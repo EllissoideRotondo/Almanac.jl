@@ -149,7 +149,7 @@ end
 """
     pck_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
 
-Euler angles (radians) of a binary PCK type 2 segment at `et` and their time
+Euler angles (radians) of a binary PCK type 2 or 20 segment at `et` and their time
 derivatives to order N, as `pcke02` of CSPICE gives them.
 
 Contract: `seg` is a PCK descriptor from `open_daf` and `data` is the array of the
@@ -160,6 +160,9 @@ frame is `R3(W) * R1(DELTA) * R3(PHI)`. Other types throw
 `SpiceError(:notsupported, ...)`. No allocation.
 """
 @inline function pck_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T<:Real,N}
-    seg.dtype == 2 || _unsupported("binary PCK", seg.dtype)
-    return _cheb_eval(data, seg, et, 3, 0, v)
+    seg.dtype == 2 && return _cheb_eval(data, seg, et, 3, 0, v)
+    # Type 20 stores the rates of the angles and the angles at the middle of each
+    # record, as SPK type 20 stores velocities and positions (`pcke20_`).
+    seg.dtype == 20 && return _spk_more(data, seg, et, v)
+    _unsupported("binary PCK", seg.dtype)
 end

@@ -163,6 +163,25 @@ function c_pckw02(h, a)
     SPICE.handleerror()
 end
 
+"""
+    c_pckw20(h, a)
+
+`pckw20_` of CSPICE N0067, which has no C wrapper `pckw20_c`: the f2c routine, with
+every argument by reference and the lengths of the two strings at the end. The summary
+buffer is set as for [`c_pckw02`](@ref).
+"""
+function c_pckw20(h, a)
+    ccall((:dafps_c, LIBCSPICE), Cvoid, (Cint, Cint, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}),
+        2, 6, zeros(2), zeros(Cint, 6), zeros(5))
+    ninrec, n = size(a.cdata)
+    ccall((:pckw20_, LIBCSPICE), Cvoid, (Ref{Cint}, Ref{Cint}, Cstring, Ref{Cdouble},
+        Ref{Cdouble}, Cstring, Ref{Cdouble}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble}, Ref{Cdouble},
+        Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Clong, Clong), h, a.clssid, a.frame,
+        a.first, a.last, a.segid, a.intlen, n, ninrec ÷ 3 - 2, Matrix{Float64}(a.cdata),
+        a.ascale, a.tscale, a.initjd, a.initfr, ncodeunits(a.frame), ncodeunits(a.segid))
+    SPICE.handleerror()
+end
+
 function c_ckw05(h, a)
     ccall((:ckw05_c, LIBCSPICE), Cvoid, (Cint, Cint, Cint, Cdouble, Cdouble, Cint, Cstring,
         Cint, Cstring, Cint, Ptr{Cdouble}, Ptr{Cdouble}, Cdouble, Cint, Ptr{Cdouble}), h,
@@ -938,6 +957,35 @@ function bad_pckw02(a)
     ]
 end
 
+function gen_pckw20(rng, k)
+    n = rand(rng, (1, 2, 9, 40))
+    polydg = rand(rng, (0, 1, 5, 12))
+    intlen = 1.0 + 9.0 * rand(rng)                  # days
+    initjd = 2451545.0 + rand(rng, -3000:3000)
+    initfr = rand(rng, (0.0, 0.25, 0.123456789))
+    btime = 86400.0 * (initjd - 2451545.0 + initfr)
+    ltime = btime + n * intlen * 86400.0
+    cdata = 1.0e-3 .* randn(rng, 3 * (polydg + 2), n)  # rates and angles in units of ascale
+    return (clssid=rand(rng, sort!(collect(keys(PCK_FRAMES)))),
+        frame=rand(rng, ("J2000", "ECLIPJ2000", "B1950", "GALACTIC")), first=btime,
+        last=ltime, segid=rand_segid(rng, "P20"), intlen, cdata,
+        ascale=rand(rng, (1.0, 0.01)), tscale=rand(rng, (1.0, 86400.0)), initjd, initfr)
+end
+function bad_pckw20(a)
+    # CSPICE N0067 has `pckw20_` and no `pckw20_c`, so the checks of the C wrapper (an
+    # empty string) are not compared with CSPICE: `both` is false for them.
+    return Any[bad_ids(a; long=:idstringtoolong, empty_both=false)...,
+        ("degree 51", merge(a, (cdata=zeros(3 * 53, size(a.cdata, 2)),)), :invaliddegree, true),
+        ("zero interval length", merge(a, (intlen=0.0,)), :intlennotpos, true),
+        ("first equal to last", merge(a, (first=a.last,)), :baddescrtimes, true),
+        ("zero angle scale", merge(a, (ascale=0.0,)), :nonpositivescale, true),
+        ("negative time scale", merge(a, (tscale=-1.0,)), :nonpositivescale, true),
+        ("first before the data", merge(a, (first=a.first - 100.0,)), :coveragegap, true),
+        ("last after the data", merge(a, (last=a.last + 100.0,)), :coveragegap, true),
+        ("no record", merge(a, (cdata=zeros(size(a.cdata, 1), 0),)), :invalidcount, false),
+    ]
+end
+
 const WRITER_CASES = WriterCase[
     WriterCase("spkw13", :spk, gen_w13,
         (h, a) -> spkw13(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, a.states, a.epochs),
@@ -1009,6 +1057,9 @@ const WRITER_CASES = WriterCase[
     WriterCase("pckw02", :pck, gen_pckw02,
         (h, a) -> pckw02(h, a.clssid, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.btime),
         c_pckw02, bad_pckw02),
+    WriterCase("pckw20", :pck, gen_pckw20,
+        (h, a) -> pckw20(h, a.clssid, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.ascale, a.tscale, a.initjd, a.initfr),
+        c_pckw20, bad_pckw20),
 ]
 
 "The writer case with the name `name`."
@@ -1984,12 +2035,13 @@ group("9. DAF access, SPK and CK writers") do
         SPICE.kclear()
     end
 
-    @apart @testset "binary PCK: Almanac reads the file that it writes" begin
-        c = writer_case("pckw02")
+    @apart @testset "binary PCK type $type: Almanac reads the file that it writes" for type in (2, 20)
+        # Type 20 was found missing by the replay of NAIF's tspice (F_PCK20).
+        c = writer_case("pckw$(lpad(type, 2, '0'))")
         # One segment for each body-fixed frame, each with another base frame.
         segs = [merge(c.gen(rng, k), (clssid=id, frame=base)) for (k, (id, base)) in
                 enumerate(zip(sort!(collect(keys(PCK_FRAMES))), ("ECLIPJ2000", "J2000", "B1950")))]
-        pc, pn = write_both(c, dir, "pck_readback", segs)
+        pc, pn = write_both(c, dir, "pck_readback_$type", segs)
         @test read(pc) == read(pn)
         ctx = neo_context([pn])
         oracle_load([pc])
@@ -2011,22 +2063,26 @@ group("9. DAF access, SPK and CK writers") do
         # last-bit difference of one element.
         @test drot <= 1e-15
         @test dxf <= 1e-15
-        # The base frame by ID, and by a name with blanks and in lower case, as `irfnum_`
-        # compares names; a frame ID outside the inertial frames is rejected.
-        a = segs[1]
-        paths = String[]
-        for (i, frame) in enumerate((17, " eclip J2000 ", "ECLIPJ2000"))
-            p = joinpath(dir, "pck_frame_$i.bpc")
-            h = pckopn(p, "IFNAME pck_readback")
-            c.neo(h, merge(a, (frame=frame,)))
-            pckcls(h)
-            push!(paths, p)
+        # Type 2: the base frame by ID, and by a name with blanks and in lower case, as
+        # `irfnum_` compares names; a frame ID outside the inertial frames is rejected.
+        # (Type 20 looks the frame up with `namfrm`, as any frame: "writers: every input
+        # check".)
+        if type == 2
+            a = segs[1]
+            paths = String[]
+            for (i, frame) in enumerate((17, " eclip J2000 ", "ECLIPJ2000"))
+                p = joinpath(dir, "pck_frame_$i.bpc")
+                h = pckopn(p, "IFNAME pck_readback")
+                c.neo(h, merge(a, (frame=frame,)))
+                pckcls(h)
+                push!(paths, p)
+            end
+            @test allequal(read.(paths))
+            h = pckopn(joinpath(dir, "pck_frame_bad.bpc"), "BAD")
+            @test throws_kind(() -> c.neo(h, merge(a, (frame=22,))), :invalidrefframe)
+            @test throws_kind(() -> c.neo(h, merge(a, (frame=0,))), :invalidrefframe)
+            dafcls(h)
         end
-        @test allequal(read.(paths))
-        h = pckopn(joinpath(dir, "pck_frame_bad.bpc"), "BAD")
-        @test throws_kind(() -> c.neo(h, merge(a, (frame=22,))), :invalidrefframe)
-        @test throws_kind(() -> c.neo(h, merge(a, (frame=0,))), :invalidrefframe)
-        dafcls(h)
     end
 
     @apart @testset "handles on different tasks" begin

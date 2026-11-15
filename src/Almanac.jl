@@ -26,7 +26,7 @@ export spk14b, spk14a, spk14e, SPK14Writer
 export spksfs, spkpvn, spkuds, spksub
 export getelm, evsgp4, spkw10
 export ckopn, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
-export pckopn, pckw02, pckcls
+export pckopn, pckw02, pckw20, pckcls
 export spkobj, spkobj!, spkcov, spkcov!, kinfo, kdata, tkvrsn
 export Window, card, wncard, wninsd!, wnvald!, wnunid, wnintd, wndifd, wncomd
 export wnelmd, wnincd, wnfetd, wnsumd, wnreld, wncond!, wnexpd!, wnextd!, wnfild!, wnfltd!
@@ -111,7 +111,7 @@ include("daf_access.jl")    # DAFHandle, dafopr, dafbfs, daffna, dafgs, dafgda, 
 include("daf_write.jl")     # dafonw, dafopw, dafbna, dafada, dafena, dafac, dafdc
 include("spk_write.jl")     # spkopn, spkopa, spkcls, spkw01 ... spkw21
 include("ck_write.jl")      # ckopn, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
-include("pck_write.jl")     # pckopn, pckw02, pckcls
+include("pck_write.jl")     # pckopn, pckw02, pckw20, pckcls
 include("ck_records.jl")    # cknr02, ckgr02, cknr03, ckgr03
 include("das.jl")           # DASHandle, dasopr, dasonw, dascls, dasrdi, dasadi, dasudc, dasac, dasec
 include("dla.jl")           # dlaopn, dlabns, dlaens, dlabfs, dlafns, dlabbs, dlafps

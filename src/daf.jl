@@ -103,8 +103,9 @@ positive whole numbers that agree with the segment length and the data type.
 function _daf_directory(data::Vector{Float64}, path::AbstractString, kind::Symbol,
         dtype::Int32, baddr::Int, eaddr::Int)
     len = eaddr - baddr + 1
-    # SPK type 20 ends with DSCALE, TSCALE, INITJD, INITFR, INTLEN, RSIZE, N.
-    trailer = (kind === :SPK && dtype == 20) ? 7 : 4
+    # SPK type 20 ends with DSCALE, TSCALE, INITJD, INITFR, INTLEN, RSIZE, N, and binary
+    # PCK type 20 the same way, with ASCALE (radians) in the place of DSCALE.
+    trailer = dtype == 20 ? 7 : 4
     len > trailer || throw(SpiceError(:baddaf,
         "segment of type $dtype at $baddr:$eaddr is too short ($len doubles) in $path"))
     init = data[eaddr-3]
@@ -283,7 +284,7 @@ function open_daf(path::AbstractString)
                         "segment $(length(segments) + 1) has addresses $b:$e outside " *
                         "the file ($nwords doubles): $path"))
                     chebyshev = kind === :SPK ? (dtype == 2 || dtype == 3 || dtype == 20) :
-                                dtype == 2
+                                (dtype == 2 || dtype == 20)
                     init, intlen, rsize, nrec = chebyshev ?
                         _daf_directory(data, path, kind, dtype, b, e) :
                         (0.0, 0.0, Int32(0), Int32(0))
