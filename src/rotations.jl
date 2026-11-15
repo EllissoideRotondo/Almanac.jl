@@ -519,6 +519,9 @@ function _frame_step(ks::KernelSet, id::Int32, et::T) where {T<:Real}
     elseif class == 5
         # A dynamic frame is linked to its base frame (`dynframes.jl`).
         return _dyn_frame_step(_CKExact(), ks, fd, et)
+    elseif class == FRAME_PROVIDER_CLASS
+        p = frame_provider(ks, fd)
+        p === nothing || return p.relative, provider_rotation(p, et)
     end
     throw(SpiceError(:notsupported,
         "frame $id has class $class; only classes 1 to 6 are supported"))
@@ -542,6 +545,10 @@ function _frame_parent(ks::KernelSet, id::Int32)
     end
     (class == 3 || class == 6) && return _J2000_FRAME
     class == 5 && return _dyn_base(ks, id)
+    if class == FRAME_PROVIDER_CLASS
+        p = frame_provider(ks, fd)
+        p === nothing || return p.relative
+    end
     throw(SpiceError(:notsupported,
         "frame $id has class $class; only classes 1 to 6 are supported"))
 end

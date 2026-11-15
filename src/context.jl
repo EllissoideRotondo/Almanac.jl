@@ -41,6 +41,8 @@ function build_kernelset(loaded::Vector{Loaded},
             push!(dskfiles, content)
         elseif content isa EKFile
             any(f -> f.path == content.path, ekfiles) || push!(ekfiles, content)
+        elseif content isa EphemerisProvider || content isa FrameProvider
+            nothing                          # added to the tables below
         elseif edited === nothing
             apply_assignments!(pool, content)
         end
@@ -51,6 +53,12 @@ function build_kernelset(loaded::Vector{Loaded},
     edited === nothing || (pool = edited)
     for i in length(loaded):-1:1
         content = loaded[i].content
+        if content isa EphemerisProvider
+            seg = Segment(content.body, content.center, content.frame, PROVIDER_DTYPE,
+                content.t0, content.t1, Int32(0), i, 0, 0.0, 0.0, Int32(0), Int32(0))
+            push!(get!(() -> Segment[], spk, seg.target), seg)
+            continue
+        end
         content isa DAF || continue
         if content.kind === :CK
             for j in length(content.cksegments):-1:1
@@ -69,6 +77,12 @@ function build_kernelset(loaded::Vector{Loaded},
     name2code, code2name = build_names(npool)
     _pool_x_bodydefs!(name2code, code2name, bodydefs)
     frames, framename2id = build_frames(npool)
+    for (i, entry) in enumerate(loaded)     # frames of add_frame!, later ones first
+        p = entry.content
+        p isa FrameProvider || continue
+        frames[p.id] = FrameDef(p.id, p.name, FRAME_PROVIDER_CLASS, Int32(i), p.center)
+        framename2id[normalize_name(p.name)] = p.id
+    end
     tk = build_tk(pool, frames)
     bodyrot = build_bodyrot(pool)
     lsk = build_lsk(pool)

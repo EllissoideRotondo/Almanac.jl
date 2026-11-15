@@ -136,7 +136,7 @@ function _sw_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T<:Real
         if class == 3
             found, ref, rot = _sw_ck_step(mode, ks, frame_def(ks, base), et)
             found && return ref, rot::Mat3{S}
-        elseif class >= 5
+        elseif class == 5 || class == 6
             return base, one(Mat3{S})
         else
             parent, rot = _frame_step(ks, base, _ck_epoch(mode, et))

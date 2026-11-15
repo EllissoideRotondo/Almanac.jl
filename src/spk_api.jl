@@ -50,7 +50,9 @@ another frame is rotated with the rotation jet of that frame.
 """
 @inline function segment_jet(ks::KernelSet, seg::Segment, et::T, ::Val{N}) where {T<:Real,N}
     # Type 10 (two-line elements) needs the leap seconds: spk_types/type10.jl.
-    jet = seg.dtype == Int32(10) ? _t10_jet(_lsk(ks), ks.daf[seg.file], seg, et, Val(N)) :
+    jet = seg.dtype == PROVIDER_DTYPE ?
+              provider_jet(ks.loaded[seg.baddr].content::EphemerisProvider, et, Val(N)) :
+          seg.dtype == Int32(10) ? _t10_jet(_lsk(ks), ks.daf[seg.file], seg, et, Val(N)) :
           spk_eval(ks.daf[seg.file], seg, et, Val(N))
     seg.frame == Int32(1) && return jet
     return rotate_jet(frame_jet(ks, seg.frame, Int32(1), et, Val(N)), jet)

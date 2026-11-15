@@ -890,7 +890,7 @@ function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where 
         fd = frame_def(ks, cur)
         if fd.class == 3
             cur, step = _ck_frame_step(mode, ks, fd, et)
-        elseif fd.class >= 5        # dynamic and switch frames, `dynframes.jl`
+        elseif fd.class == 5 || fd.class == 6     # dynamic and switch frames, `dynframes.jl`
             cur, step = _dyn_chain_step(mode, ks, fd, et)
         else
             cur, step = _frame_step(ks, cur, _ck_epoch(mode, et))
@@ -914,7 +914,7 @@ function _ck_in_chain(ks::KernelSet, id::Int32)
         n += 1
         n > MAX_FRAME_CHAIN && _chain_too_long(id)
         class = frame_def(ks, cur).class
-        (class == 3 || class >= 5) && return true
+        (class == 3 || class == 5 || class == 6) && return true
         cur = _frame_parent(ks, cur)
     end
     return false

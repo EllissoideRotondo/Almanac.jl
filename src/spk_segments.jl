@@ -134,6 +134,11 @@ function spksfs(ks::KernelSet, body::Integer, et::Real)
         return nothing
     end
     seg = segs[i]
+    if seg.dtype == PROVIDER_DTYPE          # a body of add_ephemeris!: its name is the file
+        p = ks.loaded[seg.baddr].content::EphemerisProvider
+        return p.name, dafps(Float64[seg.t0, seg.t1],
+            Int[seg.target, seg.center, seg.frame, seg.dtype, 1, 1]), p.name
+    end
     entry = _daf_entry(ks, seg.file)
     daf = entry.content::DAF
     # Of two segments with the same data, the later one has the priority.
@@ -227,6 +232,15 @@ function spkpvn(ks::KernelSet, h::DAFHandle, descr::AbstractVector{<:Real}, et::
     return _spkpvn(ks, data, _spk_descr_segment(data, descr, h.path, ic[5] - 1), et)
 end
 function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Real}, et::Real)
+    i = findlast(e -> e.path == file && e.content isa EphemerisProvider, ks.loaded)
+    if i !== nothing                        # a body of add_ephemeris!
+        p = ks.loaded[i].content::EphemerisProvider
+        e = check_epoch(et)
+        p.t0 <= primal(e) <= p.t1 || throw(SpiceError(:timeoutofbounds, "spkpvn: request " *
+            "time $(primal(e)) is outside of descriptor bounds $(p.t0) : $(p.t1)"))
+        r, v = provider_jet(p, e, Val(1))
+        return Int(p.frame), vcat(r, v), Int(p.center)
+    end
     daf = _spk_loaded(ks, file)
     _, ic = dafus(descr, 2, 6)
     b, e = ic[5], ic[6]

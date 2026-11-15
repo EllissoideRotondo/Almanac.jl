@@ -67,6 +67,7 @@ export limbpt, termpt, tangpt, fovtrg, fovray, getfov, getfvn
 export spkcpo, spkcpt, spkcvo, spkcvt, azlcpo, azlrec, recazl, dazldr, drdazl
 export gfdist, gfsep, gfposc, gfrr, gfpa, gfuds, gfudb, gfevnt, gfstol, gfrefn, uddc, uddf
 export gfsubc, gfsntc, gfilum, gfoclt, gftfov, gfrfov, gfocce, gffove
+export add_ephemeris!, add_frame!
 export EphemerisTable, ephemeris_table, table_position, table_state, table_jet, table_span
 export RotationTable, rotation_table, table_rotation, table_rotation_jet, table_to_spk
 export EKColumnAttr, EKSegmentSummary
@@ -148,6 +149,7 @@ include("gf/surface.jl")     # gfsubc, gfsntc: sub-observer point and surface in
 include("gf/illumination.jl")  # gfilum: illumination angles at a surface point
 include("gf/occultation.jl") # gfoclt, gfocce: occultations and transits
 include("gf/fov.jl")         # gftfov, gfrfov, gffove: visibility in a field of view
+include("providers.jl")     # EphemerisProvider evaluation, add_ephemeris!
 include("table.jl")         # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
 include("ek/file.jl")       # EK pages, trees, segment and column descriptors
 include("ek/columns.jl")    # EK column entries of classes 1 to 9

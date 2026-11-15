@@ -8,6 +8,12 @@ pxfrm2
 sxform
 ```
 
+## Frames from functions of the program
+
+```@docs
+add_frame!
+```
+
 ## Frame information
 
 ```@docs

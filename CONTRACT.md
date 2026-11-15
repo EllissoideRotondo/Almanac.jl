@@ -202,6 +202,25 @@ evaluator pair `spkrNN`/`spkeNN` of CSPICE, so a plain epoch gives the CSPICE st
   `parse_text_lines` (32 and 80 bytes). Throws `SpiceError(:badkernel)` before
   returning anything, so a load is atomic.
 
+## `providers.jl` (with `EphemerisProvider` and `FrameProvider` of `types.jl`)
+
+- An `EphemerisProvider` is a `Loaded` content. `build_kernelset` gives it one SPK
+  `Segment` with `dtype == PROVIDER_DTYPE` (-1), `file == 0` and `baddr` = its index in
+  `ks.loaded`, in the priority order of a file loaded at its place in the list.
+- `segment_jet` (`spk_api.jl`) sends such a segment to `provider_jet(p, et, Val(N))`;
+  every other reader of `ks.spk` segments that touches `ks.daf[seg.file]` must test
+  `PROVIDER_DTYPE` first (`spksfs`, `spkpvn` do).
+- `p.f` is untyped: one dynamic call per evaluation; the result is converted to
+  `Vec3{T}`, so callers stay type-stable. Orders >= 2 call `p.f` on a `Taylor` epoch.
+- A `FrameProvider` gets a `FrameDef` of class `FRAME_PROVIDER_CLASS` (7) with
+  `classid` = its index in `ks.loaded`, added after `build_frames` and before
+  `build_tk`, so it replaces a pool frame of the same ID and TK frames may be relative
+  to it. `_frame_step` and `_frame_parent` (`rotations.jl`) link it to `p.relative`
+  through `provider_rotation(p, et)`. A class 7 frame of the pool is not a provider:
+  `frame_provider(ks, fd)` returns `nothing` for it and the error of an unknown class
+  stays. Code that dispatches on frame classes must not
+  treat class 7 as dynamic: write `class == 5 || class == 6`, not `class >= 5`.
+
 ## `names.jl`
 
 - `normalize_name(s) -> String`: upper case, leading/trailing blanks removed, inner

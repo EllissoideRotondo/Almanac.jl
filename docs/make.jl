@@ -15,6 +15,7 @@ makedocs(;
             "howto/contexts.md",
             "howto/derivatives.md",
             "howto/tables.md",
+            "howto/providers.md",
             "howto/events.md",
             "howto/writing.md",
         ],

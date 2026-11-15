@@ -41,6 +41,12 @@ spkcvo
 spkcvt
 ```
 
+## Bodies from functions of the program
+
+```@docs
+add_ephemeris!
+```
+
 ## Tables
 
 ```@docs
