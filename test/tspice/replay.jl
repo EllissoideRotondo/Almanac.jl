@@ -203,7 +203,7 @@ gmat(a::Arg, nr, nc) = reshape(Float64.(a.values), nr, nc)
 const NOTOUT = Dict("gdpool" => ["n"], "gipool" => ["n"], "gcpool" => ["n"],
     "bodvrd" => ["dim"], "bodvcd" => ["dim"], "dtpool" => ["found"],
     "lgrint" => ["work"], "lgrind" => ["work"], "hrmint" => ["work"], "lgresp" => ["work"],
-    "hrmesp" => ["work"])
+    "hrmesp" => ["work"], "getfvn" => ["n"], "getfov" => ["n"])
 
 "An input by its name: the planes and ellipses of SPICELIB are arrays of 4 and 9 doubles."
 function jl_named(a::Arg)
@@ -383,6 +383,10 @@ function default_mapping(ctx, c::Call)
     end
     notout = get(NOTOUT, name, String[])
     outs = [o for o in c.outputs if !(o.name in notout)]
+    # a routine without outputs (a setter that Almanac makes return its value), and the
+    # SET action of TIMDEF, whose VALUE SPICELIB leaves as given
+    (isempty(outs) || (name == "timdef" && uppercase(strip(jl(c.inputs[1]))) == "SET")) &&
+        return []
     found = findfirst(o -> o.name == "found", outs)
     if found !== nothing
         fexp = outs[found].values[1]

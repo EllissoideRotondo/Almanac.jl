@@ -41,10 +41,10 @@ FIXED_LENGTHS = {
     "termpt": {"npts": "max(0, ncuts)", "points": "3*sum(npts(1:max(0, ncuts)))",
                "epochs": "sum(npts(1:max(0, ncuts)))", "trmvcs": "3*sum(npts(1:max(0, ncuts)))"},
     # N counts characters (DASADC, DASUDC) or records (SPKW10, CKW05), not array elements
-    "dasadc": {"data": "merge((n + epos - bpos) / max(1, epos - bpos + 1), 0, epos >= bpos .and. n > 0)"},
-    "dasudc": {"data": "merge((last - first + 1 + epos - bpos) / max(1, epos - bpos + 1), 0, "
-                        "epos >= bpos .and. last >= first)"},
+    "dasadc": {"data": "tlog_nsub(n, bpos, epos, len(data))"},
+    "dasudc": {"data": "tlog_nsub(last - first + 1, bpos, epos, len(data))"},
     "spkw10": {"consts": "8", "elems": "max(0, 10*n)"},
+    "spkw18": {"packts": "max(0, n*merge(12, 6, subtyp == 0))"},
     "ckw05": {"packts": "max(0, n*merge(8, merge(4, merge(14, 7, subtyp == 2), subtyp == 1), subtyp == 0))"},
 }
 
@@ -409,6 +409,19 @@ contains
       write(unit, '(a,1x,a,1x,i0)') label, 'c', 1
       write(unit, '(a,a)') '|', trim(x)
    end subroutine tlog_c1
+   !> Number of strings that NCHARS characters fill at the positions BPOS:EPOS of strings
+   !> of length SLEN; huge(0), which logs the array as not held, for positions outside.
+   integer(ip) function tlog_nsub(nchars, bpos, epos, slen)
+      integer(ip), intent(in) :: nchars, bpos, epos
+      integer, intent(in) :: slen
+      if (bpos < 1 .or. epos > slen) then
+         tlog_nsub = huge(0_ip)
+      else if (epos < bpos .or. nchars < 1) then
+         tlog_nsub = 0
+      else
+         tlog_nsub = (nchars + epos - bpos) / (epos - bpos + 1)
+      end if
+   end function tlog_nsub
 end module tspice_log
 '''
 
