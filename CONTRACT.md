@@ -90,7 +90,7 @@ order because `Loaded`, `KernelSet` and `SpiceContext` have fields of their type
   the container of binary SPK, binary PCK and CK kernels). It validates the file
   record, handles both byte orders, walks the summary records, and fills the
   descriptors in file order: `Segment` for `:SPK` and `:PCK` (including the four
-  directory values for SPK types 2, 3, 20 and PCK type 2), `CKSegment` for `:CK`.
+  directory values for SPK types 2, 3, 20 and PCK types 2, 20), `CKSegment` for `:CK`.
   Postcondition: every segment has finite epochs and
   `1 <= baddr <= eaddr <= length(data)`. Throws `SpiceError(:filenotfound)` or `(:baddaf)`.
   `data` is the only memory map of the file that stays after the call.
@@ -119,7 +119,7 @@ order because `Loaded`, `KernelSet` and `SpiceContext` have fields of their type
   not have, so only a query through a `KernelSet` evaluates it (see `spk_api.jl`).
   Precondition, not checked: `seg.t0 <= primal(et) <= seg.t1`.
 - `pck_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3}`:
-  the stored 3-1-3 Euler angles (PHI, DELTA, W) in radians of a binary PCK type 2
+  the stored 3-1-3 Euler angles (PHI, DELTA, W) in radians of a binary PCK type 2 or 20
   segment, as `pcke02` returns them, and their time derivatives. `PHI = RA + pi/2`,
   `DELTA = pi/2 - DEC`; the matrix from the segment's inertial frame to the body frame
   is `R3(W) * R1(DELTA) * R3(PHI)`.
@@ -529,8 +529,9 @@ open files and one hidden "current array" for each search; here the opened file 
 
 The segment writers: `spkopn`, `spkopa`, `spkcls`, `spkpds`, `spkw01` to `spkw21`
 (types 1, 2, 3, 5, 8, 9, 12, 13, 15, 17 to 21), `ckopn`, `ckcls`, `ckw01`, `ckw02`,
-`ckw03`, `ckw05`, `ckw06`, and `pckopn`, `pckw02`, `pckcls` (binary PCK type 2, whose
-records `_seg_cheb_records` lays out as for SPK types 2 and 3). Each writer makes the input checks of the SPICELIB routine in
+`ckw03`, `ckw05`, `ckw06`, and `pckopn`, `pckw02`, `pckw20`, `pckcls` (binary PCK types 2 and 20; the type 2
+records `_seg_cheb_records` lays out as for SPK types 2 and 3, the type 20 records are
+stored as given, as for SPK type 20). Each writer makes the input checks of the SPICELIB routine in
 the same order, so the data area is equal bit for bit to the one that CSPICE writes
 from the same input.
 
