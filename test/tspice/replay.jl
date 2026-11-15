@@ -186,14 +186,19 @@ for (r, names) in ("qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npt
         "dskrb2" => ["nv", "np"], "hrmesp" => ["n", "work"], "lgresp" => ["n", "work"],
         "dafada" => ["n"], "vlcomg" => ["n"], "ekacei" => ["nvals"], "ekaced" => ["nvals"],
         "ekacec" => ["nvals"], "ekucei" => ["nvals"], "ekuced" => ["nvals"], "ekucec" => ["nvals"],
-        "dasadd" => ["n"], "dasadi" => ["n"])
+        "dasadd" => ["n"], "dasadi" => ["n"], "dskxsi" => ["nsurf", "maxd", "maxi"],
+        "dskxv" => ["nsurf", "nrays"], "chbigr" => ["degp"], "chbint" => ["degp"],
+        "chbval" => ["degp"], "chbder" => ["degp"], "dafps" => ["nd", "ni"],
+        "ckw01" => ["avflag", "nrec"], "ckw02" => ["nrec"], "ckw03" => ["avflag", "nrec", "nints"],
+        "pltvol" => ["nv", "np"], "pltar" => ["nv", "np"], "pltexp" => [], "dskw02" => ["nv", "np"])
     DROP[r] = names
 end
 
 "Routines whose arrays of 9 or 36 numbers are vectors, not matrices, in Almanac."
 const VECTOR_ROUTINES = Set(["vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg",
     "vzerog", "vdotg", "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg",
-    "qderiv", "eqncpv", "dskrb2", "hrmint", "lgrint", "lgrind", "hrmesp", "lgresp", "dafada", "dasadd", "dasadi"])
+    "qderiv", "eqncpv", "dskrb2", "hrmint", "lgrint", "lgrind", "hrmesp", "lgresp", "dafada", "dasadd", "dasadi", "chbigr", "chbint",
+    "chbval", "chbder", "dafps", "dskxsi"])
 
 "Routines whose array of points is a list of points in Almanac: name => (argument, size)."
 const POINT_LISTS = Dict("srfnrm" => ("srfpts", 3), "latsrf" => ("lonlat", 2))
@@ -221,10 +226,19 @@ end
 "Segment writers: the count `n` is the length of the arrays in Almanac."
 const WRITERS = r"^(spkw|ckw|pckw)\d\d$"
 "Array arguments of the segment writers, vectors even when they hold one number."
-const WRITER_ARRAYS = Set(["states", "epochs", "sclkdp", "quats", "avvs", "starts",
+const WRITER_ARRAYS = Set(["states", "epochs", "sclkdp", "quats", "avvs", "starts", "start", "stop",
     "cdata", "packts", "records", "rates", "coeffs", "dlines", "elems", "ivlbds"])
 
+"Routines whose vertices and plates are 3 x n matrices in Almanac."
+const PLATE_ROUTINES = Set(["pltar", "pltvol", "dskw02", "dskmi2"])
+
 function jl_named(a::Arg, routine::AbstractString)
+    if routine in PLATE_ROUTINES && a.name in ("vrtces", "plates") && a.kind != 'c'
+        v = a.kind == 'd' ? Float64.(a.values) : Int.(a.values)
+        return reshape(v, 3, length(v) ÷ 3)
+    end
+    routine == "dskw02" && a.name == "corpar" && length(a.values) > 10 &&
+        return Float64.(a.values[1:10])
     if occursin(WRITERS, routine) && a.name in WRITER_ARRAYS && a.kind == 'd'
         return Float64.(a.values)
     end
@@ -242,7 +256,8 @@ function jl_named(a::Arg, routine::AbstractString)
         return [SVector{k}(v[i:i+k-1]) for i in 1:k:length(v)-k+1]
     end
     routine in VECTOR_ROUTINES && a.kind != 'c' &&
-        (length(a.values) > 1 || a.name in ("xvals", "yvals", "f0", "f2", "v1", "v2", "data")) &&
+        (length(a.values) > 1 || a.name in ("xvals", "yvals", "f0", "f2", "v1", "v2", "data",
+            "cp", "srflst", "dc", "ic", "vrtces", "plates")) &&
         return a.kind == 'd' ? SVector{length(a.values),Float64}(a.values...) :
                SVector{length(a.values),Int}(a.values...)
     return jl_named(a)
@@ -340,6 +355,15 @@ end
 
 function default_mapping(ctx, c::Call)
     name = lowercase(c.name)
+    if name == "dasrdc"
+        a = Dict(x.name => x for x in c.inputs)
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        f, l = jl(a["first"]), jl(a["last"])
+        got = dasrdc(h, f, l)
+        (c.failed || isempty(c.outputs) || any(v -> v isa Symbol, c.outputs[1].values)) && return []
+        exp = das_chars(c.outputs[1].values, l - f + 1, jl(a["bpos"]), jl(a["epos"]))
+        return [("data", Any[exp], Any[got])]
+    end
     if name in ("dasadc", "dasudc")
         a = Dict(x.name => x for x in c.inputs)
         any(x -> x.kind != 'c' && any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
@@ -368,6 +392,12 @@ function default_mapping(ctx, c::Call)
     drop = occursin(WRITERS, name) ? vcat(get(DROP, name, String[]), ["n"]) : get(DROP, name, String[])
     args = Any[(h = handle_value(a); h === nothing ? jl_named(a, name) : h)
                for a in c.inputs if !(a.name in drop)]
+    # the angular velocities of a CK writer without them are `nothing` in Almanac
+    if name in ("ckw01", "ckw03")
+        av = findfirst(a -> a.name == "avflag", c.inputs)
+        k = findfirst(a -> a.name == "avvs", [a for a in c.inputs if !(a.name in drop)])
+        (av !== nothing && k !== nothing && !c.inputs[av].values[1]) && (args[k] = nothing)
+    end
     # a loaded file is known by its path; a call that takes no path takes a reader handle
     if !applicable(f, ctx, args...) && !applicable(f, args...)
         args = Any[x isa AbstractString && x in values(HMAP) ? daf_reader(x, c) : x for x in args]
@@ -430,14 +460,22 @@ function default_mapping(ctx, c::Call)
         fexp || return [("found", Any[false], Any[true])]
     end
     vals = r isa Tuple ? collect(r) : Any[r]
+    WRITE_HANDLE[] = Int[a.values[1] for a in c.inputs if a.name in HANDLE_ARGS && a.kind == 'i']
     return counted(name, map_handles(output_pairs(name, outs, vals)))
 end
+
+# the handles of the current call, for `counted`
+const WRITE_HANDLE = Ref(Int[])
 
 "Outputs that hold a value only if a count output is at least a number: SPICELIB leaves them undefined otherwise."
 const COUNTED = Dict("inelpl" => ("nxpts", ["xpt1" => 1, "xpt2" => 2]),
                      "inrypl" => ("nxpts", ["xpt" => 1]))
 
 function counted(name, pairs)
+    # for a file open for write Almanac's dashfs describes the segregated file that dascls
+    # writes (documented); SPICELIB's describes the records as they are now
+    name == "dashfs" && return filter(p -> !(p[1] in ("free", "lastrc", "lastwd")) ||
+                                         !any(<(0), WRITE_HANDLE[]), pairs)
     rule = get(COUNTED, name, nothing)
     rule === nothing && return pairs
     k = findfirst(p -> p[1] == rule[1], pairs)
