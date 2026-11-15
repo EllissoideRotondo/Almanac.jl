@@ -175,7 +175,7 @@ const DROP = Dict("gdpool" => ["start", "room"], "gipool" => ["start", "room"],
     "gcpool" => ["start", "room"], "bodvrd" => ["maxn"], "bodvcd" => ["maxn"],
     "pdpool" => ["n"], "pipool" => ["n"], "pcpool" => ["n"], "lmpool" => ["n"])
 
-for g in ("vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdotg",
+for g in ("vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdotg", "vlcomg",
         "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg")
     DROP[g] = ["ndim"]
 end
@@ -183,7 +183,7 @@ end
 for (r, names) in ("qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npts"],
         "hrmint" => ["n", "work"], "lgrint" => ["n", "work"], "lgrind" => ["n", "work"],
         "dskrb2" => ["nv", "np"], "hrmesp" => ["n", "work"], "lgresp" => ["n", "work"],
-        "dafada" => ["n"])
+        "dafada" => ["n"], "vlcomg" => ["n"])
     DROP[r] = names
 end
 
@@ -225,6 +225,9 @@ function jl_named(a::Arg, routine::AbstractString)
     if occursin(WRITERS, routine) && a.name in WRITER_ARRAYS && a.kind == 'd'
         return Float64.(a.values)
     end
+    # the log holds the declared size of CONSTS(8) plus one
+    routine == "spkw10" && a.name == "consts" && length(a.values) > 8 &&
+        return Float64.(a.values[1:8])
     pl = get(POINT_LISTS, routine, nothing)
     if pl !== nothing && a.name == pl[1]
         k = pl[2]
@@ -265,6 +268,21 @@ const HMAP = Dict{Int,Any}()
 handle_value(a::Arg) = a.kind == 'i' && length(a.values) == 1 && a.name in HANDLE_ARGS ?
     get(HMAP, a.values[1], nothing) : nothing
 
+"""
+A reader handle of Almanac for a file that SPICELIB loaded (`cklpf`, `spklef`): the DAF
+calls take a handle where the queries take the path. Opened once, in the directory where
+the file was loaded.
+"""
+const READERS = Dict{String,Any}()
+"The directory in which each file loaded by handle was loaded."
+const LOADDIR = Dict{String,String}()
+function daf_reader(path::AbstractString, c::Call)
+    return get!(READERS, path) do
+        dir = get(LOADDIR, path, isempty(c.snapshot) ? pwd() : c.snapshot)
+        Almanac.dafopr(isabspath(path) ? path : joinpath(dir, path))
+    end
+end
+
 function open_by_handle(ctx, c::Call)
     name = lowercase(c.name)
     path = String(c.inputs[1].values[1])
@@ -280,7 +298,9 @@ function open_by_handle(ctx, c::Call)
         abspath(path) in TAINTED && throw(UnmappedHandle())
     end
     f = getfield(Almanac, Symbol(name))
-    args = Any[jl(a) for a in c.inputs]
+    # SPICELIB takes an empty internal file name and CSPICE does not (`emptystring`);
+    # the name is not under test, and without the file the family could not go on.
+    args = Any[a.name == "ifname" && isempty(strip(jl(a))) ? "replay" : jl(a) for a in c.inputs]
     h = f(args...)
     k = findfirst(o -> o.name in HANDLE_ARGS, c.outputs)
     k === nothing || (HMAP[c.outputs[k].values[1]] = h; HPATH[c.outputs[k].values[1]] = abspath(path))
@@ -298,6 +318,7 @@ function default_mapping(ctx, c::Call)
     occursin(OPENERS, name) && return open_by_handle(ctx, c)
     if name in DAF_SELECT
         h = handle_value(c.inputs[1])
+        h isa AbstractString && (h = daf_reader(h, c))
         h === nothing || (CURRENT_DAF[] = h)
         name == "dafcs" && return []
     end
@@ -308,13 +329,36 @@ function default_mapping(ctx, c::Call)
     drop = occursin(WRITERS, name) ? vcat(get(DROP, name, String[]), ["n"]) : get(DROP, name, String[])
     args = Any[(h = handle_value(a); h === nothing ? jl_named(a, name) : h)
                for a in c.inputs if !(a.name in drop)]
+    # a loaded file is known by its path; a call that takes no path takes a reader handle
+    if !applicable(f, ctx, args...) && !applicable(f, args...)
+        args = Any[x isa AbstractString && x in values(HMAP) ? daf_reader(x, c) : x for x in args]
+    end
     if name in DAF_CURRENT
-        CURRENT_DAF[] === nothing && throw(UnmappedHandle())
+        if CURRENT_DAF[] === nothing
+            # the array was begun by a routine outside the log: a file open for write
+            # (negative handle) misses data that SPICELIB's has
+            name in ("dafada", "dafena") &&
+                foreach(h -> h < 0 && push!(TAINTED, HPATH[h]), keys(HPATH))
+            throw(UnmappedHandle())
+        end
         pushfirst!(args, CURRENT_DAF[])
     end
     if occursin(CLOSERS, name)
-        f(args...)
-        delete!(HMAP, c.inputs[1].values[1])
+        hid = c.inputs[1].values[1]
+        try
+            f(args...)
+        catch e
+            # SPICELIB closed a file with segments that a routine outside the log wrote
+            # (the CK and PCK writers of some families are not recorded): the later
+            # opens read SPICELIB's file from the snapshots.
+            (e isa SpiceError && e.kind === :nosegmentsfound && !c.failed) || rethrow()
+            try Almanac.dafcls(args[1]) catch end    # the close left it open
+            haskey(HPATH, hid) && push!(TAINTED, HPATH[hid])
+            delete!(HMAP, hid)
+            throw(UnmappedHandle())
+        end
+        filter!(kv -> kv.second !== args[1], READERS)
+        args[1] isa AbstractString || delete!(HMAP, hid)
         return []
     end
     r = applicable(f, ctx, args...) ? f(ctx, args...) : f(args...)
@@ -329,7 +373,20 @@ function default_mapping(ctx, c::Call)
         fexp || return [("found", Any[false], Any[true])]
     end
     vals = r isa Tuple ? collect(r) : Any[r]
-    return map_handles(output_pairs(name, outs, vals))
+    return counted(name, map_handles(output_pairs(name, outs, vals)))
+end
+
+"Outputs that hold a value only if a count output is at least a number: SPICELIB leaves them undefined otherwise."
+const COUNTED = Dict("inelpl" => ("nxpts", ["xpt1" => 1, "xpt2" => 2]),
+                     "inrypl" => ("nxpts", ["xpt" => 1]))
+
+function counted(name, pairs)
+    rule = get(COUNTED, name, nothing)
+    rule === nothing && return pairs
+    k = findfirst(p -> p[1] == rule[1], pairs)
+    k === nothing && return pairs
+    n = pairs[k][2][1]
+    return filter(p -> !any(r -> r.first == p[1] && n < r.second, rule[2]), pairs)
 end
 
 """
@@ -538,7 +595,8 @@ function load_by_handle(ctx, c)
         furnsh(ctx, path)
     end
     # Almanac keeps the path as given, and `spksfs` returns it as the handle.
-    c.failed || (HANDLES[c.outputs[1].values[1]] = path; HMAP[c.outputs[1].values[1]] = path)
+    c.failed || (HANDLES[c.outputs[1].values[1]] = path; HMAP[c.outputs[1].values[1]] = path;
+                 LOADDIR[path] = isempty(c.snapshot) ? pwd() : c.snapshot)
     return []
 end
 
@@ -657,6 +715,8 @@ function replay_family(path, tallies, mismatches)
     empty!(HMAP)
     CURRENT_DAF[] = nothing
     empty!(HPATH); empty!(TAINTED)
+    foreach(h -> try Almanac.dafcls(h) catch end, values(READERS)); empty!(READERS)
+    empty!(LOADDIR)
     cd(mktempdir())
     ORACLE && cspice_reset()
     # A load or pool edit whose values the log does not hold leaves Almanac without
@@ -772,16 +832,16 @@ function main(args)
             println("family $(basename(path)): ", first(sprint(showerror, e), 300))
         end
     end
-    println(rpad("routine", 10), lpad("match", 8), lpad("cspice", 8), lpad("near", 7), lpad("spread", 8), lpad("value", 7), lpad("error", 7), lpad("adapter", 9), lpad("skipped", 9))
+    println(rpad("routine", 10), lpad("match", 10), lpad("cspice", 8), lpad("near", 8), lpad("spread", 8), lpad("value", 8), lpad("error", 8), lpad("adapter", 10), lpad("skipped", 10))
     tot = Tally()
     for name in sort(collect(keys(tallies)))
         t = tallies[name]
-        println(rpad(name, 10), lpad(t.match, 8), lpad(t.cspice, 8), lpad(t.near, 7), lpad(t.spread, 8), lpad(t.value, 7), lpad(t.error, 7), lpad(t.adapter, 9), lpad(t.skipped, 9))
+        println(rpad(name, 10), lpad(t.match, 10), lpad(t.cspice, 8), lpad(t.near, 8), lpad(t.spread, 8), lpad(t.value, 8), lpad(t.error, 8), lpad(t.adapter, 10), lpad(t.skipped, 10))
         for f in fieldnames(Tally)
             setfield!(tot, f, getfield(tot, f) + getfield(t, f))
         end
     end
-    println(rpad("all", 10), lpad(tot.match, 8), lpad(tot.cspice, 8), lpad(tot.near, 7), lpad(tot.spread, 8), lpad(tot.value, 7), lpad(tot.error, 7), lpad(tot.adapter, 9), lpad(tot.skipped, 9))
+    println(rpad("all", 10), lpad(tot.match, 10), lpad(tot.cspice, 8), lpad(tot.near, 8), lpad(tot.spread, 8), lpad(tot.value, 8), lpad(tot.error, 8), lpad(tot.adapter, 10), lpad(tot.skipped, 10))
     close(mismatches.io)
     return tot
 end
