@@ -37,6 +37,8 @@ CSPICE keeps buffers and saved search results between calls, for speed. This pac
 
 Each routine follows the arithmetic of its CSPICE counterpart, operation by operation, including the order of the terms of a sum; fused multiply-add is not used. For the same kernels and the same `Float64` input, a result is equal to that of CSPICE bit for bit or differs by rounding; [Coverage and validation](@ref) says how this was checked and gives measured differences.
 
+The elementary functions (`sin`, `cos`, `exp`, ...) are those of Julia, and CSPICE takes them from the C library of the platform. Julia and the GNU C library return different last bits for about 3 % of the arguments of `sin` and `cos` (measured on 10⁶ points between 1 and 51), so a result that calls them can differ from CSPICE in the last bit: a type 5 SPK segment propagated over six years gives a planet barycenter 3e-8 km from CSPICE's at 2e8 km from the Sun.
+
 ### Exact derivatives and the rates of CSPICE
 
 Order 0 of [`spkder`](@ref) and of [`pxder`](@ref) is the result of `spkpos` and of `pxform`, and every higher order is the derivative of that result as a function of the epoch, with the velocity of the SPK data in the place of the derivative of its position. For an SPK type whose velocity is the derivative of its position, such as type 2 of the planetary ephemerides, the result is therefore the exact derivative. For a type that stores the velocity apart from the position, such as type 9, order 1 of a geometric position is the stored velocity, as in `spkezr`, and the partial of a dual-number epoch is the same velocity.
