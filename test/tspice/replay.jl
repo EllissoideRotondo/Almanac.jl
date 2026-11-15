@@ -11,7 +11,10 @@
 # - `match`: Almanac gives the outputs of SPICELIB within `RTOL`, or throws the
 #   `SpiceError` whose kind is the short message that SPICELIB signaled;
 # - `cspice`: Almanac differs from SPICELIB and agrees with CSPICE (TSPICE_ORACLE=1);
-# - `near`: the outputs differ by more than `RTOL` and less than `NEAR` relative;
+# - `near`: the outputs differ by more than `RTOL` and less than `NEAR` relative (to the
+#   largest magnitude in each group of three numbers);
+# - `spread`: the outputs differ by more, SPICELIB and CSPICE differ from each other, and
+#   Almanac is no farther from CSPICE than twice SPICELIB's distance (TSPICE_ORACLE=1);
 # - `value`: the outputs differ by more;
 # - `error`: SPICELIB signaled an error and Almanac did not, or the reverse, or the kinds
 #   differ;
@@ -345,6 +348,9 @@ end
 
 "Arguments as SPICE.jl takes them: plain arrays."
 plain(x::StaticArray) = Array(x)
+# an argument of mixed numbers from the log; SPICE.jl takes only concrete arrays
+plain(x::AbstractArray{Any}) = all(v -> v isa Integer, x) ? Int.(x) :
+    all(v -> v isa Real, x) ? Float64.(x) : all(v -> v isa AbstractString, x) ? String.(x) : x
 plain(x) = x
 
 "The routines that change the kernels or the settings, mirrored into CSPICE."
@@ -362,13 +368,43 @@ end
 # makes it stop the process.
 const NO_ORACLE = r"^(ek|das|daf|dla|spkw|ckw|pckw|spko|cko|pcko|dsko|dskw|dskcls|spkcls|ckcls|pckcls)"
 
+# CSPICE routines that SPICE.jl does not wrap (tangpt), or whose wrapper returns arrays of
+# the full size `maxn` (termpt), called as SPICE.jl calls the others.
+const SpD = Float64
+function cspice_tangpt(method, target, et, fixref, abcorr, corloc, obsrvr, dref, dvec)
+    tanpt, srfpt, srfvec = zeros(3), zeros(3), zeros(3)
+    alt, range, trgepc = Ref(0.0), Ref(0.0), Ref(0.0)
+    ccall((:tangpt_c, SPICE.libcspice), Cvoid,
+          (Cstring, Cstring, SpD, Cstring, Cstring, Cstring, Cstring, Cstring, Ref{SpD},
+           Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}),
+          method, target, et, fixref, abcorr, corloc, obsrvr, dref, Vector{SpD}(dvec),
+          tanpt, alt, range, srfpt, trgepc, srfvec)
+    SPICE.handleerror()
+    return tanpt, alt[], range[], srfpt, trgepc[], srfvec
+end
+function cspice_termpt(method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr, refvec,
+        rolstp, ncuts, schstp, soltol, maxn)
+    npts = zeros(Int32, ncuts)
+    points, epochs, trmvcs = zeros(3, maxn), zeros(maxn), zeros(3, maxn)
+    ccall((:termpt_c, SPICE.libcspice), Cvoid,
+          (Cstring, Cstring, Cstring, SpD, Cstring, Cstring, Cstring, Cstring, Ref{SpD}, SpD,
+           Int32, SpD, SpD, Int32, Ref{Int32}, Ref{SpD}, Ref{SpD}, Ref{SpD}),
+          method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr, Vector{SpD}(refvec),
+          rolstp, ncuts, schstp, soltol, maxn, npts, points, epochs, trmvcs)
+    SPICE.handleerror()
+    n = Int(sum(npts))
+    return Int.(npts), [points[:, i] for i in 1:n], epochs[1:n], [trmvcs[:, i] for i in 1:n]
+end
+const CSPICE_EXTRA = Dict{String,Function}("tangpt" => cspice_tangpt, "termpt" => cspice_termpt)
+
 function cspice_call(c::Call)
     name = lowercase(c.name)
     occursin(NO_ORACLE, name) && return nothing
     any(a -> handle_value(a) !== nothing, c.inputs) && return nothing
     name in ("spklef", "cklpf", "pcklof") && (name = "furnsh")
-    isdefined(SPICE, Symbol(name)) || return nothing
-    f = getfield(SPICE, Symbol(name))
+    f = haskey(CSPICE_EXTRA, name) ? CSPICE_EXTRA[name] :
+        isdefined(SPICE, Symbol(name)) ? getfield(SPICE, Symbol(name)) : nothing
+    f === nothing && return nothing
     drop = get(DROP, lowercase(c.name), String[])
     args = Any[plain(jl(a)) for a in c.inputs if !(a.name in drop)]
     v = isempty(c.inputs) ? Any[] : c.inputs[end].values
@@ -410,8 +446,55 @@ function agrees_with_cspice(c::Call, almanac_result)
     for ((_, _, a), (_, _, o)) in zip(almanac_result, oracle)
         (a === nothing || o === nothing) && return a === o
         length(a) == length(o) || return false
-        all(t -> close_enough(t[1], t[2]) || (t[1] isa Real && t[2] isa Real &&
-            abs(t[1] - t[2]) <= NEAR * max(abs(t[1]), abs(t[2]), 1.0)), zip(a, o)) || return false
+        near_output(a, o) || return false
+    end
+    return true
+end
+
+"""
+True if the outputs `a` and `b` agree within `NEAR`, relative to the largest magnitude
+(at least 1) in each group of three numbers: a 3-vector is compared as a whole, so a
+small component of a large vector does not need a tighter agreement than the vector
+has, and the position and the velocity of a state are compared apart.
+"""
+function near_output(a, b)
+    length(a) == length(b) || return false
+    k = length(a) % 3 == 0 ? 3 : max(length(a), 1)
+    for i in 1:k:length(a)
+        r = i:min(i + k - 1, length(a))
+        scale = 1.0
+        for x in Iterators.flatten((a[r], b[r]))
+            x isa Real && isfinite(x) && (scale = max(scale, abs(Float64(x))))
+        end
+        all(t -> close_enough(t[1], t[2]) ||
+            (t[1] isa Real && t[2] isa Real && abs(t[1] - t[2]) <= NEAR * scale), zip(a[r], b[r])) ||
+            return false
+    end
+    return true
+end
+
+"""
+True if SPICELIB and CSPICE disagree with each other, and Almanac is no farther from
+CSPICE than twice the distance of SPICELIB, in every output: the result is within the
+scatter of the references. An ill-conditioned geometry gives this: a ray that grazes a
+plate from 2e8 km moves its intercept by 1e-5 km for one unit in the last place of the
+rotation to the body frame, whose sine and cosine differ in the last bit between Julia
+and the C library.
+"""
+function within_spread(c::Call, pairs)
+    r = cspice_call(c)
+    (r === nothing || r isa Exception) && return false
+    name = lowercase(c.name)
+    notout = get(NOTOUT, name, String[])
+    outs = filter(o -> !(o.name in notout) && o.name != "found", c.outputs)
+    oracle = output_pairs(name, outs, r isa Tuple ? collect(r) : Any[r])
+    length(oracle) == length(pairs) || return false
+    for ((_, e, g), (_, _, o)) in zip(pairs, oracle)
+        (g === nothing || o === nothing || length(g) != length(o) || length(e) != length(o)) && return false
+        all(x -> x isa Real, Iterators.flatten((e, g, o))) || return near_output(g, o)
+        dac = maximum(abs.(Float64.(g) .- Float64.(o)); init=0.0)
+        dsc = maximum(abs.(Float64.(e) .- Float64.(o)); init=0.0)
+        dac <= 2dsc || near_output(g, o) || return false
     end
     return true
 end
@@ -544,12 +627,13 @@ mutable struct Tally
     match::Int
     cspice::Int
     near::Int
+    spread::Int
     value::Int
     error::Int
     adapter::Int
     skipped::Int
 end
-Tally() = Tally(0, 0, 0, 0, 0, 0, 0)
+Tally() = Tally(0, 0, 0, 0, 0, 0, 0, 0)
 
 function replay_family(path, tallies, mismatches)
     family = replace(basename(path), ".log" => "")
@@ -620,12 +704,11 @@ function replay_family(path, tallies, mismatches)
                 t.cspice += 1
             else
                 n, e, g = bad[1]
-                near = all(((n, e, g),) -> g !== nothing && length(e) == length(g) &&
-                    all(t -> close_enough(t[1], t[2]) || (t[1] isa Real && t[2] isa Real &&
-                        abs(t[1] - t[2]) <= NEAR * max(abs(t[1]), abs(t[2]), 1.0)), zip(e, g)), bad)
-                near ? (t.near += 1) : (t.value += 1)
+                near = all(((n, e, g),) -> g !== nothing && length(e) == length(g) && near_output(e, g), bad)
+                kind = near ? "near" : ORACLE && within_spread(c, result) ? "spread" : "value"
+                kind == "near" ? (t.near += 1) : kind == "spread" ? (t.spread += 1) : (t.value += 1)
                 d = g === nothing ? "nothing" : string(g)
-                record!(mismatches, (family, c, near ? "near" : "value", "$n: SPICELIB $(e) Almanac $(first(d, 300))" *
+                record!(mismatches, (family, c, kind, "$n: SPICELIB $(e) Almanac $(first(d, 300))" *
                     (g === nothing ? "" : @sprintf(" (max rel diff %.2e)", maxdiff(e, g)))))
             end
         end
@@ -674,16 +757,16 @@ function main(args)
             println("family $(basename(path)): ", first(sprint(showerror, e), 300))
         end
     end
-    println(rpad("routine", 10), lpad("match", 8), lpad("cspice", 8), lpad("near", 7), lpad("value", 7), lpad("error", 7), lpad("adapter", 9), lpad("skipped", 9))
+    println(rpad("routine", 10), lpad("match", 8), lpad("cspice", 8), lpad("near", 7), lpad("spread", 8), lpad("value", 7), lpad("error", 7), lpad("adapter", 9), lpad("skipped", 9))
     tot = Tally()
     for name in sort(collect(keys(tallies)))
         t = tallies[name]
-        println(rpad(name, 10), lpad(t.match, 8), lpad(t.cspice, 8), lpad(t.near, 7), lpad(t.value, 7), lpad(t.error, 7), lpad(t.adapter, 9), lpad(t.skipped, 9))
+        println(rpad(name, 10), lpad(t.match, 8), lpad(t.cspice, 8), lpad(t.near, 7), lpad(t.spread, 8), lpad(t.value, 7), lpad(t.error, 7), lpad(t.adapter, 9), lpad(t.skipped, 9))
         for f in fieldnames(Tally)
             setfield!(tot, f, getfield(tot, f) + getfield(t, f))
         end
     end
-    println(rpad("all", 10), lpad(tot.match, 8), lpad(tot.cspice, 8), lpad(tot.near, 7), lpad(tot.value, 7), lpad(tot.error, 7), lpad(tot.adapter, 9), lpad(tot.skipped, 9))
+    println(rpad("all", 10), lpad(tot.match, 8), lpad(tot.cspice, 8), lpad(tot.near, 7), lpad(tot.spread, 8), lpad(tot.value, 7), lpad(tot.error, 7), lpad(tot.adapter, 9), lpad(tot.skipped, 9))
     close(mismatches.io)
     return tot
 end
