@@ -328,7 +328,7 @@ end
 
 "Contract: `raw` is one physical line; returns the line as `rdkdat` hands it on (cut at 132 characters, tabs replaced by blanks, blanks removed at both ends)."
 function _clean_line(raw::AbstractString)::Vector{UInt8}
-    b = Vector{UInt8}(codeunits(raw))
+    b = Vector{UInt8}(String(raw))     # one copy; `Vector{UInt8}(codeunits(raw))` of a SubString iterates byte by byte
     while !isempty(b) && (b[end] == UInt8('\r') || b[end] == UInt8('\n'))
         pop!(b)
     end
@@ -464,7 +464,34 @@ function parse_text_kernel(path::AbstractString, yearbound::Int=1969,
         check::Bool=false)::TextKernel
     isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
     text = read(path, String)
-    return parse_text_lines(path, eachsplit(text, r"\r\n|\n|\r"), yearbound, check)
+    return parse_text_lines(path, _physical_lines(text), yearbound, check)
+end
+
+"""
+    _physical_lines(text::String) -> Vector{SubString{String}}
+
+Contract: returns the lines of `text` split at CR-LF, LF or a lone CR, as
+`eachsplit(text, r"\\r\\n|\\n|\\r")` does (the piece after a final terminator is kept,
+empty), by a scan of the bytes instead of a regex search per line.
+"""
+function _physical_lines(text::String)
+    cu = codeunits(text)
+    n = length(cu)
+    out = SubString{String}[]
+    start = 1
+    i = 1
+    @inbounds while i <= n
+        c = cu[i]
+        if c == UInt8('\n') || c == UInt8('\r')
+            push!(out, SubString(text, start, prevind(text, i)))
+            i += (c == UInt8('\r') && i < n && cu[i+1] == UInt8('\n')) ? 2 : 1
+            start = i
+        else
+            i += 1
+        end
+    end
+    push!(out, SubString(text, start, lastindex(text)))
+    return out
 end
 
 # ---------------------------------------------------------------------------------
