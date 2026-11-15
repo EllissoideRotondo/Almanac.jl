@@ -357,7 +357,22 @@ plain(x) = x
 const STATEFUL = Set(["furnsh", "unload", "kclear", "ldpool", "clpool", "pdpool", "pcpool",
     "pipool", "lmpool", "dvpool", "timdef", "spklef", "cklpf", "pcklof"])
 
-"The kind of an error of SPICE.jl (its message starts with the short message of CSPICE)."
+# SPICE.jl puts only the long message of CSPICE into its error; the short message, which
+# is the kind, is added in front here.
+ORACLE && Core.eval(SPICE, quote
+    function handleerror()
+        ccall((:failed_c, libcspice), Bool, ()) || return nothing
+        buf = Array{UInt8}(undef, 1841)
+        ccall((:getmsg_c, libcspice), Cvoid, (Cstring, Cint, Ref{UInt8}), "SHORT", 1841, buf)
+        short = String(buf[1:findfirst(iszero, buf) - 1])
+        ccall((:getmsg_c, libcspice), Cvoid, (Cstring, Cint, Ref{UInt8}), "LONG", 1841, buf)
+        long = String(buf[1:findfirst(iszero, buf) - 1])
+        ccall((:reset_c, libcspice), Cvoid, ())
+        throw(SpiceError(short * " " * long))
+    end
+end)
+
+"The kind of an error of SPICE.jl: the short message of CSPICE, which `handleerror` puts first."
 function cspice_kind(e)
     m = match(r"SPICE\((\w+)\)", sprint(showerror, e))
     return m === nothing ? :unknown : Symbol(lowercase(m.captures[1]))
