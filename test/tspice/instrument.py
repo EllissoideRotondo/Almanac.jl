@@ -40,6 +40,11 @@ FIXED_LENGTHS = {
                "epochs": "sum(npts(1:max(0, ncuts)))", "tangts": "3*sum(npts(1:max(0, ncuts)))"},
     "termpt": {"npts": "max(0, ncuts)", "points": "3*sum(npts(1:max(0, ncuts)))",
                "epochs": "sum(npts(1:max(0, ncuts)))", "trmvcs": "3*sum(npts(1:max(0, ncuts)))"},
+    # N counts characters (DASADC, DASUDC) or records (SPKW10, CKW05), not array elements
+    "dasadc": {"data": "merge((n + epos - bpos) / max(1, epos - bpos + 1), 0, epos >= bpos .and. n > 0)"},
+    "dasudc": {"data": "merge((n + epos - bpos) / max(1, epos - bpos + 1), 0, epos >= bpos .and. n > 0)"},
+    "spkw10": {"consts": "8", "elems": "max(0, 10*n)"},
+    "ckw05": {"packts": "max(0, n*merge(8, merge(4, merge(14, 7, subtyp == 2), subtyp == 1), subtyp == 0))"},
 }
 
 
