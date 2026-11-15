@@ -39,7 +39,7 @@ See also [`wninsd!`](@ref), [`wnunid`](@ref), [`wnfetd`](@ref), [`wnsumd`](@ref)
 struct Window <: AbstractVector{Float64}
     data::Vector{Float64}
     Window() = new(Float64[])
-    Window(endpoints::AbstractVector{<:Real}) = wnvald!(new(Vector{Float64}(endpoints)))
+    Window(endpoints::AbstractVector{<:Real}) = wnvald!(new(_vec_of(Float64, endpoints)))
 end
 
 Base.size(w::Window) = size(w.data)

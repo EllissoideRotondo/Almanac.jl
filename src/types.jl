@@ -2,6 +2,21 @@
 # queries read without a lock, and `furnsh`/`unload` replace it as a whole.
 
 const Vec3{T} = SVector{3,T}
+
+"""
+    _vec_of(T, x, f=identity) -> Vector{T}
+
+A new `Vector{T}` of `f(v)` for the elements `v` of `x` in linear order, for any
+iterable: a vector, a static vector, a matrix, a tuple. A typed comprehension is not
+used because over a static vector it gives a `SizedVector` (StaticArrays).
+"""
+function _vec_of(::Type{T}, x, f=identity) where {T}
+    out = Vector{T}(undef, length(x))
+    for (i, v) in enumerate(x)
+        @inbounds out[i] = f(v)
+    end
+    return out
+end
 const Mat3{T} = SMatrix{3,3,T,9}
 
 """

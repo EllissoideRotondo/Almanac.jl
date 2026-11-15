@@ -246,7 +246,7 @@ See also [`pipool`](@ref), [`pcpool`](@ref), [`dvpool`](@ref), [`lmpool`](@ref).
 function pdpool(ctx::SpiceContext, name::AbstractString, values::AbstractVector{<:Real})
     n = _pool_x_name(name)
     isempty(values) && return nothing
-    v = Vector{Float64}(values)
+    v = _vec_of(Float64, values)
     return _pool_x_edit!(pool -> (pool[n] = v; (n,)), ctx)
 end
 
@@ -272,7 +272,7 @@ rules and the error are those of [`pdpool`](@ref).
 function pcpool(ctx::SpiceContext, name::AbstractString, cvals::AbstractVector{<:AbstractString})
     n = _pool_x_name(name)
     isempty(cvals) && return nothing
-    v = Vector{String}(map(s -> first(String(s), _TK_MAXSTR), cvals))
+    v = _vec_of(String, cvals, s -> first(String(s), _TK_MAXSTR))
     return _pool_x_edit!(pool -> (pool[n] = v; (n,)), ctx)
 end
 

@@ -293,7 +293,7 @@ function dafada(h::DAFHandle, data::AbstractVector{<:Real})
     n == 0 && return nothing
     h.afree + n - 1 <= typemax(Int32) - 2 * _DAF_RECWORDS || throw(SpiceError(:dafwritefail,
         "dafada: the array would pass the largest address of a DAF in $(h.path)"))
-    _daf_write_data!(h, h.afree, data isa Vector{Float64} ? data : Vector{Float64}(data))
+    _daf_write_data!(h, h.afree, data isa Vector{Float64} ? data : _vec_of(Float64, data))
     h.afree += n
     return nothing
 end

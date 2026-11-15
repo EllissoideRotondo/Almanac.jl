@@ -552,7 +552,7 @@ function dafus(sum::AbstractVector{<:Real}, nd::Integer, ni::Integer)
     (nd >= 0 && ni >= 0 && length(sum) >= _daf_sumsize(nd, ni)) || throw(SpiceError(
         :dafinvalidparams, "dafus: a summary of $(length(sum)) doubles does not hold " *
         "ND = $nd, NI = $ni"))
-    s = Vector{Float64}(sum)   # not a comprehension: over a static vector it gives a SizedVector
+    s = _vec_of(Float64, sum)
     dc = s[1:nd]
     ints = reinterpret(Int32, s)
     ic = Int[ints[2nd+j] for j in 1:ni]
