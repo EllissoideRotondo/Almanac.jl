@@ -462,7 +462,9 @@ function describe(c::Call)
 end
 
 function main(args)
-    logdir = args[1]
+    logdir = abspath(args[1])
+    # The writers that the families call create files in the working directory.
+    cd(mktempdir())
     families = args[2:end]
     logs = sort(filter(f -> endswith(f, ".log"), readdir(logdir; join=true)))
     wanted = Set("F_" * uppercase(replace(fam, r"^F_"i => "")) * ".LOG" for fam in families)
