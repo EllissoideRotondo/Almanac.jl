@@ -156,6 +156,10 @@ The built-in frames are searched first. If several frames of the kernel pool mat
 the one with the smallest ID is returned; CSPICE returns the first one in the order
 of its hash table. `nothing` takes the place of the `found` flag.
 
+Throws `SpiceError(:invalidframedef)` if a `FRAME_*_CLASS` variable that the search
+meets is not a number, or a matching definition lacks its `_CLASS_ID`, `_NAME` or
+`FRAME_<name>` variable.
+
 # Examples
 ```jldoctest
 julia> ccifrm(2, 499)
@@ -171,12 +175,46 @@ function ccifrm(ks::KernelSet, frclss::Integer, clssid::Integer)
     for f in BUILTIN_NONINERTIAL_FRAMES
         f.class == frclss && f.classid == clssid && return Int(f.id), f.name, Int(f.center)
     end
+    _ccifrm_check(ks, frclss, clssid)
     best = nothing
     for f in values(ks.frames)      # invariant: `best` is the match with the smallest ID so far
         (f.class == frclss && f.classid == clssid && !haskey(BUILTIN_FRAMES, f.id)) || continue
         (best === nothing || f.id < best.id) && (best = f)
     end
     return best === nothing ? nothing : (Int(best.id), best.name, Int(best.center))
+end
+
+"""
+    _ccifrm_check(ks, frclss, clssid)
+
+The checks of the pool search of `ccifrm_`, on the `FRAME_*_CLASS` variables in sorted
+order up to the first that matches: a class that is not a number, or a matching class
+without `_CLASS_ID`, a matching ID without `_NAME`, or a name without `FRAME_<name>`,
+throws `SpiceError(:invalidframedef)`. CSPICE takes the order of its hash table, so it
+can return a match before it meets a malformed definition that this check meets first.
+"""
+function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
+    bad(key, what) = throw(SpiceError(:invalidframedef, "invalid frame specification " *
+        "found in kernel pool: frame class keyword is $key but $what"))
+    for key in sort!([k for k in keys(ks.pool) if occursin(r"^FRAME_.*_CLASS$", k)])
+        v = ks.pool[key]
+        (v isa Vector{Float64} && !isempty(v)) ||
+            bad(key, "integer class was not associated with this keyword")
+        round(Int, v[1]) == frclss || continue
+        id = get(ks.pool, key * "_ID", nothing)
+        (id isa Vector{Float64} && !isempty(id)) ||
+            bad(key, "associated integer class ID assignment was not found")
+        round(Int, id[1]) == clssid || continue
+        name = get(ks.pool, key[1:end-6] * "_NAME", nothing)
+        (name isa Vector{String} && !isempty(name)) ||
+            bad(key, "associated frame name assignment was not found")
+        code = get(ks.pool, "FRAME_" * strip(name[1]), nothing)
+        (code isa Vector{Float64} && !isempty(code)) || throw(SpiceError(:invalidframedef,
+            "invalid frame specification found in kernel pool: frame name is " *
+            "$(strip(name[1])) but associated frame ID assignment was not found"))
+        return nothing
+    end
+    return nothing
 end
 
 "Throws `SpiceError(:badframeclass)` unless `frmcls` is -1 or a class 1 to 6, as `bltfrm_` and `kplfrm_`."
@@ -369,9 +407,12 @@ the frame class ID of a binary PCK frame, the ID that its segments carry (31008 
 `MOON_PA_DE440`). `et` is in seconds past J2000 TDB. A binary PCK has priority over the
 constants of a text PCK.
 
-Throws `SpiceError(:irfnotrec)` if `ref` is not a built-in inertial frame,
-`SpiceError(:badarg)` if `et` is not finite, and `SpiceError(:framedatanotfound)` if
-no PCK data are loaded for the body.
+Throws `SpiceError`:
+- `:irfnotrec` if `ref` is not a built-in inertial frame;
+- `:badarg` if `et` is not finite;
+- `:framedatanotfound` if no PCK data are loaded for the body;
+- `:kernelvarnotfound` if the text constants of the body have `BODY<id>_PM` without
+  `BODY<id>_POLE_RA` or `BODY<id>_POLE_DEC`.
 
 See also [`tisbod`](@ref), [`pxform`](@ref).
 """
