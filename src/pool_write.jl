@@ -351,7 +351,8 @@ Load the variables of the text kernel file `fname` into the kernel pool, as
 Different from [`furnsh`](@ref), the file does not enter the list of loaded kernels:
 [`ktotal`](@ref) does not count it and [`unload`](@ref) cannot remove it. Its
 variables are direct edits of the pool, with the rules of [`pdpool`](@ref). A
-`KERNELS_TO_LOAD` list in the file is not followed.
+`KERNELS_TO_LOAD` list in the file is not followed. A file whose name ends in `.json`
+is read as a [text kernel in JSON](@ref "Text kernels in JSON").
 
 Throws `SpiceError(:emptystring)` if `fname` is empty, `SpiceError(:fileopenfailed)` if the
 file does not exist and `SpiceError(:badkernel)` if an assignment is malformed.

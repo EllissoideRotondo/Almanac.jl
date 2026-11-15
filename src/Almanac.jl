@@ -85,6 +85,7 @@ include("daf.jl")           # open_daf, segment descriptors
 include("spk_eval.jl")      # spk_eval, pck_eval, find_segment
 include("spk_more.jl")      # SPK types 1, 5, 8, 9, 12 to 15, 17 to 21
 include("textkernel.jl")    # parse_text_kernel, kernel_arch, metakernel_files
+include("jsonkernel.jl")    # parse_json_kernel, is_json_kernel
 include("names.jl")         # body names and codes, built-in and pool-defined
 include("frames.jl")        # frame definitions, built-in and pool-defined
 include("time.jl")          # leap seconds, deltet, unitim, ttrans, calendars, constants

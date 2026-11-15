@@ -77,6 +77,25 @@ For data that are polynomials in time (SPK types 2, 3, 8, 9, 12, 13, 14, 18, 20 
 | Tables for inner loops and GPUs | [`ephemeris_table`](@ref), [`rotation_table`](@ref) |
 | Aberration correction as a value, parsed once | [`Aberration`](@ref): `ab = Aberration("LT+S")`, then `spkezr("MOON", et, "J2000", ab, "EARTH")` |
 | Scratch files in memory | [`dasops`](@ref), [`ekops`](@ref) |
+| Text kernels written in JSON | [`furnsh`](@ref) and [`ldpool`](@ref) of a file named `*.json`; see [Text kernels in JSON](@ref) |
+
+### Text kernels in JSON
+
+A file whose name ends in `.json` is a text kernel written as one JSON object, in the format of [jsonspice](https://github.com/jacobwilliams/jsonspice), which [PEPPER](https://github.com/jacobwilliams/pepper) also reads. [`furnsh`](@ref), [`ldpool`](@ref), [`unload`](@ref), [`kinfo`](@ref) and meta-kernels treat it as a text kernel; CSPICE cannot read it. The name decides: a JSON file with another extension is read as a text kernel and loads nothing.
+
+```json
+// gm.json
+{
+    "BODY399_RADII": [6378.1366, 6378.1366, 6356.7519],
+    "+NAIF_BODY_NAME": "SPOCK",
+    "+NAIF_BODY_CODE": -1000,
+    "EPOCH": "@2026-NOV-11/12:00",
+}
+```
+
+Each member is one assignment. A key `"+NAME"` appends, as `+=` in a text kernel. A number, `true` (1) or `false` (0) is a numeric value; a string is a string value, and a string that starts with `@` is a time, as `@` in a text kernel. An array holds numbers and times, or strings. The file may have `//` line comments and trailing commas, which jsonspice files use; other JSON5 syntax is a syntax error.
+
+A JSON number is read correctly rounded, while a number of a text kernel is read as CSPICE reads it, which can be a few units in the last place away: the same value in the two formats can give pools that differ in the last bits.
 
 ## What is absent
 

@@ -153,7 +153,8 @@ end
 Load the kernel file at `path` into `ctx`, as `furnsh_c`.
 
 The type is read from the file: SPK, binary PCK, CK, DSK, EK, text kernel or
-meta-kernel. A meta-kernel loads the files of its `KERNELS_TO_LOAD` list in order,
+meta-kernel. A file whose name ends in `.json` is a
+[text kernel in JSON](@ref "Text kernels in JSON"). A meta-kernel loads the files of its `KERNELS_TO_LOAD` list in order,
 with `PATH_SYMBOLS` and `PATH_VALUES` applied as in CSPICE.
 Without `ctx` the kernel goes into [`default_context`](@ref).
 

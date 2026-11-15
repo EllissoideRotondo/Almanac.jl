@@ -459,10 +459,12 @@ Only text between `\\begindata` and `\\begintext` is data. Values are numbers (w
 `D` or `E` exponents), `@` dates as TDB seconds past J2000, or quoted strings with
 `''` as an escaped quote; string elements are kept raw, so a continuation marker is
 still in place (see `pool_string_joined`). Variable names are case-sensitive.
+A file whose name ends in `.json` is read by `parse_json_kernel` instead.
 """
 function parse_text_kernel(path::AbstractString, yearbound::Int=1969,
         check::Bool=false)::TextKernel
     isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
+    is_json_kernel(path) && return parse_json_kernel(path, yearbound, check)
     text = read(path, String)
     return parse_text_lines(path, _physical_lines(text), yearbound, check)
 end

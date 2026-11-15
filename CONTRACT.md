@@ -191,6 +191,17 @@ evaluator pair `spkrNN`/`spkeNN` of CSPICE, so a plain epoch gives the CSPICE st
 - `_nparsd(s) -> Float64`: the double that `nparsd` of CSPICE computes, which is not
   always the correctly rounded one; throws `SpiceError(:badnumber)`.
 
+## `jsonkernel.jl`
+
+- `is_json_kernel(path) -> Bool`: the name ends in `.json`, in any case; the content
+  is not read. `parse_text_kernel` calls `parse_json_kernel` for such a path, so every
+  reader of text kernels (`read_kernel`, `ldpool`, meta-kernel files) accepts JSON.
+- `parse_json_kernel(path, yearbound=1969, check=false) -> TextKernel`: the same
+  `Assignment`s as the text kernel with the same content, except that numbers are
+  correctly rounded (not `_nparsd`). Names and string values pass the checks of
+  `parse_text_lines` (32 and 80 bytes). Throws `SpiceError(:badkernel)` before
+  returning anything, so a load is atomic.
+
 ## `names.jl`
 
 - `normalize_name(s) -> String`: upper case, leading/trailing blanks removed, inner
