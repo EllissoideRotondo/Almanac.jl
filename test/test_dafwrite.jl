@@ -2314,6 +2314,29 @@ group("9. DAF access, SPK and CK writers") do
         rm(ck)
         @test !ispath(ck)
     end
+
+    # A comprehension over a static vector gives a `SizedVector` (StaticArrays), which
+    # `dafus` reinterpreted with the wrong axes and the writers could not grow.
+    @apart @testset "static vectors as arguments" begin
+        sum = dafps([1.0, 2.0], [3, 4, 5, 6, 7, 8])
+        @test dafus(SVector{5}(sum), 2, 6) == dafus(sum, 2, 6)
+        st = [7000.0, 0, 0, 0, 7.5, 0, 7000.0, 75, 0, 0, 7.5, 0]
+        files = map((st, SVector{12}(st))) do states
+            p = tempname() * ".bsp"
+            h = spkopn(p, "static")
+            spkw05(h, -9, 399, "J2000", 0.0, 10.0, "s", 3.986e5, states[1:6], [0.0])
+            spkw08(h, -8, 399, "J2000", 0.0, 10.0, "s", 1, states, 0.0, 10.0)
+            spkcls(h)
+            p
+        end
+        ctx = SpiceContext()
+        furnsh(ctx, files[1])
+        a = (spkgeo(ctx, -9, 5.0, "J2000", 399), spkgeo(ctx, -8, 5.0, "J2000", 399))
+        unload(ctx, files[1])
+        furnsh(ctx, files[2])
+        @test (spkgeo(ctx, -9, 5.0, "J2000", 399), spkgeo(ctx, -8, 5.0, "J2000", 399)) == a
+        rm.(files)
+    end
 end
 
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

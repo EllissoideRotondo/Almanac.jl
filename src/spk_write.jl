@@ -78,13 +78,13 @@ function _seg_flat(who::AbstractString, what::AbstractString, x, rowlen::Int)
         m = size(x, 1)
         (rowlen == 0 || m == rowlen) || throw(SpiceError(:badarg,
             "$who: `$what` must have $rowlen rows (one table row in each column), it has $m"))
-        return Float64[Float64(v) for v in vec(x)], size(x, 2), m
+        return Vector{Float64}(vec(x)), size(x, 2), m
     elseif x isa AbstractVector{<:Real}
         rowlen > 0 || throw(SpiceError(:badarg,
             "$who: `$what` must be a matrix or a vector of vectors"))
         length(x) % rowlen == 0 || throw(SpiceError(:badarg,
             "$who: the length $(length(x)) of `$what` is not a multiple of $rowlen"))
-        return Float64[Float64(v) for v in x], length(x) ÷ rowlen, rowlen
+        return Vector{Float64}(x), length(x) ÷ rowlen, rowlen
     elseif x isa AbstractVector
         n = length(x)
         m = rowlen == 0 ? (n == 0 ? 0 : length(x[1])) : rowlen
@@ -106,12 +106,12 @@ function _seg_vec(who::AbstractString, what::AbstractString, x, n::Int)
     x isa AbstractVector{<:Real} || throw(SpiceError(:badarg, "$who: `$what` must be a vector of numbers"))
     (n < 0 || length(x) == n) || throw(SpiceError(:badarg,
         "$who: `$what` must have $n elements but has $(length(x))"))
-    return Float64[Float64(v) for v in x]
+    return Vector{Float64}(x)
 end
 
 function _seg_fixed(who::AbstractString, what::AbstractString, v, n::Int)
     length(v) == n || throw(SpiceError(:badarg, "$who: `$what` must have $n elements but has $(length(v))"))
-    return Float64[Float64(x) for x in v]
+    return Vector{Float64}(v)
 end
 
 function _seg_increasing(who::AbstractString, epochs::Vector{Float64})
