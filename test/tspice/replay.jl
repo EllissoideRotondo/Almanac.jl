@@ -144,6 +144,7 @@ flat(x::AbstractArray{<:AbstractString}) = Any[String.(x)...]
 flat(x::AbstractArray) = Any[reduce(vcat, flat.(x))...]
 flat(x::SpiceEllipse) = Any[x.center..., x.semimajor..., x.semiminor...]
 flat(x::SpicePlane) = Any[x.normal..., x.constant]
+flat(x::Tuple) = Any[reduce(vcat, [flat(v) for v in x]; init=Any[])...]
 
 close_enough(a::Real, b::Real) = a == b || abs(a - b) <= ATOL + RTOL * max(abs(a), abs(b))
 close_enough(a::AbstractString, b::AbstractString) = rstrip(a) == rstrip(b)
@@ -175,7 +176,7 @@ const DROP = Dict("gdpool" => ["start", "room"], "gipool" => ["start", "room"],
     "gcpool" => ["start", "room"], "bodvrd" => ["maxn"], "bodvcd" => ["maxn"],
     "pdpool" => ["n"], "pipool" => ["n"], "pcpool" => ["n"], "lmpool" => ["n"])
 
-for g in ("vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdotg", "vlcomg",
+for g in ("vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdotg", "vlcomg", "dasadd", "dasadi",
         "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg")
     DROP[g] = ["ndim"]
 end
@@ -184,14 +185,15 @@ for (r, names) in ("qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npt
         "hrmint" => ["n", "work"], "lgrint" => ["n", "work"], "lgrind" => ["n", "work"],
         "dskrb2" => ["nv", "np"], "hrmesp" => ["n", "work"], "lgresp" => ["n", "work"],
         "dafada" => ["n"], "vlcomg" => ["n"], "ekacei" => ["nvals"], "ekaced" => ["nvals"],
-        "ekacec" => ["nvals"], "ekucei" => ["nvals"], "ekuced" => ["nvals"], "ekucec" => ["nvals"])
+        "ekacec" => ["nvals"], "ekucei" => ["nvals"], "ekuced" => ["nvals"], "ekucec" => ["nvals"],
+        "dasadd" => ["n"], "dasadi" => ["n"])
     DROP[r] = names
 end
 
 "Routines whose arrays of 9 or 36 numbers are vectors, not matrices, in Almanac."
 const VECTOR_ROUTINES = Set(["vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg",
     "vzerog", "vdotg", "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg",
-    "qderiv", "eqncpv", "dskrb2", "hrmint", "lgrint", "lgrind", "hrmesp", "lgresp", "dafada"])
+    "qderiv", "eqncpv", "dskrb2", "hrmint", "lgrint", "lgrind", "hrmesp", "lgresp", "dafada", "dasadd", "dasadi"])
 
 "Routines whose array of points is a list of points in Almanac: name => (argument, size)."
 const POINT_LISTS = Dict("srfnrm" => ("srfpts", 3), "latsrf" => ("lonlat", 2))
@@ -241,7 +243,8 @@ function jl_named(a::Arg, routine::AbstractString)
     end
     routine in VECTOR_ROUTINES && a.kind != 'c' &&
         (length(a.values) > 1 || a.name in ("xvals", "yvals", "f0", "f2", "v1", "v2", "data")) &&
-        return SVector{length(a.values)}(a.kind == 'd' ? Float64.(a.values) : Int.(a.values))
+        return a.kind == 'd' ? SVector{length(a.values),Float64}(a.values...) :
+               SVector{length(a.values),Int}(a.values...)
     return jl_named(a)
 end
 
@@ -318,8 +321,39 @@ const DAF_SELECT = Set(["dafbfs", "dafbbs", "dafbna", "dafcs"])
 const DAF_CURRENT = Set(["daffna", "daffpa", "dafgs", "dafgn", "dafena", "dafada", "dafws", "dafrs"])
 const CURRENT_DAF = Ref{Any}(nothing)
 
+"""
+The characters that DASADC and DASUDC of SPICELIB take from the strings `data`, the
+positions `bpos:epos` of each string in turn, `n` of them: Almanac takes them as one
+string.
+"""
+function das_chars(data, n, bpos, epos)
+    io = IOBuffer()
+    for s in data
+        n <= 0 && break
+        sub = rpad(s, epos)[bpos:epos]
+        k = min(n, length(sub))
+        print(io, sub[1:k])
+        n -= k
+    end
+    return String(take!(io))
+end
+
 function default_mapping(ctx, c::Call)
     name = lowercase(c.name)
+    if name in ("dasadc", "dasudc")
+        a = Dict(x.name => x for x in c.inputs)
+        any(x -> x.kind != 'c' && any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        data = a["data"].values
+        b, e = jl(a["bpos"]), jl(a["epos"])
+        if name == "dasadc"
+            dasadc(h, das_chars(data, jl(a["n"]), b, e))
+        else
+            f, l = jl(a["first"]), jl(a["last"])
+            dasudc(h, f, l, das_chars(data, l - f + 1, b, e))
+        end
+        return []
+    end
     occursin(OPENERS, name) && return open_by_handle(ctx, c)
     if name in DAF_SELECT
         h = handle_value(c.inputs[1])

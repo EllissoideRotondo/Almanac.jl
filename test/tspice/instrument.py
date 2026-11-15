@@ -264,7 +264,7 @@ module tspice_log
    use pepper_legacy_context, only: legacy_context
    implicit none
    private
-   public :: tlog_begin, tlog_end, tlog_snapshot, tlog_d, tlog_d1, tlog_i, tlog_i1, &
+   public :: tlog_nsub, tlog_begin, tlog_end, tlog_snapshot, tlog_d, tlog_d1, tlog_i, tlog_i1, &
       tlog_l, tlog_l1, tlog_c, tlog_c1
    integer, save :: unit = 0
    logical, save :: opened = .false.
