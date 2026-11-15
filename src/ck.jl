@@ -574,9 +574,12 @@ in the number type of `t` and the quaternion is normalized. `av` is zero unless
     return cmat, av
 end
 
-"Throw `SpiceError` unless `subtyp` is in 0:3 and `wndsiz` is a valid window size for it."
-@inline function _ck_check05(subtyp::Int, wndsiz::Int)
-    0 <= subtyp <= 3 || _ck_bad(:notsupported, "unexpected subtype of a CK type 5 or 6 segment")
+"""
+Throw `SpiceError` unless `subtyp` is in 0:3 and `wndsiz` is a valid window size for it.
+A bad subtype is `kind`: `:notsupported` in `ckr05_`, `:invalidsubtype` in `ckr06_`.
+"""
+@inline function _ck_check05(subtyp::Int, wndsiz::Int, kind::Symbol=:notsupported)
+    0 <= subtyp <= 3 || _ck_bad(kind, "unexpected subtype of a CK type 5 or 6 segment")
     (2 <= wndsiz <= _CK5_MAXWND[subtyp+1] && iseven(wndsiz)) || _ck_bad(:invalidvalue,
         "window size of a CK type 5 or 6 segment is odd or outside the allowed range")
     return nothing
@@ -705,7 +708,7 @@ function _ck_eval06seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Floa
                 continue
             end
         end
-        _ck_check05(subtyp, wndsiz)
+        _ck_check05(subtyp, wndsiz, :invalidsubtype)
         packsz = _CK5_PACKSZ[subtyp+1]
         eb = minib - 1 + npkt * packsz          # epochs are data[eb+1:eb+npkt]
         (npkt >= 1 && eb + npkt <= minie) ||
