@@ -761,11 +761,16 @@ function build_names(pool::AbstractDict{String,PoolValue})
     length(names) == length(codes) || throw(SpiceError(:badpool,
         "NAIF_BODY_NAME has $(length(names)) elements and NAIF_BODY_CODE has " *
         "$(length(codes))"))
-    for (name, code) in zip(names, codes)
-        nn = normalize_name(name)
-        isempty(nn) && throw(SpiceError(:badpool, "NAIF_BODY_NAME has a blank name"))
+    normalized = map(normalize_name, names)
+    any(isempty, normalized) && throw(SpiceError(:badpool, "NAIF_BODY_NAME has a blank name"))
+    # As `zzbodker` of CSPICE: of the entries with the same name only the last counts,
+    # and the name of a code is that of its last entry that counts. A code whose name
+    # was given again to another code later in the list has no name.
+    last = Dict{String,Int}(nn => i for (i, nn) in enumerate(normalized))
+    for (i, (name, code)) in enumerate(zip(names, codes))
+        last[normalized[i]] == i || continue
         c = round(Int32, code)
-        name2code[nn] = c
+        name2code[normalized[i]] = c
         code2name[c] = String(strip(name, ' '))
     end
     return name2code, code2name
@@ -818,5 +823,9 @@ function body_name(ks::KernelSet, code::Integer)::Union{String,Nothing}
     c = Int32(code)
     n = get(ks.code2name, c, nothing)
     n === nothing || return n
-    return get(BUILTIN_CODE2NAME, c, nothing)
+    n = get(BUILTIN_CODE2NAME, c, nothing)
+    # A built-in name that the pool or `boddef` gives to another code no longer names
+    # this code, as in `zzbodc2n` of CSPICE.
+    (n === nothing || haskey(ks.name2code, normalize_name(n))) && return nothing
+    return n
 end

@@ -76,11 +76,14 @@ function _pool_x_bodydefs!(name2code::Dict{String,Int32}, code2name::Dict{Int32,
     for (name, code) in bodydefs    # invariant: `names` holds the latest valid name per code
         final[normalize_name(name)] == code && (names[code] = name)
     end
+    # A name of `boddef` that the pool defines too is the pool's: its code keeps no name
+    # from `boddef` (the pool masks it, as in `zzbodc2n` of CSPICE).
+    for (code, name) in names
+        (haskey(code2name, code) || haskey(name2code, normalize_name(name))) && continue
+        code2name[code] = name
+    end
     for (nn, code) in final
         haskey(name2code, nn) || (name2code[nn] = code)
-    end
-    for (code, name) in names
-        haskey(code2name, code) || (code2name[code] = name)
     end
     return nothing
 end

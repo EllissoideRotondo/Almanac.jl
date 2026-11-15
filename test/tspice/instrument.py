@@ -246,7 +246,8 @@ LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspic
 !> The log goes to the file named by the environment variable TSPICE_LOG; without it
 !> nothing is written. Format, one item per line:
 !>   @ NAME DEPTH FAILED   a call (DEPTH > 1: made by a routine that is being logged)
-!>   <ARG K N / >ARG K N   an input / output argument of kind K (d, i, l, c), N values,
+!>   <ARG K N / >ARG K N   an input / output argument of kind K (d, i, l, c), N values
+!>                         (N = -1: more than 2000, not logged),
 !>                         one per following line (strings: their text, trailing blanks
 !>                         removed, after a `|`)
 !>   S DIR                 the files of the working directory, copied to DIR
@@ -264,6 +265,7 @@ module tspice_log
    logical, save :: checked = .false.
    integer, save :: depth = 0
    integer, save :: nsnap = 0
+   integer, parameter :: maxlog = 2000   ! longer arrays are logged as N = -1, not replayed
    character(1024), save :: logpath = ' '
 contains
    logical function on()
@@ -316,6 +318,10 @@ contains
       integer(ip), intent(in) :: n
       integer :: k
       if (.not. on()) return
+      if (n > maxlog) then
+         write(unit, '(a,1x,a,1x,i0)') label, 'd', -1
+         return
+      end if
       write(unit, '(a,1x,a,1x,i0)') label, 'd', n
       do k = 1, n
          write(unit, '(es25.17e3)') x(k)
@@ -335,6 +341,10 @@ contains
       integer(ip), intent(in) :: n
       integer :: k
       if (.not. on()) return
+      if (n > maxlog) then
+         write(unit, '(a,1x,a,1x,i0)') label, 'i', -1
+         return
+      end if
       write(unit, '(a,1x,a,1x,i0)') label, 'i', n
       do k = 1, n
          write(unit, '(i0)') x(k)
@@ -354,6 +364,10 @@ contains
       integer(ip), intent(in) :: n
       integer :: k
       if (.not. on()) return
+      if (n > maxlog) then
+         write(unit, '(a,1x,a,1x,i0)') label, 'l', -1
+         return
+      end if
       write(unit, '(a,1x,a,1x,i0)') label, 'l', n
       do k = 1, n
          write(unit, '(l1)') x(k)
@@ -373,6 +387,10 @@ contains
       integer(ip), intent(in) :: n
       integer :: k
       if (.not. on()) return
+      if (n > maxlog) then
+         write(unit, '(a,1x,a,1x,i0)') label, 'c', -1
+         return
+      end if
       write(unit, '(a,1x,a,1x,i0)') label, 'c', n
       do k = 1, n
          write(unit, '(a,a)') '|', trim(x(k))
