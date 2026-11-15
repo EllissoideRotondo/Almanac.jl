@@ -136,7 +136,11 @@ velocity series. Types 1, 5, 8, 9, 12 to 15 and 17 to 21 (`spk_more.jl`): order
 `k >= 2` is derivative `k-1` of the velocity function that CSPICE defines. Type 10
 and unknown types throw `SpiceError(:spktypenotsupp, ...)`. No allocation.
 """
+@noinline _empty_segment(seg) = throw(SpiceError(:baddaf,
+    "the segment of body or frame $(seg.target) has no data (addresses $(seg.baddr):$(seg.eaddr))"))
+
 @inline function spk_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T<:Real,N}
+    seg.eaddr < seg.baddr && _empty_segment(seg)
     if seg.dtype == 2
         return _cheb_eval(data, seg, et, 3, 0, v)
     elseif seg.dtype == 3
@@ -160,6 +164,7 @@ frame is `R3(W) * R1(DELTA) * R3(PHI)`. Other types throw
 `SpiceError(:notsupported, ...)`. No allocation.
 """
 @inline function pck_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T<:Real,N}
+    seg.eaddr < seg.baddr && _empty_segment(seg)
     seg.dtype == 2 && return _cheb_eval(data, seg, et, 3, 0, v)
     # Type 20 stores the rates of the angles and the angles at the middle of each
     # record, as SPK type 20 stores velocities and positions (`pcke20_`).

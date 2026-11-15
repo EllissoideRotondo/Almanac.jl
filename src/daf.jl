@@ -280,12 +280,16 @@ function open_daf(path::AbstractString)
                     else
                         ic[1], Int32(0), ic[2], ic[3], Int(ic[4]), Int(ic[5])
                     end
-                    (1 <= b <= e <= nwords) || throw(SpiceError(:baddaf,
+                    # A segment without data (DAFBNA then DAFENA with no DAFADA: the
+                    # end address is the begin address minus one) loads, as in CSPICE;
+                    # an evaluation of it throws.
+                    empty = b == e + 1 && b >= 1
+                    (empty || 1 <= b <= e <= nwords) || throw(SpiceError(:baddaf,
                         "segment $(length(segments) + 1) has addresses $b:$e outside " *
                         "the file ($nwords doubles): $path"))
                     chebyshev = kind === :SPK ? (dtype == 2 || dtype == 3 || dtype == 20) :
                                 (dtype == 2 || dtype == 20)
-                    init, intlen, rsize, nrec = chebyshev ?
+                    init, intlen, rsize, nrec = (chebyshev && !empty) ?
                         _daf_directory(data, path, kind, dtype, b, e) :
                         (0.0, 0.0, Int32(0), Int32(0))
                     push!(segments, Segment(target, center, frame, dtype, t0, t1, Int32(0),

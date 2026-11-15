@@ -2035,6 +2035,27 @@ group("9. DAF access, SPK and CK writers") do
         SPICE.kclear()
     end
 
+    @apart @testset "a segment without data loads, as in CSPICE" begin
+        # Found by the replay of NAIF's tspice (F_PCKBSR): DAFBNA then DAFENA with no
+        # DAFADA gives a segment whose end address is its begin address minus one.
+        # CSPICE loads such a file; an evaluation of the segment fails.
+        p = joinpath(dir, "empty_segment.bpc")
+        h = pckopn(p, "EMPTY")
+        dafbna(h, dafps([0.0, 1.0e6], [3000, 1, 2, 0, 0]), "EMPTY")
+        dafena(h)
+        dafcls(h)
+        ctx = SpiceContext()
+        furnsh(ctx, p)
+        @test ktotal(ctx, "PCK") == 1
+        @test throws_kind(() -> pxform(ctx, "J2000", "ITRF93", 10.0), :baddaf)
+        SPICE.furnsh(p)
+        try
+            @test SPICE.ktotal("PCK") == 1
+        finally
+            SPICE.kclear()
+        end
+    end
+
     @apart @testset "binary PCK type $type: Almanac reads the file that it writes" for type in (2, 20)
         # Type 20 was found missing by the replay of NAIF's tspice (F_PCK20).
         c = writer_case("pckw$(lpad(type, 2, '0'))")

@@ -18,8 +18,8 @@
 # - `adapter`: the call could not be made (a method error of the mapping below), which
 #   is a fault of this script, not of Almanac;
 # - `skipped`: made by another recorded routine, or made while SPICELIB was in an error
-#   state (it then does nothing), or with an array too long for the log, or a routine
-#   with no mapping.
+#   state (it then does nothing), or with an array too long for the log, or after a
+#   load or pool edit with such an array, or a routine with no mapping.
 #
 # The output is a table per routine and the first mismatches of each kind, and
 # `LOGDIR/replay.tsv` with one line per mismatch.
@@ -426,12 +426,16 @@ function replay_family(path, tallies, mismatches)
     ctx = SpiceContext()
     empty!(HANDLES)
     ORACLE && cspice_reset()
+    # A load or pool edit whose values the log does not hold leaves Almanac without
+    # the kernels of SPICELIB: the rest of the family is skipped.
+    desync = false
     foreach_call(path; want=n -> haskey(MAPPINGS, n) || isdefined(Almanac, Symbol(n))) do c
         name = lowercase(c.name)
         t = get!(Tally, tallies, name)
         truncated = any(a -> a.values == Any[TRUNCATED], c.inputs) ||
                     any(a -> a.values == Any[TRUNCATED], c.outputs)
-        if c.depth > 1 || c.failed_before || truncated ||
+        truncated && name in STATEFUL && (desync = true)
+        if desync || c.depth > 1 || c.failed_before || truncated ||
                 !(haskey(MAPPINGS, name) || isdefined(Almanac, Symbol(name)))
             t.skipped += 1
             return
