@@ -788,8 +788,10 @@ double address space, and `SpiceError(:badarg)` if `data` is too short. If they 
 addresses and `first > last`, nothing changes.
 """
 function dasudd(h::DASHandle, first::Integer, last::Integer, data::AbstractVector{<:Real})
-    _das_check_write(h, "dasudd")
+    # the addresses first, as SPICELIB: an update of a file open for read with a bad
+    # address is `invalidaddress`
     _das_check_update(h, "dasudd", first, last, length(h.dps))
+    _das_check_write(h, "dasudd")
     first > last && return nothing
     length(data) >= last - first + 1 || throw(SpiceError(:badarg, "dasudd: data is too short"))
     copyto!(h.dps, first, data, firstindex(data), last - first + 1)
@@ -808,8 +810,10 @@ integer address space, `SpiceError(:badarg)` if `data` is too short, and
 and `first > last`, nothing changes.
 """
 function dasudi(h::DASHandle, first::Integer, last::Integer, data::AbstractVector{<:Integer})
-    _das_check_write(h, "dasudi")
+    # the addresses first, as SPICELIB: an update of a file open for read with a bad
+    # address is `invalidaddress`
     _das_check_update(h, "dasudi", first, last, length(h.ints))
+    _das_check_write(h, "dasudi")
     first > last && return nothing
     length(data) >= last - first + 1 || throw(SpiceError(:badarg, "dasudi: data is too short"))
     _das_check_int32("dasudi", view(data, firstindex(data):firstindex(data)+(last-first)))
@@ -831,8 +835,10 @@ addresses and `first > last`, nothing changes.
 See also [`dasadc`](@ref), [`dasrdc`](@ref).
 """
 function dasudc(h::DASHandle, first::Integer, last::Integer, data::AbstractString)
-    _das_check_write(h, "dasudc")
+    # the addresses first, as SPICELIB: an update of a file open for read with a bad
+    # address is `invalidaddress`
     _das_check_update(h, "dasudc", first, last, length(h.chars))
+    _das_check_write(h, "dasudc")
     first > last && return nothing
     units = codeunits(data)
     length(units) >= last - first + 1 || throw(SpiceError(:badarg, "dasudc: data is too short"))
