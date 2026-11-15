@@ -33,6 +33,7 @@ CSPICE itself is the reference. The test suite calls each routine of this packag
 | Derivative | The first derivative with the velocity of CSPICE, and each higher derivative with automatic differentiation of the one below it |
 | Error | The kind of the error, and the text of the message where a program can depend on it |
 | Concurrency | Answers from many threads during changes of the loaded kernels with the answers of one thread |
+| NAIF's test suite | The calls that tspice, the test suite of SPICELIB, makes in its 400 test families, recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against this package; a difference from SPICELIB is checked against CSPICE (`test/tspice/`, not part of the default run) |
 | Allocation | A static proof (AllocCheck.jl) that 61 numeric routines cannot allocate: vector, matrix, rotation, coordinate and ellipsoid calls, conic elements, `unitim`, `deltet` and the table queries ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_alloccheck.jl)) |
 
 | Measure | Value |
