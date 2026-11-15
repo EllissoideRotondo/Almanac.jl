@@ -177,12 +177,29 @@ for g in ("vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdo
     DROP[g] = ["ndim"]
 end
 
+for (r, names) in ("qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npts"],
+        "hrmint" => ["n", "work"], "lgrint" => ["n", "work"], "lgrind" => ["n", "work"],
+        "dskrb2" => ["nv", "np"], "hrmesp" => ["n", "work"], "lgresp" => ["n", "work"],
+        "dafada" => ["n"])
+    DROP[r] = names
+end
+
+"Routines whose arrays of 9 or 36 numbers are vectors, not matrices, in Almanac."
+const VECTOR_ROUTINES = Set(["vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg",
+    "vzerog", "vdotg", "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg",
+    "qderiv", "eqncpv", "dskrb2", "hrmint", "lgrint", "lgrind", "hrmesp", "lgresp", "dafada"])
+
+"Routines whose array of points is a list of points in Almanac: name => (argument, size)."
+const POINT_LISTS = Dict("srfnrm" => ("srfpts", 3), "latsrf" => ("lonlat", 2))
+
 "A matrix argument of a routine of general dimensions: column-major, `nr` by `nc`."
 gmat(a::Arg, nr, nc) = reshape(Float64.(a.values), nr, nc)
 
 # Output arguments that Almanac does not return (counts of returned arrays).
 const NOTOUT = Dict("gdpool" => ["n"], "gipool" => ["n"], "gcpool" => ["n"],
-    "bodvrd" => ["dim"], "bodvcd" => ["dim"], "dtpool" => ["found"])
+    "bodvrd" => ["dim"], "bodvcd" => ["dim"], "dtpool" => ["found"],
+    "lgrint" => ["work"], "lgrind" => ["work"], "hrmint" => ["work"], "lgresp" => ["work"],
+    "hrmesp" => ["work"])
 
 "An input by its name: the planes and ellipses of SPICELIB are arrays of 4 and 9 doubles."
 function jl_named(a::Arg)
@@ -195,12 +212,108 @@ function jl_named(a::Arg)
     end
     return jl(a)
 end
+"Segment writers: the count `n` is the length of the arrays in Almanac."
+const WRITERS = r"^(spkw|ckw|pckw)\d\d$"
+"Array arguments of the segment writers, vectors even when they hold one number."
+const WRITER_ARRAYS = Set(["states", "epochs", "sclkdp", "quats", "avvs", "starts",
+    "cdata", "packts", "records", "rates", "coeffs", "dlines", "elems", "ivlbds"])
+
+function jl_named(a::Arg, routine::AbstractString)
+    if occursin(WRITERS, routine) && a.name in WRITER_ARRAYS && a.kind == 'd'
+        return Float64.(a.values)
+    end
+    pl = get(POINT_LISTS, routine, nothing)
+    if pl !== nothing && a.name == pl[1]
+        k = pl[2]
+        v = Float64.(a.values)
+        return [SVector{k}(v[i:i+k-1]) for i in 1:k:length(v)-k+1]
+    end
+    routine in VECTOR_ROUTINES && a.kind != 'c' &&
+        (length(a.values) > 1 || a.name in ("xvals", "yvals", "f0", "f2", "v1", "v2", "data")) &&
+        return SVector{length(a.values)}(a.kind == 'd' ? Float64.(a.values) : Int.(a.values))
+    return jl_named(a)
+end
+
+# --- files opened by handle ------------------------------------------------------------
+#
+# The integer handles of SPICELIB in the log are mapped to the handles that Almanac
+# returned for the same open. A file is opened in the working directory of the replay
+# (a new directory for each family), not in the snapshot of the call: a snapshot is a
+# record of SPICELIB's directory and stays unchanged. A file that the open reads is
+# first copied from the snapshot.
+
+const OPENERS = r"^(daf|das|spk|ck|pck|ek|dsk|dla)(opn|opr|opw|onw|opa)$"
+const CLOSERS = r"^(daf|das|spk|ck|pck|ek|dsk)cls$"
+"Opens that create a file; SPICELIB's succeeded, so a file of that name did not exist."
+const CREATORS = r"(opn|onw)$"
+const HANDLE_ARGS = Set(["handle", "inhan", "han", "handl", "newh"])
+
+"A handle of a file that SPICELIB opened in a routine that is not recorded (a tspice
+utility such as TSTSPK): the call is skipped; the file is read from the snapshots."
+struct UnmappedHandle <: Exception end
+
+"Paths of the files opened by handle, and the files whose writes were not all replayed."
+const HPATH = Dict{Int,String}()
+const TAINTED = Set{String}()
+
+"Almanac's handle of each handle of SPICELIB."
+const HMAP = Dict{Int,Any}()
+
+handle_value(a::Arg) = a.kind == 'i' && length(a.values) == 1 && a.name in HANDLE_ARGS ?
+    get(HMAP, a.values[1], nothing) : nothing
+
+function open_by_handle(ctx, c::Call)
+    name = lowercase(c.name)
+    path = String(c.inputs[1].values[1])
+    if occursin(CREATORS, name)
+        c.failed || (rm(path; force=true); delete!(TAINTED, abspath(path)))
+    else
+        snap = isempty(c.snapshot) ? "" : joinpath(c.snapshot, path)
+        if (!isfile(path) || abspath(path) in TAINTED) && isfile(snap)
+            mkpath(dirname(abspath(path)))
+            cp(snap, path; force=true)
+            delete!(TAINTED, abspath(path))
+        end
+        abspath(path) in TAINTED && throw(UnmappedHandle())
+    end
+    f = getfield(Almanac, Symbol(name))
+    args = Any[jl(a) for a in c.inputs]
+    h = f(args...)
+    k = findfirst(o -> o.name in HANDLE_ARGS, c.outputs)
+    k === nothing || (HMAP[c.outputs[k].values[1]] = h; HPATH[c.outputs[k].values[1]] = abspath(path))
+    return []
+end
+
+# SPICELIB keeps a current DAF for the array search and the array being added; Almanac
+# takes the handle of each call.
+const DAF_SELECT = Set(["dafbfs", "dafbbs", "dafbna", "dafcs"])
+const DAF_CURRENT = Set(["daffna", "daffpa", "dafgs", "dafgn", "dafena", "dafada", "dafws", "dafrs"])
+const CURRENT_DAF = Ref{Any}(nothing)
 
 function default_mapping(ctx, c::Call)
     name = lowercase(c.name)
+    occursin(OPENERS, name) && return open_by_handle(ctx, c)
+    if name in DAF_SELECT
+        h = handle_value(c.inputs[1])
+        h === nothing || (CURRENT_DAF[] = h)
+        name == "dafcs" && return []
+    end
+    name == "dafgh" && return map_handles([("handle", c.outputs[1].values, Any[CURRENT_DAF[]])])
+    any(a -> a.name in HANDLE_ARGS && a.kind == 'i' && handle_value(a) === nothing, c.inputs) &&
+        throw(UnmappedHandle())
     f = getfield(Almanac, Symbol(name))
-    drop = get(DROP, name, String[])
-    args = Any[jl_named(a) for a in c.inputs if !(a.name in drop)]
+    drop = occursin(WRITERS, name) ? vcat(get(DROP, name, String[]), ["n"]) : get(DROP, name, String[])
+    args = Any[(h = handle_value(a); h === nothing ? jl_named(a, name) : h)
+               for a in c.inputs if !(a.name in drop)]
+    if name in DAF_CURRENT
+        CURRENT_DAF[] === nothing && throw(UnmappedHandle())
+        pushfirst!(args, CURRENT_DAF[])
+    end
+    if occursin(CLOSERS, name)
+        f(args...)
+        delete!(HMAP, c.inputs[1].values[1])
+        return []
+    end
     r = applicable(f, ctx, args...) ? f(ctx, args...) : f(args...)
     notout = get(NOTOUT, name, String[])
     outs = [o for o in c.outputs if !(o.name in notout)]
@@ -208,11 +321,24 @@ function default_mapping(ctx, c::Call)
     if found !== nothing
         fexp = outs[found].values[1]
         deleteat!(outs, found)
+        r isa Bool && return [("found", Any[fexp], Any[r])]
         r === nothing && return [("found", Any[fexp], Any[false])]
         fexp || return [("found", Any[false], Any[true])]
     end
     vals = r isa Tuple ? collect(r) : Any[r]
-    return output_pairs(name, outs, vals)
+    return map_handles(output_pairs(name, outs, vals))
+end
+
+"""
+Pairs with a handle output compared through `HMAP`: equal when Almanac returned the
+handle (or path) that is mapped to SPICELIB's handle; an unmapped handle is mapped.
+"""
+function map_handles(pairs)
+    return map(pairs) do (n, e, g)
+        (n in HANDLE_ARGS && length(e) == 1 && g !== nothing && length(g) == 1) || return (n, e, g)
+        h = get!(HMAP, e[1], g[1])
+        return (n, e, h == g[1] ? e : g)
+    end
 end
 
 # --- the CSPICE oracle ----------------------------------------------------------------
@@ -239,6 +365,7 @@ const NO_ORACLE = r"^(ek|das|daf|dla|spkw|ckw|pckw|spko|cko|pcko|dsko|dskw|dskcl
 function cspice_call(c::Call)
     name = lowercase(c.name)
     occursin(NO_ORACLE, name) && return nothing
+    any(a -> handle_value(a) !== nothing, c.inputs) && return nothing
     name in ("spklef", "cklpf", "pcklof") && (name = "furnsh")
     isdefined(SPICE, Symbol(name)) || return nothing
     f = getfield(SPICE, Symbol(name))
@@ -312,19 +439,22 @@ function load_by_handle(ctx, c)
     in_snapshot(c) do
         furnsh(ctx, path)
     end
-    c.failed || (HANDLES[c.outputs[1].values[1]] = path)
+    # Almanac keeps the path as given, and `spksfs` returns it as the handle.
+    c.failed || (HANDLES[c.outputs[1].values[1]] = path; HMAP[c.outputs[1].values[1]] = path)
     return []
 end
 
 function unload_by_handle(ctx, c)
     path = get(HANDLES, jl(c.inputs[1]), nothing)
     path === nothing || unload(ctx, path)
+    delete!(HMAP, jl(c.inputs[1]))
     return []
 end
 
 # Routines whose arguments do not follow the default.
 const MAPPINGS = Dict{String,Function}(
     "spklef" => load_by_handle, "cklpf" => load_by_handle, "pcklof" => load_by_handle,
+    "dafcs" => default_mapping, "dafgh" => default_mapping,
     "spkuef" => unload_by_handle, "ckupf" => unload_by_handle, "pckuof" => unload_by_handle,
     "tparse" => function (ctx, c)
         errmsg = c.outputs[2].values[1]
@@ -425,6 +555,10 @@ function replay_family(path, tallies, mismatches)
     family = replace(basename(path), ".log" => "")
     ctx = SpiceContext()
     empty!(HANDLES)
+    empty!(HMAP)
+    CURRENT_DAF[] = nothing
+    empty!(HPATH); empty!(TAINTED)
+    cd(mktempdir())
     ORACLE && cspice_reset()
     # A load or pool edit whose values the log does not hold leaves Almanac without
     # the kernels of SPICELIB: the rest of the family is skipped.
@@ -435,6 +569,13 @@ function replay_family(path, tallies, mismatches)
         truncated = any(a -> a.values == Any[TRUNCATED], c.inputs) ||
                     any(a -> a.values == Any[TRUNCATED], c.outputs)
         truncated && name in STATEFUL && (desync = true)
+        # a write that is not replayed leaves the file of Almanac incomplete: the later
+        # calls on its handle are skipped
+        for a in c.inputs
+            (truncated && a.name in HANDLE_ARGS && a.kind == 'i') || continue
+            delete!(HMAP, a.values[1])
+            haskey(HPATH, a.values[1]) && push!(TAINTED, HPATH[a.values[1]])
+        end
         if desync || c.depth > 1 || c.failed_before || truncated ||
                 !(haskey(MAPPINGS, name) || isdefined(Almanac, Symbol(name)))
             t.skipped += 1
@@ -450,7 +591,9 @@ function replay_family(path, tallies, mismatches)
         oracle_ok() = ORACLE && !(name in STATEFUL) && !(result isa Exception && !(result isa SpiceError)) &&
                       agrees_with_cspice(c, result)
         expkind = c.failed ? Symbol(lowercase(replace(c.short, r"^SPICE\(|\)$" => ""))) : nothing
-        if result isa SpiceError
+        if result isa UnmappedHandle
+            t.skipped += 1
+        elseif result isa SpiceError
             if expkind === result.kind
                 t.match += 1
             elseif oracle_ok()
