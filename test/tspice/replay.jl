@@ -183,7 +183,8 @@ end
 for (r, names) in ("qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npts"],
         "hrmint" => ["n", "work"], "lgrint" => ["n", "work"], "lgrind" => ["n", "work"],
         "dskrb2" => ["nv", "np"], "hrmesp" => ["n", "work"], "lgresp" => ["n", "work"],
-        "dafada" => ["n"], "vlcomg" => ["n"])
+        "dafada" => ["n"], "vlcomg" => ["n"], "ekacei" => ["nvals"], "ekaced" => ["nvals"],
+        "ekacec" => ["nvals"], "ekucei" => ["nvals"], "ekuced" => ["nvals"], "ekucec" => ["nvals"])
     DROP[r] = names
 end
 
@@ -224,6 +225,10 @@ const WRITER_ARRAYS = Set(["states", "epochs", "sclkdp", "quats", "avvs", "start
 function jl_named(a::Arg, routine::AbstractString)
     if occursin(WRITERS, routine) && a.name in WRITER_ARRAYS && a.kind == 'd'
         return Float64.(a.values)
+    end
+    # the values of an EK entry are a vector, also of one value
+    if occursin(r"^ek[au]ce[cdi]$", routine) && a.name in ("ivals", "dvals", "cvals")
+        return a.kind == 'c' ? String.(a.values) : a.kind == 'i' ? Int.(a.values) : Float64.(a.values)
     end
     # the log holds the declared size of CONSTS(8) plus one
     routine == "spkw10" && a.name == "consts" && length(a.values) > 8 &&
@@ -361,7 +366,21 @@ function default_mapping(ctx, c::Call)
         args[1] isa AbstractString || delete!(HMAP, hid)
         return []
     end
-    r = applicable(f, ctx, args...) ? f(ctx, args...) : f(args...)
+    r = try
+        applicable(f, ctx, args...) ? f(ctx, args...) : f(args...)
+    catch e
+        # An EK that SPICELIB filled through routines outside the log (the segments of
+        # the tspice EK utilities): a segment or record that Almanac's file lacks.
+        if e isa SpiceError && e.kind === :invalidindex && !c.failed && startswith(name, "ek")
+            for a in c.inputs
+                (a.name in HANDLE_ARGS && haskey(HPATH, a.values[1])) || continue
+                push!(TAINTED, HPATH[a.values[1]])
+                delete!(HMAP, a.values[1])
+            end
+            throw(UnmappedHandle())
+        end
+        rethrow()
+    end
     notout = get(NOTOUT, name, String[])
     outs = [o for o in c.outputs if !(o.name in notout)]
     found = findfirst(o -> o.name == "found", outs)
