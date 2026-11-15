@@ -52,6 +52,8 @@ where `ℓ` is the light time, `A` is the stellar aberration and `R` is the rota
 
 The velocity of `spkezr` differs from order 1 for two reasons. CSPICE takes the rate of the light time from the converged light-time equation also for the `LT` corrections, which gives a relative difference of about 1e-8 for the Moon seen from the Earth (8.4e-9 measured with `de440s.bsp`). CSPICE also takes the acceleration of the observer for the `+S` corrections from a difference of velocities over ±1 s, which gives a relative difference of about 1e-13.
 
+For a body whose text PCK gives polynomials of degree 3 for the nutation and precession angles (`BODY<sys>_MAX_PHASE_DEGREE = 3`), the rate that `tisbod_` of CSPICE N0067 computes for an angle divides the cubic term by the square of the seconds in a century instead of by the seconds in a century, so its rate block misses that term. [`tisbod`](@ref), [`sxform`](@ref) and the states in such a frame give the exact derivative of the rotation instead; with the constants of NAIF's test suite for the Moon, CSPICE differs from a central difference of `tipbod` by 1.1e-9 and this package by 1.6e-13. For degrees 1 and 2 the two agree to rounding.
+
 For a rotation, the table says what `pxder` differentiates and what `sxform` returns in its place.
 
 | Frame | `pxder` differentiates | Derivative block of `sxform` |
