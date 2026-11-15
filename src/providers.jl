@@ -12,9 +12,10 @@ of its velocity, from `p.f` called on a Taylor number (as for SPK types that sto
 velocity, `spk_eval`). Throws `SpiceError(:badarraysize)` if `p.f` does not return six
 numbers.
 """
-@inline function provider_jet(p::EphemerisProvider, et::T, ::Val{N}) where {T<:Real,N}
+@noinline function provider_jet(p::EphemerisProvider, et::T, ::Val{N}) where {T<:Real,N}
     # `p.f` is not inferred: every value is converted to `T` with an assertion, so that
     # the jet has a concrete type and the callers of `segment_jet` stay type-stable.
+    # `@noinline` keeps this branch out of the inlined `segment_jet` of the file types.
     if N <= 1
         s = p.f(et)
         _provider_check(p, s, et)
