@@ -41,6 +41,13 @@ spkcvo
 spkcvt
 ```
 
+## Prepared queries
+
+```@docs
+state_query
+StateQuery
+```
+
 ## Bodies from functions of the program
 
 ```@docs

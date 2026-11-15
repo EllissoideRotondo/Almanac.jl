@@ -8,6 +8,13 @@ pxfrm2
 sxform
 ```
 
+## Prepared rotations
+
+```@docs
+rotation_query
+RotationQuery
+```
+
 ## Frames from functions of the program
 
 ```@docs

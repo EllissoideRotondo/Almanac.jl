@@ -77,6 +77,7 @@ For data that are polynomials in time (SPK types 2, 3, 8, 9, 12, 13, 14, 18, 20 
 | Tables for inner loops and GPUs | [`ephemeris_table`](@ref), [`rotation_table`](@ref) |
 | Aberration correction as a value, parsed once | [`Aberration`](@ref): `ab = Aberration("LT+S")`, then `spkezr("MOON", et, "J2000", ab, "EARTH")` |
 | Scratch files in memory | [`dasops`](@ref), [`ekops`](@ref) |
+| States and rotations resolved once and evaluated at many epochs | [`state_query`](@ref), [`rotation_query`](@ref) |
 | Bodies and frames that come from functions of the program | [`add_ephemeris!`](@ref), [`add_frame!`](@ref) |
 | Text kernels written in JSON | [`furnsh`](@ref) and [`ldpool`](@ref) of a file named `*.json`; see [Text kernels in JSON](@ref) |
 

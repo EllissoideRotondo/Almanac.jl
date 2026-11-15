@@ -221,6 +221,13 @@ evaluator pair `spkrNN`/`spkeNN` of CSPICE, so a plain epoch gives the CSPICE st
   stays. Code that dispatches on frame classes must not
   treat class 7 as dynamic: write `class == 5 || class == 6`, not `class >= 5`.
 
+## `queries.jl`
+
+- `StateQuery` and `RotationQuery` hold a `KernelSet` and resolved codes; evaluation
+  calls the `KernelSet` methods of `spkezr`, `spkpos`, `pxform`, `sxform` with those
+  codes, so the results are those of the name forms bit for bit. A change of the
+  queried path of those calls changes the queries with it.
+
 ## `names.jl`
 
 - `normalize_name(s) -> String`: upper case, leading/trailing blanks removed, inner

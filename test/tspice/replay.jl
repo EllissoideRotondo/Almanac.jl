@@ -10,6 +10,7 @@
 #
 # - `match`: Almanac gives the outputs of SPICELIB within `RTOL`, or throws the
 #   `SpiceError` whose kind is the short message that SPICELIB signaled;
+# - `cspice`: Almanac differs from SPICELIB and agrees with CSPICE (TSPICE_ORACLE=1);
 # - `near`: the outputs differ by more than `RTOL` and less than `NEAR` relative;
 # - `value`: the outputs differ by more;
 # - `error`: SPICELIB signaled an error and Almanac did not, or the reverse, or the kinds
@@ -24,6 +25,14 @@
 # `LOGDIR/replay.tsv` with one line per mismatch.
 
 using Almanac, Printf, LinearAlgebra, StaticArrays
+
+# With TSPICE_ORACLE=1 each mismatch is also computed by CSPICE (through SPICE.jl, with
+# the loads of the family mirrored into it): a call where Almanac agrees with CSPICE and
+# both differ from SPICELIB, the Fortran library that tspice ran, is counted as
+# `cspice` instead (CSPICE is the reference of Almanac, and some of its routines are
+# not translations of SPICELIB's: vperp_c, the time defaults).
+const ORACLE = get(ENV, "TSPICE_ORACLE", "0") == "1"
+ORACLE && import SPICE
 
 const RTOL = parse(Float64, get(ENV, "TSPICE_RTOL", "1e-12"))
 const ATOL = parse(Float64, get(ENV, "TSPICE_ATOL", "1e-14"))
@@ -50,8 +59,12 @@ struct Call
     snapshot::String
 end
 
-"Call `f(call)` for each call of the log at `path`, in order, reading the log as a stream."
-function foreach_call(f, path)
+"""
+Call `f(call)` for each call of the log at `path`, in order, reading the log as a stream.
+A call of a routine for which `want(name)` is false is passed with no arguments, which
+saves the parsing of its values.
+"""
+function foreach_call(f, path; want=_ -> true)
     open(path) do io
         pending = nothing                   # a line read ahead
         lineno = 0
@@ -64,6 +77,7 @@ function foreach_call(f, path)
             _, name, depth, fb = parts
             start = lineno
             ins, outs, snap = Arg[], Arg[], ""
+            keep = want(lowercase(name))
             failed, short = false, ""
             while !eof(io)
                 l = nextline()
@@ -74,6 +88,8 @@ function foreach_call(f, path)
                     break
                 elseif startswith(l, "S ")
                     snap = l[3:end]
+                elseif !keep
+                    continue
                 elseif startswith(l, "<") || startswith(l, ">")
                     p = split(l)
                     length(p) == 3 || continue
@@ -118,6 +134,7 @@ end
 "The values of an Almanac result, flattened as SPICELIB's output arguments are."
 flat(x::Nothing) = nothing
 flat(x::AbstractString) = Any[String(x)]
+flat(x::Symbol) = Any[String(x)]
 flat(x::Number) = Any[x]
 flat(x::AbstractArray{<:Number}) = Any[vec(collect(x))...]
 flat(x::AbstractArray{<:AbstractString}) = Any[String.(x)...]
@@ -175,6 +192,72 @@ function default_mapping(ctx, c::Call)
     end
     vals = r isa Tuple ? collect(r) : Any[r]
     return output_pairs(name, outs, vals)
+end
+
+# --- the CSPICE oracle ----------------------------------------------------------------
+
+"Arguments as SPICE.jl takes them: plain arrays."
+plain(x::StaticArray) = Array(x)
+plain(x) = x
+
+"The routines that change the kernels or the settings, mirrored into CSPICE."
+const STATEFUL = Set(["furnsh", "unload", "kclear", "ldpool", "clpool", "pdpool", "pcpool",
+    "pipool", "lmpool", "dvpool", "timdef", "spklef", "cklpf", "pcklof"])
+
+"The kind of an error of SPICE.jl (its message starts with the short message of CSPICE)."
+function cspice_kind(e)
+    m = match(r"SPICE\((\w+)\)", sprint(showerror, e))
+    return m === nothing ? :unknown : Symbol(lowercase(m.captures[1]))
+end
+
+"Call the SPICE.jl function of the routine of `c` with its inputs; an exception is returned."
+function cspice_call(c::Call)
+    name = lowercase(c.name)
+    name in ("spklef", "cklpf", "pcklof") && (name = "furnsh")
+    isdefined(SPICE, Symbol(name)) || return nothing
+    f = getfield(SPICE, Symbol(name))
+    drop = get(DROP, lowercase(c.name), String[])
+    args = Any[plain(jl(a)) for a in c.inputs if !(a.name in drop)]
+    name in ("pdpool", "pipool", "pcpool") && (args = Any[args[1], plain(jl(c.inputs[end]))])
+    name == "lmpool" && (args = Any[String.(c.inputs[1].values)])
+    try
+        return in_snapshot(() -> f(args...), c)
+    catch e
+        return e
+    end
+end
+
+function cspice_reset()
+    SPICE.kclear()
+    SPICE.timdef("SET", "CALENDAR", "GREGORIAN")
+    SPICE.timdef("SET", "SYSTEM", "UTC")
+end
+
+"""
+True if CSPICE gives for `c` what Almanac gave: the same error kind, or outputs that
+agree within `NEAR` with `got`, the outputs of Almanac paired with SPICELIB's.
+"""
+function agrees_with_cspice(c::Call, almanac_result)
+    r = cspice_call(c)
+    r === nothing && return false
+    if almanac_result isa SpiceError
+        return r isa Exception && cspice_kind(r) === almanac_result.kind
+    end
+    r isa Exception && return false
+    name = lowercase(c.name)
+    notout = get(NOTOUT, name, String[])
+    outs = [o for o in c.outputs if !(o.name in notout && o.name != "found")]
+    filter!(o -> o.name != "found", outs)
+    vals = r isa Tuple ? collect(r) : Any[r]
+    oracle = output_pairs(name, outs, vals)
+    length(oracle) == length(almanac_result) || return false
+    for ((_, _, a), (_, _, o)) in zip(almanac_result, oracle)
+        (a === nothing || o === nothing) && return a === o
+        length(a) == length(o) || return false
+        all(t -> close_enough(t[1], t[2]) || (t[1] isa Real && t[2] isa Real &&
+            abs(t[1] - t[2]) <= NEAR * max(abs(t[1]), abs(t[2]), 1.0)), zip(a, o)) || return false
+    end
+    return true
 end
 
 function output_pairs(name, outs, vals)
@@ -282,19 +365,21 @@ in_snapshot(f, c::Call) = isempty(c.snapshot) ? f() : cd(f, c.snapshot)
 
 mutable struct Tally
     match::Int
+    cspice::Int
     near::Int
     value::Int
     error::Int
     adapter::Int
     skipped::Int
 end
-Tally() = Tally(0, 0, 0, 0, 0, 0)
+Tally() = Tally(0, 0, 0, 0, 0, 0, 0)
 
 function replay_family(path, tallies, mismatches)
     family = replace(basename(path), ".log" => "")
     ctx = SpiceContext()
     empty!(HANDLES)
-    foreach_call(path) do c
+    ORACLE && cspice_reset()
+    foreach_call(path; want=n -> haskey(MAPPINGS, n) || isdefined(Almanac, Symbol(n))) do c
         name = lowercase(c.name)
         t = get!(Tally, tallies, name)
         truncated = any(a -> a.values == Any[TRUNCATED], c.inputs) ||
@@ -310,26 +395,35 @@ function replay_family(path, tallies, mismatches)
         catch e
             e
         end
+        ORACLE && name in STATEFUL && cspice_call(c)
+        oracle_ok() = ORACLE && !(name in STATEFUL) && !(result isa Exception && !(result isa SpiceError)) &&
+                      agrees_with_cspice(c, result)
         expkind = c.failed ? Symbol(lowercase(replace(c.short, r"^SPICE\(|\)$" => ""))) : nothing
         if result isa SpiceError
             if expkind === result.kind
                 t.match += 1
+            elseif oracle_ok()
+                t.cspice += 1
             else
                 t.error += 1
-                push!(mismatches, (family, c, "error", "SPICELIB: $(c.failed ? c.short : "no error"); " *
+                record!(mismatches, (family, c, "error", "SPICELIB: $(c.failed ? c.short : "no error"); " *
                     "Almanac: $(result.kind): $(first(sprint(showerror, result), 160))"))
             end
         elseif result isa Exception
             t.adapter += 1
-            push!(mismatches, (family, c, "adapter", first(sprint(showerror, result), 200)))
+            record!(mismatches, (family, c, "adapter", first(sprint(showerror, result), 200)))
+        elseif c.failed && oracle_ok()
+            t.cspice += 1
         elseif c.failed
             t.error += 1
-            push!(mismatches, (family, c, "error", "SPICELIB: $(c.short); Almanac: no error"))
+            record!(mismatches, (family, c, "error", "SPICELIB: $(c.short); Almanac: no error"))
         else
             bad = [(n, e, g) for (n, e, g) in result if
                    g === nothing || length(e) != length(g) || !all(close_enough.(e, g))]
             if isempty(bad)
                 t.match += 1
+            elseif oracle_ok()
+                t.cspice += 1
             else
                 n, e, g = bad[1]
                 near = all(((n, e, g),) -> g !== nothing && length(e) == length(g) &&
@@ -337,11 +431,29 @@ function replay_family(path, tallies, mismatches)
                         abs(t[1] - t[2]) <= NEAR * max(abs(t[1]), abs(t[2]), 1.0)), zip(e, g)), bad)
                 near ? (t.near += 1) : (t.value += 1)
                 d = g === nothing ? "nothing" : string(g)
-                push!(mismatches, (family, c, near ? "near" : "value", "$n: SPICELIB $(e) Almanac $(first(d, 300))" *
+                record!(mismatches, (family, c, near ? "near" : "value", "$n: SPICELIB $(e) Almanac $(first(d, 300))" *
                     (g === nothing ? "" : @sprintf(" (max rel diff %.2e)", maxdiff(e, g)))))
             end
         end
     end
+end
+
+"""
+The mismatches go to `replay.tsv` as they are found, the first `MAXROWS` of each routine
+and kind; the others are only counted.
+"""
+mutable struct Mismatches
+    io::IO
+    rows::Dict{Tuple{String,String},Int}
+end
+const MAXROWS = 200
+
+function record!(m::Mismatches, (fam, c, kind, msg))
+    key = (c.name, kind)
+    n = get(m.rows, key, 0) + 1
+    m.rows[key] = n
+    n <= MAXROWS || return
+    println(m.io, fam, '\t', c.line, '\t', kind, '\t', describe(c), '\t', replace(msg, '\n' => ' '))
 end
 
 function describe(c::Call)
@@ -356,30 +468,27 @@ function main(args)
     wanted = Set("F_" * uppercase(replace(fam, r"^F_"i => "")) * ".LOG" for fam in families)
     isempty(families) || filter!(f -> uppercase(basename(f)) in wanted, logs)
     tallies = Dict{String,Tally}()
-    mismatches = Any[]
+    mismatches = Mismatches(open(joinpath(logdir, "replay.tsv"), "w"), Dict{Tuple{String,String},Int}())
     for path in logs
         println(stderr, basename(path))
+        flush(stderr)
         try
             replay_family(path, tallies, mismatches)
         catch e
             println("family $(basename(path)): ", first(sprint(showerror, e), 300))
         end
     end
-    println(rpad("routine", 10), lpad("match", 8), lpad("near", 7), lpad("value", 7), lpad("error", 7), lpad("adapter", 9), lpad("skipped", 9))
+    println(rpad("routine", 10), lpad("match", 8), lpad("cspice", 8), lpad("near", 7), lpad("value", 7), lpad("error", 7), lpad("adapter", 9), lpad("skipped", 9))
     tot = Tally()
     for name in sort(collect(keys(tallies)))
         t = tallies[name]
-        println(rpad(name, 10), lpad(t.match, 8), lpad(t.near, 7), lpad(t.value, 7), lpad(t.error, 7), lpad(t.adapter, 9), lpad(t.skipped, 9))
+        println(rpad(name, 10), lpad(t.match, 8), lpad(t.cspice, 8), lpad(t.near, 7), lpad(t.value, 7), lpad(t.error, 7), lpad(t.adapter, 9), lpad(t.skipped, 9))
         for f in fieldnames(Tally)
             setfield!(tot, f, getfield(tot, f) + getfield(t, f))
         end
     end
-    println(rpad("all", 10), lpad(tot.match, 8), lpad(tot.near, 7), lpad(tot.value, 7), lpad(tot.error, 7), lpad(tot.adapter, 9), lpad(tot.skipped, 9))
-    open(joinpath(logdir, "replay.tsv"), "w") do io
-        for (fam, c, kind, msg) in mismatches
-            println(io, fam, '\t', c.line, '\t', kind, '\t', describe(c), '\t', replace(msg, '\n' => ' '))
-        end
-    end
+    println(rpad("all", 10), lpad(tot.match, 8), lpad(tot.cspice, 8), lpad(tot.near, 7), lpad(tot.value, 7), lpad(tot.error, 7), lpad(tot.adapter, 9), lpad(tot.skipped, 9))
+    close(mismatches.io)
     return tot
 end
 

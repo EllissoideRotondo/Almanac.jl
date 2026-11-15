@@ -40,6 +40,19 @@ extrema(distance)                           # km
 
 A thread can also load or unload a kernel while other threads query. [`furnsh`](@ref), [`unload`](@ref) and the calls that change the kernel pool build a new snapshot and replace the old one in one step, so that a reader sees the set before the change or after it and never a mixture. Two changes at the same time wait for each other. Two consecutive queries of one thread can therefore see different kernel sets if another thread changes the set between them.
 
+## Resolve a query once
+
+[`state_query`](@ref) resolves the names, the frame and the aberration correction of a state once, on the snapshot of the moment, and [`rotation_query`](@ref) does the same for a rotation. The query then gives the result of [`spkezr`](@ref) or [`pxform`](@ref) to the last bit, without the lookup of the names at each epoch, and its snapshot keeps two consecutive results of the same kernel set even when another thread loads a kernel in between.
+
+```@example ctx
+q = state_query(mission, "PROBE", "J2000", "LT+S", "EARTH")
+
+positions = [spkpos(q, t)[1] for t in epochs]
+q(epochs[1]) == spkezr(mission, "PROBE", epochs[1], "J2000", "LT+S", "EARTH")
+```
+
+A query is immutable and can be shared by threads. To see kernels loaded after it was made, make a new query.
+
 ## What must not be shared
 
-A file that is open for direct access (a handle from `dafopr`, `dasopr`, `spkopn` and similar calls) belongs to the code that opened it, and one handle must not be used from two threads at once. The same holds for a [`Window`](@ref) that a thread changes. An [`EphemerisTable`](@ref) or a [`RotationTable`](@ref) is immutable and can be shared.
+A file that is open for direct access (a handle from `dafopr`, `dasopr`, `spkopn` and similar calls) belongs to the code that opened it, and one handle must not be used from two threads at once. The same holds for a [`Window`](@ref) that a thread changes. An [`EphemerisTable`](@ref), a [`RotationTable`](@ref), a [`StateQuery`](@ref) or a [`RotationQuery`](@ref) is immutable and can be shared.
