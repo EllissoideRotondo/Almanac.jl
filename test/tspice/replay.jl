@@ -211,8 +211,13 @@ function cspice_kind(e)
 end
 
 "Call the SPICE.jl function of the routine of `c` with its inputs; an exception is returned."
+# Routines that open or write files are not called in CSPICE: an inconsistent file
+# makes it stop the process.
+const NO_ORACLE = r"^(ek|das|daf|dla|spkw|ckw|pckw|spko|cko|pcko|dsko|dskw|dskcls|spkcls|ckcls|pckcls)"
+
 function cspice_call(c::Call)
     name = lowercase(c.name)
+    occursin(NO_ORACLE, name) && return nothing
     name in ("spklef", "cklpf", "pcklof") && (name = "furnsh")
     isdefined(SPICE, Symbol(name)) || return nothing
     f = getfield(SPICE, Symbol(name))
