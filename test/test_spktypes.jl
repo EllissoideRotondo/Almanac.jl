@@ -529,6 +529,18 @@ group("9. SPK data types against CSPICE") do
         @test spkpos(ctx, c.body, et, "J2000", "NONE", EARTH)[1] == byid[1][SOneTo(3)]
     end
 
+    # CSPICE (SPKGEO) subtracts the two states in their common segment frame and rotates
+    # the difference; rotating each state to J2000 first changes the last bit, which is
+    # 3e-8 km at the distance of Mars from the solar system barycenter.
+    @apart @testset "a chain in a frame other than J2000: the CSPICE state to the bit" begin
+        a, b = (only(c for c in cases if c.label == "type $t, degree 3, ECLIPJ2000") for t in (9, 13))
+        lo, hi = max(a.t0, b.t0), min(a.t1, b.t1)
+        for et in random_epochs(MersenneTwister(SEED + 90), 20, lo, hi)   # own stream
+            @test spkgeo(ctx, a.body, et, "J2000", b.body)[1] ==
+                  SPICE.spkgeo(a.body, et, "J2000", b.body)[1]
+        end
+    end
+
     @apart @testset "zero allocation and inferred types" begin
         for c in cases
             et = c.t0 + 0.37 * (c.t1 - c.t0)

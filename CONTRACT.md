@@ -207,7 +207,7 @@ evaluator pair `spkrNN`/`spkeNN` of CSPICE, so a plain epoch gives the CSPICE st
 - An `EphemerisProvider` is a `Loaded` content. `build_kernelset` gives it one SPK
   `Segment` with `dtype == PROVIDER_DTYPE` (-1), `file == 0` and `baddr` = its index in
   `ks.loaded`, in the priority order of a file loaded at its place in the list.
-- `segment_jet` (`spk_api.jl`) sends such a segment to `provider_jet(p, et, Val(N))`;
+- `segment_jet` and `segment_jet_native` (`spk_api.jl`) send such a segment to `provider_jet(p, et, Val(N))`;
   every other reader of `ks.spk` segments that touches `ks.daf[seg.file]` must test
   `PROVIDER_DTYPE` first (`spksfs`, `spkpvn` do).
 - `p.f` is untyped: one dynamic call per evaluation; the result is converted to
@@ -453,6 +453,11 @@ the default context, plus an inner form on a `KernelSet`.
   and throws `SpkInsufficientDataError` (`:spkinsuffdata` or `:noloadedfiles`). It is the place where a
   type 10 segment is evaluated, with `_t10_jet` and the leap seconds of `ks`.
   `frame_jet(ks, from, to, et, ::Val{N})` is the rotation jet for any epoch type.
+  `spk_jet` sums each chain in the segment frames and changes frame where a segment's
+  frame changes, then subtracts and rotates to `ref` as `SPKGEO` does
+  (`_chain_add`, `_chain_combine`); a chain of J2000 segments makes no rotation before
+  the one to `ref`. With this order the state equals CSPICE's to the last bit for
+  segments in other frames too.
 - `check_epoch(et)` throws `SpiceError(:badarg)` for an epoch that is not finite;
   `NameOrID = Union{AbstractString,Integer}`; `CLIGHT` is the value of `clight_c`.
 
