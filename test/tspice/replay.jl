@@ -139,7 +139,8 @@ flat(x::Number) = Any[x]
 flat(x::AbstractArray{<:Number}) = Any[vec(collect(x))...]
 flat(x::AbstractArray{<:AbstractString}) = Any[String.(x)...]
 flat(x::AbstractArray) = Any[reduce(vcat, flat.(x))...]
-flat(x::SpiceEllipse) = Any[x.center..., x.semi_major..., x.semi_minor...]
+flat(x::SpiceEllipse) = Any[x.center..., x.semimajor..., x.semiminor...]
+flat(x::SpicePlane) = Any[x.normal..., x.constant]
 
 close_enough(a::Real, b::Real) = a == b || abs(a - b) <= ATOL + RTOL * max(abs(a), abs(b))
 close_enough(a::AbstractString, b::AbstractString) = rstrip(a) == rstrip(b)
@@ -171,15 +172,35 @@ const DROP = Dict("gdpool" => ["start", "room"], "gipool" => ["start", "room"],
     "gcpool" => ["start", "room"], "bodvrd" => ["maxn"], "bodvcd" => ["maxn"],
     "pdpool" => ["n"], "pipool" => ["n"], "pcpool" => ["n"], "lmpool" => ["n"])
 
+for g in ("vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdotg",
+        "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg")
+    DROP[g] = ["ndim"]
+end
+
+"A matrix argument of a routine of general dimensions: column-major, `nr` by `nc`."
+gmat(a::Arg, nr, nc) = reshape(Float64.(a.values), nr, nc)
+
 # Output arguments that Almanac does not return (counts of returned arrays).
 const NOTOUT = Dict("gdpool" => ["n"], "gipool" => ["n"], "gcpool" => ["n"],
     "bodvrd" => ["dim"], "bodvcd" => ["dim"], "dtpool" => ["found"])
+
+"An input by its name: the planes and ellipses of SPICELIB are arrays of 4 and 9 doubles."
+function jl_named(a::Arg)
+    if a.kind == 'd' && length(a.values) == 4 && a.name in ("plane", "projpl", "invpl")
+        v = Float64.(a.values)
+        return SpicePlane(SVector{3}(v[1], v[2], v[3]), v[4])
+    elseif a.kind == 'd' && length(a.values) == 9 && a.name in ("ellips", "ellipse", "limb")
+        v = Float64.(a.values)
+        return SpiceEllipse(SVector{3}(v[1:3]...), SVector{3}(v[4:6]...), SVector{3}(v[7:9]...))
+    end
+    return jl(a)
+end
 
 function default_mapping(ctx, c::Call)
     name = lowercase(c.name)
     f = getfield(Almanac, Symbol(name))
     drop = get(DROP, name, String[])
-    args = Any[jl(a) for a in c.inputs if !(a.name in drop)]
+    args = Any[jl_named(a) for a in c.inputs if !(a.name in drop)]
     r = applicable(f, ctx, args...) ? f(ctx, args...) : f(args...)
     notout = get(NOTOUT, name, String[])
     outs = [o for o in c.outputs if !(o.name in notout)]
@@ -223,7 +244,10 @@ function cspice_call(c::Call)
     f = getfield(SPICE, Symbol(name))
     drop = get(DROP, lowercase(c.name), String[])
     args = Any[plain(jl(a)) for a in c.inputs if !(a.name in drop)]
-    name in ("pdpool", "pipool", "pcpool") && (args = Any[args[1], plain(jl(c.inputs[end]))])
+    v = isempty(c.inputs) ? Any[] : c.inputs[end].values
+    name == "pdpool" && (args = Any[args[1], Float64.(v)])
+    name == "pipool" && (args = Any[args[1], Int.(v)])
+    name == "pcpool" && (args = Any[args[1], String.(v)])
     name == "lmpool" && (args = Any[String.(c.inputs[1].values)])
     try
         return in_snapshot(() -> f(args...), c)
@@ -320,7 +344,7 @@ const MAPPINGS = Dict{String,Function}(
     "dtpool" => function (ctx, c)
         found, n, typ = c.outputs[1].values[1], c.outputs[2].values[1], c.outputs[3].values[1]
         r = dtpool(ctx, jl(c.inputs[1]))
-        r === nothing && return [("found", Any[found], Any[false])]
+        r[2] === :X && return [("found", Any[found], Any[false])]   # Almanac: (0, :X) when absent
         found || return [("found", Any[false], Any[true])]
         return [("n,type", Any[n, typ], Any[r[1], string(r[2])])]
     end,
@@ -330,6 +354,24 @@ const MAPPINGS = Dict{String,Function}(
     "pdpool" => (ctx, c) -> (pdpool(ctx, jl(c.inputs[1]), Float64.(c.inputs[3].values)); []),
     "pipool" => (ctx, c) -> (pipool(ctx, jl(c.inputs[1]), Int.(c.inputs[3].values)); []),
     "pcpool" => (ctx, c) -> (pcpool(ctx, jl(c.inputs[1]), String.(c.inputs[3].values)); []),
+    "mxvg" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        nr, nc = a["nr1"].values[1], a["nc1r2"].values[1]
+        r = mxvg(gmat(a["m1"], nr, nc), Float64.(a["v2"].values))
+        return output_pairs("mxvg", c.outputs, Any[r])
+    end,
+    "mtxvg" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        nc, nr = a["nc1"].values[1], a["nr1r2"].values[1]
+        r = mtxvg(gmat(a["m1"], nr, nc), Float64.(a["v2"].values))
+        return output_pairs("mtxvg", c.outputs, Any[r])
+    end,
+    "mxmg" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        nr1, nc1r2, nc2 = a["nr1"].values[1], a["nc1r2"].values[1], a["nc2"].values[1]
+        r = mxmg(gmat(a["m1"], nr1, nc1r2), gmat(a["m2"], nc1r2, nc2))
+        return output_pairs("mxmg", c.outputs, Any[r])
+    end,
     "gnpool" => function (ctx, c)
         # Almanac returns the names in ascending order, CSPICE in the order of its hash
         # table: compare the sets when SPICELIB returned all of them.
