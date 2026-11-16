@@ -202,6 +202,12 @@ end
 @inline _ssbpos(ks::KernelSet, body::Int32, et, iref::Int32) =
     spk_jet(ks, body, et, iref, Int32(0), Val(0))[1]
 
+"The position of `_ssbpos` and a zero velocity, as a pair of the type that `_ssb` returns."
+@noinline function _ssbpos_still(ks::KernelSet, body::Int32, et, iref::Int32)
+    r = _ssbpos(ks, body, et, iref)
+    return r, zero(r)
+end
+
 "True if frame `ref` is inertial (class 1): the test `type == 1` of `spkez`."
 @inline _is_inertial(ks::KernelSet, ref::Int32) =
     ref == Int32(1) || frame_def(ks, ref).class == Int32(1)
@@ -454,8 +460,10 @@ function abcorr_position(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberr
         obs::Int32)
     inertial = _is_inertial(ks, ref)
     iref = inertial ? ref : Int32(1)
-    robs, vobs = corr.stellar ? _ssb(ks, obs, et, iref) :
-                 (r0 = _ssbpos(ks, obs, et, iref); (r0, zero(r0)))
+    # Both branches return a pair of the same type. With `spk_jet` of order 1 in one
+    # branch and of order 0 in the other, the two results share one storage slot, and a
+    # pass of Enzyme stops on a slot that holds results of two different types.
+    robs, vobs = corr.stellar ? _ssb(ks, obs, et, iref) : _ssbpos_still(ks, obs, et, iref)
     r, lt = _apo(ks, targ, et, iref, corr, robs, vobs)
     inertial && return r, lt
     center = frame_def(ks, ref).center

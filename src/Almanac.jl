@@ -153,6 +153,7 @@ include("gf/fov.jl")         # gftfov, gfrfov, gffove: visibility in a field of 
 include("providers.jl")     # EphemerisProvider evaluation, add_ephemeris!
 include("queries.jl")       # StateQuery, state_query, RotationQuery, rotation_query
 include("table.jl")         # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
+include("ad.jl")            # derivative rules for the AD package extensions
 include("ek/file.jl")       # EK pages, trees, segment and column descriptors
 include("ek/columns.jl")    # EK column entries of classes 1 to 9
 include("ek/query_parse.jl")  # EK query language: scan, parse, resolve names and times, check
