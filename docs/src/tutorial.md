@@ -1,6 +1,6 @@
 # First session
 
-This page goes through one complete session: it loads kernels, converts a time, asks for a state and a rotation, finds the point of the Earth below a spacecraft, and searches for the times of perigee. Each call has the name that it has in CSPICE, without the `_c` suffix and with `!` for a call that changes its argument.
+This session loads kernels, converts a time, computes a state and a rotation, finds the point below a spacecraft and searches for perigees. Names are those of CSPICE without `_c`; a call that changes an argument ends in `!`.
 
 ```@setup first
 using Almanac
@@ -10,18 +10,18 @@ kernels = DocKernels.write(mktempdir())
 
 ## Load kernels
 
-A kernel is a file of data: an SPK holds trajectories in segments, each of which gives one body relative to a center over an interval of time, and a text kernel holds constants such as leap seconds and body radii. [`furnsh`](@ref) loads a kernel of any kind, and [`ktotal`](@ref) counts the loaded kernels of one kind or of all kinds. In the block below, `kernels` is a vector of three paths.
+[`furnsh`](@ref) loads a kernel of any kind, including a meta-kernel; [`ktotal`](@ref) counts loaded kernels. Here `kernels` holds three paths: leap seconds, constants of the Sun and the Earth, and an SPK.
 
 ```@example first
 using Almanac
 
-foreach(furnsh, kernels)      # leap seconds, constants of the Sun and the Earth, an SPK
+foreach(furnsh, kernels)
 ktotal("ALL")
 ```
 
-A meta-kernel is a text kernel that lists other kernels in its variable `KERNELS_TO_LOAD`. `furnsh(meta)` loads each listed file into the default context, and `furnsh(ctx, meta)` loads them into the context `ctx` (see [Contexts and threads](@ref)). As in CSPICE, a relative path in the list is relative to the working directory of Julia, not to the directory of the meta-kernel. The variables `PATH_SYMBOLS` and `PATH_VALUES` give a name to a directory, and an entry that begins with `$NAME` starts with that directory.
+As in CSPICE, relative paths in a meta-kernel's `KERNELS_TO_LOAD` are relative to the working directory, not to the meta-kernel; use `PATH_SYMBOLS` and `PATH_VALUES` for anything else.
 
-The kernels of real bodies come from NAIF. The package SPICEKernels.jl downloads the generic kernels of NAIF on first use and returns their paths, which `furnsh` takes as they are:
+For real bodies, [SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels) downloads the NAIF generic kernels and returns their paths:
 
 ```julia
 using SPICEKernels
@@ -33,7 +33,7 @@ furnsh(pck00011())       # orientation and radii of the bodies
 
 ## Convert a time
 
-The state, frame, geometry and event calls take an epoch as seconds past J2000 in Barycentric Dynamical Time (TDB), which SPICE calls ET; the CK calls take encoded spacecraft clock instead. [`str2et`](@ref) converts a calendar string to that number. [`timout`](@ref) converts back with a picture, which is a string that shows the wanted format; the marker `::TDB` asks for the TDB time scale.
+State, frame, geometry and event calls take epochs in seconds past J2000 TDB (ET); the CK calls take encoded spacecraft clock. [`str2et`](@ref) parses a calendar string and [`timout`](@ref) formats an epoch with a picture string.
 
 ```@example first
 et = str2et("2025 MAR 01 12:00:00 UTC")
@@ -43,36 +43,36 @@ et = str2et("2025 MAR 01 12:00:00 UTC")
 timout(et, "YYYY Mon DD HR:MN:SC.### ::TDB")
 ```
 
-The input string and the output string differ by 69.185 seconds, which is the difference between TDB and UTC at that date.
+The 69.185 s offset is TDB − UTC at that date.
 
 ## State of a body
 
-[`spkezr`](@ref) returns the state of a target relative to an observer, as a position in kilometers and a velocity in kilometers per second, together with the one-way light time in seconds. The frame and the aberration correction are arguments: `"NONE"` gives the geometric state, and `"LT+S"` gives the state that the observer sees, corrected for light time and stellar aberration.
+[`spkezr`](@ref) returns the state of a target relative to an observer (km, km/s) and the one-way light time (s). `"NONE"` gives the geometric state, `"LT+S"` the apparent one.
 
 ```@example first
 state, lt = spkezr("PROBE", et, "J2000", "NONE", "EARTH")
 state
 ```
 
-The result is a static vector of six numbers; with names in upper case, as here, the call allocates no memory. [`spkpos`](@ref) returns the position alone:
+The state is an `SVector{6}`. The call does not allocate when bodies and frame are integer IDs or upper-case names with single blanks (`"MARS BARYCENTER"`). [`spkpos`](@ref) returns the position only:
 
 ```@example first
 sun, lt_sun = spkpos("SUN", et, "J2000", "LT+S", "PROBE")
-lt_sun                        # seconds from the Sun to the spacecraft
+lt_sun                        # s
 ```
 
 ## Rotation between frames
 
-[`pxform`](@ref) returns the matrix that rotates a vector from one frame to another at an epoch, and [`sxform`](@ref) returns the 6 by 6 matrix that also transforms the velocity. `IAU_EARTH` is the frame that rotates with the Earth.
+[`pxform`](@ref) returns the 3×3 rotation from one frame to another, [`sxform`](@ref) the 6×6 state transformation.
 
 ```@example first
 r = pxform("J2000", "IAU_EARTH", et)
-r * state[1:3]                # the position in the rotating frame, km
+r * state[1:3]                # km, in the Earth-fixed frame
 ```
 
 ## The point below the spacecraft
 
-[`subpnt`](@ref) returns the point of a body that is nearest to an observer, in the body-fixed frame; the method string selects the nearest point on the ellipsoid whose radii the constants kernel gives. The call also returns the epoch at the body and the vector from the observer to the point. [`reclat`](@ref) converts it to radius, longitude and latitude in radians, and `dpr()` is the number of degrees in a radian.
+[`subpnt`](@ref) returns the sub-observer point in the body-fixed frame, the epoch at the target and the observer-to-point vector. [`reclat`](@ref) converts it to radius, longitude and latitude (rad).
 
 ```@example first
 point, epoch, vector = subpnt("NEAR POINT/ELLIPSOID", "EARTH", et, "IAU_EARTH", "NONE", "PROBE")
@@ -82,7 +82,7 @@ radius, lon, lat = reclat(point)
 
 ## Search for an event
 
-The geometry finder calls (names that begin with `gf`) search an interval of time for the epochs at which a quantity meets a condition. The interval and the result are both a [`Window`](@ref), which is a list of disjoint intervals. The search below looks for the local minima (`"LOCMIN"`) of the distance from the Earth during one day. The two zeros are the reference value of a comparison such as `">"` and the adjustment, which widens an absolute extremum to the times within that amount of it; a local minimum uses neither, and 600 seconds is the step of the search; [The step](@ref) says how to choose it.
+The `gf` calls search a [`Window`](@ref) of time for the epochs where a quantity meets a condition, and return a `Window`. Below, the local minima of the distance over one day. The arguments after the relation are the reference value and the adjustment (both unused for `"LOCMIN"`) and the step, 600 s; [The step](@ref) says how to choose it.
 
 ```@example first
 search = Window()
@@ -96,11 +96,11 @@ for i in 1:wncard(perigees)
 end
 ```
 
-The orbit of the example has a perigee radius of 7078.137 km, which the search recovers three times in the day.
+The example orbit has a perigee radius of 7078.137 km.
 
 ## Unload
 
-[`kclear`](@ref) removes all kernels, and [`unload`](@ref) removes one file, or a meta-kernel with the files that it loaded.
+[`kclear`](@ref) removes all kernels; [`unload`](@ref) removes one file, or a meta-kernel and the files it loaded.
 
 ```@example first
 kclear()
@@ -109,7 +109,7 @@ ktotal("ALL")
 
 ## Errors
 
-A call that cannot answer throws a [`SpiceError`](@ref) whose `kind` field names the reason and whose `msg` field holds the text; CSPICE would set its error flag instead. With no kernel loaded, the name of the spacecraft is unknown:
+A call that cannot answer throws a [`SpiceError`](@ref), usually its subtype [`SpiceKindError`](@ref). Its `kind` is the CSPICE short message as a lower-case symbol (`SPICE(IDCODENOTFOUND)` becomes `:idcodenotfound`), and `msg` the text.
 
 ```@example first
 try
@@ -119,6 +119,6 @@ catch err
 end
 ```
 
-A query that the loaded SPK files cannot answer throws the subtype [`SpkInsufficientDataError`](@ref). Its fields `target` and `observer` hold the two bodies, `et` the epoch, `body` the body without data, and `loaded` whether that body has data at other epochs, so that a program can load another kernel or skip the epoch without reading the text.
+Missing SPK data throw the subtype [`SpkInsufficientDataError`](@ref), whose fields name the bodies, the epoch, and whether the missing body has data at other epochs.
 
-[Differences from CSPICE](@ref) lists what a CSPICE user must know before a port.
+Before porting a CSPICE program, read [Differences from CSPICE](@ref).

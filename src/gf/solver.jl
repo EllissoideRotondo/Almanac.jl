@@ -24,7 +24,8 @@ const _GF_ADDWIN = 0.5
 """
     gfrefn(t1, t2, s1=false, s2=true) -> Float64
 
-Return the midpoint of the bracket [`t1`, `t2`], as `gfrefn_c`. This is the default
+Return the midpoint of the bracket [`t1`, `t2`], as
+[`gfrefn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrefn_c.html). This is the default
 refinement function of the geometry finder.
 
 The result is `t1 * 0.5 + t2 * 0.5`, clamped between `t1` and `t2`; the two ends can be in
@@ -248,7 +249,8 @@ end
     _gf_wnexpd(w, left, right) -> Window
 
 Copy of `w` with each interval expanded by `left` at its left end and by `right` at its
-right end, and overlapping intervals merged, as `wnexpd_c` (the amounts are not
+right end, and overlapping intervals merged, as
+[`wnexpd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnexpd_c.html) (the amounts are not
 negative here).
 """
 function _gf_wnexpd(w::Window, left::Float64, right::Float64)
@@ -473,7 +475,8 @@ end
 """
     uddf(udfunc, x, dx) -> Float64
 
-Return the numerical derivative of the scalar function `udfunc` at `x`, as `uddf_c`.
+Return the numerical derivative of the scalar function `udfunc` at `x`, as
+[`uddf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/uddf_c.html).
 
 The result is the central difference `(udfunc(x + dx) - udfunc(x - dx)) / (2 dx)`.
 Unlike CSPICE, `udfunc` takes the abscissa alone.
@@ -500,7 +503,8 @@ end
 """
     uddc(udfunc, x, dx) -> Bool
 
-Return `true` if the numerical derivative `uddf(udfunc, x, dx)` is negative, as `uddc_c`.
+Return `true` if the numerical derivative `uddf(udfunc, x, dx)` is negative, as
+[`uddc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/uddc_c.html).
 
 This is the "is decreasing" test that [`gfuds`](@ref) needs, for a function without an
 analytical derivative: pass `et -> uddc(udfuns, et, dx)` as `udqdec`.

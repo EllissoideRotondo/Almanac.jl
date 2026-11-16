@@ -5,7 +5,8 @@
     pxform([ctx,] from, to, et) -> SMatrix{3,3}
 
 Return the matrix that rotates a position vector from frame `from` to frame `to` at
-`et`, as `pxform_c`.
+`et`, as
+[`pxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pxform_c.html).
 
 For the matrix `R`, `R * v` gives in `to` the components of a vector `v` given in
 `from`. `from` and `to` are frame names or frame IDs. `et` is in seconds past J2000
@@ -57,7 +58,8 @@ pxform(from::NameOrID, to::NameOrID, et::Real) = pxform(default_context(), from,
     pxfrm2([ctx,] from, to, etfrom, etto) -> SMatrix{3,3}
 
 Return the matrix that rotates a position vector from frame `from` at the epoch
-`etfrom` to frame `to` at the epoch `etto`, as `pxfrm2_c` of CSPICE.
+`etfrom` to frame `to` at the epoch `etto`, as
+[`pxfrm2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pxfrm2_c.html) of CSPICE.
 
 The matrix is the product of the rotation from `from` to J2000 at `etfrom` and the
 rotation from J2000 to `to` at `etto`. It is the rotation that the light-time
@@ -136,7 +138,8 @@ pxder(from::NameOrID, to::NameOrID, et::Real, v::Val) =
     sxform([ctx,] from, to, et) -> SMatrix{6,6}
 
 Return the matrix that transforms a state (position, velocity) from frame `from` to
-frame `to` at `et`, as `sxform_c`.
+frame `to` at `et`, as
+[`sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html).
 
 The matrix is `[R 0; dR R]`: `R` is the rotation of [`pxform`](@ref) and `dR` is its
 time derivative in 1/s. `from` and `to` are frame names or frame IDs; `et` is in

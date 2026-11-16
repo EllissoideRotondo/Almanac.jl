@@ -13,7 +13,8 @@ const _M_HALFPI = Float64(pi) / 2
 
 """
 `reclat` kernel. With `scaled` the longitude comes from the components divided by the
-largest one (`reclat_c`); without it from the components themselves (`reclat_`).
+largest one (
+[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)); without it from the components themselves (`reclat_`).
 """
 @inline function _m_reclat(v::SVector{3}, scaled::Bool)
     vmax = _m_maxabs(v)
@@ -31,7 +32,8 @@ end
 """
     reclat(rectan) -> (radius, lon, lat)
 
-Return the latitudinal coordinates of the rectangular point `rectan`, as `reclat_c` of
+Return the latitudinal coordinates of the rectangular point `rectan`, as
+[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html) of
 CSPICE.
 
 `radius` has the unit of `rectan`. The angles are in radians: the longitude `lon` in
@@ -64,7 +66,8 @@ end
     latrec(radius, lon, lat) -> SVector{3}
 
 Return the rectangular coordinates of the point with the latitudinal coordinates
-`radius`, `lon`, `lat` (angles in radians), as `latrec_c` of CSPICE.
+`radius`, `lon`, `lat` (angles in radians), as
+[`latrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latrec_c.html) of CSPICE.
 
 See also [`reclat`](@ref), which has an example, and [`drdlat`](@ref).
 """
@@ -74,7 +77,8 @@ latrec(radius::Real, lon::Real, lat::Real) = _m_latrec(_m_f(radius), _m_f(lon), 
     recrad(rectan) -> (range, ra, dec)
 
 Return the range, the right ascension and the declination of the rectangular point
-`rectan`, as `recrad_c` of CSPICE.
+`rectan`, as
+[`recrad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recrad_c.html) of CSPICE.
 
 The angles are in radians: `ra` in [0, 2 pi) and `dec` in [-pi/2, pi/2]. They differ
 from the result of [`reclat`](@ref) only in the range of the first angle.
@@ -98,7 +102,8 @@ end
     radrec(range, ra, dec) -> SVector{3}
 
 Return the rectangular coordinates of the point with the range `range`, the right
-ascension `ra` and the declination `dec` (angles in radians), as `radrec_c` of CSPICE.
+ascension `ra` and the declination `dec` (angles in radians), as
+[`radrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/radrec_c.html) of CSPICE.
 
 See also [`recrad`](@ref).
 """
@@ -122,7 +127,8 @@ end
 """
     recsph(rectan) -> (r, colat, slon)
 
-Return the spherical coordinates of the rectangular point `rectan`, as `recsph_c` of
+Return the spherical coordinates of the rectangular point `rectan`, as
+[`recsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recsph_c.html) of
 CSPICE.
 
 The angles are in radians: the colatitude `colat` in [0, pi], from the positive z axis,
@@ -151,7 +157,8 @@ end
     sphrec(r, colat, slon) -> SVector{3}
 
 Return the rectangular coordinates of the point with the spherical coordinates `r`,
-`colat`, `slon` (angles in radians), as `sphrec_c` of CSPICE.
+`colat`, `slon` (angles in radians), as
+[`sphrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphrec_c.html) of CSPICE.
 
 See also [`recsph`](@ref), [`drdsph`](@ref).
 """
@@ -173,7 +180,8 @@ end
 """
     reccyl(rectan) -> (r, clon, z)
 
-Return the cylindrical coordinates of the rectangular point `rectan`, as `reccyl_c` of
+Return the cylindrical coordinates of the rectangular point `rectan`, as
+[`reccyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reccyl_c.html) of
 CSPICE.
 
 `r` is the distance from the z axis. The longitude `clon` is in radians in [0, 2 pi),
@@ -200,7 +208,8 @@ end
     cylrec(r, clon, z) -> SVector{3}
 
 Return the rectangular coordinates of the point with the cylindrical coordinates `r`,
-`clon`, `z` (`clon` in radians), as `cylrec_c` of CSPICE.
+`clon`, `z` (`clon` in radians), as
+[`cylrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cylrec_c.html) of CSPICE.
 
 See also [`reccyl`](@ref), [`drdcyl`](@ref).
 """
@@ -219,7 +228,8 @@ end
     cyllat(r, clon, z) -> (radius, lon, lat)
 
 Return the latitudinal coordinates of the point with the cylindrical coordinates `r`,
-`clon`, `z`, as `cyllat_c` of CSPICE. Angles are in radians. The longitude is returned
+`clon`, `z`, as
+[`cyllat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cyllat_c.html) of CSPICE. Angles are in radians. The longitude is returned
 as given.
 
 See also [`latcyl`](@ref), [`reclat`](@ref), [`reccyl`](@ref).
@@ -235,7 +245,8 @@ end
     latcyl(radius, lon, lat) -> (r, clon, z)
 
 Return the cylindrical coordinates of the point with the latitudinal coordinates
-`radius`, `lon`, `lat`, as `latcyl_c` of CSPICE. Angles are in radians. The longitude
+`radius`, `lon`, `lat`, as
+[`latcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latcyl_c.html) of CSPICE. Angles are in radians. The longitude
 is returned as given.
 
 See also [`cyllat`](@ref).
@@ -250,7 +261,8 @@ end
     cylsph(r, clon, z) -> (radius, colat, slon)
 
 Return the spherical coordinates of the point with the cylindrical coordinates `r`,
-`clon`, `z`, as `cylsph_c` of CSPICE. Angles are in radians. The longitude is returned
+`clon`, `z`, as
+[`cylsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cylsph_c.html) of CSPICE. Angles are in radians. The longitude is returned
 as given.
 
 See also [`sphcyl`](@ref), [`recsph`](@ref).
@@ -266,7 +278,8 @@ end
     sphcyl(radius, colat, slon) -> (r, clon, z)
 
 Return the cylindrical coordinates of the point with the spherical coordinates
-`radius`, `colat`, `slon`, as `sphcyl_c` of CSPICE. Angles are in radians. The
+`radius`, `colat`, `slon`, as
+[`sphcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphcyl_c.html) of CSPICE. Angles are in radians. The
 longitude is returned as given.
 
 See also [`cylsph`](@ref).
@@ -281,7 +294,8 @@ end
     sphlat(r, colat, slon) -> (radius, lon, lat)
 
 Return the latitudinal coordinates of the point with the spherical coordinates `r`,
-`colat`, `slon`, as `sphlat_c` of CSPICE. Angles are in radians. The latitude is
+`colat`, `slon`, as
+[`sphlat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphlat_c.html) of CSPICE. Angles are in radians. The latitude is
 `pi/2 - colat`, and the other two values are returned as given.
 
 See also [`latsph`](@ref).
@@ -295,7 +309,8 @@ end
     latsph(radius, lon, lat) -> (rho, colat, slon)
 
 Return the spherical coordinates of the point with the latitudinal coordinates
-`radius`, `lon`, `lat`, as `latsph_c` of CSPICE. Angles are in radians. The colatitude
+`radius`, `lon`, `lat`, as
+[`latsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latsph_c.html) of CSPICE. Angles are in radians. The colatitude
 is `pi/2 - lat`, and the other two values are returned as given.
 
 The longitude is the second latitudinal coordinate and the third spherical one:
@@ -333,7 +348,8 @@ end
     recgeo(rectan, re, f) -> (lon, lat, alt)
 
 Return the geodetic coordinates of the rectangular point `rectan` relative to a
-spheroid, as `recgeo_c` of CSPICE.
+spheroid, as
+[`recgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recgeo_c.html) of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`; its polar radius is
 `re * (1 - f)`. `lon` and `lat` are in radians. `lat` is the angle between the
@@ -381,7 +397,8 @@ end
     georec(lon, lat, alt, re, f) -> SVector{3}
 
 Return the rectangular coordinates of the point with the geodetic coordinates `lon`,
-`lat` and `alt`, as `georec_c` of CSPICE.
+`lat` and `alt`, as
+[`georec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/georec_c.html) of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`. Angles are in
 radians. The result has the unit of `re` and `alt`.
@@ -426,7 +443,8 @@ end
     recpgr([ctx,] body, rectan, re, f) -> (lon, lat, alt)
 
 Return the planetographic coordinates of the rectangular point `rectan` relative to the
-spheroid of `body`, as `recpgr_c` of CSPICE.
+spheroid of `body`, as
+[`recpgr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recpgr_c.html) of CSPICE.
 
 `body` is a name or an ID. `re` is the equatorial radius and `f` the flattening of the
 spheroid. `lat` (radians) and `alt` are the geodetic values of [`recgeo`](@ref). `lon`
@@ -482,7 +500,8 @@ end
     pgrrec([ctx,] body, lon, lat, alt, re, f) -> SVector{3}
 
 Return the rectangular coordinates of the point with the planetographic coordinates
-`lon`, `lat` and `alt` of `body`, as `pgrrec_c` of CSPICE.
+`lon`, `lat` and `alt` of `body`, as
+[`pgrrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pgrrec_c.html) of CSPICE.
 
 `re` is the equatorial radius and `f` the flattening of the spheroid. Angles are in
 radians. The kernel pool of `ctx` (without `ctx`, of [`default_context`](@ref)) gives
@@ -517,7 +536,8 @@ end
     drdlat(r, lon, lat) -> SMatrix{3,3}
 
 Return the Jacobian of rectangular coordinates with respect to the latitudinal
-coordinates `(r, lon, lat)`, as `drdlat_c` of CSPICE.
+coordinates `(r, lon, lat)`, as
+[`drdlat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdlat_c.html) of CSPICE.
 
 See also [`dlatdr`](@ref), [`latrec`](@ref).
 """
@@ -540,7 +560,8 @@ end
     dlatdr(x, y, z) -> SMatrix{3,3}
 
 Return the Jacobian of the latitudinal coordinates `(radius, lon, lat)` with respect to
-rectangular coordinates, at the point `(x, y, z)`, as `dlatdr_c` of CSPICE.
+rectangular coordinates, at the point `(x, y, z)`, as
+[`dlatdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dlatdr_c.html) of CSPICE.
 
 Throws `SpiceError(:pointonzaxis)` if the point is on the z axis.
 
@@ -572,7 +593,8 @@ end
     drdsph(r, colat, slon) -> SMatrix{3,3}
 
 Return the Jacobian of rectangular coordinates with respect to the spherical
-coordinates `(r, colat, slon)`, as `drdsph_c` of CSPICE.
+coordinates `(r, colat, slon)`, as
+[`drdsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdsph_c.html) of CSPICE.
 
 See also [`dsphdr`](@ref), [`sphrec`](@ref), [`drdlat`](@ref).
 """
@@ -582,7 +604,8 @@ drdsph(r::Real, colat::Real, slon::Real) = _m_drdsph(promote(_m_f(r), _m_f(colat
     dsphdr(x, y, z) -> SMatrix{3,3}
 
 Return the Jacobian of the spherical coordinates `(r, colat, slon)` with respect to
-rectangular coordinates, at the point `(x, y, z)`, as `dsphdr_c` of CSPICE.
+rectangular coordinates, at the point `(x, y, z)`, as
+[`dsphdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dsphdr_c.html) of CSPICE.
 
 Throws `SpiceError(:pointonzaxis)` if the point is on the z axis.
 
@@ -605,7 +628,8 @@ end
     drdcyl(r, clon, z) -> SMatrix{3,3}
 
 Return the Jacobian of rectangular coordinates with respect to the cylindrical
-coordinates `(r, clon, z)`, as `drdcyl_c` of CSPICE.
+coordinates `(r, clon, z)`, as
+[`drdcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdcyl_c.html) of CSPICE.
 
 See also [`dcyldr`](@ref), [`cylrec`](@ref), [`drdlat`](@ref).
 """
@@ -615,7 +639,8 @@ drdcyl(r::Real, clon::Real, z::Real) = _m_drdcyl(promote(_m_f(r), _m_f(clon), _m
     dcyldr(x, y, z) -> SMatrix{3,3}
 
 Return the Jacobian of the cylindrical coordinates `(r, clon, z)` with respect to
-rectangular coordinates, at the point `(x, y, z)`, as `dcyldr_c` of CSPICE.
+rectangular coordinates, at the point `(x, y, z)`, as
+[`dcyldr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dcyldr_c.html) of CSPICE.
 
 Throws `SpiceError(:pointonzaxis)` if the point is on the z axis.
 
@@ -655,7 +680,8 @@ end
     drdgeo(lon, lat, alt, re, f) -> SMatrix{3,3}
 
 Return the Jacobian of rectangular coordinates with respect to the geodetic coordinates
-`(lon, lat, alt)`, as `drdgeo_c` of CSPICE.
+`(lon, lat, alt)`, as
+[`drdgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdgeo_c.html) of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`.
 
@@ -680,7 +706,8 @@ end
     dgeodr(x, y, z, re, f) -> SMatrix{3,3}
 
 Return the Jacobian of the geodetic coordinates `(lon, lat, alt)` with respect to
-rectangular coordinates, at the point `(x, y, z)`, as `dgeodr_c` of CSPICE.
+rectangular coordinates, at the point `(x, y, z)`, as
+[`dgeodr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dgeodr_c.html) of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`.
 
@@ -696,7 +723,8 @@ dgeodr(x::Real, y::Real, z::Real, re::Real, f::Real) =
     drdpgr([ctx,] body, lon, lat, alt, re, f) -> SMatrix{3,3}
 
 Return the Jacobian of rectangular coordinates with respect to the planetographic
-coordinates `(lon, lat, alt)` of `body`, as `drdpgr_c` of CSPICE. The kernel pool of
+coordinates `(lon, lat, alt)` of `body`, as
+[`drdpgr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdpgr_c.html) of CSPICE. The kernel pool of
 `ctx` (without `ctx`, of [`default_context`](@ref)) gives the sense of the longitude,
 by the rules in [`recpgr`](@ref).
 
@@ -717,7 +745,8 @@ end
     dpgrdr([ctx,] body, x, y, z, re, f) -> SMatrix{3,3}
 
 Return the Jacobian of the planetographic coordinates `(lon, lat, alt)` of `body` with
-respect to rectangular coordinates, at the point `(x, y, z)`, as `dpgrdr_c` of CSPICE.
+respect to rectangular coordinates, at the point `(x, y, z)`, as
+[`dpgrdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dpgrdr_c.html) of CSPICE.
 The kernel pool of `ctx` (without `ctx`, of [`default_context`](@ref)) gives the sense
 of the longitude, by the rules in [`recpgr`](@ref).
 
@@ -774,7 +803,8 @@ end
     xfmsta([ctx,] istate, icosys, ocosys, body) -> SVector{6}
 
 Return the state `istate` converted from the coordinate system `icosys` to the
-coordinate system `ocosys`, as `xfmsta_c` of CSPICE.
+coordinate system `ocosys`, as
+[`xfmsta_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xfmsta_c.html) of CSPICE.
 
 A state is three coordinates followed by their time derivatives. The names of the
 systems ignore case and blanks. Angles are in radians. A length has the unit of the
@@ -931,7 +961,7 @@ end
     convrt(x, in, out)
 
 Return the measurement `x` converted from the unit `in` to the unit `out`, as
-`convrt_c` of CSPICE.
+[`convrt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/convrt_c.html) of CSPICE.
 
 | Class    | Units                                                                 |
 |:---------|:----------------------------------------------------------------------|

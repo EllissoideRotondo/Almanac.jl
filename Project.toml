@@ -13,15 +13,30 @@ StaticArrays = "90137ffa-7385-5640-81b9-e52037218182"
 
 [weakdeps]
 Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
+ChainRulesCore = "d360d2e6-b24c-11e9-a2a3-2a2ae2dbcce4"
+EnzymeCore = "f151be2c-9106-41f4-ab19-57ee4f262869"
 ForwardDiff = "f6369f11-7733-5829-9624-2563aa707210"
+Mooncake = "da2b9cff-9c12-43a0-ae48-6db2b0edb7d6"
+ReverseDiff = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
+Tracker = "9f7883ad-71c0-57eb-9f7f-b5c9e6d3789c"
 
 [extensions]
 AlmanacAdaptExt = "Adapt"
+AlmanacChainRulesCoreExt = "ChainRulesCore"
+AlmanacEnzymeCoreExt = "EnzymeCore"
 AlmanacForwardDiffExt = "ForwardDiff"
+AlmanacMooncakeExt = "Mooncake"
+AlmanacReverseDiffExt = "ReverseDiff"
+AlmanacTrackerExt = "Tracker"
 
 [compat]
 Adapt = "4"
+ChainRulesCore = "1"
+EnzymeCore = "0.8.27"
 ForwardDiff = "0.10, 1"
+Mooncake = "0.5.70"
+ReverseDiff = "1"
+Tracker = "0.2"
 LinearAlgebra = "1"
 Mmap = "1"
 StaticArrays = "1.9"

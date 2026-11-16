@@ -204,7 +204,8 @@ end
     subpnt([ctx,] method, target, et, fixref, abcorr, obsrvr) -> (spoint, trgepc, srfvec)
 
 Return the sub-observer point on `target` as seen by `obsrvr` at `et` (seconds past
-J2000 TDB), as `subpnt_c` of CSPICE.
+J2000 TDB), as
+[`subpnt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/subpnt_c.html) of CSPICE.
 
 - `spoint`: the point, in km, in the body-fixed frame `fixref` of the target.
 - `trgepc`: the epoch at the point (seconds past J2000 TDB). With a light time
@@ -264,7 +265,8 @@ function subpnt end
     subslr([ctx,] method, target, et, fixref, abcorr, obsrvr) -> (spoint, trgepc, srfvec)
 
 Return the sub-solar point on `target` as seen by `obsrvr` at `et` (seconds past J2000
-TDB), as `subslr_c` of CSPICE.
+TDB), as
+[`subslr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/subslr_c.html) of CSPICE.
 
 - `spoint`: the point, in km, in the body-fixed frame `fixref` of the target.
 - `trgepc`: the epoch at the point (seconds past J2000 TDB). With a light time

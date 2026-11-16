@@ -50,7 +50,8 @@ end
 """
     dlaopn(path, ftype, ifname, ncomch) -> DASHandle
 
-Create the DLA file `path` and open it for writing, as `dlaopn` of SPICELIB.
+Create the DLA file `path` and open it for writing, as
+[`dlaopn`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dlaopn.html) of SPICELIB.
 
 A DLA file is a DAS file that holds a doubly linked list of segments; a DSK file is one.
 `ftype` is the file type, `ifname` is the internal file name and `ncomch` is the number of
@@ -76,7 +77,8 @@ end
 """
     dlabns(handle) -> Nothing
 
-Begin a new segment at the end of the DLA file, as `dlabns` of SPICELIB.
+Begin a new segment at the end of the DLA file, as
+[`dlabns`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dlabns.html) of SPICELIB.
 
 The segment becomes the last one of the list. The data that `dasadd`, `dasadi` and
 `dasadc` append after the call belong to it. Its descriptor gives the size zero in every
@@ -101,7 +103,8 @@ end
 """
     dlaens(handle) -> Nothing
 
-End the segment that [`dlabns`](@ref) began, as `dlaens` of SPICELIB: store in its
+End the segment that [`dlabns`](@ref) began, as
+[`dlaens`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dlaens.html) of SPICELIB: store in its
 descriptor the sizes of the data that were appended since `dlabns`.
 
 Throws `SpiceError(:dasnosuchaddress)` if the file has no segment.
@@ -121,7 +124,8 @@ end
 """
     dlabfs(handle) -> Union{DLADescr,Nothing}
 
-Return the descriptor of the first segment of the DLA file, as `dlabfs_c`, or `nothing`
+Return the descriptor of the first segment of the DLA file, as
+[`dlabfs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dlabfs_c.html), or `nothing`
 if the file has no segment.
 
 `nothing` replaces the `found` flag of CSPICE. The search has no hidden state: continue
@@ -148,7 +152,8 @@ end
 """
     dlafns(handle, dladsc) -> Union{DLADescr,Nothing}
 
-Return the descriptor of the segment that follows `dladsc`, as `dlafns_c`, or `nothing`
+Return the descriptor of the segment that follows `dladsc`, as
+[`dlafns_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dlafns_c.html), or `nothing`
 if `dladsc` is the last segment.
 
 See also [`dlabfs`](@ref).
@@ -161,7 +166,8 @@ end
 """
     dlabbs(handle) -> Union{DLADescr,Nothing}
 
-Return the descriptor of the last segment of the DLA file, as `dlabbs_c`, or `nothing` if
+Return the descriptor of the last segment of the DLA file, as
+[`dlabbs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dlabbs_c.html), or `nothing` if
 the file has no segment. Continue the backward search with [`dlafps`](@ref).
 """
 function dlabbs(h::DASHandle)
@@ -174,7 +180,8 @@ end
 """
     dlafps(handle, dladsc) -> Union{DLADescr,Nothing}
 
-Return the descriptor of the segment that precedes `dladsc`, as `dlafps_c`, or `nothing`
+Return the descriptor of the segment that precedes `dladsc`, as
+[`dlafps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dlafps_c.html), or `nothing`
 if `dladsc` is the first segment.
 """
 function dlafps(h::DASHandle, d::DLADescr)

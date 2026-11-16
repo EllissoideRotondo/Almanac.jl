@@ -23,7 +23,8 @@ end
 """
     pckopn(path, ifname, ncomch=0) -> DAFHandle
 
-Create the binary PCK file `path` and open it for writing, as `pckopn_c`.
+Create the binary PCK file `path` and open it for writing, as
+[`pckopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckopn_c.html).
 
 `ifname` is the internal file name and `ncomch` is the number of comment characters to
 make room for. The file is on disk when the call returns, byte for byte the file that
@@ -69,7 +70,8 @@ end
     pckw02(handle, clssid, frame, first, last, segid, intlen, cdata, btime) -> Nothing
 
 Write a binary PCK segment of type 2 (Chebyshev polynomials for three Euler angles, on
-intervals of equal length) to the file of `handle`, as `pckw02_c`.
+intervals of equal length) to the file of `handle`, as
+[`pckw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckw02_c.html).
 
 - `handle`: a [`DAFHandle`](@ref) from [`pckopn`](@ref).
 - `clssid`: the frame class ID of the body-fixed frame, the `classid` of
@@ -142,7 +144,8 @@ end
            tscale, initjd, initfr) -> Nothing
 
 Write a binary PCK segment of type 20 (Chebyshev polynomials for the rates of three
-Euler angles, on intervals of equal length) to the file of `handle`, as `pckw20_c`.
+Euler angles, on intervals of equal length) to the file of `handle`, as
+[`pckw20`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pckw20.html) of SPICELIB.
 
 Each record of `cdata` holds `polydg + 1` coefficients of the rate of `phi`, then the
 value of `phi` at the midpoint of the interval, then the same for `delta` and for `w`
@@ -211,7 +214,8 @@ pckw20(h::DAFHandle, clssid::Integer, frame::SegFrame, first::Real, last::Real,
 """
     pckcls(handle) -> Nothing
 
-Close the binary PCK file of `handle`, as `pckcls_c`. The call does nothing if the handle
+Close the binary PCK file of `handle`, as
+[`pckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcls_c.html). The call does nothing if the handle
 is closed already. The close writes no data: every write call puts its bytes on disk
 before it returns. Load the file with [`furnsh`](@ref) after the close.
 

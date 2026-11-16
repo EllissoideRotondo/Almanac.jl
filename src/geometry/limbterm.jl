@@ -615,7 +615,8 @@ end
            ncuts, schstp, soltol, maxn) -> (npts, points, epochs, tangts)
 
 Return limb points of `target` as seen by `obsrvr` at `et` (seconds past J2000 TDB),
-as `limbpt_c` of CSPICE.
+as
+[`limbpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/limbpt_c.html) of CSPICE.
 
 The points lie in `ncuts` half planes bounded by the line from the target center to
 the observer. Half plane `i` contains `refvec` rotated by `(i - 1) * rolstp` radians,
@@ -715,7 +716,8 @@ limbpt(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abc
            rolstp, ncuts, schstp, soltol, maxn) -> (npts, points, epochs, trmvcs)
 
 Return terminator points of `target` lit by the source `ilusrc`, as seen by `obsrvr` at
-`et` (seconds past J2000 TDB), as `termpt_c` of CSPICE.
+`et` (seconds past J2000 TDB), as
+[`termpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/termpt_c.html) of CSPICE.
 
 The points lie in `ncuts` half planes bounded by the line from the target center to
 the source center. Half plane `i` contains `refvec` (body-fixed frame `fixref`)
@@ -801,7 +803,8 @@ termpt(method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real, fix
         -> (tanpt, alt, range, srfpt, trgepc, srfvec)
 
 Return the tangent point of the ray from `obsrvr` along `dvec` on the reference
-ellipsoid of `target`, as `tangpt_c` of CSPICE.
+ellipsoid of `target`, as
+[`tangpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tangpt_c.html) of CSPICE.
 
 - `tanpt`: the point of the ray nearest to the ellipsoid, in km in the body-fixed
   frame `fixref`.

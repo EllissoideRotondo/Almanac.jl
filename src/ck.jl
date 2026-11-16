@@ -927,7 +927,8 @@ end
     _ck_state_rotation(ks, from, to, et::Float64) -> Mat3{Taylor{1,Float64}}
 
 Matrix from frame `from` to frame `to` at `et` and its derivative as `frmchg_` of
-CSPICE gives them (the two blocks of `sxform_c`): each CK link contributes the angular
+CSPICE gives them (the two blocks of
+[`sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html)): each CK link contributes the angular
 velocity of its segment, and needs a segment that has one. The two chains are followed
 to their first common frame, as in `frame_rotation`.
 """

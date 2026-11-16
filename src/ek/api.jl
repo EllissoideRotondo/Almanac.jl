@@ -14,7 +14,8 @@
 """
     ekopr(path) -> DASHandle
 
-Open the EK file `path` for read access and return its handle, as `ekopr_c`.
+Open the EK file `path` for read access and return its handle, as
+[`ekopr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekopr_c.html).
 
 The handle is a [`DASHandle`](@ref). The caller owns it; close it with
 [`ekcls`](@ref). The handle serves the calls that read one file ([`eknseg`](@ref),
@@ -42,7 +43,8 @@ end
 """
     ekcls(handle) -> Nothing
 
-Close the EK file of `handle`, as `ekcls_c`.
+Close the EK file of `handle`, as
+[`ekcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekcls_c.html).
 
 For a write handle all data are on disk when the call returns. Closing a closed handle
 does nothing. A fast load that [`ekffld`](@ref) did not end leaves a segment that
@@ -61,7 +63,8 @@ end
 """
     eknseg(handle) -> Int
 
-Return the number of segments of the EK file of `handle`, as `eknseg_c`.
+Return the number of segments of the EK file of `handle`, as
+[`eknseg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eknseg_c.html).
 
 Throws `SpiceError(:dasnosuchhandle)` if the handle is closed,
 `SpiceError(:wrongarchitecture)` if the file is not an EK, and
@@ -75,7 +78,8 @@ end
 """
     ekssum(handle, segno) -> EKSegmentSummary
 
-Return the summary of segment `segno` of the EK file of `handle`, as `ekssum_c`: the
+Return the summary of segment `segno` of the EK file of `handle`, as
+[`ekssum_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekssum_c.html): the
 table name, the number of rows, and the name and attributes of every column.
 
 `segno` counts from 1; `ekssum_c` counts from 0.
@@ -128,7 +132,8 @@ end
     ekrcec(handle, segno, recno, column) -> (cvals::Vector{String}, isnull::Bool)
 
 Return all strings of the entry of the character column `column` in row `recno` of
-segment `segno`, without trailing blanks, as `ekrcec_c`.
+segment `segno`, without trailing blanks, as
+[`ekrcec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekrcec_c.html).
 
 `segno` and `recno` count from 1; `ekrcec_c` counts from 0. The column name is matched
 without regard to case. The entry of a scalar column gives a vector of one string. A
@@ -156,7 +161,8 @@ end
     ekrced(handle, segno, recno, column) -> (dvals::Vector{Float64}, isnull::Bool)
 
 Return all values of the entry of the double precision or time column `column` in row
-`recno` of segment `segno`, as `ekrced_c`. A time is in seconds past J2000 TDB.
+`recno` of segment `segno`, as
+[`ekrced_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekrced_c.html). A time is in seconds past J2000 TDB.
 
 Indices and results are as for [`ekrcec`](@ref): `segno` and `recno` count from 1, and
 a null entry gives an empty vector and `isnull == true`.
@@ -174,7 +180,8 @@ end
     ekrcei(handle, segno, recno, column) -> (ivals::Vector{Int}, isnull::Bool)
 
 Return all values of the entry of the integer column `column` in row `recno` of
-segment `segno`, as `ekrcei_c`.
+segment `segno`, as
+[`ekrcei_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekrcei_c.html).
 
 Indices and results are as for [`ekrcec`](@ref): `segno` and `recno` count from 1, and
 a null entry gives an empty vector and `isnull == true`.
@@ -195,7 +202,8 @@ end
 """
     ekntab([ctx]) -> Int
 
-Return the number of loaded EK tables, as `ekntab_c`; 0 if no EK file is loaded.
+Return the number of loaded EK tables, as
+[`ekntab_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekntab_c.html); 0 if no EK file is loaded.
 
 Segments of the same table name, in one file or in several, count as one table.
 
@@ -208,7 +216,8 @@ ekntab() = ekntab(default_context())
 """
     eklef([ctx,] path) -> String
 
-Load the EK file at `path` for queries, as `eklef_c`, and return the value to pass to
+Load the EK file at `path` for queries, as
+[`eklef_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eklef_c.html), and return the value to pass to
 [`ekuef`](@ref).
 
 The result is the path itself, not an integer handle as in CSPICE. It is not a
@@ -241,7 +250,8 @@ eklef(path::AbstractString) = eklef(default_context(), path)
 """
     ekuef([ctx,] path) -> Nothing
 
-Unload the EK file that [`eklef`](@ref) loaded, as `ekuef_c`. `path` is the value that
+Unload the EK file that [`eklef`](@ref) loaded, as
+[`ekuef_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekuef_c.html). `path` is the value that
 `eklef` returned; `ekuef_c` takes an integer handle.
 
 A path that is not loaded changes nothing, as in CSPICE. An [`EKResult`](@ref) of an
@@ -253,7 +263,8 @@ ekuef(path::AbstractString) = ekuef(default_context(), path)
 """
     ektnam([ctx,] n) -> String
 
-Return the name, in upper case, of loaded table number `n`, as `ektnam_c`.
+Return the name, in upper case, of loaded table number `n`, as
+[`ektnam_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ektnam_c.html).
 
 `n` counts from 1; `ektnam_c` counts from 0. The tables are in the order in which they
 were loaded.
@@ -280,7 +291,8 @@ end
 """
     ekccnt([ctx,] table) -> Int
 
-Return the number of columns of the loaded table `table`, as `ekccnt_c`.
+Return the number of columns of the loaded table `table`, as
+[`ekccnt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekccnt_c.html).
 
 The table name is matched without regard to case.
 
@@ -296,7 +308,8 @@ ekccnt(table::AbstractString) = ekccnt(default_context(), table)
     ekcii([ctx,] table, cindex) -> (column::String, attdsc::EKColumnAttr)
 
 Return the name and the attributes of column number `cindex` of the loaded table
-`table`, as `ekcii_c`.
+`table`, as
+[`ekcii_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekcii_c.html).
 
 `cindex` counts from 1; `ekcii_c` counts from 0. The columns are in the order of the
 first loaded segment of the table. [`EKColumnAttr`](@ref) states one difference from
@@ -323,7 +336,8 @@ ekcii(table::AbstractString, cindex::Integer) = ekcii(default_context(), table, 
 """
     ekpsel([ctx,] query) -> NamedTuple
 
-Return the description of the SELECT clause of `query`, as `ekpsel_c`, in the named
+Return the description of the SELECT clause of `query`, as
+[`ekpsel_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekpsel_c.html), in the named
 tuple `(n, xbegs, xends, xtypes, xclass, tabs, cols, failed, errmsg)`.
 
 - `n`: the number of SELECT items. The vectors have one element for each item.
@@ -347,7 +361,8 @@ ekpsel(query::AbstractString) = ekpsel(default_context(), query)
 """
     ekfind([ctx,] query) -> (result::EKResult, failed::Bool, errmsg::String)
 
-Find the rows of the loaded EK tables that satisfy `query`, as `ekfind_c`, and return
+Find the rows of the loaded EK tables that satisfy `query`, as
+[`ekfind_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekfind_c.html), and return
 them in an [`EKResult`](@ref) with the error flag and the error message of the query.
 
 The query has the form `SELECT <column>, ... FROM <table> [<alias>], ... [WHERE
@@ -458,7 +473,8 @@ end
     eknelt(result, selidx, row) -> Int
 
 Return the number of elements of the entry in row `row` and SELECT column `selidx` of
-`result`, as `eknelt_c`.
+`result`, as
+[`eknelt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eknelt_c.html).
 
 `selidx` and `row` count from 1; `eknelt_c` counts from 0. The result is 1 for a
 scalar column and the entry size for an array column of fixed size, also when the
@@ -486,7 +502,8 @@ end
     ekgc(result, selidx, row, elment=1) -> (cdata::String, null::Bool, found::Bool)
 
 Return element `elment` of the character entry in row `row` and SELECT column `selidx`
-of `result`, without trailing blanks, as `ekgc_c`.
+of `result`, without trailing blanks, as
+[`ekgc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekgc_c.html).
 
 `selidx`, `row` and `elment` count from 1; `ekgc_c` counts from 0. `null` is true if
 the entry is null; `cdata` is then empty and `found` is true. `found` is false if an
@@ -513,7 +530,8 @@ end
     ekgd(result, selidx, row, elment=1) -> (ddata::Float64, null::Bool, found::Bool)
 
 Return element `elment` of the double precision or time entry in row `row` and SELECT
-column `selidx` of `result`, as `ekgd_c`. A time is in seconds past J2000 TDB.
+column `selidx` of `result`, as
+[`ekgd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekgd_c.html). A time is in seconds past J2000 TDB.
 
 Indices, `null` and `found` are as for [`ekgc`](@ref); `ddata` is 0.0 for a null entry
 and for an element that is not found.
@@ -532,7 +550,8 @@ end
     ekgi(result, selidx, row, elment=1) -> (idata::Int, null::Bool, found::Bool)
 
 Return element `elment` of the integer entry in row `row` and SELECT column `selidx` of
-`result`, as `ekgi_c`.
+`result`, as
+[`ekgi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekgi_c.html).
 
 Indices, `null` and `found` are as for [`ekgc`](@ref); `idata` is 0 for a null entry
 and for an element that is not found.

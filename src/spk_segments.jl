@@ -20,7 +20,8 @@
 """
     spkuds(descr) -> (body, center, frame, type, first, last, baddr, eaddr)
 
-Unpack the SPK segment descriptor `descr`, as `spkuds_c`.
+Unpack the SPK segment descriptor `descr`, as
+[`spkuds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkuds_c.html).
 
 `body` moves relative to `center` in the frame with the ID `frame`, and `type` is the SPK
 data type. `first` and `last` bound the coverage, in seconds past J2000 TDB. `baddr` and
@@ -80,7 +81,8 @@ end
     spksfs([ctx,] body::Integer, et) -> Union{Nothing,Tuple{String,Vector{Float64},String}}
 
 Return `(file, descr, ident)` for the loaded SPK segment of the highest priority for
-`body` at `et`, as `spksfs_c`, or `nothing` if no loaded segment of `body` covers `et`.
+`body` at `et`, as
+[`spksfs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksfs_c.html), or `nothing` if no loaded segment of `body` covers `et`.
 
 - `file`: the path of the loaded SPK file as it was passed to [`furnsh`](@ref) (the
   path that [`kdata`](@ref) gives). It takes the place of the handle of CSPICE: pass it
@@ -199,7 +201,8 @@ end
     spkpvn([ctx,] file::AbstractString, descr, et) -> (ref, state, center)
 
 Return the state of the target of one SPK segment relative to the center of the segment
-at `et`, as `spkpvn_c`.
+at `et`, as
+[`spkpvn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpvn_c.html).
 
 The segment has the descriptor `descr` (5 doubles, from [`dafgs`](@ref) or
 [`spksfs`](@ref)). It is in the file of `handle`, or in the file with the path `file` that
@@ -736,7 +739,8 @@ end
     spksub(handle, descr, ident, start, stop, newh) -> Nothing
 
 Write the part of an SPK segment that covers the interval `[start, stop]` as a new
-segment of another SPK file, as `spksub_c`.
+segment of another SPK file, as
+[`spksub_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksub_c.html).
 
 - `handle`, `descr`: the file that holds the source segment ([`dafopr`](@ref)) and the
   descriptor of the segment ([`dafgs`](@ref), [`spksfs`](@ref)).

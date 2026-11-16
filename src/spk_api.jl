@@ -299,7 +299,8 @@ spkder(targ::NameOrID, et::Real, ref::NameOrID, obs::NameOrID, v::Val) =
     spkgeo([ctx,] targ::Integer, et, ref, obs::Integer) -> (state, lt)
 
 Return the geometric state of body `targ` relative to body `obs` in frame `ref` at
-`et`, and the one-way light time, as `spkgeo_c`.
+`et`, and the one-way light time, as
+[`spkgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgeo_c.html).
 
 `state` is an `SVector{6}`: position in km, then velocity in km/s. `lt` is the
 distance divided by the speed of light, in seconds. `et` is in seconds past J2000
@@ -329,7 +330,8 @@ spkgeo(targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkgps([ctx,] targ::Integer, et, ref, obs::Integer) -> (pos, lt)
 
 Return the geometric position of body `targ` relative to body `obs` in frame `ref` at
-`et`, and the one-way light time, as `spkgps_c`.
+`et`, and the one-way light time, as
+[`spkgps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgps_c.html).
 
 `pos` is an `SVector{3}` in km and `lt` is in seconds. The arguments and the errors are
 those of [`spkgeo`](@ref). As in CSPICE, `targ == obs` gives a zero position and a zero
@@ -351,7 +353,8 @@ spkgps(targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkezr([ctx,] targ, et, ref, abcorr, obs) -> (state, lt)
 
 Return the state of `targ` relative to `obs` in frame `ref` at `et`, and the one-way
-light time, as `spkezr_c`.
+light time, as
+[`spkezr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkezr_c.html).
 
 `state` is an `SVector{6}`: position in km, then velocity in km/s. `lt` is in seconds.
 
@@ -408,7 +411,8 @@ spkezr(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString, obs::Nam
     spkpos([ctx,] targ, et, ref, abcorr, obs) -> (pos, lt)
 
 Return the position of `targ` relative to `obs` in frame `ref` at `et`, and the
-one-way light time, as `spkpos_c`.
+one-way light time, as
+[`spkpos_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpos_c.html).
 
 `pos` is an `SVector{3}` in km and `lt` is in seconds. The arguments and the errors
 are those of [`spkezr`](@ref), except that an `abcorr` that is not valid throws

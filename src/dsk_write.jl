@@ -13,7 +13,8 @@ const _DSK_IXIFIX = _DSK_MAXCGR + 7       # size of the fixed part of the intege
 """
     dskopn(fname, ifname, ncomch) -> DASHandle
 
-Create the DSK file `fname` and open it for writing, as `dskopn_c`.
+Create the DSK file `fname` and open it for writing, as
+[`dskopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskopn_c.html).
 
 `ifname` is the internal file name and `ncomch` is the number of comment characters to
 make room for. The new file has no segment. Segments that [`dskw02`](@ref) adds are in
@@ -32,7 +33,8 @@ dskopn(fname::AbstractString, ifname::AbstractString, ncomch::Integer) =
 """
     dskcls(handle, optmiz=true) -> Nothing
 
-Close the DSK file of `handle`, as `dskcls_c`. A file that is open for writing is written
+Close the DSK file of `handle`, as
+[`dskcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskcls_c.html). A file that is open for writing is written
 to disk by this call.
 
 `optmiz` is accepted for CSPICE compatibility and ignored. The file is always written
@@ -259,7 +261,8 @@ end
     dskmi2(vrtces, plates, finscl, corscl, worksz, voxpsz, voxlsz, makvtl, spxisz)
         -> (spaixd, spaixi)
 
-Return the spatial index of a type 2 segment, as `dskmi2_c`: the double part `spaixd` (10
+Return the spatial index of a type 2 segment, as
+[`dskmi2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskmi2_c.html): the double part `spaixd` (10
 elements) and the integer part `spaixi` (`spxisz` elements). [`dskw02`](@ref) takes both.
 
 # Arguments
@@ -370,7 +373,7 @@ end
     dskrb2(vrtces, plates, corsys, corpar) -> (mncor3, mxcor3)
 
 Return the bounds of the third coordinate of the plates of a type 2 segment, as
-`dskrb2_c`, in the unit of the vertices (km).
+[`dskrb2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskrb2_c.html), in the unit of the vertices (km).
 
 - `corsys = 1`, latitudinal: the radius.
 - `corsys = 3`, rectangular: z.
@@ -445,7 +448,8 @@ end
            mncor2, mxcor2, mncor3, mxcor3, first, last, vrtces, plates, spaixd, spaixi)
         -> Nothing
 
-Write a type 2 segment (triangular plates) to the DSK file of `handle`, as `dskw02_c`.
+Write a type 2 segment (triangular plates) to the DSK file of `handle`, as
+[`dskw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskw02_c.html).
 
 # Arguments
 - `handle`: a [`DASHandle`](@ref) from [`dskopn`](@ref).

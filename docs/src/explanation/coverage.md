@@ -2,7 +2,7 @@
 
 ## What is available
 
-The package covers the library part of CSPICE N0067.
+Almanac.jl covers the library of CSPICE N0067; [What is absent](@ref) lists the routines replaced by Julia facilities.
 
 | Area | Available |
 |---|---|
@@ -13,7 +13,7 @@ The package covers the library part of CSPICE N0067.
 | Derivatives | `spkder` and `pxder` to any order; a `ForwardDiff.Dual` epoch in the calls that [Dual-number epochs](@ref) lists |
 | Orientation and clocks | CK types 1 to 6, `ckgp`, `ckgpav`, `ckcov`, `ckobj`, `ckfrot`, `ckfxfm`; records of CK types 2 and 3 (`cknr02`, `ckgr02`, `cknr03`, `ckgr03`); spacecraft clock type 1 |
 | Time | `str2et`, `utc2et`, `timout`, `et2utc`, `etcal`, `unitim`, `tparse`, `tpictr`, `timdef`, `tsetyr`, `tparch`, `deltet`, `et2lst`, `lspcn` |
-| File access and writers | DAF read and write calls, SPK writers for all 16 types (type 14 through `spk14b`, `spk14a`, `spk14e`), CK writers for 5 types, the binary PCK writer of type 2 (`pckopn`, `pckw02`, `pckcls`), comment area, windows, `spkobj`, `spkcov`, `kinfo`, `kdata`; SPK segments by descriptor (`spksfs`, `spkpvn`, `spkuds`, and `spksub` for every type) |
+| File access and writers | DAF read and write calls, SPK writers for all 16 types (type 14 through `spk14b`, `spk14a`, `spk14e`), CK writers for 5 types, binary PCK writers of types 2 and 20 (`pckopn`, `pckw02`, `pckw20`, `pckcls`), comment area, windows, `spkobj`, `spkcov`, `kinfo`, `kdata`; SPK segments by descriptor (`spksfs`, `spkpvn`, `spkuds`, and `spksub` for every type) |
 | Kernel pool | `gdpool`, `gcpool`, `gipool`, `bodvrd`, `bodvcd`, `bodfnd`, body and frame name calls; `pdpool`, `pcpool`, `pipool`, `dvpool`, `lmpool`, `ldpool`, `clpool`, `boddef`; `expool`, `dtpool`, `gnpool`, `szpool`, `stpool`, `badkpv`; watchers `swpool`, `cvpool` for each context |
 | Mathematics | vectors, matrices, rotations and quaternions, coordinate conversions with their Jacobians, ellipsoid, plane and ellipse calls, conic elements and two-body propagation, equinoctial elements (`eqncpv`), Chebyshev, Lagrange and Hermite interpolation, base 16 strings of doubles (`dp2hx`, `hx2dp`) |
 | Shape kernels | DAS file access, DSK type 2 read and write, plate access calls, ray-surface intercept (`dskxv`, `dskxsi`, `dskx02`), `latsrf`, `srfnrm`, surface name calls (type 2 is the only DSK type of CSPICE N0067) |
@@ -24,16 +24,16 @@ The package covers the library part of CSPICE N0067.
 
 ## How the results were checked
 
-CSPICE itself is the reference. The test suite calls each routine of this package and the routine of the same name in CSPICE, through SPICE.jl, on the same input, and compares the two results; it does not compare with stored numbers. The input is kernels from NAIF (planetary ephemerides, lunar orientation, leap seconds, constants) and kernels that the tests write with the CSPICE writers, so that every data type has a case.
+CSPICE itself is the reference: the tests call each routine and its CSPICE counterpart (through SPICE.jl) on the same input and compare, rather than comparing with stored numbers. Inputs are NAIF kernels (planetary ephemerides, lunar orientation, leap seconds, constants) and kernels the tests write with the CSPICE writers, so that every data type is exercised.
 
 | Kind of check | What it compares |
 |---|---|
-| Differential | A result of this package with the result of CSPICE for the same call |
-| File | A kernel that this package wrote with the kernel that CSPICE wrote, byte for byte |
+| Differential | A result with the CSPICE result of the same call |
+| File | A kernel written by Almanac.jl with the one CSPICE writes: SPK, CK and binary PCK files byte for byte, DSK and EK files word for word |
 | Derivative | The first derivative with the velocity of CSPICE, and each higher derivative with automatic differentiation of the one below it |
 | Error | The kind of the error, and the text of the message where a program can depend on it |
-| Concurrency | Answers from many threads during changes of the loaded kernels with the answers of one thread |
-| NAIF's test suite | The calls that tspice, the test suite of SPICELIB, makes in its 400 test families, recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against this package; a difference from SPICELIB is checked against CSPICE ([how to run it](@ref "Run NAIF's test suite"); not part of the default run) |
+| Concurrency | Answers from many threads, while kernels are loaded and unloaded, with the answers of one thread |
+| NAIF's test suite | The calls of tspice, SPICELIB's test suite (400 families), recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against Almanac.jl; a difference from SPICELIB is checked against CSPICE ([how to run it](@ref "Run NAIF's test suite"); not in the default run) |
 | Allocation | A static proof (AllocCheck.jl) that 61 numeric routines cannot allocate: vector, matrix, rotation, coordinate and ellipsoid calls, conic elements, `unitim`, `deltet` and the table queries ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_alloccheck.jl)) |
 
 | Measure | Value |
@@ -53,10 +53,14 @@ The first run builds PEPPER with gfortran 16 and fpm, which must be on `PATH`, a
 
 ## Known limits of accuracy
 
-A result that differs from CSPICE differs by rounding. For the states of the Moon and the planets from de440s.bsp, in inertial and body-fixed frames, the default run measures the following.
+Apart from the deliberate differences in [Differences from CSPICE](@ref), results differ from CSPICE by rounding. For states of the Moon and the planets from de440s.bsp, in inertial and body-fixed frames, the default run measures:
 
 | Quantity | Aberration corrections | Largest relative difference from CSPICE |
 |---|---|---|
 | Position, velocity and light time | all nine (`NONE` to `XCN+S`) | 7.3e-16 |
 
-Three limits hold in CSPICE as well as in this package, because they come from the size of a number or from the method of CSPICE. The rotation angle of the Earth in `IAU_EARTH` grows with time and is about 50,000 radians in this century, so that the rounding of that angle alone moves the Sun by some meters in the frame. An aberration-corrected position has steps of some millimeters at the boundaries between the [records](@ref "Exact derivatives and the rates of CSPICE") of an SPK, because the target is evaluated at an earlier epoch than the observer, so that the two cross a boundary at different times. `spkezr` and `spkpos` differ from each other by up to 2e-11 relative with the converged corrections (`CN`, `CN+S`, which iterate the light-time equation until it converges), because the two routines stop their iterations by different rules.
+Three limits hold in CSPICE as well, because they come from the size of a number or from the CSPICE method:
+
+- The rotation angle of the Earth in `IAU_EARTH` grows to about 50,000 rad this century; its rounding alone moves the Sun by some meters in that frame.
+- An aberration-corrected position has millimeter steps at the boundaries between SPK [records](@ref "Exact derivatives and the rates of CSPICE"), because target and observer are evaluated at different epochs and cross a boundary at different times.
+- `spkezr` and `spkpos` differ by up to 2e-11 relative with the converged corrections (`CN`, `CN+S`), because they stop iterating by different rules.

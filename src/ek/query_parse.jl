@@ -2244,7 +2244,8 @@ Contract: `tables` is the catalog of loaded tables in load order, with names in
 upper case. Runs the steps of `ekfind_` that come before the search (`zzekqini_`,
 `zzekscan_`, `zzekpars_`, `zzeknres_`, `zzektres_`, `zzeksemc_`) on the string `query`
 and returns `(q::_EKQuery, false, "")`, or `(nothing, true, errmsg)` with the error
-message that `ekfind_c` returns in `errmsg` for a query that is not valid. Positions
+message that
+[`ekfind_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekfind_c.html) returns in `errmsg` for a query that is not valid. Positions
 in a message are 1-based byte positions in `query`. Time values are converted with
 the leap-second and clock data of `ks` and the time defaults `td`. Pure function of
 its arguments; does not modify them.
@@ -2280,7 +2281,8 @@ end
     _ek_psel(tables, ks, td, query) -> NamedTuple
 
 Contract: as `_ek_encode_query` for the arguments. Analyses the SELECT clause of
-`query` as `ekpsel_c` and returns `(n, xbegs, xends, xtypes, xclass, tabs, cols, failed,
+`query` as
+[`ekpsel_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekpsel_c.html) and returns `(n, xbegs, xends, xtypes, xclass, tabs, cols, failed,
 errmsg)`: the number `n` of SELECT items and for each item the first and last
 character of its expression in `query` (`xbegs`, `xends`; 1-based byte positions, one
 more than the 0-based positions of `ekpsel_c`), its data type (`xtypes`: `:CHR`,

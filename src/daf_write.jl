@@ -114,7 +114,8 @@ end
 """
     dafonw(path, ftype, nd, ni, ifname, resv) -> DAFHandle
 
-Create the DAF file `path` and open it for writing, as `dafonw` of SPICELIB.
+Create the DAF file `path` and open it for writing, as
+[`dafonw`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafonw.html) of SPICELIB.
 
 - `ftype`: the file type, for example `"SPK"`. Four characters are stored.
 - `nd`, `ni`: the numbers of doubles and of integers in an array summary.
@@ -189,7 +190,8 @@ end
 """
     dafopw(path) -> DAFHandle
 
-Open the existing DAF file `path` for writing, as `dafopw_c`, to add arrays or comments.
+Open the existing DAF file `path` for writing, as
+[`dafopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafopw_c.html), to add arrays or comments.
 
 The file must have the native byte order, and no open handle of this process may have
 it open, for read or for write, under any path. After the call, [`dafopr`](@ref) can
@@ -228,7 +230,8 @@ end
 """
     dafbna(handle, sum, name) -> Nothing
 
-Begin a new array in the DAF file of `handle`, as `dafbna_c`.
+Begin a new array in the DAF file of `handle`, as
+[`dafbna`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafbna.html) of SPICELIB.
 
 `sum` is the packed summary ([`dafps`](@ref)); [`dafena`](@ref) sets its two address
 components. `name` is the array name, cut or padded to `8 * (nd + (ni + 1) ÷ 2)`
@@ -278,7 +281,7 @@ end
     dafada(handle, data) -> Nothing
 
 Append the doubles `data` to the array that [`dafbna`](@ref) began on `handle`, as
-`dafada_c`. The data are written to the file at once.
+[`dafada`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafada.html) of SPICELIB. The data are written to the file at once.
 
 Throws `SpiceError(:dafnewconflict)` if no array is begun on the handle, and
 `:dafwritefail` if the array would pass the largest address of a DAF or the system reports
@@ -301,7 +304,8 @@ end
 """
     dafena(handle) -> Nothing
 
-End the array that [`dafbna`](@ref) began on `handle`, as `dafena_c`.
+End the array that [`dafbna`](@ref) began on `handle`, as
+[`dafena`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafena.html) of SPICELIB.
 
 The call writes the summary and the name of the array and the new free address of the
 file. A search that is begun after the call finds the array. Before the call the file on
@@ -377,7 +381,7 @@ end
     dafws(handle, sum) -> Nothing
 
 Replace the packed summary of the current array of the search on `handle` with `sum`, as
-`dafws_c`. The two address components are replaced too; [`dafrs`](@ref) keeps them. The
+[`dafws`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafws.html) of SPICELIB. The two address components are replaced too; [`dafrs`](@ref) keeps them. The
 change is on disk when the call returns.
 
 Throws `SpiceError(:nocurrentarray)` if the search has no current array, and
@@ -402,7 +406,7 @@ end
     dafrs(handle, sum) -> Nothing
 
 Replace the summary of the current array of the search on `handle` with `sum`, as
-`dafrs_c`, but keep its two address components (the last two integers). The change is on
+[`dafrs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafrs_c.html), but keep its two address components (the last two integers). The change is on
 disk when the call returns.
 
 Throws `SpiceError(:nocurrentarray)` if the search has no current array, and
@@ -424,7 +428,7 @@ end
     dafrn(handle, name) -> Nothing
 
 Replace the name of the current array of the search on `handle` with `name`, as
-`dafrn_c`. `name` is cut or padded to the name size of the file. The change is on disk
+[`dafrn`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafrn.html) of SPICELIB. `name` is cut or padded to the name size of the file. The change is on disk
 when the call returns.
 
 Throws `SpiceError(:nocurrentarray)` if the search has no current array. A call that
@@ -508,7 +512,8 @@ end
 """
     dafac(handle, lines) -> Nothing
 
-Append the comment lines `lines` to the comment area of the DAF file, as `dafac_c`.
+Append the comment lines `lines` to the comment area of the DAF file, as
+[`dafac_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafac_c.html).
 
 A line can have any length; trailing blanks are not stored. If the reserved records do
 not have room, records are added and the data of the file move. Every address that was
@@ -608,7 +613,8 @@ end
 """
     dafdc(handle) -> Nothing
 
-Delete the comment area of the DAF file, as `dafdc_c`.
+Delete the comment area of the DAF file, as
+[`dafdc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafdc_c.html).
 
 All reserved records are removed and the data of the file move up. Every address that was
 read from a summary before the call is then stale, and a search on the handle is at its

@@ -21,7 +21,8 @@ dsktolerances(ctx::SpiceContext) = @atomic ctx.dsktols
 """
     dskgtl([ctx,] keywrd) -> Float64
 
-Return the DSK tolerance or margin with the keyword `keywrd`, as `dskgtl_c`.
+Return the DSK tolerance or margin with the keyword `keywrd`, as
+[`dskgtl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskgtl_c.html).
 
 | `keywrd` | CSPICE name | Meaning                          | Value at start |
 |:---------|:------------|:---------------------------------|:---------------|
@@ -49,7 +50,8 @@ dskgtl(keywrd::Integer) = dskgtl(default_context(), keywrd)
 """
     dskstl([ctx,] keywrd, dpval) -> Nothing
 
-Set the DSK tolerance or margin with the keyword `keywrd` to `dpval`, as `dskstl_c`. See
+Set the DSK tolerance or margin with the keyword `keywrd` to `dpval`, as
+[`dskstl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskstl_c.html). See
 [`dskgtl`](@ref) for the keywords.
 
 Only the keywords 1 to 4 can be set. As in CSPICE, the value is not checked. The change
@@ -152,7 +154,8 @@ end
     dskgd(handle, dladsc) -> DSKDescr
     dskgd(segment::DSKSegment) -> DSKDescr
 
-Return the DSK descriptor of a segment, as `dskgd_c`.
+Return the DSK descriptor of a segment, as
+[`dskgd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskgd_c.html).
 
 Throws `SpiceError(:invalidformat)` if the segment has fewer than 24 doubles.
 
@@ -174,7 +177,8 @@ _dsk_b02(hdr::DSK02Header) = (hdr.nv, hdr.np, hdr.nvxtot,
                                vtxnpl, voxnpt, voxnpl)
     dskb02(segment::DSKSegment)
 
-Return the bookkeeping items of a type 2 segment, as `dskb02_c`.
+Return the bookkeeping items of a type 2 segment, as
+[`dskb02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskb02_c.html).
 
 - `nv`, `np`, `nvxtot`: the numbers of vertices, of plates and of voxels.
 - `vtxbds`: the vertex bounds (km), a 2 x 3 matrix; row 1 holds the lower bounds and row 2
@@ -204,7 +208,7 @@ end
     dskz02(segment::DSKSegment) -> (nv, np)
 
 Return the number of vertices and the number of plates of a type 2 segment, as
-`dskz02_c`.
+[`dskz02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskz02_c.html).
 
 Throws `SpiceError(:typenotsupported)` if the segment does not have the data type 2.
 """
@@ -320,7 +324,8 @@ end
     dskp02(handle, dladsc, start, room) -> Vector{SVector{3,Int}}
     dskp02([ctx | ks,] segment::DSKSegment, start, room)
 
-Return at most `room` plates of a type 2 segment, from plate `start` on, as `dskp02_c`.
+Return at most `room` plates of a type 2 segment, from plate `start` on, as
+[`dskp02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskp02_c.html).
 
 A plate is three vertex numbers. Plate numbers and vertex numbers start at 1, as in
 CSPICE. The result has fewer than `room` plates if the segment has no more.
@@ -342,7 +347,8 @@ dskp02(ks::KernelSet, seg::DSKSegment, start::Integer, room::Integer) =
     dskv02([ctx | ks,] segment::DSKSegment, start, room)
 
 Return at most `room` vertices of a type 2 segment (km, in the frame of the segment), from
-vertex `start` on, as `dskv02_c`. Vertex numbers start at 1, as in CSPICE.
+vertex `start` on, as
+[`dskv02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskv02_c.html). Vertex numbers start at 1, as in CSPICE.
 
 Throws `SpiceError(:valueoutofrange)` if `room <= 0`, `:indexoutofrange` if `start` is
 not in `1:nv`, and `:typenotsupported` if the segment does not have the data type 2.
@@ -358,7 +364,8 @@ dskv02(ks::KernelSet, seg::DSKSegment, start::Integer, room::Integer) =
     dskn02(handle, dladsc, plid) -> SVector{3,Float64}
     dskn02([ctx | ks,] segment::DSKSegment, plid)
 
-Return the outward unit normal of plate `plid` of a type 2 segment, as `dskn02_c`.
+Return the outward unit normal of plate `plid` of a type 2 segment, as
+[`dskn02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskn02_c.html).
 
 It is the unit vector of `(v2 - v1) x (v3 - v1)` for the vertices `v1`, `v2`, `v3` of the
 plate. It points outward because a DSK plate has its vertices in counterclockwise order
@@ -381,7 +388,8 @@ end
     dski02([ctx | ks,] segment::DSKSegment, item, start, room)
 
 Return at most `room` integers of the item `item` of a type 2 segment, from element
-`start` on (1 is the first), as `dski02_c`.
+`start` on (1 is the first), as
+[`dski02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dski02_c.html).
 
 | `item` | Content                      | `item` | Content                  |
 |:-------|:-----------------------------|:-------|:-------------------------|
@@ -410,7 +418,8 @@ dski02(ks::KernelSet, seg::DSKSegment, item::Integer, start::Integer, room::Inte
     dskd02([ctx | ks,] segment::DSKSegment, item, start, room)
 
 Return at most `room` doubles of the item `item` of a type 2 segment, from element `start`
-on (1 is the first), as `dskd02_c`.
+on (1 is the first), as
+[`dskd02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskd02_c.html).
 
 | `item` | Content              | Doubles           |
 |:-------|:---------------------|:------------------|
@@ -455,7 +464,8 @@ dskn02(seg::DSKSegment, plid::Integer) = dskn02(default_context(), seg, plid)
     dskx02([ctx | ks,] segment::DSKSegment, vertex, raydir)
 
 Return `(plid, xpt)`, the plate number and the point where the ray from `vertex` along
-`raydir` first meets the plates of one type 2 segment, as `dskx02_c`, or `nothing` if
+`raydir` first meets the plates of one type 2 segment, as
+[`dskx02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskx02_c.html), or `nothing` if
 the ray meets no plate.
 
 `vertex` (km) and `raydir` are in the frame of the segment, relative to the center of that
@@ -520,7 +530,8 @@ end
     dskobj(path) -> Vector{Int}
 
 Return the ID codes of the bodies that have a segment in the DSK file `path`, sorted and
-without repetition, as `dskobj_c`.
+without repetition, as
+[`dskobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskobj_c.html).
 
 The file is read from disk and need not be loaded.
 
@@ -536,7 +547,8 @@ dskobj(path::AbstractString) = sort!(unique!(Int[d.center for d in _dsk_file_des
     dskobj!(ids, path) -> ids
 
 Insert the ID codes of the bodies that have a segment in the DSK file `path` into the
-vector `ids`, as `dskobj_c` does with a SPICE cell.
+vector `ids`, as
+[`dskobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskobj_c.html) does with a SPICE cell.
 
 `ids` is used as a set: on return it is sorted and without duplicates. The vector
 comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
@@ -548,7 +560,8 @@ dskobj!(ids::AbstractVector{<:Integer}, path::AbstractString) = _add_ids!(ids, d
     dsksrf(path, bodyid) -> Vector{Int}
 
 Return the ID codes of the surfaces of the body `bodyid` that have a segment in the DSK
-file `path`, sorted and without repetition, as `dsksrf_c`.
+file `path`, sorted and without repetition, as
+[`dsksrf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dsksrf_c.html).
 
 The errors are those of [`dskobj`](@ref).
 
@@ -561,7 +574,8 @@ dsksrf(path::AbstractString, bodyid::Integer) = sort!(unique!(Int[d.surfce
     dsksrf!(ids, path, bodyid) -> ids
 
 Insert the ID codes of the surfaces of the body `bodyid` that have a segment in the DSK
-file `path` into the vector `ids`, as `dsksrf_c` does with a SPICE cell.
+file `path` into the vector `ids`, as
+[`dsksrf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dsksrf_c.html) does with a SPICE cell.
 
 `ids` is used as a set: on return it is sorted and without duplicates. The vector
 comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
@@ -625,7 +639,7 @@ _dsk_frame_code(ks::KernelSet, fixref::AbstractString) = Int32(namfrm(ks, fixref
 
 Return `(xpt, segment, plid)` for the first point where the ray from `vertex` along
 `raydir` meets the surface that the loaded DSK segments of `target` define, as
-`dskxsi_c`, or `nothing` if there is no intercept.
+[`dskxsi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskxsi_c.html), or `nothing` if there is no intercept.
 
 # Arguments
 - `pri`: must be `false`. All segments have the same priority and the nearest intercept
@@ -742,7 +756,8 @@ end
     dskxv([ctx | ks,] pri, target, srflst, et, fixref, vtxarr, dirarr) -> (xptarr, fndarr)
 
 Return the intercepts of a set of rays with the surface that the loaded DSK segments of
-`target` define, as `dskxv_c`.
+`target` define, as
+[`dskxv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskxv_c.html).
 
 `vtxarr` and `dirarr` hold the vertices (km) and the directions of the n rays: 3 x n
 matrices, or vectors of n 3-vectors. `xptarr[i]` is the intercept of ray `i` (an
@@ -771,7 +786,8 @@ dskxv(pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID, vtxarr, d
     pltexp(iverts, delta) -> SVector{3,SVector{3,Float64}}
 
 Return the vertices of the plate `iverts` after an expansion about its centroid by the
-fraction `delta`, as `pltexp_c`.
+fraction `delta`, as
+[`pltexp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pltexp_c.html).
 
 `iverts` holds the three vertices: three 3-vectors, or the columns of a 3 x 3 matrix. The
 distance of each vertex from the centroid is multiplied by `1 + delta`, so the result is
@@ -790,7 +806,8 @@ end
     pltnrm(v1, v2, v3) -> SVector{3,Float64}
 
 Return the normal `(v2 - v1) x (v3 - v2)` of the plate with the vertices `v1`, `v2`,
-`v3`, as `pltnrm_c`.
+`v3`, as
+[`pltnrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pltnrm_c.html).
 
 The normal follows the right-hand rule: it points to the side from which the vertices
 are in counterclockwise order. The result does not have unit length. It is zero for a
@@ -803,7 +820,8 @@ pltnrm(v1, v2, v3) = _dsk_pltnrm(_dsk_vec3(v1), _dsk_vec3(v2), _dsk_vec3(v3))
     pltnp(point, v1, v2, v3) -> (pnear, dist)
 
 Return the point of the plate with the vertices `v1`, `v2`, `v3` that is nearest to
-`point`, and its distance from `point`, as `pltnp_c`. A degenerate plate (a line segment
+`point`, and its distance from `point`, as
+[`pltnp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pltnp_c.html). A degenerate plate (a line segment
 or a point) is accepted.
 """
 pltnp(point, v1, v2, v3) = _dsk_pltnp(_dsk_vec3(point), _dsk_vec3(v1), _dsk_vec3(v2), _dsk_vec3(v3))
@@ -830,7 +848,8 @@ end
 """
     pltar(vrtces, plates) -> Float64
 
-Return the total area of a set of plates, as `pltar_c`.
+Return the total area of a set of plates, as
+[`pltar_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pltar_c.html).
 
 `vrtces` and `plates` are 3 x n matrices or vectors of 3-vectors. A plate is three vertex
 numbers, which start at 1. An empty set of plates gives 0.
@@ -861,7 +880,8 @@ end
 """
     pltvol(vrtces, plates) -> Float64
 
-Return the volume of the region that a set of plates encloses, as `pltvol_c`.
+Return the volume of the region that a set of plates encloses, as
+[`pltvol_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pltvol_c.html).
 
 `vrtces` and `plates` are 3 x n matrices or vectors of 3-vectors. A plate is three vertex
 numbers, which start at 1. The plates must form a closed surface with outward normals;

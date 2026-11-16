@@ -389,7 +389,8 @@ end
     occult([ctx,] targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr, et) -> Int
 
 Return the occultation state of two targets as seen by `obsrvr` at `et` (seconds past
-J2000 TDB), as `occult_c` of CSPICE:
+J2000 TDB), as
+[`occult_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/occult_c.html) of CSPICE:
 
 | Code | Meaning |
 |---|---|

@@ -15,7 +15,8 @@
 """
     ckopn(path, ifname, ncomch=0) -> DAFHandle
 
-Create the CK file `path` and open it for writing, as `ckopn_c`.
+Create the CK file `path` and open it for writing, as
+[`ckopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckopn_c.html).
 
 `ifname` is the internal file name and `ncomch` is the number of comment characters to
 make room for. The file is on disk when the call returns. An existing file is never
@@ -55,7 +56,8 @@ end
 """
     ckcls(handle) -> Nothing
 
-Close the CK file of `handle`, as `ckcls_c`. The call does nothing if the handle is closed
+Close the CK file of `handle`, as
+[`ckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcls_c.html). The call does nothing if the handle is closed
 already. The close writes no data: every write call puts its bytes on disk before it
 returns. Load the file with [`furnsh`](@ref) after the close.
 
@@ -118,7 +120,8 @@ end
 """
     ckw01([ctx,] handle, begtim, endtim, inst, ref, segid, sclkdp, quats, avvs) -> Nothing
 
-Write a CK segment of type 1 (discrete pointing) to the file of `handle`, as `ckw01_c`.
+Write a CK segment of type 1 (discrete pointing) to the file of `handle`, as
+[`ckw01_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw01_c.html).
 
 # Arguments
 The arguments `ctx`, `handle`, `begtim`, `endtim`, `inst`, `ref` and `segid` have the same
@@ -206,7 +209,7 @@ ckw01(h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
         -> Nothing
 
 Write a CK segment of type 2 (pointing with a constant angular velocity on intervals), as
-`ckw02_c`.
+[`ckw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw02_c.html).
 
 Record `i` is valid from `start[i]` to `stop[i]` (encoded spacecraft clock ticks).
 `quats[i]` is its quaternion, `avvs[i]` its angular velocity (rad/s) and `rates[i]` its
@@ -280,7 +283,7 @@ ckw02(h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
         -> Nothing
 
 Write a CK segment of type 3 (pointing with linear interpolation inside intervals), as
-`ckw03_c`.
+[`ckw03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw03_c.html).
 
 `sclkdp` holds the times of the `nrec` records (encoded spacecraft clock ticks), `quats`
 their quaternions and `starts` the start times of the interpolation intervals. Inside
@@ -360,7 +363,7 @@ ckw03(h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
           packts, rate, nints, starts) -> Nothing
 
 Write a CK segment of type 5 (Hermite or Lagrange interpolation of attitude packets), as
-`ckw05_c`.
+[`ckw05_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw05_c.html).
 
 `subtyp` selects the interpolation and the content of a packet. `q` is a SPICE
 quaternion (scalar first), `dq` its derivative, `av` the angular velocity in `ref`
@@ -466,7 +469,7 @@ const _CK06_PKTSZS = (8, 4, 14, 7)
           packts, rates, sclkdp, ivlbds, sellst) -> Nothing
 
 Write a CK segment of type 6 (mini-segments of Hermite or Lagrange interpolation), as
-`ckw06` of SPICELIB. CSPICE has no C wrapper for it.
+[`ckw06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw06.html) of SPICELIB. CSPICE has no C wrapper for it.
 
 A mini-segment is a set of packets with its own subtype, degree and clock rate, valid on
 its own interval. The number of mini-segments is `length(npkts)`. The subtypes, their

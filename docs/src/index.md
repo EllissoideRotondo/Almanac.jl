@@ -1,73 +1,34 @@
 # Almanac.jl
 
-Almanac.jl reads SPICE kernels and answers the questions that the CSPICE toolkit answers (where a body is, how a frame is oriented, when an event occurs), in Julia code with no C library behind it. The calls keep the names and the argument order of CSPICE, so that a program written for CSPICE or SPICE.jl needs few changes.
-
-Queries are safe from many threads at once, because each query reads an immutable snapshot of the loaded kernels, which a later load does not change, and no call keeps hidden state. A context object holds one set of loaded kernels, and a program that needs two independent sets makes two contexts. With ForwardDiff.jl loaded, the epoch of the state, rotation, surface and time-conversion calls that [Dual-number epochs](@ref) lists can be a dual number, and `spkder` and `pxder` return time derivatives of any order, so that a state can go into an optimizer or an integrator without finite differences. A trajectory or a rotation can be extracted into a flat array of coefficients that a GPU evaluates.
-
-A program that must call the CSPICE library of NAIF itself, for example to obtain results that are identical to those of another CSPICE program on every platform, is better served by the wrapper SPICE.jl. The toolkit programs of NAIF, such as `brief` and `mkspk`, are not part of this package.
+Almanac.jl is a native Julia port of CSPICE N0067. It reads SPICE kernels and answers the questions CSPICE answers (where a body is, how a frame is oriented, when an event occurs) in pure Julia. Calls keep the CSPICE names, without the `_c` suffix, and with [few exceptions](@ref "Call conventions") the argument order; each docstring links to the NAIF page of the routine it ports.
 
 ## Installation
-
-The package needs Julia 1.10 or later. Install it from GitHub:
 
 ```julia-repl
 pkg> add https://github.com/Orbitology/Almanac.jl
 ```
 
-The examples of this manual run on three small kernels that the manual writes itself: leap seconds; the radii and the rotation of the Sun and of the Earth, with the name of a spacecraft `PROBE`; and two-body orbits of the Earth around the Sun and of `PROBE` around the Earth. The positions are therefore not those of the real bodies; with kernels from NAIF the same calls give real positions.
+Julia 1.10 or later.
 
-## Contents
+## Features
 
-### Tutorial
+- Lock-free queries from any number of threads; each query reads an immutable snapshot of the loaded kernels.
+- Independent kernel sets, one per [`SpiceContext`](@ref).
+- Time derivatives of any order ([`spkder`](@ref), [`pxder`](@ref)) and automatic differentiation with ForwardDiff.jl ([dual-number epochs](@ref "Dual-number epochs")), Enzyme.jl, Mooncake.jl, Zygote.jl, ReverseDiff.jl and Tracker.jl ([other AD packages](@ref "Other AD packages")).
+- [Ephemeris and rotation tables](@ref) for inner loops and GPU kernels.
+- Event searches, surface geometry on ellipsoids and DSK shapes, and writers for SPK, CK, binary PCK, DSK and EK files.
+- Bodies and frames defined by Julia functions ([`add_ephemeris!`](@ref), [`add_frame!`](@ref)).
 
-The first session loads kernels, computes states and orientations, and ends with an event search.
+Use the wrapper [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl) instead when results must be bit-identical to the CSPICE library on every platform.
 
-```@contents
-Pages = ["tutorial.md"]
-Depth = 2
-```
+## Where to start
 
-### How-to guides
+- [First session](@ref): load kernels, compute a state, a rotation and a sub-observer point, search for events.
+- [Differences from CSPICE](@ref): read before porting a CSPICE or SPICE.jl program.
+- The how-to guides cover [threads and contexts](@ref "Contexts and threads"), [derivatives](@ref "Time derivatives"), [tables](@ref "Ephemeris and rotation tables"), [user-defined bodies](@ref "Bodies and frames from your own functions"), [event searches](@ref "Event searches") and [writing kernels](@ref "Writing kernels").
 
-These guides cover several threads and several sets of loaded kernels, time derivatives, tables for inner loops and GPUs, event searches, and the writing of kernels.
-
-```@contents
-Pages = [
-    "howto/contexts.md",
-    "howto/derivatives.md",
-    "howto/tables.md",
-    "howto/events.md",
-    "howto/writing.md",
-]
-Depth = 2
-```
-
-### Concepts
-
-These pages say where Almanac.jl differs from CSPICE, which parts of the toolkit exist, and how they were checked.
-
-```@contents
-Pages = ["explanation/cspice.md", "explanation/coverage.md"]
-Depth = 2
-```
-
-### API reference
-
-```@contents
-Pages = [
-    "reference/kernels.md",
-    "reference/time.md",
-    "reference/states.md",
-    "reference/frames.md",
-    "reference/geometry.md",
-    "reference/events.md",
-    "reference/math.md",
-    "reference/files.md",
-    "reference/ek.md",
-]
-Depth = 1
-```
+The examples run on three small kernels that the manual writes itself: leap seconds, constants of the Sun and the Earth with a spacecraft named `PROBE`, and two-body orbits of the Earth and of `PROBE`. Positions are therefore not those of the real bodies.
 
 ## Contributing
 
-Report defects and ask questions in the [issues of the repository](https://github.com/Orbitology/Almanac.jl/issues). Almanac.jl is an independent project: NAIF and the Jet Propulsion Laboratory do not develop or support it, so do not send its defects to NAIF.
+Report defects and ask questions in the [issues](https://github.com/Orbitology/Almanac.jl/issues). Almanac.jl is not developed or supported by NAIF; do not send its defects to NAIF.

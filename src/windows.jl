@@ -59,7 +59,8 @@ end
 """
     card(x) -> Int
 
-Return the number of elements of `x`, as `card_c` of CSPICE gives for a cell.
+Return the number of elements of `x`, as
+[`card_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/card_c.html) of CSPICE gives for a cell.
 
 For a [`Window`](@ref) this is the number of endpoints, which is twice the number of
 intervals. For another vector, such as the IDs that [`spkobj`](@ref) returns, it is the
@@ -72,7 +73,8 @@ card(x::AbstractVector) = length(x)
 """
     wncard(window) -> Int
 
-Return the number of intervals of `window`, as `wncard_c` of CSPICE.
+Return the number of intervals of `window`, as
+[`wncard_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wncard_c.html) of CSPICE.
 
 See also [`card`](@ref), [`wnfetd`](@ref).
 """
@@ -81,7 +83,8 @@ wncard(w::Window) = length(w.data) ÷ 2
 """
     wninsd!(window, left, right) -> window
 
-Insert the interval [`left`, `right`] into `window` and return `window`, as `wninsd_c`
+Insert the interval [`left`, `right`] into `window` and return `window`, as
+[`wninsd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wninsd_c.html)
 of CSPICE.
 
 The new interval is merged with each interval that it overlaps or touches. The window
@@ -144,7 +147,8 @@ end
     wnvald!(window) -> window
 
 Sort and merge the endpoint pairs in `window.data` to make a valid window, and return
-`window`, as `wnvald_c` of CSPICE.
+`window`, as
+[`wnvald_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnvald_c.html) of CSPICE.
 
 The pairs can be in any order and can overlap. `Window(endpoints)` calls this, so it is
 necessary only after a direct change of `window.data`.
@@ -173,7 +177,8 @@ end
 """
     wnunid(a, b) -> Window
 
-Return the union of the windows `a` and `b`, as `wnunid_c` of CSPICE.
+Return the union of the windows `a` and `b`, as
+[`wnunid_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnunid_c.html) of CSPICE.
 
 # Examples
 ```jldoctest
@@ -218,7 +223,8 @@ end
 """
     wnintd(a, b) -> Window
 
-Return the intersection of the windows `a` and `b`, as `wnintd_c` of CSPICE.
+Return the intersection of the windows `a` and `b`, as
+[`wnintd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnintd_c.html) of CSPICE.
 
 Two intervals that share only an endpoint give the interval of that one point.
 
@@ -245,7 +251,8 @@ end
 """
     wndifd(a, b) -> Window
 
-Return the difference of the windows `a` and `b`, as `wndifd_c` of CSPICE.
+Return the difference of the windows `a` and `b`, as
+[`wndifd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wndifd_c.html) of CSPICE.
 
 The result holds closed intervals. An interval of `b` that cuts an interval of `a`
 leaves the shared endpoints in the result: [1, 5] minus [2, 3] is [1, 2] and [3, 5]. An
@@ -308,7 +315,7 @@ end
     wncomd(window, left, right) -> Window
 
 Return the complement of `window` with respect to the interval [`left`, `right`], as
-`wncomd_c` of CSPICE.
+[`wncomd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wncomd_c.html) of CSPICE.
 
 The result holds the closed parts of the interval that `window` does not cover. The
 window is the first argument; CSPICE has it after the interval.
@@ -345,7 +352,7 @@ end
     wnelmd(window, point) -> Bool
 
 Return `true` if `point` is in an interval of `window`, endpoints included, as
-`wnelmd_c` of CSPICE. The window is the first argument; CSPICE has it last.
+[`wnelmd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnelmd_c.html) of CSPICE. The window is the first argument; CSPICE has it last.
 
 See also [`wnincd`](@ref).
 """
@@ -361,7 +368,8 @@ end
     wnincd(window, left, right) -> Bool
 
 Return `true` if the interval [`left`, `right`] is inside one interval of `window`,
-endpoints included, as `wnincd_c` of CSPICE. The window is the first argument; CSPICE
+endpoints included, as
+[`wnincd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnincd_c.html) of CSPICE. The window is the first argument; CSPICE
 has it last.
 
 See also [`wnelmd`](@ref).
@@ -377,7 +385,8 @@ end
 """
     wnfetd(window, n) -> (left, right)
 
-Return the endpoints of interval number `n` of `window`, as `wnfetd_c` of CSPICE. `n`
+Return the endpoints of interval number `n` of `window`, as
+[`wnfetd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnfetd_c.html) of CSPICE. `n`
 starts at 1; in CSPICE it starts at 0.
 
 Throws `SpiceError(:nointerval)` if `n` is not in `1:wncard(window)`.
@@ -399,7 +408,8 @@ end
 """
     wnsumd(window) -> (meas, avg, stddev, idxsml, idxlon)
 
-Return a summary of `window`, as `wnsumd_c` of CSPICE.
+Return a summary of `window`, as
+[`wnsumd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnsumd_c.html) of CSPICE.
 
 - `meas`: the sum of the lengths of the intervals.
 - `avg`, `stddev`: the mean and the standard deviation of the lengths.
@@ -452,7 +462,8 @@ end
 """
     wnexpd!(window, left, right) -> window
 
-Expand each interval of `window` and return `window`, as `wnexpd_c` of CSPICE.
+Expand each interval of `window` and return `window`, as
+[`wnexpd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnexpd_c.html) of CSPICE.
 
 `left` is subtracted from each left endpoint and `right` is added to each right
 endpoint. A negative value contracts the interval. An interval whose left endpoint then
@@ -506,7 +517,8 @@ end
 """
     wncond!(window, left, right) -> window
 
-Contract each interval of `window` and return `window`, as `wncond_c` of CSPICE.
+Contract each interval of `window` and return `window`, as
+[`wncond_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wncond_c.html) of CSPICE.
 
 `left` is added to each left endpoint and `right` is subtracted from each right
 endpoint; this is [`wnexpd!`](@ref) with `-left` and `-right`. An interval whose left
@@ -525,7 +537,8 @@ wncond!(w::Window, left::Real, right::Real) = wnexpd!(w, -Float64(left), -Float6
     wnextd!(window, side) -> window
 
 Replace each interval of `window` by the interval of one point at its left
-(`side = 'L'`) or right (`side = 'R'`) endpoint, and return `window`, as `wnextd_c`
+(`side = 'L'`) or right (`side = 'R'`) endpoint, and return `window`, as
+[`wnextd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnextd_c.html)
 of CSPICE.
 
 Letter case of `side` is ignored. The window is the first argument; CSPICE has it last.
@@ -559,7 +572,7 @@ end
     wnfild!(window, smlgap) -> window
 
 Fill each gap of `window` that is not longer than `smlgap` and return `window`, as
-`wnfild_c` of CSPICE.
+[`wnfild_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnfild_c.html) of CSPICE.
 
 The two intervals on each side of such a gap are merged. A gap is the distance between
 the right endpoint of an interval and the left endpoint of the next one. The window is
@@ -597,7 +610,8 @@ end
     wnfltd!(window, smlint) -> window
 
 Remove each interval of `window` that is not longer than `smlint` and return `window`,
-as `wnfltd_c` of CSPICE.
+as
+[`wnfltd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnfltd_c.html) of CSPICE.
 
 An interval stays only if its length is greater than `smlint`, so `smlint = 0` removes
 the intervals of one point. The window is the first argument; CSPICE has it last.
@@ -630,7 +644,7 @@ end
     wnreld(a, op, b) -> Bool
 
 Return `true` if the relation `a op b` holds between the windows `a` and `b`, as
-`wnreld_c` of CSPICE.
+[`wnreld_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnreld_c.html) of CSPICE.
 
 | `op` | Relation |
 |:-----|:---------|
