@@ -22,7 +22,7 @@ julia> endswith(tkvrsn(), "/CSPICE_N0067")
 true
 ```
 """
-function tkvrsn(item::Union{AbstractString,Symbol}="TOOLKIT")
+function tkvrsn(item::Union{AbstractString, Symbol} = "TOOLKIT")
     uppercase(strip(String(item))) == "TOOLKIT" || return "No version found."
     return string("Almanac_v", pkgversion(@__MODULE__), "/", CSPICE_VERSION)
 end
@@ -85,7 +85,7 @@ julia> ktotal(SpiceContext())
 
 See also [`kdata`](@ref), [`kinfo`](@ref).
 """
-ktotal(ks::KernelSet, kind::AbstractString="ALL") = length(_kernels_of_kind(ks, kind))
+ktotal(ks::KernelSet, kind::AbstractString = "ALL") = length(_kernels_of_kind(ks, kind))
 ktotal(ctx::SpiceContext, kind::AbstractString) = ktotal(kernelset(ctx), kind)
 ktotal(kind::AbstractString) = ktotal(default_context(), kind)
 
@@ -114,15 +114,15 @@ end
 
 See also [`kinfo`](@ref).
 """
-function kdata(ks::KernelSet, which::Integer, kind::AbstractString="ALL")
+function kdata(ks::KernelSet, which::Integer, kind::AbstractString = "ALL")
     list = _kernels_of_kind(ks, kind)
     (1 <= which <= length(list)) || return nothing
     e = list[which]
     return e.path, kernel_filetype(e), e.source, 0
 end
-kdata(ctx::SpiceContext, which::Integer, kind::AbstractString="ALL") =
+kdata(ctx::SpiceContext, which::Integer, kind::AbstractString = "ALL") =
     kdata(kernelset(ctx), which, kind)
-kdata(which::Integer, kind::AbstractString="ALL") = kdata(default_context(), which, kind)
+kdata(which::Integer, kind::AbstractString = "ALL") = kdata(default_context(), which, kind)
 
 """
     kinfo([ctx,] file) -> Union{Nothing,Tuple{String,String,Int}}
@@ -160,12 +160,24 @@ file that is not a DAF and `SpiceError(:invalidfiletype)` for a DAF of another t
 """
 function _require_binary_kernel(who::AbstractString, path::AbstractString, kind::AbstractString)
     arch, typ = getfat(path)
-    arch == "XFR" && throw(SpiceError(:invalidformat, "$who: input file $path has " *
-        "architecture $arch; the file must be a binary $kind file"))
-    arch == "DAF" || throw(SpiceError(:invalidarchtype, "$who: input file $path has " *
-        "architecture $arch; the file must be a binary $kind file (DAF architecture)"))
-    typ == kind || throw(SpiceError(:invalidfiletype, "$who: input file $path has file " *
-        "type $typ; the file must be a binary $kind file"))
+    arch == "XFR" && throw(
+        SpiceError(
+            :invalidformat, "$who: input file $path has " *
+                "architecture $arch; the file must be a binary $kind file"
+        )
+    )
+    arch == "DAF" || throw(
+        SpiceError(
+            :invalidarchtype, "$who: input file $path has " *
+                "architecture $arch; the file must be a binary $kind file (DAF architecture)"
+        )
+    )
+    typ == kind || throw(
+        SpiceError(
+            :invalidfiletype, "$who: input file $path has file " *
+                "type $typ; the file must be a binary $kind file"
+        )
+    )
     return nothing
 end
 

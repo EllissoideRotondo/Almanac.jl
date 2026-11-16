@@ -12,7 +12,7 @@ of its velocity, from `p.f` called on a Taylor number (as for SPK types that sto
 velocity, `spk_eval`). Throws `SpiceError(:badarraysize)` if `p.f` does not return six
 numbers.
 """
-@noinline function provider_jet(p::EphemerisProvider, et::T, ::Val{N}) where {T<:Real,N}
+@noinline function provider_jet(p::EphemerisProvider, et::T, ::Val{N}) where {T <: Real, N}
     # `p.f` is not inferred: every value is converted to `T` with an assertion, so that
     # the jet has a concrete type and the callers of `segment_jet` stay type-stable.
     # `@noinline` keeps this branch out of the inlined `segment_jet` of the file types.
@@ -21,7 +21,7 @@ numbers.
         _provider_check(p, s, et)
         r = Vec3{T}(_tc(T, s[1]), _tc(T, s[2]), _tc(T, s[3]))
         v = Vec3{T}(_tc(T, s[4]), _tc(T, s[5]), _tc(T, s[6]))
-        return ntuple(k -> k == 1 ? r : v, Val(N + 1))::NTuple{N + 1,Vec3{T}}
+        return ntuple(k -> k == 1 ? r : v, Val(N + 1))::NTuple{N + 1, Vec3{T}}
     end
     s = p.f(taylor_var(et, Val(N - 1)))
     _provider_check(p, s, et)
@@ -30,19 +30,23 @@ numbers.
     dx = _tderivs(T, s[4], Val(N - 1))
     dy = _tderivs(T, s[5], Val(N - 1))
     dz = _tderivs(T, s[6], Val(N - 1))
-    return ntuple(k -> k == 1 ? r0 : Vec3{T}(dx[k-1], dy[k-1], dz[k-1]), Val(N + 1))::NTuple{N + 1,Vec3{T}}
+    return ntuple(k -> k == 1 ? r0 : Vec3{T}(dx[k - 1], dy[k - 1], dz[k - 1]), Val(N + 1))::NTuple{N + 1, Vec3{T}}
 end
 
 @inline _tc(::Type{T}, x) where {T} = convert(T, x)::T
 _tvalue(x::Taylor) = x.v
 _tvalue(x) = x
-_tderivs(::Type{T}, x::Taylor, ::Val{M}) where {T,M} = map(y -> _tc(T, y), derivatives(x))::NTuple{M + 1,T}
-_tderivs(::Type{T}, x, ::Val{M}) where {T,M} = ntuple(k -> k == 1 ? _tc(T, x) : zero(T), Val(M + 1))
+_tderivs(::Type{T}, x::Taylor, ::Val{M}) where {T, M} = map(y -> _tc(T, y), derivatives(x))::NTuple{M + 1, T}
+_tderivs(::Type{T}, x, ::Val{M}) where {T, M} = ntuple(k -> k == 1 ? _tc(T, x) : zero(T), Val(M + 1))
 
 @noinline function _provider_check(p::EphemerisProvider, s, et)
-    (applicable(length, s) && length(s) == 6) || throw(SpiceError(:badarraysize,
-        "the provider '$(p.name)' of body $(p.body) returned $(repr(s)) at ET " *
-        "$(primal(et)) s; it must return the six numbers of a state"))
+    (applicable(length, s) && length(s) == 6) || throw(
+        SpiceError(
+            :badarraysize,
+            "the provider '$(p.name)' of body $(p.body) returned $(repr(s)) at ET " *
+                "$(primal(et)) s; it must return the six numbers of a state"
+        )
+    )
     return nothing
 end
 
@@ -95,15 +99,25 @@ true
 
 See also [`unload`](@ref), [`ephemeris_table`](@ref).
 """
-function add_ephemeris!(f, ctx::SpiceContext, body::NameOrID, center::NameOrID,
-        frame::NameOrID, t0::Real, t1::Real; name::AbstractString="")
-    t0 <= t1 || throw(SpiceError(:baddescrtimes,
-        "add_ephemeris!: the interval [$t0, $t1] ends before it starts"))
+function add_ephemeris!(
+        f, ctx::SpiceContext, body::NameOrID, center::NameOrID,
+        frame::NameOrID, t0::Real, t1::Real; name::AbstractString = ""
+    )
+    t0 <= t1 || throw(
+        SpiceError(
+            :baddescrtimes,
+            "add_ephemeris!: the interval [$t0, $t1] ends before it starts"
+        )
+    )
     lock(ctx.lock) do
         ks = kernelset(ctx)
         b, c, fr = body_code(ks, body), body_code(ks, center), frame_id(ks, frame)
-        b == c && throw(SpiceError(:barycenterephem,
-            "add_ephemeris!: body $b cannot be its own center"))
+        b == c && throw(
+            SpiceError(
+                :barycenterephem,
+                "add_ephemeris!: body $b cannot be its own center"
+            )
+        )
         n = isempty(name) ? "ephemeris of body $b" : String(name)
         p = EphemerisProvider(n, b, c, fr, Float64(t0), Float64(t1), f, :SPK)
         list = copy(ks.loaded)
@@ -112,8 +126,10 @@ function add_ephemeris!(f, ctx::SpiceContext, body::NameOrID, center::NameOrID,
     end
     return nothing
 end
-add_ephemeris!(f, body::NameOrID, center::NameOrID, frame::NameOrID, t0::Real, t1::Real;
-    kw...) = add_ephemeris!(f, default_context(), body, center, frame, t0, t1; kw...)
+add_ephemeris!(
+    f, body::NameOrID, center::NameOrID, frame::NameOrID, t0::Real, t1::Real;
+    kw...
+) = add_ephemeris!(f, default_context(), body, center, frame, t0, t1; kw...)
 
 # ---------------------------------------------------------------------------------------
 # Frames
@@ -138,11 +154,15 @@ end
 Contract: the matrix from frame `p.id` to frame `p.relative` that `p.f(et)` returns.
 Throws `SpiceError(:badarraysize)` if it does not have 3 x 3 elements.
 """
-@inline function provider_rotation(p::FrameProvider, et::T) where {T<:Real}
+@inline function provider_rotation(p::FrameProvider, et::T) where {T <: Real}
     m = p.f(et)
-    (applicable(size, m) && size(m) == (3, 3)) || throw(SpiceError(:badarraysize,
-        "the provider of frame '$(p.name)' returned $(repr(m)) at ET $(primal(et)) s; " *
-        "it must return a 3 x 3 rotation matrix"))
+    (applicable(size, m) && size(m) == (3, 3)) || throw(
+        SpiceError(
+            :badarraysize,
+            "the provider of frame '$(p.name)' returned $(repr(m)) at ET $(primal(et)) s; " *
+                "it must return a 3 x 3 rotation matrix"
+        )
+    )
     return Mat3{T}(ntuple(k -> _tc(T, m[k]), Val(9)))::Mat3{T}
 end
 
@@ -201,8 +221,10 @@ julia> sxform(ctx, "SPIN", "J2000", 0.0)[5, 1]    # derivative of the (2, 1) ele
 
 See also [`add_ephemeris!`](@ref), [`unload`](@ref).
 """
-function add_frame!(f, ctx::SpiceContext, name::AbstractString, id::Integer,
-        center::NameOrID, relative::NameOrID; path::AbstractString="")
+function add_frame!(
+        f, ctx::SpiceContext, name::AbstractString, id::Integer,
+        center::NameOrID, relative::NameOrID; path::AbstractString = ""
+    )
     nn = normalize_name(name)
     isempty(nn) && throw(SpiceError(:emptystring, "add_frame!: the frame name is empty"))
     (haskey(BUILTIN_FRAMENAME2ID, nn) || haskey(BUILTIN_FRAMES, Int32(id))) &&
@@ -210,8 +232,12 @@ function add_frame!(f, ctx::SpiceContext, name::AbstractString, id::Integer,
     lock(ctx.lock) do
         ks = kernelset(ctx)
         c, r = body_code(ks, center), frame_id(ks, relative)
-        r == Int32(id) && throw(SpiceError(:badframe,
-            "add_frame!: frame $id cannot be relative to itself"))
+        r == Int32(id) && throw(
+            SpiceError(
+                :badframe,
+                "add_frame!: frame $id cannot be relative to itself"
+            )
+        )
         frame_def(ks, r)                    # the relative frame must be defined
         p = isempty(path) ? "frame $name" : String(path)
         list = copy(ks.loaded)

@@ -70,8 +70,8 @@ Call `f(call)` for each call of the log at `path`, in order, reading the log as 
 A call of a routine for which `want(name)` is false is passed with no arguments, which
 saves the parsing of its values.
 """
-function foreach_call(f, path; want=_ -> true)
-    open_log(path) do io
+function foreach_call(f, path; want = _ -> true)
+    return open_log(path) do io
         pending = nothing                   # a line read ahead
         lineno = 0
         nextline() = (pending === nothing ? (lineno += 1; readline(io)) : (l = pending; pending = nothing; l))
@@ -88,7 +88,7 @@ function foreach_call(f, path; want=_ -> true)
             while !eof(io)
                 l = nextline()
                 if startswith(l, "! ")
-                    p = split(l, ' '; limit=3)
+                    p = split(l, ' '; limit = 3)
                     failed = p[2] == "T"
                     short = length(p) == 3 ? strip(p[3]) : ""
                     break
@@ -113,8 +113,8 @@ function foreach_call(f, path; want=_ -> true)
                     for j in 1:n
                         v = nextline()
                         vals[j] = k == "d" ? parse(Float64, strip(v)) :
-                                  k == "i" ? parse(Int, strip(v)) :
-                                  k == "l" ? strip(v) == "T" : String(v[2:end])
+                            k == "i" ? parse(Int, strip(v)) :
+                            k == "l" ? strip(v) == "T" : String(v[2:end])
                     end
                     push!((l[1] == '<' ? ins : outs), Arg(aname[2:end], k[1], vals))
                 elseif startswith(l, "@ ")
@@ -136,9 +136,9 @@ function jl(a::Arg)
     n = length(v)
     T = a.kind == 'd' ? Float64 : a.kind == 'i' ? Int : Bool
     n == 1 && return T(v[1])
-    n == 9 && return SMatrix{3,3,T}(v...)
-    n == 36 && return SMatrix{6,6,T}(v...)
-    return SVector{n,T}(v...)
+    n == 9 && return SMatrix{3, 3, T}(v...)
+    n == 36 && return SMatrix{6, 6, T}(v...)
+    return SVector{n, T}(v...)
 end
 
 "The values of an Almanac result, flattened as SPICELIB's output arguments are."
@@ -151,16 +151,20 @@ flat(x::AbstractArray{<:AbstractString}) = Any[String.(x)...]
 flat(x::AbstractArray) = Any[reduce(vcat, flat.(x))...]
 flat(x::SpiceEllipse) = Any[x.center..., x.semimajor..., x.semiminor...]
 flat(x::SpicePlane) = Any[x.normal..., x.constant]
-flat(x::Tuple) = Any[reduce(vcat, [flat(v) for v in x]; init=Any[])...]
+flat(x::Tuple) = Any[reduce(vcat, [flat(v) for v in x]; init = Any[])...]
 # the descriptors in the order of the arrays of SPICELIB (DLADSZ = 8, DSKDSZ = 24)
 flat(x::Almanac.DLADescr) = Any[getfield(x, f) for f in fieldnames(typeof(x))]
-flat(x::Almanac.DSKDescr) = Any[x.surfce, x.center, x.dclass, x.dtype, x.frmcde, x.corsys,
-    x.corpar..., x.co1min, x.co1max, x.co2min, x.co2max, x.co3min, x.co3max, x.start, x.stop]
+flat(x::Almanac.DSKDescr) = Any[
+    x.surfce, x.center, x.dclass, x.dtype, x.frmcde, x.corsys,
+    x.corpar..., x.co1min, x.co1max, x.co2min, x.co2max, x.co3min, x.co3max, x.start, x.stop,
+]
 # the descriptors of CSPICE have the same fields
 ORACLE && @eval begin
     flat(x::SPICE.DLADescr) = Any[getfield(x, f) for f in fieldnames(typeof(x))]
-    flat(x::SPICE.DSKDescr) = Any[x.surfce, x.center, x.dclass, x.dtype, x.frmcde, x.corsys,
-        x.corpar..., x.co1min, x.co1max, x.co2min, x.co2max, x.co3min, x.co3max, x.start, x.stop]
+    flat(x::SPICE.DSKDescr) = Any[
+        x.surfce, x.center, x.dclass, x.dtype, x.frmcde, x.corsys,
+        x.corpar..., x.co1min, x.co1max, x.co2min, x.co2max, x.co3min, x.co3max, x.start, x.stop,
+    ]
 end
 
 close_enough(a::Real, b::Real) = a == b || abs(a - b) <= ATOL + RTOL * max(abs(a), abs(b))
@@ -173,7 +177,7 @@ function maxdiff(exp, got)
     m = 0.0
     for (a, b) in zip(exp, got)
         (a isa Real && b isa Real) || continue
-        m = max(m, abs(a - b) / max(abs(a), abs(b), 1e-300))
+        m = max(m, abs(a - b) / max(abs(a), abs(b), 1.0e-300))
     end
     return m
 end
@@ -189,16 +193,21 @@ end
 
 
 # Input arguments that SPICELIB needs and Almanac does not (sizes of output arrays).
-const DROP = Dict("gdpool" => ["start", "room"], "gipool" => ["start", "room"],
+const DROP = Dict(
+    "gdpool" => ["start", "room"], "gipool" => ["start", "room"],
     "gcpool" => ["start", "room"], "bodvrd" => ["maxn"], "bodvcd" => ["maxn"],
-    "pdpool" => ["n"], "pipool" => ["n"], "pcpool" => ["n"], "lmpool" => ["n"], "ekbseg" => ["ncols"])
+    "pdpool" => ["n"], "pipool" => ["n"], "pcpool" => ["n"], "lmpool" => ["n"], "ekbseg" => ["ncols"]
+)
 
-for g in ("vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdotg", "vlcomg", "dasadd", "dasadi",
-        "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg")
+for g in (
+        "vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg", "vzerog", "vdotg", "vlcomg", "dasadd", "dasadi",
+        "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg",
+    )
     DROP[g] = ["ndim"]
 end
 
-for (r, names) in ("qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npts"],
+for (r, names) in (
+        "qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npts"],
         "hrmint" => ["n", "work"], "lgrint" => ["n", "work"], "lgrind" => ["n", "work"],
         "dskrb2" => ["nv", "np"], "hrmesp" => ["n", "work"], "lgresp" => ["n", "work"],
         "dafada" => ["n"], "vlcomg" => ["n"], "ekacei" => ["nvals"], "ekaced" => ["nvals"],
@@ -207,30 +216,37 @@ for (r, names) in ("qderiv" => ["ndim"], "srfnrm" => ["npts"], "latsrf" => ["npt
         "dskxv" => ["nsurf", "nrays"], "chbigr" => ["degp"], "chbint" => ["degp"],
         "chbval" => ["degp"], "chbder" => ["degp"], "dafps" => ["nd", "ni"],
         "ckw01" => ["avflag", "nrec"], "ckw02" => ["nrec"], "ckw03" => ["avflag", "nrec", "nints"],
-        "pltvol" => ["nv", "np"], "pltar" => ["nv", "np"], "pltexp" => [], "dskw02" => ["nv", "np"])
+        "pltvol" => ["nv", "np"], "pltar" => ["nv", "np"], "pltexp" => [], "dskw02" => ["nv", "np"],
+    )
     DROP[r] = names
 end
 
 "Routines whose arrays of 9 or 36 numbers are vectors, not matrices, in Almanac."
-const VECTOR_ROUTINES = Set(["vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg",
-    "vzerog", "vdotg", "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg",
-    "qderiv", "eqncpv", "hrmint", "lgrint", "lgrind", "hrmesp", "lgresp", "dafada", "dasadd", "dasadi", "chbigr", "chbint",
-    "chbval", "chbder", "dafps", "dskxsi"])
+const VECTOR_ROUTINES = Set(
+    [
+        "vnormg", "vminug", "vsubg", "vaddg", "vsclg", "vequg",
+        "vzerog", "vdotg", "vhatg", "vdistg", "vsepg", "vrelg", "vprojg", "vlcomg", "unormg",
+        "qderiv", "eqncpv", "hrmint", "lgrint", "lgrind", "hrmesp", "lgresp", "dafada", "dasadd", "dasadi", "chbigr", "chbint",
+        "chbval", "chbder", "dafps", "dskxsi",
+    ]
+)
 
 "Routines whose array of points is a list of points in Almanac: name => (argument, size)."
 const POINT_LISTS = Dict("srfnrm" => ("srfpts", 3), "latsrf" => ("lonlat", 2))
 
 "A matrix argument of a routine of general dimensions: column-major, `nr` by `nc`."
 gmat(a::Arg, nr, nc) = reshape(Float64.(a.values), nr, nc)
-gmatn(a::Arg, nr, nc) = reshape(Float64.(a.values)[1:nr*nc], nr, nc)
+gmatn(a::Arg, nr, nc) = reshape(Float64.(a.values)[1:(nr * nc)], nr, nc)
 
 # Output arguments that Almanac does not return (counts of returned arrays).
-const NOTOUT = Dict("gdpool" => ["n"], "gipool" => ["n"], "gcpool" => ["n"],
+const NOTOUT = Dict(
+    "gdpool" => ["n"], "gipool" => ["n"], "gcpool" => ["n"],
     "dskp02" => ["n"], "dskv02" => ["n"], "dski02" => ["n"], "dskd02" => ["n"],
     "ekrcec" => ["segno", "nvals"], "ekrced" => ["segno", "nvals"], "ekrcei" => ["segno", "nvals"],
     "bodvrd" => ["dim"], "bodvcd" => ["dim"], "dtpool" => ["found"],
     "lgrint" => ["work"], "lgrind" => ["work"], "hrmint" => ["work"], "lgresp" => ["work"],
-    "hrmesp" => ["work"], "getfvn" => ["n"], "getfov" => ["n"])
+    "hrmesp" => ["work"], "getfvn" => ["n"], "getfov" => ["n"]
+)
 
 "An input by its name: the planes and ellipses of SPICELIB are arrays of 4 and 9 doubles."
 function jl_named(a::Arg)
@@ -250,8 +266,12 @@ end
 "Segment writers: the count `n` is the length of the arrays in Almanac."
 const WRITERS = r"^(spkw|ckw|pckw)\d\d$"
 "Array arguments of the segment writers, vectors even when they hold one number."
-const WRITER_ARRAYS = Set(["states", "epochs", "sclkdp", "quats", "avvs", "starts", "start", "stop",
-    "cdata", "packts", "records", "rates", "coeffs", "dlines", "elems", "ivlbds"])
+const WRITER_ARRAYS = Set(
+    [
+        "states", "epochs", "sclkdp", "quats", "avvs", "starts", "start", "stop",
+        "cdata", "packts", "records", "rates", "coeffs", "dlines", "elems", "ivlbds",
+    ]
+)
 
 "Routines whose vertices and plates are 3 x n matrices in Almanac."
 const PLATE_ROUTINES = Set(["pltar", "pltvol", "dskw02", "dskmi2", "dskrb2"])
@@ -277,13 +297,17 @@ function jl_named(a::Arg, routine::AbstractString)
     if pl !== nothing && a.name == pl[1]
         k = pl[2]
         v = Float64.(a.values)
-        return [SVector{k}(v[i:i+k-1]) for i in 1:k:length(v)-k+1]
+        return [SVector{k}(v[i:(i + k - 1)]) for i in 1:k:(length(v) - k + 1)]
     end
     routine in VECTOR_ROUTINES && a.kind != 'c' &&
-        (length(a.values) > 1 || a.name in ("xvals", "yvals", "f0", "f2", "v1", "v2", "data",
-            "cp", "srflst", "dc", "ic", "vrtces", "plates")) &&
-        return a.kind == 'd' ? SVector{length(a.values),Float64}(a.values...) :
-               SVector{length(a.values),Int}(a.values...)
+        (
+        length(a.values) > 1 || a.name in (
+            "xvals", "yvals", "f0", "f2", "v1", "v2", "data",
+            "cp", "srflst", "dc", "ic", "vrtces", "plates",
+        )
+    ) &&
+        return a.kind == 'd' ? SVector{length(a.values), Float64}(a.values...) :
+        SVector{length(a.values), Int}(a.values...)
     return jl_named(a)
 end
 
@@ -306,11 +330,11 @@ utility such as TSTSPK): the call is skipped; the file is read from the snapshot
 struct UnmappedHandle <: Exception end
 
 "Paths of the files opened by handle, and the files whose writes were not all replayed."
-const HPATH = Dict{Int,String}()
+const HPATH = Dict{Int, String}()
 const TAINTED = Set{String}()
 
 "Almanac's handle of each handle of SPICELIB."
-const HMAP = Dict{Int,Any}()
+const HMAP = Dict{Int, Any}()
 
 handle_value(a::Arg) = a.kind == 'i' && length(a.values) == 1 && a.name in HANDLE_ARGS ?
     get(HMAP, a.values[1], nothing) : nothing
@@ -320,9 +344,9 @@ A reader handle of Almanac for a file that SPICELIB loaded (`cklpf`, `spklef`): 
 calls take a handle where the queries take the path. Opened once, in the directory where
 the file was loaded.
 """
-const READERS = Dict{String,Any}()
+const READERS = Dict{String, Any}()
 "The directory in which each file loaded by handle was loaded, and that of the last furnsh."
-const LOADDIR = Dict{String,String}()
+const LOADDIR = Dict{String, String}()
 const LAST_LOAD = Ref("")
 function daf_reader(path::AbstractString, c::Call)
     return get!(READERS, path) do
@@ -336,12 +360,12 @@ function open_by_handle(ctx, c::Call)
     name = lowercase(c.name)
     path = String(c.inputs[1].values[1])
     if occursin(CREATORS, name)
-        c.failed || (rm(path; force=true); delete!(TAINTED, abspath(path)))
+        c.failed || (rm(path; force = true); delete!(TAINTED, abspath(path)))
     else
         snap = isempty(c.snapshot) ? "" : joinpath(c.snapshot, path)
         if (!isfile(path) || abspath(path) in TAINTED) && isfile(snap)
             mkpath(dirname(abspath(path)))
-            cp(snap, path; force=true)
+            cp(snap, path; force = true)
             delete!(TAINTED, abspath(path))
         end
         abspath(path) in TAINTED && throw(UnmappedHandle())
@@ -358,7 +382,7 @@ function open_by_handle(ctx, c::Call)
 end
 
 "The type 14 segment writers of Almanac, by SPICELIB's handle."
-const SPK14W = Dict{Int,Any}()
+const SPK14W = Dict{Int, Any}()
 
 "SPICELIB's handles of the files open for write."
 const WRITE_OPEN = Set{Int}()
@@ -381,11 +405,15 @@ read SPICELIB's file from the snapshots.
 function drop_handle(hid)
     haskey(HPATH, hid) && push!(TAINTED, HPATH[hid])
     h = get(HMAP, hid, nothing)
-    h isa Almanac.DASHandle && try Almanac.dascls(h) catch end
-    h isa Almanac.DAFHandle && try Almanac.dafcls(h) catch end
+    h isa Almanac.DASHandle && try
+        Almanac.dascls(h)
+    catch end
+    h isa Almanac.DAFHandle && try
+        Almanac.dafcls(h)
+    catch end
     CURRENT_DAF[] === h && (CURRENT_DAF[] = nothing)
     delete!(HMAP, hid)
-    delete!(WRITE_OPEN, hid)
+    return delete!(WRITE_OPEN, hid)
 end
 
 # SPICELIB keeps a current DAF for the array search and the array being added; Almanac
@@ -417,7 +445,8 @@ const RECORD_WRITERS = Dict(
     "spkw03" => ("cdata", a -> 6 * (jl(a["polydg"]) + 1)),
     "spkw20" => ("cdata", a -> 3 * (jl(a["polydg"]) + 2)),
     "pckw02" => ("cdata", a -> 3 * (jl(a["polydg"]) + 1)),
-    "spkw21" => ("dlines", a -> jl(a["dlsize"])))
+    "spkw21" => ("dlines", a -> jl(a["dlsize"]))
+)
 
 const EK_QUERY = Set(["ekfind", "eknelt", "ekgc", "ekgd", "ekgi"])
 const CURRENT_EK = Ref{Any}(nothing)   # result of the last ekfind
@@ -460,7 +489,7 @@ function default_mapping(ctx, c::Call)
         # values (then Almanac's file misses the segment)
         (m <= 0 || n < 0) && throw(UnmappedHandle())
         length(v) < n * m && (c.failed || drop_handle(a["handle"].values[1]); throw(UnmappedHandle()))
-        recs = [v[(k-1)*m+1:k*m] for k in 1:n]
+        recs = [v[((k - 1) * m + 1):(k * m)] for k in 1:n]
         drop = ("handle", "n", "polydg", "dlsize")
         args = Any[x.name == data ? recs : jl_named(x, name) for x in c.inputs if !(x.name in drop)]
         f = getfield(Almanac, Symbol(name))
@@ -477,8 +506,10 @@ function default_mapping(ctx, c::Call)
         # takes a vector and returns a tuple, so the call has no counterpart
         (jl(a["nsurf"]) < 0 || jl(a["maxd"]) < 1 || jl(a["maxi"]) < 1) && throw(UnmappedHandle())
         srf = Int.(a["srflst"].values)[1:max(0, jl(a["nsurf"]))]
-        r = dskxsi(ctx, jl(a["pri"]), jl(a["target"]), srf, jl(a["et"]), jl(a["fixref"]),
-                   jl(a["vertex"]), jl(a["raydir"]))
+        r = dskxsi(
+            ctx, jl(a["pri"]), jl(a["target"]), srf, jl(a["et"]), jl(a["fixref"]),
+            jl(a["vertex"]), jl(a["raydir"])
+        )
         out = Dict(o.name => o for o in c.outputs)
         fexp = out["found"].values[1]
         r === nothing && return [("found", Any[fexp], Any[false])]
@@ -518,8 +549,10 @@ function default_mapping(ctx, c::Call)
         flag(b) = b ? 1 : -1
         d = out["attdsc"].values
         got = Any[at.cclass, findfirst(==(at.dtype), (:CHR, :DP, :INT, :TIME)), at.size, flag(at.indexd), flag(at.nullok)]
-        return [("column", Any[rstrip(String(out["column"].values[1]))], Any[col]),
-                ("attdsc", Any[d[1], d[2], d[4], d[5], d[6]], got)]
+        return [
+            ("column", Any[rstrip(String(out["column"].values[1]))], Any[col]),
+            ("attdsc", Any[d[1], d[2], d[4], d[5], d[6]], got),
+        ]
     end
     occursin(OPENERS, name) && return open_by_handle(ctx, c)
     if name in DAF_SELECT
@@ -535,8 +568,10 @@ function default_mapping(ctx, c::Call)
         throw(UnmappedHandle())
     f = getfield(Almanac, Symbol(name))
     drop = occursin(WRITERS, name) ? vcat(get(DROP, name, String[]), ["n"]) : get(DROP, name, String[])
-    args = Any[(h = handle_value(a); h === nothing ? jl_named(a, name) : h)
-               for a in c.inputs if !(a.name in drop)]
+    args = Any[
+        (h = handle_value(a); h === nothing ? jl_named(a, name) : h)
+            for a in c.inputs if !(a.name in drop)
+    ]
     # the angular velocities of a CK writer without them are `nothing` in Almanac
     if name in ("ckw01", "ckw03")
         av = findfirst(a -> a.name == "avflag", c.inputs)
@@ -566,7 +601,9 @@ function default_mapping(ctx, c::Call)
             # (the CK and PCK writers of some families are not recorded): the later
             # opens read SPICELIB's file from the snapshots.
             (e isa SpiceError && e.kind === :nosegmentsfound && !c.failed) || rethrow()
-            try Almanac.dafcls(args[1]) catch end    # the close left it open
+            try
+                Almanac.dafcls(args[1])
+            catch end    # the close left it open
             haskey(HPATH, hid) && push!(TAINTED, HPATH[hid])
             delete!(HMAP, hid)
             throw(UnmappedHandle())
@@ -630,14 +667,18 @@ end
 const WRITE_HANDLE = Ref(Int[])
 
 "Outputs that hold a value only if a count output is at least a number: SPICELIB leaves them undefined otherwise."
-const COUNTED = Dict("inelpl" => ("nxpts", ["xpt1" => 1, "xpt2" => 2]),
-                     "inrypl" => ("nxpts", ["xpt" => 1]))
+const COUNTED = Dict(
+    "inelpl" => ("nxpts", ["xpt1" => 1, "xpt2" => 2]),
+    "inrypl" => ("nxpts", ["xpt" => 1])
+)
 
 function counted(name, pairs)
     # for a file open for write Almanac's dashfs describes the segregated file that dascls
     # writes (documented); SPICELIB's describes the records as they are now
-    name == "dashfs" && return filter(p -> !(p[1] in ("free", "lastrc", "lastwd")) ||
-                                         !any(<(0), WRITE_HANDLE[]), pairs)
+    name == "dashfs" && return filter(
+        p -> !(p[1] in ("free", "lastrc", "lastwd")) ||
+            !any(<(0), WRITE_HANDLE[]), pairs
+    )
     rule = get(COUNTED, name, nothing)
     rule === nothing && return pairs
     k = findfirst(p -> p[1] == rule[1], pairs)
@@ -668,23 +709,29 @@ plain(x::AbstractArray{Any}) = all(v -> v isa Integer, x) ? Int.(x) :
 plain(x) = x
 
 "The routines that change the kernels or the settings, mirrored into CSPICE."
-const STATEFUL = Set(["furnsh", "unload", "kclear", "ldpool", "clpool", "pdpool", "pcpool",
-    "pipool", "lmpool", "dvpool", "timdef", "spklef", "cklpf", "pcklof"])
+const STATEFUL = Set(
+    [
+        "furnsh", "unload", "kclear", "ldpool", "clpool", "pdpool", "pcpool",
+        "pipool", "lmpool", "dvpool", "timdef", "spklef", "cklpf", "pcklof",
+    ]
+)
 
 # SPICE.jl puts only the long message of CSPICE into its error; the short message, which
 # is the kind, is added in front here.
-ORACLE && Core.eval(SPICE, quote
-    function handleerror()
-        ccall((:failed_c, libcspice), Bool, ()) || return nothing
-        buf = Array{UInt8}(undef, 1841)
-        ccall((:getmsg_c, libcspice), Cvoid, (Cstring, Cint, Ref{UInt8}), "SHORT", 1841, buf)
-        short = String(buf[1:findfirst(iszero, buf) - 1])
-        ccall((:getmsg_c, libcspice), Cvoid, (Cstring, Cint, Ref{UInt8}), "LONG", 1841, buf)
-        long = String(buf[1:findfirst(iszero, buf) - 1])
-        ccall((:reset_c, libcspice), Cvoid, ())
-        throw(SpiceError(short * " " * long))
+ORACLE && Core.eval(
+    SPICE, quote
+        function handleerror()
+            ccall((:failed_c, libcspice), Bool, ()) || return nothing
+            buf = Array{UInt8}(undef, 1841)
+            ccall((:getmsg_c, libcspice), Cvoid, (Cstring, Cint, Ref{UInt8}), "SHORT", 1841, buf)
+            short = String(buf[1:(findfirst(iszero, buf) - 1)])
+            ccall((:getmsg_c, libcspice), Cvoid, (Cstring, Cint, Ref{UInt8}), "LONG", 1841, buf)
+            long = String(buf[1:(findfirst(iszero, buf) - 1)])
+            ccall((:reset_c, libcspice), Cvoid, ())
+            throw(SpiceError(short * " " * long))
+        end
     end
-end)
+)
 
 "The kind of an error of SPICE.jl: the short message of CSPICE, which `handleerror` puts first."
 function cspice_kind(e)
@@ -703,28 +750,38 @@ const SpD = Float64
 function cspice_tangpt(method, target, et, fixref, abcorr, corloc, obsrvr, dref, dvec)
     tanpt, srfpt, srfvec = zeros(3), zeros(3), zeros(3)
     alt, range, trgepc = Ref(0.0), Ref(0.0), Ref(0.0)
-    ccall((:tangpt_c, SPICE.libcspice), Cvoid,
-          (Cstring, Cstring, SpD, Cstring, Cstring, Cstring, Cstring, Cstring, Ref{SpD},
-           Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}),
-          method, target, et, fixref, abcorr, corloc, obsrvr, dref, Vector{SpD}(dvec),
-          tanpt, alt, range, srfpt, trgepc, srfvec)
+    ccall(
+        (:tangpt_c, SPICE.libcspice), Cvoid,
+        (
+            Cstring, Cstring, SpD, Cstring, Cstring, Cstring, Cstring, Cstring, Ref{SpD},
+            Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD},
+        ),
+        method, target, et, fixref, abcorr, corloc, obsrvr, dref, Vector{SpD}(dvec),
+        tanpt, alt, range, srfpt, trgepc, srfvec
+    )
     SPICE.handleerror()
     return tanpt, alt[], range[], srfpt, trgepc[], srfvec
 end
-function cspice_termpt(method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr, refvec,
-        rolstp, ncuts, schstp, soltol, maxn)
+function cspice_termpt(
+        method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr, refvec,
+        rolstp, ncuts, schstp, soltol, maxn
+    )
     npts = zeros(Int32, ncuts)
     points, epochs, trmvcs = zeros(3, maxn), zeros(maxn), zeros(3, maxn)
-    ccall((:termpt_c, SPICE.libcspice), Cvoid,
-          (Cstring, Cstring, Cstring, SpD, Cstring, Cstring, Cstring, Cstring, Ref{SpD}, SpD,
-           Int32, SpD, SpD, Int32, Ref{Int32}, Ref{SpD}, Ref{SpD}, Ref{SpD}),
-          method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr, Vector{SpD}(refvec),
-          rolstp, ncuts, schstp, soltol, maxn, npts, points, epochs, trmvcs)
+    ccall(
+        (:termpt_c, SPICE.libcspice), Cvoid,
+        (
+            Cstring, Cstring, Cstring, SpD, Cstring, Cstring, Cstring, Cstring, Ref{SpD}, SpD,
+            Int32, SpD, SpD, Int32, Ref{Int32}, Ref{SpD}, Ref{SpD}, Ref{SpD},
+        ),
+        method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr, Vector{SpD}(refvec),
+        rolstp, ncuts, schstp, soltol, maxn, npts, points, epochs, trmvcs
+    )
     SPICE.handleerror()
     n = Int(sum(npts))
     return Int.(npts), [points[:, i] for i in 1:n], epochs[1:n], [trmvcs[:, i] for i in 1:n]
 end
-const CSPICE_EXTRA = Dict{String,Function}("tangpt" => cspice_tangpt, "termpt" => cspice_termpt)
+const CSPICE_EXTRA = Dict{String, Function}("tangpt" => cspice_tangpt, "termpt" => cspice_termpt)
 
 function cspice_call(c::Call)
     name = lowercase(c.name)
@@ -751,7 +808,7 @@ end
 function cspice_reset()
     SPICE.kclear()
     SPICE.timdef("SET", "CALENDAR", "GREGORIAN")
-    SPICE.timdef("SET", "SYSTEM", "UTC")
+    return SPICE.timdef("SET", "SYSTEM", "UTC")
 end
 
 """
@@ -795,8 +852,10 @@ function near_output(a, b)
         for x in Iterators.flatten((a[r], b[r]))
             x isa Real && isfinite(x) && (scale = max(scale, abs(Float64(x))))
         end
-        all(t -> close_enough(t[1], t[2]) ||
-            (t[1] isa Real && t[2] isa Real && abs(t[1] - t[2]) <= NEAR * scale), zip(a[r], b[r])) ||
+        all(
+            t -> close_enough(t[1], t[2]) ||
+                (t[1] isa Real && t[2] isa Real && abs(t[1] - t[2]) <= NEAR * scale), zip(a[r], b[r])
+        ) ||
             return false
     end
     return true
@@ -821,19 +880,19 @@ function within_spread(c::Call, pairs)
     for ((_, e, g), (_, _, o)) in zip(pairs, oracle)
         (g === nothing || o === nothing || length(g) != length(o) || length(e) != length(o)) && return false
         all(x -> x isa Real, Iterators.flatten((e, g, o))) || return near_output(g, o)
-        dac = maximum(abs.(Float64.(g) .- Float64.(o)); init=0.0)
-        dsc = maximum(abs.(Float64.(e) .- Float64.(o)); init=0.0)
+        dac = maximum(abs.(Float64.(g) .- Float64.(o)); init = 0.0)
+        dsc = maximum(abs.(Float64.(e) .- Float64.(o)); init = 0.0)
         dac <= 2dsc || near_output(g, o) || return false
     end
     return true
 end
 
 function output_pairs(name, outs, vals)
-    pairs = Tuple{String,Vector{Any},Any}[]
+    pairs = Tuple{String, Vector{Any}, Any}[]
     if length(vals) != length(outs)
         # a single array output that SPICELIB splits into several, or the reverse
-        flatvals = reduce(vcat, [flat(v) for v in vals if v !== nothing]; init=Any[])
-        exp = reduce(vcat, [o.values for o in outs]; init=Any[])
+        flatvals = reduce(vcat, [flat(v) for v in vals if v !== nothing]; init = Any[])
+        exp = reduce(vcat, [o.values for o in outs]; init = Any[])
         push!(pairs, (join([o.name for o in outs], "+"), exp, flatvals))
         return pairs
     end
@@ -844,7 +903,7 @@ function output_pairs(name, outs, vals)
 end
 
 "SPICELIB's handles of the files loaded by handle in this family, and their paths."
-const HANDLES = Dict{Int,String}()
+const HANDLES = Dict{Int, String}()
 
 function load_by_handle(ctx, c)
     path = jl(c.inputs[1])
@@ -852,8 +911,10 @@ function load_by_handle(ctx, c)
         furnsh(ctx, path)
     end
     # Almanac keeps the path as given, and `spksfs` returns it as the handle.
-    c.failed || (HANDLES[c.outputs[1].values[1]] = path; HMAP[c.outputs[1].values[1]] = path;
-                 LOADDIR[path] = isempty(c.snapshot) ? pwd() : c.snapshot)
+    c.failed || (
+        HANDLES[c.outputs[1].values[1]] = path; HMAP[c.outputs[1].values[1]] = path;
+        LOADDIR[path] = isempty(c.snapshot) ? pwd() : c.snapshot
+    )
     return []
 end
 
@@ -865,7 +926,7 @@ function unload_by_handle(ctx, c)
 end
 
 # Routines whose arguments do not follow the default.
-const MAPPINGS = Dict{String,Function}(
+const MAPPINGS = Dict{String, Function}(
     "spklef" => load_by_handle, "cklpf" => load_by_handle, "pcklof" => load_by_handle,
     "eklef" => load_by_handle, "ekuef" => unload_by_handle, "dasllc" => dasllc_mapping,
     "dasops" => (ctx, c) -> (h = dasops(); c.failed || (HMAP[c.outputs[1].values[1]] = h); []),
@@ -874,8 +935,10 @@ const MAPPINGS = Dict{String,Function}(
     "spk14b" => function (ctx, c)
         a = Dict(x.name => x for x in c.inputs)
         h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
-        SPK14W[a["handle"].values[1]] = spk14b(ctx, h, jl(a["segid"]), jl(a["body"]), jl(a["center"]),
-            jl(a["frame"]), jl(a["first"]), jl(a["last"]), jl(a["chbdeg"]))
+        SPK14W[a["handle"].values[1]] = spk14b(
+            ctx, h, jl(a["segid"]), jl(a["body"]), jl(a["center"]),
+            jl(a["frame"]), jl(a["first"]), jl(a["last"]), jl(a["chbdeg"])
+        )
         # SPK14A is not in the log (the size of its records is not known to the recorder):
         # the file misses the records, and later opens read SPICELIB's file
         haskey(HPATH, a["handle"].values[1]) && push!(TAINTED, HPATH[a["handle"].values[1]])
@@ -895,7 +958,7 @@ const MAPPINGS = Dict{String,Function}(
     "xposeg" => function (ctx, c)
         a = Dict(x.name => x for x in c.inputs)
         nr, nc = jl(a["nrow"]), jl(a["ncol"])
-        r = xposeg(reshape(Float64.(a["matrix"].values)[1:nr*nc], nr, nc))
+        r = xposeg(reshape(Float64.(a["matrix"].values)[1:(nr * nc)], nr, nc))
         return [("xposem", c.outputs[1].values, flat(r))]
     end,
     "swpool" => function (ctx, c)
@@ -906,8 +969,10 @@ const MAPPINGS = Dict{String,Function}(
     end,
     "badkpv" => function (ctx, c)
         a = Dict(x.name => x for x in c.inputs)
-        r = badkpv(ctx, jl(a["caller"]), jl(a["name"]), jl(a["comp"]), jl(a["size"]),
-                   jl(a["divby"]), only(jl(a["type"])))
+        r = badkpv(
+            ctx, jl(a["caller"]), jl(a["name"]), jl(a["comp"]), jl(a["size"]),
+            jl(a["divby"]), only(jl(a["type"]))
+        )
         return output_pairs("badkpv", c.outputs, Any[r])
     end,
     "ekops" => (ctx, c) -> (h = ekops(); c.failed || (HMAP[c.outputs[1].values[1]] = h); []),
@@ -958,7 +1023,11 @@ const MAPPINGS = Dict{String,Function}(
         isempty(c.snapshot) || (LOADDIR[path] = c.snapshot; LAST_LOAD[] = c.snapshot)
         return []
     end,
-    "ldpool" => (ctx, c) -> (in_snapshot(c) do; ldpool(ctx, jl(c.inputs[1])); end; []),
+    "ldpool" => (ctx, c) -> (
+        in_snapshot(c) do;
+            ldpool(ctx, jl(c.inputs[1]))
+        end; []
+    ),
     "lmpool" => (ctx, c) -> (lmpool(ctx, String.(c.inputs[1].values)); []),
     "pdpool" => (ctx, c) -> (pdpool(ctx, jl(c.inputs[1]), Float64.(c.inputs[3].values)); []),
     "pipool" => (ctx, c) -> (pipool(ctx, jl(c.inputs[1]), Int.(c.inputs[3].values)); []),
@@ -979,7 +1048,7 @@ const MAPPINGS = Dict{String,Function}(
     "polyds" => function (ctx, c)
         # COEFFS(0:DEG): also a vector when it holds one number
         a = Dict(x.name => x for x in c.inputs)
-        r = polyds(Float64.(a["coeffs"].values)[1:jl(a["deg"])+1], jl(a["nderiv"]), jl(a["t"]))
+        r = polyds(Float64.(a["coeffs"].values)[1:(jl(a["deg"]) + 1)], jl(a["nderiv"]), jl(a["t"]))
         return output_pairs("polyds", c.outputs, Any[r])
     end,
     "mtxmg" => function (ctx, c)
@@ -1073,18 +1142,22 @@ function replay_family(path, tallies, mismatches)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
     empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W)
-    foreach(h -> try Almanac.dafcls(h) catch end, values(READERS)); empty!(READERS)
+    foreach(
+        h -> try
+            Almanac.dafcls(h)
+        catch end, values(READERS)
+    ); empty!(READERS)
     empty!(LOADDIR); LAST_LOAD[] = ""
     cd(mktempdir())
     ORACLE && cspice_reset()
     # A load or pool edit whose values the log does not hold leaves Almanac without
     # the kernels of SPICELIB: the rest of the family is skipped.
     desync = false
-    foreach_call(path; want=n -> haskey(MAPPINGS, n) || isdefined(Almanac, Symbol(n))) do c
+    return foreach_call(path; want = n -> haskey(MAPPINGS, n) || isdefined(Almanac, Symbol(n))) do c
         name = lowercase(c.name)
         t = get!(Tally, tallies, name)
         truncated = any(a -> a.values == Any[TRUNCATED], c.inputs) ||
-                    any(a -> a.values == Any[TRUNCATED], c.outputs)
+            any(a -> a.values == Any[TRUNCATED], c.outputs)
         truncated && name in STATEFUL && (desync = true)
         # a write that is not replayed leaves the file of Almanac incomplete: the later
         # calls on its handle are skipped
@@ -1105,7 +1178,7 @@ function replay_family(path, tallies, mismatches)
         end
         ORACLE && name in STATEFUL && cspice_call(c)
         oracle_ok() = ORACLE && !(name in STATEFUL) && !(result isa Exception && !(result isa SpiceError)) &&
-                      agrees_with_cspice(c, result)
+            agrees_with_cspice(c, result)
         expkind = c.failed ? Symbol(lowercase(replace(c.short, r"^SPICE\(|\)$" => ""))) : nothing
         if result isa UnmappedHandle
             t.skipped += 1
@@ -1116,8 +1189,12 @@ function replay_family(path, tallies, mismatches)
                 t.cspice += 1
             else
                 t.error += 1
-                record!(mismatches, (family, c, "error", "SPICELIB: $(c.failed ? c.short : "no error"); " *
-                    "Almanac: $(result.kind): $(first(sprint(showerror, result), 160))"))
+                record!(
+                    mismatches, (
+                        family, c, "error", "SPICELIB: $(c.failed ? c.short : "no error"); " *
+                            "Almanac: $(result.kind): $(first(sprint(showerror, result), 160))",
+                    )
+                )
             end
         elseif result isa Exception
             t.adapter += 1
@@ -1128,8 +1205,10 @@ function replay_family(path, tallies, mismatches)
             t.error += 1
             record!(mismatches, (family, c, "error", "SPICELIB: $(c.short); Almanac: no error"))
         else
-            bad = [(n, e, g) for (n, e, g) in result if
-                   g === nothing || length(e) != length(g) || !all(close_enough.(e, g))]
+            bad = [
+                (n, e, g) for (n, e, g) in result if
+                    g === nothing || length(e) != length(g) || !all(close_enough.(e, g))
+            ]
             if isempty(bad)
                 t.match += 1
             elseif oracle_ok()
@@ -1140,8 +1219,12 @@ function replay_family(path, tallies, mismatches)
                 kind = near ? "near" : ORACLE && within_spread(c, result) ? "spread" : "value"
                 kind == "near" ? (t.near += 1) : kind == "spread" ? (t.spread += 1) : (t.value += 1)
                 d = g === nothing ? "nothing" : string(g)
-                record!(mismatches, (family, c, kind, "$n: SPICELIB $(e) Almanac $(first(d, 300))" *
-                    (g === nothing ? "" : @sprintf(" (max rel diff %.2e)", maxdiff(e, g)))))
+                record!(
+                    mismatches, (
+                        family, c, kind, "$n: SPICELIB $(e) Almanac $(first(d, 300))" *
+                            (g === nothing ? "" : @sprintf(" (max rel diff %.2e)", maxdiff(e, g))),
+                    )
+                )
             end
         end
     end
@@ -1157,8 +1240,8 @@ away.
 """
 mutable struct Mismatches
     io::IO
-    rows::Dict{Tuple{String,String},Int}
-    ids::Union{IO,Nothing}
+    rows::Dict{Tuple{String, String}, Int}
+    ids::Union{IO, Nothing}
 end
 Mismatches(io::IO, rows) = Mismatches(io, rows, nothing)
 const MAXROWS = 200
@@ -1168,14 +1251,16 @@ const GATED_KINDS = ("value", "error", "adapter")
 function fnv64(s::AbstractString)
     h = 0xcbf29ce484222325
     for b in codeunits(s)
-        h = (h ⊻ b) * 0x100000001b3
+        h = (h ⊻ b) * 0x00000100000001b3
     end
     return h
 end
 
 "The identity of a mismatch of the call `c`: a hash of its name and all its inputs."
-call_id(c::Call) = string(fnv64(c.name * "(" * join(["$(a.name)=$(repr(a.values))" for a in c.inputs], ",") * ")");
-    base=16, pad=16)
+call_id(c::Call) = string(
+    fnv64(c.name * "(" * join(["$(a.name)=$(repr(a.values))" for a in c.inputs], ",") * ")");
+    base = 16, pad = 16
+)
 
 function record!(m::Mismatches, (fam, c, kind, msg))
     if m.ids !== nothing && kind in GATED_KINDS
@@ -1185,7 +1270,7 @@ function record!(m::Mismatches, (fam, c, kind, msg))
     n = get(m.rows, key, 0) + 1
     m.rows[key] = n
     n <= MAXROWS || return
-    println(m.io, fam, '\t', c.line, '\t', kind, '\t', describe(c), '\t', replace(msg, '\n' => ' '))
+    return println(m.io, fam, '\t', c.line, '\t', kind, '\t', describe(c), '\t', replace(msg, '\n' => ' '))
 end
 
 function describe(c::Call)
@@ -1195,7 +1280,7 @@ end
 
 "The logs of LOGDIR (`F_XXX.log` or `F_XXX.log.gz`), of the families named, or all."
 function family_logs(logdir, families)
-    logs = sort(filter(f -> occursin(r"^F_.*\.log(\.gz)?$", basename(f)), readdir(logdir; join=true)))
+    logs = sort(filter(f -> occursin(r"^F_.*\.log(\.gz)?$", basename(f)), readdir(logdir; join = true)))
     wanted = Set("F_" * uppercase(replace(fam, r"^F_"i => "")) for fam in families)
     isempty(families) || filter!(f -> uppercase(replace(basename(f), r"\.log(\.gz)?$" => "")) in wanted, logs)
     return logs
@@ -1205,7 +1290,7 @@ const TALLY_FIELDS = fieldnames(Tally)
 
 "`tallies` as a table, one routine per line: the name and the counts of `Tally`."
 function write_tallies(path, tallies)
-    open(path, "w") do io
+    return open(path, "w") do io
         println(io, join(["routine"; String.(collect(TALLY_FIELDS))], '\t'))
         for name in sort(collect(keys(tallies)))
             t = tallies[name]
@@ -1223,9 +1308,11 @@ function main(args)
     # The writers that the families call create files in the working directory.
     cd(mktempdir())
     logs = family_logs(logdir, args[2:end])
-    tallies = Dict{String,Tally}()
-    mismatches = Mismatches(open(joinpath(outdir, "replay.tsv"), "w"),
-        Dict{Tuple{String,String},Int}(), open(joinpath(outdir, "ids.tsv"), "w"))
+    tallies = Dict{String, Tally}()
+    mismatches = Mismatches(
+        open(joinpath(outdir, "replay.tsv"), "w"),
+        Dict{Tuple{String, String}, Int}(), open(joinpath(outdir, "ids.tsv"), "w")
+    )
     # families.tsv: the status of each family, `done` or `failed` with the error. A family
     # that fails is not a mismatch that the baseline can allow: the exit status is 1.
     failed = 0

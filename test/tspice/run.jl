@@ -39,19 +39,21 @@ const GATED = ["value", "error", "adapter"]
 
 "One replay process per CPU thread, at most one per 3 GB of free memory (a process of a
 large family holds about 2 GB)."
-default_jobs() = max(1, min(Sys.CPU_THREADS, floor(Int, Sys.free_memory() / 3e9)))
+default_jobs() = max(1, min(Sys.CPU_THREADS, floor(Int, Sys.free_memory() / 3.0e9)))
 
 function parse_args(args)
-    o = Dict{String,Any}("dir" => joinpath(homedir(), ".cache", "almanac-tspice"),
+    o = Dict{String, Any}(
+        "dir" => joinpath(homedir(), ".cache", "almanac-tspice"),
         "record" => false, "jobs" => default_jobs(), "oracle" => true, "update" => false,
-        "families" => String[])
+        "families" => String[]
+    )
     i = 1
     while i <= length(args)
         a = args[i]
         if a == "--dir"
-            o["dir"] = abspath(expanduser(args[i+1])); i += 1
+            o["dir"] = abspath(expanduser(args[i + 1])); i += 1
         elseif a == "--jobs"
-            o["jobs"] = parse(Int, args[i+1]); i += 1
+            o["jobs"] = parse(Int, args[i + 1]); i += 1
         elseif a == "--record"
             o["record"] = true
         elseif a == "--no-oracle"
@@ -70,7 +72,7 @@ end
 
 "Read a table of counts: routine => Dict(kind => count)."
 function read_counts(path)
-    t = Dict{String,Dict{String,Int}}()
+    t = Dict{String, Dict{String, Int}}()
     isfile(path) || return t
     lines = readlines(path)
     head = split(lines[1], '\t')
@@ -87,7 +89,7 @@ SPICELIB that Almanac states), `gap` (a limit of the replay, not of Almanac) or
 `unexplained`, with what it is.
 """
 function read_notes(path)
-    t = Dict{String,Tuple{String,String}}()
+    t = Dict{String, Tuple{String, String}}()
     isfile(path) || return t
     lines = readlines(path)
     head = split(lines[1], '\t')
@@ -99,8 +101,8 @@ function read_notes(path)
     return t
 end
 
-function write_counts(path, t, kinds; notes=nothing)
-    open(path, "w") do io
+function write_counts(path, t, kinds; notes = nothing)
+    return open(path, "w") do io
         println(io, join(["routine"; kinds; notes === nothing ? String[] : ["class", "note"]], '\t'))
         for r in sort(collect(keys(t)))
             extra = notes === nothing ? String[] : collect(get(notes, r, ("unexplained", "")))
@@ -113,7 +115,7 @@ end
 function split_logs(logs, n)
     groups = [String[] for _ in 1:n]
     load = zeros(Int, n)
-    for f in sort(logs; by=filesize, rev=true)
+    for f in sort(logs; by = filesize, rev = true)
         k = argmin(load)
         push!(groups[k], f)
         load[k] += filesize(f)
@@ -142,7 +144,7 @@ function main(args)
         println("record again with --record")
         return 2
     end
-    logs = filter(f -> endswith(f, ".log.gz"), readdir(logdir; join=true))
+    logs = filter(f -> endswith(f, ".log.gz"), readdir(logdir; join = true))
     if !full
         wanted = Set("F_" * uppercase(replace(f, r"^F_"i => "")) * ".LOG.GZ" for f in o["families"])
         filter!(f -> uppercase(basename(f)) in wanted, logs)
@@ -152,7 +154,7 @@ function main(args)
     end
     isempty(logs) && error("no logs in $logdir")
     results = joinpath(dir, "results")
-    rm(results; force=true, recursive=true)
+    rm(results; force = true, recursive = true)
     groups = split_logs(logs, jobs)
     println("replaying $(length(logs)) families in $(length(groups)) processes ...")
     project = dirname(HERE)                # test/
@@ -164,7 +166,7 @@ function main(args)
         env["TSPICE_OUT"] = out
         env["TSPICE_ORACLE"] = o["oracle"] ? "1" : "0"
         cmd = `$(Base.julia_cmd()) --startup-file=no --project=$project $(joinpath(HERE, "replay.jl")) $logdir $names`
-        run(pipeline(setenv(cmd, env); stdout=joinpath(out, "out.txt"), stderr=joinpath(out, "err.txt")); wait=false)
+        run(pipeline(setenv(cmd, env); stdout = joinpath(out, "out.txt"), stderr = joinpath(out, "err.txt")); wait = false)
     end
     foreach(wait, procs)
     # every family of every worker must be replayed to the end
@@ -187,8 +189,8 @@ function main(args)
         return 2
     end
     # merge
-    total = Dict{String,Dict{String,Int}}()
-    ids = Dict{String,Int}()
+    total = Dict{String, Dict{String, Int}}()
+    ids = Dict{String, Int}()
     open(joinpath(results, "replay.tsv"), "w") do io
         for k in 1:length(groups)
             w = joinpath(results, "worker$k")
@@ -196,7 +198,7 @@ function main(args)
                 ids[l] = get(ids, l, 0) + 1
             end
             for (r, c) in read_counts(joinpath(w, "tally.tsv"))
-                d = get!(total, r, Dict{String,Int}())
+                d = get!(total, r, Dict{String, Int}())
                 for (kind, n) in c
                     d[kind] = get(d, kind, 0) + n
                 end
@@ -213,8 +215,10 @@ function main(args)
         (full && o["oracle"]) || (println("--update-baseline needs a full run with the oracle"); return 2)
         # a routine keeps its class and note; a new one is `unexplained` until classed
         notes = read_notes(baseline_path)
-        write_counts(baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)),
-                     GATED; notes)
+        write_counts(
+            baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)),
+            GATED; notes
+        )
         write_ids_gz(joinpath(HERE, "baseline_ids.tsv.gz"), ids)
         write_counts(joinpath(HERE, "coverage.tsv"), total, COVERED)
         println("baseline written to $baseline_path, baseline_ids.tsv.gz and coverage.tsv")
@@ -228,7 +232,7 @@ function main(args)
     end
     base = read_counts(baseline_path)
     notes = read_notes(baseline_path)
-    byclass = Dict{String,Int}()
+    byclass = Dict{String, Int}()
     for (r, c) in total, k in GATED
         cl = first(get(notes, r, ("unexplained", "")))
         byclass[cl] = get(byclass, cl, 0) + get(c, k, 0)
@@ -239,7 +243,7 @@ function main(args)
     baseids = read_ids_gz(joinpath(HERE, "baseline_ids.tsv.gz"))
     fams = Set(replace(basename(f), ".log.gz" => "") for f in logs)
     gone = 0
-    for (id, n) in sort(collect(ids); by=first)
+    for (id, n) in sort(collect(ids); by = first)
         b = get(baseids, id, 0)
         n > b && push!(worse, "new mismatch: $(replace(id, '\t' => ' '))" * (b > 0 ? " ($n, baseline $b)" : ""))
     end
@@ -252,7 +256,7 @@ function main(args)
     if full
         cov = read_counts(joinpath(HERE, "coverage.tsv"))
         for r in sort(collect(union(keys(cov), keys(total))))
-            c, b = get(total, r, Dict{String,Int}()), get(cov, r, Dict{String,Int}())
+            c, b = get(total, r, Dict{String, Int}()), get(cov, r, Dict{String, Int}())
             for k in ("skipped", "near", "spread")
                 get(c, k, 0) > get(b, k, 0) && push!(worse, "$r: $(get(c, k, 0)) calls $k (baseline $(get(b, k, 0)))")
             end
@@ -274,8 +278,10 @@ function main(args)
 end
 
 "The families of the manifest of a full recording."
-manifest_families(logdir) = [String(split(l, '\t')[2]) for l in readlines(joinpath(logdir, "manifest.tsv"))
-                             if startswith(l, "family\t")]
+manifest_families(logdir) = [
+    String(split(l, '\t')[2]) for l in readlines(joinpath(logdir, "manifest.tsv"))
+        if startswith(l, "family\t")
+]
 
 """
 The problems of the recording in `logdir` for the families (all those of the manifest if
@@ -291,7 +297,7 @@ function check_recording(logdir, families)
         h = bytes2hex(open(io -> sha256(io), joinpath(HERE, f)))
         get(m, f, "") == h || println("note: the recording was made with another $f")
     end
-    status = Dict{String,String}()
+    status = Dict{String, String}()
     sf = joinpath(logdir, "status.tsv")
     isfile(sf) && for l in readlines(sf)
         p = split(l, '\t')
@@ -310,8 +316,8 @@ end
 const COVERED = ["match", "cspice", "near", "spread", "value", "error", "adapter", "skipped"]
 
 function write_ids(path, ids)
-    open(path, "w") do io
-        for (id, n) in sort(collect(ids); by=first)
+    return open(path, "w") do io
+        for (id, n) in sort(collect(ids); by = first)
             println(io, id, '\t', n)
         end
     end
@@ -319,18 +325,18 @@ end
 
 "The identities as a gzip file (`gzip` of the system, as for the logs)."
 function write_ids_gz(path, ids)
-    open(pipeline(`gzip -9n`; stdout=path), "w") do io
-        for (id, n) in sort(collect(ids); by=first)
+    return open(pipeline(`gzip -9n`; stdout = path), "w") do io
+        for (id, n) in sort(collect(ids); by = first)
             println(io, id, '\t', n)
         end
     end
 end
 
 function read_ids_gz(path)
-    ids = Dict{String,Int}()
+    ids = Dict{String, Int}()
     isfile(path) || return ids
     for l in eachline(`gzip -dc $path`)
-        p = rsplit(l, '\t'; limit=2)
+        p = rsplit(l, '\t'; limit = 2)
         ids[String(p[1])] = parse(Int, p[2])
     end
     return ids

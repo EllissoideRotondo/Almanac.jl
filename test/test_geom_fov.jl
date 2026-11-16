@@ -16,8 +16,10 @@
 isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
 
 const FOV_SCRATCH = -999050
-const FOV_VARS = ["FOV_FRAME", "FOV_SHAPE", "BORESIGHT", "FOV_CLASS_SPEC", "FOV_BOUNDARY",
-    "FOV_BOUNDARY_CORNERS", "FOV_REF_VECTOR", "FOV_REF_ANGLE", "FOV_CROSS_ANGLE", "FOV_ANGLE_UNITS"]
+const FOV_VARS = [
+    "FOV_FRAME", "FOV_SHAPE", "BORESIGHT", "FOV_CLASS_SPEC", "FOV_BOUNDARY",
+    "FOV_BOUNDARY_CORNERS", "FOV_REF_VECTOR", "FOV_REF_ANGLE", "FOV_CROSS_ANGLE", "FOV_ANGLE_UNITS",
+]
 
 "Define the scratch instrument in the two kernel pools: only the variables in `vars` exist."
 function fov_define!(ctx, vars::Pair...)
@@ -31,15 +33,15 @@ function fov_define!(ctx, vars::Pair...)
 end
 
 "Compare `getfov` for the scratch instrument: the same error kind, or the same values."
-function fov_same(ctx, room=100)
+function fov_same(ctx, room = 100)
     kc = c_kind(() -> g_getfov(FOV_SCRATCH, room))
     kn = neo_kind(() -> getfov(ctx, FOV_SCRATCH, room))
     kc == kn || (println("  getfov kinds: CSPICE ", repr(kc), ", Almanac ", repr(kn)); return false, kc)
     kc === nothing || return true, kc
     a = getfov(ctx, FOV_SCRATCH, room)
     b = g_getfov(FOV_SCRATCH, room)
-    ok = a[1] == b[1] && a[2] == b[2] && grel(a[3], b[3]) < 1e-15 && length(a[4]) == size(b[4], 2) &&
-         all(grel(a[4][i], b[4][:, i]) < 1e-14 for i in eachindex(a[4]))
+    ok = a[1] == b[1] && a[2] == b[2] && grel(a[3], b[3]) < 1.0e-15 && length(a[4]) == size(b[4], 2) &&
+        all(grel(a[4][i], b[4][:, i]) < 1.0e-14 for i in eachindex(a[4]))
     return ok, nothing
 end
 
@@ -61,13 +63,13 @@ end
             @test c == a
             d = g_getfvn(name)
             @test c[1] == d[1] && length(c[4]) == size(d[4], 2)
-            @test a isa Tuple{String,String,SVector{3,Float64},Vector{SVector{3,Float64}}}
+            @test a isa Tuple{String, String, SVector{3, Float64}, Vector{SVector{3, Float64}}}
         end
         measured(@sprintf("  %-64s max=%.3e", "getfov: boresight and boundary vectors", worst))
-        @test worst < 1e-15
+        @test worst < 1.0e-15
         @test getfov(ctx, -999003)[1] == "RECTANGLE" && length(getfov(ctx, -999003)[4]) == 4
         @test getfov(ctx, -999002)[1] == "ELLIPSE"                 # the kernel has 'ellipse'
-        @test same_kind(() -> g_getfvn("NO_INSTRUMENT"), () -> getfvn(ctx, "NO_INSTRUMENT"); expect=:idcodenotfound)
+        @test same_kind(() -> g_getfvn("NO_INSTRUMENT"), () -> getfvn(ctx, "NO_INSTRUMENT"); expect = :idcodenotfound)
         @test getfvn(ctx, "-999001") == getfov(ctx, -999001)
     end
 
@@ -115,10 +117,19 @@ end
             (nothing, 4, [F, "FOV_SHAPE" => "RECTANGLE", B, "FOV_CLASS_SPEC" => "corners", "FOV_BOUNDARY" => sq]),
             (nothing, 100, [F, "FOV_SHAPE" => "POLYGON", B, "FOV_BOUNDARY" => vcat(sq, [0.0, -3.0, 9.0])]),
             (nothing, 1, [F, "FOV_SHAPE" => "CIRCLE", "BORESIGHT" => [0.3, -0.2, 2.0], A, "FOV_REF_VECTOR" => [1.0, 2.0, 3.0], U, "FOV_REF_ANGLE" => [12.0]]),
-            (nothing, 2, [F, "FOV_SHAPE" => "ELLIPSE", "BORESIGHT" => [0.3, -0.2, 2.0], A, "FOV_REF_VECTOR" => [1.0, 2.0, 3.0],
-                "FOV_ANGLE_UNITS" => "ARCSECONDS", "FOV_REF_ANGLE" => [7200.0], "FOV_CROSS_ANGLE" => [1800.0]]),
-            (nothing, 4, [F, "FOV_SHAPE" => "RECTANGLE", "BORESIGHT" => [0.3, -0.2, 2.0], "FOV_CLASS_SPEC" => "Angles", "FOV_REF_VECTOR" => [1.0, 2.0, 3.0],
-                "FOV_ANGLE_UNITS" => "RADIANS", "FOV_REF_ANGLE" => [0.7], "FOV_CROSS_ANGLE" => [0.2]])]
+            (
+                nothing, 2, [
+                    F, "FOV_SHAPE" => "ELLIPSE", "BORESIGHT" => [0.3, -0.2, 2.0], A, "FOV_REF_VECTOR" => [1.0, 2.0, 3.0],
+                    "FOV_ANGLE_UNITS" => "ARCSECONDS", "FOV_REF_ANGLE" => [7200.0], "FOV_CROSS_ANGLE" => [1800.0],
+                ],
+            ),
+            (
+                nothing, 4, [
+                    F, "FOV_SHAPE" => "RECTANGLE", "BORESIGHT" => [0.3, -0.2, 2.0], "FOV_CLASS_SPEC" => "Angles", "FOV_REF_VECTOR" => [1.0, 2.0, 3.0],
+                    "FOV_ANGLE_UNITS" => "RADIANS", "FOV_REF_ANGLE" => [0.7], "FOV_CROSS_ANGLE" => [0.2],
+                ],
+            ),
+        ]
         kinds_seen = Set{Symbol}()
         for (expect, room, vars) in cases
             fov_define!(ctx, vars...)
@@ -158,7 +169,7 @@ end
             sh = rand(rng, ["ELLIPSOID", "POINT", "ellipsoid", " Point"])
             fr = occursin("oint", sh) && rand(rng, Bool) ? " " : "IAU_" * t
             if inst == "GEO_FLAT"
-                nwide += same_kind(() -> g_fovtrg(inst, t, sh, fr, cor, "EARTH", et), () -> fovtrg(ctx, inst, t, sh, fr, cor, "EARTH", et); expect=:fovtoowide)
+                nwide += same_kind(() -> g_fovtrg(inst, t, sh, fr, cor, "EARTH", et), () -> fovtrg(ctx, inst, t, sh, fr, cor, "EARTH", et); expect = :fovtoowide)
                 continue
             end
             a = fovtrg(ctx, inst, t, sh, fr, cor, "EARTH", et)
@@ -207,7 +218,8 @@ end
                 (C, "EARTH BARYCENTER", "ELLIPSOID", "J2000", "LT", "MOON"),
                 ("NO_INSTRUMENT", "MOON", "ELLIPSOID", "IAU_MOON", "LT", "EARTH"),
                 ("MOON", "SUN", "ELLIPSOID", "IAU_SUN", "LT", "EARTH"),
-                ("GEO_FLAT", "MOON", "POINT", " ", "LT", "EARTH"))
+                ("GEO_FLAT", "MOON", "POINT", " ", "LT", "EARTH"),
+            )
             @test same_kind(() -> g_fovtrg(inst, t, sh, fr, cor, obs, et), () -> fovtrg(ctx, inst, t, sh, fr, cor, obs, et))
         end
         z = [0.0, 0.0, 1.0]
@@ -221,7 +233,8 @@ end
                 (C, z, "J2000", "FOO", "EARTH"),
                 (C, zeros(3), "J2000", "NONE", "EARTH"),
                 ("NO_INSTRUMENT", z, "J2000", "NONE", "EARTH"),
-                ("GEO_FLAT", z, "J2000", "NONE", "EARTH"))
+                ("GEO_FLAT", z, "J2000", "NONE", "EARTH"),
+            )
             @test same_kind(() -> g_fovray(inst, d, rf, cor, obs, et), () -> fovray(ctx, inst, d, rf, cor, obs, et))
         end
         @test neo_kind(() -> fovray(ctx, C, [1.0, 0.0], "J2000", "NONE", "EARTH", et)) == :badarg
@@ -241,12 +254,14 @@ end
         # corners that are not neighbours.
         dir(x, y) = [sind(x) * cosd(y), sind(y), cosd(x) * cosd(y)]
         star = vcat(dir(-85, 0), dir(-2.5, 3), dir(80, 12), dir(75, 0), dir(80, -12), dir(-2.5, -3))
-        for bnd in (star, [1.0, 0.0, 9.0, 2.0, 0.0, 18.0, 0.0, 1.0, 9.0],              # two parallel vectors
+        for bnd in (
+                star, [1.0, 0.0, 9.0, 2.0, 0.0, 18.0, 0.0, 1.0, 9.0],              # two parallel vectors
                 [1.0, 0.0, 0.1, -1.0, 0.0, 0.1, 0.0, 1.0, -0.1, 0.0, -1.0, -0.1],          # not in one half space
                 [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, -1.0, 0.0, 0.0, 0.0, -1.0, 0.0],            # in a plane
                 [1.0, 0.0, 0.01, -1.0, 0.0, 0.01, 0.3, 1.5e-12, 1.0],      # a corner in the plane of a side
                 [1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, 1.0, -1.0, -1.0, -1.0, 0.9],        # no side has the other corners on one side
-                [1.0, 0.0, 0.02, 0.0, 1.0, 0.02, -1.0, 0.0, 0.02, 0.0, -1.0, 0.02])        # wide, but valid
+                [1.0, 0.0, 0.02, 0.0, 1.0, 0.02, -1.0, 0.0, 0.02, 0.0, -1.0, 0.02],
+            )        # wide, but valid
             fov_define!(ctx, F, "FOV_SHAPE" => "POLYGON", B, "FOV_BOUNDARY" => bnd)
             kc = c_kind(() -> g_fovray(S, z, "GEO_CAM", "NONE", "EARTH", et))
             kn = neo_kind(() -> fovray(ctx, S, z, "GEO_CAM", "NONE", "EARTH", et))

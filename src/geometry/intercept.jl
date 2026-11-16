@@ -5,8 +5,12 @@
 # is generic over the epoch number type for an ellipsoid; all discrete decisions use
 # `primal`.
 
-@noinline _geo_sub_in_method(method) = throw(SpiceError(:invalidmethod,
-    "the method string <$method> contains a sub-observer point type, which is not valid here"))
+@noinline _geo_sub_in_method(method) = throw(
+    SpiceError(
+        :invalidmethod,
+        "the method string <$method> contains a sub-observer point type, which is not valid here"
+    )
+)
 
 """
     _geo_stl_dir(j2dir, vobs, transmit) -> SVector{3}
@@ -22,7 +26,7 @@ relative error of `1e-17`).
     relerr = 1.0
     i = 1
     # invariant: `stldir` is the estimate after i - 1 steps
-    while i <= 5 && relerr > 1e-17
+    while i <= 5 && relerr > 1.0e-17
         stlerr = j2dir - _stelab(stldir, vfwd)
         stldir = stlerr + stldir
         relerr = primal(_norm3(stlerr)) / primal(_norm3(stldir))
@@ -43,13 +47,15 @@ the light time to its center. `LT` forms make one light-time iteration and `CN` 
 at most ten, with the convergence test of CSPICE. Postcondition: if `found`, `spoint`
 is on the surface and `srfvec` is the vector from the observer to it.
 """
-function _geo_sfxcor(ks::KernelSet, sh::_GeoShape, et, corr::Aberration, obscde::Int32,
-        dfrcde::Int32, dvec::Vec3{Float64})
+function _geo_sfxcor(
+        ks::KernelSet, sh::_GeoShape, et, corr::Aberration, obscde::Int32,
+        dfrcde::Int32, dvec::Vec3{Float64}
+    )
     trgcde = sh.trgcde
     fixfid = sh.fixfid
     s = _geo_sign(corr)
-    loccor = corr.uselt ? Aberration(; uselt=true, converged=corr.converged, transmit=corr.transmit) :
-             Aberration()
+    loccor = corr.uselt ? Aberration(; uselt = true, converged = corr.converged, transmit = corr.transmit) :
+        Aberration()
     tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, loccor, obscde)
     obspos = -tpos
     trgepc = et + s * lt
@@ -67,8 +73,12 @@ function _geo_sfxcor(ks::KernelSet, sh::_GeoShape, et, corr::Aberration, obscde:
     trgdir = _m_mxv(j2tmat, j2dir)
     none = (false, zero(obspos), trgepc, zero(obspos))
     range = primal(_norm3(obspos))
-    range == 0.0 && throw(SpiceError(:noseparation,
-        "the distance between the observer and the target is zero"))
+    range == 0.0 && throw(
+        SpiceError(
+            :noseparation,
+            "the distance between the observer and the target is zero"
+        )
+    )
     if range > sh.maxrad * 1.01
         # The ray cannot reach the target if it misses the outer bounding sphere.
         reject = asin(sh.maxrad * 1.01 / range)
@@ -104,7 +114,7 @@ function _geo_sfxcor(ks::KernelSet, sh::_GeoShape, et, corr::Aberration, obscde:
     ltdiff = 1.0
     etdiff = 1.0
     # invariant: `spoint` and `lt` are the intercept and its light time after i iterations
-    while i < nitr && ltdiff > abs(primal(lt)) * 1e-17 && etdiff > 0.0
+    while i < nitr && ltdiff > abs(primal(lt)) * 1.0e-17 && etdiff > 0.0
         xform = frame_rotation(ks, Int32(1), fixfid, trgepc)
         obspos = _m_mxv(xform, robs - _ssbpos(ks, trgcde, trgepc, Int32(1)))
         trgdir = _m_mxv(xform, j2dir)
@@ -130,17 +140,23 @@ function _geo_sfxcor(ks::KernelSet, sh::_GeoShape, et, corr::Aberration, obscde:
     return true, spoint, trgepc, _norm3(spoint - obspos) * udir
 end
 
-function _geo_sincpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
+function _geo_sincpt(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
-        dref::NameOrID, dvec::AbstractVector)
+        dref::NameOrID, dvec::AbstractVector
+    )
     corr = _geo_abcorr(abcorr)
     trgcde = _geo_body(ks, target, "target")
     obscde = _geo_body(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("surface intercept", obsrvr)
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
     dv = _geo_pos(dvec)
-    (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(SpiceError(:zerovector,
-        "the direction vector of the ray is the zero vector"))
+    (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(
+        SpiceError(
+            :zerovector,
+            "the direction vector of the ray is the zero vector"
+        )
+    )
     dfrcde = _geo_namfrm(ks, dref)
     _geo_frinfo(ks, dfrcde)[3] || _geo_no_frame(dref)
     m = _geo_method(ks, trgcde, method)
@@ -209,15 +225,23 @@ end
 
 See also [`subpnt`](@ref), [`dskxsi`](@ref), [`gfsntc`](@ref), [`fovray`](@ref).
 """
-sincpt(ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
-    abcorr::AbcorrArg, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector) =
+sincpt(
+    ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+    abcorr::AbcorrArg, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector
+) =
     _geo_sincpt(ks, _DSK_DEFAULT_TOLS, method, target, et, fixref, abcorr, obsrvr, dref, dvec)
-sincpt(ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
-    abcorr::AbcorrArg, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector) =
-    _geo_sincpt(kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, abcorr, obsrvr,
-        dref, dvec)
-sincpt(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
-    obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector) =
+sincpt(
+    ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+    abcorr::AbcorrArg, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector
+) =
+    _geo_sincpt(
+    kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, abcorr, obsrvr,
+    dref, dvec
+)
+sincpt(
+    method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
+    obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector
+) =
     sincpt(default_context(), method, target, et, fixref, abcorr, obsrvr, dref, dvec)
 
 """

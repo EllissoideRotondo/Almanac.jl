@@ -11,8 +11,10 @@
 
 The checks that `illumg` and `illumf` share, in the order of CSPICE.
 """
-@inline function _geo_illum_setup(ks::KernelSet, method::AbstractString, target::NameOrID,
-        fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID)
+@inline function _geo_illum_setup(
+        ks::KernelSet, method::AbstractString, target::NameOrID,
+        fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
+    )
     corr = _geo_abcorr(abcorr)
     trgcde = _geo_body(ks, target, "target")
     m = _geo_method(ks, trgcde, method)
@@ -32,8 +34,10 @@ the locus `TARGET`), which gives `srfvec` and the epoch `trgepc` at the point, a
 illumination source as seen from the surface point at `trgepc` (`spkcpo` with the
 locus `OBSERVER`), which gives `tipos`.
 """
-@inline function _geo_illum_states(ks::KernelSet, corr::Aberration, trgcde::Int32,
-        obscde::Int32, srccde::Int32, fixfid::Int32, spoint::Vec3{Float64}, et)
+@inline function _geo_illum_states(
+        ks::KernelSet, corr::Aberration, trgcde::Int32,
+        obscde::Int32, srccde::Int32, fixfid::Int32, spoint::Vec3{Float64}, et
+    )
     f = _GeoFixed(spoint, zero(Vec3{Float64}), 0.0, trgcde, fixfid)
     opstat, lt = _geo_cvt(ks, f, et, fixfid, _GEO_AT_TARGET, corr, obscde)
     trgepc = et + _geo_sign(corr) * lt
@@ -41,9 +45,11 @@ locus `OBSERVER`), which gives `tipos`.
     return trgepc, SVector(opstat[1], opstat[2], opstat[3]), SVector(tistat[1], tistat[2], tistat[3])
 end
 
-function _geo_illumg(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
+function _geo_illumg(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, ilusrc::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
-        obsrvr::NameOrID, spoint::AbstractVector)
+        obsrvr::NameOrID, spoint::AbstractVector
+    )
     corr, trgcde, obscde, fixfid, m = _geo_illum_setup(ks, method, target, fixref, abcorr, obsrvr)
     sp = _geo_pos(spoint)
     e = check_epoch(et)
@@ -59,9 +65,11 @@ function _geo_illumg(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
     return trgepc, srfvec, vsep(obspos, tipos), vsep(normal, tipos), vsep(normal, obspos)
 end
 
-function _geo_illumf(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
+function _geo_illumf(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, ilusrc::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
-        obsrvr::NameOrID, spoint::AbstractVector)
+        obsrvr::NameOrID, spoint::AbstractVector
+    )
     corr, trgcde, obscde, fixfid, m = _geo_illum_setup(ks, method, target, fixref, abcorr, obsrvr)
     sp = _geo_pos(spoint)
     e = check_epoch(et)
@@ -89,7 +97,7 @@ function _geo_illumf(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
     lit = incdnc <= _M_HALFPI
     if lit || visibl
         # A point is hidden or in shadow if the ray from just above it meets the surface.
-        vertex = sp + (sh.maxrad * 1e-10) * normal
+        vertex = sp + (sh.maxrad * 1.0e-10) * normal
         visibl && (visibl = !_geo_rayx(ks, sh, vertex, obspos, tp)[1])
         lit && (lit = !_geo_rayx(ks, sh, vertex, tipos, tp)[1])
     end
@@ -172,15 +180,23 @@ function illumf end
 
 for (f, g) in ((:illumg, :_geo_illumg), (:illumf, :_geo_illumf))
     @eval begin
-        $f(ks::KernelSet, method::AbstractString, target::NameOrID, ilusrc::NameOrID, et::Real,
-            fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector) =
+        $f(
+            ks::KernelSet, method::AbstractString, target::NameOrID, ilusrc::NameOrID, et::Real,
+            fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector
+        ) =
             $g(ks, _DSK_DEFAULT_TOLS, method, target, ilusrc, et, fixref, abcorr, obsrvr, spoint)
-        $f(ctx::SpiceContext, method::AbstractString, target::NameOrID, ilusrc::NameOrID,
+        $f(
+            ctx::SpiceContext, method::AbstractString, target::NameOrID, ilusrc::NameOrID,
             et::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
-            spoint::AbstractVector) = $g(kernelset(ctx), dsktolerances(ctx), method, target,
-            ilusrc, et, fixref, abcorr, obsrvr, spoint)
-        $f(method::AbstractString, target::NameOrID, ilusrc::NameOrID, et::Real,
-            fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector) =
+            spoint::AbstractVector
+        ) = $g(
+            kernelset(ctx), dsktolerances(ctx), method, target,
+            ilusrc, et, fixref, abcorr, obsrvr, spoint
+        )
+        $f(
+            method::AbstractString, target::NameOrID, ilusrc::NameOrID, et::Real,
+            fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector
+        ) =
             $f(default_context(), method, target, ilusrc, et, fixref, abcorr, obsrvr, spoint)
     end
 end
@@ -210,15 +226,23 @@ daylight = incdnc <= halfpi()          # the Sun is above the horizon of the poi
 
 See also [`illumg`](@ref), [`illumf`](@ref), [`phaseq`](@ref), [`subslr`](@ref).
 """
-ilumin(ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
-    abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector) =
+ilumin(
+    ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+    abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector
+) =
     _geo_illumg(ks, _DSK_DEFAULT_TOLS, method, target, 10, et, fixref, abcorr, obsrvr, spoint)
-ilumin(ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
-    abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector) =
-    _geo_illumg(kernelset(ctx), dsktolerances(ctx), method, target, 10, et, fixref, abcorr,
-        obsrvr, spoint)
-ilumin(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
-    obsrvr::NameOrID, spoint::AbstractVector) =
+ilumin(
+    ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+    abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector
+) =
+    _geo_illumg(
+    kernelset(ctx), dsktolerances(ctx), method, target, 10, et, fixref, abcorr,
+    obsrvr, spoint
+)
+ilumin(
+    method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
+    obsrvr::NameOrID, spoint::AbstractVector
+) =
     ilumin(default_context(), method, target, et, fixref, abcorr, obsrvr, spoint)
 
 """
@@ -241,25 +265,37 @@ throws the errors of [`spkpos`](@ref).
 
 See also [`ilumin`](@ref), [`gfpa`](@ref).
 """
-function phaseq(ks::KernelSet, et::Real, target::NameOrID, illmn::NameOrID, obsrvr::NameOrID,
-        abcorr::AbcorrArg)
+function phaseq(
+        ks::KernelSet, et::Real, target::NameOrID, illmn::NameOrID, obsrvr::NameOrID,
+        abcorr::AbcorrArg
+    )
     targ = _geo_body(ks, target, "target")
     illum = _geo_body(ks, illmn, "illumination source")
     obs = _geo_body(ks, obsrvr, "observer")
     corr = _geo_abcorr(abcorr)
-    corr.transmit && throw(SpiceError(:invalidoption,
-        "the aberration correction $(string(corr)) calls for transmission; phaseq " *
-        "accepts reception corrections only"))
-    (targ == obs || targ == illum || obs == illum) && throw(SpiceError(:bodiesnotdistinct,
-        "the target $target, the illumination source $illmn and the observer $obsrvr " *
-        "must be three different bodies"))
+    corr.transmit && throw(
+        SpiceError(
+            :invalidoption,
+            "the aberration correction $(string(corr)) calls for transmission; phaseq " *
+                "accepts reception corrections only"
+        )
+    )
+    (targ == obs || targ == illum || obs == illum) && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "the target $target, the illumination source $illmn and the observer $obsrvr " *
+                "must be three different bodies"
+        )
+    )
     e = check_epoch(et)
     pv1, lt = _geo_spkezp(ks, targ, e, Int32(1), corr, obs)
     pv2, _ = _geo_spkezp(ks, illum, corr.geometric ? e : e - lt, Int32(1), corr, targ)
     return pi - vsep(pv1, pv2)
 end
-phaseq(ctx::SpiceContext, et::Real, target::NameOrID, illmn::NameOrID, obsrvr::NameOrID,
-    abcorr::AbcorrArg) = phaseq(kernelset(ctx), et, target, illmn, obsrvr, abcorr)
+phaseq(
+    ctx::SpiceContext, et::Real, target::NameOrID, illmn::NameOrID, obsrvr::NameOrID,
+    abcorr::AbcorrArg
+) = phaseq(kernelset(ctx), et, target, illmn, obsrvr, abcorr)
 phaseq(et::Real, target::NameOrID, illmn::NameOrID, obsrvr::NameOrID, abcorr::AbcorrArg) =
     phaseq(default_context(), et, target, illmn, obsrvr, abcorr)
 
@@ -297,14 +333,22 @@ function _geo_sepradius(ks::KernelSet, body::Int32, shape::AbstractString)
     sh = _geo_sepshape(shape)
     sh == 0x01 && return 0.0
     sh == 0x02 && return maximum(_geo_radii(ks, body))
-    throw(SpiceError(:notrecognized,
-        "the body shape $shape is not recognized; the supported shapes are POINT and SPHERE"))
+    throw(
+        SpiceError(
+            :notrecognized,
+            "the body shape $shape is not recognized; the supported shapes are POINT and SPHERE"
+        )
+    )
 end
 
 "Angular radius of a sphere of radius `r` at the distance `range` (`zzsepq`)."
 @inline function _geo_angrad(r::Float64, range, obs, body, which)
-    primal(range) > r || throw(SpiceError(:insidebody, "the observer $obs is inside the " *
-        "surface of target $which, $body: range $(primal(range)) km, radius $r km"))
+    primal(range) > r || throw(
+        SpiceError(
+            :insidebody, "the observer $obs is inside the " *
+                "surface of target $which, $body: range $(primal(range)) km, radius $r km"
+        )
+    )
     return r == 0.0 ? zero(range) : asin(r / range)
 end
 
@@ -345,9 +389,11 @@ overlap = sep < 0           # the disks of the Moon and of the Sun overlap
 
 See also [`phaseq`](@ref), [`gfsep`](@ref).
 """
-function trgsep(ks::KernelSet, et::Real, targ1::NameOrID, shape1::AbstractString,
+function trgsep(
+        ks::KernelSet, et::Real, targ1::NameOrID, shape1::AbstractString,
         frame1::NameOrID, targ2::NameOrID, shape2::AbstractString, frame2::NameOrID,
-        obsrvr::NameOrID, abcorr::AbcorrArg)
+        obsrvr::NameOrID, abcorr::AbcorrArg
+    )
     _geo_nonempty(targ1, "target 1")
     _geo_nonempty(shape1, "shape 1")
     _geo_nonempty(frame1, "frame 1")
@@ -359,8 +405,12 @@ function trgsep(ks::KernelSet, et::Real, targ1::NameOrID, shape1::AbstractString
     b1 = _geo_body(ks, targ1, "target 1")
     b2 = _geo_body(ks, targ2, "target 2")
     obs = _geo_body(ks, obsrvr, "observer")
-    (obs == b1 || obs == b2 || b1 == b2) && throw(SpiceError(:bodiesnotdistinct,
-        "the targets $targ1 and $targ2 and the observer $obsrvr must be three different bodies"))
+    (obs == b1 || obs == b2 || b1 == b2) && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "the targets $targ1 and $targ2 and the observer $obsrvr must be three different bodies"
+        )
+    )
     corr = _geo_abcorr(abcorr)
     r1 = _geo_sepradius(ks, b1, shape1)
     r2 = _geo_sepradius(ks, b2, shape2)
@@ -371,10 +421,14 @@ function trgsep(ks::KernelSet, et::Real, targ1::NameOrID, shape1::AbstractString
     ang2 = _geo_angrad(r2, vnorm(pv2), obsrvr, targ2, 2)
     return vsep(pv1, pv2) - ang1 - ang2
 end
-trgsep(ctx::SpiceContext, et::Real, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,
+trgsep(
+    ctx::SpiceContext, et::Real, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,
     targ2::NameOrID, shape2::AbstractString, frame2::NameOrID, obsrvr::NameOrID,
-    abcorr::AbcorrArg) =
+    abcorr::AbcorrArg
+) =
     trgsep(kernelset(ctx), et, targ1, shape1, frame1, targ2, shape2, frame2, obsrvr, abcorr)
-trgsep(et::Real, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID, targ2::NameOrID,
-    shape2::AbstractString, frame2::NameOrID, obsrvr::NameOrID, abcorr::AbcorrArg) =
+trgsep(
+    et::Real, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID, targ2::NameOrID,
+    shape2::AbstractString, frame2::NameOrID, obsrvr::NameOrID, abcorr::AbcorrArg
+) =
     trgsep(default_context(), et, targ1, shape1, frame1, targ2, shape2, frame2, obsrvr, abcorr)

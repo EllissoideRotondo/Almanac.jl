@@ -126,17 +126,17 @@ more. Unload the files from CSPICE first: CSPICE keeps a loaded binary kernel op
 """
 function remove_temp(path::AbstractString)
     try
-        rm(path; recursive=true, force=true)
+        rm(path; recursive = true, force = true)
     catch e
         (Sys.iswindows() && e isa Base.IOError) || rethrow()
         GC.gc()
-        rm(path; recursive=true, force=true)
+        rm(path; recursive = true, force = true)
     end
     return nothing
 end
 
 "Names of the groups that were skipped, with the reason, for the summary of `runtests.jl`."
-const SKIPPED = Tuple{String,String}[]
+const SKIPPED = Tuple{String, String}[]
 
 "Measured values that `runtests.jl` prints again at the end, so thresholds can be tightened."
 const MEASURED = String[]
@@ -160,11 +160,11 @@ function group(body, name::AbstractString, kernels...)
     if !isempty(gone)
         reason = "missing kernels: " * join(gone, ", ")
         Kernels.REQUIRED && error("$name: $reason (ALMANAC_REQUIRE_KERNELS=1)")
-        printstyled("SKIP  ", name, "  (", reason, ")\n"; color=:yellow, bold=true)
+        printstyled("SKIP  ", name, "  (", reason, ")\n"; color = :yellow, bold = true)
         push!(SKIPPED, (String(name), reason))
         return nothing
     end
-    printstyled("GROUP ", name, "\n"; color=:cyan, bold=true)
+    printstyled("GROUP ", name, "\n"; color = :cyan, bold = true)
     @testset "$name" begin
         body()
     end
@@ -173,7 +173,7 @@ end
 
 "Skip notice for a part of a group that cannot run (threads, optional kernel)."
 function skip_notice(name::AbstractString, reason::AbstractString)
-    printstyled("SKIP  ", name, "  (", reason, ")\n"; color=:yellow, bold=true)
+    printstyled("SKIP  ", name, "  (", reason, ")\n"; color = :yellow, bold = true)
     push!(SKIPPED, (String(name), String(reason)))
     return nothing
 end
@@ -211,14 +211,20 @@ function quantile_of(v::AbstractVector{<:Real}, q::Real)
 end
 
 "Quantiles q50, q75, q99 and the maximum of `v`."
-qstats(v) = (q50=quantile_of(v, 0.50), q75=quantile_of(v, 0.75), q99=quantile_of(v, 0.99),
-    max=Float64(maximum(v)))
+qstats(v) = (
+    q50 = quantile_of(v, 0.5), q75 = quantile_of(v, 0.75), q99 = quantile_of(v, 0.99),
+    max = Float64(maximum(v)),
+)
 
 "Print one line of measured quantiles with the label `what` and return the statistics."
 function report_quantiles(what::AbstractString, v)
     s = qstats(v)
-    measured(@sprintf("  %-58s n=%-7d q50=%.3e q75=%.3e q99=%.3e max=%.3e", what, length(v),
-        s.q50, s.q75, s.q99, s.max))
+    measured(
+        @sprintf(
+            "  %-58s n=%-7d q50=%.3e q75=%.3e q99=%.3e max=%.3e", what, length(v),
+            s.q50, s.q75, s.q99, s.max
+        )
+    )
     return s
 end
 
@@ -238,8 +244,10 @@ record of every segment if `h < margin * record`. Finite differences are then no
 taken across a record boundary, where the high derivatives of a piecewise polynomial
 jump.
 """
-function record_safe_epochs(rng::AbstractRNG, n::Integer; init::Float64=-4.734072e9,
-        record::Float64=345600.0, span::Float64=6.3e8, margin::Float64=0.1)
+function record_safe_epochs(
+        rng::AbstractRNG, n::Integer; init::Float64 = -4.734072e9,
+        record::Float64 = 345600.0, span::Float64 = 6.3e8, margin::Float64 = 0.1
+    )
     @assert 0 < margin < 0.5
     mlo = ceil(Int, (-span - init) / record)
     mhi = floor(Int, (span - init) / record) - 1
@@ -295,8 +303,10 @@ descriptor before the call. `kn` and `kc` are the error kinds, `:none` without o
 CSPICE is not called when Almanac gives `:spkstructureerror` (`kc` is `:skipped`):
 for such a type 19 segment CSPICE N0067 reads `data[0]` in `spks19_` and aborts.
 """
-function spksub_both(src::AbstractString, dir::AbstractString, tag::AbstractString,
-        ident::AbstractString, t0::Real, t1::Real; descr=identity)
+function spksub_both(
+        src::AbstractString, dir::AbstractString, tag::AbstractString,
+        ident::AbstractString, t0::Real, t1::Real; descr = identity
+    )
     pc, pn = joinpath(dir, "sub_c_" * tag * ".bsp"), joinpath(dir, "sub_n_" * tag * ".bsp")
     h = dafopr(src)
     dafbfs(h)
@@ -316,8 +326,10 @@ function spksub_both(src::AbstractString, dir::AbstractString, tag::AbstractStri
     SPICE.dafbfs(hc)
     @assert SPICE.daffna()
     nc = SPICE.spkopn(pc, "SUBSET", 0)
-    ccall((:spksub_c, SPICE.libcspice), Cvoid, (Cint, Ptr{Cdouble}, Cstring, Cdouble, Cdouble, Cint),
-        hc, descr(SPICE.dafgs(5)), ident, t0, t1, nc)
+    ccall(
+        (:spksub_c, SPICE.libcspice), Cvoid, (Cint, Ptr{Cdouble}, Cstring, Cdouble, Cdouble, Cint),
+        hc, descr(SPICE.dafgs(5)), ident, t0, t1, nc
+    )
     kc = cspice_kind()
     SPICE.dafcls(nc)
     SPICE.dafcls(hc)
@@ -346,17 +358,17 @@ const ULP_ALLOWANCE = 4
 # operations of CSPICE, and on the development machine every state was equal to the
 # last bit (maximum difference 0 over 109,200 samples); the bound allows one rounding
 # for a CSPICE build with different floating-point contraction.
-const TOL_J2000 = StateTol(3e-16, 1e-15, 1e-6, 1e-12)
+const TOL_J2000 = StateTol(3.0e-16, 1.0e-15, 1.0e-6, 1.0e-12)
 # Constant rotation on top: one matrix product more.
-const TOL_INERTIAL = StateTol(3e-16, 1e-15, 1e-6, 1e-12)
+const TOL_INERTIAL = StateTol(3.0e-16, 1.0e-15, 1.0e-6, 1.0e-12)
 # Body-fixed frames. The angle W uses the operations of CSPICE as well, so only the
 # matrix products differ in rounding. Measured: relative position 3.3e-16 at most,
 # relative velocity 9.0e-15 at most (q99 3.5e-15), velocity 2.9e-11 km/s at most.
-const TOL_BODYFIXED = StateTol(3e-16, 2e-14, 1e-6, 1e-9)
+const TOL_BODYFIXED = StateTol(3.0e-16, 2.0e-14, 1.0e-6, 1.0e-9)
 
 "Lowest norm used as the divisor of a relative difference (km, km/s)."
 const POS_FLOOR = 1.0
-const VEL_FLOOR = 1e-6
+const VEL_FLOOR = 1.0e-6
 
 """
     compare_states(ctx, pairs, epochs, ref) -> NamedTuple
@@ -383,7 +395,7 @@ function compare_states(ctx, pairs, epochs, ref::AbstractString)
                 d = abs(state[i] - ref_state[i])
                 push!(abs_pos, d); push!(rel_pos, d / nr)
                 push!(excess_pos, max(d - ULP_ALLOWANCE * eps(nr), 0.0))
-                d = abs(state[i+3] - ref_state[i+3])
+                d = abs(state[i + 3] - ref_state[i + 3])
                 push!(abs_vel, d); push!(rel_vel, d / nv)
             end
             push!(rel_lt, abs(lt - ref_lt) / max(ref_lt, POS_FLOOR / 299792.458))

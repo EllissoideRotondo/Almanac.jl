@@ -49,8 +49,12 @@ julia> gfstol(ctx)
 See also [`gfdist`](@ref).
 """
 function gfstol(ctx::SpiceContext, value::Real)
-    value > 0 || throw(SpiceError(:invalidtolerance,
-        "Convergence tolerance must be greater-than zero. Input VALUE = $value."))
+    value > 0 || throw(
+        SpiceError(
+            :invalidtolerance,
+            "Convergence tolerance must be greater-than zero. Input VALUE = $value."
+        )
+    )
     @atomic ctx.gftol = Float64(value)
     return Float64(value)
 end
@@ -147,9 +151,11 @@ wnsumd(near)[1]                          # seconds
 See also [`gfrr`](@ref), [`gfsep`](@ref), [`gfpa`](@ref), [`gfposc`](@ref),
 [`gfuds`](@ref), [`gfstol`](@ref), [`Window`](@ref).
 """
-function gfdist(ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
+function gfdist(
+        ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
         relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window;
-        tol::Real=_GF_CNVTOL, bail=nothing, report=nothing, threads::Bool=false)
+        tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
     q = GFDistance(ks, target, abcorr, obsrvr)
@@ -170,9 +176,11 @@ as CSPICE does, so the kernels must cover `cnfine` with that margin.
 
 See also [`gfdist`](@ref).
 """
-function gfrr(ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
+function gfrr(
+        ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
         relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window;
-        tol::Real=_GF_CNVTOL, bail=nothing, report=nothing, threads::Bool=false)
+        tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
     q = GFRangeRate(ks, target, abcorr, obsrvr)
@@ -181,15 +189,23 @@ end
 
 for f in (:gfdist, :gfrr)
     @eval begin
-        $f(ctx::SpiceContext, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
+        $f(
+            ctx::SpiceContext, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
             relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window;
-            tol::Real=gfstol(ctx), kw...) =
-            $f(kernelset(ctx), target, abcorr, obsrvr, relate, refval, adjust, step, cnfine;
-                tol, kw...)
-        $f(target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, relate::AbstractString,
-            refval::Real, adjust::Real, step::Real, cnfine::Window; kw...) =
-            $f(default_context(), target, abcorr, obsrvr, relate, refval, adjust, step,
-                cnfine; kw...)
+            tol::Real = gfstol(ctx), kw...
+        ) =
+            $f(
+            kernelset(ctx), target, abcorr, obsrvr, relate, refval, adjust, step, cnfine;
+            tol, kw...
+        )
+        $f(
+            target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, relate::AbstractString,
+            refval::Real, adjust::Real, step::Real, cnfine::Window; kw...
+        ) =
+            $f(
+            default_context(), target, abcorr, obsrvr, relate, refval, adjust, step,
+            cnfine; kw...
+        )
     end
 end
 
@@ -217,27 +233,37 @@ Throws the errors of [`gfdist`](@ref), and `SpiceError` with the kind
 
 See also [`gfdist`](@ref), [`gfoclt`](@ref).
 """
-function gfsep(ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,
+function gfsep(
+        ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,
         targ2::NameOrID, shape2::AbstractString, frame2::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, relate::AbstractString, refval::Real, adjust::Real, step::Real,
-        cnfine::Window; tol::Real=_GF_CNVTOL, bail=nothing, report=nothing,
-        threads::Bool=false)
+        cnfine::Window; tol::Real = _GF_CNVTOL, bail = nothing, report = nothing,
+        threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
     q = GFSeparation(ks, targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr)
     return _gf_search(q, relate, refval, adjust, cnfine, run)
 end
-gfsep(ctx::SpiceContext, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,
+gfsep(
+    ctx::SpiceContext, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,
     targ2::NameOrID, shape2::AbstractString, frame2::NameOrID, abcorr::AbcorrArg,
     obsrvr::NameOrID, relate::AbstractString, refval::Real, adjust::Real, step::Real,
-    cnfine::Window; tol::Real=gfstol(ctx), kw...) =
-    gfsep(kernelset(ctx), targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr,
-        relate, refval, adjust, step, cnfine; tol, kw...)
-gfsep(targ1::NameOrID, shape1::AbstractString, frame1::NameOrID, targ2::NameOrID,
+    cnfine::Window; tol::Real = gfstol(ctx), kw...
+) =
+    gfsep(
+    kernelset(ctx), targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr,
+    relate, refval, adjust, step, cnfine; tol, kw...
+)
+gfsep(
+    targ1::NameOrID, shape1::AbstractString, frame1::NameOrID, targ2::NameOrID,
     shape2::AbstractString, frame2::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
-    relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window; kw...) =
-    gfsep(default_context(), targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr,
-        relate, refval, adjust, step, cnfine; kw...)
+    relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window; kw...
+) =
+    gfsep(
+    default_context(), targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr,
+    relate, refval, adjust, step, cnfine; kw...
+)
 
 """
     gfpa([ctx,] target, illmn, abcorr, obsrvr, relate, refval, adjust, step, cnfine;
@@ -257,24 +283,34 @@ transmission correction.
 
 See also [`gfdist`](@ref), [`gfilum`](@ref), [`phaseq`](@ref).
 """
-function gfpa(ks::KernelSet, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
+function gfpa(
+        ks::KernelSet, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, relate::AbstractString, refval::Real, adjust::Real, step::Real,
-        cnfine::Window; tol::Real=_GF_CNVTOL, bail=nothing, report=nothing,
-        threads::Bool=false)
+        cnfine::Window; tol::Real = _GF_CNVTOL, bail = nothing, report = nothing,
+        threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
     q = GFPhase(ks, target, illmn, abcorr, obsrvr)
     return _gf_search(q, relate, refval, adjust, cnfine, run)
 end
-gfpa(ctx::SpiceContext, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
+gfpa(
+    ctx::SpiceContext, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
     obsrvr::NameOrID, relate::AbstractString, refval::Real, adjust::Real, step::Real,
-    cnfine::Window; tol::Real=gfstol(ctx), kw...) =
-    gfpa(kernelset(ctx), target, illmn, abcorr, obsrvr, relate, refval, adjust, step,
-        cnfine; tol, kw...)
-gfpa(target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
-    relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window; kw...) =
-    gfpa(default_context(), target, illmn, abcorr, obsrvr, relate, refval, adjust, step,
-        cnfine; kw...)
+    cnfine::Window; tol::Real = gfstol(ctx), kw...
+) =
+    gfpa(
+    kernelset(ctx), target, illmn, abcorr, obsrvr, relate, refval, adjust, step,
+    cnfine; tol, kw...
+)
+gfpa(
+    target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
+    relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window; kw...
+) =
+    gfpa(
+    default_context(), target, illmn, abcorr, obsrvr, relate, refval, adjust, step,
+    cnfine; kw...
+)
 
 """
     _gf_position_coordinate(ks, target, frame, abcorr, obsrvr, crdsys, coord) -> GFCoordinate
@@ -285,13 +321,19 @@ The coordinate `coord` of the system `crdsys` of the position of `target` relati
 (`:notsupported`), frame (`:unknownframe`; `:noframe` for the systems that need the
 radii of its center).
 """
-function _gf_position_coordinate(ks::KernelSet, target::NameOrID, frame::NameOrID,
-        abcorr::AbcorrArg, obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString)
+function _gf_position_coordinate(
+        ks::KernelSet, target::NameOrID, frame::NameOrID,
+        abcorr::AbcorrArg, obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString
+    )
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer")
-    targ == obs && throw(SpiceError(:bodiesnotdistinct,
-        "The observer and target must be distinct objects, but are not: " *
-        "OBSRVR = $obsrvr; TARGET = $target."))
+    targ == obs && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer and target must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr; TARGET = $target."
+        )
+    )
     corr = Aberration(abcorr)
     ref = Int32(0)                       # 0: the frame is not known
     try
@@ -366,26 +408,36 @@ gfposc("SUN", "J2000", "LT+S", "EARTH", "RA/DEC", "RIGHT ASCENSION", "<", pi / 2
 
 See also [`gfdist`](@ref), [`gfsubc`](@ref), [`gfsntc`](@ref).
 """
-function gfposc(ks::KernelSet, target::NameOrID, frame::NameOrID, abcorr::AbcorrArg,
+function gfposc(
+        ks::KernelSet, target::NameOrID, frame::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString,
         relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window;
-        tol::Real=_GF_CNVTOL, bail=nothing, report=nothing, threads::Bool=false)
+        tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
     q = _gf_position_coordinate(ks, target, frame, abcorr, obsrvr, crdsys, coord)
     return _gf_search(q, relate, refval, adjust, cnfine, run)
 end
-gfposc(ctx::SpiceContext, target::NameOrID, frame::NameOrID, abcorr::AbcorrArg,
+gfposc(
+    ctx::SpiceContext, target::NameOrID, frame::NameOrID, abcorr::AbcorrArg,
     obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString,
     relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window;
-    tol::Real=gfstol(ctx), kw...) =
-    gfposc(kernelset(ctx), target, frame, abcorr, obsrvr, crdsys, coord, relate, refval,
-        adjust, step, cnfine; tol, kw...)
-gfposc(target::NameOrID, frame::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
+    tol::Real = gfstol(ctx), kw...
+) =
+    gfposc(
+    kernelset(ctx), target, frame, abcorr, obsrvr, crdsys, coord, relate, refval,
+    adjust, step, cnfine; tol, kw...
+)
+gfposc(
+    target::NameOrID, frame::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
     crdsys::AbstractString, coord::AbstractString, relate::AbstractString, refval::Real,
-    adjust::Real, step::Real, cnfine::Window; kw...) =
-    gfposc(default_context(), target, frame, abcorr, obsrvr, crdsys, coord, relate, refval,
-        adjust, step, cnfine; kw...)
+    adjust::Real, step::Real, cnfine::Window; kw...
+) =
+    gfposc(
+    default_context(), target, frame, abcorr, obsrvr, crdsys, coord, relate, refval,
+    adjust, step, cnfine; kw...
+)
 
 """
     gfuds([ctx,] udfuns, udqdec, relate, refval, adjust, step, cnfine;
@@ -435,17 +487,23 @@ julia> [round(wnfetd(peaks, i)[1]; digits=4) for i in 1:wncard(peaks)]
 
 See also [`gfudb`](@ref), [`uddc`](@ref), [`uddf`](@ref), [`gfdist`](@ref).
 """
-function gfuds(::KernelSet, udfuns::F, udqdec::D, relate::AbstractString, refval::Real,
-        adjust::Real, step::Real, cnfine::Window; tol::Real=_GF_CNVTOL, bail=nothing,
-        report=nothing, threads::Bool=false) where {F,D}
+function gfuds(
+        ::KernelSet, udfuns::F, udqdec::D, relate::AbstractString, refval::Real,
+        adjust::Real, step::Real, cnfine::Window; tol::Real = _GF_CNVTOL, bail = nothing,
+        report = nothing, threads::Bool = false
+    ) where {F, D}
     run = _gf_run(step, tol; bail, report, threads)
     return _gf_search(GFFunction(udfuns, udqdec), relate, refval, adjust, cnfine, run)
 end
-gfuds(ctx::SpiceContext, udfuns::F, udqdec::D, relate::AbstractString, refval::Real,
-    adjust::Real, step::Real, cnfine::Window; tol::Real=gfstol(ctx), kw...) where {F,D} =
+gfuds(
+    ctx::SpiceContext, udfuns::F, udqdec::D, relate::AbstractString, refval::Real,
+    adjust::Real, step::Real, cnfine::Window; tol::Real = gfstol(ctx), kw...
+) where {F, D} =
     gfuds(kernelset(ctx), udfuns, udqdec, relate, refval, adjust, step, cnfine; tol, kw...)
-gfuds(udfuns::F, udqdec::D, relate::AbstractString, refval::Real, adjust::Real,
-    step::Real, cnfine::Window; kw...) where {F,D} =
+gfuds(
+    udfuns::F, udqdec::D, relate::AbstractString, refval::Real, adjust::Real,
+    step::Real, cnfine::Window; kw...
+) where {F, D} =
     gfuds(default_context(), udfuns, udqdec, relate, refval, adjust, step, cnfine; kw...)
 
 """
@@ -478,38 +536,52 @@ julia> [round.(wnfetd(w, i); digits=4) for i in 1:wncard(w)]
 
 See also [`gfuds`](@ref), [`gfoclt`](@ref), [`gftfov`](@ref).
 """
-function gfudb(::KernelSet, udfunb::F, step::Real, cnfine::Window; tol::Real=_GF_CNVTOL,
-        bail=nothing, report=nothing, threads::Bool=false) where {F}
+function gfudb(
+        ::KernelSet, udfunb::F, step::Real, cnfine::Window; tol::Real = _GF_CNVTOL,
+        bail = nothing, report = nothing, threads::Bool = false
+    ) where {F}
     run = _gf_run(step, tol; bail, report, threads)
     _gf_repi(run, cnfine, "User defined boolean event search ", "done.")
     result = _gf_scan!(Window(), et -> udfunb(et)::Bool, cnfine, run, false)
     _gf_repf(run)
     return result
 end
-gfudb(ctx::SpiceContext, udfunb::F, step::Real, cnfine::Window; tol::Real=gfstol(ctx),
-    kw...) where {F} = gfudb(kernelset(ctx), udfunb, step, cnfine; tol, kw...)
+gfudb(
+    ctx::SpiceContext, udfunb::F, step::Real, cnfine::Window; tol::Real = gfstol(ctx),
+    kw...
+) where {F} = gfudb(kernelset(ctx), udfunb, step, cnfine; tol, kw...)
 gfudb(udfunb::F, step::Real, cnfine::Window; kw...) where {F} =
     gfudb(default_context(), udfunb, step, cnfine; kw...)
 
 # --- gfevnt ------------------------------------------------------------------------------
 
 function _gf_qdpars(qdpars::AbstractVector{<:Real}, name::String)
-    length(qdpars) >= 3 || throw(SpiceError(:invalidcount, "The parameter $name needs " *
-        "3 numeric values in QDPARS; $(length(qdpars)) were supplied."))
-    return Vec3{Float64}(qdpars[begin], qdpars[begin+1], qdpars[begin+2])
+    length(qdpars) >= 3 || throw(
+        SpiceError(
+            :invalidcount, "The parameter $name needs " *
+                "3 numeric values in QDPARS; $(length(qdpars)) were supplied."
+        )
+    )
+    return Vec3{Float64}(qdpars[begin], qdpars[begin + 1], qdpars[begin + 2])
 end
 
 "Names of the quantities of `gfevnt` and, for each, the parameters that must be supplied."
 const _GF_QPARS = (
-    "ANGULAR SEPARATION" => ("TARGET1", "FRAME1", "SHAPE1", "TARGET2", "FRAME2", "SHAPE2",
-        "OBSERVER", "ABCORR"),
+    "ANGULAR SEPARATION" => (
+        "TARGET1", "FRAME1", "SHAPE1", "TARGET2", "FRAME2", "SHAPE2",
+        "OBSERVER", "ABCORR",
+    ),
     "DISTANCE" => ("TARGET", "OBSERVER", "ABCORR"),
-    "COORDINATE" => ("TARGET", "OBSERVER", "ABCORR", "COORDINATE SYSTEM", "COORDINATE",
-        "REFERENCE FRAME", "VECTOR DEFINITION", "METHOD", "DVEC", "DREF"),
+    "COORDINATE" => (
+        "TARGET", "OBSERVER", "ABCORR", "COORDINATE SYSTEM", "COORDINATE",
+        "REFERENCE FRAME", "VECTOR DEFINITION", "METHOD", "DVEC", "DREF",
+    ),
     "RANGE RATE" => ("TARGET", "OBSERVER", "ABCORR"),
     "PHASE ANGLE" => ("TARGET", "OBSERVER", "ILLUM", "ABCORR"),
-    "ILLUMINATION ANGLE" => ("TARGET", "ILLUM", "OBSERVER", "ABCORR", "REFERENCE FRAME",
-        "ANGTYP", "METHOD", "SPOINT"),
+    "ILLUMINATION ANGLE" => (
+        "TARGET", "ILLUM", "OBSERVER", "ABCORR", "REFERENCE FRAME",
+        "ANGTYP", "METHOD", "SPOINT",
+    ),
 )
 
 """
@@ -583,28 +655,42 @@ gfevnt(86400.0, gfrefn, "DISTANCE", ["TARGET", "OBSERVER", "ABCORR"],
 
 See also [`gfocce`](@ref), [`gffove`](@ref).
 """
-function gfevnt(ks::KernelSet, udstep, udrefn, gquant::AbstractString,
+function gfevnt(
+        ks::KernelSet, udstep, udrefn, gquant::AbstractString,
         qpnams::AbstractVector{<:AbstractString}, qcpars::AbstractVector{<:AbstractString},
         qdpars::AbstractVector{<:Real}, qipars::AbstractVector{<:Integer},
         qlpars::AbstractVector{Bool}, op::AbstractString, refval::Real, tol::Real,
-        adjust::Real, cnfine::Window; bail=nothing, report=nothing, threads::Bool=false)
+        adjust::Real, cnfine::Window; bail = nothing, report = nothing, threads::Bool = false
+    )
     quant = uppercase(strip(gquant, ' '))
     k = findfirst(p -> p.first == quant, _GF_QPARS)
-    k === nothing && throw(SpiceError(:notrecognized, "The geometric quantity, $gquant " *
-        "is not recognized. Supported quantities are: DISTANCE, PHASE ANGLE, " *
-        "COORDINATE, RANGE RATE, ANGULAR SEPARATION,ILLUMINATION ANGLE."))
+    k === nothing && throw(
+        SpiceError(
+            :notrecognized, "The geometric quantity, $gquant " *
+                "is not recognized. Supported quantities are: DISTANCE, PHASE ANGLE, " *
+                "COORDINATE, RANGE RATE, ANGULAR SEPARATION,ILLUMINATION ANGLE."
+        )
+    )
     n = length(qpnams)
-    (n <= 10 && length(qcpars) >= n) || throw(SpiceError(:invalidcount,
-        "Number of quantity definition parameters = $n;  must be in range 0:10."))
+    (n <= 10 && length(qcpars) >= n) || throw(
+        SpiceError(
+            :invalidcount,
+            "Number of quantity definition parameters = $n;  must be in range 0:10."
+        )
+    )
     pnames = String[uppercase(strip(s, ' ')) for s in qpnams]
     for p in _GF_QPARS[k].second         # invariant: the parameters before p are supplied
-        p in pnames || throw(SpiceError(:missingvalue, "The parameter $p is required in " *
-            "order to compute events pertaining to the quantity $quant; this parameter " *
-            "was not supplied."))
+        p in pnames || throw(
+            SpiceError(
+                :missingvalue, "The parameter $p is required in " *
+                    "order to compute events pertaining to the quantity $quant; this parameter " *
+                    "was not supplied."
+            )
+        )
     end
     par(name) = String(strip(qcpars[findfirst(==(name), pnames)], ' '))
     _gf_relcode(op)
-    run = _gf_run(udstep, tol; refine=udrefn, bail, report, threads)
+    run = _gf_run(udstep, tol; refine = udrefn, bail, report, threads)
     if quant == "DISTANCE"
         q = GFDistance(ks, par("TARGET"), par("ABCORR"), par("OBSERVER"))
         return _gf_search(q, op, refval, adjust, cnfine, run)
@@ -615,44 +701,64 @@ function gfevnt(ks::KernelSet, udstep, udrefn, gquant::AbstractString,
         q = GFPhase(ks, par("TARGET"), par("ILLUM"), par("ABCORR"), par("OBSERVER"))
         return _gf_search(q, op, refval, adjust, cnfine, run)
     elseif quant == "ANGULAR SEPARATION"
-        q = GFSeparation(ks, par("TARGET1"), par("SHAPE1"), par("FRAME1"), par("TARGET2"),
-            par("SHAPE2"), par("FRAME2"), par("ABCORR"), par("OBSERVER"))
+        q = GFSeparation(
+            ks, par("TARGET1"), par("SHAPE1"), par("FRAME1"), par("TARGET2"),
+            par("SHAPE2"), par("FRAME2"), par("ABCORR"), par("OBSERVER")
+        )
         return _gf_search(q, op, refval, adjust, cnfine, run)
     elseif quant == "COORDINATE"
         rawdef = qcpars[findfirst(==("VECTOR DEFINITION"), pnames)]
         vecdef = _gf_compress(rawdef)
         if vecdef == "POSITION"
-            q = _gf_position_coordinate(ks, par("TARGET"), par("REFERENCE FRAME"),
-                par("ABCORR"), par("OBSERVER"), par("COORDINATE SYSTEM"), par("COORDINATE"))
+            q = _gf_position_coordinate(
+                ks, par("TARGET"), par("REFERENCE FRAME"),
+                par("ABCORR"), par("OBSERVER"), par("COORDINATE SYSTEM"), par("COORDINATE")
+            )
             return _gf_search(q, op, refval, adjust, cnfine, run)
         end
         intercept = vecdef == "SURFACE INTERCEPT POINT"
-        (intercept || vecdef == "SUB-OBSERVER POINT") || throw(SpiceError(:notsupported,
-            "The vector definition $vecdef is not supported."))
+        (intercept || vecdef == "SUB-OBSERVER POINT") || throw(
+            SpiceError(
+                :notsupported,
+                "The vector definition $vecdef is not supported."
+            )
+        )
         # CSPICE compares the definition as the caller wrote it with the upper-case name
         # before it checks the center of the frame, so another spelling skips that check
         # (the geometry call then makes it at the first evaluation); this is kept.
         chkctr = rstrip(rawdef, ' ') == vecdef
         dvec = intercept ? _gf_qdpars(qdpars, "DVEC") : _GF_ZERO3
-        q = _gf_surface_coordinate(ks, intercept, chkctr, par("TARGET"),
+        q = _gf_surface_coordinate(
+            ks, intercept, chkctr, par("TARGET"),
             par("REFERENCE FRAME"), par("METHOD"), par("ABCORR"), par("OBSERVER"),
-            par("DREF"), dvec, par("COORDINATE SYSTEM"), par("COORDINATE"))
+            par("DREF"), dvec, par("COORDINATE SYSTEM"), par("COORDINATE")
+        )
         return _gf_search(q, op, refval, adjust, cnfine, run)
     end
-    q = GFIllumination(ks, par("METHOD"), par("ANGTYP"), par("TARGET"), par("ILLUM"),
-        par("REFERENCE FRAME"), par("ABCORR"), par("OBSERVER"), _gf_qdpars(qdpars, "SPOINT"))
+    q = GFIllumination(
+        ks, par("METHOD"), par("ANGTYP"), par("TARGET"), par("ILLUM"),
+        par("REFERENCE FRAME"), par("ABCORR"), par("OBSERVER"), _gf_qdpars(qdpars, "SPOINT")
+    )
     return _gf_search(q, op, refval, adjust, cnfine, run)
 end
-gfevnt(ctx::SpiceContext, udstep, udrefn, gquant::AbstractString,
+gfevnt(
+    ctx::SpiceContext, udstep, udrefn, gquant::AbstractString,
     qpnams::AbstractVector{<:AbstractString}, qcpars::AbstractVector{<:AbstractString},
     qdpars::AbstractVector{<:Real}, qipars::AbstractVector{<:Integer},
     qlpars::AbstractVector{Bool}, op::AbstractString, refval::Real, tol::Real,
-    adjust::Real, cnfine::Window; kw...) =
-    gfevnt(kernelset(ctx), udstep, udrefn, gquant, qpnams, qcpars, qdpars, qipars, qlpars,
-        op, refval, tol, adjust, cnfine; kw...)
-gfevnt(udstep, udrefn, gquant::AbstractString, qpnams::AbstractVector{<:AbstractString},
+    adjust::Real, cnfine::Window; kw...
+) =
+    gfevnt(
+    kernelset(ctx), udstep, udrefn, gquant, qpnams, qcpars, qdpars, qipars, qlpars,
+    op, refval, tol, adjust, cnfine; kw...
+)
+gfevnt(
+    udstep, udrefn, gquant::AbstractString, qpnams::AbstractVector{<:AbstractString},
     qcpars::AbstractVector{<:AbstractString}, qdpars::AbstractVector{<:Real},
     qipars::AbstractVector{<:Integer}, qlpars::AbstractVector{Bool}, op::AbstractString,
-    refval::Real, tol::Real, adjust::Real, cnfine::Window; kw...) =
-    gfevnt(default_context(), udstep, udrefn, gquant, qpnams, qcpars, qdpars, qipars,
-        qlpars, op, refval, tol, adjust, cnfine; kw...)
+    refval::Real, tol::Real, adjust::Real, cnfine::Window; kw...
+) =
+    gfevnt(
+    default_context(), udstep, udrefn, gquant, qpnams, qcpars, qdpars, qipars,
+    qlpars, op, refval, tol, adjust, cnfine; kw...
+)

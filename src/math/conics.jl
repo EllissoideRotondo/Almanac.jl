@@ -31,8 +31,12 @@ See also [`prop2b`](@ref).
 """
 function stmp03(x::Real)
     xx = _m_f(x)
-    primal(xx) <= _STUMPFF_LBOUND && throw(SpiceError(:valueoutofrange,
-        "the argument $(primal(xx)) of the Stumpff functions is below the lower bound $_STUMPFF_LBOUND"))
+    primal(xx) <= _STUMPFF_LBOUND && throw(
+        SpiceError(
+            :valueoutofrange,
+            "the argument $(primal(xx)) of the Stumpff functions is below the lower bound $_STUMPFF_LBOUND"
+        )
+    )
     return _stumpff(xx)
 end
 
@@ -69,14 +73,18 @@ See also [`conics`](@ref), [`oscelt`](@ref).
 function prop2b(gm::Real, pvinit::AbstractVector, dt::Real)
     s = _m_v6(pvinit)
     mu = Float64(gm)
-    pos = SVector{3,Float64}(s[1], s[2], s[3])
-    vel = SVector{3,Float64}(s[4], s[5], s[6])
+    pos = SVector{3, Float64}(s[1], s[2], s[3])
+    vel = SVector{3, Float64}(s[4], s[5], s[6])
     mu > 0.0 || throw(SpiceError(:nonpositivemass, "the gravitational parameter is $mu; it must be positive"))
     _m_iszero(pos) && throw(SpiceError(:zeroposition, "the initial position is the zero vector"))
     _m_iszero(vel) && throw(SpiceError(:zerovelocity, "the initial velocity is the zero vector"))
     h = _m_cross(pos, vel)
-    _m_dot(h, h) == 0.0 && throw(SpiceError(:nonconicmotion,
-        "the initial position and velocity are parallel: the motion is not conic"))
+    _m_dot(h, h) == 0.0 && throw(
+        SpiceError(
+            :nonconicmotion,
+            "the initial position and velocity are parallel: the motion is not conic"
+        )
+    )
     p, v = _prop2b(mu, pos, vel, _m_f(dt), :dtoutofrange)
     return _m_state(p, v)
 end
@@ -127,7 +135,7 @@ See also [`oscelt`](@ref), [`prop2b`](@ref).
 """
 function conics(elts::AbstractVector, et::Real)
     length(elts) == 8 || _m_baddim("a set of conic elements", 8)
-    rp, ecc, inc, lnode, argp, m0, t0, mu = ntuple(i -> Float64(elts[begin+i-1]), Val(8))
+    rp, ecc, inc, lnode, argp, m0, t0, mu = ntuple(i -> Float64(elts[begin + i - 1]), Val(8))
     ecc >= 0.0 || throw(SpiceError(:badeccentricity, "the eccentricity is $ecc; it must not be negative"))
     rp > 0.0 || throw(SpiceError(:badperiapsevalue, "the perifocal distance is $rp; it must be positive"))
     mu > 0.0 || throw(SpiceError(:badgm, "the gravitational parameter is $mu; it must be positive"))
@@ -164,16 +172,24 @@ end
 @inline _m_dsign(a, b) = (x = _m_abs(a); primal(b) >= 0.0 ? x : -x)
 
 @inline function _m_oscelt(state::SVector{6}, et, mu)
-    primal(mu) > 0.0 || throw(SpiceError(:nonpositivemass,
-        "the gravitational parameter is $(primal(mu)); it must be positive"))
+    primal(mu) > 0.0 || throw(
+        SpiceError(
+            :nonpositivemass,
+            "the gravitational parameter is $(primal(mu)); it must be positive"
+        )
+    )
     r, v = _m_pv(state)
     _m_iszero(r) && throw(SpiceError(:degeneratecase, "the position is the zero vector"))
     _m_iszero(v) && throw(SpiceError(:degeneratecase, "the velocity is the zero vector"))
     rmag = _m_norm(r)
     vmag = _m_norm(v)
     h = _m_cross(r, v)
-    _m_iszero(h) && throw(SpiceError(:degeneratecase,
-        "the position and the velocity are parallel: the angular momentum is zero"))
+    _m_iszero(h) && throw(
+        SpiceError(
+            :degeneratecase,
+            "the position and the velocity are parallel: the angular momentum is zero"
+        )
+    )
     z0 = zero(h[1])
     n = SVector(-h[2], h[1], z0)
     e = (1.0 / mu) * ((vmag * vmag - mu / rmag) * r + (-_m_dot(r, v)) * v)
@@ -300,8 +316,12 @@ function oscltx(state::AbstractVector, et::Real, mu::Real)
         # `twovec_(eccvec, 1, pole, 3)`: x along the eccentricity vector, y along
         # pole × x, z along x × y
         ax2 = _m_ucrss(pole, eccvec)
-        _m_iszero(ax2) && throw(SpiceError(:dependentvectors,
-            "the eccentricity vector and the orbit pole are linearly dependent"))
+        _m_iszero(ax2) && throw(
+            SpiceError(
+                :dependentvectors,
+                "the eccentricity vector and the orbit pole are linearly dependent"
+            )
+        )
         xmat = _m_rows(_m_hat(eccvec), ax2, _m_ucrss(eccvec, ax2))
         rperi = _m_mxv(xmat, pos)
         _, lon, _ = _m_reclat(rperi, false)
@@ -324,8 +344,10 @@ function oscltx(state::AbstractVector, et::Real, mu::Real)
         end
     end
     z = zero(T)
-    return SVector{20,T}(el[1], el[2], el[3], el[4], el[5], el[6], el[7], el[8], nu, a, tau,
-        z, z, z, z, z, z, z, z, z)
+    return SVector{20, T}(
+        el[1], el[2], el[3], el[4], el[5], el[6], el[7], el[8], nu, a, tau,
+        z, z, z, z, z, z, z, z, z
+    )
 end
 
 """
@@ -374,12 +396,18 @@ See also [`conics`](@ref).
 """
 function eqncpv(et::Real, epoch::Real, eqel::AbstractVector, rapol::Real, decpol::Real)
     length(eqel) == 9 || _m_baddim("a set of equinoctial elements", 9)
-    a, h, k, l, p, q, dlpdt, mldt, nodedt = ntuple(i -> Float64(eqel[begin+i-1]), Val(9))
+    a, h, k, l, p, q, dlpdt, mldt, nodedt = ntuple(i -> Float64(eqel[begin + i - 1]), Val(9))
     a > 0.0 || throw(SpiceError(:badsemiaxis, "the semi-major axis is $a; it must be positive"))
     ecc = sqrt(h * h + k * k)
-    ecc > 0.9 && throw(SpiceError(:eccoutofrange,
-        "the eccentricity of the elements is $ecc; it must not be above 0.9"))
-    pos, vel = _eqn_state(_m_f(et), Float64(epoch), a, h, k, l, p, q, dlpdt, mldt, nodedt,
-        Float64(rapol), Float64(decpol))
+    ecc > 0.9 && throw(
+        SpiceError(
+            :eccoutofrange,
+            "the eccentricity of the elements is $ecc; it must not be above 0.9"
+        )
+    )
+    pos, vel = _eqn_state(
+        _m_f(et), Float64(epoch), a, h, k, l, p, q, dlpdt, mldt, nodedt,
+        Float64(rapol), Float64(decpol)
+    )
     return _m_state(pos, vel)
 end

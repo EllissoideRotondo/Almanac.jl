@@ -14,8 +14,8 @@ end
 
 "`AniseState` of anise.h."
 struct AniseState
-    position_km::NTuple{3,Cdouble}
-    velocity_km_s::NTuple{3,Cdouble}
+    position_km::NTuple{3, Cdouble}
+    velocity_km_s::NTuple{3, Cdouble}
     epoch_et_s::Cdouble
     frame_ephemeris_id::Int32
     frame_orientation_id::Int32
@@ -64,19 +64,25 @@ State of `target` relative to `observer` in the orientation `frame` (1 is J2000)
 `et`, no aberration correction; the state is written to `out[]`. Returns the status
 code of ANISE (0 is success). The call does not allocate.
 """
-@inline function anise_spk_ezr(alm::AniseAlmanac, target::Integer, et::Float64,
-        frame::Integer, observer::Integer, out::Base.RefValue{AniseState})
-    return ccall((:anise_almanac_spk_ezr, libanise), Cint,
+@inline function anise_spk_ezr(
+        alm::AniseAlmanac, target::Integer, et::Float64,
+        frame::Integer, observer::Integer, out::Base.RefValue{AniseState}
+    )
+    return ccall(
+        (:anise_almanac_spk_ezr, libanise), Cint,
         (Ptr{Cvoid}, Int32, Cdouble, Int32, Cstring, Int32, Ptr{AniseState}),
-        alm.ptr, target, et, frame, "NONE", observer, out)
+        alm.ptr, target, et, frame, "NONE", observer, out
+    )
 end
 
 "State as a 6-vector; throws with the ANISE message if the query fails."
-function anise_state(alm::AniseAlmanac, target::Integer, et::Float64, frame::Integer,
-        observer::Integer)
+function anise_state(
+        alm::AniseAlmanac, target::Integer, et::Float64, frame::Integer,
+        observer::Integer
+    )
     out = Ref(AniseState())
     rc = anise_spk_ezr(alm, target, et, frame, observer, out)
     rc == 0 || error("anise_almanac_spk_ezr failed with code $rc: " * anise_last_error())
     s = out[]
-    return SVector{6,Float64}(s.position_km..., s.velocity_km_s...)
+    return SVector{6, Float64}(s.position_km..., s.velocity_km_s...)
 end

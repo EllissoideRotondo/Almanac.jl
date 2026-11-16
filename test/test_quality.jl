@@ -55,8 +55,10 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
             @test warm(alloc_spkder_rot, ctx, et, iau_earth, Val(N)) == 0
             @test warm(alloc_spkder_rot, ctx, et, moon_pa, Val(N)) == 0
         end
-        for (from, to) in ((1, eclip), (1, iau_earth), (iau_earth, 1), (1, moon_pa),
-                (1, moon_me), (iau_earth, moon_pa))
+        for (from, to) in (
+                (1, eclip), (1, iau_earth), (iau_earth, 1), (1, moon_pa),
+                (1, moon_me), (iau_earth, moon_pa),
+            )
             @test warm(alloc_pxform, ctx, from, to, et) == 0
             @test warm(alloc_sxform, ctx, from, to, et) == 0
             for N in 0:3
@@ -66,34 +68,38 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
     end
 
     @apart @testset "allocation of the name forms (reported, not asserted)" begin
-        measured("  name form spkezr(ctx, \"MOON\", et, \"J2000\", \"NONE\", \"EARTH\"): " *
-            "$(warm(alloc_names, ctx, et)) bytes")
-        measured("  name form pxform(ctx, \"J2000\", \"IAU_EARTH\", et): " *
-            "$(warm(alloc_pxform_names, ctx, et)) bytes")
+        measured(
+            "  name form spkezr(ctx, \"MOON\", et, \"J2000\", \"NONE\", \"EARTH\"): " *
+                "$(warm(alloc_names, ctx, et)) bytes"
+        )
+        measured(
+            "  name form pxform(ctx, \"J2000\", \"IAU_EARTH\", et): " *
+                "$(warm(alloc_pxform_names, ctx, et)) bytes"
+        )
         @test true
     end
 
     @apart @testset "inferred return types" begin
-        @test (@inferred spkezr(ctx, 301, et, 1, "NONE", 399)) isa Tuple{SVector{6,Float64},Float64}
-        @test (@inferred spkpos(ctx, 301, et, 1, "NONE", 399)) isa Tuple{SVector{3,Float64},Float64}
-        @test (@inferred spkgeo(ctx, 301, et, 1, 399)) isa Tuple{SVector{6,Float64},Float64}
-        @test (@inferred spkezr(ctx, 301, et, iau_earth, "NONE", 399)) isa Tuple{SVector{6,Float64},Float64}
-        @test (@inferred spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")) isa Tuple{SVector{6,Float64},Float64}
-        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(0))) isa NTuple{1,SVector{3,Float64}}
-        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(1))) isa NTuple{2,SVector{3,Float64}}
-        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(2))) isa NTuple{3,SVector{3,Float64}}
-        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(3))) isa NTuple{4,SVector{3,Float64}}
-        @test (@inferred spkder(ctx, 301, et, moon_pa, 399, Val(3))) isa NTuple{4,SVector{3,Float64}}
-        @test (@inferred pxform(ctx, 1, iau_earth, et)) isa SMatrix{3,3,Float64,9}
-        @test (@inferred pxform(ctx, 1, moon_me, et)) isa SMatrix{3,3,Float64,9}
-        @test (@inferred pxform(ctx, "J2000", "IAU_EARTH", et)) isa SMatrix{3,3,Float64,9}
-        @test (@inferred sxform(ctx, 1, iau_earth, et)) isa SMatrix{6,6,Float64,36}
-        @test (@inferred pxder(ctx, 1, iau_earth, et, Val(0))) isa NTuple{1,SMatrix{3,3,Float64,9}}
-        @test (@inferred pxder(ctx, 1, iau_earth, et, Val(1))) isa NTuple{2,SMatrix{3,3,Float64,9}}
-        @test (@inferred pxder(ctx, 1, iau_earth, et, Val(2))) isa NTuple{3,SMatrix{3,3,Float64,9}}
-        @test (@inferred pxder(ctx, 1, moon_pa, et, Val(3))) isa NTuple{4,SMatrix{3,3,Float64,9}}
+        @test (@inferred spkezr(ctx, 301, et, 1, "NONE", 399)) isa Tuple{SVector{6, Float64}, Float64}
+        @test (@inferred spkpos(ctx, 301, et, 1, "NONE", 399)) isa Tuple{SVector{3, Float64}, Float64}
+        @test (@inferred spkgeo(ctx, 301, et, 1, 399)) isa Tuple{SVector{6, Float64}, Float64}
+        @test (@inferred spkezr(ctx, 301, et, iau_earth, "NONE", 399)) isa Tuple{SVector{6, Float64}, Float64}
+        @test (@inferred spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")) isa Tuple{SVector{6, Float64}, Float64}
+        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(0))) isa NTuple{1, SVector{3, Float64}}
+        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(1))) isa NTuple{2, SVector{3, Float64}}
+        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(2))) isa NTuple{3, SVector{3, Float64}}
+        @test (@inferred spkder(ctx, 301, et, 1, 399, Val(3))) isa NTuple{4, SVector{3, Float64}}
+        @test (@inferred spkder(ctx, 301, et, moon_pa, 399, Val(3))) isa NTuple{4, SVector{3, Float64}}
+        @test (@inferred pxform(ctx, 1, iau_earth, et)) isa SMatrix{3, 3, Float64, 9}
+        @test (@inferred pxform(ctx, 1, moon_me, et)) isa SMatrix{3, 3, Float64, 9}
+        @test (@inferred pxform(ctx, "J2000", "IAU_EARTH", et)) isa SMatrix{3, 3, Float64, 9}
+        @test (@inferred sxform(ctx, 1, iau_earth, et)) isa SMatrix{6, 6, Float64, 36}
+        @test (@inferred pxder(ctx, 1, iau_earth, et, Val(0))) isa NTuple{1, SMatrix{3, 3, Float64, 9}}
+        @test (@inferred pxder(ctx, 1, iau_earth, et, Val(1))) isa NTuple{2, SMatrix{3, 3, Float64, 9}}
+        @test (@inferred pxder(ctx, 1, iau_earth, et, Val(2))) isa NTuple{3, SMatrix{3, 3, Float64, 9}}
+        @test (@inferred pxder(ctx, 1, moon_pa, et, Val(3))) isa NTuple{4, SMatrix{3, 3, Float64, 9}}
         # An integer epoch and a Float32 epoch give Float64 results.
-        @test (@inferred spkezr(ctx, 301, 0, 1, "NONE", 399)) isa Tuple{SVector{6,Float64},Float64}
+        @test (@inferred spkezr(ctx, 301, 0, 1, "NONE", 399)) isa Tuple{SVector{6, Float64}, Float64}
     end
 
     @apart @testset "package image and method table" begin
@@ -102,7 +108,7 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
         project = dirname(Base.active_project())
         cmd = `$(Base.julia_cmd()) --startup-file=no --project=$project -e "using Almanac"`
         err = IOBuffer()
-        ok = success(pipeline(cmd; stderr=err, stdout=devnull))
+        ok = success(pipeline(cmd; stderr = err, stdout = devnull))
         text = String(take!(err))
         @test ok
         @test !occursin("overwritten", text)

@@ -97,7 +97,7 @@ const _EK_TRMXDP = 10             # largest depth of a tree
 @inline function _ek_gei(chars::AbstractVector{UInt8}, addr::Integer)
     n = 0
     for k in 0:4                         # invariant: n holds the digits before k
-        n = 128 * n + Int(chars[addr+k])
+        n = 128 * n + Int(chars[addr + k])
     end
     return n
 end
@@ -111,18 +111,34 @@ addresses lie inside its allocated pages. Throws `SpiceError(:wrongarchitecture)
 """
 function _ek_check(s, path::AbstractString, who::AbstractString)
     ints = s.ints
-    (length(ints) >= 16 && ints[1] == _EK_ARCH) || throw(SpiceError(:wrongarchitecture,
-        "$who: file $path has architecture $(isempty(ints) ? 0 : ints[1]), which is invalid " *
-        "for paged access; the EK software version is $_EK_ARCH"))
+    (length(ints) >= 16 && ints[1] == _EK_ARCH) || throw(
+        SpiceError(
+            :wrongarchitecture,
+            "$who: file $path has architecture $(isempty(ints) ? 0 : ints[1]), which is invalid " *
+                "for paged access; the EK software version is $_EK_ARCH"
+        )
+    )
     topc = Int(ints[4]) * 1024
     topd = Int(ints[9]) * 128
     topi = Int(ints[14]) * 256 + 256
-    length(s.chars) > topc && throw(SpiceError(:invalidformat,
-        "$who: file $path has last char address $(length(s.chars)); `top' = $topc."))
-    length(s.dps) > topd && throw(SpiceError(:invalidformat,
-        "$who: file $path has last d.p. address $(length(s.dps)); `top' = $topd."))
-    length(ints) > topi && throw(SpiceError(:invalidformat,
-        "$who: file $path has last int. address $(length(ints)); `top' = $topi."))
+    length(s.chars) > topc && throw(
+        SpiceError(
+            :invalidformat,
+            "$who: file $path has last char address $(length(s.chars)); `top' = $topc."
+        )
+    )
+    length(s.dps) > topd && throw(
+        SpiceError(
+            :invalidformat,
+            "$who: file $path has last d.p. address $(length(s.dps)); `top' = $topd."
+        )
+    )
+    length(ints) > topi && throw(
+        SpiceError(
+            :invalidformat,
+            "$who: file $path has last int. address $(length(ints)); `top' = $topi."
+        )
+    )
     return nothing
 end
 
@@ -132,7 +148,7 @@ end
     hi = n
     while lo < hi                        # invariant: elements 1..lo are <= key, elements hi+1..n are > key
         mid = (lo + hi + 1) >> 1
-        if ints[first+mid-1] <= key
+        if ints[first + mid - 1] <= key
             lo = mid
         else
             hi = mid - 1
@@ -142,7 +158,7 @@ end
 end
 
 "Number of keys of the tree with the root page `tree` (`zzektrsz`)."
-@inline _ek_trsz(ints::AbstractVector{Int32}, tree::Integer) = Int(ints[_ek_ibase(tree)+_EK_TRNKEY])
+@inline _ek_trsz(ints::AbstractVector{Int32}, tree::Integer) = Int(ints[_ek_ibase(tree) + _EK_TRNKEY])
 
 """
     _ek_trlk(ints, tree, key) -> (value, node, noffst, idx, level)
@@ -155,32 +171,44 @@ key in the node, and the level of the node (1 for the root). Precondition:
 """
 function _ek_trlk(ints::AbstractVector{Int32}, tree::Integer, key::Integer)
     base = _ek_ibase(tree)
-    totkey = Int(ints[base+_EK_TRNKEY])
-    depth = Int(ints[base+_EK_TRDPTH])
+    totkey = Int(ints[base + _EK_TRNKEY])
+    depth = Int(ints[base + _EK_TRDPTH])
     k = Int(key)
-    (1 <= k <= totkey) || throw(SpiceError(:indexoutofrange,
-        "Key = $k; valid range = 1:$totkey. Tree = $tree"))
-    prev = _ek_lstlei(ints, base + _EK_TRKEYR + 1, Int(ints[base+_EK_TRNKR]), k)
-    prvkey = prev > 0 ? Int(ints[base+_EK_TRKEYR+prev]) : 0
-    prvkey == k && return Int(ints[base+_EK_TRDATR+prev]), Int(tree), 0, prev, 1
-    child = Int(ints[base+_EK_TRKIDR+prev+1])
+    (1 <= k <= totkey) || throw(
+        SpiceError(
+            :indexoutofrange,
+            "Key = $k; valid range = 1:$totkey. Tree = $tree"
+        )
+    )
+    prev = _ek_lstlei(ints, base + _EK_TRKEYR + 1, Int(ints[base + _EK_TRNKR]), k)
+    prvkey = prev > 0 ? Int(ints[base + _EK_TRKEYR + prev]) : 0
+    prvkey == k && return Int(ints[base + _EK_TRDATR + prev]), Int(tree), 0, prev, 1
+    child = Int(ints[base + _EK_TRKIDR + prev + 1])
     noffst = prvkey
     level = 1
     while child > 0
         # invariant: the key is in the subtree of `child`, whose keys start after `noffst`
         level += 1
-        level > depth && throw(SpiceError(:bug,
-            "Runaway node pointer chain.  Key = $k; valid range = 1:$totkey. Tree = $tree"))
+        level > depth && throw(
+            SpiceError(
+                :bug,
+                "Runaway node pointer chain.  Key = $k; valid range = 1:$totkey. Tree = $tree"
+            )
+        )
         base = _ek_ibase(child)
         newkey = k - noffst
-        prev = _ek_lstlei(ints, base + _EK_TRKEYC + 1, Int(ints[base+_EK_TRNKC]), newkey)
-        prvkey = prev > 0 ? Int(ints[base+_EK_TRKEYC+prev]) : 0
-        prvkey == newkey && return Int(ints[base+_EK_TRDATC+prev]), child, noffst, prev, level
-        child = Int(ints[base+_EK_TRKIDC+prev+1])
+        prev = _ek_lstlei(ints, base + _EK_TRKEYC + 1, Int(ints[base + _EK_TRNKC]), newkey)
+        prvkey = prev > 0 ? Int(ints[base + _EK_TRKEYC + prev]) : 0
+        prvkey == newkey && return Int(ints[base + _EK_TRDATC + prev]), child, noffst, prev, level
+        child = Int(ints[base + _EK_TRKIDC + prev + 1])
         noffst += prvkey
     end
-    throw(SpiceError(:bug, "Key $k; valid range = 1:$totkey. Tree = $tree.  Key was not " *
-        "found.  This probably indicates a corrupted file or a bug in the EK code."))
+    throw(
+        SpiceError(
+            :bug, "Key $k; valid range = 1:$totkey. Tree = $tree.  Key was not " *
+                "found.  This probably indicates a corrupted file or a bug in the EK code."
+        )
+    )
 end
 
 "Data value of `key` in the tree with the root page `tree` (`zzektrdp`)."
@@ -197,10 +225,14 @@ nodes do not hold the number of keys that the root states.
 function _ek_tree_values(ints::AbstractVector{Int32}, tree::Integer)
     n = _ek_trsz(ints, tree)
     out = Vector{Int32}(undef, n)
-    depth = Int(ints[_ek_ibase(tree)+_EK_TRDPTH])
+    depth = Int(ints[_ek_ibase(tree) + _EK_TRDPTH])
     filled = _ek_tree_walk!(out, 0, ints, Int(tree), true, depth)
-    filled == n || throw(SpiceError(:bug,
-        "the tree with root page $tree holds $filled keys, but its root states $n"))
+    filled == n || throw(
+        SpiceError(
+            :bug,
+            "the tree with root page $tree holds $filled keys, but its root states $n"
+        )
+    )
     return out
 end
 
@@ -210,26 +242,28 @@ returns the new position. `below` is the number of tree levels from this node do
 depth of the tree for the root); a node of the last level is a leaf, and its child
 pointers are not read, because CSPICE can leave old values there.
 """
-function _ek_tree_walk!(out::Vector{Int32}, pos::Int, ints::AbstractVector{Int32}, node::Int,
-        isroot::Bool, below::Int)
+function _ek_tree_walk!(
+        out::Vector{Int32}, pos::Int, ints::AbstractVector{Int32}, node::Int,
+        isroot::Bool, below::Int
+    )
     below > _EK_TRMXDP && throw(SpiceError(:bug, "the tree node chain is deeper than $_EK_TRMXDP"))
     base = _ek_ibase(node)
-    nkeys = Int(ints[base+(isroot ? _EK_TRNKR : _EK_TRNKC)])
+    nkeys = Int(ints[base + (isroot ? _EK_TRNKR : _EK_TRNKC)])
     kidbase = base + (isroot ? _EK_TRKIDR : _EK_TRKIDC)
     datbase = base + (isroot ? _EK_TRDATR : _EK_TRDATC)
     for i in 1:nkeys                     # invariant: `pos` values are in `out`, in key order
-        child = below > 1 ? Int(ints[kidbase+i]) : 0
+        child = below > 1 ? Int(ints[kidbase + i]) : 0
         child > 0 && (pos = _ek_tree_walk!(out, pos, ints, child, false, below - 1))
         pos < length(out) || throw(SpiceError(:bug, "a tree holds more keys than its root states"))
         pos += 1
-        out[pos] = ints[datbase+i]
+        out[pos] = ints[datbase + i]
     end
-    child = below > 1 ? Int(ints[kidbase+nkeys+1]) : 0
+    child = below > 1 ? Int(ints[kidbase + nkeys + 1]) : 0
     child > 0 && (pos = _ek_tree_walk!(out, pos, ints, child, false, below - 1))
     return pos
 end
 
-@inline _ek_segtree(s) = Int(s.ints[_ek_ibase(1)+1])
+@inline _ek_segtree(s) = Int(s.ints[_ek_ibase(1) + 1])
 
 @inline _ek_nseg(s) = _ek_trsz(s.ints, _ek_segtree(s))
 
@@ -241,8 +275,12 @@ Throws `SpiceError(:invalidindex)` for a segment number outside `1:nseg`.
 """
 function _ek_mloc(s, segno::Integer)
     nseg = _ek_nseg(s)
-    (1 <= segno <= nseg) || throw(SpiceError(:invalidindex,
-        "Segment number = $segno; valid range is 1:$nseg."))
+    (1 <= segno <= nseg) || throw(
+        SpiceError(
+            :invalidindex,
+            "Segment number = $segno; valid range is 1:$nseg."
+        )
+    )
     page = _ek_trdp(s.ints, _ek_segtree(s), segno)
     return page, _ek_ibase(page)
 end
@@ -250,7 +288,7 @@ end
 "The 24 integers of the descriptor of segment `segno`, as a view of `s.ints` (`zzeksdsc`)."
 @inline function _ek_sdsc(s, segno::Integer)
     _, base = _ek_mloc(s, segno)
-    return view(s.ints, base+1:base+_EK_SDSCSZ)
+    return view(s.ints, (base + 1):(base + _EK_SDSCSZ))
 end
 
 function _ek_rstr(chars::AbstractVector{UInt8}, first::Int, last::Int)
@@ -263,10 +301,12 @@ end
 function _ek_column(s, mbase::Integer, i::Integer)
     b = Int(mbase) + _EK_SDSCSZ + (Int(i) - 1) * _EK_CDSCSZ
     ints = s.ints
-    nambas = Int(ints[b+_EK_NAMIDX])
-    return _EKColumn(_ek_rstr(s.chars, nambas + 1, nambas + _EK_CNAMSZ), ints[b+_EK_CLSIDX],
-        ints[b+_EK_TYPIDX], ints[b+_EK_LENIDX], ints[b+_EK_SIZIDX], ints[b+_EK_IXTIDX],
-        ints[b+_EK_IXPIDX], ints[b+_EK_NFLIDX] == 1, ints[b+_EK_ORDIDX], ints[b+_EK_METIDX])
+    nambas = Int(ints[b + _EK_NAMIDX])
+    return _EKColumn(
+        _ek_rstr(s.chars, nambas + 1, nambas + _EK_CNAMSZ), ints[b + _EK_CLSIDX],
+        ints[b + _EK_TYPIDX], ints[b + _EK_LENIDX], ints[b + _EK_SIZIDX], ints[b + _EK_IXTIDX],
+        ints[b + _EK_IXPIDX], ints[b + _EK_NFLIDX] == 1, ints[b + _EK_ORDIDX], ints[b + _EK_METIDX]
+    )
 end
 
 "True if `a` and `b` are equal without regard to case and blanks (`eqstr`)."
@@ -288,6 +328,7 @@ function _ek_eqstr(a::AbstractString, b::AbstractString)
         i += 1
         j += 1
     end
+    return
 end
 
 """
@@ -303,8 +344,12 @@ function _ek_find_column(s, segdsc::AbstractVector{Int32}, column::AbstractStrin
         col = _ek_column(s, mbase, i)
         _ek_eqstr(col.name, column) && return col
     end
-    throw(SpiceError(:bug, "Descriptor for column $column was not found. " *
-        "Segment base = $mbase."))
+    throw(
+        SpiceError(
+            :bug, "Descriptor for column $column was not found. " *
+                "Segment base = $mbase."
+        )
+    )
 end
 
 """
@@ -317,19 +362,27 @@ a descriptor whose counts are not possible.
 """
 function _ek_segment(s, segno::Integer)
     _, base = _ek_mloc(s, segno)
-    segdsc = Vector{Int32}(s.ints[base+1:base+_EK_SDSCSZ])
+    segdsc = Vector{Int32}(s.ints[(base + 1):(base + _EK_SDSCSZ)])
     ncols = Int(segdsc[_EK_NCIDX])
     nrows = Int(segdsc[_EK_NRIDX])
     stype = Int(segdsc[_EK_EKTIDX])
-    (1 <= ncols <= _EK_MXCLSG && nrows >= 0) || throw(SpiceError(:invalidformat,
-        "segment $segno has $ncols columns and $nrows rows"))
+    (1 <= ncols <= _EK_MXCLSG && nrows >= 0) || throw(
+        SpiceError(
+            :invalidformat,
+            "segment $segno has $ncols columns and $nrows rows"
+        )
+    )
     tnb = Int(segdsc[_EK_TNMIDX])
     table = _ek_rstr(s.chars, tnb + 1, tnb + _EK_TNAMSZ)
     columns = _EKColumn[_ek_column(s, base, i) for i in 1:ncols]
     recptrs = if stype == 1
         v = _ek_tree_values(s.ints, segdsc[_EK_RTIDX])
-        length(v) == nrows || throw(SpiceError(:invalidformat, "segment $segno states " *
-            "$nrows rows, but its record tree has $(length(v)) keys"))
+        length(v) == nrows || throw(
+            SpiceError(
+                :invalidformat, "segment $segno states " *
+                    "$nrows rows, but its record tree has $(length(v)) keys"
+            )
+        )
         v
     elseif stype == 2
         collect(Int32(1):Int32(nrows))
@@ -369,9 +422,13 @@ function open_ek(path::AbstractString)
         nseg < 1 && throw(SpiceError(:eknosegments, "The EK file $path contains no segments."))
         segs = _EKSegment[_ek_segment(h, i) for i in 1:nseg]
         for seg in segs
-            allunique(c.name for c in seg.columns) || throw(SpiceError(:ekcolnummismatch,
-                "The EK file $path could not be loaded; the segment $(seg.segno) contains " *
-                "duplicate column names in table $(seg.table)."))
+            allunique(c.name for c in seg.columns) || throw(
+                SpiceError(
+                    :ekcolnummismatch,
+                    "The EK file $path could not be loaded; the segment $(seg.segno) contains " *
+                        "duplicate column names in table $(seg.table)."
+                )
+            )
         end
         segs
     catch

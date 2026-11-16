@@ -52,16 +52,16 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             nint = rand(rng, (1, 1, 2, 4))
             cn = gf_random_window(rng, nint, 0.0, 25.0)
             step = rand(rng, (0.05, 0.2, 0.37))
-            vals = [f(t) for t in range(0.0, 25.0; length=400)]
+            vals = [f(t) for t in range(0.0, 25.0; length = 400)]
             refval = rel in ("<", "=", ">") ? rand(rng) * (maximum(vals) - minimum(vals)) * 0.8 +
-                                              minimum(vals) : 0.0
+                minimum(vals) : 0.0
             adjust = (rel in ("ABSMIN", "ABSMAX") && isodd(trial)) ?
-                     0.2 * rand(rng) * (maximum(vals) - minimum(vals)) : 0.0
+                0.2 * rand(rng) * (maximum(vals) - minimum(vals)) : 0.0
             qdec = gf_decreasing(d)
             w = gfuds(f, qdec, rel, refval, adjust, step, cn)
             ref = GFO.gfuds(f, qdec, rel, refval, adjust, step, collect(cn))
             @test collect(w) == ref
-            gf_compare("uds " * gf_family(rel, adjust), w, ref; atol=0.0)
+            gf_compare("uds " * gf_family(rel, adjust), w, ref; atol = 0.0)
             @test all(t -> wnelmd(cn, t), w)
             n += 1
         end
@@ -82,9 +82,11 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         # sin has roots at 0 and at pi (the double nearest to pi gives a small positive
         # sine) and extrema at pi/2 and 3 pi/2.
         qdec = gf_decreasing(d1)
-        for cn in (Window([0.0, pi]), Window([0.0, 2pi]), Window([pi / 2, 3pi / 2]),
-                Window([pi / 2, pi / 2]), Window([0.0, pi / 2, pi, 3pi / 2]),
-                Window([pi, 2pi, 2pi, 3pi])), rel in relations
+        for cn in (
+                    Window([0.0, pi]), Window([0.0, 2pi]), Window([pi / 2, 3pi / 2]),
+                    Window([pi / 2, pi / 2]), Window([0.0, pi / 2, pi, 3pi / 2]),
+                    Window([pi, 2pi, 2pi, 3pi]),
+                ), rel in relations
             refs = rel in ("<", "=", ">") ? (0.0, 1.0, -1.0, 0.5) : (0.0,)
             for refval in refs
                 w = gfuds(f1, qdec, rel, refval, 0.0, 0.3, cn)
@@ -95,8 +97,8 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         # only if the bisection, which works on the window expanded by 0.5 s, puts it
         # inside the window; CSPICE behaves in the same way (compared above).
         w = gfuds(f1, qdec, "=", 0.0, 0.0, 0.3, Window([0.0, 2pi]))
-        @test any(t -> abs(t - pi) < 1e-6, w)
-        @test all(t -> min(abs(t), abs(t - pi), abs(t - 2pi)) < 1e-6, w)
+        @test any(t -> abs(t - pi) < 1.0e-6, w)
+        @test all(t -> min(abs(t), abs(t - pi), abs(t - 2pi)) < 1.0e-6, w)
     end
 
     @testset "gfuds: searches with no result" begin
@@ -126,7 +128,7 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             w = gfudb(b, step, cn)
             ref = GFO.gfudb(b, step, collect(cn))
             @test collect(w) == ref
-            gf_compare("udb state", w, ref; atol=0.0)
+            gf_compare("udb state", w, ref; atol = 0.0)
         end
         @test collect(gfudb(GFState(t -> true), 1.0, Window([0.0, 3.0, 5.0, 5.0]))) == [0.0, 3.0, 5.0, 5.0]
         @test isempty(gfudb(GFState(t -> false), 1.0, Window([0.0, 3.0])))
@@ -149,9 +151,13 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
                 ref = GFO.gfuds(f2, qdec, "=", 0.1, 0.0, 0.2, collect(cn))
                 @test collect(gfuds(ctx, f2, qdec, "=", 0.1, 0.0, 0.2, cn)) == ref
                 # the keyword overrides the default, on every form
-                @test collect(gfuds(other, f2, qdec, "=", 0.1, 0.0, 0.2, cn; tol=tol)) == ref
-                @test collect(gfuds(Almanac.kernelset(other), f2, qdec, "=", 0.1, 0.0, 0.2, cn;
-                    tol=tol)) == ref
+                @test collect(gfuds(other, f2, qdec, "=", 0.1, 0.0, 0.2, cn; tol = tol)) == ref
+                @test collect(
+                    gfuds(
+                        Almanac.kernelset(other), f2, qdec, "=", 0.1, 0.0, 0.2, cn;
+                        tol = tol
+                    )
+                ) == ref
                 @test gfuds(other, f2, qdec, "=", 0.1, 0.0, 0.2, cn) == base
                 refb = GFO.gfudb(t -> f2(t) > 0.1, 0.2, collect(cn))
                 @test collect(gfudb(ctx, GFState(t -> f2(t) > 0.1), 0.2, cn)) == refb
@@ -163,7 +169,7 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             @test GFO.kind(() -> GFO.gfstol(0.0)) === :invalidtolerance
             @test gfstol(ctx) == 1.0e-9
             # a coarse tolerance moves the root by less than the tolerance
-            coarse = gfuds(ctx, f2, qdec, "=", 0.1, 0.0, 0.2, cn; tol=1.0e-2)
+            coarse = gfuds(ctx, f2, qdec, "=", 0.1, 0.0, 0.2, cn; tol = 1.0e-2)
             @test length(coarse) == length(base)
             @test maximum(abs.(collect(coarse) .- collect(base))) <= 1.0e-2
         finally
@@ -175,7 +181,7 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             @test gfstol(1.0e-3) == 1.0e-3
             GFO.gfstol(1.0e-3)
             @test collect(gfuds(f2, qdec, "=", 0.1, 0.0, 0.2, cn)) ==
-                  GFO.gfuds(f2, qdec, "=", 0.1, 0.0, 0.2, collect(cn))
+                GFO.gfuds(f2, qdec, "=", 0.1, 0.0, 0.2, collect(cn))
         finally
             gfstol(old)
             GFO.gfstol(1.0e-6)
@@ -203,25 +209,29 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         # Differences from CSPICE (audit of 2026-11-16): a step below the spacing of the
         # floating-point numbers at the epoch, with which CSPICE loops for ever, and a NaN
         # adjustment or reference value, with which CSPICE finds no event.
-        far = Window([1e9, 1e9 + 1.0])
-        @test throws_kind(() -> gfudb(GFState(t -> true), 1e-9, far), :invalidstep)
+        far = Window([1.0e9, 1.0e9 + 1.0])
+        @test throws_kind(() -> gfudb(GFState(t -> true), 1.0e-9, far), :invalidstep)
         # the step function of the geometric searches, through the solver
-        @test throws_kind(() -> Almanac._gf_scan!(Window(), et -> true, far,
-            Almanac._gf_run(et -> 1e-9, 1e-6), false), :invalidstep)
-        @test throws_kind(() -> gfuds(f1, qdec, "<", 0.0, 0.0, 1e-9, far), :invalidstep)
-        @test collect(gfudb(GFState(t -> true), 0.25, far)) == [1e9, 1e9 + 1.0]
-        @test collect(gfudb(GFState(t -> true), 1e-9, Window([1e9, 1e9]))) == [1e9, 1e9]
-        @test collect(gfudb(GFState(t -> true), 1.0, Window([1e9, nextfloat(1e9, 3)]))) ==
-              [1e9, nextfloat(1e9, 3)]
+        @test throws_kind(
+            () -> Almanac._gf_scan!(
+                Window(), et -> true, far,
+                Almanac._gf_run(et -> 1.0e-9, 1.0e-6), false
+            ), :invalidstep
+        )
+        @test throws_kind(() -> gfuds(f1, qdec, "<", 0.0, 0.0, 1.0e-9, far), :invalidstep)
+        @test collect(gfudb(GFState(t -> true), 0.25, far)) == [1.0e9, 1.0e9 + 1.0]
+        @test collect(gfudb(GFState(t -> true), 1.0e-9, Window([1.0e9, 1.0e9]))) == [1.0e9, 1.0e9]
+        @test collect(gfudb(GFState(t -> true), 1.0, Window([1.0e9, nextfloat(1.0e9, 3)]))) ==
+            [1.0e9, nextfloat(1.0e9, 3)]
         @test throws_kind(() -> gfuds(f1, qdec, "ABSMIN", 0.0, NaN, 0.3, cn), :valueoutofrange)
         @test throws_kind(() -> gfuds(f1, qdec, "ABSMAX", 0.0, Inf, 0.3, cn), :valueoutofrange)
         @test throws_kind(() -> gfuds(f1, qdec, "<", NaN, 0.0, 0.3, cn), :invalidvalue)
-        @test throws_kind(() -> gfuds(f1, qdec, "=", 0.0, 0.0, 0.3, cn; tol=0.0), :invalidtolerance)
-        @test throws_kind(() -> gfudb(GFState(t -> true), 0.3, cn; tol=-1.0), :invalidtolerance)
+        @test throws_kind(() -> gfuds(f1, qdec, "=", 0.0, 0.0, 0.3, cn; tol = 0.0), :invalidtolerance)
+        @test throws_kind(() -> gfudb(GFState(t -> true), 0.3, cn; tol = -1.0), :invalidtolerance)
         # relations are read without regard to case and outer blanks
         @test gfuds(f1, qdec, " locmax ", 0.0, 0.0, 0.3, cn) == gfuds(f1, qdec, "LOCMAX", 0.0, 0.0, 0.3, cn)
         @test collect(gfuds(f1, qdec, " = ", 0.0, 0.0, 0.3, cn)) ==
-              GFO.gfuds(f1, qdec, " = ", 0.0, 0.0, 0.3, collect(cn))
+            GFO.gfuds(f1, qdec, " = ", 0.0, 0.0, 0.3, collect(cn))
         # the confinement window is not modified
         before = copy(cn)
         gfuds(f1, qdec, "=", 0.0, 0.0, 0.3, cn)
@@ -233,7 +243,7 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         cn = Window([0.0, 10.0, 12.0, 20.0])
         events = Any[]
         rep = (ev, args...) -> push!(events, (ev, args...))
-        w = gfuds(f1, qdec, "<", 0.3, 0.0, 0.3, cn; report=rep)
+        w = gfuds(f1, qdec, "<", 0.3, 0.0, 0.3, cn; report = rep)
         @test w == gfuds(f1, qdec, "<", 0.3, 0.0, 0.3, cn)
         kinds = first.(events)
         @test count(==(:init), kinds) == 2 && count(==(:final), kinds) == 2    # two passes
@@ -241,17 +251,19 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         @test all(e -> e[1] !== :update || e[2] <= e[4] <= e[3], events)
         @test events[1][2] == cn                       # the window of the pass
         empty!(events)
-        gfuds(f1, qdec, "LOCMAX", 0.0, 0.0, 0.3, cn; report=rep)
+        gfuds(f1, qdec, "LOCMAX", 0.0, 0.0, 0.3, cn; report = rep)
         @test count(==(:init), first.(events)) == 1    # one pass
         empty!(events)
-        gfudb(GFState(t -> f1(t) > 0), 0.3, cn; report=rep)
+        gfudb(GFState(t -> f1(t) > 0), 0.3, cn; report = rep)
         @test events[1][1:3] == (:init, cn, "User defined boolean event search ")
         # interrupt: the search stops at once
         calls = Ref(0)
-        @test_throws InterruptException gfuds(f1, qdec, "<", 0.3, 0.0, 0.3, cn;
-            bail=() -> (calls[] += 1; calls[] > 5))
+        @test_throws InterruptException gfuds(
+            f1, qdec, "<", 0.3, 0.0, 0.3, cn;
+            bail = () -> (calls[] += 1; calls[] > 5)
+        )
         @test calls[] == 6
-        @test gfuds(f1, qdec, "<", 0.3, 0.0, 0.3, cn; bail=() -> false) == w
+        @test gfuds(f1, qdec, "<", 0.3, 0.0, 0.3, cn; bail = () -> false) == w
     end
 
     @testset "threads keyword: the same window" begin
@@ -260,11 +272,11 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             cn = gf_random_window(rng, nint, 0.0, 60.0)
             refval = rel in ("<", "=", ">") ? 0.2 : 0.0
             adjust = rel in ("ABSMIN", "ABSMAX") ? 0.1 : 0.0
-            @test gfuds(f2, qdec, rel, refval, adjust, 0.2, cn; threads=true) ==
-                  gfuds(f2, qdec, rel, refval, adjust, 0.2, cn)
+            @test gfuds(f2, qdec, rel, refval, adjust, 0.2, cn; threads = true) ==
+                gfuds(f2, qdec, rel, refval, adjust, 0.2, cn)
         end
         cn = gf_random_window(rng, 12, 0.0, 60.0)
-        @test gfudb(GFState(t -> f2(t) > 0.1), 0.2, cn; threads=true) == gfudb(GFState(t -> f2(t) > 0.1), 0.2, cn)
+        @test gfudb(GFState(t -> f2(t) > 0.1), 0.2, cn; threads = true) == gfudb(GFState(t -> f2(t) > 0.1), 0.2, cn)
     end
 
     @testset "window helpers of the solver" begin

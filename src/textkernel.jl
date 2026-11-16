@@ -44,8 +44,12 @@ function kernel_arch(path::AbstractString)::Symbol
             end
             d == 2 && i == 5 && return :PCK
         end
-        throw(SpiceError(:notsupported,
-            "old-style DAF '$path' has a summary format that is neither SPK nor PCK"))
+        throw(
+            SpiceError(
+                :notsupported,
+                "old-style DAF '$path' has a summary format that is neither SPK nor PCK"
+            )
+        )
     elseif startswith(idword, "DAS/")
         strip(idword[5:end]) == "DSK" && return :DSK
         strip(idword[5:end]) == "EK" && return :EK
@@ -58,7 +62,7 @@ end
 # Numbers: port of NPARSD
 # ---------------------------------------------------------------------------------
 
-const _NPARSD_LOOKUP = (1.0, 10.0, 100.0, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10)
+const _NPARSD_LOOKUP = (1.0, 10.0, 100.0, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e9, 1.0e10)
 
 """
     _nparsd(s) -> Float64
@@ -68,15 +72,19 @@ point, `E`/`D` exponent, signs, `PI`, embedded blanks and commas ignored); retur
 the same double that `nparsd` computes, which is not always the correctly rounded
 one. Throws `SpiceError(:badnumber)` otherwise.
 """
-function _nparsd(s::Union{AbstractString,AbstractVector{UInt8}})::Float64
+function _nparsd(s::Union{AbstractString, AbstractVector{UInt8}})::Float64
     bytes = s isa AbstractString ? codeunits(s) : s
-    bad(i) = throw(SpiceError(:badnumber,
-        "'$(String(copy(bytes)))' is not a number (character $i)"))
-    intbnd = 1e15
+    bad(i) = throw(
+        SpiceError(
+            :badnumber,
+            "'$(String(copy(bytes)))' is not a number (character $i)"
+        )
+    )
+    intbnd = 1.0e15
     maxexp = 308.0
     minexp = -309.0
     dpmax = floatmax(Float64)
-    smlbnd = dpmax / 1e10
+    smlbnd = dpmax / 1.0e10
     pntok = signok = expok = bpiok = doint = roundd = roundi = true
     dodec = doexp = mantsa = sigchr = epiok = zeroi = false
     intval = decval = expval = ecount = 0.0
@@ -122,8 +130,12 @@ function _nparsd(s::Union{AbstractString,AbstractVector{UInt8}})::Float64
                 end
             elseif doexp
                 if expval + ecount > maxexp
-                    throw(SpiceError(:badnumber,
-                        "'$(String(copy(bytes)))' is too large for a double"))
+                    throw(
+                        SpiceError(
+                            :badnumber,
+                            "'$(String(copy(bytes)))' is too large for a double"
+                        )
+                    )
                 elseif expval + ecount < minexp
                 else
                     expval = expval * 10.0 + sgn2 * v
@@ -174,20 +186,28 @@ function _nparsd(s::Union{AbstractString,AbstractVector{UInt8}})::Float64
     expval += ecount
     if expval < 0.0
         while expval < -10.0
-            value /= 1e10
+            value /= 1.0e10
             expval += 10.0
         end
-        value /= _NPARSD_LOOKUP[Int(-trunc(expval))+1]
+        value /= _NPARSD_LOOKUP[Int(-trunc(expval)) + 1]
     elseif expval > 0.0
         while expval > 10.0
-            value >= smlbnd && throw(SpiceError(:badnumber,
-                "'$(String(copy(bytes)))' is too large for a double"))
-            value *= 1e10
+            value >= smlbnd && throw(
+                SpiceError(
+                    :badnumber,
+                    "'$(String(copy(bytes)))' is too large for a double"
+                )
+            )
+            value *= 1.0e10
             expval -= 10.0
         end
-        f = _NPARSD_LOOKUP[Int(round(expval))+1]
-        value < dpmax / f || throw(SpiceError(:badnumber,
-            "'$(String(copy(bytes)))' is too large for a double"))
+        f = _NPARSD_LOOKUP[Int(round(expval)) + 1]
+        value < dpmax / f || throw(
+            SpiceError(
+                :badnumber,
+                "'$(String(copy(bytes)))' is too large for a double"
+            )
+        )
         value *= f
     end
     return sgn1 * value
@@ -197,8 +217,10 @@ end
 # Dates: the `@` forms, as TPARSE converts them
 # ---------------------------------------------------------------------------------
 
-const _MONTH_ABBR = ("JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT",
-    "NOV", "DEC")
+const _MONTH_ABBR = (
+    "JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT",
+    "NOV", "DEC",
+)
 
 """
     _tparse(s, yearbound=1969, check=false) -> Float64
@@ -212,7 +234,7 @@ years from `yearbound` (the bound of `tsetyr`), and `check` is the range check o
 as in CSPICE (there `str2et_` can leave the check on, and the reader then rejects dates
 such as `@1-JAN-49` that it accepted before).
 """
-function _tparse(s::AbstractString, yearbound::Int=1969, check::Bool=false)::Float64
+function _tparse(s::AbstractString, yearbound::Int = 1969, check::Bool = false)::Float64
     @assert yearbound > 0
     d = TimeDefaults()
     try
@@ -252,7 +274,7 @@ function _tokenize(line::Vector{UInt8})
     @inbounds for i in eachindex(line)
         c = line[i]
         if c == UInt8(' ') || c == UInt8(',') || c == UInt8('(') || c == UInt8(')') ||
-           c == UInt8('=') || c == 0x09
+                c == UInt8('=') || c == 0x09
             if intokn || (inquot && even)
                 inquot = false
                 intokn = false
@@ -263,19 +285,19 @@ function _tokenize(line::Vector{UInt8})
                     push!(begs, i)
                     push!(ends, i)
                     push!(types, _TOK_EQUAL)
-                    if i > 1 && line[i-1] == UInt8('+')
+                    if i > 1 && line[i - 1] == UInt8('+')
                         n = length(begs)
                         types[n] = _TOK_PLUSEQ
                         begs[n] = i - 1
-                        if n >= 2 && begs[n-1] == ends[n-1]
+                        if n >= 2 && begs[n - 1] == ends[n - 1]
                             pop!(begs)
                             pop!(ends)
                             pop!(types)
-                            begs[n-1] = i - 1
-                            ends[n-1] = i
-                            types[n-1] = _TOK_PLUSEQ
+                            begs[n - 1] = i - 1
+                            ends[n - 1] = i
+                            types[n - 1] = _TOK_PLUSEQ
                         elseif n >= 2
-                            ends[n-1] -= 1
+                            ends[n - 1] -= 1
                         end
                     end
                 elseif c == UInt8(')')
@@ -357,7 +379,7 @@ const _BEGINTEXT = Vector{UInt8}(codeunits("\\begintext"))
 
 # The kinds are the short messages of `zzrvar`: BADVARASSIGN, BADVARNAME, TYPEMISMATCH,
 # NUMBEREXPECTED, BADTIMESPEC.
-@noinline _tk_fail(path, lineno::Int, msg, kind::Symbol=:badvarassign) =
+@noinline _tk_fail(path, lineno::Int, msg, kind::Symbol = :badvarassign) =
     throw(SpiceError(kind, "$msg (line $lineno of '$path')"))
 
 function _tk_number(path, lineno, bytes)
@@ -387,8 +409,10 @@ for a year of two digits in an `@` date, and `check` the range check of `tparch`
 it. Throws `SpiceError` for a malformed assignment, with the kind that `zzrvar` gives
 (`:badvarassign`, `:badvarname`, `:typemismatch`, `:numberexpected`, `:badtimespec`).
 """
-function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
-        check::Bool=false)::TextKernel
+function parse_text_lines(
+        path::AbstractString, lines, yearbound::Int = 1969,
+        check::Bool = false
+    )::TextKernel
     out = Assignment[]
     indata = false
     invec = false
@@ -413,11 +437,15 @@ function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
         count = length(begs)
         nxt = 1
         if !invec
-            count >= 3 || _tk_fail(path, lineno, "a kernel variable assignment must have the form " *
-                                "'<name> [+]= <values>'")
+            count >= 3 || _tk_fail(
+                path, lineno, "a kernel variable assignment must have the form " *
+                    "'<name> [+]= <values>'"
+            )
             ends[1] - begs[1] + 1 <= _TK_MAXNAME ||
-                _tk_fail(path, lineno, "a variable name is longer than $_TK_MAXNAME characters",
-                    :badvarname)
+                _tk_fail(
+                path, lineno, "a variable name is longer than $_TK_MAXNAME characters",
+                :badvarname
+            )
             name = String(line[begs[1]:ends[1]])
             types[2] == _TOK_EQUAL || types[2] == _TOK_PLUSEQ ||
                 _tk_fail(path, lineno, "the assignment operator of '$name' is neither '=' nor '+='")
@@ -441,21 +469,29 @@ function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
             t, b, e = types[nxt], begs[nxt], ends[nxt]
             if kind == 0
                 kind = t == _TOK_QUOTED ? 1 : t == _TOK_VALUE ? 2 :
-                       _tk_fail(path, lineno, "the first item after the assignment operator of '$name' " *
-                            "is not a value")
+                    _tk_fail(
+                        path, lineno, "the first item after the assignment operator of '$name' " *
+                        "is not a value"
+                    )
             end
             if kind == 1
-                t == _TOK_QUOTED || _tk_fail(path, lineno, "'$name' is a string variable but a value " *
-                                          "is not a string", :typemismatch)
-                b + 1 >= e && _tk_fail(path, lineno, "there is a quoted string with no characters",
-                    :typemismatch)
+                t == _TOK_QUOTED || _tk_fail(
+                    path, lineno, "'$name' is a string variable but a value " *
+                        "is not a string", :typemismatch
+                )
+                b + 1 >= e && _tk_fail(
+                    path, lineno, "there is a quoted string with no characters",
+                    :typemismatch
+                )
                 push!(strs, _string_value(line, b, e))
             else
-                t == _TOK_VALUE || _tk_fail(path, lineno, "'$name' is a numeric variable but a value " *
-                                         "is not a number or a time", :typemismatch)
+                t == _TOK_VALUE || _tk_fail(
+                    path, lineno, "'$name' is a numeric variable but a value " *
+                        "is not a number or a time", :typemismatch
+                )
                 if line[b] == UInt8('@')
                     e == b && _tk_fail(path, lineno, "'@' is not followed by a time", :badtimespec)
-                    push!(nums, _tparse(String(line[b+1:e]), yearbound, check))
+                    push!(nums, _tparse(String(line[(b + 1):e]), yearbound, check))
                 else
                     push!(nums, _tk_number(path, lineno, view(line, b:e)))
                 end
@@ -481,8 +517,10 @@ Only text between `\\begindata` and `\\begintext` is data. Values are numbers (w
 still in place (see `pool_string_joined`). Variable names are case-sensitive.
 A file whose name ends in `.json` is read by `parse_json_kernel` instead.
 """
-function parse_text_kernel(path::AbstractString, yearbound::Int=1969,
-        check::Bool=false)::TextKernel
+function parse_text_kernel(
+        path::AbstractString, yearbound::Int = 1969,
+        check::Bool = false
+    )::TextKernel
     _isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
     is_json_kernel(path) && return parse_json_kernel(path, yearbound, check)
     text = read(path, String)
@@ -506,7 +544,7 @@ function _physical_lines(text::String)
         c = cu[i]
         if c == UInt8('\n') || c == UInt8('\r')
             push!(out, SubString(text, start, prevind(text, i)))
-            i += (c == UInt8('\r') && i < n && cu[i+1] == UInt8('\n')) ? 2 : 1
+            i += (c == UInt8('\r') && i < n && cu[i + 1] == UInt8('\n')) ? 2 : 1
             start = i
         else
             i += 1
@@ -528,7 +566,7 @@ and `+=` appends to it (or creates it). A stored vector is never mutated, so vec
 shared with an older snapshot stay valid. Throws `SpiceError(:typemismatch)` when
 `+=` mixes numeric and string values.
 """
-function apply_assignments!(pool::Dict{String,PoolValue}, tk::TextKernel)
+function apply_assignments!(pool::Dict{String, PoolValue}, tk::TextKernel)
     for a in tk.assignments
         old = a.append ? get(pool, a.name, nothing) : nothing
         if old === nothing
@@ -538,8 +576,12 @@ function apply_assignments!(pool::Dict{String,PoolValue}, tk::TextKernel)
         elseif old isa Vector{String} && a.value isa Vector{String}
             pool[a.name] = vcat(old, a.value)
         else
-            throw(SpiceError(:typemismatch, "'+=' on kernel variable '$(a.name)' in " *
-                "'$(tk.path)' mixes numeric and string values"))
+            throw(
+                SpiceError(
+                    :typemismatch, "'+=' on kernel variable '$(a.name)' in " *
+                        "'$(tk.path)' mixes numeric and string values"
+                )
+            )
         end
     end
     return pool
@@ -560,7 +602,7 @@ function pool_strings_joined(values::Vector{String}, contin::AbstractString)::Ve
     for v in values
         part = rstrip(v, ' ')
         if endswith(part, contin)
-            print(buf, chop(part; tail=length(contin)))
+            print(buf, chop(part; tail = length(contin)))
             open_string = true
         else
             print(buf, part)
@@ -578,8 +620,10 @@ end
 Contract: the `nth` (1-based) logical string of a string variable whose elements may
 be continued with `contin`, or `nothing` if there is none (`stpool`).
 """
-function pool_string_joined(values::Vector{String}, nth::Integer,
-    contin::AbstractString="//")
+function pool_string_joined(
+        values::Vector{String}, nth::Integer,
+        contin::AbstractString = "//"
+    )
     all = pool_strings_joined(values, contin)
     return 1 <= nth <= length(all) ? all[nth] : nothing
 end
@@ -594,19 +638,27 @@ meta-kernel. As in CSPICE, a relative path is returned unchanged, so it is relat
 to the current directory of the process and not to the directory of the meta-kernel.
 """
 function metakernel_files(tk::TextKernel)::Vector{String}
-    pool = apply_assignments!(Dict{String,PoolValue}(), tk)
+    pool = apply_assignments!(Dict{String, PoolValue}(), tk)
     ktl = get(pool, "KERNELS_TO_LOAD", nothing)
     ktl isa Vector{String} || return String[]
     files = pool_strings_joined(ktl, "+")
     syms = get(pool, "PATH_SYMBOLS", nothing)
     syms isa Vector{String} || return files
     vals = get(pool, "PATH_VALUES", nothing)
-    vals isa Vector{String} || throw(SpiceError(:badkernel,
-        "meta-kernel '$(tk.path)' has PATH_SYMBOLS but no PATH_VALUES"))
+    vals isa Vector{String} || throw(
+        SpiceError(
+            :badkernel,
+            "meta-kernel '$(tk.path)' has PATH_SYMBOLS but no PATH_VALUES"
+        )
+    )
     values = pool_strings_joined(vals, "+")
-    length(values) == length(syms) || throw(SpiceError(:badkernel,
-        "meta-kernel '$(tk.path)' has $(length(syms)) path symbols and " *
-        "$(length(values)) path values"))
+    length(values) == length(syms) || throw(
+        SpiceError(
+            :badkernel,
+            "meta-kernel '$(tk.path)' has $(length(syms)) path symbols and " *
+                "$(length(values)) path values"
+        )
+    )
     return [_substitute_symbols(f, syms, values) for f in files]
 end
 

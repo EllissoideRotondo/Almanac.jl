@@ -11,10 +11,14 @@ group("ad tracked", Kernels.FULL_SET_FILES...) do
     ctx, epochs, default, full = ad_setup()
     # Tracker has no arithmetic between a `Dual` and a `TrackedReal`, so ForwardDiff runs
     # over ReverseDiff only.
-    for (bname, backend, nested) in (("ReverseDiff", AutoReverseDiff(), true),
-            ("Tracker", AutoTracker(), false))
-        ad_check(bname, backend, ctx, epochs, default, full;
-            gradient=true, batched=false, nested)
+    for (bname, backend, nested) in (
+            ("ReverseDiff", AutoReverseDiff(), true),
+            ("Tracker", AutoTracker(), false),
+        )
+        ad_check(
+            bname, backend, ctx, epochs, default, full;
+            gradient = true, batched = false, nested
+        )
         @testset "$bname: a plain-epoch call refuses a tracked epoch" begin
             lst(t) = et2lst(ctx, t, 399, 0.0, "PLANETOCENTRIC")[1]
             @test throws_kind(() -> DI.derivative(lst, backend, epochs[1]), :badarg)

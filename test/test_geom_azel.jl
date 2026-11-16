@@ -11,7 +11,7 @@ import ForwardDiff
 
 # Measured: 2e-16 (coordinates and Jacobians), 3e-16 (azlcpo range), 2e-15 rad (angles),
 # 4e-14 (rates).
-const AZ_TOL = (coord=5e-15, range=5e-12, angle=5e-11, rate=5e-10)
+const AZ_TOL = (coord = 5.0e-15, range = 5.0e-12, angle = 5.0e-11, rate = 5.0e-10)
 
 az_alloc_cpo(ks, et, c, p, ccw, plsz) = @allocated azlcpo(ks, "ELLIPSOID", 301, et, c, ccw, plsz, p, 399, 10013)
 az_alloc_rec(a, b, c) = @allocated azlrec(a, b, c, true, false)
@@ -48,21 +48,23 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
             b = g_drdazl(range, az, el, ccw, plsz)
             gput!(st, "drdazl", maximum(abs.(a .- b)) / maximum(abs.(b)))
             if k % 20 == 0
-                @test azlrec(range, az, el; azccw=ccw, elplsz=plsz) == azlrec(range, az, el, ccw, plsz)
-                @test recazl(v; azccw=ccw, elplsz=plsz) == recazl(v, ccw, plsz)
-                @test dazldr(v...; azccw=ccw, elplsz=plsz) == dazldr(v..., ccw, plsz)
-                @test drdazl(range, az, el; azccw=ccw, elplsz=plsz) == drdazl(range, az, el, ccw, plsz)
+                @test azlrec(range, az, el; azccw = ccw, elplsz = plsz) == azlrec(range, az, el, ccw, plsz)
+                @test recazl(v; azccw = ccw, elplsz = plsz) == recazl(v, ccw, plsz)
+                @test dazldr(v...; azccw = ccw, elplsz = plsz) == dazldr(v..., ccw, plsz)
+                @test drdazl(range, az, el; azccw = ccw, elplsz = plsz) == drdazl(range, az, el, ccw, plsz)
                 # The two Jacobians are inverses, and they are the derivatives.
                 p = azlrec(range, az, el, ccw, plsz)
-                @test isapprox(dazldr(p..., ccw, plsz) * drdazl(range, az, el, ccw, plsz), I; atol=1e-9)
+                @test isapprox(dazldr(p..., ccw, plsz) * drdazl(range, az, el, ccw, plsz), I; atol = 1.0e-9)
                 jf = ForwardDiff.jacobian(x -> azlrec(x[1], x[2], x[3], ccw, plsz), SVector(range, az, el))
-                @test isapprox(jf, drdazl(range, az, el, ccw, plsz); rtol=1e-12)
+                @test isapprox(jf, drdazl(range, az, el, ccw, plsz); rtol = 1.0e-12)
             end
         end
         # Special points: the axes, zero angles with each sense, the origin.
-        for v in ([1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -2.0], [-1.0, 0.0, 0.0],
-                [0.0, -1.0, 0.0], [0.0, 0.0, 0.0], [1.0, -0.0, 0.0], [1.0, 1e-300, 0.0]), ccw in (true, false),
-            plsz in (true, false)
+        for v in (
+                    [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -2.0], [-1.0, 0.0, 0.0],
+                    [0.0, -1.0, 0.0], [0.0, 0.0, 0.0], [1.0, -0.0, 0.0], [1.0, 1.0e-300, 0.0],
+                ), ccw in (true, false),
+                plsz in (true, false)
 
             a = recazl(v, ccw, plsz)
             b = g_recazl(v, ccw, plsz)
@@ -75,8 +77,8 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
         for k in keys(st.d)
             @test st.d[k] < AZ_TOL.coord
         end
-        @test same_kind(() -> g_dazldr(0.0, 0.0, 1.0, true, true), () -> dazldr(0.0, 0.0, 1.0, true, true); expect=:pointonzaxis)
-        @test same_kind(() -> g_drdazl(-1.0, 0.3, 0.2, true, true), () -> drdazl(-1.0, 0.3, 0.2, true, true); expect=:valueoutofrange)
+        @test same_kind(() -> g_dazldr(0.0, 0.0, 1.0, true, true), () -> dazldr(0.0, 0.0, 1.0, true, true); expect = :pointonzaxis)
+        @test same_kind(() -> g_drdazl(-1.0, 0.3, 0.2, true, true), () -> drdazl(-1.0, 0.3, 0.2, true, true); expect = :valueoutofrange)
     end
 
     @testset "azlcpo, 600 random cases" begin
@@ -100,8 +102,10 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
             gput!(st, "azimuth and elevation (rad)", max(abs(a[1][2] - b[1][2]), abs(a[1][3] - b[1][3])))
             speed = norm(g_spkcpo(t, et, cref, "OBSERVER", cor, pos, ctr, cref)[1][4:6])
             gput!(st, "range rate over the speed", abs(a[1][4] - b[1][4]) / speed)
-            gput!(st, "angle rates over the largest", max(abs(a[1][5] - b[1][5]), abs(a[1][6] - b[1][6])) /
-                                                       max(abs(b[1][5]), abs(b[1][6])))
+            gput!(
+                st, "angle rates over the largest", max(abs(a[1][5] - b[1][5]), abs(a[1][6] - b[1][6])) /
+                    max(abs(b[1][5]), abs(b[1][6]))
+            )
             gput!(st, "light time", abs(a[2] - b[2]) / b[2])
             if k % 10 == 0
                 c = azlcpo(ctx, "ellipsoid", GEO_IDS[t], et, Aberration(cor), ccw, plsz, SVector{3}(pos), GEO_IDS[ctr], namfrm(ctx, cref))
@@ -127,9 +131,12 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
                 ("ELLIPSOID", "MOON", "LT", "EARTH", "IAU_MOON"),
                 ("ELLIPSOID", "MOON", "LT", "EARTH", "J2000"),
                 ("DSK/UNPRIORITIZED", "MOON", "LT", "EARTH", "IAU_EARTH"),
-                ("SPHERE", "MOON", "LT", "EARTH", "IAU_EARTH"))
-            @test same_kind(() -> g_azlcpo(m, t, et, cor, true, true, p, ctr, cref),
-                () -> azlcpo(ctx, m, t, et, cor, true, true, p, ctr, cref))
+                ("SPHERE", "MOON", "LT", "EARTH", "IAU_EARTH"),
+            )
+            @test same_kind(
+                () -> g_azlcpo(m, t, et, cor, true, true, p, ctr, cref),
+                () -> azlcpo(ctx, m, t, et, cor, true, true, p, ctr, cref)
+            )
         end
         @test neo_kind(() -> azlcpo(ctx, "ELLIPSOID", "MOON", et, "LT", true, true, [1.0], "EARTH", "IAU_EARTH")) == :badarg
     end
@@ -145,11 +152,11 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
         @test gwarm(az_alloc_azl, p) == 0
         @test gwarm(az_alloc_dr, 1.0, 2.0, 3.0) == 0
         @test gwarm(az_alloc_rd, 2.0, 0.3, 0.4) == 0
-        @test (@inferred azlcpo(ks, "ELLIPSOID", 301, et, "CN+S", true, false, p, 399, 10013)) isa Tuple{SVector{6,Float64},Float64}
-        @test (@inferred azlrec(2.0, 0.3, 0.4, true, false)) isa SVector{3,Float64}
-        @test (@inferred recazl(p, true, false)) isa NTuple{3,Float64}
-        @test (@inferred dazldr(1.0, 2.0, 3.0, true, false)) isa SMatrix{3,3,Float64,9}
-        @test (@inferred drdazl(2.0, 0.3, 0.4, true, false)) isa SMatrix{3,3,Float64,9}
+        @test (@inferred azlcpo(ks, "ELLIPSOID", 301, et, "CN+S", true, false, p, 399, 10013)) isa Tuple{SVector{6, Float64}, Float64}
+        @test (@inferred azlrec(2.0, 0.3, 0.4, true, false)) isa SVector{3, Float64}
+        @test (@inferred recazl(p, true, false)) isa NTuple{3, Float64}
+        @test (@inferred dazldr(1.0, 2.0, 3.0, true, false)) isa SMatrix{3, 3, Float64, 9}
+        @test (@inferred drdazl(2.0, 0.3, 0.4, true, false)) isa SMatrix{3, 3, Float64, 9}
     end
 
     @testset "azlcpo: epoch as a dual number" begin
@@ -159,7 +166,7 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
             f = t -> azlcpo(ks, "ELLIPSOID", 301, t, cor, true, true, p, 399, 10013)[1]
             d = f(ForwardDiff.Dual(et, 1.0))
             v = f(et)
-            @test isapprox(ForwardDiff.value.(d), v; rtol=1e-12)
+            @test isapprox(ForwardDiff.value.(d), v; rtol = 1.0e-12)
             dp = ForwardDiff.partials.(d, 1)[SOneTo(3)]
             fd = geo_fd(t -> f(t)[SOneTo(3)], et, 20.0)
             w = SVector(1.0 / v[1], 1.0, 1.0)          # range in units of itself, angles in radians
@@ -167,7 +174,7 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
             gput!(st, "d(range, az, el)/dt against the returned rates", norm(w .* (dp .- v[SVector(4, 5, 6)])) / norm(w .* v[SVector(4, 5, 6)]))
         end
         greport("azlcpo, dual epoch", st)
-        @test gget(st, "d(range, az, el)/dt against central difference") < 1e-4
-        @test gget(st, "d(range, az, el)/dt against the returned rates") < 1e-3
+        @test gget(st, "d(range, az, el)/dt against central difference") < 1.0e-4
+        @test gget(st, "d(range, az, el)/dt against the returned rates") < 1.0e-3
     end
 end

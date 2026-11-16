@@ -34,20 +34,26 @@ group("1. states against CSPICE", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "de440s, all ordered pairs, J2000" begin
         epochs = random_epochs(rng, 200, DE440S_COVERAGE...)
-        println("  bodies: ", bodies, "; ", length(pairs), " ordered pairs x ",
-            length(epochs), " epochs")
+        println(
+            "  bodies: ", bodies, "; ", length(pairs), " ordered pairs x ",
+            length(epochs), " epochs"
+        )
         d = compare_states(ctx, pairs, epochs, "J2000")
         assert_states("de440s J2000", d, TOL_J2000)
     end
 
     # A smaller set in the other frames: a mix of short and long chains.
-    small = [(301, 399), (399, 301), (10, 399), (399, 10), (301, 10), (5, 399),
-        (4, 301), (199, 299), (3, 0), (0, 301)]
+    small = [
+        (301, 399), (399, 301), (10, 399), (399, 10), (301, 10), (5, 399),
+        (4, 301), (199, 299), (3, 0), (0, 301),
+    ]
     small = [p for p in small if (p[1] == 0 || p[1] in bodies) && (p[2] == 0 || p[2] in bodies)]
     epochs50 = random_epochs(rng, 50, DE440S_COVERAGE...)
-    @apart @testset "de440s, frame $ref" for (ref, tol) in (("ECLIPJ2000", TOL_INERTIAL),
+    @apart @testset "de440s, frame $ref" for (ref, tol) in (
+            ("ECLIPJ2000", TOL_INERTIAL),
             ("IAU_EARTH", TOL_BODYFIXED), ("IAU_MOON", TOL_BODYFIXED),
-            ("MOON_PA", TOL_BODYFIXED), ("MOON_ME", TOL_BODYFIXED))
+            ("MOON_PA", TOL_BODYFIXED), ("MOON_ME", TOL_BODYFIXED),
+        )
         d = compare_states(ctx, small, epochs50, ref)
         assert_states("de440s $ref", d, tol)
     end
@@ -56,9 +62,11 @@ group("1. states against CSPICE", Kernels.FULL_SET_FILES...) do
         # The forms differ in the resolution of names only, which does not depend on the
         # epoch: two epochs in the default run.
         epochs = random_epochs(rng, nsample(2, 20), DE440S_COVERAGE...)
-        named = [("MOON", 301, "EARTH", 399), ("EARTH", 399, "SUN", 10),
+        named = [
+            ("MOON", 301, "EARTH", 399), ("EARTH", 399, "SUN", 10),
             ("SUN", 10, "MOON", 301), ("EARTH BARYCENTER", 3, "SOLAR SYSTEM BARYCENTER", 0),
-            ("JUPITER BARYCENTER", 5, "VENUS", 299), ("MERCURY", 199, "EMB", 3)]
+            ("JUPITER BARYCENTER", 5, "VENUS", 299), ("MERCURY", 199, "EMB", 3),
+        ]
         for (tn, ti, on, oi) in named, et in epochs
             byid = spkezr(ctx, ti, et, "J2000", "NONE", oi)
             # Name form, integer-ID form, integer-string form, integer frame ID and a
@@ -76,21 +84,21 @@ group("1. states against CSPICE", Kernels.FULL_SET_FILES...) do
             @test spkgeo(ctx, ti, et, "J2000", oi) == byid
             # CSPICE answers for the name form and for spkpos and spkgeo.
             cstate, clt = SPICE.spkezr(tn, et, "J2000", "NONE", on)
-            @test isapprox(byid[1], cstate; rtol=1e-13)
-            @test isapprox(lt, clt; rtol=1e-13)
+            @test isapprox(byid[1], cstate; rtol = 1.0e-13)
+            @test isapprox(lt, clt; rtol = 1.0e-13)
             cpos, cplt = SPICE.spkpos(tn, et, "J2000", "NONE", on)
-            @test isapprox(pos, cpos; rtol=1e-13)
+            @test isapprox(pos, cpos; rtol = 1.0e-13)
             cgeo, cglt = SPICE.spkgeo(ti, et, "J2000", oi)
-            @test isapprox(spkgeo(ctx, ti, et, "J2000", oi)[1], cgeo; rtol=1e-13)
-            @test isapprox(lt, cglt; rtol=1e-13)
+            @test isapprox(spkgeo(ctx, ti, et, "J2000", oi)[1], cgeo; rtol = 1.0e-13)
+            @test isapprox(lt, cglt; rtol = 1.0e-13)
             # Light time is the one-way time |r|/c.
-            @test isapprox(lt, norm(pos) / 299792.458; rtol=4eps())
+            @test isapprox(lt, norm(pos) / 299792.458; rtol = 4eps())
         end
         # The result types are the ones the contract gives.
         state, lt = spkezr(ctx, 301, 0.0, "J2000", "NONE", 399)
-        @test state isa SVector{6,Float64}
+        @test state isa SVector{6, Float64}
         @test lt isa Float64
-        @test spkpos(ctx, 301, 0.0, "J2000", "NONE", 399)[1] isa SVector{3,Float64}
+        @test spkpos(ctx, 301, 0.0, "J2000", "NONE", 399)[1] isa SVector{3, Float64}
         # A body relative to itself is the zero state.
         @test all(iszero, spkezr(ctx, 399, 0.0, "J2000", "NONE", 399)[1])
     end
@@ -100,9 +108,9 @@ group("1. states against CSPICE", Kernels.FULL_SET_FILES...) do
         foreach(furnsh, set)
         for et in random_epochs(rng, 10, DE440S_COVERAGE...)
             @test spkezr("MOON", et, "J2000", "NONE", "EARTH") ==
-                  spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")
+                spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")
             @test spkpos(301, et, "IAU_EARTH", "NONE", 399) ==
-                  spkpos(ctx, 301, et, "IAU_EARTH", "NONE", 399)
+                spkpos(ctx, 301, et, "IAU_EARTH", "NONE", 399)
         end
         kclear()
     end
@@ -116,15 +124,15 @@ group("1. states against CSPICE", Kernels.FULL_SET_FILES...) do
             @test (s, lt) == spkezr(ctx, t, et, ref, abcorr, o)
             @test spkezp(ctx, t, et, ref, abcorr, o) == spkpos(ctx, t, et, ref, abcorr, o)
             cs, clt = SPICE.spkez(t, et, ref, abcorr, o)
-            @test isapprox(s, cs; rtol=1e-13) && isapprox(lt, clt; rtol=1e-13)
+            @test isapprox(s, cs; rtol = 1.0e-13) && isapprox(lt, clt; rtol = 1.0e-13)
             p, plt = spkgps(ctx, t, et, ref, o)
             g, glt = spkgeo(ctx, t, et, ref, o)
             @test p == g[SOneTo(3)] && plt == glt
             cp, cplt = SPICE.spkgps(t, et, ref, o)
-            @test isapprox(p, cp; rtol=1e-13) && isapprox(plt, cplt; rtol=1e-13)
+            @test isapprox(p, cp; rtol = 1.0e-13) && isapprox(plt, cplt; rtol = 1.0e-13)
         end
         # A body relative to itself: zero before the frame is checked, as in CSPICE.
-        @test spkgps(ctx, 399, 0.0, "NOSUCH", 399) == (zero(SVector{3,Float64}), 0.0)
+        @test spkgps(ctx, 399, 0.0, "NOSUCH", 399) == (zero(SVector{3, Float64}), 0.0)
         @test SPICE.spkgps(399, 0.0, "NOSUCH", 399) == ([0.0, 0.0, 0.0], 0.0)
         kclear()
         foreach(furnsh, set)

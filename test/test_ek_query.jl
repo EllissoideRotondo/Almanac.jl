@@ -49,17 +49,19 @@ clause, column position) pairs; `rhs` is `nothing` for a comparison with the val
 `lit` (and `lit2` for BETWEEN). `text` is the relation in the query language.
 """
 struct EKQAtom
-    lhs::Tuple{Int,Int}
+    lhs::Tuple{Int, Int}
     op::Symbol
-    rhs::Union{Nothing,Tuple{Int,Int}}
+    rhs::Union{Nothing, Tuple{Int, Int}}
     lit::Any
     lit2::Any
     text::String
 end
 
-const EKQ_NEGATED = Dict(:eq => :ne, :ne => :eq, :lt => :ge, :ge => :lt, :le => :gt, :gt => :le,
+const EKQ_NEGATED = Dict(
+    :eq => :ne, :ne => :eq, :lt => :ge, :ge => :lt, :le => :gt, :gt => :le,
     :like => :unlike, :unlike => :like, :isnull => :notnull, :notnull => :isnull,
-    :between => :notbetween, :notbetween => :between)
+    :between => :notbetween, :notbetween => :between
+)
 
 "Order of two strings as the EK does it: by character code, blank padded, 1024 characters."
 function ekq_strcmp(a::AbstractString, b::AbstractString)
@@ -86,7 +88,7 @@ function ekq_like(s::AbstractString, t::AbstractString)
 end
 
 ekq_relop(op::Symbol, rel::Int) = op === :eq ? rel == 0 : op === :ne ? rel != 0 : op === :lt ? rel < 0 :
-                                  op === :le ? rel <= 0 : op === :gt ? rel > 0 : rel >= 0
+    op === :le ? rel <= 0 : op === :gt ? rel > 0 : rel >= 0
 
 "True if the relation `a` (with the operator `op`) holds for `rows`, one model row for each table."
 function ekq_atom(a::EKQAtom, op::Symbol, rows)
@@ -125,16 +127,16 @@ Value of the WHERE tree `t` for `rows`. A tree is an `EKQAtom` or `(:and, l, r)`
 query language it replaces each operator by its opposite (a null entry is less than
 every value, so `NOT (A < 1)` is `A >= 1`, which is false for a null entry).
 """
-function ekq_eval(t, rows, neg::Bool=false)
+function ekq_eval(t, rows, neg::Bool = false)
     t isa EKQAtom && return ekq_atom(t, neg ? EKQ_NEGATED[t.op] : t.op, rows)
     t[1] === :not && return ekq_eval(t[2], rows, !neg)
     isand = (t[1] === :and) != neg
     return isand ? (ekq_eval(t[2], rows, neg) && ekq_eval(t[3], rows, neg)) :
-           (ekq_eval(t[2], rows, neg) || ekq_eval(t[3], rows, neg))
+        (ekq_eval(t[2], rows, neg) || ekq_eval(t[3], rows, neg))
 end
 
 "The query text of the WHERE tree `t`."
-function ekq_text(rng, @nospecialize(t), parent::Symbol=:top)
+function ekq_text(rng, @nospecialize(t), parent::Symbol = :top)
     t isa EKQAtom && return t.text
     t[1] === :not && return "NOT (" * ekq_text(rng, t[2]) * ")"
     s = ekq_text(rng, t[2], t[1]) * (t[1] === :and ? " AND " : " OR ") * ekq_text(rng, t[3], t[1])
@@ -146,7 +148,7 @@ struct EKQGen
     text::String
     tabs::Vector{EKQTable}
     tree::Any
-    select::Vector{Tuple{Int,Int}}
+    select::Vector{Tuple{Int, Int}}
     kind::String
 end
 
@@ -175,6 +177,7 @@ function ekq_expected(g::EKQGen)
             rows[t] = r
             rec(t + 1)
         end
+        return
     end
     rec(1)
     return out
@@ -184,8 +187,10 @@ end
 # The generator
 # ---------------------------------------------------------------------------------------
 
-const EKQ_OPTEXT = Dict(:eq => ["=", "EQ"], :ne => ["!=", "<>", "^=", "NE"], :lt => ["<", "LT"],
-    :le => ["<=", "LE"], :gt => [">", "GT"], :ge => [">=", "GE"])
+const EKQ_OPTEXT = Dict(
+    :eq => ["=", "EQ"], :ne => ["!=", "<>", "^=", "NE"], :lt => ["<", "LT"],
+    :le => ["<=", "LE"], :gt => [">", "GT"], :ge => [">=", "GE"]
+)
 const EKQ_MONTHS = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"]
 
 "A string literal of the query language for `s`, with one of the two quote characters."
@@ -208,8 +213,10 @@ function ekq_number(text::AbstractString)
     x = Ref{Float64}(NaN)
     msg = fill(UInt8(' '), 160)
     ptr = Ref{Cint}(0)
-    ccall((:nparsd_, EKLIB), Cint, (Ptr{UInt8}, Ref{Float64}, Ptr{UInt8}, Ref{Cint}, Cint, Cint),
-        text, x, msg, ptr, ncodeunits(text), length(msg))
+    ccall(
+        (:nparsd_, EKLIB), Cint, (Ptr{UInt8}, Ref{Float64}, Ptr{UInt8}, Ref{Cint}, Cint, Cint),
+        text, x, msg, ptr, ncodeunits(text), length(msg)
+    )
     @assert all(==(UInt8(' ')), msg) && !isnan(x[]) "nparsd accepts the number '$text'"
     return x[]
 end
@@ -227,7 +234,7 @@ function ekq_literal(rng, ctx, tab::EKQTable, c::Int)
         r < 0.24 && return Float64(v), string(Float64(v))         # a double with an integer value
         return v, string(v)
     elseif col.dtype === :DP
-        v === nothing && (v = round(500 * randn(rng); digits=1))
+        v === nothing && (v = round(500 * randn(rng); digits = 1))
         rand(rng) < 0.15 && isinteger(v) && return v, string(Int(v))
         # The public search reads the text as the correctly rounded double, which is `v`.
         # CSPICE and the compatibility mode read it with `nparsd` (see `ekq_number`), which
@@ -239,8 +246,12 @@ function ekq_literal(rng, ctx, tab::EKQTable, c::Int)
             return str2et(ctx, text), ekq_quote(rng, text)
         end
         y = rand(rng, 1991:2009); m = rand(rng, 1:12); d = rand(rng, 1:28)
-        text = rand(rng, ["$y $(EKQ_MONTHS[m]) $d", "$(EKQ_MONTHS[m]) $d, $y 12:00:00 TDB",
-            "$y-$(lpad(m, 2, '0'))-$(lpad(d, 2, '0'))T06:07:08", "$y $(EKQ_MONTHS[m]) $d 18:30:00.5"])
+        text = rand(
+            rng, [
+                "$y $(EKQ_MONTHS[m]) $d", "$(EKQ_MONTHS[m]) $d, $y 12:00:00 TDB",
+                "$y-$(lpad(m, 2, '0'))-$(lpad(d, 2, '0'))T06:07:08", "$y $(EKQ_MONTHS[m]) $d 18:30:00.5",
+            ]
+        )
         return str2et(ctx, text), ekq_quote(rng, text)
     end
     v === nothing && (v = rand(rng, EK_WORDS))
@@ -258,7 +269,7 @@ function ekq_template(rng, tab::EKQTable, c::Int)
     r < 0.2 && return s[1:rand(rng, 1:length(s))] * "*"
     r < 0.4 && return "*" * s[rand(rng, 1:length(s)):end]
     r < 0.55 && return "*" * s[rand(rng, 1:length(s))] * "*"
-    r < 0.7 && (i = rand(rng, 1:length(s)); return s[1:i-1] * "%" * s[i+1:end])
+    r < 0.7 && (i = rand(rng, 1:length(s)); return s[1:(i - 1)] * "%" * s[(i + 1):end])
     r < 0.8 && return uppercase(s)
     r < 0.9 && return "*" * lowercase(s[end:end])
     return rand(rng, ["*", "%%%%%", "a*a", "*e*a*", "%*", "*%e", "A*", "*  ", "%eta"])
@@ -292,8 +303,10 @@ function ekq_value_atom(rng, ctx, tabs, names, t::Int, c::Int)
 end
 
 "Scalar columns of `b` that the column `col` can be compared with."
-ekq_partners(col::EKColSpec, b::EKQTable) = [i for i in ekq_scalars(b) if
-    (col.dtype in (:INT, :DP) ? b.cols[i].dtype in (:INT, :DP) : b.cols[i].dtype === col.dtype)]
+ekq_partners(col::EKColSpec, b::EKQTable) = [
+    i for i in ekq_scalars(b) if
+        (col.dtype in (:INT, :DP) ? b.cols[i].dtype in (:INT, :DP) : b.cols[i].dtype === col.dtype)
+]
 
 "A relation between a scalar column of table `t1` and one of table `t2`; `ops` are the operators to choose from."
 function ekq_column_atom(rng, tabs, names, t1::Int, t2::Int, ops)
@@ -303,15 +316,17 @@ function ekq_column_atom(rng, tabs, names, t1::Int, t2::Int, ops)
     op = rand(rng, ops)
     (op in (:like, :unlike) && col.dtype !== :CHR) && (op = :eq)
     optext = op === :like ? "LIKE" : op === :unlike ? "NOT LIKE" : rand(rng, EKQ_OPTEXT[op])
-    return EKQAtom((t1, c1), op, (t2, c2), nothing, nothing,
-        names[t1] * col.name * " " * optext * " " * names[t2] * tabs[t2].cols[c2].name)
+    return EKQAtom(
+        (t1, c1), op, (t2, c2), nothing, nothing,
+        names[t1] * col.name * " " * optext * " " * names[t2] * tabs[t2].cols[c2].name
+    )
 end
 
 "A random tree over the atoms `atoms` (all are used)."
 function ekq_tree(rng, atoms::Vector)
     length(atoms) == 1 && return rand(rng) < 0.12 ? (:not, atoms[1]) : atoms[1]
-    k = rand(rng, 1:length(atoms)-1)
-    t = (rand(rng, [:and, :and, :or]), ekq_tree(rng, atoms[1:k]), ekq_tree(rng, atoms[k+1:end]))
+    k = rand(rng, 1:(length(atoms) - 1))
+    t = (rand(rng, [:and, :and, :or]), ekq_tree(rng, atoms[1:k]), ekq_tree(rng, atoms[(k + 1):end]))
     return rand(rng) < 0.1 ? (:not, t) : t
 end
 
@@ -321,7 +336,7 @@ tuple, so each tree has its own type: the functions that only build the text do 
 specialize on it (one compiled method for all trees). `ekq_eval` does specialize, since
 it runs once for each combination of rows.
 """
-function ekq_build(rng, tabs, aliases, names, @nospecialize(tree), kind; arrays::Bool=true)
+function ekq_build(rng, tabs, aliases, names, @nospecialize(tree), kind; arrays::Bool = true)
     all = [(t, c) for t in eachindex(tabs) for c in eachindex(tabs[t].cols) if arrays || tabs[t].cols[c].size == 1]
     select = [rand(rng, all) for _ in 1:rand(rng, 1:4)]
     from = join([isempty(aliases[t]) ? tabs[t].name : tabs[t].name * " " * aliases[t] for t in eachindex(tabs)], ", ")
@@ -368,27 +383,37 @@ function ekq_join(rng, ctx, tabs::Vector{EKQTable})
     parts = Any[]
     for t in 2:length(tabs)
         ops = rand(rng) < 0.65 ? [:eq] : rand(rng, [[:lt, :le, :gt, :ge], [:ne], [:like, :unlike], [:eq]])
-        a = rand(rng) < 0.5 ? ekq_column_atom(rng, tabs, names, t, rand(rng, 1:t-1), ops) :
-            ekq_column_atom(rng, tabs, names, rand(rng, 1:t-1), t, ops)
+        a = rand(rng) < 0.5 ? ekq_column_atom(rng, tabs, names, t, rand(rng, 1:(t - 1)), ops) :
+            ekq_column_atom(rng, tabs, names, rand(rng, 1:(t - 1)), t, ops)
         push!(parts, a)
-        rand(rng) < 0.25 && push!(parts, ekq_column_atom(rng, tabs, names, t, rand(rng, 1:t-1), [:eq, :ne, :lt, :ge]))
+        rand(rng) < 0.25 && push!(parts, ekq_column_atom(rng, tabs, names, t, rand(rng, 1:(t - 1)), [:eq, :ne, :lt, :ge]))
     end
     # Relations on values keep the row sets (and the time of CSPICE) small.
     for t in eachindex(tabs)
         length(tabs[t].rows) > 60 || rand(rng) < 0.3 || continue
         c = findfirst(col -> col.dtype === :INT && col.indexed, tabs[t].cols)
         lo = rand(rng, 1:150)
-        push!(parts, EKQAtom((t, c), :between, nothing, lo, lo + 40, names[t] * tabs[t].cols[c].name *
-            " BETWEEN $lo AND $(lo + 40)"))
+        push!(
+            parts, EKQAtom(
+                (t, c), :between, nothing, lo, lo + 40, names[t] * tabs[t].cols[c].name *
+                    " BETWEEN $lo AND $(lo + 40)"
+            )
+        )
         rand(rng) < 0.3 && push!(parts, ekq_value_atom(rng, ctx, tabs, names, t, rand(rng, ekq_scalars(tabs[t]))))
     end
     tree = foldl((l, r) -> (:and, l, r), shuffle(rng, parts))
     if rand(rng) < 0.25
         extra = ekq_value_atom(rng, ctx, tabs, names, 1, rand(rng, ekq_scalars(tabs[1])))
-        tree = (:and, tree, (:or, extra, ekq_value_atom(rng, ctx, tabs, names, length(tabs),
-            rand(rng, ekq_scalars(tabs[end])))))
+        tree = (
+            :and, tree, (
+                :or, extra, ekq_value_atom(
+                    rng, ctx, tabs, names, length(tabs),
+                    rand(rng, ekq_scalars(tabs[end]))
+                ),
+            ),
+        )
     end
-    return ekq_build(rng, tabs, aliases, names, tree, "$(length(tabs)) tables"; arrays=rand(rng) < 0.3)
+    return ekq_build(rng, tabs, aliases, names, tree, "$(length(tabs)) tables"; arrays = rand(rng) < 0.3)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -638,8 +663,10 @@ function ek_compare_query(ctx, query::String)
     if signal !== nothing
         # CSPICE signals an error (it does not set the error flag): Almanac throws the same kind.
         same = neo_kind(() -> ekfind(ctx, query)) === signal
-        return (cerr=true, nerr=true, msgsame=same, nc=0, compat=same, default=same, sameset=same, nd=0,
-            values=Vector{Any}[], cmsg=string(signal), nmsg="", signal=signal)
+        return (
+            cerr = true, nerr = true, msgsame = same, nc = 0, compat = same, default = same, sameset = same, nd = 0,
+            values = Vector{Any}[], cmsg = string(signal), nmsg = "", signal = signal,
+        )
     end
     nc, cerr, cmsg = c_ekfind(query)
     ks = Almanac.kernelset(ctx)
@@ -648,30 +675,36 @@ function ek_compare_query(ctx, query::String)
     @assert derr == nerr && dmsg == nmsg
     if cerr || nerr
         same = cerr == nerr && cmsg == nmsg
-        return (cerr=cerr, nerr=nerr, msgsame=cmsg == nmsg, nc=nc, compat=same, default=same, sameset=same,
-            nd=res.nmrows, values=Vector{Any}[], cmsg=cmsg, nmsg=nmsg, signal=nothing)
+        return (
+            cerr = cerr, nerr = nerr, msgsame = cmsg == nmsg, nc = nc, compat = same, default = same, sameset = same,
+            nd = res.nmrows, values = Vector{Any}[], cmsg = cmsg, nmsg = nmsg, signal = nothing,
+        )
     end
-    rc = Almanac._ek_search(ks, eq; compat=true)
+    rc = Almanac._ek_search(ks, eq; compat = true)
     cvals = c_ek_result(nc, rc.seltype)
     compat = rc.nmrows == nc && neo_ek_result(rc) == cvals
     dvals = neo_ek_result(res)
     default = dvals == cvals
-    return (cerr=false, nerr=false, msgsame=true, nc=nc, compat=compat, default=default,
-        sameset=default || ekq_rowkeys(dvals) == ekq_rowkeys(cvals), nd=res.nmrows, values=dvals, cmsg="",
-        nmsg="", signal=nothing)
+    return (
+        cerr = false, nerr = false, msgsame = true, nc = nc, compat = compat, default = default,
+        sameset = default || ekq_rowkeys(dvals) == ekq_rowkeys(cvals), nd = res.nmrows, values = dvals, cmsg = "",
+        nmsg = "", signal = nothing,
+    )
 end
 
 "True if one of the defects of CSPICE can change the result of the query `q`."
 ek_defect_possible(q::String) = occursin(r"\bOR\b|NOT|\d\.\d*[1-9]|BETWEEN"i, q)
 
 group("EK queries: catalogue, query corpus against CSPICE and against the model", Kernels.LSK) do
-    model, paths = ek_standard_files(SEED + 1; scale=0.15)
+    model, paths = ek_standard_files(SEED + 1; scale = 0.15)
     kernels = [Kernels.LSK, paths...]
     oracle_load(kernels)
     ctx = neo_context(kernels)
     allsegs = [s for (_, segs) in model for s in segs]
-    qtable(name) = EKQTable(name, first(s.cols for s in allsegs if s.table == name),
-        reduce(vcat, [s.rows for s in allsegs if s.table == name]))
+    qtable(name) = EKQTable(
+        name, first(s.cols for s in allsegs if s.table == name),
+        reduce(vcat, [s.rows for s in allsegs if s.table == name])
+    )
     events, groups, links = qtable("EVENTS"), qtable("GROUPS"), qtable("LINKS")
 
     ek_part("kernel list: an EK file is a kernel of type EK") do
@@ -716,12 +749,14 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
             end
         end
         @test [ektnam(ctx, n) for n in 1:3] == ["EVENTS", "GROUPS", "LINKS"]
-        for (f, cf) in ((() -> ektnam(ctx, 0), () -> ccall((:ektnam_c, EKLIB), Cvoid, (Cint, Cint, Ptr{UInt8}), -1, 65, zeros(UInt8, 65))),
-            (() -> ektnam(ctx, 4), () -> ccall((:ektnam_c, EKLIB), Cvoid, (Cint, Cint, Ptr{UInt8}), 3, 65, zeros(UInt8, 65))),
-            (() -> ekccnt(ctx, "NOTABLE"), () -> ccall((:ekccnt_c, EKLIB), Cvoid, (Cstring, Ref{Cint}), "NOTABLE", Ref{Cint}(0))),
-            (() -> ekcii(ctx, "NOTABLE", 1), () -> ccall((:ekcii_c, EKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}), "NOTABLE", 0, 33, zeros(UInt8, 33), zeros(Cint, 6))),
-            (() -> ekcii(ctx, "LINKS", 6), () -> ccall((:ekcii_c, EKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}), "LINKS", 5, 33, zeros(UInt8, 33), zeros(Cint, 6))),
-            (() -> ekcii(ctx, "LINKS", 0), () -> ccall((:ekcii_c, EKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}), "LINKS", -1, 33, zeros(UInt8, 33), zeros(Cint, 6))))
+        for (f, cf) in (
+                (() -> ektnam(ctx, 0), () -> ccall((:ektnam_c, EKLIB), Cvoid, (Cint, Cint, Ptr{UInt8}), -1, 65, zeros(UInt8, 65))),
+                (() -> ektnam(ctx, 4), () -> ccall((:ektnam_c, EKLIB), Cvoid, (Cint, Cint, Ptr{UInt8}), 3, 65, zeros(UInt8, 65))),
+                (() -> ekccnt(ctx, "NOTABLE"), () -> ccall((:ekccnt_c, EKLIB), Cvoid, (Cstring, Ref{Cint}), "NOTABLE", Ref{Cint}(0))),
+                (() -> ekcii(ctx, "NOTABLE", 1), () -> ccall((:ekcii_c, EKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}), "NOTABLE", 0, 33, zeros(UInt8, 33), zeros(Cint, 6))),
+                (() -> ekcii(ctx, "LINKS", 6), () -> ccall((:ekcii_c, EKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}), "LINKS", 5, 33, zeros(UInt8, 33), zeros(Cint, 6))),
+                (() -> ekcii(ctx, "LINKS", 0), () -> ccall((:ekcii_c, EKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}), "LINKS", -1, 33, zeros(UInt8, 33), zeros(Cint, 6))),
+            )
             cf()
             kind = c_pending_kind()
             @test kind !== nothing
@@ -737,8 +772,10 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         # `ek_parse` compares the analysis of every query of its corpus with `ekpsel_c`;
         # here: the public call on the catalogue of Almanac, one valid query with every
         # data type, an array column, an alias and a table name, and one error.
-        for q in ["select  e.id ,g.gname, G.T0, EVENTS.VAL, ivec  from events e, groups g where e.grp = g.gid order by e.id",
-            "SELECT FOO FROM EVENTS"]
+        for q in [
+                "select  e.id ,g.gname, G.T0, EVENTS.VAL, ivec  from events e, groups g where e.grp = g.gid order by e.id",
+                "SELECT FOO FROM EVENTS",
+            ]
             a = ekpsel(ctx, q)
             b = c_ekpsel(q)
             @test a == b
@@ -759,15 +796,35 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         push!(generated, ekq_single(rng, ctx, links))
     end
     for _ in 1:nsample(30, 70)
-        push!(generated, ekq_join(rng, ctx, shuffle(rng, rand(rng, [[events, groups], [events, links],
-            [links, groups], [events, events], [groups, groups], [links, links]]))))
+        push!(
+            generated, ekq_join(
+                rng, ctx, shuffle(
+                    rng, rand(
+                        rng, [
+                            [events, groups], [events, links],
+                            [links, groups], [events, events], [groups, groups], [links, links],
+                        ]
+                    )
+                )
+            )
+        )
     end
     for _ in 1:nsample(4, 30)
-        push!(generated, ekq_join(rng, ctx, shuffle(rng, rand(rng, [[events, links, groups],
-            [links, links, groups], [events, links, links]]))))
+        push!(
+            generated, ekq_join(
+                rng, ctx, shuffle(
+                    rng, rand(
+                        rng, [
+                            [events, links, groups],
+                            [links, links, groups], [events, links, links],
+                        ]
+                    )
+                )
+            )
+        )
     end
 
-    stats = Dict{String,Vector{Int}}()          # kind => [queries, compat equal, default equal, same rows, errors]
+    stats = Dict{String, Vector{Int}}()          # kind => [queries, compat equal, default equal, same rows, errors]
     examples = String[]
     function record(kind, q, r)
         s = get!(stats, kind, zeros(Int, 5))
@@ -777,11 +834,15 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         s[4] += r.sameset
         s[5] += r.cerr
         if !r.compat
-            println("  differs from CSPICE in compatibility mode: ", q, "\n     CSPICE: ", r.nc, " rows",
-                r.cerr ? " error " * r.cmsg : "", "; Almanac: ", r.nerr ? "error " * r.nmsg : "$(r.nd) rows in correct mode")
+            println(
+                "  differs from CSPICE in compatibility mode: ", q, "\n     CSPICE: ", r.nc, " rows",
+                r.cerr ? " error " * r.cmsg : "", "; Almanac: ", r.nerr ? "error " * r.nmsg : "$(r.nd) rows in correct mode"
+            )
         elseif !r.default && length(examples) < 8
-            push!(examples, "    $q\n      CSPICE $(r.nc) rows, Almanac $(r.nd) rows" *
-                (r.sameset ? " (same rows, other order)" : ""))
+            push!(
+                examples, "    $q\n      CSPICE $(r.nc) rows, Almanac $(r.nd) rows" *
+                    (r.sameset ? " (same rows, other order)" : "")
+            )
         end
         return nothing
     end
@@ -817,8 +878,10 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
             ok = ekq_rowkeys(expect) == ekq_rowkeys(r.values)
             if !ok
                 badmodel += 1
-                badmodel <= 5 && println("  differs from the model: ", g.text, "\n     model ", length(expect),
-                    " rows, Almanac ", r.nd, " rows, CSPICE ", r.nc, " rows")
+                badmodel <= 5 && println(
+                    "  differs from the model: ", g.text, "\n     model ", length(expect),
+                    " rows, Almanac ", r.nd, " rows, CSPICE ", r.nc, " rows"
+                )
             end
         end
         @test badmodel == 0
@@ -826,8 +889,10 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
 
     corpus_line(kind, counts) = "  " * rpad(kind, 28) * join(" " * lpad(n, 4) for n in counts)
     total = zeros(Int, 5)
-    measured("EK query corpus (queries / equal to CSPICE in compatibility mode / public ekfind equal to " *
-             "CSPICE / public ekfind same rows in any order / invalid):")
+    measured(
+        "EK query corpus (queries / equal to CSPICE in compatibility mode / public ekfind equal to " *
+            "CSPICE / public ekfind same rows in any order / invalid):"
+    )
     for kind in sort(collect(keys(stats)))
         s = stats[kind]
         total .+= s
@@ -836,17 +901,21 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
     measured(corpus_line("all", total))
     @test total[1] >= 200
     @test total[2] == total[1]
-    isempty(examples) || println("  queries where the public ekfind differs from CSPICE (defects of CSPICE):\n",
-        join(examples, "\n"))
+    isempty(examples) || println(
+        "  queries where the public ekfind differs from CSPICE (defects of CSPICE):\n",
+        join(examples, "\n")
+    )
 
     ek_part("the defects of CSPICE, against the model") do
         ids = [r[1][1] for r in events.rows]
         # (b) A double value with a fraction against an indexed integer column.
-        for (q, pred) in (("SELECT ID FROM EVENTS WHERE ID < 17.4", x -> x < 17.4),
-            ("SELECT ID FROM EVENTS WHERE ID <= 17.6", x -> x <= 17.6),
-            ("SELECT ID FROM EVENTS WHERE ID > 17.5", x -> x > 17.5),
-            ("SELECT ID FROM EVENTS WHERE ID >= 16.5", x -> x >= 16.5),
-            ("SELECT ID FROM EVENTS WHERE ID = 17.5", x -> false))
+        for (q, pred) in (
+                ("SELECT ID FROM EVENTS WHERE ID < 17.4", x -> x < 17.4),
+                ("SELECT ID FROM EVENTS WHERE ID <= 17.6", x -> x <= 17.6),
+                ("SELECT ID FROM EVENTS WHERE ID > 17.5", x -> x > 17.5),
+                ("SELECT ID FROM EVENTS WHERE ID >= 16.5", x -> x >= 16.5),
+                ("SELECT ID FROM EVENTS WHERE ID = 17.5", x -> false),
+            )
             res, err, _ = ekfind(ctx, q)
             @test !err
             @test res.nmrows == count(pred, ids)
@@ -881,7 +950,7 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
             con = only(eq.constraints)
             @test con.dval === x && con.dexact === 2.756
             @test ekfind(ctx, q)[1].nmrows == count(v -> f(v, 2.756), vals)
-            @test Almanac._ek_search(ks, eq; compat=true).nmrows == count(v -> f(v, x), vals) == c_ekfind(q)[1]
+            @test Almanac._ek_search(ks, eq; compat = true).nmrows == count(v -> f(v, x), vals) == c_ekfind(q)[1]
         end
     end
 
@@ -891,27 +960,37 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         n, cerr, _ = c_ekfind(q)
         @test !err && isempty(msg) && res.nmrows == n == length(res) && n > 0
         @test res isa EKResult
-        directi(sel, row, elt) = () -> ccall((:ekgi_c, EKLIB), Cvoid, (Cint, Cint, Cint, Ref{Cint}, Ref{Cint}, Ref{Cint}),
-            sel - 1, row - 1, elt - 1, Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0))
-        directd(sel, row, elt) = () -> ccall((:ekgd_c, EKLIB), Cvoid, (Cint, Cint, Cint, Ref{Float64}, Ref{Cint}, Ref{Cint}),
-            sel - 1, row - 1, elt - 1, Ref{Float64}(0), Ref{Cint}(0), Ref{Cint}(0))
-        directc(sel, row, elt) = () -> ccall((:ekgc_c, EKLIB), Cvoid, (Cint, Cint, Cint, Cint, Ptr{UInt8}, Ref{Cint},
-                Ref{Cint}), sel - 1, row - 1, elt - 1, 100, zeros(UInt8, 100), Ref{Cint}(0), Ref{Cint}(0))
-        for (f, cf) in ((() -> ekgi(res, 2, 1), directi(2, 1, 1)),
-            (() -> ekgi(res, 3, 1), directi(3, 1, 1)),
-            (() -> ekgd(res, 1, 1), directd(1, 1, 1)),
-            (() -> ekgd(res, 2, 1), directd(2, 1, 1)),
-            (() -> ekgc(res, 1, 1), directc(1, 1, 1)),
-            (() -> ekgc(res, 4, 1), directc(4, 1, 1)),
-            (() -> ekgi(res, 1, 0), directi(1, 0, 1)),
-            (() -> ekgi(res, 1, n + 1), directi(1, n + 1, 1)),
-            (() -> ekgi(res, 0, 1), directi(0, 1, 1)),
-            (() -> ekgi(res, 7, 1), directi(7, 1, 1)),
-            (() -> ekgi(res, 1, 1, 0), directi(1, 1, 0)),
-            (() -> ekgd(res, 3, 1, 0), directd(3, 1, 0)),
-            (() -> ekgc(res, 2, 1, 0), directc(2, 1, 0)),
-            (() -> eknelt(res, 7, 1), () -> ccall((:eknelt_c, EKLIB), Cint, (Cint, Cint), 6, 0)),
-            (() -> eknelt(res, 1, n + 1), () -> ccall((:eknelt_c, EKLIB), Cint, (Cint, Cint), 0, n)))
+        directi(sel, row, elt) = () -> ccall(
+            (:ekgi_c, EKLIB), Cvoid, (Cint, Cint, Cint, Ref{Cint}, Ref{Cint}, Ref{Cint}),
+            sel - 1, row - 1, elt - 1, Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0)
+        )
+        directd(sel, row, elt) = () -> ccall(
+            (:ekgd_c, EKLIB), Cvoid, (Cint, Cint, Cint, Ref{Float64}, Ref{Cint}, Ref{Cint}),
+            sel - 1, row - 1, elt - 1, Ref{Float64}(0), Ref{Cint}(0), Ref{Cint}(0)
+        )
+        directc(sel, row, elt) = () -> ccall(
+            (:ekgc_c, EKLIB), Cvoid, (
+                Cint, Cint, Cint, Cint, Ptr{UInt8}, Ref{Cint},
+                Ref{Cint},
+            ), sel - 1, row - 1, elt - 1, 100, zeros(UInt8, 100), Ref{Cint}(0), Ref{Cint}(0)
+        )
+        for (f, cf) in (
+                (() -> ekgi(res, 2, 1), directi(2, 1, 1)),
+                (() -> ekgi(res, 3, 1), directi(3, 1, 1)),
+                (() -> ekgd(res, 1, 1), directd(1, 1, 1)),
+                (() -> ekgd(res, 2, 1), directd(2, 1, 1)),
+                (() -> ekgc(res, 1, 1), directc(1, 1, 1)),
+                (() -> ekgc(res, 4, 1), directc(4, 1, 1)),
+                (() -> ekgi(res, 1, 0), directi(1, 0, 1)),
+                (() -> ekgi(res, 1, n + 1), directi(1, n + 1, 1)),
+                (() -> ekgi(res, 0, 1), directi(0, 1, 1)),
+                (() -> ekgi(res, 7, 1), directi(7, 1, 1)),
+                (() -> ekgi(res, 1, 1, 0), directi(1, 1, 0)),
+                (() -> ekgd(res, 3, 1, 0), directd(3, 1, 0)),
+                (() -> ekgc(res, 2, 1, 0), directc(2, 1, 0)),
+                (() -> eknelt(res, 7, 1), () -> ccall((:eknelt_c, EKLIB), Cint, (Cint, Cint), 6, 0)),
+                (() -> eknelt(res, 1, n + 1), () -> ccall((:eknelt_c, EKLIB), Cint, (Cint, Cint), 0, n)),
+            )
             cf()
             kind = c_pending_kind()
             @test kind !== nothing
@@ -936,8 +1015,10 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         # A query with an error gives an empty result and does not throw. (CSPICE can stop
         # the program for a column that is not scalar in a WHERE or ORDER BY clause, when
         # it builds the message; these queries are not sent to it.)
-        for q2 in ("SELECT ID FROM EVENTS WHERE VEC < 3.0", "SELECT ID FROM EVENTS ORDER BY VEC",
-            "SELECT ID FROM EVENTS WHERE ID < 3 AND TAGS = 'a'", "")
+        for q2 in (
+                "SELECT ID FROM EVENTS WHERE VEC < 3.0", "SELECT ID FROM EVENTS ORDER BY VEC",
+                "SELECT ID FROM EVENTS WHERE ID < 3 AND TAGS = 'a'", "",
+            )
             r2, err2, msg2 = ekfind(ctx, q2)
             @test err2 && !isempty(msg2) && r2.nmrows == 0
         end
@@ -957,8 +1038,10 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         @test [ektnam(ctx, n) for n in 1:2] == [c_ektnam(n) for n in 1:2]
         r = ek_compare_query(ctx, q)
         @test r.cerr && r.nerr && r.msgsame
-        for q2 in ("SELECT ID, NAME FROM EVENTS WHERE ID < 50 ORDER BY NAME",
-            "SELECT E.ID, G.GID FROM EVENTS E, GROUPS G WHERE E.GRP = G.GID")
+        for q2 in (
+                "SELECT ID, NAME FROM EVENTS WHERE ID < 50 ORDER BY NAME",
+                "SELECT E.ID, G.GID FROM EVENTS E, GROUPS G WHERE E.GRP = G.GID",
+            )
             @test ek_compare_query(ctx, q2).compat
         end
         # Load again: the file is now the last one, so its segments are searched last.

@@ -48,15 +48,19 @@ end
 # The cotangent of the epoch for each lane, or `nothing` for a constant epoch.
 _epoch_cotangent(::Const, dret, dy) = nothing
 _epoch_cotangent(::Active, dret::Active, dy) = _edot(dret.val, dy)
-_epoch_cotangent(::Active, dret::NTuple{W,Active}, dy) where {W} =
+_epoch_cotangent(::Active, dret::NTuple{W, Active}, dy) where {W} =
     map(d -> _edot(d.val, dy), dret)
 _epoch_cotangent(et::Active, ::Type{<:Const}, dy) = zero(et.val)
-_epoch_cotangent(et::Active, ::NTuple{W,Type{<:Const}}, dy) where {W} =
+_epoch_cotangent(et::Active, ::NTuple{W, Type{<:Const}}, dy) where {W} =
     ntuple(_ -> zero(et.val), Val(W))
 
-@noinline _no_nested_reverse(et) = throw(ArgumentError("Almanac: Enzyme reverse mode " *
-    "takes a Float64 epoch, not a $(typeof(et.val)); for a second derivative use " *
-    "ForwardDiff over Enzyme forward mode, or over Zygote, ReverseDiff or Tracker"))
+@noinline _no_nested_reverse(et) = throw(
+    ArgumentError(
+        "Almanac: Enzyme reverse mode " *
+            "takes a Float64 epoch, not a $(typeof(et.val)); for a second derivative use " *
+            "ForwardDiff over Enzyme forward mode, or over Zygote, ReverseDiff or Tracker"
+    )
+)
 
 const POINTS = (
     (spk_jet, 3, 6), (frame_rotation, 4, 4), (frame_jet, 4, 5),
@@ -76,14 +80,18 @@ for (f, iet, n) in POINTS
         EnzymeRules.augmented_primal(::RevConfig, ::Const{typeof($f)}, ::Type, $(typed...)) =
             _no_nested_reverse($(args[iet]))
 
-        function EnzymeRules.augmented_primal(config::RevConfig, ::Const{typeof($f)},
-                ::Type, $(plain...))
+        function EnzymeRules.augmented_primal(
+                config::RevConfig, ::Const{typeof($f)},
+                ::Type, $(plain...)
+            )
             y, dy = _ad_rule($f, $([:($a.val) for a in args]...))
             return AugmentedReturn(needs_primal(config) ? y : nothing, nothing, dy)
         end
 
-        function EnzymeRules.reverse(config::RevConfig, ::Const{typeof($f)}, dret, dy,
-                $(plain...))
+        function EnzymeRules.reverse(
+                config::RevConfig, ::Const{typeof($f)}, dret, dy,
+                $(plain...)
+            )
             d = _epoch_cotangent($(args[iet]), dret, dy)
             return ($([i == iet ? :d : :nothing for i in 1:n]...),)
         end

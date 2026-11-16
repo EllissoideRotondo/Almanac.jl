@@ -32,7 +32,7 @@ function with_baseline_edit(f, edit)
     saved = read(path)
     try
         lines = readlines(`gzip -dc $path`)
-        open(pipeline(`gzip -9n`; stdout=path), "w") do io
+        open(pipeline(`gzip -9n`; stdout = path), "w") do io
             foreach(l -> println(io, l), edit(lines))
         end
         return f()
@@ -43,16 +43,22 @@ end
 
 function main(args)
     src = isempty(args) ? joinpath(homedir(), ".cache", "almanac-tspice") : abspath(args[1])
-    results = Pair{String,Bool}[]
-    check(name, got, want) = (push!(results, name => got == want);
-        println(got == want ? "ok    " : "FAIL  ", name, ": exit ", got, ", expected ", want))
+    results = Pair{String, Bool}[]
+    check(name, got, want) = (
+        push!(results, name => got == want);
+        println(got == want ? "ok    " : "FAIL  ", name, ": exit ", got, ", expected ", want)
+    )
 
     dir = scratch(src)
     check("the recording as it is", run_status(dir, FAMS), 0)
 
     # a mismatch of F_POOL removed from the baseline is a new mismatch
-    got = with_baseline_edit(ls -> (i = findfirst(l -> startswith(l, "F_POOL\t"), ls);
-                                    i === nothing ? ls : deleteat!(ls, i))) do
+    got = with_baseline_edit(
+        ls -> (
+            i = findfirst(l -> startswith(l, "F_POOL\t"), ls);
+            i === nothing ? ls : deleteat!(ls, i)
+        )
+    ) do
         run_status(dir, FAMS)
     end
     check("a mismatch that the baseline lacks", got, 1)
@@ -68,7 +74,7 @@ function main(args)
     write(joinpath(dir, "logs", "status.tsv"), "F_LTIME\tfailed\ttimeout\nF_POOL\tpassed\n")
     check("a family that failed to record", run_status(dir, FAMS), 2)
 
-    rm(dir; recursive=true)
+    rm(dir; recursive = true)
     nfail = count(!last, results)
     println(nfail == 0 ? "the gate rejects every case" : "$nfail case(s) not rejected")
     return nfail == 0 ? 0 : 1

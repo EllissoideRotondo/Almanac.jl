@@ -28,8 +28,10 @@ const NSETS = 10
 const YEAR = 365.25 * 86400.0
 const STEP = 60.0
 const RUNS = parse(Int, get(ENV, "ALMANAC_BENCH_RUNS", "7"))
-const KERNELS = ("naif0012.tls", "pck00011.tpc", "de421.bsp", "earth_latest_high_prec.bpc",
-    "moon_pa_de440_200625.bpc", "moon_de440_250416.tf")
+const KERNELS = (
+    "naif0012.tls", "pck00011.tpc", "de421.bsp", "earth_latest_high_prec.bpc",
+    "moon_pa_de440_200625.bpc", "moon_de440_250416.tf",
+)
 
 "The epochs of PEPPER's `random_epochs`: span*(random(1000000)-1)/1e6, Park-Miller, seed 4242."
 function random_epochs(n, span)
@@ -50,14 +52,14 @@ function best(f, ets)
     for _ in 1:RUNS
         t0 = time_ns()
         sum = f(ets)
-        t = min(t, (time_ns() - t0) / 1e9)
+        t = min(t, (time_ns() - t0) / 1.0e9)
     end
     return t, sum
 end
 
 function run(key, f, ets)
     t, s = best(f, ets)
-    report(key, length(ets), t, s)
+    return report(key, length(ets), t, s)
 end
 
 # --- with names and strings, as from a CSPICE program ------------------------------------
@@ -66,19 +68,21 @@ function states_names(ctx, ets, sfx)
     run("spkezr_moon$sfx", e -> sum(et -> spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")[1][1], e), ets)
     run("spkgeo_moon$sfx", e -> sum(et -> spkgeo(ctx, 301, et, "J2000", 399)[1][1], e), ets)
     run("spkezr_mars_lts$sfx", e -> sum(et -> spkezr(ctx, "MARS BARYCENTER", et, "ECLIPJ2000", "LT+S", "EARTH")[1][1], e), ets)
-    run("spkezr_mars_lt$sfx", e -> sum(e) do et
-        s = spkezr(ctx, "MARS BARYCENTER", et, "ECLIPJ2000", "LT", "EARTH")[1]
-        s[1] + s[4]
-    end, ets)
+    run(
+        "spkezr_mars_lt$sfx", e -> sum(e) do et
+            s = spkezr(ctx, "MARS BARYCENTER", et, "ECLIPJ2000", "LT", "EARTH")[1]
+            s[1] + s[4]
+        end, ets
+    )
     run("spkpos_mars_lts$sfx", e -> sum(et -> spkpos(ctx, "MARS BARYCENTER", et, "ECLIPJ2000", "LT+S", "EARTH")[1][1], e), ets)
-    run("spkpos_sun_cns$sfx", e -> sum(et -> spkpos(ctx, "SUN", et, "J2000", "CN+S", "EARTH")[1][1], e), ets)
+    return run("spkpos_sun_cns$sfx", e -> sum(et -> spkpos(ctx, "SUN", et, "J2000", "CN+S", "EARTH")[1][1], e), ets)
 end
 
 function frames_names(ctx, ets, sfx)
     run("pxform_itrf93$sfx", e -> sum(et -> pxform(ctx, "J2000", "ITRF93", et)[1, 1], e), ets)
     run("sxform_itrf93$sfx", e -> sum(et -> sxform(ctx, "J2000", "ITRF93", et)[4, 1], e), ets)
     run("pxform_iau_mars$sfx", e -> sum(et -> pxform(ctx, "J2000", "IAU_MARS", et)[1, 1], e), ets)
-    run("pxform_moon_me$sfx", e -> sum(et -> pxform(ctx, "MOON_ME", "J2000", et)[1, 1], e), ets)
+    return run("pxform_moon_me$sfx", e -> sum(et -> pxform(ctx, "MOON_ME", "J2000", et)[1, 1], e), ets)
 end
 
 # --- on the snapshot, with codes and a parsed correction ------------------------------
@@ -89,12 +93,14 @@ function states_ids(ks, ets, sfx)
     run("spkezr_moon$sfx", e -> sum(et -> spkezr(ks, 301, et, j2000, none, 399)[1][1], e), ets)
     run("spkgeo_moon$sfx", e -> sum(et -> spkgeo(ks, 301, et, j2000, 399)[1][1], e), ets)
     run("spkezr_mars_lts$sfx", e -> sum(et -> spkezr(ks, 4, et, eclip, lts, 399)[1][1], e), ets)
-    run("spkezr_mars_lt$sfx", e -> sum(e) do et
-        s = spkezr(ks, 4, et, eclip, lt, 399)[1]
-        s[1] + s[4]
-    end, ets)
+    run(
+        "spkezr_mars_lt$sfx", e -> sum(e) do et
+            s = spkezr(ks, 4, et, eclip, lt, 399)[1]
+            s[1] + s[4]
+        end, ets
+    )
     run("spkpos_mars_lts$sfx", e -> sum(et -> spkpos(ks, 4, et, eclip, lts, 399)[1][1], e), ets)
-    run("spkpos_sun_cns$sfx", e -> sum(et -> spkpos(ks, 10, et, j2000, cns, 399)[1][1], e), ets)
+    return run("spkpos_sun_cns$sfx", e -> sum(et -> spkpos(ks, 10, et, j2000, cns, 399)[1][1], e), ets)
 end
 
 function frames_ids(ks, ets, sfx)
@@ -102,7 +108,7 @@ function frames_ids(ks, ets, sfx)
     run("pxform_itrf93$sfx", e -> sum(et -> pxform(ks, 1, itrf, et)[1, 1], e), ets)
     run("sxform_itrf93$sfx", e -> sum(et -> sxform(ks, 1, itrf, et)[4, 1], e), ets)
     run("pxform_iau_mars$sfx", e -> sum(et -> pxform(ks, 1, mars, et)[1, 1], e), ets)
-    run("pxform_moon_me$sfx", e -> sum(et -> pxform(ks, moon, 1, et)[1, 1], e), ets)
+    return run("pxform_moon_me$sfx", e -> sum(et -> pxform(ks, moon, 1, et)[1, 1], e), ets)
 end
 
 # --- tables over the epochs -----------------------------------------------------------
@@ -115,19 +121,19 @@ function tables(ctx, ets, sfx)
     itrf = rotation_table(ctx, "J2000", "ITRF93", t0, t1)
     run("pxform_itrf93$sfx", e -> sum(et -> table_rotation(itrf, et)[1, 1], e), ets)
     mars = rotation_table(ctx, "J2000", "IAU_MARS", t0, t1)
-    run("pxform_iau_mars$sfx", e -> sum(et -> table_rotation(mars, et)[1, 1], e), ets)
+    return run("pxform_iau_mars$sfx", e -> sum(et -> table_rotation(mars, et)[1, 1], e), ets)
 end
 
 function main(kdir)
     ets = random_epochs(NQ, 20 * YEAR)
-    seq = [i * STEP for i in 0:NQ-1]
+    seq = [i * STEP for i in 0:(NQ - 1)]
     paths = [joinpath(kdir, k) for k in KERNELS]
 
     ctx = SpiceContext()
     load = function (_)
         kclear(ctx)
         foreach(p -> furnsh(ctx, p), paths)
-        0.0
+        return 0.0
     end
     t, _ = best(load, 1:NSETS)          # one load per call; report per set
     report("load_set", 1, t, 0.0)
@@ -144,7 +150,7 @@ function main(kdir)
     frames_ids(ks, seq, "_ids_seq")
 
     tables(ctx, ets, "_table")
-    tables(ctx, seq, "_table_seq")
+    return tables(ctx, seq, "_table_seq")
 end
 
 isempty(ARGS) ? println("usage: julia --project=bench bench/pepper.jl KERNEL_DIR") : main(ARGS[1])

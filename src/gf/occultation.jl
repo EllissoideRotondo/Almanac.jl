@@ -45,19 +45,29 @@ or `PARTIAL` (`:invalidocctype`), and `ANY` if a target is a point
 extended target has radii or DSK data, and a body-fixed frame that is known and
 centered on it (`:invalidframe`).
 """
-function _gf_occultation(ks::KernelSet, tols::DSKTolerances, occtyp::AbstractString,
+function _gf_occultation(
+        ks::KernelSet, tols::DSKTolerances, occtyp::AbstractString,
         front::NameOrID, fshape::AbstractString, fframe::NameOrID, back::NameOrID,
-        bshape::AbstractString, bframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID)
+        bshape::AbstractString, bframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
+    )
     (_geo_occ_upper(fshape) == "POINT" && _geo_occ_upper(bshape) == "POINT") &&
-        throw(SpiceError(:invalidshapecombo, "The front and back target shape " *
-            "specifications are both POINT; at least one of these targets must be an " *
-            "extended object."))
+        throw(
+        SpiceError(
+            :invalidshapecombo, "The front and back target shape " *
+                "specifications are both POINT; at least one of these targets must be an " *
+                "extended object."
+        )
+    )
     idf = _gf_body(ks, front, "front target object")
     idb = _gf_body(ks, back, "back target object")
     obs = _gf_body(ks, obsrvr, "observer")
-    (idf == idb || idf == obs || idb == obs) && throw(SpiceError(:bodiesnotdistinct,
-        "The observer and both targets must be distinct objects, but are not: " *
-        "OBSRVR = $obsrvr; FRONT = $front; BACK = $back."))
+    (idf == idb || idf == obs || idb == obs) && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer and both targets must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr; FRONT = $front; BACK = $back."
+        )
+    )
     pf = _geo_occ_parse(ks, idf, fshape, "front target")
     pf.kind == 0x00 && _geo_occ_bad_shape(fshape)
     pb = _geo_occ_parse(ks, idb, bshape, "back target")
@@ -66,29 +76,44 @@ function _gf_occultation(ks::KernelSet, tols::DSKTolerances, occtyp::AbstractStr
     bb = _GeoOccBody(idb, pb.kind, pb.m, Int32(0))
     # CSPICE reads the surface list of the back target with the ID of the front target.
     bsrf = (bb.kind == _GEO_OCC_DSK && !isempty(bb.m.srflst)) ?
-           _geo_method(ks, idf, _geo_occ_upper(bshape)).srflst : bb.m.srflst
-    ((fb.kind == _GEO_OCC_DSK && bb.kind != _GEO_OCC_POINT) ||
-     (bb.kind == _GEO_OCC_DSK && fb.kind != _GEO_OCC_POINT)) && throw(SpiceError(
-        :invalidshapecombo, "Front target shape from FSHAPE string was <$fshape>; back " *
-        "target shape from BSHAPE was <$bshape>. When one shape is DSK, the other must " *
-        "be POINT."))
+        _geo_method(ks, idf, _geo_occ_upper(bshape)).srflst : bb.m.srflst
+    (
+        (fb.kind == _GEO_OCC_DSK && bb.kind != _GEO_OCC_POINT) ||
+            (bb.kind == _GEO_OCC_DSK && fb.kind != _GEO_OCC_POINT)
+    ) && throw(
+        SpiceError(
+            :invalidshapecombo, "Front target shape from FSHAPE string was <$fshape>; back " *
+                "target shape from BSHAPE was <$bshape>. When one shape is DSK, the other must " *
+                "be POINT."
+        )
+    )
     typ = uppercase(lstrip(rstrip(occtyp, ' '), ' '))
     k = findfirst(p -> p.first == typ, _GF_OCCTYPES)
-    k === nothing && throw(SpiceError(:invalidocctype, "The occultation type $occtyp is " *
-        "not recognized.  Supported types are: ANNULAR, ANY, PARTIAL,  FULL."))
+    k === nothing && throw(
+        SpiceError(
+            :invalidocctype, "The occultation type $occtyp is " *
+                "not recognized.  Supported types are: ANNULAR, ANY, PARTIAL,  FULL."
+        )
+    )
     ((fb.kind == _GEO_OCC_POINT || bb.kind == _GEO_OCC_POINT) && typ != "ANY") &&
-        throw(SpiceError(:badtypeshapecombo, "Occultation type $occtyp is not allowed " *
-            "when either target body is modeled as a point. Set OCCTYP to ANY for use " *
-            "with point targets."))
+        throw(
+        SpiceError(
+            :badtypeshapecombo, "Occultation type $occtyp is not allowed " *
+                "when either target body is modeled as a point. Set OCCTYP to ANY for use " *
+                "with point targets."
+        )
+    )
     full = _geo_abcorr(abcorr)
-    corr = full.uselt ? Aberration(; uselt=true, converged=full.converged, transmit=full.transmit) :
-           full
+    corr = full.uselt ? Aberration(; uselt = true, converged = full.converged, transmit = full.transmit) :
+        full
     # Radii, frames and bounding spheres, the front target first; the frames are kept
     # as IDs for the evaluations.
     ffrm = _geo_occ_extent(ks, fb, fframe, fb.m.srflst)[4]
     bfrm = _geo_occ_extent(ks, bb, bframe, bsrf)[4]
-    return _GFOccultation(ks, tols, fb, ffrm, bb, bfrm, bsrf, obs, corr,
-        _GF_OCCTYPES[k].second)
+    return _GFOccultation(
+        ks, tols, fb, ffrm, bb, bfrm, bsrf, obs, corr,
+        _GF_OCCTYPES[k].second
+    )
 end
 
 """
@@ -96,8 +121,10 @@ The state of `zzgfocst`: true if at `et` the front target occults the back targe
 the way that the occultation type asks for.
 """
 @inline function _gf_occulted(o::_GFOccultation, et::Float64)
-    code = _geo_occ_eval(o.ks, o.tols, o.front, o.fframe, o.back, o.bframe, o.bsrf, o.obs,
-        o.corr, et)
+    code = _geo_occ_eval(
+        o.ks, o.tols, o.front, o.fframe, o.back, o.bframe, o.bsrf, o.obs,
+        o.corr, et
+    )
     return o.want == 0 ? code != 0 : code == o.want
 end
 
@@ -110,12 +137,16 @@ end
 which the state `_gf_occulted` is true. Postcondition: a new window, a subset of
 `cnfine`.
 """
-function _gf_oclt(ks::KernelSet, tols::DSKTolerances, occtyp::AbstractString,
+function _gf_oclt(
+        ks::KernelSet, tols::DSKTolerances, occtyp::AbstractString,
         front::NameOrID, fshape::AbstractString, fframe::NameOrID, back::NameOrID,
         bshape::AbstractString, bframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
-        cnfine::Window, run::_GFRun)
-    o = _gf_occultation(ks, tols, occtyp, front, fshape, fframe, back, bshape, bframe,
-        abcorr, obsrvr)
+        cnfine::Window, run::_GFRun
+    )
+    o = _gf_occultation(
+        ks, tols, occtyp, front, fshape, fframe, back, bshape, bframe,
+        abcorr, obsrvr
+    )
     _gf_repi(run, cnfine, "Occultation/transit search ", "done.")
     result = _gf_scan!(Window(), et -> _gf_occulted(o, et), cnfine, run, false)
     _gf_repf(run)
@@ -196,24 +227,36 @@ end
 
 See also [`gfocce`](@ref), [`occult`](@ref), [`gfdist`](@ref).
 """
-function gfoclt(ks::KernelSet, occtyp::AbstractString, front::NameOrID,
+function gfoclt(
+        ks::KernelSet, occtyp::AbstractString, front::NameOrID,
         fshape::AbstractString, fframe::NameOrID, back::NameOrID, bshape::AbstractString,
         bframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window;
-        tol::Real=_GF_CNVTOL, bail=nothing, report=nothing, threads::Bool=false)
-    return _gf_oclt(ks, _DSK_DEFAULT_TOLS, occtyp, front, fshape, fframe, back, bshape,
-        bframe, abcorr, obsrvr, cnfine, _gf_run(step, tol; bail, report, threads))
+        tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
+    )
+    return _gf_oclt(
+        ks, _DSK_DEFAULT_TOLS, occtyp, front, fshape, fframe, back, bshape,
+        bframe, abcorr, obsrvr, cnfine, _gf_run(step, tol; bail, report, threads)
+    )
 end
-gfoclt(ctx::SpiceContext, occtyp::AbstractString, front::NameOrID, fshape::AbstractString,
+gfoclt(
+    ctx::SpiceContext, occtyp::AbstractString, front::NameOrID, fshape::AbstractString,
     fframe::NameOrID, back::NameOrID, bshape::AbstractString, bframe::NameOrID,
-    abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window; tol::Real=gfstol(ctx),
-    bail=nothing, report=nothing, threads::Bool=false) =
-    _gf_oclt(kernelset(ctx), dsktolerances(ctx), occtyp, front, fshape, fframe, back,
-        bshape, bframe, abcorr, obsrvr, cnfine, _gf_run(step, tol; bail, report, threads))
-gfoclt(occtyp::AbstractString, front::NameOrID, fshape::AbstractString, fframe::NameOrID,
+    abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window; tol::Real = gfstol(ctx),
+    bail = nothing, report = nothing, threads::Bool = false
+) =
+    _gf_oclt(
+    kernelset(ctx), dsktolerances(ctx), occtyp, front, fshape, fframe, back,
+    bshape, bframe, abcorr, obsrvr, cnfine, _gf_run(step, tol; bail, report, threads)
+)
+gfoclt(
+    occtyp::AbstractString, front::NameOrID, fshape::AbstractString, fframe::NameOrID,
     back::NameOrID, bshape::AbstractString, bframe::NameOrID, abcorr::AbcorrArg,
-    obsrvr::NameOrID, step::Real, cnfine::Window; kw...) =
-    gfoclt(default_context(), occtyp, front, fshape, fframe, back, bshape, bframe, abcorr,
-        obsrvr, step, cnfine; kw...)
+    obsrvr::NameOrID, step::Real, cnfine::Window; kw...
+) =
+    gfoclt(
+    default_context(), occtyp, front, fshape, fframe, back, bshape, bframe, abcorr,
+    obsrvr, step, cnfine; kw...
+)
 
 """
     gfocce([ctx,] occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, obsrvr,
@@ -230,23 +273,35 @@ keywords `bail`, `report` and `threads`, the result and the errors are those of
 
 See also [`gfoclt`](@ref), [`gfevnt`](@ref), [`gffove`](@ref).
 """
-function gfocce(ks::KernelSet, occtyp::AbstractString, front::NameOrID,
+function gfocce(
+        ks::KernelSet, occtyp::AbstractString, front::NameOrID,
         fshape::AbstractString, fframe::NameOrID, back::NameOrID, bshape::AbstractString,
         bframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, tol::Real, udstep, udrefn,
-        cnfine::Window; bail=nothing, report=nothing, threads::Bool=false)
-    return _gf_oclt(ks, _DSK_DEFAULT_TOLS, occtyp, front, fshape, fframe, back, bshape,
+        cnfine::Window; bail = nothing, report = nothing, threads::Bool = false
+    )
+    return _gf_oclt(
+        ks, _DSK_DEFAULT_TOLS, occtyp, front, fshape, fframe, back, bshape,
         bframe, abcorr, obsrvr, cnfine,
-        _gf_run(udstep, tol; refine=udrefn, bail, report, threads))
+        _gf_run(udstep, tol; refine = udrefn, bail, report, threads)
+    )
 end
-gfocce(ctx::SpiceContext, occtyp::AbstractString, front::NameOrID, fshape::AbstractString,
+gfocce(
+    ctx::SpiceContext, occtyp::AbstractString, front::NameOrID, fshape::AbstractString,
     fframe::NameOrID, back::NameOrID, bshape::AbstractString, bframe::NameOrID,
     abcorr::AbcorrArg, obsrvr::NameOrID, tol::Real, udstep, udrefn, cnfine::Window;
-    bail=nothing, report=nothing, threads::Bool=false) =
-    _gf_oclt(kernelset(ctx), dsktolerances(ctx), occtyp, front, fshape, fframe, back,
-        bshape, bframe, abcorr, obsrvr, cnfine,
-        _gf_run(udstep, tol; refine=udrefn, bail, report, threads))
-gfocce(occtyp::AbstractString, front::NameOrID, fshape::AbstractString, fframe::NameOrID,
+    bail = nothing, report = nothing, threads::Bool = false
+) =
+    _gf_oclt(
+    kernelset(ctx), dsktolerances(ctx), occtyp, front, fshape, fframe, back,
+    bshape, bframe, abcorr, obsrvr, cnfine,
+    _gf_run(udstep, tol; refine = udrefn, bail, report, threads)
+)
+gfocce(
+    occtyp::AbstractString, front::NameOrID, fshape::AbstractString, fframe::NameOrID,
     back::NameOrID, bshape::AbstractString, bframe::NameOrID, abcorr::AbcorrArg,
-    obsrvr::NameOrID, tol::Real, udstep, udrefn, cnfine::Window; kw...) =
-    gfocce(default_context(), occtyp, front, fshape, fframe, back, bshape, bframe, abcorr,
-        obsrvr, tol, udstep, udrefn, cnfine; kw...)
+    obsrvr::NameOrID, tol::Real, udstep, udrefn, cnfine::Window; kw...
+) =
+    gfocce(
+    default_context(), occtyp, front, fshape, fframe, back, bshape, bframe, abcorr,
+    obsrvr, tol, udstep, udrefn, cnfine; kw...
+)

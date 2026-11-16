@@ -34,7 +34,7 @@ using ForwardDiff, LinearAlgebra, StaticArrays
     file = rotating!(SpiceContext())
     furnsh(file, spk)
     prov = rotating!(SpiceContext())
-    add_ephemeris!(earth, prov, 399, 0, "J2000", t0, t1; name="earth")
+    add_ephemeris!(earth, prov, 399, 0, "J2000", t0, t1; name = "earth")
     add_ephemeris!(probe, prov, -1000, "EARTH", "J2000", t0, t1)
 
     @testset "the same states as the SPK" begin
@@ -42,30 +42,30 @@ using ForwardDiff, LinearAlgebra, StaticArrays
         # 1.6e8 km: the two contexts differ by rounding at that size, 2 ulps of 1.6e8 km
         # in position and 4e-12 km/s in velocity measured; the bounds are twice that.
         ap, av, al = 4 * eps(1.6e8), 1.0e-11, 4 * eps(1.6e8) / Almanac.CLIGHT
-        ets = range(t0 + 1000, t1 - 1000; length=7)
+        ets = range(t0 + 1000, t1 - 1000; length = 7)
         for corr in ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT", "XLT+S", "XCN+S"),
                 ref in ("J2000", "ECLIPJ2000", "IAU_EARTH"), (targ, obs) in ((-1000, 399), (399, -1000))
             for et in ets
                 a, la = spkezr(file, targ, et, ref, corr, obs)
                 b, lb = spkezr(prov, targ, et, ref, corr, obs)
                 @test maximum(abs, b[1:3] - a[1:3]) <= ap && maximum(abs, b[4:6] - a[4:6]) <= av &&
-                      abs(lb - la) <= al
+                    abs(lb - la) <= al
             end
         end
-        @test spkpos(prov, -1000, 10.0, "J2000", "NONE", 399)[1] ≈ probe(10.0)[1:3] rtol = 1e-15
-        @test spkgeo(prov, -1000, 10.0, "J2000", 0)[1] ≈ probe(10.0) + earth(10.0) rtol = 1e-15
+        @test spkpos(prov, -1000, 10.0, "J2000", "NONE", 399)[1] ≈ probe(10.0)[1:3] rtol = 1.0e-15
+        @test spkgeo(prov, -1000, 10.0, "J2000", 0)[1] ≈ probe(10.0) + earth(10.0) rtol = 1.0e-15
         # order 2 and 3 through Taylor numbers: the velocity is constant
         @test all(iszero, spkder(prov, -1000, 5.0, "J2000", 399, Val(3))[3])
         # the result types do not depend on the function (a regression: an untyped
         # provider made `spkgeo` of every SPK type type-unstable)
-        @test (@inferred spkgeo(prov, -1000, 5.0, 1, 399)) isa Tuple{SVector{6,Float64},Float64}
-        @test (@inferred spkder(prov, -1000, 5.0, 1, 399, Val(3))) isa NTuple{4,SVector{3,Float64}}
+        @test (@inferred spkgeo(prov, -1000, 5.0, 1, 399)) isa Tuple{SVector{6, Float64}, Float64}
+        @test (@inferred spkder(prov, -1000, 5.0, 1, 399, Val(3))) isa NTuple{4, SVector{3, Float64}}
     end
 
     @testset "dual-number epochs" begin
         g(et) = spkpos(prov, -1000, et, "IAU_EARTH", "LT+S", 399)[1]
         h(et) = spkpos(file, -1000, et, "IAU_EARTH", "LT+S", 399)[1]
-        @test ForwardDiff.derivative(g, 100.0) ≈ ForwardDiff.derivative(h, 100.0) rtol = 1e-12
+        @test ForwardDiff.derivative(g, 100.0) ≈ ForwardDiff.derivative(h, 100.0) rtol = 1.0e-12
     end
 
     @testset "the rules of a file" begin
@@ -73,7 +73,7 @@ using ForwardDiff, LinearAlgebra, StaticArrays
         furnsh(ctx, spk)
         @test spkezr(ctx, -1000, 0.0, "J2000", "NONE", 399)[1] == probe(0.0)
         shifted(et) = probe(et) .+ [1.0, 0, 0, 0, 0, 0]
-        add_ephemeris!(shifted, ctx, -1000, 399, "J2000", -10.0, 10.0; name="shift")
+        add_ephemeris!(shifted, ctx, -1000, 399, "J2000", -10.0, 10.0; name = "shift")
         @test spkezr(ctx, -1000, 0.0, "J2000", "NONE", 399)[1][1] == probe(0.0)[1] + 1    # later wins
         @test spkezr(ctx, -1000, 20.0, "J2000", "NONE", 399)[1] == probe(20.0)            # outside: the file
         @test kinfo(ctx, "shift")[1] == "SPK" && ktotal(ctx, "SPK") == 2
@@ -116,11 +116,11 @@ using ForwardDiff, LinearAlgebra, StaticArrays
         # The probe's distance from the Earth falls below 300000 km once in [t0, t1].
         w = gfdist(prov, -1000, "NONE", 399, ">", 3.0e5, 0.0, 3600.0, Window([t0 + 1, t1 - 1]))
         crossing = w[2]
-        @test norm(spkpos(file, -1000, crossing, "J2000", "NONE", 399)[1]) ≈ 3.0e5 rtol = 1e-9
+        @test norm(spkpos(file, -1000, crossing, "J2000", "NONE", 399)[1]) ≈ 3.0e5 rtol = 1.0e-9
     end
 
     @testset "queries from threads" begin
-        ets = collect(range(t0 + 1000, t1 - 1000; length=4000))
+        ets = collect(range(t0 + 1000, t1 - 1000; length = 4000))
         serial = [spkezr(prov, -1000, et, "IAU_EARTH", "CN+S", 399)[1] for et in ets]
         par = similar(serial)
         Threads.@threads for i in eachindex(ets)
@@ -137,38 +137,42 @@ using ForwardDiff, LinearAlgebra, StaticArrays
         tilt = [1 0 0; 0 cosd(30) -sind(30); 0 sind(30) cosd(30)]
         ctx = SpiceContext()
         add_frame!(spin, ctx, "SPIN", 1_400_001, 399, "J2000")
-        add_frame!(et -> tilt, ctx, "TILT", 1_400_002, 399, "SPIN"; path="tilt frame")
-        lmpool(ctx, ["FRAME_TK_TILT = 1400003", "FRAME_1400003_NAME = 'TK_TILT'",
-            "FRAME_1400003_CLASS = 4", "FRAME_1400003_CLASS_ID = 1400003",
-            "FRAME_1400003_CENTER = 399", "TKFRAME_1400003_RELATIVE = 'SPIN'",
-            "TKFRAME_1400003_SPEC = 'MATRIX'",
-            "TKFRAME_1400003_MATRIX = ( $(join(vec(tilt), ' ')) )"])
+        add_frame!(et -> tilt, ctx, "TILT", 1_400_002, 399, "SPIN"; path = "tilt frame")
+        lmpool(
+            ctx, [
+                "FRAME_TK_TILT = 1400003", "FRAME_1400003_NAME = 'TK_TILT'",
+                "FRAME_1400003_CLASS = 4", "FRAME_1400003_CLASS_ID = 1400003",
+                "FRAME_1400003_CENTER = 399", "TKFRAME_1400003_RELATIVE = 'SPIN'",
+                "TKFRAME_1400003_SPEC = 'MATRIX'",
+                "TKFRAME_1400003_MATRIX = ( $(join(vec(tilt), ' ')) )",
+            ]
+        )
         et = 5000.0
-        @test pxform(ctx, "SPIN", "J2000", et) ≈ spin(et) rtol = 1e-15
-        @test pxform(ctx, "J2000", "SPIN", et) ≈ transpose(spin(et)) rtol = 1e-15
-        @test pxform(ctx, "TILT", "J2000", et) ≈ spin(et) * tilt rtol = 1e-15
-        @test pxform(ctx, "TILT", "J2000", et) ≈ pxform(ctx, "TK_TILT", "J2000", et) rtol = 1e-15
+        @test pxform(ctx, "SPIN", "J2000", et) ≈ spin(et) rtol = 1.0e-15
+        @test pxform(ctx, "J2000", "SPIN", et) ≈ transpose(spin(et)) rtol = 1.0e-15
+        @test pxform(ctx, "TILT", "J2000", et) ≈ spin(et) * tilt rtol = 1.0e-15
+        @test pxform(ctx, "TILT", "J2000", et) ≈ pxform(ctx, "TK_TILT", "J2000", et) rtol = 1.0e-15
         x = sxform(ctx, "TILT", "J2000", et)
         dspin = ω * [-sin(ω * et) -cos(ω * et) 0; cos(ω * et) -sin(ω * et) 0; 0 0 0]
-        @test x[4:6, 1:3] ≈ dspin * tilt rtol = 1e-14
-        @test x ≈ sxform(ctx, "TK_TILT", "J2000", et) rtol = 1e-14
-        @test ForwardDiff.derivative(t -> pxform(ctx, "TILT", "J2000", t)[2, 1], et) ≈ x[5, 1] rtol = 1e-14
+        @test x[4:6, 1:3] ≈ dspin * tilt rtol = 1.0e-14
+        @test x ≈ sxform(ctx, "TK_TILT", "J2000", et) rtol = 1.0e-14
+        @test ForwardDiff.derivative(t -> pxform(ctx, "TILT", "J2000", t)[2, 1], et) ≈ x[5, 1] rtol = 1.0e-14
         @test frinfo(ctx, 1_400_001)[1:2] == (399, 7)
         @test namfrm(ctx, "SPIN") == 1_400_001 && frmnam(ctx, 1_400_002) == "TILT"
         # a state in the frame, a body defined in the frame
         add_ephemeris!(et -> [7000.0, 0, 0, 0, 0, 0], ctx, -1000, 399, "SPIN", t0, t1)
         r = spkpos(ctx, -1000, et, "J2000", "NONE", 399)[1]
-        @test r ≈ spin(et) * [7000.0, 0, 0] rtol = 1e-15
+        @test r ≈ spin(et) * [7000.0, 0, 0] rtol = 1.0e-15
         s = spkezr(ctx, -1000, et, "SPIN", "NONE", 399)[1]
-        @test isapprox(s[1:3], [7000.0, 0, 0]; rtol=1e-15)
-        @test maximum(abs, s[4:6]) < 1e-12
+        @test isapprox(s[1:3], [7000.0, 0, 0]; rtol = 1.0e-15)
+        @test maximum(abs, s[4:6]) < 1.0e-12
         # the load list
         @test kinfo(ctx, "tilt frame")[1] == "TEXT"
         unload(ctx, "tilt frame")
         @test_throws SpiceError pxform(ctx, "TILT", "J2000", et)
         @test pxform(ctx, "SPIN", "J2000", et) ≈ spin(et)
         # threads
-        ets = collect(range(0.0, 86400.0; length=2000))
+        ets = collect(range(0.0, 86400.0; length = 2000))
         serial = [sxform(ctx, "SPIN", "J2000", t) for t in ets]
         par = similar(serial)
         Threads.@threads for i in eachindex(ets)
@@ -199,4 +203,3 @@ using ForwardDiff, LinearAlgebra, StaticArrays
         @test kind(() -> pxform(ctx, "BAD", "J2000", 0.0)) === :badarraysize
     end
 end
-

@@ -1,7 +1,7 @@
 # Conic types: type 5 (discrete states, two-body propagation), type 15 (precessing
 # conic) and type 17 (equinoctial elements).
 
-@noinline _conic_error(msg::String, kind::Symbol=:badorbit) = throw(SpiceError(kind, msg))
+@noinline _conic_error(msg::String, kind::Symbol = :badorbit) = throw(SpiceError(kind, msg))
 
 "Reciprocals `1/(i (i+1))`, `i = 1:20`, of the series of `stmp03`."
 const _STUMPFF_PAIRS = ntuple(i -> 1.0 / (Float64(i) * Float64(i + 1)), 20)
@@ -17,7 +17,7 @@ Stumpff functions of `x`, as `stmp03`: the closed forms with `cosh`, `sinh` for
 between. The branch follows `primal(x)`. Throws `SpiceError(kind)` if
 `x <= _STUMPFF_LBOUND`.
 """
-@inline function _stumpff(x::T, kind::Symbol=:badorbit) where {T<:Real}
+@inline function _stumpff(x::T, kind::Symbol = :badorbit) where {T <: Real}
     x0 = primal(x)
     x0 <= _STUMPFF_LBOUND &&
         _conic_error("the argument of the Stumpff functions is too low", kind)
@@ -60,8 +60,10 @@ gives the CSPICE state. For another number type `x`
 gets its derivative parts from Newton steps with `d kfun / dx = b r` (see
 `_with_primal`), and the closing formulas are evaluated in that type.
 """
-function _prop2b(gm::Float64, pos::Vec3{Float64}, vel::Vec3{Float64}, dt::T,
-        kind::Symbol=:badorbit) where {T<:Real}
+function _prop2b(
+        gm::Float64, pos::Vec3{Float64}, vel::Vec3{Float64}, dt::T,
+        kind::Symbol = :badorbit
+    ) where {T <: Real}
     gm > 0.0 || _conic_error("the gravitational parameter is not positive", kind)
     (_maxabs(pos) == 0.0 || _maxabs(vel) == 0.0) &&
         _conic_error("the initial position or velocity is zero", kind)
@@ -104,8 +106,10 @@ function _prop2b(gm::Float64, pos::Vec3{Float64}, vel::Vec3{Float64}, dt::T,
                 lower *= 2.0
                 oldx = x
                 x = clamp(lower, -bound, bound)
-                x == oldx && _conic_error("the time interval is too long for two-body " *
-                    "propagation", kind)
+                x == oldx && _conic_error(
+                    "the time interval is too long for two-body " *
+                        "propagation", kind
+                )
                 _, c1, c2, c3 = _stumpff(f * x * x, kind)
                 kfun = x * (br0 * c1 + x * (b2rv * c2 + x * (bq * c3)))
             end
@@ -117,8 +121,10 @@ function _prop2b(gm::Float64, pos::Vec3{Float64}, vel::Vec3{Float64}, dt::T,
                 upper *= 2.0
                 oldx = x
                 x = clamp(upper, -bound, bound)
-                x == oldx && _conic_error("the time interval is too long for two-body " *
-                    "propagation", kind)
+                x == oldx && _conic_error(
+                    "the time interval is too long for two-body " *
+                        "propagation", kind
+                )
                 _, c1, c2, c3 = _stumpff(f * x * x, kind)
                 kfun = x * (br0 * c1 + x * (b2rv * c2 + x * bq * c3))
             end
@@ -180,11 +186,11 @@ neighbor states, with the weight `(1 + cos(pi (t - t1)/(t2 - t1)))/2` for the
 earlier one, and the velocity has the term of the weight rate. Before the first
 epoch and after the last one the state is the propagation of the end state alone.
 """
-function _spk5(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk5(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 9 || _badsegment(seg, "the segment is too short")
-    @inbounds gm = data[e-1]
+    @inbounds gm = data[e - 1]
     n = _seg_count(seg, @inbounds(data[e]), 1, _MAXCOUNT, "state count")
     7 * n + n ÷ 100 + 2 == len || _badsegment(seg, "the state count does not agree with the length")
     ebase = b - 1 + 6 * n                       # epoch i is data[ebase+i]
@@ -192,10 +198,10 @@ function _spk5(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
     if i == 0 || i == n
         k = max(i, 1)
         a = b + 6 * (k - 1)
-        return _prop2b(gm, _vec3(data, a), _vec3(data, a + 3), et - @inbounds(data[ebase+k]))
+        return _prop2b(gm, _vec3(data, a), _vec3(data, a + 3), et - @inbounds(data[ebase + k]))
     end
     a = b + 6 * (i - 1)
-    @inbounds t1, t2 = data[ebase+i], data[ebase+i+1]
+    @inbounds t1, t2 = data[ebase + i], data[ebase + i + 1]
     p1, v1 = _prop2b(gm, _vec3(data, a), _vec3(data, a + 3), et - t1)
     p2, v2 = _prop2b(gm, _vec3(data, a + 6), _vec3(data, a + 9), et - t2)
     denom = t2 - t1
@@ -225,19 +231,21 @@ the periapsis epoch. CSPICE turns the two-body velocity only, so the velocity is
 not the derivative of the position; the derivative of the true anomaly comes from
 its `atan` form in the orbit plane.
 """
-function _spk15(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk15(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b = seg.baddr
     seg.eaddr - b + 1 == 16 || _badsegment(seg, "the segment does not have 16 doubles")
     @inbounds begin
         epoch = data[b]
         tp, pa = _vec3(data, b + 1), _vec3(data, b + 4)
-        p, ecc = data[b+7], data[b+8]
-        j2flg = _trunc_index(data[b+9])
+        p, ecc = data[b + 7], data[b + 8]
+        j2flg = _trunc_index(data[b + 9])
         pv = _vec3(data, b + 10)
-        gm, oj2, rpl = data[b+13], data[b+14], data[b+15]
+        gm, oj2, rpl = data[b + 13], data[b + 14], data[b + 15]
     end
-    (p > 0.0 && ecc >= 0.0 && gm > 0.0 && rpl >= 0.0) || _badsegment(seg,
-        "P = $p, ECC = $ecc, GM = $gm, radius = $rpl are not all in their ranges")
+    (p > 0.0 && ecc >= 0.0 && gm > 0.0 && rpl >= 0.0) || _badsegment(
+        seg,
+        "P = $p, ECC = $ecc, GM = $gm, radius = $rpl are not all in their ranges"
+    )
     (_maxabs(tp) == 0.0 || _maxabs(pa) == 0.0 || _maxabs(pv) == 0.0) &&
         _badsegment(seg, "the trajectory pole, the periapsis vector or the body pole is zero")
     pa, tp, pv = _vhat(pa), _vhat(tp), _vhat(pv)
@@ -337,9 +345,11 @@ derivative parts by Newton steps, see `_with_primal`), and the state in the equa
 frame of the pole `(rapol, decpol)` is turned to the frame of the pole's coordinates.
 Throws `SpiceError(:eccoutofbounds)` if `h² + k² >= 0.81` at `et`, as `kepleq`.
 """
-function _eqn_state(et::T, epoch::Float64, a::Float64, h0::Float64, k0::Float64, l::Float64,
+function _eqn_state(
+        et::T, epoch::Float64, a::Float64, h0::Float64, k0::Float64, l::Float64,
         p0::Float64, q0::Float64, dlpdt::Float64, mldt::Float64, nodedt::Float64,
-        rapol::Float64, decpol::Float64) where {T<:Real}
+        rapol::Float64, decpol::Float64
+    ) where {T <: Real}
     sa, ca = sincos(rapol)
     sd, cd = sincos(decpol)
     dt = et - epoch
@@ -359,8 +369,12 @@ function _eqn_state(et::T, epoch::Float64, a::Float64, h0::Float64, k0::Float64,
     # Mean longitude, with the whole revolutions of the rate term removed.
     mlrate = mldt * dt
     ml = l + _with_primal(mlrate, f2c_dmod(primal(mlrate), 2.0 * _PI))
-    primal(h)^2 + primal(k)^2 >= 0.81 && throw(SpiceError(:eccoutofbounds,
-        "the eccentricity of the equinoctial elements at the epoch is not below 0.9"))
+    primal(h)^2 + primal(k)^2 >= 0.81 && throw(
+        SpiceError(
+            :eccoutofbounds,
+            "the eccentricity of the equinoctial elements at the epoch is not below 0.9"
+        )
+    )
     # Eccentric longitude: ml plus the root of the Kepler equation in the elements
     # turned by ml (`kepleq`).
     sml, cml = sincos(ml)
@@ -405,17 +419,19 @@ node, and the right ascension and declination of the pole of the reference plane
 Throws `SpiceError(:baddaf)` unless the semi-major axis is positive and the
 eccentricity is not above 0.9.
 """
-function _spk17(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk17(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     bs = seg.baddr
     seg.eaddr - bs + 1 == 12 || _badsegment(seg, "the segment does not have 12 doubles")
     @inbounds begin
         epoch = data[bs]
-        a, h0, k0, l = data[bs+1], data[bs+2], data[bs+3], data[bs+4]
-        p0, q0 = data[bs+5], data[bs+6]
-        dlpdt, mldt, nodedt = data[bs+7], data[bs+8], data[bs+9]
-        rapol, decpol = data[bs+10], data[bs+11]
+        a, h0, k0, l = data[bs + 1], data[bs + 2], data[bs + 3], data[bs + 4]
+        p0, q0 = data[bs + 5], data[bs + 6]
+        dlpdt, mldt, nodedt = data[bs + 7], data[bs + 8], data[bs + 9]
+        rapol, decpol = data[bs + 10], data[bs + 11]
     end
-    (a > 0.0 && sqrt(h0 * h0 + k0 * k0) <= 0.9) || _badsegment(seg,
-        "the semi-major axis is not positive or the eccentricity is above 0.9")
+    (a > 0.0 && sqrt(h0 * h0 + k0 * k0) <= 0.9) || _badsegment(
+        seg,
+        "the semi-major axis is not positive or the eccentricity is above 0.9"
+    )
     return _eqn_state(et, epoch, a, h0, k0, l, p0, q0, dlpdt, mldt, nodedt, rapol, decpol)
 end

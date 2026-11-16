@@ -19,7 +19,7 @@ function main(args)
     keep = "--keep" in args
     out = filter(a -> a != "--keep", args)
     root = dirname(@__DIR__)
-    merged = Dict{String,Vector{Union{Nothing,Int}}}()
+    merged = Dict{String, Vector{Union{Nothing, Int}}}()
     covfiles = String[]
     for dir in ("src", "ext"), (d, _, files) in walkdir(joinpath(root, dir)), f in files
         endswith(f, ".cov") || continue
@@ -39,9 +39,9 @@ function main(args)
         h, n = count(>(0), c), length(c)
         hit += h
         total += n
-        push!(lines, string(rpad(source, 34), lpad(h, 6), lpad(n, 6), lpad(round(100 * h / max(n, 1); digits=1), 7)))
+        push!(lines, string(rpad(source, 34), lpad(h, 6), lpad(n, 6), lpad(round(100 * h / max(n, 1); digits = 1), 7)))
     end
-    push!(lines, string(rpad("all", 34), lpad(hit, 6), lpad(total, 6), lpad(round(100 * hit / total; digits=1), 7)))
+    push!(lines, string(rpad("all", 34), lpad(hit, 6), lpad(total, 6), lpad(round(100 * hit / total; digits = 1), 7)))
     foreach(println, lines)
     isempty(out) || write(out[1], join(lines, "\n") * "\n")
     keep || foreach(rm, covfiles)

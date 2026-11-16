@@ -35,7 +35,7 @@ function loop_neo_der(ctx, epochs, abcorr, v::Val{N}) where {N}
     acc = 0.0
     for et in epochs
         jet = spkder(ctx, EARTH, et, J2000, abcorr, MOON, v)
-        acc += jet[N+1][1]
+        acc += jet[N + 1][1]
     end
     return acc
 end
@@ -82,12 +82,12 @@ function main()
     end
 
     text = run_header("Aberration benchmark: Almanac, CSPICE") * """
-    Kernel: `$(Kernels.DE440S)` only, in both engines.
-    Epochs: 100, evenly spaced from 1900-01-01 12:00 ET to 2099-01-01 12:00 ET (end excluded).
+        Kernel: `$(Kernels.DE440S)` only, in both engines.
+        Epochs: 100, evenly spaced from 1900-01-01 12:00 ET to 2099-01-01 12:00 ET (end excluded).
 
-    ## Time per query
+        ## Time per query
 
-    """ * markdown_table(rows; base)
+        """ * markdown_table(rows; base)
     println()
     println(text)
     write_results("aberration", text)

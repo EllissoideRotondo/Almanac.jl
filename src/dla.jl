@@ -12,16 +12,25 @@ const _DLA_DSCSIZ = 8
 
 "The DLA descriptor in `ints[addr:addr+7]`; throws `SpiceError(:dasnosuchaddress)` if that range is not in `ints`."
 function _dla_descr(ints::Vector{Int32}, addr::Integer, path::AbstractString)
-    (1 <= addr && addr + _DLA_DSCSIZ - 1 <= length(ints)) || throw(SpiceError(
-        :dasnosuchaddress, "the DLA descriptor address $addr is not inside the " *
-        "$(length(ints)) integers of $path"))
-    @inbounds return DLADescr(ints[addr], ints[addr+1], ints[addr+2], ints[addr+3],
-        ints[addr+4], ints[addr+5], ints[addr+6], ints[addr+7])
+    (1 <= addr && addr + _DLA_DSCSIZ - 1 <= length(ints)) || throw(
+        SpiceError(
+            :dasnosuchaddress, "the DLA descriptor address $addr is not inside the " *
+                "$(length(ints)) integers of $path"
+        )
+    )
+    @inbounds return DLADescr(
+        ints[addr], ints[addr + 1], ints[addr + 2], ints[addr + 3],
+        ints[addr + 4], ints[addr + 5], ints[addr + 6], ints[addr + 7]
+    )
 end
 
 function _dla_check(ints::Vector{Int32}, path::AbstractString)
-    length(ints) >= 3 || throw(SpiceError(:dasnosuchaddress,
-        "the file $path has $(length(ints)) integers; a DLA file has at least 3"))
+    length(ints) >= 3 || throw(
+        SpiceError(
+            :dasnosuchaddress,
+            "the file $path has $(length(ints)) integers; a DLA file has at least 3"
+        )
+    )
     return nothing
 end
 
@@ -38,8 +47,12 @@ function _dla_segments(ints::Vector{Int32}, path::AbstractString)
     addr = Int(ints[2])
     while addr != _DLA_NULPTR
         # invariant: `out` holds the descriptors before `addr`, each one visited once
-        length(out) * _DLA_DSCSIZ <= length(ints) || throw(SpiceError(:baddladescriptor,
-            "the forward list of DLA segments has a cycle in $path"))
+        length(out) * _DLA_DSCSIZ <= length(ints) || throw(
+            SpiceError(
+                :baddladescriptor,
+                "the forward list of DLA segments has a cycle in $path"
+            )
+        )
         d = _dla_descr(ints, addr, path)
         push!(out, d)
         addr = d.fwdptr
@@ -63,11 +76,17 @@ Throws `SpiceError(:emptystring)` if `path` is empty, `SpiceError(:badrecordcoun
 
 See also [`dskopn`](@ref), [`dlabns`](@ref).
 """
-function dlaopn(path::AbstractString, ftype::AbstractString, ifname::AbstractString,
-        ncomch::Integer)
+function dlaopn(
+        path::AbstractString, ftype::AbstractString, ifname::AbstractString,
+        ncomch::Integer
+    )
     isempty(path) && throw(SpiceError(:emptystring, "dlaopn: the file name is empty"))
-    ncomch < 0 && throw(SpiceError(:badrecordcount,
-        "dlaopn: the requested number of comment characters must be non-negative but was $ncomch"))
+    ncomch < 0 && throw(
+        SpiceError(
+            :badrecordcount,
+            "dlaopn: the requested number of comment characters must be non-negative but was $ncomch"
+        )
+    )
     ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAS_RECLEN + 1 : 0
     h = dasonw(path, ftype, ifname, ncomr)
     dasadi(h, Int32[_DLA_VERSION, _DLA_NULPTR, _DLA_NULPTR])
@@ -92,9 +111,13 @@ function dlabns(h::DASHandle)
     first, last = Int(h.ints[2]), Int(h.ints[3])
     lastc, lastd, lasti = daslla(h)
     this = lasti + 1
-    dasadi(h, Int32[last, _DLA_NULPTR, lasti + _DLA_DSCSIZ, _DLA_NULPTR, lastd,
-        _DLA_NULPTR, lastc, _DLA_NULPTR])
-    last != _DLA_NULPTR && (h.ints[last+1] = this)
+    dasadi(
+        h, Int32[
+            last, _DLA_NULPTR, lasti + _DLA_DSCSIZ, _DLA_NULPTR, lastd,
+            _DLA_NULPTR, lastc, _DLA_NULPTR,
+        ]
+    )
+    last != _DLA_NULPTR && (h.ints[last + 1] = this)
     first == _DLA_NULPTR && (h.ints[2] = this)
     h.ints[3] = this
     return nothing
@@ -115,9 +138,9 @@ function dlaens(h::DASHandle)
     this = Int(h.ints[3])
     d = _dla_descr(h.ints, this, h.path)
     lastc, lastd, lasti = daslla(h)
-    h.ints[this+3] = lasti - d.ibase
-    h.ints[this+5] = lastd - d.dbase
-    h.ints[this+7] = lastc - d.cbase
+    h.ints[this + 3] = lasti - d.ibase
+    h.ints[this + 5] = lastd - d.dbase
+    h.ints[this + 7] = lastc - d.cbase
     return nothing
 end
 

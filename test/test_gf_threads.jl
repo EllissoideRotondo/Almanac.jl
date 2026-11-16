@@ -40,24 +40,44 @@ function gf_thread_jobs(rng::AbstractRNG, n::Integer)
         rel = rels[mod1(i, length(rels))]
         adjust = rel in ("ABSMIN", "ABSMAX") && isodd(i ÷ 7)
         kind = mod1(i, 5)
-        opt = (; threads=isodd(i ÷ 5))
+        opt = (; threads = isodd(i ÷ 5))
         job = if kind == 1
-            GFThreadJob("gfdist $rel", c -> gfdist(c, "MOON", "LT+S", "EARTH", rel, 3.8e5,
-                adjust ? 2000.0 : 0.0, day, cn; opt...))
+            GFThreadJob(
+                "gfdist $rel", c -> gfdist(
+                    c, "MOON", "LT+S", "EARTH", rel, 3.8e5,
+                    adjust ? 2000.0 : 0.0, day, cn; opt...
+                )
+            )
         elseif kind == 2
-            GFThreadJob("gfsep $rel", c -> gfsep(c, "MOON", "SPHERE", "IAU_MOON", "SUN",
-                "SPHERE", "IAU_SUN", "LT+S", "EARTH", rel, 1.2, adjust ? 0.05 : 0.0, day, cn;
-                opt...))
+            GFThreadJob(
+                "gfsep $rel", c -> gfsep(
+                    c, "MOON", "SPHERE", "IAU_MOON", "SUN",
+                    "SPHERE", "IAU_SUN", "LT+S", "EARTH", rel, 1.2, adjust ? 0.05 : 0.0, day, cn;
+                    opt...
+                )
+            )
         elseif kind == 3
-            GFThreadJob("gfrr $rel", c -> gfrr(c, "MOON", "NONE", "EARTH", rel, 0.01,
-                adjust ? 0.005 : 0.0, day, cn; opt...))
+            GFThreadJob(
+                "gfrr $rel", c -> gfrr(
+                    c, "MOON", "NONE", "EARTH", rel, 0.01,
+                    adjust ? 0.005 : 0.0, day, cn; opt...
+                )
+            )
         elseif kind == 4
-            GFThreadJob("gfpa $rel", c -> gfpa(c, "MOON", "SUN", "LT+S", "EARTH", rel, 1.0,
-                adjust ? 0.05 : 0.0, day, cn; opt...))
+            GFThreadJob(
+                "gfpa $rel", c -> gfpa(
+                    c, "MOON", "SUN", "LT+S", "EARTH", rel, 1.0,
+                    adjust ? 0.05 : 0.0, day, cn; opt...
+                )
+            )
         else
-            GFThreadJob("gfposc $rel", c -> gfposc(c, "MOON", "IAU_EARTH", "LT+S", "EARTH",
-                "LATITUDINAL", "LONGITUDE", rel, 3.0, adjust ? 0.02 : 0.0, 3600.0, cn;
-                opt...))
+            GFThreadJob(
+                "gfposc $rel", c -> gfposc(
+                    c, "MOON", "IAU_EARTH", "LT+S", "EARTH",
+                    "LATITUDINAL", "LONGITUDE", rel, 3.0, adjust ? 0.02 : 0.0, 3600.0, cn;
+                    opt...
+                )
+            )
         end
         push!(jobs, job)
     end
@@ -81,16 +101,20 @@ end
         full = Window([0.0, 3 * 365 * day])
         many = gf_random_window(rng, 24, 0.0, 3 * 365 * day)
         for cn in (full, many), rel in ("<", "=", ">", "LOCMIN", "LOCMAX", "ABSMIN", "ABSMAX"),
-            adjust in (0.0, 1500.0)
+                adjust in (0.0, 1500.0)
             adjust != 0 && !(rel in ("ABSMIN", "ABSMAX")) && continue
             a = gfdist(ctx, "MOON", "LT+S", "EARTH", rel, 3.8e5, adjust, day, cn)
-            b = gfdist(ctx, "MOON", "LT+S", "EARTH", rel, 3.8e5, adjust, day, cn; threads=true)
+            b = gfdist(ctx, "MOON", "LT+S", "EARTH", rel, 3.8e5, adjust, day, cn; threads = true)
             @test collect(a) == collect(b)
-            a = gfposc(ctx, "MOON", "IAU_EARTH", "NONE", "EARTH", "RA/DEC", "RIGHT ASCENSION",
-                rel, 1.0, adjust * 1.0e-5, 3600.0, wnintd(cn, Window([0.0, 60 * day])))
-            b = gfposc(ctx, "MOON", "IAU_EARTH", "NONE", "EARTH", "RA/DEC", "RIGHT ASCENSION",
+            a = gfposc(
+                ctx, "MOON", "IAU_EARTH", "NONE", "EARTH", "RA/DEC", "RIGHT ASCENSION",
+                rel, 1.0, adjust * 1.0e-5, 3600.0, wnintd(cn, Window([0.0, 60 * day]))
+            )
+            b = gfposc(
+                ctx, "MOON", "IAU_EARTH", "NONE", "EARTH", "RA/DEC", "RIGHT ASCENSION",
                 rel, 1.0, adjust * 1.0e-5, 3600.0, wnintd(cn, Window([0.0, 60 * day]));
-                threads=true)
+                threads = true
+            )
             @test collect(a) == collect(b)
         end
         # (`gfuds` and `gfudb` with the keyword: group gf_solver, "threads keyword: the same window")
@@ -142,22 +166,26 @@ end
             end
             nrep = nsample(1, 3)
             nreaders = FULL ? max(2, Threads.nthreads() - 1) : clamp(Threads.nthreads() - 1, 2, 3)
-            readers = [Threads.@spawn begin
-                for rep in 1:nrep, k in eachindex(jobs)
-                    ok = try
-                        collect(jobs[k].run(shared)) == serial[k]
-                    catch
-                        false
+            readers = [
+                Threads.@spawn begin
+                    for rep in 1:nrep, k in eachindex(jobs)
+                        ok = try
+                            collect(jobs[k].run(shared)) == serial[k]
+                        catch
+                            false
+                        end
+                        ok || Threads.atomic_add!(bad, 1)
+                        Threads.atomic_add!(total, 1)
                     end
-                    ok || Threads.atomic_add!(bad, 1)
-                    Threads.atomic_add!(total, 1)
-                end
-            end for _ in 1:nreaders]
+                end for _ in 1:nreaders
+            ]
             foreach(wait, readers)
             stop[] = true
             cycles = fetch(writer)
-            measured("  gf threads: $(total[]) searches on $(length(readers)) tasks during " *
-                     "$cycles load/unload cycles; $(bad[]) differ from the serial search")
+            measured(
+                "  gf threads: $(total[]) searches on $(length(readers)) tasks during " *
+                    "$cycles load/unload cycles; $(bad[]) differ from the serial search"
+            )
             @test bad[] == 0
             @test cycles > 0
             @test total[] == nrep * length(jobs) * length(readers)

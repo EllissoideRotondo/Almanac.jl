@@ -105,8 +105,12 @@ See also [`wnunid`](@ref), [`wnvald!`](@ref).
 function wninsd!(w::Window, left::Real, right::Real)
     l = Float64(left)
     r = Float64(right)
-    l > r && throw(SpiceError(:badendpoints,
-        "wninsd!: left endpoint $l is greater than right endpoint $r"))
+    l > r && throw(
+        SpiceError(
+            :badendpoints,
+            "wninsd!: left endpoint $l is greater than right endpoint $r"
+        )
+    )
     d = w.data
     card = length(d)
     if card == 0 || l > d[card]
@@ -118,24 +122,24 @@ function wninsd!(w::Window, left::Real, right::Real)
     while i <= card && d[i] < l          # invariant: intervals before i end before l
         i += 2
     end
-    if r < d[i-1]
+    if r < d[i - 1]
         # The new interval lies strictly between two intervals (or before the first).
-        splice!(d, i-1:i-2, (l, r))
+        splice!(d, (i - 1):(i - 2), (l, r))
         return w
     end
-    d[i-1] = min(l, d[i-1])
+    d[i - 1] = min(l, d[i - 1])
     d[i] = max(r, d[i])
     j = i + 2
     while j <= card && d[j] <= d[i]      # invariant: intervals i+2 .. j-2 are swallowed
         j += 2
     end
-    if j <= card && d[i] >= d[j-1]
+    if j <= card && d[i] >= d[j - 1]
         d[i] = d[j]
         j += 2
     end
     while j <= card                      # invariant: d[1:i] is final; j is the next to keep
         i += 2
-        d[i-1] = d[j-1]
+        d[i - 1] = d[j - 1]
         d[i] = d[j]
         j += 2
     end
@@ -161,15 +165,23 @@ See also [`Window`](@ref), [`wninsd!`](@ref).
 function wnvald!(w::Window)
     pairs = copy(w.data)
     n = length(pairs)
-    isodd(n) && throw(SpiceError(:unmatchendpts,
-        "wnvald!: the window has an odd number of endpoints ($n)"))
+    isodd(n) && throw(
+        SpiceError(
+            :unmatchendpts,
+            "wnvald!: the window has an odd number of endpoints ($n)"
+        )
+    )
     for i in 1:2:n
-        pairs[i] > pairs[i+1] && throw(SpiceError(:badendpoints,
-            "wnvald!: left endpoint $(pairs[i]) is greater than right endpoint $(pairs[i+1])"))
+        pairs[i] > pairs[i + 1] && throw(
+            SpiceError(
+                :badendpoints,
+                "wnvald!: left endpoint $(pairs[i]) is greater than right endpoint $(pairs[i + 1])"
+            )
+        )
     end
     empty!(w.data)
     for i in 1:2:n                       # invariant: w is a valid window of pairs 1 .. i-1
-        wninsd!(w, pairs[i], pairs[i+1])
+        wninsd!(w, pairs[i], pairs[i + 1])
     end
     return w
 end
@@ -208,7 +220,7 @@ function wnunid(a::Window, b::Window)
     stop = -Inf
     while ap < acard || bp < bcard       # invariant: c is the union of the intervals taken
         usea = bp > bcard || (ap <= acard && A[ap] < B[bp])
-        lo, hi = usea ? (A[ap], A[ap+1]) : (B[bp], B[bp+1])
+        lo, hi = usea ? (A[ap], A[ap + 1]) : (B[bp], B[bp + 1])
         if lo <= stop && !isempty(c)
             c[end] = max(c[end], hi)
         else
@@ -237,11 +249,11 @@ function wnintd(a::Window, b::Window)
     ap = 1
     bp = 1
     while ap < acard && bp < bcard       # invariant: c holds the common parts found so far
-        if A[ap+1] < B[bp+1]
-            A[ap+1] >= B[bp] && push!(c, max(B[bp], A[ap]), A[ap+1])
+        if A[ap + 1] < B[bp + 1]
+            A[ap + 1] >= B[bp] && push!(c, max(B[bp], A[ap]), A[ap + 1])
             ap += 2
         else
-            B[bp+1] >= A[ap] && push!(c, max(A[ap], B[bp]), B[bp+1])
+            B[bp + 1] >= A[ap] && push!(c, max(A[ap], B[bp]), B[bp + 1])
             bp += 2
         end
     end
@@ -270,12 +282,12 @@ function wndifd(a::Window, b::Window)
     bpb = 1
     while apb + 1 <= acard               # invariant: c is the difference for a's intervals before apb
         f = A[apb]
-        l = A[apb+1]
+        l = A[apb + 1]
         unrslv = bpb + 1 <= bcard
         keep = true
         while unrslv
             bl = B[bpb]
-            br = B[bpb+1]
+            br = B[bpb + 1]
             if l < bl
                 unrslv = false
             elseif f > br
@@ -327,8 +339,12 @@ See also [`wnunid`](@ref), which has an example, and [`wndifd`](@ref).
 function wncomd(w::Window, left::Real, right::Real)
     l = Float64(left)
     r = Float64(right)
-    l > r && throw(SpiceError(:badendpoints,
-        "wncomd: left endpoint $l is greater than right endpoint $r"))
+    l > r && throw(
+        SpiceError(
+            :badendpoints,
+            "wncomd: left endpoint $l is greater than right endpoint $r"
+        )
+    )
     d = w.data
     card = length(d)
     result = Window()
@@ -339,9 +355,9 @@ function wncomd(w::Window, left::Real, right::Real)
     while i <= card && d[i] < l          # invariant: intervals before i end before l
         i += 2
     end
-    i <= card && d[i-1] > l && wninsd!(result, l, d[i-1])
-    while i < card && d[i+1] < r         # invariant: gaps before interval i are in result
-        wninsd!(result, d[i], d[i+1])
+    i <= card && d[i - 1] > l && wninsd!(result, l, d[i - 1])
+    while i < card && d[i + 1] < r         # invariant: gaps before interval i are in result
+        wninsd!(result, d[i], d[i + 1])
         i += 2
     end
     i <= card && d[i] < r && wninsd!(result, d[i], r)
@@ -358,8 +374,8 @@ See also [`wnincd`](@ref).
 """
 function wnelmd(w::Window, point::Real)
     d = w.data
-    for i in 1:2:length(d)-1
-        d[i] <= point <= d[i+1] && return true
+    for i in 1:2:(length(d) - 1)
+        d[i] <= point <= d[i + 1] && return true
     end
     return false
 end
@@ -376,8 +392,8 @@ See also [`wnelmd`](@ref).
 """
 function wnincd(w::Window, left::Real, right::Real)
     d = w.data
-    for i in 1:2:length(d)-1
-        (left >= d[i] && right <= d[i+1]) && return true
+    for i in 1:2:(length(d) - 1)
+        (left >= d[i] && right <= d[i + 1]) && return true
     end
     return false
 end
@@ -400,9 +416,13 @@ julia> wnfetd(Window([1, 3, 7, 11]), 2)
 See also [`wncard`](@ref).
 """
 function wnfetd(w::Window, n::Integer)
-    (1 <= n <= wncard(w)) || throw(SpiceError(:nointerval,
-        "wnfetd: interval $n is not in a window of $(wncard(w)) interval(s)"))
-    return w.data[2n-1], w.data[2n]
+    (1 <= n <= wncard(w)) || throw(
+        SpiceError(
+            :nointerval,
+            "wnfetd: interval $n is not in a window of $(wncard(w)) interval(s)"
+        )
+    )
+    return w.data[2n - 1], w.data[2n]
 end
 
 """
@@ -439,7 +459,7 @@ function wnsumd(w::Window)
     mshort = d[2] - d[1]
     mlong = mshort
     for i in 1:2:card                    # invariant: sums and extremes cover intervals before i
-        m = d[i+1] - d[i]
+        m = d[i + 1] - d[i]
         sum += m
         sumsqr += m * m
         if m < mshort
@@ -488,9 +508,9 @@ function wnexpd!(w::Window, left::Real, right::Real)
     card = length(d)
     gone = 0
     for i in 1:2:card                    # invariant: d[1:i-1-gone] holds the kept intervals
-        d[i-gone] = d[i] - l
-        d[i-gone+1] = d[i+1] + r
-        d[i-gone] > d[i-gone+1] && (gone += 2)
+        d[i - gone] = d[i] - l
+        d[i - gone + 1] = d[i + 1] + r
+        d[i - gone] > d[i - gone + 1] && (gone += 2)
     end
     card -= gone
     if card == 0
@@ -502,9 +522,9 @@ function wnexpd!(w::Window, left::Real, right::Real)
     i = 2
     j = 2
     while j < card                       # invariant: d[1:i-1] is final; j is the next right endpoint
-        if d[j] < d[j+1]
+        if d[j] < d[j + 1]
             d[i] = d[j]
-            d[i+1] = d[j+1]
+            d[i + 1] = d[j + 1]
             i += 2
         end
         j += 2
@@ -556,11 +576,11 @@ function wnextd!(w::Window, side::AbstractChar)
     d = w.data
     if side == 'L' || side == 'l'
         for i in 1:2:length(d)
-            d[i+1] = d[i]
+            d[i + 1] = d[i]
         end
     elseif side == 'R' || side == 'r'
         for i in 1:2:length(d)
-            d[i] = d[i+1]
+            d[i] = d[i + 1]
         end
     else
         throw(SpiceError(:invalidendpntspec, "wnextd!: side was '$side'; it must be 'L' or 'R'"))
@@ -594,9 +614,9 @@ function wnfild!(w::Window, smlgap::Real)
     i = 2
     j = 2
     while j < card                       # invariant: d[1:i-1] is final; j is the next right endpoint
-        if d[j] + gap < d[j+1]
+        if d[j] + gap < d[j + 1]
             d[i] = d[j]
-            d[i+1] = d[j+1]
+            d[i + 1] = d[j + 1]
             i += 2
         end
         j += 2
@@ -630,9 +650,9 @@ function wnfltd!(w::Window, smlint::Real)
     card = length(d)
     i = 0
     for j in 2:2:card                    # invariant: d[1:i] holds the kept intervals before j-1
-        if d[j] - d[j-1] > small
+        if d[j] - d[j - 1] > small
             i += 2
-            d[i-1] = d[j-1]
+            d[i - 1] = d[j - 1]
             d[i] = d[j]
         end
     end
@@ -676,12 +696,16 @@ function wnreld(a::Window, op::AbstractString, b::Window)
     o == "=" && return equal
     o == "<>" && return !equal
     if o == "<=" || o == "<"
-        sub = all(i -> wnincd(b, a.data[i], a.data[i+1]), 1:2:length(a.data))
+        sub = all(i -> wnincd(b, a.data[i], a.data[i + 1]), 1:2:length(a.data))
         return o == "<=" ? sub : sub && !equal
     elseif o == ">=" || o == ">"
-        sub = all(i -> wnincd(a, b.data[i], b.data[i+1]), 1:2:length(b.data))
+        sub = all(i -> wnincd(a, b.data[i], b.data[i + 1]), 1:2:length(b.data))
         return o == ">=" ? sub : sub && !equal
     end
-    throw(SpiceError(:invalidoperation, "wnreld: the relational operator '$op' is not " *
-        "recognized; it must be one of =, <>, <=, <, >=, >"))
+    throw(
+        SpiceError(
+            :invalidoperation, "wnreld: the relational operator '$op' is not " *
+                "recognized; it must be one of =, <>, <=, <, >=, >"
+        )
+    )
 end

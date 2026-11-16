@@ -204,10 +204,12 @@ struct SpkInsufficientDataError <: SpiceError
     target::Int
     observer::Int
     et::Float64
-    body::Union{Nothing,Int}
+    body::Union{Nothing, Int}
     loaded::Bool
-    function SpkInsufficientDataError(kind::Symbol, msg::AbstractString, target::Integer,
-            observer::Integer, et::Real, body::Union{Nothing,Integer}, loaded::Bool)
+    function SpkInsufficientDataError(
+            kind::Symbol, msg::AbstractString, target::Integer,
+            observer::Integer, et::Real, body::Union{Nothing, Integer}, loaded::Bool
+        )
         @assert kind === :spkinsuffdata || kind === :noloadedfiles
         @assert !loaded || body !== nothing
         return new(_check_kind(kind), msg, target, observer, et, body, loaded)

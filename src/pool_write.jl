@@ -26,8 +26,10 @@
 # caller can read without a lock and compare with a value that it kept.
 
 "Sizes of `szpool`: the parameters of `pool.c`."
-const _POOL_X_SIZES = ("MAXVAR" => 26003, "MAXVAL" => 400000, "MAXLIN" => 15000,
-    "MAXCHR" => 80, "MXNOTE" => 130015, "MAXLEN" => 32, "MAXAGT" => 1000)
+const _POOL_X_SIZES = (
+    "MAXVAR" => 26003, "MAXVAL" => 400000, "MAXLIN" => 15000,
+    "MAXCHR" => 80, "MXNOTE" => 130015, "MAXLEN" => 32, "MAXAGT" => 1000,
+)
 
 # ---------------------------------------------------------------------------------------
 # Snapshot swaps (called under the lock of the context)
@@ -45,7 +47,7 @@ returned as it is, and `build_names` reports its errors.
 """
 const _NAMES_POOL_KINDS = (:missingkpv, :baddimensions, :blanknameassigned)   # of `build_names`
 
-function _pool_x_namepool(pool::Dict{String,PoolValue}, edited::Bool)
+function _pool_x_namepool(pool::Dict{String, PoolValue}, edited::Bool)
     edited || return pool
     try
         build_names(pool)
@@ -67,14 +69,16 @@ pool. A later pair for the same name replaces an earlier one; a name or a code t
 the kernel pool defines keeps the definition of the pool. These tables are searched
 before the built-in table, so a `boddef` pair masks a built-in name, as in CSPICE.
 """
-function _pool_x_bodydefs!(name2code::Dict{String,Int32}, code2name::Dict{Int32,String},
-        bodydefs::Vector{Tuple{String,Int32}})
+function _pool_x_bodydefs!(
+        name2code::Dict{String, Int32}, code2name::Dict{Int32, String},
+        bodydefs::Vector{Tuple{String, Int32}}
+    )
     isempty(bodydefs) && return nothing
-    final = Dict{String,Int32}()
+    final = Dict{String, Int32}()
     for (name, code) in bodydefs
         final[normalize_name(name)] = code
     end
-    names = Dict{Int32,String}()
+    names = Dict{Int32, String}()
     for (name, code) in bodydefs    # invariant: `names` holds the latest valid name per code
         final[normalize_name(name)] == code && (names[code] = name)
     end
@@ -146,8 +150,14 @@ function _pool_x_swap_loaded!(ctx::SpiceContext, list::Vector{Loaded}, entries::
         end
         # Only a pair of direct edits may be incomplete between two calls: a kernel that
         # assigns the body names is checked at the load, as in CSPICE.
-        any(e -> e.content isa TextKernel && any(a -> a.name in ("NAIF_BODY_NAME",
-            "NAIF_BODY_CODE"), e.content.assignments), entries) && build_names(pool)
+        any(
+            e -> e.content isa TextKernel && any(
+                a -> a.name in (
+                    "NAIF_BODY_NAME",
+                    "NAIF_BODY_CODE",
+                ), e.content.assignments
+            ), entries
+        ) && build_names(pool)
     end
     ks = build_kernelset(list, pool, old.bodydefs)
     @atomic ctx.ks = ks
@@ -213,8 +223,12 @@ end
 "Contract: the variable name `name` without outer blanks; throws `SpiceError(:badvarname)` if it is empty or longer than 32 characters, as `pdpool_`."
 function _pool_x_name(name::AbstractString)
     n = String(strip(name))
-    (1 <= length(n) <= _TK_MAXNAME) || throw(SpiceError(:badvarname, "the kernel pool " *
-        "variable name '$n' has length $(length(n)); the allowed length is 1 to $_TK_MAXNAME"))
+    (1 <= length(n) <= _TK_MAXNAME) || throw(
+        SpiceError(
+            :badvarname, "the kernel pool " *
+                "variable name '$n' has length $(length(n)); the allowed length is 1 to $_TK_MAXNAME"
+        )
+    )
     return n
 end
 
@@ -319,7 +333,7 @@ See also [`kclear`](@ref).
 """
 clpool(ctx::SpiceContext) = _pool_x_edit!(pool -> (empty!(pool); :all), ctx)
 
-function _pool_x_apply!(pool::Dict{String,PoolValue}, tk::TextKernel)
+function _pool_x_apply!(pool::Dict{String, PoolValue}, tk::TextKernel)
     apply_assignments!(pool, tk)
     return String[a.name for a in tk.assignments]
 end
@@ -352,8 +366,10 @@ See also [`ldpool`](@ref), [`furnsh`](@ref).
 """
 function lmpool(ctx::SpiceContext, cvals::AbstractVector{<:AbstractString})
     defs = timedefaults(ctx)
-    tk = parse_text_lines("lmpool", vcat(["\\begindata"], String[String(s) for s in cvals]),
-        defs.yearbound, defs.check)
+    tk = parse_text_lines(
+        "lmpool", vcat(["\\begindata"], String[String(s) for s in cvals]),
+        defs.yearbound, defs.check
+    )
     return _pool_x_edit!(pool -> _pool_x_apply!(pool, tk), ctx)
 end
 
@@ -507,8 +523,10 @@ julia> try
 :badvariablesize
 ```
 """
-function badkpv(ks::KernelSet, caller::AbstractString, name::AbstractString,
-        comp::AbstractString, size::Integer, divby::Integer, type::AbstractChar)
+function badkpv(
+        ks::KernelSet, caller::AbstractString, name::AbstractString,
+        comp::AbstractString, size::Integer, divby::Integer, type::AbstractChar
+    )
     for (arg, s) in (("caller", caller), ("name", name), ("comp", comp))
         isempty(s) && throw(SpiceError(:emptystring, "badkpv: the argument $arg is empty"))
     end
@@ -517,31 +535,59 @@ end
 
 # `badkpv` on the pool dictionary, for the checks of a pool that is not yet in a
 # `KernelSet` (`build_tk`); the arguments are not empty.
-function _badkpv(pool::AbstractDict, caller::AbstractString, name::AbstractString,
-        comp::AbstractString, size::Integer, divby::Integer, type::AbstractChar)
+function _badkpv(
+        pool::AbstractDict, caller::AbstractString, name::AbstractString,
+        comp::AbstractString, size::Integer, divby::Integer, type::AbstractChar
+    )
     v = get(pool, String(strip(name)), nothing)
     dim, class = v === nothing ? (0, :X) : (length(v), v isa Vector{Float64} ? :N : :C)
-    class === :X && throw(SpiceError(:variablenotfound, "$caller: the kernel pool " *
-        "variable '$name' is not currently present in the kernel pool"))
+    class === :X && throw(
+        SpiceError(
+            :variablenotfound, "$caller: the kernel pool " *
+                "variable '$name' is not currently present in the kernel pool"
+        )
+    )
     op = rstrip(comp, ' ')
     ok = op == "=" ? dim == size : op == "<" ? dim < size : op == ">" ? dim > size :
-         op == "<=" ? dim <= size : op == "=>" ? dim >= size :
-         throw(SpiceError(:unknowncompare, "$caller: the comparison operator '$comp' is " *
-            "not a recognized value; the recognized values are '<', '<=', '=', '=>', '>'"))
-    ok || throw(SpiceError(:badvariablesize, "$caller: the kernel pool variable '$name' " *
-        "is expected to have a number of components DIM such that DIM $op $size, but it " *
-        "has $dim"))
+        op == "<=" ? dim <= size : op == "=>" ? dim >= size :
+        throw(
+            SpiceError(
+                :unknowncompare, "$caller: the comparison operator '$comp' is " *
+                "not a recognized value; the recognized values are '<', '<=', '=', '=>', '>'"
+            )
+        )
+    ok || throw(
+        SpiceError(
+            :badvariablesize, "$caller: the kernel pool variable '$name' " *
+                "is expected to have a number of components DIM such that DIM $op $size, but it " *
+                "has $dim"
+        )
+    )
     # The rule of CSPICE: a division by zero is replaced by a ratio of 1.
     ratio = divby != 0 ? div(dim, divby) : 1
-    divby * ratio == dim || throw(SpiceError(:badvariablesize, "$caller: the number of " *
-        "components of the kernel pool variable '$name' is $dim, which is not divisible by $divby"))
+    divby * ratio == dim || throw(
+        SpiceError(
+            :badvariablesize, "$caller: the number of " *
+                "components of the kernel pool variable '$name' is $dim, which is not divisible by $divby"
+        )
+    )
     t = uppercase(type)
-    (t == 'C' || t == 'N') || throw(SpiceError(:invalidtype, "$caller: the expected type " *
-        "'$type' of the kernel pool variable '$name' is neither 'C' nor 'N'"))
+    (t == 'C' || t == 'N') || throw(
+        SpiceError(
+            :invalidtype, "$caller: the expected type " *
+                "'$type' of the kernel pool variable '$name' is neither 'C' nor 'N'"
+        )
+    )
     want = t == 'C' ? :C : :N
-    class === want || throw(SpiceError(:badvariabletype, "$caller: the kernel pool " *
-        "variable '$name' must be of type " * (t == 'C' ? "\"CHARACTER\"; it is numeric" :
-        "\"NUMERIC\"; it is character")))
+    class === want || throw(
+        SpiceError(
+            :badvariabletype, "$caller: the kernel pool " *
+                "variable '$name' must be of type " * (
+                t == 'C' ? "\"CHARACTER\"; it is numeric" :
+                    "\"NUMERIC\"; it is character"
+            )
+        )
+    )
     return false
 end
 
@@ -602,9 +648,13 @@ julia> gnpool(ctx, "BODY%%%_GM")
  "BODY399_GM"
 ```
 """
-function gnpool(ks::KernelSet, name::AbstractString, start::Integer=1, room::Integer=typemax(Int))
-    room >= 1 || throw(SpiceError(:badarraysize, "the amount of room specified as " *
-        "available for output was $room; the amount of room must be positive"))
+function gnpool(ks::KernelSet, name::AbstractString, start::Integer = 1, room::Integer = typemax(Int))
+    room >= 1 || throw(
+        SpiceError(
+            :badarraysize, "the amount of room specified as " *
+                "available for output was $room; the amount of room must be positive"
+        )
+    )
     t = String(strip(name))
     hits = sort!(String[k for k in keys(ks.pool) if _pool_x_match(k, t)])
     first = max(1, Int(start))
@@ -781,17 +831,21 @@ for f in (:expool, :dtpool)
         $f(name::AbstractString) = $f(default_context(), name)
     end
 end
-gnpool(ctx::SpiceContext, name::AbstractString, start::Integer=1, room::Integer=typemax(Int)) =
+gnpool(ctx::SpiceContext, name::AbstractString, start::Integer = 1, room::Integer = typemax(Int)) =
     gnpool(kernelset(ctx), name, start, room)
-gnpool(name::AbstractString, start::Integer=1, room::Integer=typemax(Int)) =
+gnpool(name::AbstractString, start::Integer = 1, room::Integer = typemax(Int)) =
     gnpool(default_context(), name, start, room)
 stpool(ctx::SpiceContext, item::AbstractString, nth::Integer, contin::AbstractString) =
     stpool(kernelset(ctx), item, nth, contin)
 stpool(item::AbstractString, nth::Integer, contin::AbstractString) =
     stpool(default_context(), item, nth, contin)
-badkpv(ctx::SpiceContext, caller::AbstractString, name::AbstractString, comp::AbstractString,
-    size::Integer, divby::Integer, type::AbstractChar) =
+badkpv(
+    ctx::SpiceContext, caller::AbstractString, name::AbstractString, comp::AbstractString,
+    size::Integer, divby::Integer, type::AbstractChar
+) =
     badkpv(kernelset(ctx), caller, name, comp, size, divby, type)
-badkpv(caller::AbstractString, name::AbstractString, comp::AbstractString, size::Integer,
-    divby::Integer, type::AbstractChar) =
+badkpv(
+    caller::AbstractString, name::AbstractString, comp::AbstractString, size::Integer,
+    divby::Integer, type::AbstractChar
+) =
     badkpv(default_context(), caller, name, comp, size, divby, type)

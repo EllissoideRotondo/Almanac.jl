@@ -21,35 +21,43 @@ function oracle_tkfram(id::Integer)
     rot = zeros(9)
     frame = Ref{Cint}(0)
     found = Ref{Cint}(0)
-    ccall((:tkfram_, SPICE.libcspice), Cint, (Ref{Cint}, Ptr{Float64}, Ref{Cint}, Ref{Cint}),
-        Cint(id), rot, frame, found)
+    ccall(
+        (:tkfram_, SPICE.libcspice), Cint, (Ref{Cint}, Ptr{Float64}, Ref{Cint}, Ref{Cint}),
+        Cint(id), rot, frame, found
+    )
     kind = cspice_kind()
     kind === :none || return kind
     found[] == 0 && return nothing
-    return SMatrix{3,3,Float64,9}(rot), Int(frame[])
+    return SMatrix{3, 3, Float64, 9}(rot), Int(frame[])
 end
 
 "`tkfram(ctx, id)`, or the kind of the `SpiceError` that it throws."
-neo_tkfram(ctx, id) = try tkfram(ctx, id) catch e; e isa Almanac.SpiceError ? e.kind : rethrow() end
+neo_tkfram(ctx, id) = try
+    tkfram(ctx, id)
+catch e
+    e isa Almanac.SpiceError ? e.kind : rethrow()
+end
 
 group("19. frame information, body constants, local solar time", Kernels.FULL_SET_FILES...) do
     rng = MersenneTwister(SEED + 19)
     set = [Kernels.full_set()..., CKFix.frame_kernel(), DynFix.frame_kernel()]
     extra = joinpath(mktempdir(), "objects.tf")
-    write(extra, """
-    KPL/FK
+    write(
+        extra, """
+        KPL/FK
 
-    \\begindata
-       OBJECT_MARS_FRAME      = 'IAU_MARS'
-       OBJECT_599_FRAME       = 'J2000'
-       OBJECT_EARTH_FRAME     = 13000
-       OBJECT_-77_FRAME       = 'TESTSC_T3'
-       OBJECT_301_FRAME       = 'MOON_ME'
-       OBJECT_299_FRAME       = 31000
-       NAIF_BODY_NAME        += ( 'TEST_PROBE' )
-       NAIF_BODY_CODE        += ( -77 )
-    \\begintext
-    """)
+        \\begindata
+           OBJECT_MARS_FRAME      = 'IAU_MARS'
+           OBJECT_599_FRAME       = 'J2000'
+           OBJECT_EARTH_FRAME     = 13000
+           OBJECT_-77_FRAME       = 'TESTSC_T3'
+           OBJECT_301_FRAME       = 'MOON_ME'
+           OBJECT_299_FRAME       = 31000
+           NAIF_BODY_NAME        += ( 'TEST_PROBE' )
+           NAIF_BODY_CODE        += ( -77 )
+        \\begintext
+        """
+    )
     # The second pass adds the `OBJECT_*_FRAME` variables. Only `cidfrm` and `cnmfrm` read
     # them, so the other calls are compared in the first pass only.
     for with_objects in (false, true)
@@ -58,9 +66,13 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         ctx = neo_context(set)
         label = with_objects ? " (with OBJECT_*_FRAME variables)" : ""
 
-        frames = vcat(collect(-5:25), collect(10001:10150), collect(13000:13010),
-            [1850000 + i for i in 0:25], [31000, 31001, 31002, 31003, 31004, 31005, 31006,
-                31007, 31008, -77001, -77003, -77900, -77099, -99001, 1400499, 99999999])
+        frames = vcat(
+            collect(-5:25), collect(10001:10150), collect(13000:13010),
+            [1850000 + i for i in 0:25], [
+                31000, 31001, 31002, 31003, 31004, 31005, 31006,
+                31007, 31008, -77001, -77003, -77900, -77099, -99001, 1400499, 99999999,
+            ]
+        )
         with_objects || @testset "frinfo" begin
             nfound = 0
             for id in frames
@@ -72,13 +84,17 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             end
             println("  frinfo: ", length(frames), " frame IDs, ", nfound, " found")
             @test nfound > 150
-            @test (@inferred Union{Nothing,NTuple{3,Int}} frinfo(ctx, 13000)) == SPICE.frinfo(13000)
+            @test (@inferred Union{Nothing, NTuple{3, Int}} frinfo(ctx, 13000)) == SPICE.frinfo(13000)
         end
 
         @testset "cidfrm and cnmfrm$label" begin
-            bodies = vcat(collect(-3:12), collect(199:100:999), collect(301:1:305),
-                collect(401:402), collect(501:516), collect(601:618), [10, 9511010, 2000001,
-                    2000004, 2000433, 1000005, -77, -78, -31, 3, 4, 399, 301, 123456789])
+            bodies = vcat(
+                collect(-3:12), collect(199:100:999), collect(301:1:305),
+                collect(401:402), collect(501:516), collect(601:618), [
+                    10, 9511010, 2000001,
+                    2000004, 2000433, 1000005, -77, -78, -31, 3, 4, 399, 301, 123456789,
+                ]
+            )
             nfound = 0
             for b in bodies
                 want = SPICE.cidfrm(b)
@@ -89,9 +105,11 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             end
             println("  cidfrm: ", length(bodies), " bodies, ", nfound, " found")
             @test nfound > 50
-            names = ["EARTH", "earth", "  Moon ", "MARS", "JUPITER", "SUN", "PHOBOS", "TEST_PROBE", "VENUS",
+            names = [
+                "EARTH", "earth", "  Moon ", "MARS", "JUPITER", "SUN", "PHOBOS", "TEST_PROBE", "VENUS",
                 "SOLAR SYSTEM BARYCENTER", "MARS BARYCENTER", "NOT A BODY", "TITAN", "CERES",
-                "PLUTO", "IO", "Earth  Barycenter", "399", "-77", "499"]
+                "PLUTO", "IO", "Earth  Barycenter", "399", "-77", "499",
+            ]
             for n in names
                 want = SPICE.cnmfrm(n)
                 got = cnmfrm(ctx, n)
@@ -111,8 +129,10 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 @test got == want
                 n += 1
             end
-            for (c, k) in ((1, 0), (1, 22), (2, 398), (2, 31006), (3, -77001), (3, 5), (4, -77900),
-                (5, 1850001), (6, 1850021), (7, 1), (0, 0), (2, 10), (4, 31001))
+            for (c, k) in (
+                    (1, 0), (1, 22), (2, 398), (2, 31006), (3, -77001), (3, 5), (4, -77900),
+                    (5, 1850001), (6, 1850021), (7, 1), (0, 0), (2, 10), (4, 31001),
+                )
                 want = SPICE.ccifrm(c, k)
                 got = ccifrm(ctx, c, k)
                 got == want || @info "ccifrm" c k got want
@@ -134,8 +154,12 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             end
             @test nfound >= 3
             @test worst <= 4 * eps()
-            measured(@sprintf("  %-58s n=%-7d max=%.3e", "tkfram: element of the matrix",
-                nfound, worst))
+            measured(
+                @sprintf(
+                    "  %-58s n=%-7d max=%.3e", "tkfram: element of the matrix",
+                    nfound, worst
+                )
+            )
         end
     end
 
@@ -143,12 +167,16 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         # Regression: tkfram returned `nothing`, and pxform threw :framedatanotfound, for
         # an incomplete or inconsistent TK frame definition; tkfram_c and pxform_c signal
         # the error of tkfram_ for each. One case for each check of tkfram_.
-        head = ["FRAME_TKA = -1000", "FRAME_-1000_NAME = 'TKA'", "FRAME_-1000_CLASS = 4",
-            "FRAME_-1000_CLASS_ID = -1000", "FRAME_-1000_CENTER = 399"]
+        head = [
+            "FRAME_TKA = -1000", "FRAME_-1000_NAME = 'TKA'", "FRAME_-1000_CLASS = 4",
+            "FRAME_-1000_CLASS_ID = -1000", "FRAME_-1000_CENTER = 399",
+        ]
         rel(name) = "TKFRAME_-1000_RELATIVE = '$name'"
         spec(s) = "TKFRAME_-1000_SPEC = '$s'"
-        angles(units, axes) = [rel("J2000"); spec("ANGLES"); "TKFRAME_-1000_ANGLES = (1, 2, 3)";
-            "TKFRAME_-1000_AXES = $axes"; "TKFRAME_-1000_UNITS = '$units'"]
+        angles(units, axes) = [
+            rel("J2000"); spec("ANGLES"); "TKFRAME_-1000_ANGLES = (1, 2, 3)";
+            "TKFRAME_-1000_AXES = $axes"; "TKFRAME_-1000_UNITS = '$units'"
+        ]
         unit = "TKFRAME_-1000_MATRIX = (1, 0, 0, 0, 1, 0, 0, 0, 1)"
         cases = (
             (-1000, head),                                                  # variablenotfound
@@ -159,10 +187,14 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             (-1000, [head; rel("J2000"); spec("MATRIX"); "TKFRAME_-1000_MATRIX = (1, 0, 0)"]),
             (-1000, [head; angles("FURLONGS", "(3, 1, 3)")]),               # unitsnotrec
             (-1000, [head; angles("DEGREES", "(3, 4, 3)")]),                # badaxisnumbers
-            (-2001, ["FRAME_TKB = -1001", "FRAME_-1001_NAME = 'TKB'", "FRAME_-1001_CLASS = 4",
-                "FRAME_-1001_CLASS_ID = -2001", "FRAME_-1001_CENTER = 399",
-                "TKFRAME_-2001_RELATIVE = 'J2000'", "TKFRAME_-2001_SPEC = 'QUATERNION'",
-                "TKFRAME_-2001_Q = (1, 0, 0, 0)"]),                         # incompleteframe
+            (
+                -2001, [
+                    "FRAME_TKB = -1001", "FRAME_-1001_NAME = 'TKB'", "FRAME_-1001_CLASS = 4",
+                    "FRAME_-1001_CLASS_ID = -2001", "FRAME_-1001_CENTER = 399",
+                    "TKFRAME_-2001_RELATIVE = 'J2000'", "TKFRAME_-2001_SPEC = 'QUATERNION'",
+                    "TKFRAME_-2001_Q = (1, 0, 0, 0)",
+                ],
+            ),                         # incompleteframe
         )
         r = zeros(9)
         try
@@ -174,8 +206,12 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 want = oracle_tkfram(id)
                 @test want isa Symbol && neo_tkfram(tctx, id) === want
                 name = id == -1000 ? "TKA" : "TKB"
-                ccall((:pxform_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cdouble,
-                    Ptr{Float64}), name, "J2000", 0.0, r)
+                ccall(
+                    (:pxform_c, SPICE.libcspice), Cvoid, (
+                        Cstring, Cstring, Cdouble,
+                        Ptr{Float64},
+                    ), name, "J2000", 0.0, r
+                )
                 @test throws_kind(() -> pxform(tctx, name, "J2000", 0.0), cspice_kind())
             end
             @test neo_tkfram(SpiceContext(), 0) === oracle_tkfram(0) === :zeroframeid
@@ -191,8 +227,10 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
 
     # A definition without its center: KERNELVARNOTFOUND in CSPICE (tspice F_CCIFRM).
     @apart @testset "ccifrm: a frame without a center" begin
-        lines = ["FRAME_-999_CLASS = 3", "FRAME_-999_CLASS_ID = -1",
-            "FRAME_-999_NAME = 'BADFRAME'", "FRAME_BADFRAME = -999"]
+        lines = [
+            "FRAME_-999_CLASS = 3", "FRAME_-999_CLASS_ID = -1",
+            "FRAME_-999_NAME = 'BADFRAME'", "FRAME_BADFRAME = -999",
+        ]
         c2 = SpiceContext()
         lmpool(c2, lines)
         @test throws_kind(() -> ccifrm(c2, 3, -1), :kernelvarnotfound)
@@ -200,13 +238,21 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         @test ccifrm(c2, 3, -1) == (-999, "BADFRAME", 399)
         try
             SPICE.lmpool(lines)
-            ccall((:ccifrm_c, SPICE.libcspice), Cvoid, (Cint, Cint, Cint, Ref{Cint}, Ptr{UInt8},
-                Ref{Cint}, Ref{Cint}), 3, -1, 33, Ref{Cint}(0), zeros(UInt8, 33), Ref{Cint}(0),
-                Ref{Cint}(0))
+            ccall(
+                (:ccifrm_c, SPICE.libcspice), Cvoid, (
+                    Cint, Cint, Cint, Ref{Cint}, Ptr{UInt8},
+                    Ref{Cint}, Ref{Cint},
+                ), 3, -1, 33, Ref{Cint}(0), zeros(UInt8, 33), Ref{Cint}(0),
+                Ref{Cint}(0)
+            )
             @test cspice_kind() === :kernelvarnotfound
         finally
-            foreach(SPICE.dvpool, ["FRAME_-999_CLASS", "FRAME_-999_CLASS_ID", "FRAME_-999_NAME",
-                "FRAME_BADFRAME"])
+            foreach(
+                SPICE.dvpool, [
+                    "FRAME_-999_CLASS", "FRAME_-999_CLASS_ID", "FRAME_-999_NAME",
+                    "FRAME_BADFRAME",
+                ]
+            )
         end
     end
 
@@ -227,7 +273,7 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         structure_ok = true
         # 31008 is the frame class of the lunar binary PCK; the others use text PCK constants.
         for body in (399, 301, 499, 599, 10, 199, 299, 699, 799, 899, 401, 502, 606, 31008),
-            ref in ("J2000", "ECLIPJ2000", "B1950", "FK4", "GALACTIC", 1, 17)
+                ref in ("J2000", "ECLIPJ2000", "B1950", "FK4", "GALACTIC", 1, 17)
             for et in random_epochs(rng, 6, -6.0e8, 6.0e8)
                 refname = ref isa Integer ? frmnam(ctx, ref) : ref
                 a = tipbod(ctx, ref, body, et)
@@ -244,12 +290,12 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         sp = report_quantiles("tipbod: element of the matrix", dp)
         ss = report_quantiles("tisbod: element of the rotation block", ds)
         sd = report_quantiles("tisbod: derivative block (relative)", dd)
-        @test sp.max <= 1e-13
-        @test ss.max <= 1e-13
-        @test sd.max <= 1e-12
+        @test sp.max <= 1.0e-13
+        @test ss.max <= 1.0e-13
+        @test sd.max <= 1.0e-12
         @test structure_ok          # [R 0; dR R]
-        @test (@inferred tipbod(ks, 1, 399, 1.0e8)) isa SMatrix{3,3,Float64,9}
-        @test (@inferred tisbod(ks, 1, 399, 1.0e8)) isa SMatrix{6,6,Float64,36}
+        @test (@inferred tipbod(ks, 1, 399, 1.0e8)) isa SMatrix{3, 3, Float64, 9}
+        @test (@inferred tisbod(ks, 1, 399, 1.0e8)) isa SMatrix{6, 6, Float64, 36}
         @test throws_kind(() -> tipbod(ctx, "IAU_EARTH", 399, 0.0), :irfnotrec)
         @test throws_kind(() -> tipbod(ctx, "J2000", 123456, 0.0), :framedatanotfound)
         # A rotation rate without a pole: CSPICE names the absent variable.
@@ -287,8 +333,10 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
     @apart @testset "bodfnd and bodvcd" begin
         n = 0
         for body in (399, 301, 499, 10, 599, 1, 3, 9, -77, 2000004, 606),
-            item in ("RADII", "PM", "POLE_RA", "POLE_DEC", "GM", "NUT_PREC_RA", "LONG_AXIS",
-                "radii", "NOTHING", "NUT_PREC_ANGLES", "MAX_PHASE_DEGREE")
+                item in (
+                    "RADII", "PM", "POLE_RA", "POLE_DEC", "GM", "NUT_PREC_RA", "LONG_AXIS",
+                    "radii", "NOTHING", "NUT_PREC_ANGLES", "MAX_PHASE_DEGREE",
+                )
             want = SPICE.bodfnd(body, item)
             @test bodfnd(ctx, body, item) == want
             want || continue
@@ -306,7 +354,7 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         dsec = Int[]
         # Bodies with a segment in de440s.bsp; Venus rotates in the retrograde direction.
         for body in (399, 301, 299, 199, 10),
-            typ in ("PLANETOCENTRIC", "PLANETOGRAPHIC", "planetographic", " Planetocentric ")
+                typ in ("PLANETOCENTRIC", "PLANETOGRAPHIC", "planetographic", " Planetocentric ")
             for et in random_epochs(rng, 12, -6.0e8, 6.0e8)
                 lon = (2 * rand(rng) - 1) * 2pi
                 want = SPICE.et2lst(et, body, lon, strip(typ))
@@ -325,8 +373,12 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             end
         end
         nexact = count(==(0), dsec)
-        measured(@sprintf("  %-58s n=%-7d equal=%d max=%d s", "et2lst: all five outputs", n,
-            nexact, maximum(dsec)))
+        measured(
+            @sprintf(
+                "  %-58s n=%-7d equal=%d max=%d s", "et2lst: all five outputs", n,
+                nexact, maximum(dsec)
+            )
+        )
         @test maximum(dsec) <= 1
         @test nexact >= n - 3
         @test et2lst(ctx, 0.0, 10, 1.0, "PLANETOCENTRIC") == SPICE.et2lst(0.0, 10, 1.0, "PLANETOCENTRIC")
@@ -337,7 +389,7 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 SPICE.pcpool("BODY299_PGR_POSITIVE_LON", [sense])
                 pcpool(ctx, "BODY299_PGR_POSITIVE_LON", [sense])
                 @test et2lst(ctx, 1.0e8, 299, 0.7, "PLANETOGRAPHIC") ==
-                      SPICE.et2lst(1.0e8, 299, 0.7, "PLANETOGRAPHIC")
+                    SPICE.et2lst(1.0e8, 299, 0.7, "PLANETOGRAPHIC")
             end
             pcpool(ctx, "BODY299_PGR_POSITIVE_LON", ["NORTH"])
             @test throws_kind(() -> et2lst(ctx, 1.0e8, 299, 0.7, "PLANETOGRAPHIC"), :invalidoption)
@@ -347,14 +399,14 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         end
         @test throws_kind(() -> et2lst(ctx, 0.0, 1234567, 0.0, "PLANETOCENTRIC"), :cantfindframe)
         r = @inferred et2lst(ctx, 1.0e8, 399, 0.3, "PLANETOCENTRIC")
-        @test r isa Tuple{Int,Int,Int,String,String}
+        @test r isa Tuple{Int, Int, Int, String, String}
     end
 
     @apart @testset "lspcn" begin
         d = Float64[]
         # Bodies with a segment in de440s.bsp and a pole in the PCK.
         for body in ("EARTH", 399, "MOON", 301, "VENUS", 199, "mercury"),
-            ab in ("NONE", "LT", "LT+S", "CN", "CN+S")
+                ab in ("NONE", "LT", "LT+S", "CN", "CN+S")
             for et in random_epochs(rng, 10, -6.0e8, 6.0e8)
                 want = SPICE.lspcn(string(body isa Integer ? bodc2n(ctx, body) : body), et, ab)
                 got = lspcn(ctx, body, et, ab)
@@ -363,7 +415,7 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             end
         end
         s = report_quantiles("lspcn: angle (rad)", d)
-        @test s.max <= 2e-12
+        @test s.max <= 2.0e-12
         @test 0 <= lspcn(ctx, "EARTH", 0.0, "NONE") < 2pi
         @test (@inferred lspcn(ks, 399, 1.0e8, "LT+S")) isa Float64
     end
@@ -384,12 +436,14 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         # KP_C no class, so both are left out; FRAME_KP_D is rounded to the ID of OTHER,
         # whose name does not match and which is listed; KP_E has a name variable in
         # lower case, which the template matches and the lookup of the ID does not.
-        lines = ["FRAME_KP_A = 1700001", "FRAME_1700001_NAME = 'KP_A'", "FRAME_KP_A_CLASS = 3",
+        lines = [
+            "FRAME_KP_A = 1700001", "FRAME_1700001_NAME = 'KP_A'", "FRAME_KP_A_CLASS = 3",
             "FRAME_1700002_NAME = 'KP_B'", "FRAME_1700002_CLASS = 4",
             "FRAME_KP_C = 1700003", "FRAME_1700003_NAME = 'KP_C'",
             "FRAME_1700005_NAME = 'KP_D'", "FRAME_KP_D = 1700004.4",
             "FRAME_1700004_NAME = 'OTHER'", "FRAME_1700004_CLASS = 4",
-            "frame_1700006_name = 'KP_E'", "FRAME_KP_E = 1700006", "FRAME_1700006_CLASS = 4"]
+            "frame_1700006_name = 'KP_E'", "FRAME_KP_E = 1700006", "FRAME_1700006_CLASS = 4",
+        ]
         try
             SPICE.kclear()
             SPICE.lmpool(lines)

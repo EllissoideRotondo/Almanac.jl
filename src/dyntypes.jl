@@ -34,7 +34,7 @@ struct DynVector
     frame::Int32
     frclass::Int32
     frcenter::Int32
-    vec::SVector{3,Float64}
+    vec::SVector{3, Float64}
 end
 
 """
@@ -72,7 +72,7 @@ mutable struct DynFrame
     const v1::DynVector
     const v2::DynVector
     const minsep::Float64
-    const axes::NTuple{3,Int32}
+    const axes::NTuple{3, Int32}
     const epoch::Float64
     const scale::Float64
     const coef1::Vector{Float64}
@@ -131,8 +131,8 @@ Contract: `agents` and `notify` are read and written only under the lock of the
 context; `version` is atomic, never decreases, and can be read without the lock.
 """
 mutable struct PoolWatch
-    const agents::Dict{String,Vector{String}}
+    const agents::Dict{String, Vector{String}}
     const notify::Set{String}
     @atomic version::Int
-    PoolWatch() = new(Dict{String,Vector{String}}(), Set{String}(), 0)
+    PoolWatch() = new(Dict{String, Vector{String}}(), Set{String}(), 0)
 end

@@ -22,8 +22,8 @@ isdefined(@__MODULE__, :CKFix) || include("ckfixtures.jl")
 # last partition and below 2e5 s (3e-11 s) in the part that the CK tests use. The two
 # engines do the same operations in the same order, so the measured difference is 0;
 # the thresholds leave room for a `sin` that differs in the last place (TDT clock).
-const SCLK_TOL_ET = 1e-7          # seconds, over the whole clock range
-const SCLK_TOL_TICKS = 1e-6       # ticks, continuous conversion over the whole clock range
+const SCLK_TOL_ET = 1.0e-7          # seconds, over the whole clock range
+const SCLK_TOL_TICKS = 1.0e-6       # ticks, continuous conversion over the whole clock range
 
 "Largest encoded SCLK of the clock with partitions `pstart`, `pstop`."
 sclk_mxtick(pstart, pstop) = sum(round.(pstop .- pstart))
@@ -56,8 +56,10 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
     oracle_load(set)
     ctx = neo_context(set)
     ks = Almanac.kernelset(ctx)
-    clocks = ((CKFix.SC_TDB, CKFix.TDB_PSTART, CKFix.TDB_PSTOP, CKFix.TDB_COEF),
-        (CKFix.SC_TDT, CKFix.TDT_PSTART, CKFix.TDT_PSTOP, CKFix.TDT_COEF))
+    clocks = (
+        (CKFix.SC_TDB, CKFix.TDB_PSTART, CKFix.TDB_PSTOP, CKFix.TDB_COEF),
+        (CKFix.SC_TDT, CKFix.TDT_PSTART, CKFix.TDT_PSTOP, CKFix.TDT_COEF),
+    )
 
     @apart @testset "clock data" begin
         for (sc, pstart, pstop, _) in clocks
@@ -115,11 +117,21 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
     end
 
     @apart @testset "clock strings as a user writes them" begin
-        cases = ((CKFix.SC_TDB, ["1/100.5", "100.5", "1/0000000100.005", "2/2000.000",
-                "2/ 2000 . 17", "  1/  77 12", "9999.255", "2/9999:255", "1/100", "100,3",
-                "2/2000-1", "1/.7", "1/7.", "2000.001", "1.5/100.5"]),
-            (CKFix.SC_TDT, ["1/1:0:0", "1:59:49", "1/000000854:20:01", "2/3:00:00",
-                "3/1:0:0", "2/5", "1/7 30", "1/7::3", "1/7:5:", "12:30"]))
+        cases = (
+            (
+                CKFix.SC_TDB, [
+                    "1/100.5", "100.5", "1/0000000100.005", "2/2000.000",
+                    "2/ 2000 . 17", "  1/  77 12", "9999.255", "2/9999:255", "1/100", "100,3",
+                    "2/2000-1", "1/.7", "1/7.", "2000.001", "1.5/100.5",
+                ],
+            ),
+            (
+                CKFix.SC_TDT, [
+                    "1/1:0:0", "1:59:49", "1/000000854:20:01", "2/3:00:00",
+                    "3/1:0:0", "2/5", "1/7 30", "1/7::3", "1/7:5:", "12:30",
+                ],
+            ),
+        )
         for (sc, list) in cases, s in list
             @test agree(==, () -> scencd(ctx, sc, s), () -> SPICE.scencd(sc, s))
             @test agree(==, () -> scs2e(ctx, sc, s), () -> SPICE.scs2e(sc, s))
@@ -140,8 +152,8 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         @test_throws SPICE.SpiceError SPICE.sct2e(sc, mx + 1.0)
         @test throws_kind(() -> sce2c(ctx, sc, -10.0), :valueoutofrange)
         @test_throws SPICE.SpiceError SPICE.sce2c(sc, -10.0)
-        @test throws_kind(() -> sce2c(ctx, sc, 1e12), :valueoutofrange)
-        @test throws_kind(() -> sce2t(ctx, sc, 1e12), :valueoutofrange)
+        @test throws_kind(() -> sce2c(ctx, sc, 1.0e12), :valueoutofrange)
+        @test throws_kind(() -> sce2t(ctx, sc, 1.0e12), :valueoutofrange)
         # `sce2t` extends the first record to earlier epochs; the result is then negative.
         @test throws_kind(() -> sce2t(ctx, sc, -10.0), :valueoutofrange)
         @test throws_kind(() -> scdecd(ctx, sc, -1.0), :valueoutofrange)
@@ -158,8 +170,14 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         # no fields and no partition: the fields are checked first, as CSPICE (F_SCLK0)
         @test throws_kind(() -> scencd(ctx, sc, " /"), :invalidsclkstring)
         # A character of several bytes in a field is an error of the string, not of the code.
-        @test all(s -> try scencd(ctx, sc, s); false catch e; e isa Almanac.SpiceError end,
-            ("1/é:2", "1/100:4é", "é"))
+        @test all(
+            s -> try
+                scencd(ctx, sc, s); false
+            catch e
+                e isa Almanac.SpiceError
+            end,
+            ("1/é:2", "1/100:4é", "é")
+        )
         @test throws_kind(() -> scencd(ctx, sc, "1/10001.0"), :notinpart)
         @test throws_kind(() -> scencd(ctx, CKFix.SC_TDT, "2/1:0:0"), :notinpart)
         @test throws_kind(() -> scencd(ctx, CKFix.SC_TDT, "900000001:0:0"), :nopartition)
@@ -180,28 +198,28 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
     @apart @testset "derivatives pass through the conversions" begin
         for (sc, _, _, coef) in clocks
             tikmsc = sc == CKFix.SC_TDB ? 256.0 : CKFix.TDT_TIKMSC
-            for k in 1:size(coef, 1)-1
-                t = coef[k, 1] + (coef[k+1, 1] - coef[k, 1]) * (0.2 + 0.6 * rand(rng))
+            for k in 1:(size(coef, 1) - 1)
+                t = coef[k, 1] + (coef[k + 1, 1] - coef[k, 1]) * (0.2 + 0.6 * rand(rng))
                 x = sct2e(ctx, sc, Almanac.taylor_var(t, Val(2)))
                 e0, e1, e2 = Almanac.derivatives(x)
                 @test e0 == sct2e(ctx, sc, t)
                 h = 64.0
                 fd = (sct2e(ctx, sc, t + h) - sct2e(ctx, sc, t - h)) / 2h
-                @test isapprox(e1, fd; rtol=1e-9)
+                @test isapprox(e1, fd; rtol = 1.0e-9)
                 # seconds per tick: the record rate (per count) over the ticks in a count
-                @test isapprox(e1, coef[k, 3] / tikmsc; rtol=sc == CKFix.SC_TDB ? 1e-15 : 1e-7)
+                @test isapprox(e1, coef[k, 3] / tikmsc; rtol = sc == CKFix.SC_TDB ? 1.0e-15 : 1.0e-7)
                 sc == CKFix.SC_TDB && @test e2 == 0.0
                 y = sce2c(ctx, sc, Almanac.taylor_var(e0, Val(2)))
                 c0, c1, _ = Almanac.derivatives(y)
-                @test isapprox(c0, t; atol=1e-6)
-                @test isapprox(c1 * e1, 1.0; rtol=1e-12)
+                @test isapprox(c0, t; atol = 1.0e-6)
+                @test isapprox(c1 * e1, 1.0; rtol = 1.0e-12)
             end
         end
         # A dual number passes as well, with the derivative of the Taylor number.
         sc, coef = clocks[1][1], clocks[1][4]
         t = (coef[1, 1] + coef[2, 1]) / 2
         d = ForwardDiff.derivative(s -> sct2e(ctx, sc, s), t)
-        @test d ≈ Almanac.derivatives(sct2e(ctx, sc, Almanac.taylor_var(t, Val(1))))[2] rtol = 1e-15
+        @test d ≈ Almanac.derivatives(sct2e(ctx, sc, Almanac.taylor_var(t, Val(1))))[2] rtol = 1.0e-15
     end
 
     @apart @testset "no allocation, inferred types" begin
@@ -218,8 +236,8 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
             @test (@inferred sct2e(ks, sc, t)) isa Float64
             @test (@inferred sce2c(ks, sc, et)) isa Float64
             @test (@inferred sce2t(ks, sc, et)) isa Float64
-            @test (@inferred sct2e(ks, sc, tv)) isa Almanac.Taylor{2,Float64}
-            @test (@inferred sce2c(ks, sc, ev)) isa Almanac.Taylor{2,Float64}
+            @test (@inferred sct2e(ks, sc, tv)) isa Almanac.Taylor{2, Float64}
+            @test (@inferred sce2c(ks, sc, ev)) isa Almanac.Taylor{2, Float64}
             @test (@inferred sct2e(ctx, sc, 1000)) isa Float64
         end
     end

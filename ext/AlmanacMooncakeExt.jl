@@ -13,7 +13,7 @@ using StaticArrays: StaticArray
 # `_ad_rule`. Only the epoch has a tangent; the other arguments are lookups and codes.
 
 # Mooncake tangent of a value (a static array is a struct with the field `data`).
-_mt(x::StaticArray) = Mooncake.Tangent((data=Tuple(x),))
+_mt(x::StaticArray) = Mooncake.Tangent((data = Tuple(x),))
 _mt(x::Tuple) = map(_mt, x)
 _mt(x::Number) = x
 
@@ -28,12 +28,12 @@ _mdot(a::Tuple, d::Tuple) = sum(map(_mdot, a, d))
 _mdot(a::Number, d::Number) = a * d
 
 const POINTS = (
-    (spk_jet, :(Tuple{typeof(spk_jet),KernelSet,Int32,Float64,Int32,Int32,Val}), 3),
-    (frame_rotation, :(Tuple{typeof(frame_rotation),KernelSet,Int32,Int32,Float64}), 4),
-    (frame_jet, :(Tuple{typeof(frame_jet),KernelSet,Int32,Int32,Float64,Val}), 4),
-    (abcorr_jet, :(Tuple{typeof(abcorr_jet),KernelSet,Int32,Float64,Int32,Aberration,Int32,Val}), 3),
-    (abcorr_position, :(Tuple{typeof(abcorr_position),KernelSet,Int32,Float64,Int32,Aberration,Int32}), 3),
-    (abcorr_state, :(Tuple{typeof(abcorr_state),KernelSet,Int32,Float64,Int32,Aberration,Int32}), 3),
+    (spk_jet, :(Tuple{typeof(spk_jet), KernelSet, Int32, Float64, Int32, Int32, Val}), 3),
+    (frame_rotation, :(Tuple{typeof(frame_rotation), KernelSet, Int32, Int32, Float64}), 4),
+    (frame_jet, :(Tuple{typeof(frame_jet), KernelSet, Int32, Int32, Float64, Val}), 4),
+    (abcorr_jet, :(Tuple{typeof(abcorr_jet), KernelSet, Int32, Float64, Int32, Aberration, Int32, Val}), 3),
+    (abcorr_position, :(Tuple{typeof(abcorr_position), KernelSet, Int32, Float64, Int32, Aberration, Int32}), 3),
+    (abcorr_state, :(Tuple{typeof(abcorr_state), KernelSet, Int32, Float64, Int32, Aberration, Int32}), 3),
 )
 
 for (f, sig, iet) in POINTS
@@ -60,7 +60,7 @@ Mooncake.tangent_type(::Type{<:KernelSet}) = NoTangent
 Mooncake.tangent_type(::Type{<:SpiceContext}) = NoTangent
 Mooncake.tangent_type(::Type{Aberration}) = NoTangent
 for f in _AD_CONSTANT
-    @eval @zero_derivative DefaultCtx Tuple{$(_ad_typeof(f)),Vararg}
+    @eval @zero_derivative DefaultCtx Tuple{$(_ad_typeof(f)), Vararg}
 end
 
 end # module

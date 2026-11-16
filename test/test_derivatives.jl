@@ -51,9 +51,9 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 import ForwardDiff
 
-const FD_CASES_INERTIAL = (h=2000.0, rtol=2e-4)
-const FD_CASES_FAST = (h=20.0, rtol=2e-5)
-const AD_RTOL = (2e-15, 1e-13, 1e-11, 1e-9, 1e-7)
+const FD_CASES_INERTIAL = (h = 2000.0, rtol = 2.0e-4)
+const FD_CASES_FAST = (h = 20.0, rtol = 2.0e-5)
+const AD_RTOL = (2.0e-15, 1.0e-13, 1.0e-11, 1.0e-9, 1.0e-7)
 const MAXORDER = 4
 "Nesting depth of ForwardDiff through the generic evaluators, and through the public calls."
 const AD_GENERIC_ORDER = nsample(1, MAXORDER)
@@ -77,7 +77,7 @@ function fd_errors(jet, et::Float64, h::Float64, N::Int)
     @assert h > 0 && N >= 1
     j0 = jet(et); jp = jet(et + h); jm = jet(et - h)
     @assert length(j0) == N + 1
-    return [reldiff((jp[k+1] - jm[k+1]) / (2h), j0[k+2]) for k in 0:N-1]
+    return [reldiff((jp[k + 1] - jm[k + 1]) / (2h), j0[k + 2]) for k in 0:(N - 1)]
 end
 
 "The function `t -> d^N f / dt^N` by nested forward mode; `f` itself for `N == 0`."
@@ -100,15 +100,19 @@ function ad_jet(f, t::Float64, ::Val{N}) where {N}
 end
 
 "Position through the generic evaluators (no analytical shortcut for a `Dual` epoch)."
-generic_pos(ctx, targ, t, ref, obs) = invoke(Almanac.spk_jet,
-    Tuple{Almanac.KernelSet,Int32,Real,Int32,Int32,Val{0}}, Almanac.kernelset(ctx),
-    Int32(targ), t, Almanac.frame_id(Almanac.kernelset(ctx), ref), Int32(obs), Val(0))[1]
+generic_pos(ctx, targ, t, ref, obs) = invoke(
+    Almanac.spk_jet,
+    Tuple{Almanac.KernelSet, Int32, Real, Int32, Int32, Val{0}}, Almanac.kernelset(ctx),
+    Int32(targ), t, Almanac.frame_id(Almanac.kernelset(ctx), ref), Int32(obs), Val(0)
+)[1]
 
 "Rotation through the generic evaluators (no analytical shortcut for a `Dual` epoch)."
 function generic_rot(ctx, from, to, t)
     ks = Almanac.kernelset(ctx)
-    return invoke(Almanac.frame_rotation, Tuple{Almanac.KernelSet,Int32,Int32,Real}, ks,
-        Almanac.frame_id(ks, from), Almanac.frame_id(ks, to), t)
+    return invoke(
+        Almanac.frame_rotation, Tuple{Almanac.KernelSet, Int32, Int32, Real}, ks,
+        Almanac.frame_id(ks, from), Almanac.frame_id(ks, to), t
+    )
 end
 
 group("3. derivatives", Kernels.FULL_SET_FILES...) do
@@ -131,19 +135,19 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
         et = epochs[1]
         for N in 0:MAXORDER
             jet = spkder(ctx, 301, et, "J2000", 399, Val(N))
-            @test jet isa NTuple{N + 1,SVector{3,Float64}}
+            @test jet isa NTuple{N + 1, SVector{3, Float64}}
         end
         # A lower order is a prefix of a higher order, in each class of frame.
         for (targ, obs, ref, _) in state_cases, et in epochs[1:nsample(1, 4)]
             full = spkder(ctx, targ, et, ref, obs, Val(MAXORDER))
-            for N in 0:MAXORDER-1
+            for N in 0:(MAXORDER - 1)
                 part = spkder(ctx, targ, et, ref, obs, Val(N))
-                @test all(isapprox(part[k], full[k]; rtol=1e-13) for k in 1:N+1)
+                @test all(isapprox(part[k], full[k]; rtol = 1.0e-13) for k in 1:(N + 1))
             end
         end
         # Name form equals the integer-ID form (the name form only resolves the names).
         @test spkder(ctx, "301", et, "IAU_EARTH", "399", Val(2)) ==
-              spkder(ctx, 301, et, SPICE.namfrm("IAU_EARTH"), 399, Val(2))
+            spkder(ctx, 301, et, SPICE.namfrm("IAU_EARTH"), 399, Val(2))
     end
 
     @apart @testset "spkder: orders 0 and 1 are the spkezr state" begin
@@ -155,24 +159,30 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
             @test r == state[SOneTo(3)]
             @test v == state[SVector(4, 5, 6)]
             (r0,) = spkder(ctx, targ, et, ref, obs, Val(0))
-            @test isapprox(r0, r; rtol=1e-14)
+            @test isapprox(r0, r; rtol = 1.0e-14)
             worst = max(worst, reldiff(r, cstate[1:3]), reldiff(v, cstate[4:6]))
         end
         measured(@sprintf("  %-58s max=%.3e", "spkder orders 0, 1 against CSPICE, relative", worst))
-        @test worst <= 1e-9
+        @test worst <= 1.0e-9
     end
 
     @apart @testset "spkder: order k+1 against the central difference of order k" begin
         for (targ, obs, ref, fd) in state_cases
             worst = zeros(MAXORDER)
             for et in epochs
-                e = fd_errors(t -> spkder(ctx, targ, t, ref, obs, Val(MAXORDER)), et, fd.h,
-                    MAXORDER)
+                e = fd_errors(
+                    t -> spkder(ctx, targ, t, ref, obs, Val(MAXORDER)), et, fd.h,
+                    MAXORDER
+                )
                 worst .= max.(worst, e)
             end
-            measured(@sprintf("  FD  %3d rel %3d %-11s h=%-6g orders 1..4: %s (tol %.0e)",
-                targ, obs, ref, fd.h, join((@sprintf("%.2e", w) for w in worst), " "),
-                fd.rtol))
+            measured(
+                @sprintf(
+                    "  FD  %3d rel %3d %-11s h=%-6g orders 1..4: %s (tol %.0e)",
+                    targ, obs, ref, fd.h, join((@sprintf("%.2e", w) for w in worst), " "),
+                    fd.rtol
+                )
+            )
             @test all(<=(fd.rtol), worst)
         end
     end
@@ -189,19 +199,23 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
                 worst = zeros(order + 1)
                 for et in epochs[1:6]
                     ad = label == "generic" ? collect(ad_jet(generic, et, Val(AD_GENERIC_ORDER))) :
-                         collect(ad_jet(public, et, Val(AD_PUBLIC_ORDER)))
+                        collect(ad_jet(public, et, Val(AD_PUBLIC_ORDER)))
                     jet = spkder(ctx, targ, et, ref, obs, Val(MAXORDER))
-                    worst .= max.(worst, [reldiff(jet[k], ad[k]) for k in 1:order+1])
+                    worst .= max.(worst, [reldiff(jet[k], ad[k]) for k in 1:(order + 1)])
                 end
-                measured(@sprintf("  AD %-7s %3d rel %3d %-11s orders 0..%d: %s", label, targ,
-                    obs, ref, order, join((@sprintf("%.2e", w) for w in worst), " ")))
-                @test all(worst[k] <= AD_RTOL[k] for k in 1:order+1)
+                measured(
+                    @sprintf(
+                        "  AD %-7s %3d rel %3d %-11s orders 0..%d: %s", label, targ,
+                        obs, ref, order, join((@sprintf("%.2e", w) for w in worst), " ")
+                    )
+                )
+                @test all(worst[k] <= AD_RTOL[k] for k in 1:(order + 1))
             end
         end
         # The velocity part of spkezr with a Dual epoch carries the acceleration.
         et = epochs[2]
         acc = ForwardDiff.derivative(t -> spkezr(ctx, 301, t, "J2000", "NONE", 399)[1][SVector(4, 5, 6)], et)
-        @test isapprox(acc, spkder(ctx, 301, et, "J2000", 399, Val(2))[3]; rtol=1e-10)
+        @test isapprox(acc, spkder(ctx, 301, et, "J2000", 399, Val(2))[3]; rtol = 1.0e-10)
     end
 
     rot_cases = [
@@ -214,18 +228,18 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
     @apart @testset "pxder: orders 0 and 1 are pxform and the sxform block" begin
         worst = 0.0
         for N in 0:MAXORDER
-            @test pxder(ctx, "J2000", "IAU_EARTH", epochs[1], Val(N)) isa NTuple{N + 1,SMatrix{3,3,Float64,9}}
+            @test pxder(ctx, "J2000", "IAU_EARTH", epochs[1], Val(N)) isa NTuple{N + 1, SMatrix{3, 3, Float64, 9}}
         end
         for (from, to, _) in rot_cases, et in epochs[1:EPOCHS_EXACT]
             R, dR = pxder(ctx, from, to, et, Val(1))
             X = sxform(ctx, from, to, et)
-            @test isapprox(R, pxform(ctx, from, to, et); atol=4eps())
+            @test isapprox(R, pxform(ctx, from, to, et); atol = 4eps())
             @test dR == X[SVector(4, 5, 6), SOneTo(3)]
             Xc = SPICE.sxform(from, to, et)
             worst = max(worst, reldiff(dR, Xc[4:6, 1:3]))
         end
         measured(@sprintf("  %-58s max=%.3e", "pxder order 1 against CSPICE sxform, relative", worst))
-        @test worst <= 1e-7
+        @test worst <= 1.0e-7
         # Between inertial frames every derivative is zero.
         jet = pxder(ctx, "J2000", "GALACTIC", epochs[1], Val(3))
         @test all(all(iszero, jet[k]) for k in 2:4)
@@ -238,8 +252,12 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
                 e = fd_errors(t -> pxder(ctx, from, to, t, Val(MAXORDER)), et, fd.h, MAXORDER)
                 worst .= max.(worst, e)
             end
-            measured(@sprintf("  FD  %-11s to %-11s h=%-6g orders 1..4: %s (tol %.0e)", from,
-                to, fd.h, join((@sprintf("%.2e", w) for w in worst), " "), fd.rtol))
+            measured(
+                @sprintf(
+                    "  FD  %-11s to %-11s h=%-6g orders 1..4: %s (tol %.0e)", from,
+                    to, fd.h, join((@sprintf("%.2e", w) for w in worst), " "), fd.rtol
+                )
+            )
             @test all(<=(fd.rtol), worst)
         end
     end
@@ -252,13 +270,17 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
                 worst = zeros(order + 1)
                 for et in epochs[1:6]
                     ad = label == "generic" ? collect(ad_jet(generic, et, Val(AD_GENERIC_ORDER))) :
-                         collect(ad_jet(public, et, Val(AD_PUBLIC_ORDER)))
+                        collect(ad_jet(public, et, Val(AD_PUBLIC_ORDER)))
                     jet = pxder(ctx, from, to, et, Val(MAXORDER))
-                    worst .= max.(worst, [reldiff(jet[k], ad[k]) for k in 1:order+1])
+                    worst .= max.(worst, [reldiff(jet[k], ad[k]) for k in 1:(order + 1)])
                 end
-                measured(@sprintf("  AD %-7s %-11s to %-11s orders 0..%d: %s", label, from, to,
-                    order, join((@sprintf("%.2e", w) for w in worst), " ")))
-                @test all(worst[k] <= AD_RTOL[k] for k in 1:order+1)
+                measured(
+                    @sprintf(
+                        "  AD %-7s %-11s to %-11s orders 0..%d: %s", label, from, to,
+                        order, join((@sprintf("%.2e", w) for w in worst), " ")
+                    )
+                )
+                @test all(worst[k] <= AD_RTOL[k] for k in 1:(order + 1))
             end
         end
         # pxder with a Dual epoch: the partial of order k is order k+1.
@@ -266,7 +288,7 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
         jd = pxder(ctx, "J2000", "IAU_EARTH", ForwardDiff.Dual(et, 1.0), Val(2))
         jp = pxder(ctx, "J2000", "IAU_EARTH", et, Val(3))
         @test all(ForwardDiff.value.(jd[k]) == jp[k] for k in 1:3)
-        @test all(ForwardDiff.partials.(jd[k], 1) == jp[k+1] for k in 1:3)
+        @test all(ForwardDiff.partials.(jd[k], 1) == jp[k + 1] for k in 1:3)
     end
 
     @apart @testset "calls without derivatives refuse a Dual epoch" begin
@@ -276,16 +298,25 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
         t = ForwardDiff.Dual(epochs[1], 1.0)
         z = [0.0, 0.0, 1.0]
         calls = (
-            () -> limbpt(ctx, "TANGENT/ELLIPSOID", 399, t, "IAU_EARTH", "NONE", "CENTER", 301,
-                z, 1.0, 1, 0.0, 0.0, 1),
-            () -> termpt(ctx, "UMBRAL/TANGENT/ELLIPSOID", 10, 399, t, "IAU_EARTH", "NONE",
-                "CENTER", 301, z, 1.0, 1, 0.0, 0.0, 1),
-            () -> tangpt(ctx, "ELLIPSOID", 399, t, "IAU_EARTH", "NONE", "TANGENT POINT", 301,
-                "J2000", z),
-            () -> occult(ctx, 301, "ELLIPSOID", "IAU_MOON", 10, "ELLIPSOID", "IAU_SUN", "NONE",
-                399, t),
+            () -> limbpt(
+                ctx, "TANGENT/ELLIPSOID", 399, t, "IAU_EARTH", "NONE", "CENTER", 301,
+                z, 1.0, 1, 0.0, 0.0, 1
+            ),
+            () -> termpt(
+                ctx, "UMBRAL/TANGENT/ELLIPSOID", 10, 399, t, "IAU_EARTH", "NONE",
+                "CENTER", 301, z, 1.0, 1, 0.0, 0.0, 1
+            ),
+            () -> tangpt(
+                ctx, "ELLIPSOID", 399, t, "IAU_EARTH", "NONE", "TANGENT POINT", 301,
+                "J2000", z
+            ),
+            () -> occult(
+                ctx, 301, "ELLIPSOID", "IAU_MOON", 10, "ELLIPSOID", "IAU_SUN", "NONE",
+                399, t
+            ),
             () -> et2lst(ctx, t, 399, 0.0, "PLANETOCENTRIC"),
-            () -> fovtrg(ctx, -999, 301, "POINT", " ", "NONE", 399, t))
+            () -> fovtrg(ctx, -999, 301, "POINT", " ", "NONE", 399, t),
+        )
         @test all(f -> throws_kind(f, :badarg), calls)
     end
 end

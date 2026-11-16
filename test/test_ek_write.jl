@@ -27,36 +27,48 @@ longest string of the column plus one, and CSPICE then refuses a fixed-count col
 whose string length is greater (`zzekac09`), and can lose a character of an array
 column (`zzekac06`).
 """
-function ekw_c_ekaclc(h, segno, column, vals, entszs, nlflgs, rcptrs; minlen=129)
+function ekw_c_ekaclc(h, segno, column, vals, entszs, nlflgs, rcptrs; minlen = 129)
     len = max(c_vallen(vals), minlen)
     wk = zeros(Cint, length(rcptrs))
-    ccall((:ekaclc_c, EKLIB), Cvoid, (Cint, Cint, Cstring, Cint, Ptr{UInt8}, Ptr{Cint},
-            Ptr{Cint}, Ptr{Cint}, Ptr{Cint}), h, segno - 1, column, len, c_strarray(vals, len),
-        Cint[e for e in entszs], Cint[f for f in nlflgs], rcptrs, wk)
-    c_check()
+    ccall(
+        (:ekaclc_c, EKLIB), Cvoid, (
+            Cint, Cint, Cstring, Cint, Ptr{UInt8}, Ptr{Cint},
+            Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+        ), h, segno - 1, column, len, c_strarray(vals, len),
+        Cint[e for e in entszs], Cint[f for f in nlflgs], rcptrs, wk
+    )
+    return c_check()
 end
 
 "`ekbseg_c` with room for names of 80 characters (`c_ekbseg` cuts a name after 32)."
 function ekw_c_ekbseg(h, table, cnames, decls)
     segno = Ref{Cint}(0)
-    ccall((:ekbseg_c, EKLIB), Cvoid, (Cint, Cstring, Cint, Cint, Ptr{UInt8}, Cint, Ptr{UInt8},
-            Ref{Cint}), h, table, length(cnames), 81, c_strarray(cnames, 81), 201,
-        c_strarray(decls, 201), segno)
+    ccall(
+        (:ekbseg_c, EKLIB), Cvoid, (
+            Cint, Cstring, Cint, Cint, Ptr{UInt8}, Cint, Ptr{UInt8},
+            Ref{Cint},
+        ), h, table, length(cnames), 81, c_strarray(cnames, 81), 201,
+        c_strarray(decls, 201), segno
+    )
     c_check()
     return segno[] + 1
 end
 
-const EKW_C = (ekopn=c_ekopn, ekopw=c_ekopw, ekopr=c_ekopr, ekcls=c_ekcls, ekbseg=ekw_c_ekbseg,
-    ekappr=c_ekappr, ekinsr=c_ekinsr, ekdelr=c_ekdelr, ekacec=c_ekacec, ekaced=c_ekaced,
-    ekacei=c_ekacei, ekucec=c_ekucec, ekuced=c_ekuced, ekucei=c_ekucei, ekifld=c_ekifld,
-    ekaclc=ekw_c_ekaclc, ekacld=c_ekacld, ekacli=c_ekacli, ekffld=c_ekffld)
+const EKW_C = (
+    ekopn = c_ekopn, ekopw = c_ekopw, ekopr = c_ekopr, ekcls = c_ekcls, ekbseg = ekw_c_ekbseg,
+    ekappr = c_ekappr, ekinsr = c_ekinsr, ekdelr = c_ekdelr, ekacec = c_ekacec, ekaced = c_ekaced,
+    ekacei = c_ekacei, ekucec = c_ekucec, ekuced = c_ekuced, ekucei = c_ekucei, ekifld = c_ekifld,
+    ekaclc = ekw_c_ekaclc, ekacld = c_ekacld, ekacli = c_ekacli, ekffld = c_ekffld,
+)
 
-const EKW_N = (ekopn=Almanac.ekopn, ekopw=Almanac.ekopw, ekopr=ekopr, ekcls=ekcls,
-    ekbseg=Almanac.ekbseg, ekappr=Almanac.ekappr, ekinsr=Almanac.ekinsr,
-    ekdelr=Almanac.ekdelr, ekacec=Almanac.ekacec, ekaced=Almanac.ekaced,
-    ekacei=Almanac.ekacei, ekucec=Almanac.ekucec, ekuced=Almanac.ekuced,
-    ekucei=Almanac.ekucei, ekifld=Almanac.ekifld, ekaclc=Almanac.ekaclc,
-    ekacld=Almanac.ekacld, ekacli=Almanac.ekacli, ekffld=Almanac.ekffld)
+const EKW_N = (
+    ekopn = Almanac.ekopn, ekopw = Almanac.ekopw, ekopr = ekopr, ekcls = ekcls,
+    ekbseg = Almanac.ekbseg, ekappr = Almanac.ekappr, ekinsr = Almanac.ekinsr,
+    ekdelr = Almanac.ekdelr, ekacec = Almanac.ekacec, ekaced = Almanac.ekaced,
+    ekacei = Almanac.ekacei, ekucec = Almanac.ekucec, ekuced = Almanac.ekuced,
+    ekucei = Almanac.ekucei, ekifld = Almanac.ekifld, ekaclc = Almanac.ekaclc,
+    ekacld = Almanac.ekacld, ekacli = Almanac.ekacli, ekffld = Almanac.ekffld,
+)
 
 """
 One call `f(args...)` of an engine as a value. `c_kind` and `neo_kind` are compiled for
@@ -104,7 +116,7 @@ end
 "Depths of the trees of the EK `path`: (segment tree, record trees, index trees, data page trees)."
 function ekw_depths(path)
     h = ekopr(path)
-    depth(tree) = tree > 0 ? Int(h.ints[Almanac._ek_ibase(tree)+Almanac._EK_TRDPTH]) : 0
+    depth(tree) = tree > 0 ? Int(h.ints[Almanac._ek_ibase(tree) + Almanac._EK_TRDPTH]) : 0
     rec = 0
     idx = 0
     dat = [0, 0, 0]
@@ -112,7 +124,7 @@ function ekw_depths(path)
         seg = Almanac._ek_segment(h, segno)
         rec = max(rec, depth(seg.segdsc[Almanac._EK_RTIDX]))
         for t in 1:3
-            dat[t] = max(dat[t], depth(seg.segdsc[Almanac._EK_CPTIDX+t-1]))
+            dat[t] = max(dat[t], depth(seg.segdsc[Almanac._EK_CPTIDX + t - 1]))
         end
         for col in seg.columns
             col.ixtype == 1 && (idx = max(idx, depth(col.ixptr)))
@@ -120,11 +132,11 @@ function ekw_depths(path)
     end
     sgt = depth(Almanac._ek_segtree(h))
     ekcls(h)
-    return (seg=sgt, rec=rec, idx=idx, chr=dat[1], dp=dat[2], int=dat[3])
+    return (seg = sgt, rec = rec, idx = idx, chr = dat[1], dp = dat[2], int = dat[3])
 end
 
 ekw_depth_line(name, d) = "ek_write: tree depths of $name: segment $(d.seg), record $(d.rec), " *
-                          "index $(d.idx), data pages chr $(d.chr), dp $(d.dp), int $(d.int)"
+    "index $(d.idx), data pages chr $(d.chr), dp $(d.dp), int $(d.int)"
 
 """
 Read every entry of the EK `path` with CSPICE and with Almanac and compare both with
@@ -149,9 +161,11 @@ function ekw_read_check(path, segs::Vector{EKSegSpec})
             @test sc.nullok == [c.nullok for c in seg.cols]
             for (c, col) in enumerate(seg.cols), (r, row) in enumerate(seg.rows)
                 got, ref = if col.dtype === :CHR
-                    ekrcec(hn, segno, r, col.name), c_ekrcec(hc, segno, r, col.name;
-                        maxn=col.size == -1 ? 720 : col.size,
-                        maxlen=col.strlen == -1 ? 2600 : col.strlen + 1)
+                    ekrcec(hn, segno, r, col.name), c_ekrcec(
+                            hc, segno, r, col.name;
+                            maxn = col.size == -1 ? 720 : col.size,
+                            maxlen = col.strlen == -1 ? 2600 : col.strlen + 1
+                        )
                 elseif col.dtype === :INT
                     ekrcei(hn, segno, r, col.name), c_ekrcei(hc, segno, r, col.name)
                 else
@@ -174,38 +188,46 @@ end
 
 "Columns whose entries fill many data pages of each type, so the data page trees get deep."
 const EKW_DEEP_COLS = [
-    EKColSpec("K", :INT; indexed=true),
-    EKColSpec("S", :CHR; strlen=-1, indexed=true, nullok=true),
-    EKColSpec("V", :DP; indexed=true, nullok=true),
-    EKColSpec("TXT", :CHR; strlen=-1),
-    EKColSpec("IV", :INT; size=230),
-    EKColSpec("DV", :DP; size=115)]
+    EKColSpec("K", :INT; indexed = true),
+    EKColSpec("S", :CHR; strlen = -1, indexed = true, nullok = true),
+    EKColSpec("V", :DP; indexed = true, nullok = true),
+    EKColSpec("TXT", :CHR; strlen = -1),
+    EKColSpec("IV", :INT; size = 230),
+    EKColSpec("DV", :DP; size = 115),
+]
 
 "A segment of `EKW_DEEP_COLS` with `nrows` rows; the strings of TXT have 880 to 900 characters."
-function ekw_deep_segment(rng, table, nrows; fast=false)
+function ekw_deep_segment(rng, table, nrows; fast = false)
     rows = Vector{Any}[]
     for r in 1:nrows
-        push!(rows, Any[Any[rand(rng, 1:nrows)],
-            rand(rng) < 0.1 ? nothing : Any[rand(rng, EK_WORDS)],
-            rand(rng) < 0.1 ? nothing : Any[Float64(rand(rng, -500:500))],
-            Any[join(rand(rng, 'a':'z', rand(rng, 880:900)))],
-            Any[rand(rng, -9:9) for _ in 1:230],
-            Any[Float64(rand(rng, -9:9)) for _ in 1:115]])
+        push!(
+            rows, Any[
+                Any[rand(rng, 1:nrows)],
+                rand(rng) < 0.1 ? nothing : Any[rand(rng, EK_WORDS)],
+                rand(rng) < 0.1 ? nothing : Any[Float64(rand(rng, -500:500))],
+                Any[join(rand(rng, 'a':'z', rand(rng, 880:900)))],
+                Any[rand(rng, -9:9) for _ in 1:230],
+                Any[Float64(rand(rng, -9:9)) for _ in 1:115],
+            ]
+        )
     end
     return EKSegSpec(table, EKW_DEEP_COLS, rows, fast)
 end
 
 "Columns of a narrow table with four indexes, for many rows and for queries."
 const EKW_KEY_COLS = [
-    EKColSpec("K", :INT; indexed=true),
-    EKColSpec("S", :CHR; strlen=12, indexed=true, nullok=true),
-    EKColSpec("V", :DP; indexed=true, nullok=true),
-    EKColSpec("T", :TIME; indexed=true),
-    EKColSpec("U", :CHR; strlen=-1, indexed=true)]
+    EKColSpec("K", :INT; indexed = true),
+    EKColSpec("S", :CHR; strlen = 12, indexed = true, nullok = true),
+    EKColSpec("V", :DP; indexed = true, nullok = true),
+    EKColSpec("T", :TIME; indexed = true),
+    EKColSpec("U", :CHR; strlen = -1, indexed = true),
+]
 
 "The fixed-count form of `EKW_KEY_COLS` (a type 2 segment) without the column U."
-const EKW_FIXED_COLS = [EKColSpec(c.name, c.dtype, c.strlen, c.size, c.indexed, c.nullok, true)
-                        for c in EKW_KEY_COLS[1:4]]
+const EKW_FIXED_COLS = [
+    EKColSpec(c.name, c.dtype, c.strlen, c.size, c.indexed, c.nullok, true)
+        for c in EKW_KEY_COLS[1:4]
+]
 
 # ---------------------------------------------------------------------------------------
 # Edit scripts
@@ -228,16 +250,18 @@ A segment that the fast writers made gets new rows only, unless `fastedits` is s
 CSPICE cannot delete its rows and cannot update all of its entries (see the group on
 the edits of fast-loaded segments).
 """
-function ekw_script(rng, segs::Vector{EKSegSpec}, nops::Int; weights=(1, 2, 2, 5),
-        newsegs=EKSegSpec[], fastedits=false)
+function ekw_script(
+        rng, segs::Vector{EKSegSpec}, nops::Int; weights = (1, 2, 2, 5),
+        newsegs = EKSegSpec[], fastedits = false
+    )
     model = [EKSegSpec(s.table, s.cols, copy(s.rows), s.fast) for s in segs]
     editable = [i for (i, s) in enumerate(model) if !any(c -> c.fixed, s.cols)]
     ops = Any[]
     total = sum(weights)
     for k in 1:nops
         if !isempty(newsegs) && k % max(1, nops ÷ (length(newsegs) + 1)) == 0 &&
-           length(model) < length(segs) + length(newsegs)
-            spec = newsegs[length(model)-length(segs)+1]
+                length(model) < length(segs) + length(newsegs)
+            spec = newsegs[length(model) - length(segs) + 1]
             push!(ops, (:segment, spec))
             push!(model, EKSegSpec(spec.table, spec.cols, copy(spec.rows), spec.fast))
             any(c -> c.fixed, spec.cols) || push!(editable, length(model))
@@ -254,7 +278,7 @@ function ekw_script(rng, segs::Vector{EKSegSpec}, nops::Int; weights=(1, 2, 2, 5
             push!(ops, (:append, segno, row))
             push!(seg.rows, row)
         elseif x <= weights[1] + weights[2]
-            recno = rand(rng, 1:n+1)
+            recno = rand(rng, 1:(n + 1))
             row = newrow()
             push!(ops, (:insert, segno, recno, row))
             insert!(seg.rows, recno, row)
@@ -310,6 +334,7 @@ function ekw_fill(w, h, segno, recno, cols, row)
         vals, isnull = ekw_args(col, row[c])
         f(h, segno, recno, col.name, vals, isnull)
     end
+    return
 end
 
 "Apply the script `ops` to the file `path` with the writers `w`; `cols[segno]` are the columns."
@@ -344,8 +369,10 @@ four results must be equal word for word and must read back as `model`. Returns 
 path of one result, the number of words compared and the number of entries read.
 """
 function ekw_cross(dir, tag, segs, ops, model)
-    base = Dict(e => ekw_write(w, joinpath(dir, "$(tag)_base_$e.bes"), segs)
-                for (e, w) in (("c", EKW_C), ("n", EKW_N)))
+    base = Dict(
+        e => ekw_write(w, joinpath(dir, "$(tag)_base_$e.bes"), segs)
+            for (e, w) in (("c", EKW_C), ("n", EKW_N))
+    )
     nd, words = ekw_diff(base["c"], base["n"])
     @test nd == 0
     outs = String[]
@@ -374,7 +401,7 @@ group("EK write: files of Almanac are equal to files of CSPICE word for word") d
     words = 0
     files = 0
     entries = 0
-    for (name, segs) in ek_standard_model(SEED; scale=EKW_SCALE)
+    for (name, segs) in ek_standard_model(SEED; scale = EKW_SCALE)
         pc = ekw_write(EKW_C, joinpath(dir, "c_" * name), segs)
         pn = ekw_write(EKW_N, joinpath(dir, "n_" * name), segs)
         nd, nw = ekw_diff(pc, pn)
@@ -397,8 +424,12 @@ group("EK write: files of Almanac are equal to files of CSPICE word for word") d
     end
     # A file with comment area and many segments, so that the segment tree is used.
     rng = MersenneTwister(SEED + 2)
-    many = [ek_random_segment(rng, "T$(k % 7)", k % 3 == 0 ? EK_GROUP_COLS : EK_LINK_COLS,
-        rand(rng, 1:12); fast=k % 3 == 0) for k in 1:120]
+    many = [
+        ek_random_segment(
+            rng, "T$(k % 7)", k % 3 == 0 ? EK_GROUP_COLS : EK_LINK_COLS,
+            rand(rng, 1:12); fast = k % 3 == 0
+        ) for k in 1:120
+    ]
     paths = String[]
     for (e, w) in (("c", EKW_C), ("n", EKW_N))
         path = joinpath(dir, "$(e)_many.bes")
@@ -420,8 +451,10 @@ group("EK write: files of Almanac are equal to files of CSPICE word for word") d
     count, bad = ekw_read_check(paths[2], many)
     @test bad == 0
     measured(ekw_depth_line("many.bes", ekw_depths(paths[2])))
-    measured("ek_write: $files files written by both engines, $words words equal, " *
-             "$(entries + count) entries read back by CSPICE and Almanac")
+    measured(
+        "ek_write: $files files written by both engines, $words words equal, " *
+            "$(entries + count) entries read back by CSPICE and Almanac"
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -440,11 +473,13 @@ group("EK write: trees of depth 3 (records, indexes, data pages)") do
     # row, and both engines then edit and read it (below); the DEEP segment that grows
     # row by row is not written.
     deepslow = FULL ? [ekw_deep_segment(rng, "DEEP", nrows)] : EKSegSpec[]
-    deep = [deepslow..., ekw_deep_segment(rng, "DEEP", nrows; fast=true)]
-    keyslow = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 6000; keyrange=1:3000)
-    keyfast = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 6000; fast=true, keyrange=1:3000)
-    keys = [(FULL ? [keyslow] : EKSegSpec[])..., keyfast,
-        ek_random_segment(rng, "FIXED", EKW_FIXED_COLS, 6000; fast=true, keyrange=1:3000)]
+    deep = [deepslow..., ekw_deep_segment(rng, "DEEP", nrows; fast = true)]
+    keyslow = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 6000; keyrange = 1:3000)
+    keyfast = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 6000; fast = true, keyrange = 1:3000)
+    keys = [
+        (FULL ? [keyslow] : EKSegSpec[])..., keyfast,
+        ek_random_segment(rng, "FIXED", EKW_FIXED_COLS, 6000; fast = true, keyrange = 1:3000),
+    ]
     words = 0
     for (name, segs) in (("deep.bes", deep), ("keys.bes", keys))
         pc = ekw_write(EKW_C, joinpath(dir, "c_" * name), segs)
@@ -462,7 +497,7 @@ group("EK write: trees of depth 3 (records, indexes, data pages)") do
     end
     # Deletes and inserts in the deep trees: both engines edit the file of Almanac.
     segs = [keyslow, keyfast]
-    ops, model = ekw_script(rng, segs, nsample(500, 5000); weights=(0, 1, 6, 1))
+    ops, model = ekw_script(rng, segs, nsample(500, 5000); weights = (0, 1, 6, 1))
     base = ekw_write(EKW_N, joinpath(dir, "keys12.bes"), segs)
     d = ekw_depths(base)
     @test d.rec == 3 && d.idx == 3
@@ -477,8 +512,12 @@ group("EK write: trees of depth 3 (records, indexes, data pages)") do
     words += nw
     count, bad = ekw_read_check(outs[2], model)
     @test bad == 0
-    measured(ekw_depth_line("keys after $(length(ops)) edits ($(length(model[1].rows)) and " *
-                            "$(length(model[2].rows)) rows left)", ekw_depths(outs[2])))
+    measured(
+        ekw_depth_line(
+            "keys after $(length(ops)) edits ($(length(model[1].rows)) and " *
+                "$(length(model[2].rows)) rows left)", ekw_depths(outs[2])
+        )
+    )
     measured("ek_write: deep files, $words words equal")
 end
 
@@ -489,20 +528,22 @@ end
 group("EK write: CSPICE loads and queries files that Almanac wrote") do
     dir = mktempdir()
     rng = MersenneTwister(SEED + 4)
-    k1 = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 900; keyrange=1:300)
-    k2 = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 700; fast=true, keyrange=1:300)
-    fx = ek_random_segment(rng, "FIXED", EKW_FIXED_COLS, 800; fast=true, keyrange=1:300)
+    k1 = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 900; keyrange = 1:300)
+    k2 = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 700; fast = true, keyrange = 1:300)
+    fx = ek_random_segment(rng, "FIXED", EKW_FIXED_COLS, 800; fast = true, keyrange = 1:300)
     path = ekw_write(EKW_N, joinpath(dir, "query.bes"), [k1, k2, fx])
     nent, bad = ekw_read_check(path, [k1, k2, fx])
     @test bad == 0
     # The index searches of the write layer (`zzekillt`, `zzekille`) count as the model does.
     h = ekopr(path)
     searches = 0
-    for (segno, seg) in enumerate((k1, k2, fx)), (c, key) in ((1, 150), (1, 0), (1, 301), (3, -3.0),
-        (3, 2.5e3), (2, "beta"), (2, "a"), (2, "~"), (4, 0.0))
+    for (segno, seg) in enumerate((k1, k2, fx)), (c, key) in (
+                (1, 150), (1, 0), (1, 301), (3, -3.0),
+                (3, 2.5e3), (2, "beta"), (2, "a"), (2, "~"), (4, 0.0),
+            )
         _, mbase = Almanac._ek_mloc(h, segno)
-        segdsc = h.ints[mbase+1:mbase+24]
-        coldsc = h.ints[mbase+24+(c-1)*11+1:mbase+24+c*11]
+        segdsc = h.ints[(mbase + 1):(mbase + 24)]
+        coldsc = h.ints[(mbase + 24 + (c - 1) * 11 + 1):(mbase + 24 + c * 11)]
         vals = [r[c][1] for r in seg.rows if r[c] !== nothing]
         nnull = length(seg.rows) - length(vals)
         key isa String && (vals = [String(rstrip(v)) for v in vals])
@@ -527,7 +568,7 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
                 want = [r for r in rows if val(r, 1) == key]
                 @test n == length(want)
                 @test sort([something(g[2], [1.0e99])[1] for g in got]) ==
-                      sort([something(val(r, 3), 1.0e99) for r in want])
+                    sort([something(val(r, 3), 1.0e99) for r in want])
                 queries += 1
             end
             # A range on the double index, in the order of the index.
@@ -549,8 +590,12 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
             n, err, msg = c_ekfind("SELECT S FROM $table WHERE S GE \"m\" ORDER BY S DESC")
             @test !err
             got = [g[1][1] for g in c_ek_result(n, [:CHR])]
-            want = sort([String(rstrip(val(r, 2))) for r in rows if val(r, 2) !== nothing &&
-                         String(rstrip(val(r, 2))) >= "m"]; rev=true)
+            want = sort(
+                [
+                    String(rstrip(val(r, 2))) for r in rows if val(r, 2) !== nothing &&
+                        String(rstrip(val(r, 2))) >= "m"
+                ]; rev = true
+            )
             @test got == want
             # ORDER BY over all rows on the integer and on the time index; nulls come first.
             n, err, msg = c_ekfind("SELECT K FROM $table ORDER BY K")
@@ -559,7 +604,7 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
             n, err, msg = c_ekfind("SELECT T FROM $table WHERE K LT 40 ORDER BY T DESC")
             @test !err
             @test [g[1][1] for g in c_ek_result(n, [:DP])] ==
-                  sort([val(r, 4) for r in rows if val(r, 1) < 40]; rev=true)
+                sort([val(r, 4) for r in rows if val(r, 1) < 40]; rev = true)
             n, err, msg = c_ekfind("SELECT V FROM $table WHERE V IS NULL")
             @test !err
             @test n == count(r -> val(r, 3) === nothing, rows)
@@ -575,8 +620,10 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
     finally
         SPICE.kclear()
     end
-    measured("ek_write: CSPICE answered $queries queries on a file of Almanac, $nent entries " *
-             "read, $searches index searches of the write layer")
+    measured(
+        "ek_write: CSPICE answered $queries queries on a file of Almanac, $nent entries " *
+            "read, $searches index searches of the write layer"
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -589,9 +636,11 @@ group("EK write: edit scripts by both engines on files of both engines") do
     words = 0
     entries = 0
     # Mixed edits of a segment with every column class and of a fast-loaded segment.
-    segs = [ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, nsample(120, 250)),
-        ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, nsample(100, 200); fast=true),
-        ek_random_segment(rng, "GROUPS", EK_GROUP_COLS, 300; fast=true)]
+    segs = [
+        ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, nsample(120, 250)),
+        ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, nsample(100, 200); fast = true),
+        ek_random_segment(rng, "GROUPS", EK_GROUP_COLS, 300; fast = true),
+    ]
     ops, model = ekw_script(rng, segs, nsample(400, 1500))
     out, nw, ne = ekw_cross(dir, "mixed", segs, ops, model)
     words += nw
@@ -599,18 +648,22 @@ group("EK write: edit scripts by both engines on files of both engines") do
     measured(ekw_depth_line("mixed edits", ekw_depths(out)))
     # Reopen and append: new segments (both writers, both segment types) and new rows.
     segs = [ek_random_segment(rng, "LINKS", EK_LINK_COLS, 150)]
-    newsegs = [ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, 60),
-        ek_random_segment(rng, "LINKS", EK_LINK_COLS, 90; fast=true),
-        ek_random_segment(rng, "GROUPS", EK_GROUP_COLS, 70; fast=true),
-        EKSegSpec("EVENTS", EK_EVENT_COLS, Vector{Any}[], false)]
-    ops, model = ekw_script(rng, segs, nsample(150, 400); weights=(6, 1, 0, 1), newsegs=newsegs)
+    newsegs = [
+        ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, 60),
+        ek_random_segment(rng, "LINKS", EK_LINK_COLS, 90; fast = true),
+        ek_random_segment(rng, "GROUPS", EK_GROUP_COLS, 70; fast = true),
+        EKSegSpec("EVENTS", EK_EVENT_COLS, Vector{Any}[], false),
+    ]
+    ops, model = ekw_script(rng, segs, nsample(150, 400); weights = (6, 1, 0, 1), newsegs = newsegs)
     @test length(model) == 5
     out, nw, ne = ekw_cross(dir, "append", segs, ops, model)
     words += nw
     entries += ne
     # Delete all rows, then add rows again; the pages come back from the free lists.
-    segs = [ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, nsample(90, 180)),
-        ek_random_segment(rng, "LINKS", EK_LINK_COLS, nsample(110, 220))]
+    segs = [
+        ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, nsample(90, 180)),
+        ek_random_segment(rng, "LINKS", EK_LINK_COLS, nsample(110, 220)),
+    ]
     ops = Any[]
     model = [EKSegSpec(s.table, s.cols, Vector{Any}[], s.fast) for s in segs]
     for (segno, seg) in enumerate(segs)
@@ -620,18 +673,26 @@ group("EK write: edit scripts by both engines on files of both engines") do
             n -= 1
         end
     end
-    path = Dict(e => ekw_apply(w, cp(ekw_write(EKW_N, joinpath(dir, "all_base_$e.bes"), segs),
-            joinpath(dir, "all_$e.bes")), segs, ops) for (e, w) in (("c", EKW_C), ("n", EKW_N)))
+    path = Dict(
+        e => ekw_apply(
+            w, cp(
+                ekw_write(EKW_N, joinpath(dir, "all_base_$e.bes"), segs),
+                joinpath(dir, "all_$e.bes")
+            ), segs, ops
+        ) for (e, w) in (("c", EKW_C), ("n", EKW_N))
+    )
     nd, nw = ekw_diff(path["c"], path["n"])
     @test nd == 0
     nent, bad = ekw_read_check(path["n"], model)
     @test bad == 0 && nent == 0
-    readd, model2 = ekw_script(rng, model, nsample(200, 500); weights=(3, 3, 1, 3))
+    readd, model2 = ekw_script(rng, model, nsample(200, 500); weights = (3, 3, 1, 3))
     out, nw, ne = ekw_cross(dir, "readd", segs, vcat(ops, readd), model2)
     words += nw
     entries += ne
-    measured("ek_write: edit scripts, $words words equal over 4 engine combinations, " *
-             "$entries entries read back")
+    measured(
+        "ek_write: edit scripts, $words words equal over 4 engine combinations, " *
+            "$entries entries read back"
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -641,7 +702,7 @@ end
 group("EK write: edits of fast-loaded segments and of cut strings, which fail in CSPICE") do
     dir = mktempdir()
     decl = ["DATATYPE = CHARACTER*(4), INDEXED = TRUE"]
-    scol = [EKColSpec("S", :CHR; strlen=4, indexed=true)]
+    scol = [EKColSpec("S", :CHR; strlen = 4, indexed = true)]
     # 1. The fast writer orders equal strings of an indexed column with a sort that is
     #    not stable; CSPICE then looks for a row at the wrong place of the index.
     function fastfile(w, name)
@@ -691,8 +752,14 @@ group("EK write: edits of fast-loaded segments and of cut strings, which fail in
     #    other rows of the page.
     kcol = [EKColSpec("K", :INT)]
     function recfile(w, name)
-        path = ekw_write(w, joinpath(dir, name), [EKSegSpec("T", kcol,
-            Vector{Any}[Any[Any[10]], Any[Any[20]], Any[Any[30]]], true)])
+        path = ekw_write(
+            w, joinpath(dir, name), [
+                EKSegSpec(
+                    "T", kcol,
+                    Vector{Any}[Any[Any[10]], Any[Any[20]], Any[Any[30]]], true
+                ),
+            ]
+        )
         h = w.ekopw(path)
         w.ekdelr(h, 1, 1)
         for k in (40, 50)
@@ -714,10 +781,16 @@ group("EK write: edits of fast-loaded segments and of cut strings, which fail in
     # 4. The fast writers of the array columns give a data page no link for an entry
     #    that continues on it. CSPICE frees such a page when the entries that start on
     #    it are replaced, and the next entry is then written over the end of another.
-    acol = [EKColSpec("IV", :INT; size=200)]
+    acol = [EKColSpec("IV", :INT; size = 200)]
     function arrfile(w, name)
-        path = ekw_write(w, joinpath(dir, name), [EKSegSpec("T", acol,
-            Vector{Any}[Any[Any[k for _ in 1:200]] for k in 1:3], true)])
+        path = ekw_write(
+            w, joinpath(dir, name), [
+                EKSegSpec(
+                    "T", acol,
+                    Vector{Any}[Any[Any[k for _ in 1:200]] for k in 1:3], true
+                ),
+            ]
+        )
         h = w.ekopw(path)
         w.ekucei(h, 1, 3, "IV", fill(33, 200), false)
         w.ekucei(h, 1, 1, "IV", fill(11, 200), false)
@@ -733,20 +806,26 @@ group("EK write: edits of fast-loaded segments and of cut strings, which fail in
     #    columns, array entries over several pages, all rows deleted and rows added
     #    again. CSPICE reads the result and uses the indexes.
     rng = MersenneTwister(SEED + 8)
-    segs = [ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 6000; fast=true, keyrange=1:60),
-        ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, 500; fast=true),
-        ek_random_segment(rng, "LINKS", EK_LINK_COLS, 300; fast=true)]
-    ops, model = ekw_script(rng, segs, nsample(1500, 5000); weights=(1, 2, 4, 6), fastedits=true)
+    segs = [
+        ek_random_segment(rng, "KEYS", EKW_KEY_COLS, 6000; fast = true, keyrange = 1:60),
+        ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, 500; fast = true),
+        ek_random_segment(rng, "LINKS", EK_LINK_COLS, 300; fast = true),
+    ]
+    ops, model = ekw_script(rng, segs, nsample(1500, 5000); weights = (1, 2, 4, 6), fastedits = true)
     for recno in length(model[3].rows):-1:1
         push!(ops, (:delete, 3, rand(rng, 1:recno)))
     end
     empty!(model[3].rows)
-    more, model = ekw_script(rng, model, 600; weights=(2, 2, 1, 3), fastedits=true)
+    more, model = ekw_script(rng, model, 600; weights = (2, 2, 1, 3), fastedits = true)
     path = ekw_apply(EKW_N, ekw_write(EKW_N, joinpath(dir, "fastedit.bes"), segs), segs, vcat(ops, more))
     nent, bad = ekw_read_check(path, model)
     @test bad == 0
-    measured(ekw_depth_line("fast-loaded segments after $(length(ops) + length(more)) edits",
-        ekw_depths(path)))
+    measured(
+        ekw_depth_line(
+            "fast-loaded segments after $(length(ops) + length(more)) edits",
+            ekw_depths(path)
+        )
+    )
     SPICE.kclear()
     SPICE.furnsh(path)
     try
@@ -755,7 +834,7 @@ group("EK write: edits of fast-loaded segments and of cut strings, which fail in
             n, err, msg = c_ekfind("SELECT $name FROM $table WHERE $name IS NOT NULL ORDER BY $name")
             @test !err
             @test [g[1][1] for g in c_ek_result(n, [:CHR])] ==
-                  sort([String(rstrip(r[c][1])) for r in rows if r[c] !== nothing])
+                sort([String(rstrip(r[c][1])) for r in rows if r[c] !== nothing])
             n, err, msg = c_ekfind("SELECT $name FROM $table WHERE $name EQ \"alpha\"")
             @test !err
             @test n == count(r -> r[c] !== nothing && rstrip(r[c][1]) == "alpha", rows)
@@ -766,8 +845,10 @@ group("EK write: edits of fast-loaded segments and of cut strings, which fail in
     finally
         SPICE.kclear()
     end
-    measured("ek_write: Almanac applied $(length(ops) + length(more)) edits to fast-loaded " *
-             "segments ($nent entries read back by CSPICE and Almanac)")
+    measured(
+        "ek_write: Almanac applied $(length(ops) + length(more)) edits to fast-loaded " *
+            "segments ($nent entries read back by CSPICE and Almanac)"
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -780,16 +861,18 @@ group("EK write: fast writers for the column classes 1 to 9") do
     words = 0
     # Row counts around the page sizes, columns stored in another order than declared.
     for (k, nrows) in enumerate((1, 2, 14, 126, 127, 253, 254, 255, 1014, 1015, 2100))
-        t1 = ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, min(nrows, 300); fast=true)
-        t2 = ek_random_segment(rng, "GROUPS", EK_GROUP_COLS, nrows; fast=true)
-        t3 = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, nrows; fast=true, keyrange=1:50)
+        t1 = ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, min(nrows, 300); fast = true)
+        t2 = ek_random_segment(rng, "GROUPS", EK_GROUP_COLS, nrows; fast = true)
+        t3 = ek_random_segment(rng, "KEYS", EKW_KEY_COLS, nrows; fast = true, keyrange = 1:50)
         paths = String[]
         for (e, w) in (("c", EKW_C), ("n", EKW_N))
             path = joinpath(dir, "$(e)_fast$k.bes")
             h = w.ekopn(path, "FAST", 0)
             for seg in (t1, t2, t3)
-                segno, rcptrs = w.ekifld(h, seg.table, length(seg.rows), [c.name for c in seg.cols],
-                    [ekdecl(c) for c in seg.cols])
+                segno, rcptrs = w.ekifld(
+                    h, seg.table, length(seg.rows), [c.name for c in seg.cols],
+                    [ekdecl(c) for c in seg.cols]
+                )
                 for c in reverse(1:length(seg.cols))
                     col = seg.cols[c]
                     vals, entszs, nlflgs = ek_flat_column(seg, c)
@@ -812,9 +895,19 @@ group("EK write: fast writers for the column classes 1 to 9") do
     for allnull in (true, false)
         cols = [EKColSpec(c.name, c.dtype, c.strlen, c.size, c.indexed, true, c.fixed) for c in EK_EVENT_COLS]
         fcols = [EKColSpec(c.name, c.dtype, c.strlen, c.size, c.indexed, true, c.fixed) for c in EK_GROUP_COLS]
-        mk(cs, n) = EKSegSpec("N", cs, Vector{Any}[Any[allnull ? nothing :
-                                                       something(ek_random_entry(rng, c, r), ek_random_entry(rng,
-                    EKColSpec(c.name, c.dtype, c.strlen, c.size, false, false, c.fixed), r)) for c in cs] for r in 1:n], true)
+        mk(cs, n) = EKSegSpec(
+            "N", cs, Vector{Any}[
+                Any[
+                    allnull ? nothing :
+                        something(
+                            ek_random_entry(rng, c, r), ek_random_entry(
+                                rng,
+                                EKColSpec(c.name, c.dtype, c.strlen, c.size, false, false, c.fixed), r
+                            )
+                        ) for c in cs
+                ] for r in 1:n
+            ], true
+        )
         segs = [mk(cols, 40), mk(fcols, 300)]
         pc = ekw_write(EKW_C, joinpath(dir, "c_null$allnull.bes"), segs)
         pn = ekw_write(EKW_N, joinpath(dir, "n_null$allnull.bes"), segs)
@@ -825,8 +918,8 @@ group("EK write: fast writers for the column classes 1 to 9") do
         @test bad == 0
     end
     # Two fast loads at the same time on two handles: every load has its own state.
-    a = ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, 90; fast=true)
-    b = ek_random_segment(rng, "LINKS", EK_LINK_COLS, 130; fast=true)
+    a = ek_random_segment(rng, "EVENTS", EK_EVENT_COLS, 90; fast = true)
+    b = ek_random_segment(rng, "LINKS", EK_LINK_COLS, 130; fast = true)
     pa = joinpath(dir, "two_a.bes")
     pb = joinpath(dir, "two_b.bes")
     ha = Almanac.ekopn(pa, "A")
@@ -861,12 +954,14 @@ end
 group("EK write: input checks give the errors of CSPICE") do
     dir = mktempdir()
     rng = MersenneTwister(SEED + 7)
-    cols = [EKColSpec("I", :INT; indexed=true), EKColSpec("D", :DP; nullok=true),
-        EKColSpec("C", :CHR; strlen=8, indexed=true), EKColSpec("IA", :INT; size=3),
-        EKColSpec("DA", :DP; size=-1, nullok=true), EKColSpec("CA", :CHR; strlen=6, size=2),
-        EKColSpec("T", :TIME)]
+    cols = [
+        EKColSpec("I", :INT; indexed = true), EKColSpec("D", :DP; nullok = true),
+        EKColSpec("C", :CHR; strlen = 8, indexed = true), EKColSpec("IA", :INT; size = 3),
+        EKColSpec("DA", :DP; size = -1, nullok = true), EKColSpec("CA", :CHR; strlen = 6, size = 2),
+        EKColSpec("T", :TIME),
+    ]
     seg = ek_random_segment(rng, "CHECKS", cols, 12)
-    fseg = ek_random_segment(rng, "FIXED", EKW_FIXED_COLS, 9; fast=true)
+    fseg = ek_random_segment(rng, "FIXED", EKW_FIXED_COLS, 9; fast = true)
     pc = ekw_write(EKW_C, joinpath(dir, "c_checks.bes"), [seg, fseg])
     pn = ekw_write(EKW_N, joinpath(dir, "n_checks.bes"), [seg, fseg])
     hc = c_ekopw(pc)
@@ -881,8 +976,10 @@ group("EK write: input checks give the errors of CSPICE") do
     # `zzeksdsc_` did not set when the segment number is bad, and only then look at the
     # error state. The read uses the garbage of the stack as a DAS address, and its
     # search took 525 s in one run on Julia 1.10.
-    function same(name, fname::Symbol, @nospecialize(args...); expect=nothing, handle::Bool=true,
-            oracle::Bool=true)
+    function same(
+            name, fname::Symbol, @nospecialize(args...); expect = nothing, handle::Bool = true,
+            oracle::Bool = true
+        )
         @assert oracle || expect !== nothing "a check without CSPICE needs the expected kind"
         kc = oracle ? c_kind(EKWCall(EKW_C[fname], handle ? (hc, args...) : args)) : expect
         kn = neo_kind(EKWCall(EKW_N[fname], handle ? (hn, args...) : args))
@@ -890,110 +987,143 @@ group("EK write: input checks give the errors of CSPICE") do
         @test kc == kn
         @test kc !== nothing
         expect === nothing || @test kn === expect
-        checked += 1
+        return checked += 1
     end
     one = ["DATATYPE = INTEGER"]
     # ekbseg: names.
-    same("table name too long", :ekbseg, "T"^65, ["A"], one; expect=:idstringtoolong)
-    same("table name not printable", :ekbseg, "T\tX", ["A"], one; expect=:nonprintablechars)
-    same("table name starts with digit", :ekbseg, "1T", ["A"], one; expect=:invalidname)
-    same("table name with blank", :ekbseg, "T X", ["A"], one; expect=:invalidname)
-    same("table name with leading blank", :ekbseg, " TX", ["A"], one; expect=:invalidname)
-    same("table name with minus", :ekbseg, "T-X", ["A"], one; expect=:invalidname)
-    same("table name empty", :ekbseg, "", ["A"], one; expect=:emptystring)
-    same("column name too long", :ekbseg, "T", ["A"^33], one; expect=:idstringtoolong)
-    same("column name invalid", :ekbseg, "T", ["A.B"], one; expect=:invalidname)
-    same("column name blank", :ekbseg, "T", [" "], one; expect=:invalidname)
-    same("101 columns", :ekbseg, "T", ["C$k" for k in 1:101], fill(one[1], 101);
-        expect=:invalidcount)
+    same("table name too long", :ekbseg, "T"^65, ["A"], one; expect = :idstringtoolong)
+    same("table name not printable", :ekbseg, "T\tX", ["A"], one; expect = :nonprintablechars)
+    same("table name starts with digit", :ekbseg, "1T", ["A"], one; expect = :invalidname)
+    same("table name with blank", :ekbseg, "T X", ["A"], one; expect = :invalidname)
+    same("table name with leading blank", :ekbseg, " TX", ["A"], one; expect = :invalidname)
+    same("table name with minus", :ekbseg, "T-X", ["A"], one; expect = :invalidname)
+    same("table name empty", :ekbseg, "", ["A"], one; expect = :emptystring)
+    same("column name too long", :ekbseg, "T", ["A"^33], one; expect = :idstringtoolong)
+    same("column name invalid", :ekbseg, "T", ["A.B"], one; expect = :invalidname)
+    same("column name blank", :ekbseg, "T", [" "], one; expect = :invalidname)
+    same(
+        "101 columns", :ekbseg, "T", ["C$k" for k in 1:101], fill(one[1], 101);
+        expect = :invalidcount
+    )
     # ekbseg: declarations.
     for (name, decl, kind) in (
-        ("no DATATYPE", "SIZE = 3", :badcolumdecl),
-        ("blank declaration", " ", :badcolumdecl),
-        ("DATATYPE without value", "INDEXED = TRUE, DATATYPE", :badcolumndecl),
-        ("unknown type", "DATATYPE = REAL", :badcolumndecl),
-        ("INTEGER with suffix", "DATATYPE = INTEGER*4", :badcolumndecl),
-        ("CHARACTER without asterisk", "DATATYPE = CHARACTER(10)", :badcolumndecl),
-        ("CHARACTER alone", "DATATYPE = CHARACTER", :badcolumndecl),
-        ("CHARACTER length not a number", "DATATYPE = CHARACTER*(TEN)", :badcolumndecl),
-        ("CHARACTER length missing", "DATATYPE = CHARACTER*()", :badcolumndecl),
-        ("SIZE without value", "DATATYPE = INTEGER, SIZE", :badcolumndecl),
-        ("SIZE not a number", "DATATYPE = INTEGER, SIZE = MANY", :badcolumndecl),
-        ("VARIABLE size of CHARACTER*(*)", "DATATYPE = CHARACTER*(*), SIZE = VARIABLE", :badcolumndecl),
-        ("NULLS_OK without value", "DATATYPE = TIME, NULLS_OK", :badcolumndecl),
-        ("NULLS_OK not a boolean", "DATATYPE = TIME, NULLS_OK = YES", :badcolumndecl),
-        ("INDEXED without value", "DATATYPE = TIME, INDEXED", :badcolumndecl),
-        ("INDEXED not a boolean", "DATATYPE = TIME, INDEXED = 1", :badcolumndecl),
-        ("index on array column", "DATATYPE = INTEGER, SIZE = 3, INDEXED = TRUE", :badcolumndecl),
-        ("FIXED_COUNT without value", "DATATYPE = TIME, FIXED_COUNT", :badcolumndecl),
-        ("FIXED_COUNT not a boolean", "DATATYPE = TIME, FIXED_COUNT = NO", :badcolumndecl),
-        ("FIXED_COUNT on array column", "DATATYPE = DOUBLE PRECISION, SIZE = 2, FIXED_COUNT = TRUE",
-            :badcolumndecl))
-        same("declaration: $name", :ekbseg, "T", ["A"], [decl]; expect=kind)
+            ("no DATATYPE", "SIZE = 3", :badcolumdecl),
+            ("blank declaration", " ", :badcolumdecl),
+            ("DATATYPE without value", "INDEXED = TRUE, DATATYPE", :badcolumndecl),
+            ("unknown type", "DATATYPE = REAL", :badcolumndecl),
+            ("INTEGER with suffix", "DATATYPE = INTEGER*4", :badcolumndecl),
+            ("CHARACTER without asterisk", "DATATYPE = CHARACTER(10)", :badcolumndecl),
+            ("CHARACTER alone", "DATATYPE = CHARACTER", :badcolumndecl),
+            ("CHARACTER length not a number", "DATATYPE = CHARACTER*(TEN)", :badcolumndecl),
+            ("CHARACTER length missing", "DATATYPE = CHARACTER*()", :badcolumndecl),
+            ("SIZE without value", "DATATYPE = INTEGER, SIZE", :badcolumndecl),
+            ("SIZE not a number", "DATATYPE = INTEGER, SIZE = MANY", :badcolumndecl),
+            ("VARIABLE size of CHARACTER*(*)", "DATATYPE = CHARACTER*(*), SIZE = VARIABLE", :badcolumndecl),
+            ("NULLS_OK without value", "DATATYPE = TIME, NULLS_OK", :badcolumndecl),
+            ("NULLS_OK not a boolean", "DATATYPE = TIME, NULLS_OK = YES", :badcolumndecl),
+            ("INDEXED without value", "DATATYPE = TIME, INDEXED", :badcolumndecl),
+            ("INDEXED not a boolean", "DATATYPE = TIME, INDEXED = 1", :badcolumndecl),
+            ("index on array column", "DATATYPE = INTEGER, SIZE = 3, INDEXED = TRUE", :badcolumndecl),
+            ("FIXED_COUNT without value", "DATATYPE = TIME, FIXED_COUNT", :badcolumndecl),
+            ("FIXED_COUNT not a boolean", "DATATYPE = TIME, FIXED_COUNT = NO", :badcolumndecl),
+            (
+                "FIXED_COUNT on array column", "DATATYPE = DOUBLE PRECISION, SIZE = 2, FIXED_COUNT = TRUE",
+                :badcolumndecl,
+            ),
+        )
+        same("declaration: $name", :ekbseg, "T", ["A"], [decl]; expect = kind)
     end
-    same("fixed-count and other columns", :ekbseg, "T", ["A", "B"],
-            ["DATATYPE = INTEGER", "DATATYPE = INTEGER, FIXED_COUNT = TRUE"]; expect=:badattributes)
+    same(
+        "fixed-count and other columns", :ekbseg, "T", ["A", "B"],
+        ["DATATYPE = INTEGER", "DATATYPE = INTEGER, FIXED_COUNT = TRUE"]; expect = :badattributes
+    )
     # Segment and row numbers.
     # The record calls check the segment number in `_ekw_segment` and the six entry
     # calls check segment, column and row in `_ekw_locate`: both bounds are checked
     # through one call of each kind, and one bad number through each of the others.
     for segno in (0, 3)
-        same("ekappr segment $segno", :ekappr, segno; expect=:invalidindex)
-        same("ekacei segment $segno", :ekacei, segno, 1, "I", [1], false; expect=:invalidindex, oracle=false)
+        same("ekappr segment $segno", :ekappr, segno; expect = :invalidindex)
+        same("ekacei segment $segno", :ekacei, segno, 1, "I", [1], false; expect = :invalidindex, oracle = false)
     end
-    same("ekinsr segment 3", :ekinsr, 3, 1; expect=:invalidindex)
-    same("ekdelr segment 3", :ekdelr, 3, 1; expect=:invalidindex)
-    same("ekucei segment 3", :ekucei, 3, 1, "I", [1], false; expect=:invalidindex, oracle=false)
+    same("ekinsr segment 3", :ekinsr, 3, 1; expect = :invalidindex)
+    same("ekdelr segment 3", :ekdelr, 3, 1; expect = :invalidindex)
+    same("ekucei segment 3", :ekucei, 3, 1, "I", [1], false; expect = :invalidindex, oracle = false)
     for recno in (0, 14)
-        same("ekinsr row $recno", :ekinsr, 1, recno; expect=:invalidindex)
+        same("ekinsr row $recno", :ekinsr, 1, recno; expect = :invalidindex)
     end
     for recno in (0, 13)
-        same("ekdelr row $recno", :ekdelr, 1, recno; expect=:invalidindex)
-        same("ekacei row $recno", :ekacei, 1, recno, "IA", [1, 2, 3], false;
-            expect=:indexoutofrange)
+        same("ekdelr row $recno", :ekdelr, 1, recno; expect = :invalidindex)
+        same(
+            "ekacei row $recno", :ekacei, 1, recno, "IA", [1, 2, 3], false;
+            expect = :indexoutofrange
+        )
     end
-    same("ekuced row 13", :ekuced, 1, 13, "D", [1.0], false; expect=:indexoutofrange)
+    same("ekuced row 13", :ekuced, 1, 13, "D", [1.0], false; expect = :indexoutofrange)
     # Columns and data types: each call has its own data types.
-    for (fname, bad) in ((:ekacec, "I"), (:ekaced, "C"), (:ekacei, "T"), (:ekucec, "D"),
-        (:ekuced, "IA"), (:ekucei, "DA"))
+    for (fname, bad) in (
+            (:ekacec, "I"), (:ekaced, "C"), (:ekacei, "T"), (:ekucec, "D"),
+            (:ekuced, "IA"), (:ekucei, "DA"),
+        )
         vals = fname in (:ekacec, :ekucec) ? ["x", "y"] : fname in (:ekaced, :ekuced) ? [1.0] : [1, 2, 3]
-        same("$fname wrong type", fname, 1, 1, bad, vals, false; expect=:wrongdatatype)
+        same("$fname wrong type", fname, 1, 1, bad, vals, false; expect = :wrongdatatype)
     end
     for (fname, vals) in ((:ekacec, ["x", "y"]), (:ekucei, [1, 2, 3]))
-        same("$fname unknown column", fname, 1, 1, "NOPE", vals, false; expect=:bug)
-        same("$fname empty column name", fname, 1, 1, "", vals, false; expect=:emptystring)
+        same("$fname unknown column", fname, 1, 1, "NOPE", vals, false; expect = :bug)
+        same("$fname empty column name", fname, 1, 1, "", vals, false; expect = :emptystring)
     end
     # Entries.
-    same("value in a full scalar entry (integer)", :ekacei, 1, 1, "I", [5], false;
-        expect=:nonemptyentry)
-    same("value in a full scalar entry (double)", :ekaced, 1, 1, "T", [5.0], false;
-        expect=:nonemptyentry)
+    same(
+        "value in a full scalar entry (integer)", :ekacei, 1, 1, "I", [5], false;
+        expect = :nonemptyentry
+    )
+    same(
+        "value in a full scalar entry (double)", :ekaced, 1, 1, "T", [5.0], false;
+        expect = :nonemptyentry
+    )
     both(f) = (f(EKW_C, hc); f(EKW_N, hn))
     both((w, h) -> w.ekappr(h, 1))
-    same("null in a column without nulls (integer)", :ekacei, 1, 13, "I", [0], true;
-        expect=:badattribute)
-    same("null in a column without nulls (string)", :ekacec, 1, 13, "C", [" "], true;
-        expect=:badattribute)
-    same("null in a column without nulls (array)", :ekacei, 1, 13, "IA", [0, 0, 0], true;
-        expect=:badattribute)
-    same("null in a column without nulls (strings)", :ekacec, 1, 13, "CA", [" ", " "], true;
-        expect=:badattribute)
-    same("wrong entry size (integer)", :ekacei, 1, 13, "IA", [1, 2], false;
-        expect=:invalidcount)
-    same("wrong entry size (strings)", :ekacec, 1, 13, "CA", ["a", "b", "c"], false;
-        expect=:invalidcount)
+    same(
+        "null in a column without nulls (integer)", :ekacei, 1, 13, "I", [0], true;
+        expect = :badattribute
+    )
+    same(
+        "null in a column without nulls (string)", :ekacec, 1, 13, "C", [" "], true;
+        expect = :badattribute
+    )
+    same(
+        "null in a column without nulls (array)", :ekacei, 1, 13, "IA", [0, 0, 0], true;
+        expect = :badattribute
+    )
+    same(
+        "null in a column without nulls (strings)", :ekacec, 1, 13, "CA", [" ", " "], true;
+        expect = :badattribute
+    )
+    same(
+        "wrong entry size (integer)", :ekacei, 1, 13, "IA", [1, 2], false;
+        expect = :invalidcount
+    )
+    same(
+        "wrong entry size (strings)", :ekacec, 1, 13, "CA", ["a", "b", "c"], false;
+        expect = :invalidcount
+    )
     # (fault fixed: an update that throws deleted the old entry first, as CSPICE does;
     # the entry is now as it was. A valid update then brings the two files together
     # again: CSPICE has deleted the old entry already, Almanac deletes it now.)
     old_ia = Almanac.ekrcei(hn, 1, 2, "IA")
     old_c = Almanac.ekrcec(hn, 1, 3, "C")
     old_ca = Almanac.ekrcec(hn, 1, 3, "CA")
-    same("wrong entry size in update", :ekucei, 1, 2, "IA", [1, 2, 3, 4], false;
-        expect=:invalidcount)
-    same("update to null without nulls", :ekucec, 1, 3, "C", [" "], true;
-        expect=:badattribute)
-    same("wrong entry size in update (strings)", :ekucec, 1, 3, "CA", ["a"], false;
-        expect=:invalidcount)
+    same(
+        "wrong entry size in update", :ekucei, 1, 2, "IA", [1, 2, 3, 4], false;
+        expect = :invalidcount
+    )
+    same(
+        "update to null without nulls", :ekucec, 1, 3, "C", [" "], true;
+        expect = :badattribute
+    )
+    same(
+        "wrong entry size in update (strings)", :ekucec, 1, 3, "CA", ["a"], false;
+        expect = :invalidcount
+    )
     @test Almanac.ekrcei(hn, 1, 2, "IA") == old_ia
     @test Almanac.ekrcec(hn, 1, 3, "C") == old_c
     @test Almanac.ekrcec(hn, 1, 3, "CA") == old_ca
@@ -1003,13 +1133,15 @@ group("EK write: input checks give the errors of CSPICE") do
     # (fault fixed: a second `ekacec`, or a second `ekacei`/`ekaced` of an array column,
     # wrote the entry again and left the pages of the first one in use, as CSPICE does;
     # the three calls now throw for every column class. Almanac only: CSPICE has no check.)
-    for (fname, col, vals) in ((:ekacec, "C", ["x"]), (:ekacec, "CA", ["x", "y"]),
-        (:ekacei, "IA", [1, 2, 3]), (:ekaced, "DA", [1.0]))
+    for (fname, col, vals) in (
+            (:ekacec, "C", ["x"]), (:ekacec, "CA", ["x", "y"]),
+            (:ekacei, "IA", [1, 2, 3]), (:ekaced, "DA", [1.0]),
+        )
         @test neo_kind(EKWCall(EKW_N[fname], (hn, 1, 1, col, vals, false))) === :nonemptyentry
     end
     # Fast writers.
-    same("ekifld without rows", :ekifld, "T", 0, ["A"], one; expect=:invalidcount)
-    same("ekifld with bad name", :ekifld, "T T", 3, ["A"], one; expect=:invalidname)
+    same("ekifld without rows", :ekifld, "T", 0, ["A"], one; expect = :invalidcount)
+    same("ekifld with bad name", :ekifld, "T T", 3, ["A"], one; expect = :invalidname)
     # After the errors both files hold the same words, and both handles still work.
     both((w, h) -> ekw_fill(w, h, 1, 13, cols, [ek_random_entry(MersenneTwister(5), c, 1) for c in cols]))
     both((w, h) -> w.ekdelr(h, 1, 4))
@@ -1025,19 +1157,22 @@ group("EK write: input checks give the errors of CSPICE") do
         (:ekappr, (1,)),
         (:ekinsr, (1, 1)),
         (:ekdelr, (1, 1)),
-        (:ekifld, ("T", 2, ["A"], one))]
+        (:ekifld, ("T", 2, ["A"], one)),
+    ]
     for (fname, args) in calls
-        same("$fname with a read handle", fname, args...; expect=:dasinvalidaccess)
+        same("$fname with a read handle", fname, args...; expect = :dasinvalidaccess)
     end
     c_ekcls(hc)
     ekcls(hn)
     for (fname, args) in calls
-        same("$fname with a closed handle", fname, args...; expect=:dasnosuchhandle)
+        same("$fname with a closed handle", fname, args...; expect = :dasnosuchhandle)
     end
-    same("ekopn with a negative comment count", :ekopn, joinpath(dir, "neg.bes"), "X", -1;
-        expect=:invalidcount, handle=false)
+    same(
+        "ekopn with a negative comment count", :ekopn, joinpath(dir, "neg.bes"), "X", -1;
+        expect = :invalidcount, handle = false
+    )
     @test !ispath(joinpath(dir, "neg.bes"))
-    same("ekopw of a missing file", :ekopw, joinpath(dir, "missing.bes"); handle=false)
+    same("ekopw of a missing file", :ekopw, joinpath(dir, "missing.bes"); handle = false)
     isempty(mismatch) || foreach(println, mismatch)
 
     # Checks of Almanac whose CSPICE counterpart differs or does not exist.
@@ -1085,9 +1220,13 @@ group("EK write: input checks give the errors of CSPICE") do
     # BoundsError. CSPICE stops the process with BADSUBSCRIPT in `zzekac04` and
     # `zzekac05`, and signals OUTOFRANGE in `zzekac06`, so the kinds are not compared live.)
     hv = Almanac.ekopn(joinpath(dir, "sizes.bes"), "OWN")
-    sv, rv = Almanac.ekifld(hv, "V", 3, ["I", "D", "C"],
-        ["DATATYPE = INTEGER, SIZE = VARIABLE, NULLS_OK = TRUE",
-            "DATATYPE = DOUBLE PRECISION, SIZE = VARIABLE", "DATATYPE = CHARACTER*(8), SIZE = VARIABLE"])
+    sv, rv = Almanac.ekifld(
+        hv, "V", 3, ["I", "D", "C"],
+        [
+            "DATATYPE = INTEGER, SIZE = VARIABLE, NULLS_OK = TRUE",
+            "DATATYPE = DOUBLE PRECISION, SIZE = VARIABLE", "DATATYPE = CHARACTER*(8), SIZE = VARIABLE",
+        ]
+    )
     words = (copy(hv.chars), copy(hv.dps), copy(hv.ints))
     @test neo_kind(() -> Almanac.ekacli(hv, sv, "I", [1, 2, 3, 4], [2, 0, 2], falses(3), rv)) === :badsubscript
     @test neo_kind(() -> Almanac.ekacld(hv, sv, "D", [1.0, 2, 3, 4], [2, -1, 3], falses(3), rv)) === :badsubscript
@@ -1101,8 +1240,10 @@ group("EK write: input checks give the errors of CSPICE") do
     Almanac.ekffld(hv, sv, rv)
     @test Almanac.ekrcec(hv, sv, 2, "C") == (String[], false)
     ekcls(hv)
-    measured("ek_write: $checked input checks with the error kind of CSPICE, " *
-             "$(length(mismatch)) mismatches; $nw words equal after the failed calls")
+    measured(
+        "ek_write: $checked input checks with the error kind of CSPICE, " *
+            "$(length(mismatch)) mismatches; $nw words equal after the failed calls"
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -1111,12 +1252,16 @@ end
 
 group("EK write: a new record has no entries until they are written") do
     dir = mktempdir()
-    cols = [EKColSpec("I", :INT; indexed=true), EKColSpec("C", :CHR; strlen=-1, indexed=true),
-        EKColSpec("DA", :DP; size=-1), EKColSpec("CA", :CHR; strlen=6, size=2)]
-    rows = Vector{Any}[Any[Any[7], Any["seven"], Any[1.5, 2.5], Any["a", "b"]],
-        Any[Any[9], Any["nine"], Any[3.5], Any["c", "d"]]]
-    kinds = Dict{String,Any}()
-    paths = Dict{String,String}()
+    cols = [
+        EKColSpec("I", :INT; indexed = true), EKColSpec("C", :CHR; strlen = -1, indexed = true),
+        EKColSpec("DA", :DP; size = -1), EKColSpec("CA", :CHR; strlen = 6, size = 2),
+    ]
+    rows = Vector{Any}[
+        Any[Any[7], Any["seven"], Any[1.5, 2.5], Any["a", "b"]],
+        Any[Any[9], Any["nine"], Any[3.5], Any["c", "d"]],
+    ]
+    kinds = Dict{String, Any}()
+    paths = Dict{String, String}()
     for (e, w, rdi, rdc) in (("c", EKW_C, c_ekrcei, c_ekrcec), ("n", EKW_N, ekrcei, ekrcec))
         kind = e == "c" ? c_kind : neo_kind
         paths[e] = joinpath(dir, "$(e)_new.bes")
@@ -1155,7 +1300,8 @@ end
 
 group("EK write: column declarations are read as CSPICE reads them") do
     dir = mktempdir()
-    decls = ["datatype = integer", "DATATYPE=DOUBLE PRECISION,NULLS_OK=TRUE",
+    decls = [
+        "datatype = integer", "DATATYPE=DOUBLE PRECISION,NULLS_OK=TRUE",
         "DATATYPE = double   precision , INDEXED = true", "DATATYPE = DOUBLEPRECISION",
         "DATATYPE = T I M E, INDEXED = FALSE, NULLS_OK = FALSE",
         "DATATYPE = CHARACTER * ( 10 ), INDEXED = TRUE", "DATATYPE = character*(*)",
@@ -1164,17 +1310,20 @@ group("EK write: column declarations are read as CSPICE reads them") do
         "DATATYPE = INTEGER, FIXED_COUNT = FALSE", "DATATYPE = INTEGER, SIZE = 1, INDEXED = TRUE",
         "DATATYPE = INTEGER, SIZE = 2.9", "DATATYPE = CHARACTER*(1.2E1)",
         "DATATYPE = INTEGER, SIZE = 1, SIZE = 2", "DATATYPE = INTEGER,, SIZE = 2",
-        "DATATYPE = TIME, UNKNOWN = 3", "DATATYPE = DOUBLE PRECISION, SIZE = -1"]
-    fixed = ["DATATYPE = INTEGER, FIXED_COUNT = TRUE, INDEXED = TRUE",
+        "DATATYPE = TIME, UNKNOWN = 3", "DATATYPE = DOUBLE PRECISION, SIZE = -1",
+    ]
+    fixed = [
+        "DATATYPE = INTEGER, FIXED_COUNT = TRUE, INDEXED = TRUE",
         "FIXED_COUNT = TRUE, DATATYPE = CHARACTER*(7), NULLS_OK = TRUE",
-        "DATATYPE = TIME, FIXED_COUNT = true"]
+        "DATATYPE = TIME, FIXED_COUNT = true",
+    ]
     paths = String[]
     for (e, w) in (("c", EKW_C), ("n", EKW_N))
         path = joinpath(dir, "$(e)_decl.bes")
         h = w.ekopn(path, "DECL", 0)
         w.ekbseg(h, "mixed_Case\$1", ["Col_$k" for k in 1:length(decls)], decls)
         w.ekbseg(h, "F", ["x$k" for k in 1:length(fixed)], fixed)
-        w.ekbseg(h, "WIDE", ["C$k" for k in 1:100], [decls[1+k%length(decls)] for k in 1:100])
+        w.ekbseg(h, "WIDE", ["C$k" for k in 1:100], [decls[1 + k % length(decls)] for k in 1:100])
         w.ekcls(h)
         push!(paths, path)
     end
@@ -1196,7 +1345,7 @@ group("EK write: a scratch EK (ekops) holds what the file of ekopn holds") do
     dir = mktempdir()
     before = readdir(dir)
     words = 0
-    for (name, segs) in ek_standard_model(SEED; scale=EKW_SCALE)
+    for (name, segs) in ek_standard_model(SEED; scale = EKW_SCALE)
         h = ekops()
         foreach(seg -> ekw_write_segment(EKW_N, h, seg), segs)
         @test eknseg(h) == length(segs)

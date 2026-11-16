@@ -6,14 +6,22 @@
 "Integer components of the CK descriptor `descr`; throws `SpiceError(:ckwrongdatatype)` unless the data type is `dtype`."
 function _ck_descr_ic(who::AbstractString, descr::AbstractVector{<:Real}, dtype::Int)
     _, ic = dafus(descr, 2, 6)
-    ic[3] == dtype || throw(SpiceError(:ckwrongdatatype, "$who: the data type of the " *
-        "segment should be $dtype; the descriptor shows type $(ic[3])"))
+    ic[3] == dtype || throw(
+        SpiceError(
+            :ckwrongdatatype, "$who: the data type of the " *
+                "segment should be $dtype; the descriptor shows type $(ic[3])"
+        )
+    )
     return ic
 end
 
 function _ck_check_recno(who::AbstractString, recno::Integer, nrec::Int)
-    1 <= recno <= nrec || throw(SpiceError(:cknonexistrec, "$who: the requested record " *
-        "number ($recno) does not exist; there are $nrec records in the segment"))
+    1 <= recno <= nrec || throw(
+        SpiceError(
+            :cknonexistrec, "$who: the requested record " *
+                "number ($recno) does not exist; there are $nrec records in the segment"
+        )
+    )
     return nothing
 end
 
@@ -80,8 +88,10 @@ function ckgr02(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     prec = dafgda(h, addr, addr + 7)             # quaternion, angular velocity, rate
     start = dafgda(h, beg + 8nrec + recno - 1, beg + 8nrec + recno - 1)[1]
     stop = dafgda(h, beg + 9nrec + recno - 1, beg + 9nrec + recno - 1)[1]
-    record = Float64[start, stop, prec[8], prec[1], prec[2], prec[3], prec[4], prec[5],
-        prec[6], prec[7]]
+    record = Float64[
+        start, stop, prec[8], prec[1], prec[2], prec[3], prec[4], prec[5],
+        prec[6], prec[7],
+    ]
     @assert length(record) == 10
     return record
 end

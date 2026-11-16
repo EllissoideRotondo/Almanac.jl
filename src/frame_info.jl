@@ -66,14 +66,14 @@ end
 The built-in frames of `zzfdat_` as `(ID, name, center)`, in the order of the centers
 and, for equal centers, of the table (the order vector that `orderi_` gives).
 """
-const _FRAME_CENTER_ORDER = let all = Tuple{Int,String,Int}[]
+const _FRAME_CENTER_ORDER = let all = Tuple{Int, String, Int}[]
     for (i, d) in enumerate(INERTIAL_FRAME_DEFS)
         push!(all, (i, String(d[1]), 0))
     end
     for f in BUILTIN_NONINERTIAL_FRAMES
         push!(all, (Int(f.id), f.name, Int(f.center)))
     end
-    sort!(all; by=x -> x[3], alg=MergeSort)
+    sort!(all; by = x -> x[3], alg = MergeSort)
 end
 
 """
@@ -200,8 +200,12 @@ throws `SpiceError(:kernelvarnotfound)`. CSPICE takes the order of its hash tabl
 can return a match before it meets a malformed definition that this check meets first.
 """
 function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
-    bad(key, what) = throw(SpiceError(:invalidframedef, "invalid frame specification " *
-        "found in kernel pool: frame class keyword is $key but $what"))
+    bad(key, what) = throw(
+        SpiceError(
+            :invalidframedef, "invalid frame specification " *
+                "found in kernel pool: frame class keyword is $key but $what"
+        )
+    )
     for key in sort!([k for k in keys(ks.pool) if occursin(r"^FRAME_.*_CLASS$", k)])
         v = ks.pool[key]
         (v isa Vector{Float64} && !isempty(v)) ||
@@ -211,17 +215,25 @@ function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
         (id isa Vector{Float64} && !isempty(id)) ||
             bad(key, "associated integer class ID assignment was not found")
         round(Int, id[1]) == clssid || continue
-        name = get(ks.pool, key[1:end-6] * "_NAME", nothing)
+        name = get(ks.pool, key[1:(end - 6)] * "_NAME", nothing)
         (name isa Vector{String} && !isempty(name)) ||
             bad(key, "associated frame name assignment was not found")
         code = get(ks.pool, "FRAME_" * strip(name[1]), nothing)
-        (code isa Vector{Float64} && !isempty(code)) || throw(SpiceError(:invalidframedef,
-            "invalid frame specification found in kernel pool: frame name is " *
-            "$(strip(name[1])) but associated frame ID assignment was not found"))
+        (code isa Vector{Float64} && !isempty(code)) || throw(
+            SpiceError(
+                :invalidframedef,
+                "invalid frame specification found in kernel pool: frame name is " *
+                    "$(strip(name[1])) but associated frame ID assignment was not found"
+            )
+        )
         center = "FRAME_$(round(Int, code[1]))_CENTER"
-        haskey(ks.pool, center) || throw(SpiceError(:kernelvarnotfound,
-            "the center of frame $(strip(name[1])), the kernel variable $center, is not in " *
-            "the kernel pool"))
+        haskey(ks.pool, center) || throw(
+            SpiceError(
+                :kernelvarnotfound,
+                "the center of frame $(strip(name[1])), the kernel variable $center, is not in " *
+                    "the kernel pool"
+            )
+        )
         return nothing
     end
     return nothing
@@ -229,15 +241,22 @@ end
 
 "Throws `SpiceError(:badframeclass)` unless `frmcls` is -1 or a class 1 to 6, as `bltfrm_` and `kplfrm_`."
 function _check_frame_class(who::AbstractString, frmcls::Integer)
-    (frmcls == -1 || 1 <= frmcls <= 6) || throw(SpiceError(:badframeclass,
-        "$who: the frame class $frmcls is not supported; it must be -1 (all) or 1 to 6"))
+    (frmcls == -1 || 1 <= frmcls <= 6) || throw(
+        SpiceError(
+            :badframeclass,
+            "$who: the frame class $frmcls is not supported; it must be -1 (all) or 1 to 6"
+        )
+    )
     return nothing
 end
 
 "The built-in frames of `zzfdat_` as `(ID, class)`, in the order of the IDs."
-const _BUILTIN_FRAME_CLASSES = sort!(vcat(
-    [(i, 1) for i in eachindex(INERTIAL_FRAME_DEFS)],
-    [(Int(f.id), Int(f.class)) for f in BUILTIN_NONINERTIAL_FRAMES]))
+const _BUILTIN_FRAME_CLASSES = sort!(
+    vcat(
+        [(i, 1) for i in eachindex(INERTIAL_FRAME_DEFS)],
+        [(Int(f.id), Int(f.class)) for f in BUILTIN_NONINERTIAL_FRAMES]
+    )
+)
 
 """
     bltfrm(frmcls) -> Vector{Int}
@@ -298,8 +317,10 @@ function kplfrm(ks::KernelSet, frmcls::Integer)
     pool = ks.pool
     # `gipool_` gives the first value of a numeric variable, rounded; names are 32
     # characters long in CSPICE, so a longer name is cut.
-    getint(key) = (v = get(pool, first(key, 32), nothing);
-        v isa Vector{Float64} && !isempty(v) ? _nint(v[1]) : nothing)
+    getint(key) = (
+        v = get(pool, first(key, 32), nothing);
+        v isa Vector{Float64} && !isempty(v) ? _nint(v[1]) : nothing
+    )
     ids = Int[]
     for (key, val) in pool
         _pool_x_match(key, "FRAME_*_NAME") || continue
@@ -381,13 +402,21 @@ end
 "ID of the built-in inertial frame `ref` (name or ID); throws `SpiceError(:irfnotrec)` otherwise, as `irfrot_`."
 function _irf_id(ref::AbstractString)
     id = get(BUILTIN_FRAMENAME2ID, normalize_name(ref), Int32(0))
-    1 <= id <= N_INERTIAL_FRAMES || throw(SpiceError(:irfnotrec,
-        "the frame '$ref' is not a recognized inertial frame"))
+    1 <= id <= N_INERTIAL_FRAMES || throw(
+        SpiceError(
+            :irfnotrec,
+            "the frame '$ref' is not a recognized inertial frame"
+        )
+    )
     return id
 end
 function _irf_id(ref::Integer)
-    1 <= ref <= N_INERTIAL_FRAMES || throw(SpiceError(:irfnotrec,
-        "the frame with ID $ref is not a recognized inertial frame"))
+    1 <= ref <= N_INERTIAL_FRAMES || throw(
+        SpiceError(
+            :irfnotrec,
+            "the frame with ID $ref is not a recognized inertial frame"
+        )
+    )
     return Int32(ref)
 end
 
@@ -567,10 +596,18 @@ julia> bodvcd(ctx, 399, "RADII")
 function bodvcd(ks::KernelSet, bodyid::Integer, item::AbstractString)
     key = string("BODY", bodyid, "_", strip(item))
     v = get(ks.pool, key, nothing)
-    v === nothing && throw(SpiceError(:kernelvarnotfound,
-        "the variable $key could not be found in the kernel pool"))
-    v isa Vector{Float64} || throw(SpiceError(:typemismatch,
-        "the data associated with variable $key are not of numeric type"))
+    v === nothing && throw(
+        SpiceError(
+            :kernelvarnotfound,
+            "the variable $key could not be found in the kernel pool"
+        )
+    )
+    v isa Vector{Float64} || throw(
+        SpiceError(
+            :typemismatch,
+            "the data associated with variable $key are not of numeric type"
+        )
+    )
     return copy(v)
 end
 

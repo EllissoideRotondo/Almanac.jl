@@ -87,16 +87,24 @@ julia> ekcls(h)
 See also [`ekopw`](@ref), [`ekops`](@ref), [`ekbseg`](@ref), [`ekappr`](@ref),
 [`ekacec`](@ref), [`ekfind`](@ref).
 """
-function ekopn(path::AbstractString, ifname::AbstractString, ncomch::Integer=0)
-    (isempty(path) || isempty(ifname)) && throw(SpiceError(:emptystring,
-        "ekopn: the file name and the internal file name must not be empty"))
-    ncomch < 0 && throw(SpiceError(:invalidcount, "The number of reserved comment " *
-        "characters must be non-negative but was $ncomch."))
+function ekopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
+    (isempty(path) || isempty(ifname)) && throw(
+        SpiceError(
+            :emptystring,
+            "ekopn: the file name and the internal file name must not be empty"
+        )
+    )
+    ncomch < 0 && throw(
+        SpiceError(
+            :invalidcount, "The number of reserved comment " *
+                "characters must be non-negative but was $ncomch."
+        )
+    )
     h = dasonw(path, "EK", ifname, (Int(ncomch) + 1023) ÷ 1024)
     _ekw_pgin(h)
     p, base = _ekw_pgan(h, 3)
     tree = _ekw_trit(h)
-    h.ints[base+1] = tree
+    h.ints[base + 1] = tree
     return h
 end
 
@@ -118,7 +126,7 @@ function ekops()
     _ekw_pgin(h)
     p, base = _ekw_pgan(h, 3)
     tree = _ekw_trit(h)
-    h.ints[base+1] = tree
+    h.ints[base + 1] = tree
     return h
 end
 
@@ -169,11 +177,19 @@ The check of `chckid`: the last non-blank character of `id` is at a position not
 function _ekw_chckid(class::AbstractString, maxlen::Int, id::AbstractString)
     b = codeunits(id)
     l = something(findlast(!=(UInt8(' ')), b), 0)
-    l > maxlen && throw(SpiceError(:idstringtoolong, "The $class '$id' is invalid; the last " *
-        "non-blank character is located at position $l; the maximum allowed length is $maxlen."))
+    l > maxlen && throw(
+        SpiceError(
+            :idstringtoolong, "The $class '$id' is invalid; the last " *
+                "non-blank character is located at position $l; the maximum allowed length is $maxlen."
+        )
+    )
     i = findfirst(c -> c < 0x20 || c > 0x7e, b)
-    i === nothing || throw(SpiceError(:nonprintablechars, "The $class is invalid; this " *
-        "string contains a non-printing character (ICHAR = $(b[i])) at position $i."))
+    i === nothing || throw(
+        SpiceError(
+            :nonprintablechars, "The $class is invalid; this " *
+                "string contains a non-printing character (ICHAR = $(b[i])) at position $i."
+        )
+    )
     return nothing
 end
 
@@ -236,7 +252,7 @@ function _ekw_lparsm(list::AbstractString, delims::AbstractString, nmax::Int)
         while e <= eol && !isdelim(e)
             e += 1
         end
-        push!(items, String(rstrip(String(c[b:e-1]), ' ')))
+        push!(items, String(rstrip(String(c[b:(e - 1)]), ' ')))
         length(items) < nmax || return items
         b = e + 1
     end
@@ -270,11 +286,17 @@ function _ekw_pdec(decl::AbstractString)
         j = findfirst(==(tokens[i]), keys)
         j === nothing || (attloc[j] = i)
     end
-    attloc[1] == 0 && throw(SpiceError(:badcolumdecl,
-        "Required keyword DATATYPE was not found in column declaration $decl."))
+    attloc[1] == 0 && throw(
+        SpiceError(
+            :badcolumdecl,
+            "Required keyword DATATYPE was not found in column declaration $decl."
+        )
+    )
     tokloc = attloc[1] + 1
-    n < tokloc && _ekw_baddecl("Column data type specification did not follow \"DATATYPE\" " *
-        "keyword.", decl)
+    n < tokloc && _ekw_baddecl(
+        "Column data type specification did not follow \"DATATYPE\" " *
+            "keyword.", decl
+    )
     tok = tokens[tokloc]
     if tok == "INTEGER"
         pardsc[_EK_TYPIDX] = _EK_INT
@@ -289,14 +311,18 @@ function _ekw_pdec(decl::AbstractString)
         pardsc[_EK_TYPIDX] = _EK_CHR
         tok = filter(c -> c != ' ' && c != '(' && c != ')', tok)
         b = codeunits(tok)
-        (length(b) >= 10 && b[10] == UInt8('*')) || _ekw_baddecl("Required asterisk missing " *
-            "from character column declaration:  $tok.", decl)
+        (length(b) >= 10 && b[10] == UInt8('*')) || _ekw_baddecl(
+            "Required asterisk missing " *
+                "from character column declaration:  $tok.", decl
+        )
         if length(b) >= 11 && b[11] == UInt8('*')
             pardsc[_EK_LENIDX] = -1
         else
             len = _ekw_nparsi(String(b[11:end]))
-            len === nothing && _ekw_baddecl("String length specification $tok didn't parse " *
-                "as an integer.", decl)
+            len === nothing && _ekw_baddecl(
+                "String length specification $tok didn't parse " *
+                    "as an integer.", decl
+            )
             pardsc[_EK_LENIDX] = len
         end
     else
@@ -304,17 +330,22 @@ function _ekw_pdec(decl::AbstractString)
     end
     if attloc[2] != 0
         tokloc = attloc[2] + 1
-        n < tokloc && _ekw_baddecl("Column size specification did not follow \"SIZE\" " *
-            "keyword.", decl)
+        n < tokloc && _ekw_baddecl(
+            "Column size specification did not follow \"SIZE\" " *
+                "keyword.", decl
+        )
         tok = tokens[tokloc]
         if tok == "VARIABLE"
             (pardsc[_EK_TYPIDX] == _EK_CHR && pardsc[_EK_LENIDX] == -1) && _ekw_baddecl(
-                "Column size specification was VARIABLE for a CHARACTER*(*) column.", decl)
+                "Column size specification was VARIABLE for a CHARACTER*(*) column.", decl
+            )
             pardsc[_EK_SIZIDX] = -1
         else
             size = _ekw_nparsi(tok)
-            size === nothing && _ekw_baddecl("Column element size specification $tok " *
-                "didn't parse as an integer.", decl)
+            size === nothing && _ekw_baddecl(
+                "Column element size specification $tok " *
+                    "didn't parse as an integer.", decl
+            )
             pardsc[_EK_SIZIDX] = size
         end
     else
@@ -323,7 +354,7 @@ function _ekw_pdec(decl::AbstractString)
     scalar = pardsc[_EK_SIZIDX] == 1
     dtype = pardsc[_EK_TYPIDX]
     pardsc[_EK_CLSIDX] = dtype == _EK_CHR ? (scalar ? 3 : 6) : dtype == _EK_INT ?
-                         (scalar ? 1 : 4) : (scalar ? 2 : 5)
+        (scalar ? 1 : 4) : (scalar ? 2 : 5)
     # `flag(j, name)` reads the boolean that follows keyword j: true, false, or absent.
     function flag(j::Int, name::AbstractString)
         attloc[j] == 0 && return nothing
@@ -331,7 +362,7 @@ function _ekw_pdec(decl::AbstractString)
         n < loc && _ekw_baddecl("Boolean value did not follow \"$name\" keyword.", decl)
         tokens[loc] == "TRUE" && return true
         tokens[loc] == "FALSE" && return false
-        _ekw_baddecl("Invalid token $(tokens[loc]) follows $name keyword.", decl)
+        return _ekw_baddecl("Invalid token $(tokens[loc]) follows $name keyword.", decl)
     end
     pardsc[_EK_NFLIDX] = flag(4, "NULLS_OK") === true ? 1 : -1
     if flag(3, "INDEXED") === true
@@ -341,8 +372,10 @@ function _ekw_pdec(decl::AbstractString)
         pardsc[_EK_IXTIDX] = -1
     end
     if flag(5, "FIXED_COUNT") === true
-        pardsc[_EK_CLSIDX] <= 3 || _ekw_baddecl("FIXED_COUNT attribute used in non-scalar " *
-            "column declaration.", decl)
+        pardsc[_EK_CLSIDX] <= 3 || _ekw_baddecl(
+            "FIXED_COUNT attribute used in non-scalar " *
+                "column declaration.", decl
+        )
         pardsc[_EK_CLSIDX] += 6
     end
     return pardsc
@@ -359,8 +392,12 @@ function _ekw_styp(cdscrs::Vector{Vector{Int32}})
     fixed = any(d -> 7 <= d[_EK_CLSIDX] <= 9, cdscrs)
     (var && !fixed) && return 1
     (fixed && !var) && return 2
-    throw(SpiceError(:badattributes, "Column set contains a mixture of variable and " *
-        "fixed-count columns.  Segments must contain all variable or all fixed count columns."))
+    throw(
+        SpiceError(
+            :badattributes, "Column set contains a mixture of variable and " *
+                "fixed-count columns.  Segments must contain all variable or all fixed count columns."
+        )
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -378,8 +415,10 @@ empty index tree for every indexed column. The segment is appended to the segmen
 of the file. Mutates `cdscrs` (position, name base, index). Postcondition: `segno` is
 the number of segments of the file.
 """
-function _ekw_bs(h::DASHandle, stype::Int, tabnam::AbstractString,
-        cnames::AbstractVector{<:AbstractString}, cdscrs::Vector{Vector{Int32}})
+function _ekw_bs(
+        h::DASHandle, stype::Int, tabnam::AbstractString,
+        cnames::AbstractVector{<:AbstractString}, cdscrs::Vector{Vector{Int32}}
+    )
     ncols = length(cdscrs)
     nipage = (ncols * _EK_CDSCSZ + _EK_SDSCSZ + 255) ÷ 256
     p1, p1base = _ekw_pgan(h, 3)
@@ -409,8 +448,8 @@ function _ekw_bs(h::DASHandle, stype::Int, tabnam::AbstractString,
     segdsc[_EK_IFLIDX] = -1
     segdsc[_EK_SHDIDX] = -1
     segdsc[_EK_LCWIDX] = _EK_CPSIZE
-    segdsc[_EK_LCWIDX+1] = _EK_DPSIZE
-    segdsc[_EK_LCWIDX+2] = _EK_IPSIZE
+    segdsc[_EK_LCWIDX + 1] = _EK_DPSIZE
+    segdsc[_EK_LCWIDX + 2] = _EK_IPSIZE
     segdsc[_EK_NMLIDX] = cbase + _EK_TNAMSZ
     tname = Vector{UInt8}(codeunits(uppercase(String(lstrip(tabnam, ' ')))))
     _ekw_putc!(h.chars, cbase + 1, tname, 1, _EK_TNAMSZ)
@@ -470,22 +509,40 @@ Throws `SpiceError` with the kind:
 
 See the example of [`ekopn`](@ref).
 """
-function ekbseg(h::DASHandle, tabnam::AbstractString, cnames::AbstractVector{<:AbstractString},
-        decls::AbstractVector{<:AbstractString})
+function ekbseg(
+        h::DASHandle, tabnam::AbstractString, cnames::AbstractVector{<:AbstractString},
+        decls::AbstractVector{<:AbstractString}
+    )
     _ekw_check(h, "ekbseg")
     isempty(tabnam) && throw(SpiceError(:emptystring, "ekbseg: the table name is empty"))
     _ekw_chckid("EK table name", _EK_TNAMSZ, tabnam)
-    _ekw_isident(tabnam) || throw(SpiceError(:invalidname,
-        "Table name <$tabnam> violates syntax rules."))
+    _ekw_isident(tabnam) || throw(
+        SpiceError(
+            :invalidname,
+            "Table name <$tabnam> violates syntax rules."
+        )
+    )
     ncols = length(cnames)
-    (1 <= ncols <= _EK_MXCLSG) || throw(SpiceError(:invalidcount,
-        "Number of columns must be in range 1:$_EK_MXCLSG, was $ncols."))
-    length(decls) == ncols || throw(SpiceError(:invalidcount,
-        "ekbseg: $ncols column names but $(length(decls)) declarations"))
+    (1 <= ncols <= _EK_MXCLSG) || throw(
+        SpiceError(
+            :invalidcount,
+            "Number of columns must be in range 1:$_EK_MXCLSG, was $ncols."
+        )
+    )
+    length(decls) == ncols || throw(
+        SpiceError(
+            :invalidcount,
+            "ekbseg: $ncols column names but $(length(decls)) declarations"
+        )
+    )
     for name in cnames
         _ekw_chckid("EK column name", _EK_CNAMSZ, name)
-        _ekw_isident(name) || throw(SpiceError(:invalidname,
-            "Column name <$name> violates syntax rules."))
+        _ekw_isident(name) || throw(
+            SpiceError(
+                :invalidname,
+                "Column name <$name> violates syntax rules."
+            )
+        )
     end
     cdscrs = Vector{Int32}[_ekw_pdec(d) for d in decls]
     stype = _ekw_styp(cdscrs)
@@ -503,9 +560,13 @@ has no such check and damages a type 2 segment).
 function _ekw_segment(h::DASHandle, who::AbstractString, segno::Integer)
     _ekw_check(h, who)
     _, mbase = _ek_mloc(h, segno)
-    segdsc = h.ints[mbase+1:mbase+_EK_SDSCSZ]
-    segdsc[_EK_EKTIDX] == 1 || throw(SpiceError(:invalidtype, "$who: segment $segno has " *
-        "type $(segdsc[_EK_EKTIDX]); records can be changed in segments of type 1 only."))
+    segdsc = h.ints[(mbase + 1):(mbase + _EK_SDSCSZ)]
+    segdsc[_EK_EKTIDX] == 1 || throw(
+        SpiceError(
+            :invalidtype, "$who: segment $segno has " *
+                "type $(segdsc[_EK_EKTIDX]); records can be changed in segments of type 1 only."
+        )
+    )
     return segdsc, mbase
 end
 
@@ -535,27 +596,33 @@ end
 function _ekw_insr(h::DASHandle, segdsc::Vector{Int32}, recno::Integer)
     ints = h.ints
     size = Int(segdsc[_EK_NCIDX]) + _EK_DPTBAS
-    size > _EK_IPSIZE && _ekw_bug("Record pointer requires $size integer words; EK software " *
-        "assumes size is <= $_EK_IPSIZE.")
+    size > _EK_IPSIZE && _ekw_bug(
+        "Record pointer requires $size integer words; EK software " *
+            "assumes size is <= $_EK_IPSIZE."
+    )
     nrec = Int(segdsc[_EK_NRIDX])
-    (1 <= recno <= nrec + 1) || throw(SpiceError(:invalidindex,
-        "Record number = $recno; valid range is 1:$(nrec + 1)."))
+    (1 <= recno <= nrec + 1) || throw(
+        SpiceError(
+            :invalidindex,
+            "Record number = $recno; valid range is 1:$(nrec + 1)."
+        )
+    )
     lastp = Int(segdsc[_ekw_lcp(3)])
     lastw = Int(segdsc[_ekw_lcw(3)])
     local recbas::Int
     if size <= _EK_IPSIZE - lastw
         base = _ek_ibase(lastp)
         recbas = base + lastw
-        ints[base+256] += 1
+        ints[base + 256] += 1
         segdsc[_ekw_lcw(3)] += size
     else
         p, recbas = _ekw_aps(h, segdsc, 3)
-        ints[recbas+256] = 1
+        ints[recbas + 256] = 1
         segdsc[_ekw_lcp(3)] = p
         segdsc[_ekw_lcw(3)] = size
     end
-    ints[recbas+1] = 1
-    fill!(view(ints, recbas+2:recbas+size), Int32(_EK_UNINIT))
+    ints[recbas + 1] = 1
+    fill!(view(ints, (recbas + 2):(recbas + size)), Int32(_EK_UNINIT))
     _ekw_trin(h, segdsc[_EK_RTIDX], recno, recbas)
     segdsc[_EK_NRIDX] += 1
     _ekw_put_segdsc(h, segdsc)
@@ -604,12 +671,16 @@ function ekdelr(h::DASHandle, segno::Integer, recno::Integer)
     segdsc, mbase = _ekw_segment(h, "ekdelr", segno)
     ncols = Int(segdsc[_EK_NCIDX])
     nrec = Int(segdsc[_EK_NRIDX])
-    (1 <= recno <= nrec) || throw(SpiceError(:invalidindex,
-        "Record number = $recno; valid range is 1:$nrec."))
+    (1 <= recno <= nrec) || throw(
+        SpiceError(
+            :invalidindex,
+            "Record number = $recno; valid range is 1:$nrec."
+        )
+    )
     recptr = _ek_trdp(h.ints, segdsc[_EK_RTIDX], recno)
     for i in 1:ncols                     # invariant: the entries of the columns before i are deleted
         dscbas = mbase + _EK_SDSCSZ + (i - 1) * _EK_CDSCSZ
-        _ekw_de(h, segdsc, h.ints[dscbas+1:dscbas+_EK_CDSCSZ], recptr)
+        _ekw_de(h, segdsc, h.ints[(dscbas + 1):(dscbas + _EK_CDSCSZ)], recptr)
     end
     # A record page of the fast writers has no links: CSPICE frees it with the first
     # record that is deleted, and so loses the other records of the page. Here such a
@@ -631,11 +702,11 @@ end
 function _ekw_cdsc(h::DASHandle, segdsc::AbstractVector{Int32}, column::AbstractString)
     col = _ek_find_column(h, segdsc, column)
     b = Int(segdsc[_EK_IMDIDX]) + _EK_SDSCSZ + (Int(col.ord) - 1) * _EK_CDSCSZ
-    return h.ints[b+1:b+_EK_CDSCSZ]
+    return h.ints[(b + 1):(b + _EK_CDSCSZ)]
 end
 
 _ekw_typename(types::Tuple) = types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ?
-                              "integer" : "d.p. or time"
+    "integer" : "d.p. or time"
 
 """
     _ekw_locate(h, who, segno, recno, column, types) -> (segdsc, coldsc, recptr)
@@ -647,40 +718,55 @@ for an unknown column (as CSPICE); `:wrongdatatype` unless the data type code of
 column is in `types`; `:indexoutofrange` for a row that does not exist;
 `:dasinvalidaccess` for a read handle.
 """
-function _ekw_locate(h::DASHandle, who::AbstractString, segno::Integer, recno::Integer,
-        column::AbstractString, types::Tuple)
+function _ekw_locate(
+        h::DASHandle, who::AbstractString, segno::Integer, recno::Integer,
+        column::AbstractString, types::Tuple
+    )
     _ek_check_read(h, who)
     isempty(column) && throw(SpiceError(:emptystring, "$who: the column name is empty"))
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
     coldsc = _ekw_cdsc(h, segdsc, column)
-    coldsc[_EK_TYPIDX] in types || throw(SpiceError(:wrongdatatype, "Column $column is of " *
-        "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
-        "$(_ekw_typename(types)) columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."))
+    coldsc[_EK_TYPIDX] in types || throw(
+        SpiceError(
+            :wrongdatatype, "Column $column is of " *
+                "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
+                "$(_ekw_typename(types)) columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
+        )
+    )
     recptr = _ek_trdp(h.ints, segdsc[_EK_RTIDX], recno)
     _das_check_write(h, who)
     return segdsc, coldsc, recptr
 end
 
-@noinline _ekw_noclass(h::DASHandle, coldsc, what, column, recno, segno) = throw(SpiceError(
-    :noclass, "Class $(coldsc[_EK_CLSIDX]) from input column descriptor is not a supported " *
-    "$what class.  COLUMN = $column; RECNO = $recno; SEGNO = $segno; EK = $(h.path)."))
+@noinline _ekw_noclass(h::DASHandle, coldsc, what, column, recno, segno) = throw(
+    SpiceError(
+        :noclass, "Class $(coldsc[_EK_CLSIDX]) from input column descriptor is not a supported " *
+            "$what class.  COLUMN = $column; RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
+    )
+)
 
 _ekw_cvals(vals::AbstractVector) = Vector{UInt8}[_ekw_bytes(v) for v in vals]
 _ekw_cval1(vals::AbstractVector) = isempty(vals) ? UInt8[] : _ekw_bytes(first(vals))
 # A value that the file type `T` cannot hold is an error before anything is written.
 _ekw_num(::Type{T}, v) where {T} = convert(T, v)
 function _ekw_num(::Type{Int32}, v::Integer)
-    typemin(Int32) <= v <= typemax(Int32) || throw(SpiceError(:valueoutofrange,
-        "the integer $v does not fit the 32-bit integers of an EK file"))
+    typemin(Int32) <= v <= typemax(Int32) || throw(
+        SpiceError(
+            :valueoutofrange,
+            "the integer $v does not fit the 32-bit integers of an EK file"
+        )
+    )
     return v % Int32
 end
 _ekw_nval1(::Type{T}, vals::AbstractVector) where {T} = isempty(vals) ? zero(T) :
-                                                         _ekw_num(T, first(vals))
+    _ekw_num(T, first(vals))
 _ekw_nvals(::Type{T}, vals::AbstractVector) where {T} = vals isa Vector{T} ? vals :
-                                                         T[_ekw_num(T, v) for v in vals]
+    T[_ekw_num(T, v) for v in vals]
 
-function _ekw_entry_c(h::DASHandle, who::AbstractString, update::Bool, segno::Integer,
-        recno::Integer, column::AbstractString, vals::AbstractVector, isnull::Bool)
+function _ekw_entry_c(
+        h::DASHandle, who::AbstractString, update::Bool, segno::Integer,
+        recno::Integer, column::AbstractString, vals::AbstractVector, isnull::Bool
+    )
     segdsc, coldsc, recptr = _ekw_locate(h, who, segno, recno, column, (_EK_CHR,))
     class = coldsc[_EK_CLSIDX]
     # An update checks the new entry before it deletes the old one, so that a call that
@@ -704,9 +790,11 @@ function _ekw_entry_c(h::DASHandle, who::AbstractString, update::Bool, segno::In
     return nothing
 end
 
-function _ekw_entry_n(h::DASHandle, who::AbstractString, update::Bool, ::Type{T}, types::Tuple,
+function _ekw_entry_n(
+        h::DASHandle, who::AbstractString, update::Bool, ::Type{T}, types::Tuple,
         segno::Integer, recno::Integer, column::AbstractString, vals::AbstractVector,
-        isnull::Bool) where {T}
+        isnull::Bool
+    ) where {T}
     segdsc, coldsc, recptr = _ekw_locate(h, who, segno, recno, column, types)
     class = coldsc[_EK_CLSIDX]
     if class == 1 || class == 2
@@ -762,8 +850,10 @@ Throws `SpiceError` with the kind:
 See the example of [`ekopn`](@ref). See also [`ekaced`](@ref), [`ekacei`](@ref),
 [`ekrcec`](@ref).
 """
-ekacec(h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
-    cvals::AbstractVector, isnull::Bool=false) =
+ekacec(
+    h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
+    cvals::AbstractVector, isnull::Bool = false
+) =
     _ekw_entry_c(h, "ekacec", false, segno, recno, column, cvals, isnull)
 
 """
@@ -782,9 +872,13 @@ type.
 
 See also [`ekuced`](@ref), [`ekrced`](@ref).
 """
-ekaced(h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
-    dvals::AbstractVector, isnull::Bool=false) = _ekw_entry_n(h, "ekaced", false, Float64,
-    (_EK_DP, _EK_TIME), segno, recno, column, dvals, isnull)
+ekaced(
+    h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
+    dvals::AbstractVector, isnull::Bool = false
+) = _ekw_entry_n(
+    h, "ekaced", false, Float64,
+    (_EK_DP, _EK_TIME), segno, recno, column, dvals, isnull
+)
 
 """
     ekacei(handle, segno, recno, column, ivals, isnull=false) -> Nothing
@@ -798,9 +892,13 @@ errors are those of [`ekaced`](@ref).
 
 See also [`ekucei`](@ref), [`ekrcei`](@ref).
 """
-ekacei(h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
-    ivals::AbstractVector, isnull::Bool=false) = _ekw_entry_n(h, "ekacei", false, Int32,
-    (_EK_INT,), segno, recno, column, ivals, isnull)
+ekacei(
+    h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
+    ivals::AbstractVector, isnull::Bool = false
+) = _ekw_entry_n(
+    h, "ekacei", false, Int32,
+    (_EK_INT,), segno, recno, column, ivals, isnull
+)
 
 """
     ekucec(handle, segno, recno, column, cvals, isnull=false) -> Nothing
@@ -818,8 +916,10 @@ so that the old value is lost after `:badattribute` or `:invalidcount`.
 
 See also [`ekuced`](@ref), [`ekucei`](@ref).
 """
-ekucec(h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
-    cvals::AbstractVector, isnull::Bool=false) =
+ekucec(
+    h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
+    cvals::AbstractVector, isnull::Bool = false
+) =
     _ekw_entry_c(h, "ekucec", true, segno, recno, column, cvals, isnull)
 
 """
@@ -839,9 +939,13 @@ nulls, as in CSPICE. A call that throws leaves the entry as it was.
 
 See also [`ekucei`](@ref), [`ekrced`](@ref).
 """
-ekuced(h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
-    dvals::AbstractVector, isnull::Bool=false) = _ekw_entry_n(h, "ekuced", true, Float64,
-    (_EK_DP, _EK_TIME), segno, recno, column, dvals, isnull)
+ekuced(
+    h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
+    dvals::AbstractVector, isnull::Bool = false
+) = _ekw_entry_n(
+    h, "ekuced", true, Float64,
+    (_EK_DP, _EK_TIME), segno, recno, column, dvals, isnull
+)
 
 """
     ekucei(handle, segno, recno, column, ivals, isnull=false) -> Nothing
@@ -852,9 +956,13 @@ Replace the entry of the integer column `column` in row `recno` of segment `segn
 The arguments are those of [`ekacei`](@ref); the behavior and the errors are those
 of [`ekuced`](@ref).
 """
-ekucei(h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
-    ivals::AbstractVector, isnull::Bool=false) = _ekw_entry_n(h, "ekucei", true, Int32,
-    (_EK_INT,), segno, recno, column, ivals, isnull)
+ekucei(
+    h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
+    ivals::AbstractVector, isnull::Bool = false
+) = _ekw_entry_n(
+    h, "ekucei", true, Int32,
+    (_EK_INT,), segno, recno, column, ivals, isnull
+)
 
 # ---------------------------------------------------------------------------------------
 # Fast writers
@@ -928,13 +1036,15 @@ julia> ekrced(h, seg, 1, "XY"), ekrced(h, seg, 2, "XY"), ekrced(h, seg, 3, "XY")
 julia> ekcls(h)
 ```
 """
-function ekifld(h::DASHandle, tabnam::AbstractString, nrows::Integer,
-        cnames::AbstractVector{<:AbstractString}, decls::AbstractVector{<:AbstractString})
+function ekifld(
+        h::DASHandle, tabnam::AbstractString, nrows::Integer,
+        cnames::AbstractVector{<:AbstractString}, decls::AbstractVector{<:AbstractString}
+    )
     nrows < 1 && throw(SpiceError(:invalidcount, "Number of rows must be > 0, was $nrows. "))
     segno = ekbseg(h, tabnam, cnames, decls)
     _, mbase = _ek_mloc(h, segno)
-    h.ints[mbase+_EK_NRIDX] = nrows
-    segdsc = h.ints[mbase+1:mbase+_EK_SDSCSZ]
+    h.ints[mbase + _EK_NRIDX] = nrows
+    segdsc = h.ints[(mbase + 1):(mbase + _EK_SDSCSZ)]
     ncols = Int(segdsc[_EK_NCIDX])
     ptrs = Int32[]
     if segdsc[_EK_EKTIDX] == 1           # `zzekif01`: the pages of the records
@@ -956,7 +1066,7 @@ function ekifld(h::DASHandle, tabnam::AbstractString, nrows::Integer,
         offset = base
         for i in 1:ncols
             dscbas = mbase + _EK_SDSCSZ + (i - 1) * _EK_CDSCSZ
-            h.ints[dscbas+_EK_METIDX] = offset
+            h.ints[dscbas + _EK_METIDX] = offset
             offset += 2
         end
     end
@@ -971,18 +1081,28 @@ The common start of `ekaclc`, `ekacld` and `ekacli`. Throws `SpiceError`:
 `:wrongsegment` if `rcptrs` is the state of another fast load, `:bug` for an unknown
 column, `:wrongdatatype`.
 """
-function _ekw_fast_locate(h::DASHandle, who::AbstractString, segno::Integer,
-        column::AbstractString, rcptrs::EKFastLoad, types::Tuple)
+function _ekw_fast_locate(
+        h::DASHandle, who::AbstractString, segno::Integer,
+        column::AbstractString, rcptrs::EKFastLoad, types::Tuple
+    )
     _ekw_check(h, who)
     isempty(column) && throw(SpiceError(:emptystring, "$who: the column name is empty"))
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
-    (rcptrs.handle === h && rcptrs.segno == segno) || throw(SpiceError(:wrongsegment,
-        "$who: the record pointers belong to the fast load of segment $(rcptrs.segno) of " *
-        "$(rcptrs.handle.path), not to segment $segno of $(h.path)."))
+    (rcptrs.handle === h && rcptrs.segno == segno) || throw(
+        SpiceError(
+            :wrongsegment,
+            "$who: the record pointers belong to the fast load of segment $(rcptrs.segno) of " *
+                "$(rcptrs.handle.path), not to segment $segno of $(h.path)."
+        )
+    )
     coldsc = _ekw_cdsc(h, segdsc, column)
-    coldsc[_EK_TYPIDX] in types || throw(SpiceError(:wrongdatatype, "Column $column is of " *
-        "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
-        "$(_ekw_typename(types)) columns."))
+    coldsc[_EK_TYPIDX] in types || throw(
+        SpiceError(
+            :wrongdatatype, "Column $column is of " *
+                "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
+                "$(_ekw_typename(types)) columns."
+        )
+    )
     return segdsc, coldsc
 end
 
@@ -1000,35 +1120,57 @@ process) and at least 0 for a character column (`SpiceError(:outofrange)`, as
 `zzekac06` signals). The entry size of a null row must be at least 0
 (`SpiceError(:invalidcount)`; CSPICE reads outside the values).
 """
-function _ekw_fast_counts(who::AbstractString, segdsc::Vector{Int32}, coldsc::Vector{Int32},
-        nvals::Int, entszs::AbstractVector, nlflgs::AbstractVector)
+function _ekw_fast_counts(
+        who::AbstractString, segdsc::Vector{Int32}, coldsc::Vector{Int32},
+        nvals::Int, entszs::AbstractVector, nlflgs::AbstractVector
+    )
     nrows = Int(segdsc[_EK_NRIDX])
     size = Int(coldsc[_EK_SIZIDX])
     nullok = coldsc[_EK_NFLIDX] != -1
-    (nullok && length(nlflgs) < nrows) && throw(SpiceError(:invalidcount,
-        "$who: $(length(nlflgs)) null flags for $nrows rows"))
+    (nullok && length(nlflgs) < nrows) && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: $(length(nlflgs)) null flags for $nrows rows"
+        )
+    )
     need = nrows
     class = coldsc[_EK_CLSIDX]
     if class in (4, 5, 6)
-        (size == -1 && length(entszs) < nrows) && throw(SpiceError(:invalidcount,
-            "$who: $(length(entszs)) entry sizes for $nrows rows"))
+        (size == -1 && length(entszs) < nrows) && throw(
+            SpiceError(
+                :invalidcount,
+                "$who: $(length(entszs)) entry sizes for $nrows rows"
+            )
+        )
         if size == -1
             least = class == 6 ? 0 : 1
             for r in 1:nrows             # invariant: the entry sizes of the rows before r are valid
                 n = Int(entszs[r])
                 if nullok && nlflgs[r] != 0
-                    n < 0 && throw(SpiceError(:invalidcount,
-                        "$who: entry size $n of the null row $r is negative"))
+                    n < 0 && throw(
+                        SpiceError(
+                            :invalidcount,
+                            "$who: entry size $n of the null row $r is negative"
+                        )
+                    )
                 elseif n < least
-                    throw(SpiceError(class == 6 ? :outofrange : :badsubscript,
-                        "$who: entry size $n of row $r is less than $least"))
+                    throw(
+                        SpiceError(
+                            class == 6 ? :outofrange : :badsubscript,
+                            "$who: entry size $n of row $r is less than $least"
+                        )
+                    )
                 end
             end
         end
         need = size == -1 ? sum(Int(entszs[i]) for i in 1:nrows) : nrows * size
     end
-    nvals < need && throw(SpiceError(:invalidcount,
-        "$who: $nvals values, but the $nrows rows of the column need $need"))
+    nvals < need && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: $nvals values, but the $nrows rows of the column need $need"
+        )
+    )
     return nothing
 end
 
@@ -1039,18 +1181,28 @@ Throws `SpiceError(:columnstoredtwice)` if the fast load `rcptrs` stored the col
 already. CSPICE has no such check: `zzekff01` then takes the record pointers of the
 column that was not stored from another column.
 """
-function _ekw_fast_once(who::AbstractString, coldsc::Vector{Int32}, column::AbstractString,
-        rcptrs::EKFastLoad)
-    coldsc[_EK_ORDIDX] in rcptrs.stored && throw(SpiceError(:columnstoredtwice,
-        "$who: the column $column was stored already in this fast load"))
+function _ekw_fast_once(
+        who::AbstractString, coldsc::Vector{Int32}, column::AbstractString,
+        rcptrs::EKFastLoad
+    )
+    coldsc[_EK_ORDIDX] in rcptrs.stored && throw(
+        SpiceError(
+            :columnstoredtwice,
+            "$who: the column $column was stored already in this fast load"
+        )
+    )
     return nothing
 end
 
-@noinline _ekw_notsupported(coldsc, column) = throw(SpiceError(:notsupported, "Unsupported " *
-    "column class code $(coldsc[_EK_CLSIDX]) found in descriptor for column $column."))
+@noinline _ekw_notsupported(coldsc, column) = throw(
+    SpiceError(
+        :notsupported, "Unsupported " *
+            "column class code $(coldsc[_EK_CLSIDX]) found in descriptor for column $column."
+    )
+)
 
 _ekw_flags(nlflgs::AbstractVector) = nlflgs isa AbstractVector{Bool} ? nlflgs :
-                                     Bool[f != 0 for f in nlflgs]
+    Bool[f != 0 for f in nlflgs]
 
 """
     ekaclc(handle, segno, column, cvals, entszs, nlflgs, rcptrs) -> Nothing
@@ -1086,8 +1238,10 @@ Throws `SpiceError` with the kind:
 
 See also [`ekacld`](@ref), [`ekacli`](@ref), [`ekffld`](@ref).
 """
-function ekaclc(h::DASHandle, segno::Integer, column::AbstractString, cvals::AbstractVector,
-        entszs::AbstractVector, nlflgs::AbstractVector, rcptrs::EKFastLoad)
+function ekaclc(
+        h::DASHandle, segno::Integer, column::AbstractString, cvals::AbstractVector,
+        entszs::AbstractVector, nlflgs::AbstractVector, rcptrs::EKFastLoad
+    )
     segdsc, coldsc = _ekw_fast_locate(h, "ekaclc", segno, column, rcptrs, (_EK_CHR,))
     class = coldsc[_EK_CLSIDX]
     (class == 3 || class == 6 || class == 9) || _ekw_notsupported(coldsc, column)
@@ -1106,13 +1260,15 @@ function ekaclc(h::DASHandle, segno::Integer, column::AbstractString, cvals::Abs
     return nothing
 end
 
-function _ekw_fast_n(h::DASHandle, who::AbstractString, ::Type{T}, types::Tuple, segno::Integer,
+function _ekw_fast_n(
+        h::DASHandle, who::AbstractString, ::Type{T}, types::Tuple, segno::Integer,
         column::AbstractString, nvals::AbstractVector, entszs::AbstractVector,
-        nlflgs::AbstractVector, rcptrs::EKFastLoad) where {T}
+        nlflgs::AbstractVector, rcptrs::EKFastLoad
+    ) where {T}
     segdsc, coldsc = _ekw_fast_locate(h, who, segno, column, rcptrs, types)
     class = coldsc[_EK_CLSIDX]
     kind = class == 1 || class == 2 ? 1 : class == 4 || class == 5 ? 2 :
-           class == 7 || class == 8 ? 3 : 0
+        class == 7 || class == 8 ? 3 : 0
     kind == 0 && _ekw_notsupported(coldsc, column)
     _ekw_fast_counts(who, segdsc, coldsc, length(nvals), entszs, nlflgs)
     _ekw_fast_once(who, coldsc, column, rcptrs)
@@ -1143,10 +1299,14 @@ not null throws `SpiceError(:badsubscript)`, where CSPICE stops the process.
 
 See the example of [`ekifld`](@ref).
 """
-ekacld(h::DASHandle, segno::Integer, column::AbstractString, dvals::AbstractVector,
-    entszs::AbstractVector, nlflgs::AbstractVector, rcptrs::EKFastLoad) =
-    _ekw_fast_n(h, "ekacld", Float64, (_EK_DP, _EK_TIME), segno, column, dvals, entszs, nlflgs,
-        rcptrs)
+ekacld(
+    h::DASHandle, segno::Integer, column::AbstractString, dvals::AbstractVector,
+    entszs::AbstractVector, nlflgs::AbstractVector, rcptrs::EKFastLoad
+) =
+    _ekw_fast_n(
+    h, "ekacld", Float64, (_EK_DP, _EK_TIME), segno, column, dvals, entszs, nlflgs,
+    rcptrs
+)
 
 """
     ekacli(handle, segno, column, ivals, entszs, nlflgs, rcptrs) -> Nothing
@@ -1163,8 +1323,10 @@ where CSPICE stops the process.
 
 See the example of [`ekifld`](@ref).
 """
-ekacli(h::DASHandle, segno::Integer, column::AbstractString, ivals::AbstractVector,
-    entszs::AbstractVector, nlflgs::AbstractVector, rcptrs::EKFastLoad) =
+ekacli(
+    h::DASHandle, segno::Integer, column::AbstractString, ivals::AbstractVector,
+    entszs::AbstractVector, nlflgs::AbstractVector, rcptrs::EKFastLoad
+) =
     _ekw_fast_n(h, "ekacli", Int32, (_EK_INT,), segno, column, ivals, entszs, nlflgs, rcptrs)
 
 """
@@ -1178,27 +1340,35 @@ Precondition: every column was stored once, else `SpiceError(:invalidaddress)`.
 function _ekw_ff01(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     _, mbase = _ek_mloc(h, segno)
     ints = h.ints
-    nrows = Int(ints[mbase+_EK_NRIDX])
-    ncols = Int(ints[mbase+_EK_NCIDX])
+    nrows = Int(ints[mbase + _EK_NRIDX])
+    ncols = Int(ints[mbase + _EK_NCIDX])
     stack = rcptrs.stack
-    length(stack) >= ncols * (nrows + 1) || throw(SpiceError(:invalidaddress,
-        "ekffld: $(length(stack) ÷ (nrows + 1)) of the $ncols columns of segment $segno " *
-        "were stored"))
+    length(stack) >= ncols * (nrows + 1) || throw(
+        SpiceError(
+            :invalidaddress,
+            "ekffld: $(length(stack) ÷ (nrows + 1)) of the $ncols columns of segment $segno " *
+                "were stored"
+        )
+    )
     colord = zeros(Int, ncols)
     for i in 1:ncols                     # invariant: `colord` knows the columns of the blocks before i
-        colidx = Int(stack[(i-1)*(nrows+1)+1])
+        colidx = Int(stack[(i - 1) * (nrows + 1) + 1])
         (1 <= colidx <= ncols) || _ekw_bug("ekffld: column position $colidx on the stack")
         colord[colidx] = i
     end
-    all(>(0), colord) || throw(SpiceError(:invalidaddress,
-        "ekffld: a column of segment $segno was stored twice and another one not at all"))
+    all(>(0), colord) || throw(
+        SpiceError(
+            :invalidaddress,
+            "ekffld: a column of segment $segno was stored twice and another one not at all"
+        )
+    )
     rpsize = ncols + _EK_DPTBAS
     for (r, recptr) in enumerate(rcptrs.ptrs)
         # invariant: the records of the rows before r are complete
-        ints[recptr+1] = 1
-        ints[recptr+2] = -1
+        ints[recptr + 1] = 1
+        ints[recptr + 2] = -1
         for col in 1:ncols
-            ints[recptr+_EK_DPTBAS+col] = stack[(colord[col]-1)*(nrows+1)+1+r]
+            ints[recptr + _EK_DPTBAS + col] = stack[(colord[col] - 1) * (nrows + 1) + 1 + r]
         end
     end
     # CSPICE writes whole pages and so clears the words after the last record of a page.
@@ -1206,16 +1376,16 @@ function _ekw_ff01(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     for first in 1:nrp:nrows
         nr = min(nrp, nrows - first + 1)
         pbase = Int(rcptrs.ptrs[first])
-        fill!(view(ints, pbase+nr*rpsize+1:pbase+_EK_IPSIZE), Int32(0))
+        fill!(view(ints, (pbase + nr * rpsize + 1):(pbase + _EK_IPSIZE)), Int32(0))
     end
     tree = _ekw_trit(h)
     _ekw_tr1s(h, tree, rcptrs.ptrs)
     ints = h.ints
-    ints[mbase+_EK_RTIDX] = tree
-    ints[mbase+_EK_NRIDX] = nrows
-    ints[mbase+_EK_LCWIDX] = _EK_CPSIZE
-    ints[mbase+_EK_LCWIDX+1] = _EK_DPSIZE
-    ints[mbase+_EK_LCWIDX+2] = _EK_IPSIZE
+    ints[mbase + _EK_RTIDX] = tree
+    ints[mbase + _EK_NRIDX] = nrows
+    ints[mbase + _EK_LCWIDX] = _EK_CPSIZE
+    ints[mbase + _EK_LCWIDX + 1] = _EK_DPSIZE
+    ints[mbase + _EK_LCWIDX + 2] = _EK_IPSIZE
     return nothing
 end
 
@@ -1240,16 +1410,24 @@ function ekffld(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     _ekw_check(h, "ekffld")
     segdsc = _ek_sdsc(h, segno)
     stype = segdsc[_EK_EKTIDX]
-    (rcptrs.handle === h && rcptrs.segno == segno) || throw(SpiceError(:wrongsegment,
-        "Attempt to finish fast load of wrong segment.  Input segment number is $segno; " *
-        "stacked segment number is $(rcptrs.segno).  Input file is $(h.path); stacked " *
-        "file is $(rcptrs.handle.path)."))
+    (rcptrs.handle === h && rcptrs.segno == segno) || throw(
+        SpiceError(
+            :wrongsegment,
+            "Attempt to finish fast load of wrong segment.  Input segment number is $segno; " *
+                "stacked segment number is $(rcptrs.segno).  Input file is $(h.path); stacked " *
+                "file is $(rcptrs.handle.path)."
+        )
+    )
     if stype == 1
         _ekw_ff01(h, segno, rcptrs)
     elseif stype == 2
         ncols = Int(segdsc[_EK_NCIDX])
-        length(rcptrs.stored) == ncols || throw(SpiceError(:invalidaddress,
-            "ekffld: $(length(rcptrs.stored)) of the $ncols columns of segment $segno were stored"))
+        length(rcptrs.stored) == ncols || throw(
+            SpiceError(
+                :invalidaddress,
+                "ekffld: $(length(rcptrs.stored)) of the $ncols columns of segment $segno were stored"
+            )
+        )
     else
         _ekw_bug("Segment type $stype is not currently supported.")
     end

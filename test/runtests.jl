@@ -23,7 +23,8 @@
 include("helpers.jl")
 Kernels.fetch_kernels()
 
-const GROUPS = ["states", "rotations", "derivatives", "identities", "pool", "management",
+const GROUPS = [
+    "states", "rotations", "derivatives", "identities", "pool", "management",
     "threads", "quality", "aberration", "spktypes", "time", "sclk", "ck", "dafwrite",
     "windows", "roundtrip", "sgp4", "math_vectors", "math_rotations", "math_coordinates",
     "math_ellipsoid", "math_conics", "math_polynomials", "dynframes", "poolwrite", "frameinfo", "das", "dsk",
@@ -32,18 +33,21 @@ const GROUPS = ["states", "rotations", "derivatives", "identities", "pool", "man
     "geom_subpoints", "geom_illum", "geom_occult", "geom_limbterm", "geom_fov", "geom_constobs",
     "geom_azel", "table",
     "ek_file", "ek_parse", "ek_query", "ek_threads", "ek_write", "jsonkernel", "providers", "queries", "alloccheck",
-    "ad_enzyme", "ad_mooncake", "ad_zygote", "ad_tracked", "static"]
+    "ad_enzyme", "ad_mooncake", "ad_zygote", "ad_tracked", "static",
+]
 
 "Wall time of each group of this run, in the order of the run."
-const GROUP_SECONDS = Pair{String,Float64}[]
+const GROUP_SECONDS = Pair{String, Float64}[]
 
 selected = isempty(ARGS) ? GROUPS : ARGS
 unknown = setdiff(selected, GROUPS)
 isempty(unknown) || error("unknown test group(s) $(unknown); the groups are $(GROUPS)")
 
 println("Almanac tests: Julia ", VERSION, ", ", Threads.nthreads(), " thread(s), seed ", SEED)
-Threads.nthreads() == 1 && printstyled("NOTE  one thread only: group 7 will be skipped; run " *
-    "with `julia --threads=8 --project=test test/runtests.jl`\n"; color=:yellow, bold=true)
+Threads.nthreads() == 1 && printstyled(
+    "NOTE  one thread only: group 7 will be skipped; run " *
+        "with `julia --threads=8 --project=test test/runtests.jl`\n"; color = :yellow, bold = true
+)
 
 try
     @testset "Almanac" begin
@@ -57,12 +61,12 @@ finally
     println("\nMeasured values (for tightening the thresholds):")
     foreach(println, MEASURED)
     println("\nTime of each group (s), longest first; the whole suite has a budget of 120 s:")
-    for (g, t) in sort(GROUP_SECONDS; by=last, rev=true)
-        println("  ", rpad(g, 18), lpad(round(t; digits=1), 7))
+    for (g, t) in sort(GROUP_SECONDS; by = last, rev = true)
+        println("  ", rpad(g, 18), lpad(round(t; digits = 1), 7))
     end
-    println("  ", rpad("all", 18), lpad(round(sum(last, GROUP_SECONDS; init=0.0); digits=1), 7))
+    println("  ", rpad("all", 18), lpad(round(sum(last, GROUP_SECONDS; init = 0.0); digits = 1), 7))
     if !isempty(SKIPPED)
-        printstyled("\nSkipped:\n"; color=:yellow, bold=true)
+        printstyled("\nSkipped:\n"; color = :yellow, bold = true)
         for (name, reason) in SKIPPED
             println("  ", name, ": ", reason)
         end

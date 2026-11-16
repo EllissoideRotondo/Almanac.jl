@@ -16,18 +16,24 @@ _gf_proxy(q::GFCoordinate, sys::Int, idx::Int) =
 "`smsgnd`: true if `x` and `y` are both positive or both negative."
 @inline _gf_smsgnd(x::Float64, y::Float64) = (x > 0.0 && y > 0.0) || (x < 0.0 && y < 0.0)
 
-_gf_pass(t::String, i::Int) = replace(t, "#" => string(i); count=1)
+_gf_pass(t::String, i::Int) = replace(t, "#" => string(i); count = 1)
 
 # `zzgfrelx` on a coordinate, on its cosine and on its sine.
 _gf_relx_crd(q::GFCoordinate, relate, refval, cnfine::Window, run::_GFRun, prefix) =
-    _gf_relx(et -> _gf_value(q, et), et -> _gf_decreasing(q, et), relate, refval, 0.0,
-        cnfine, run, prefix, "done.")
+    _gf_relx(
+    et -> _gf_value(q, et), et -> _gf_decreasing(q, et), relate, refval, 0.0,
+    cnfine, run, prefix, "done."
+)
 _gf_relx_cos(q::GFCoordinate, relate, refval, cnfine::Window, run::_GFRun, prefix) =
-    _gf_relx(et -> _gf_cosvalue(q, et), et -> _gf_cosdecreasing(q, et), relate, refval,
-        0.0, cnfine, run, prefix, "done.")
+    _gf_relx(
+    et -> _gf_cosvalue(q, et), et -> _gf_cosdecreasing(q, et), relate, refval,
+    0.0, cnfine, run, prefix, "done."
+)
 _gf_relx_sin(q::GFCoordinate, relate, refval, cnfine::Window, run::_GFRun, prefix) =
-    _gf_relx(et -> _gf_sinvalue(q, et), et -> _gf_sindecreasing(q, et), relate, refval,
-        0.0, cnfine, run, prefix, "done.")
+    _gf_relx(
+    et -> _gf_sinvalue(q, et), et -> _gf_sindecreasing(q, et), relate, refval,
+    0.0, cnfine, run, prefix, "done."
+)
 
 """
     _gf_search(q::GFCoordinate, relate, refval, adjust, cnfine, run) -> Window
@@ -38,17 +44,25 @@ vector exists, and a longitude or a right ascension goes to `_gf_long`.
 Contract: `adjust >= 0` (`SpiceError(:valueoutofrange)`), a known relation
 (`:notrecognized`); the result is a new window that is a subset of `cnfine`.
 """
-function _gf_search(q::GFCoordinate, relate::AbstractString, refval::Real, adjust::Real,
-        cnfine::Window, run::_GFRun)
-    adjust < 0 && throw(SpiceError(:valueoutofrange,
-        "ADJUST was $adjust; must be non-negative."))
+function _gf_search(
+        q::GFCoordinate, relate::AbstractString, refval::Real, adjust::Real,
+        cnfine::Window, run::_GFRun
+    )
+    adjust < 0 && throw(
+        SpiceError(
+            :valueoutofrange,
+            "ADJUST was $adjust; must be non-negative."
+        )
+    )
     rel = _gf_relcode(relate)
     exist = _gf_vecexist(q.vec, cnfine, run)
     name = _GF_CRDNMS[q.sys][q.idx]
     (name == "LONGITUDE" || name == "RIGHT ASCENSION") &&
         return _gf_long(q, rel, Float64(refval), Float64(adjust), exist, run)
-    return _gf_relx(et -> _gf_value(q, et), et -> _gf_decreasing(q, et), relate, refval,
-        adjust, exist, run, _gf_prefix(q, rel, adjust), "done.")
+    return _gf_relx(
+        et -> _gf_value(q, et), et -> _gf_decreasing(q, et), relate, refval,
+        adjust, exist, run, _gf_prefix(q, rel, adjust), "done."
+    )
 end
 
 """
@@ -83,8 +97,10 @@ the branch cut is decided without a search: for a coordinate in [0, 2 pi) with
 in (-pi, pi] with `cos(refval) == -1`, `<` gives `cnfine` and `>` the empty window. The
 result is a new window that is a subset of `cnfine`.
 """
-function _gf_long(q::GFCoordinate, rel::Int, refval::Float64, adjust::Float64,
-        cnfine::Window, run0::_GFRun)
+function _gf_long(
+        q::GFCoordinate, rel::Int, refval::Float64, adjust::Float64,
+        cnfine::Window, run0::_GFRun
+    )
     loctol = max(1.0e-7, run0.tol / 10.0)
     run = _gf_withtol(run0, loctol)
     _gf_checkadjust(rel, adjust)
@@ -165,10 +181,14 @@ function _gf_long(q::GFCoordinate, rel::Int, refval::Float64, adjust::Float64,
         # The two halves of the circle, each made a little larger so that no root is
         # lost. In double precision `cos(1e-12)` is 1, so the left window is the window
         # on which the cosine is less than 1 and the right window is `cnfine`.
-        left = _gf_relx_cos(qn, "<", cos(1.0e-12), cnfine, run,
-            ("Coordinate pass 1 of 6", "Coordinate pass 2 of 6"))
-        compl = _gf_relx_cos(qn, "<", -cos(1.0e-12), left, run,
-            ("Coordinate pass 3 of 6", "Coordinate pass 4 of 6"))
+        left = _gf_relx_cos(
+            qn, "<", cos(1.0e-12), cnfine, run,
+            ("Coordinate pass 1 of 6", "Coordinate pass 2 of 6")
+        )
+        compl = _gf_relx_cos(
+            qn, "<", -cos(1.0e-12), left, run,
+            ("Coordinate pass 3 of 6", "Coordinate pass 4 of 6")
+        )
         right = wndifd(cnfine, compl)
         op = _gf_relname(uop)
         res1 = _gf_relx_crd(qra, op, 0.0, left, run, ("Coordinate pass 5 of 6", ""))
@@ -180,13 +200,19 @@ function _gf_long(q::GFCoordinate, rel::Int, refval::Float64, adjust::Float64,
     # which the coordinate is in the top, the bottom and the right half of the circle.
     isabs = uop == _GF_ABSMAX || uop == _GF_ABSMIN
     tmplat = isabs ? (adjust == 0.0 ? "Coordinate pass # of 7" : "Coordinate pass # of 7-9") :
-             "Coordinate pass # of 8"
-    top = _gf_relx_sin(qn, ">", sin(1.0e-11), cnfine, run,
-        (_gf_pass(tmplat, 1), _gf_pass(tmplat, 2)))
-    bot = _gf_relx_sin(qn, "<", -sin(1.0e-11), cnfine, run,
-        (_gf_pass(tmplat, 3), _gf_pass(tmplat, 4)))
-    right = _gf_relx_cos(qn, ">", 0.0, cnfine, run,
-        (_gf_pass(tmplat, 5), _gf_pass(tmplat, 6)))
+        "Coordinate pass # of 8"
+    top = _gf_relx_sin(
+        qn, ">", sin(1.0e-11), cnfine, run,
+        (_gf_pass(tmplat, 1), _gf_pass(tmplat, 2))
+    )
+    bot = _gf_relx_sin(
+        qn, "<", -sin(1.0e-11), cnfine, run,
+        (_gf_pass(tmplat, 3), _gf_pass(tmplat, 4))
+    )
+    right = _gf_relx_cos(
+        qn, ">", 0.0, cnfine, run,
+        (_gf_pass(tmplat, 5), _gf_pass(tmplat, 6))
+    )
     total = 6
     result = Window()
 
@@ -198,13 +224,13 @@ function _gf_long(q::GFCoordinate, rel::Int, refval::Float64, adjust::Float64,
             q2 = wndifd(top, right)
             q3 = wndifd(bot, right)
             regions = uop == _GF_ABSMAX ? ((q2, false), (right, true), (q3, false)) :
-                      ((q3, false), (right, true), (q2, false))
+                ((q3, false), (right, true), (q2, false))
         else
             q1 = wnintd(right, top)
             q4 = wnintd(right, bot)
             left = wndifd(cnfine, right)
             regions = uop == _GF_ABSMAX ? ((q4, true), (left, false), (q1, true)) :
-                      ((q1, true), (left, false), (q4, true))
+                ((q1, true), (left, false), (q4, true))
         end
         op = _gf_relname(uop)
         found = false
@@ -218,8 +244,10 @@ function _gf_long(q::GFCoordinate, rel::Int, refval::Float64, adjust::Float64,
             # `zzgfcodc`). The candidate epochs are the local extrema of the
             # coordinate, and among them the one with the most extreme cosine is
             # taken. This is kept, so that the window is the window of CSPICE.
-            result = _gf_relx(et -> _gf_cosvalue(qp, et), et -> _gf_decreasing(qp, et),
-                op, 0.0, 0.0, region, run, (_gf_pass(tmplat, total + 1), " "), "done.")
+            result = _gf_relx(
+                et -> _gf_cosvalue(qp, et), et -> _gf_decreasing(qp, et),
+                op, 0.0, 0.0, region, run, (_gf_pass(tmplat, total + 1), " "), "done."
+            )
             card(region) > 0 && (total += 1)
             if wncard(result) > 0
                 found = true

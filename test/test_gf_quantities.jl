@@ -47,11 +47,13 @@ end
     et(s) = SPICE.str2et(s)
 
     # (target, observer, steps, span of the confinement window)
-    pairs = (("MOON", "EARTH", (GF_DAY, 6 * 3600.0), 120 * GF_DAY),
+    pairs = (
+        ("MOON", "EARTH", (GF_DAY, 6 * 3600.0), 120 * GF_DAY),
         ("SUN", "EARTH", (5 * GF_DAY, 20 * GF_DAY), 800 * GF_DAY),
         ("MARS BARYCENTER", "EARTH", (10 * GF_DAY, 30 * GF_DAY), 1500 * GF_DAY),
         ("VENUS BARYCENTER", "SUN", (10 * GF_DAY,), 600 * GF_DAY),
-        ("EARTH", "MOON", (2 * GF_DAY,), 90 * GF_DAY))
+        ("EARTH", "MOON", (2 * GF_DAY,), 90 * GF_DAY),
+    )
 
     @testset "gfdist against CSPICE" begin
         i = 0
@@ -83,21 +85,25 @@ end
             refval, adjust = gf_reference(rng, q, cn, rel, wadj)
             w = gfrr(ctx, targ, abcorr, obs, rel, refval, adjust, step, cn)
             ref = GFO.gfrr(targ, abcorr, obs, rel, refval, adjust, step, collect(cn))
-            @test gf_compare("gfrr " * gf_family(rel, adjust), w, ref;
-                value=t -> Almanac._gf_value(q, t), vtol=64 * eps(30.0))
+            @test gf_compare(
+                "gfrr " * gf_family(rel, adjust), w, ref;
+                value = t -> Almanac._gf_value(q, t), vtol = 64 * eps(30.0)
+            )
         end
     end
 
     @testset "gfsep against CSPICE" begin
         # (target 1, shape 1, frame 1, target 2, shape 2, frame 2, observer, steps, span)
-        triples = (("MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "EARTH", (GF_DAY, 3 * GF_DAY), 150 * GF_DAY),
+        triples = (
+            ("MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "EARTH", (GF_DAY, 3 * GF_DAY), 150 * GF_DAY),
             ("MOON", "SPHERE", "IAU_MOON", "SUN", "SPHERE", "IAU_SUN", "EARTH", (GF_DAY,), 150 * GF_DAY),
             ("VENUS BARYCENTER", "POINT", "NULL", "SUN", "SPHERE", "IAU_SUN", "EARTH", (10 * GF_DAY,), 900 * GF_DAY),
             ("MARS BARYCENTER", "POINT", "NULL", "JUPITER BARYCENTER", "POINT", "NULL", "EARTH", (10 * GF_DAY,), 1500 * GF_DAY),
-            ("EARTH", "SPHERE", "IAU_EARTH", "MOON", "SPHERE", "IAU_MOON", "SUN", (2 * GF_DAY,), 120 * GF_DAY))
+            ("EARTH", "SPHERE", "IAU_EARTH", "MOON", "SPHERE", "IAU_MOON", "SUN", (2 * GF_DAY,), 120 * GF_DAY),
+        )
         i = 0
         for (t1, s1, f1, t2, s2, f2, obs, steps, span) in triples, abcorr in GF_ABCORRS,
-            (rel, wadj) in GF_VARIANTS
+                (rel, wadj) in GF_VARIANTS
 
             gf_pick(i += 1, 10) || continue
             cn = gf_confinement(rng, rand(rng, (1, 1, 3)), span)
@@ -106,20 +112,24 @@ end
             refval, adjust = gf_reference(rng, q, cn, rel, wadj)
             w = gfsep(ctx, t1, s1, f1, t2, s2, f2, abcorr, obs, rel, refval, adjust, step, cn)
             ref = GFO.gfsep(t1, s1, f1, t2, s2, f2, abcorr, obs, rel, refval, adjust, step, collect(cn))
-            @test gf_compare("gfsep " * gf_family(rel, adjust), w, ref;
-                value=t -> Almanac._gf_value(q, t), vtol=64 * eps(Float64(pi)))
+            @test gf_compare(
+                "gfsep " * gf_family(rel, adjust), w, ref;
+                value = t -> Almanac._gf_value(q, t), vtol = 64 * eps(Float64(pi))
+            )
         end
     end
 
     @testset "gfpa against CSPICE" begin
         # (target, illuminator, observer, steps, span); reception corrections only
-        triples = (("MOON", "SUN", "EARTH", (GF_DAY, 3 * GF_DAY), 150 * GF_DAY),
+        triples = (
+            ("MOON", "SUN", "EARTH", (GF_DAY, 3 * GF_DAY), 150 * GF_DAY),
             ("VENUS BARYCENTER", "SUN", "EARTH", (10 * GF_DAY,), 900 * GF_DAY),
             ("MARS BARYCENTER", "SUN", "EARTH", (10 * GF_DAY, 30 * GF_DAY), 1500 * GF_DAY),
-            ("EARTH", "SUN", "MOON", (2 * GF_DAY,), 120 * GF_DAY))
+            ("EARTH", "SUN", "MOON", (2 * GF_DAY,), 120 * GF_DAY),
+        )
         i = 0
         for (targ, illum, obs, steps, span) in triples, abcorr in ("NONE", "LT", "LT+S", "CN", "CN+S"),
-            (rel, wadj) in GF_VARIANTS, trial in 1:2
+                (rel, wadj) in GF_VARIANTS, trial in 1:2
 
             gf_pick(i += 1, 11) || continue
             cn = gf_confinement(rng, rand(rng, (1, 1, 3)), span)
@@ -132,10 +142,16 @@ end
         end
         cn = Window([0.0, 100 * GF_DAY])
         # a transmission correction (one branch of the code: the flag of the parsed correction)
-        @test throws_kind(() -> gfpa(ctx, "MOON", "SUN", "XLT+S", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
-            :invalidoption)
-        @test GFO.kind(() -> GFO.gfpa("MOON", "SUN", "XLT+S", "EARTH", "=", 1.0, 0.0, GF_DAY,
-            collect(cn))) === :invalidoption
+        @test throws_kind(
+            () -> gfpa(ctx, "MOON", "SUN", "XLT+S", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
+            :invalidoption
+        )
+        @test GFO.kind(
+            () -> GFO.gfpa(
+                "MOON", "SUN", "XLT+S", "EARTH", "=", 1.0, 0.0, GF_DAY,
+                collect(cn)
+            )
+        ) === :invalidoption
     end
 
     @testset "searches with no result" begin
@@ -147,8 +163,12 @@ end
         end
         @test isempty(gfrr(ctx, "MOON", "NONE", "EARTH", ">", 5.0, 0.0, GF_DAY, cn))
         @test isempty(GFO.gfrr("MOON", "NONE", "EARTH", ">", 5.0, 0.0, GF_DAY, c))
-        @test isempty(gfsep(ctx, "MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "NONE", "EARTH",
-            ">", 3.2, 0.0, GF_DAY, cn))
+        @test isempty(
+            gfsep(
+                ctx, "MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "NONE", "EARTH",
+                ">", 3.2, 0.0, GF_DAY, cn
+            )
+        )
         @test isempty(gfpa(ctx, "MOON", "SUN", "LT+S", "EARTH", "<", -0.1, 0.0, GF_DAY, cn))
         # no local extremum of the lunar distance in two days far from the apsides
         peri = gfdist(ctx, "MOON", "NONE", "EARTH", "LOCMIN", 0.0, 0.0, GF_DAY, cn)[1]
@@ -172,11 +192,13 @@ end
             p = gfdist(ctx, "MOON", abcorr, "EARTH", "LOCMIN", 0.0, 0.0, GF_DAY, full)
             a = gfdist(ctx, "MOON", abcorr, "EARTH", "LOCMAX", 0.0, 0.0, GF_DAY, full)
             @test wncard(r) >= 8 && wncard(p) >= 6 && wncard(a) >= 6
-            windows = (Window([r[1], r[7]]), Window([r[3], r[3] + 10 * GF_DAY]),
+            windows = (
+                Window([r[1], r[7]]), Window([r[3], r[3] + 10 * GF_DAY]),
                 Window([r[1] - 5 * GF_DAY, r[5]]), Window([r[3], r[3]]),
                 Window([r[1], r[3], r[5], r[7]]), Window([p[1], p[5]]),
                 Window(sort([a[1], p[5]])), Window(sort([p[1], a[1], p[3], a[3]])),
-                Window([p[3], p[3]]), Window(sort([r[1], p[3], a[3], r[9]])))
+                Window([p[3], p[3]]), Window(sort([r[1], p[3], a[3], r[9]])),
+            )
             for cn in windows, rel in GF_RELATIONS
                 adjust = rel in ("ABSMIN", "ABSMAX") ? 1000.0 : 0.0
                 for adj in unique((0.0, adjust))
@@ -186,8 +208,10 @@ end
                     @test gf_compare("gfdist end points, " * gf_family(rel, adj), w, ref)
                     w = gfrr(ctx, "MOON", abcorr, "EARTH", rel, 0.0, adj / 1.0e5, GF_DAY, cn)
                     ref = GFO.gfrr("MOON", abcorr, "EARTH", rel, 0.0, adj / 1.0e5, GF_DAY, collect(cn))
-                    @test gf_compare("gfrr end points, " * gf_family(rel, adj), w, ref;
-                        value=t -> Almanac._gf_value(qrr, t), vtol=64 * eps(30.0))
+                    @test gf_compare(
+                        "gfrr end points, " * gf_family(rel, adj), w, ref;
+                        value = t -> Almanac._gf_value(qrr, t), vtol = 64 * eps(30.0)
+                    )
                 end
             end
         end
@@ -210,12 +234,18 @@ end
 
         # Moon and Sun seen from the Earth: smallest separation at new Moon, largest at
         # full Moon.
-        sep(t) = vsep(spkpos(ctx, "MOON", t, "J2000", "LT+S", "EARTH")[1],
-            spkpos(ctx, "SUN", t, "J2000", "LT+S", "EARTH")[1])
-        newm = gfsep(ctx, "MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "LT+S", "EARTH",
-            "LOCMIN", 0.0, 0.0, GF_DAY, year)
-        fullm = gfsep(ctx, "MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "LT+S", "EARTH",
-            "LOCMAX", 0.0, 0.0, GF_DAY, year)
+        sep(t) = vsep(
+            spkpos(ctx, "MOON", t, "J2000", "LT+S", "EARTH")[1],
+            spkpos(ctx, "SUN", t, "J2000", "LT+S", "EARTH")[1]
+        )
+        newm = gfsep(
+            ctx, "MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "LT+S", "EARTH",
+            "LOCMIN", 0.0, 0.0, GF_DAY, year
+        )
+        fullm = gfsep(
+            ctx, "MOON", "POINT", "NULL", "SUN", "POINT", "NULL", "LT+S", "EARTH",
+            "LOCMAX", 0.0, 0.0, GF_DAY, year
+        )
         @test wncard(newm) in (12, 13) && wncard(fullm) in (12, 13)
         @test all(t -> sep(t) < deg2rad(5.4), newm[1:2:end])
         @test all(t -> sep(t) > deg2rad(174.6), fullm[1:2:end])
@@ -245,8 +275,10 @@ end
         cn = Window([et("2023 JAN 01"), et("2023 JUN 01")])
         nod, noi, nol = Float64[], Int[], Bool[]
         tpar = (["TARGET", "OBSERVER", "ABCORR"], ["MOON", "EARTH", "LT+S"])
-        cnames = ["TARGET", "OBSERVER", "ABCORR", "COORDINATE SYSTEM", "COORDINATE", "REFERENCE FRAME",
-            "VECTOR DEFINITION", "METHOD", "DVEC", "DREF"]
+        cnames = [
+            "TARGET", "OBSERVER", "ABCORR", "COORDINATE SYSTEM", "COORDINATE", "REFERENCE FRAME",
+            "VECTOR DEFINITION", "METHOD", "DVEC", "DREF",
+        ]
         # `gfevnt` selects the quantity by its name and gives the relation to the same
         # search for every quantity, so the default run takes each relation once and the
         # quantities in turn (each quantity once at least); the exhaustive run takes the
@@ -257,61 +289,97 @@ end
             nev += 1
             adjust = wadj ? 2000.0 : 0.0
             if iq == 1
-                @test gfevnt(ctx, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, rel, 3.9e5,
-                    1.0e-6, adjust, cn) ==
-                      gfdist(ctx, "MOON", "LT+S", "EARTH", rel, 3.9e5, adjust, GF_DAY, cn)
+                @test gfevnt(
+                    ctx, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, rel, 3.9e5,
+                    1.0e-6, adjust, cn
+                ) ==
+                    gfdist(ctx, "MOON", "LT+S", "EARTH", rel, 3.9e5, adjust, GF_DAY, cn)
             elseif iq == 2
-                @test gfevnt(ctx, GF_DAY, gfrefn, " range rate", tpar..., nod, noi, nol, rel, 0.01,
-                    1.0e-6, adjust / 1.0e5, cn) ==
-                      gfrr(ctx, "MOON", "LT+S", "EARTH", rel, 0.01, adjust / 1.0e5, GF_DAY, cn)
+                @test gfevnt(
+                    ctx, GF_DAY, gfrefn, " range rate", tpar..., nod, noi, nol, rel, 0.01,
+                    1.0e-6, adjust / 1.0e5, cn
+                ) ==
+                    gfrr(ctx, "MOON", "LT+S", "EARTH", rel, 0.01, adjust / 1.0e5, GF_DAY, cn)
             elseif iq == 3
-                @test gfevnt(ctx, GF_DAY, gfrefn, "PHASE ANGLE", ["ILLUM", "TARGET", "OBSERVER", "ABCORR"],
-                    ["SUN", "MOON", "EARTH", "LT+S"], nod, noi, nol, rel, 1.0, 1.0e-6, adjust / 1.0e4, cn) ==
-                      gfpa(ctx, "MOON", "SUN", "LT+S", "EARTH", rel, 1.0, adjust / 1.0e4, GF_DAY, cn)
+                @test gfevnt(
+                    ctx, GF_DAY, gfrefn, "PHASE ANGLE", ["ILLUM", "TARGET", "OBSERVER", "ABCORR"],
+                    ["SUN", "MOON", "EARTH", "LT+S"], nod, noi, nol, rel, 1.0, 1.0e-6, adjust / 1.0e4, cn
+                ) ==
+                    gfpa(ctx, "MOON", "SUN", "LT+S", "EARTH", rel, 1.0, adjust / 1.0e4, GF_DAY, cn)
             elseif iq == 4
-                @test gfevnt(ctx, GF_DAY, gfrefn, "ANGULAR SEPARATION",
+                @test gfevnt(
+                    ctx, GF_DAY, gfrefn, "ANGULAR SEPARATION",
                     ["TARGET1", "FRAME1", "SHAPE1", "TARGET2", "FRAME2", "SHAPE2", "OBSERVER", "ABCORR"],
                     ["MOON", "IAU_MOON", "SPHERE", "SUN", "IAU_SUN", "SPHERE", "EARTH", "LT+S"],
-                    nod, noi, nol, rel, 1.0, 1.0e-6, adjust / 1.0e4, cn) ==
-                      gfsep(ctx, "MOON", "SPHERE", "IAU_MOON", "SUN", "SPHERE", "IAU_SUN", "LT+S", "EARTH",
-                    rel, 1.0, adjust / 1.0e4, GF_DAY, cn)
+                    nod, noi, nol, rel, 1.0, 1.0e-6, adjust / 1.0e4, cn
+                ) ==
+                    gfsep(
+                    ctx, "MOON", "SPHERE", "IAU_MOON", "SUN", "SPHERE", "IAU_SUN", "LT+S", "EARTH",
+                    rel, 1.0, adjust / 1.0e4, GF_DAY, cn
+                )
             else
-                @test gfevnt(ctx, GF_DAY, gfrefn, "COORDINATE", cnames,
+                @test gfevnt(
+                    ctx, GF_DAY, gfrefn, "COORDINATE", cnames,
                     ["MOON", "EARTH", "LT+S", "RA/DEC", "DECLINATION", "J2000", "POSITION", " ", " ", " "],
-                    [0.0, 0.0, 0.0], noi, nol, rel, 0.1, 1.0e-6, adjust / 1.0e5, cn) ==
-                      gfposc(ctx, "MOON", "J2000", "LT+S", "EARTH", "RA/DEC", "DECLINATION", rel, 0.1,
-                    adjust / 1.0e5, GF_DAY, cn)
+                    [0.0, 0.0, 0.0], noi, nol, rel, 0.1, 1.0e-6, adjust / 1.0e5, cn
+                ) ==
+                    gfposc(
+                    ctx, "MOON", "J2000", "LT+S", "EARTH", "RA/DEC", "DECLINATION", rel, 0.1,
+                    adjust / 1.0e5, GF_DAY, cn
+                )
             end
         end
         @test nev == (FULL ? 5 : 1) * length(GF_VARIANTS)
         base = gfdist(ctx, "MOON", "LT+S", "EARTH", "=", 3.9e5, 0.0, GF_DAY, cn)
         # the tolerance is an argument of `gfevnt`
-        @test gfevnt(ctx, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=", 3.9e5, 1.0e-3,
-            0.0, cn) == gfdist(ctx, "MOON", "LT+S", "EARTH", "=", 3.9e5, 0.0, GF_DAY, cn; tol=1.0e-3)
+        @test gfevnt(
+            ctx, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=", 3.9e5, 1.0e-3,
+            0.0, cn
+        ) == gfdist(ctx, "MOON", "LT+S", "EARTH", "=", 3.9e5, 0.0, GF_DAY, cn; tol = 1.0e-3)
         # a step function and another refinement give the same roots within the tolerance
-        varstep = gfevnt(ctx, GFConstStep(GF_DAY), gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=", 3.9e5,
-            1.0e-6, 0.0, cn)
+        varstep = gfevnt(
+            ctx, GFConstStep(GF_DAY), gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=", 3.9e5,
+            1.0e-6, 0.0, cn
+        )
         @test varstep == base
-        third = gfevnt(ctx, GFConstStep(0.7 * GF_DAY), (t1, t2, s1, s2) -> t1 + (t2 - t1) / 3, "DISTANCE",
-            tpar..., nod, noi, nol, "=", 3.9e5, 1.0e-6, 0.0, cn)
+        third = gfevnt(
+            ctx, GFConstStep(0.7 * GF_DAY), (t1, t2, s1, s2) -> t1 + (t2 - t1) / 3, "DISTANCE",
+            tpar..., nod, noi, nol, "=", 3.9e5, 1.0e-6, 0.0, cn
+        )
         @test length(third) == length(base) && maximum(abs.(collect(third) .- collect(base))) < 2.0e-6
         # the forms on a snapshot and on the default context
-        @test gfevnt(ks, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=", 3.9e5, 1.0e-6,
-            0.0, cn) == base
+        @test gfevnt(
+            ks, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=", 3.9e5, 1.0e-6,
+            0.0, cn
+        ) == base
         # errors
-        ev(q, names, vals; op="=") = gfevnt(ctx, GF_DAY, gfrefn, q, names, vals, nod, noi, nol, op,
-            1.0, 1.0e-6, 0.0, cn)
+        ev(q, names, vals; op = "=") = gfevnt(
+            ctx, GF_DAY, gfrefn, q, names, vals, nod, noi, nol, op,
+            1.0, 1.0e-6, 0.0, cn
+        )
         @test throws_kind(() -> ev("SPEED", tpar...), :notrecognized)
-        @test throws_kind(() -> ev("DISTANCE", tpar...; op="=="), :notrecognized)
+        @test throws_kind(() -> ev("DISTANCE", tpar...; op = "=="), :notrecognized)
         @test throws_kind(() -> ev("DISTANCE", ["TARGET", "OBSERVER"], ["MOON", "EARTH"]), :missingvalue)
         @test throws_kind(() -> ev("PHASE ANGLE", tpar...), :missingvalue)
         @test throws_kind(() -> ev("DISTANCE", fill("X", 11), fill("Y", 11)), :invalidcount)
-        @test throws_kind(() -> gfevnt(ctx, 0.0, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=",
-            1.0, 1.0e-6, 0.0, cn), :invalidstep)
-        @test throws_kind(() -> gfevnt(ctx, GFConstStep(-1.0), gfrefn, "DISTANCE", tpar..., nod, noi, nol,
-            "=", 1.0, 1.0e-6, 0.0, cn), :invalidstep)
-        @test throws_kind(() -> gfevnt(ctx, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=",
-            1.0, 0.0, 0.0, cn), :invalidtolerance)
+        @test throws_kind(
+            () -> gfevnt(
+                ctx, 0.0, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=",
+                1.0, 1.0e-6, 0.0, cn
+            ), :invalidstep
+        )
+        @test throws_kind(
+            () -> gfevnt(
+                ctx, GFConstStep(-1.0), gfrefn, "DISTANCE", tpar..., nod, noi, nol,
+                "=", 1.0, 1.0e-6, 0.0, cn
+            ), :invalidstep
+        )
+        @test throws_kind(
+            () -> gfevnt(
+                ctx, GF_DAY, gfrefn, "DISTANCE", tpar..., nod, noi, nol, "=",
+                1.0, 0.0, 0.0, cn
+            ), :invalidtolerance
+        )
         cvals(vd) = ["MOON", "EARTH", "NONE", "LATITUDINAL", "LATITUDE", "IAU_EARTH", vd, " ", " ", " "]
         @test throws_kind(() -> ev("COORDINATE", cnames, cvals("VELOCITY")), :notsupported)
     end
@@ -320,78 +388,132 @@ end
         cn = Window([0.0, 30 * GF_DAY])
         c = collect(cn)
         both(kind, neo, ora) = (@test gf_kind(neo) === kind; @test GFO.kind(ora) === kind)
-        both(:idcodenotfound, () -> gfdist(ctx, "NOSUCHBODY", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfdist("NOSUCHBODY", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c))
-        both(:idcodenotfound, () -> gfrr(ctx, "MOON", "NONE", "NOSUCHBODY", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfrr("MOON", "NONE", "NOSUCHBODY", "=", 1.0, 0.0, GF_DAY, c))
-        both(:bodiesnotdistinct, () -> gfdist(ctx, "MOON", "NONE", "301", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfdist("MOON", "NONE", "301", "=", 1.0, 0.0, GF_DAY, c))
-        both(:bodiesnotdistinct, () -> gfrr(ctx, "EARTH", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfrr("EARTH", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c))
-        both(:bodiesnotdistinct, () -> gfpa(ctx, "MOON", "MOON", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfpa("MOON", "MOON", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c))
-        both(:idcodenotfound, () -> gfpa(ctx, "MOON", "LAMP", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfpa("MOON", "LAMP", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c))
+        both(
+            :idcodenotfound, () -> gfdist(ctx, "NOSUCHBODY", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfdist("NOSUCHBODY", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c)
+        )
+        both(
+            :idcodenotfound, () -> gfrr(ctx, "MOON", "NONE", "NOSUCHBODY", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfrr("MOON", "NONE", "NOSUCHBODY", "=", 1.0, 0.0, GF_DAY, c)
+        )
+        both(
+            :bodiesnotdistinct, () -> gfdist(ctx, "MOON", "NONE", "301", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfdist("MOON", "NONE", "301", "=", 1.0, 0.0, GF_DAY, c)
+        )
+        both(
+            :bodiesnotdistinct, () -> gfrr(ctx, "EARTH", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfrr("EARTH", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c)
+        )
+        both(
+            :bodiesnotdistinct, () -> gfpa(ctx, "MOON", "MOON", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfpa("MOON", "MOON", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c)
+        )
+        both(
+            :idcodenotfound, () -> gfpa(ctx, "MOON", "LAMP", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfpa("MOON", "LAMP", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c)
+        )
         sepn(a, sa, b, sb, o) = gfsep(ctx, a, sa, "NULL", b, sb, "NULL", "NONE", o, "=", 1.0, 0.0, GF_DAY, cn)
         sepo(a, sa, b, sb, o) = GFO.gfsep(a, sa, "NULL", b, sb, "NULL", "NONE", o, "=", 1.0, 0.0, GF_DAY, c)
-        both(:bodiesnotdistinct, () -> sepn("MOON", "POINT", "MOON", "POINT", "EARTH"),
-            () -> sepo("MOON", "POINT", "MOON", "POINT", "EARTH"))
-        both(:bodiesnotdistinct, () -> sepn("MOON", "POINT", "SUN", "POINT", "SUN"),
-            () -> sepo("MOON", "POINT", "SUN", "POINT", "SUN"))
-        both(:idcodenotfound, () -> sepn("MOON", "POINT", "NOSUCHBODY", "POINT", "EARTH"),
-            () -> sepo("MOON", "POINT", "NOSUCHBODY", "POINT", "EARTH"))
-        both(:notrecognized, () -> sepn("MOON", "CUBE", "SUN", "POINT", "EARTH"),
-            () -> sepo("MOON", "CUBE", "SUN", "POINT", "EARTH"))
+        both(
+            :bodiesnotdistinct, () -> sepn("MOON", "POINT", "MOON", "POINT", "EARTH"),
+            () -> sepo("MOON", "POINT", "MOON", "POINT", "EARTH")
+        )
+        both(
+            :bodiesnotdistinct, () -> sepn("MOON", "POINT", "SUN", "POINT", "SUN"),
+            () -> sepo("MOON", "POINT", "SUN", "POINT", "SUN")
+        )
+        both(
+            :idcodenotfound, () -> sepn("MOON", "POINT", "NOSUCHBODY", "POINT", "EARTH"),
+            () -> sepo("MOON", "POINT", "NOSUCHBODY", "POINT", "EARTH")
+        )
+        both(
+            :notrecognized, () -> sepn("MOON", "CUBE", "SUN", "POINT", "EARTH"),
+            () -> sepo("MOON", "CUBE", "SUN", "POINT", "EARTH")
+        )
         # a sphere without radii in the kernel pool
-        both(:kernelvarnotfound, () -> sepn("MOON", "POINT", "MARS BARYCENTER", "SPHERE", "EARTH"),
-            () -> sepo("MOON", "POINT", "MARS BARYCENTER", "SPHERE", "EARTH"))
-        for (kind, (rel, adjust, step)) in ((:invalidstep, ("=", 0.0, 0.0)),
-            (:notrecognized, ("=>", 0.0, GF_DAY)), (:valueoutofrange, ("ABSMIN", -1.0, GF_DAY)),
-            (:invalidvalue, ("=", 1.0, GF_DAY)))
-            both(kind, () -> gfdist(ctx, "MOON", "NONE", "EARTH", rel, 3.9e5, adjust, step, cn),
-                () -> GFO.gfdist("MOON", "NONE", "EARTH", rel, 3.9e5, adjust, step, c))
-            both(kind, () -> gfpa(ctx, "MOON", "SUN", "NONE", "EARTH", rel, 1.0, adjust, step, cn),
-                () -> GFO.gfpa("MOON", "SUN", "NONE", "EARTH", rel, 1.0, adjust, step, c))
+        both(
+            :kernelvarnotfound, () -> sepn("MOON", "POINT", "MARS BARYCENTER", "SPHERE", "EARTH"),
+            () -> sepo("MOON", "POINT", "MARS BARYCENTER", "SPHERE", "EARTH")
+        )
+        for (kind, (rel, adjust, step)) in (
+                (:invalidstep, ("=", 0.0, 0.0)),
+                (:notrecognized, ("=>", 0.0, GF_DAY)), (:valueoutofrange, ("ABSMIN", -1.0, GF_DAY)),
+                (:invalidvalue, ("=", 1.0, GF_DAY)),
+            )
+            both(
+                kind, () -> gfdist(ctx, "MOON", "NONE", "EARTH", rel, 3.9e5, adjust, step, cn),
+                () -> GFO.gfdist("MOON", "NONE", "EARTH", rel, 3.9e5, adjust, step, c)
+            )
+            both(
+                kind, () -> gfpa(ctx, "MOON", "SUN", "NONE", "EARTH", rel, 1.0, adjust, step, cn),
+                () -> GFO.gfpa("MOON", "SUN", "NONE", "EARTH", rel, 1.0, adjust, step, c)
+            )
         end
         # The step is checked before the bodies, and the relation before the bodies.
-        both(:invalidstep, () -> gfdist(ctx, "NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, 0.0, cn),
-            () -> GFO.gfdist("NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, 0.0, c))
-        both(:notrecognized, () -> gfdist(ctx, "NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfdist("NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, GF_DAY, c))
-        both(:invalidoption, () -> gfdist(ctx, "MOON", "LT+X", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfdist("MOON", "LT+X", "EARTH", "=", 1.0, 0.0, GF_DAY, c))
+        both(
+            :invalidstep, () -> gfdist(ctx, "NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, 0.0, cn),
+            () -> GFO.gfdist("NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, 0.0, c)
+        )
+        both(
+            :notrecognized, () -> gfdist(ctx, "NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfdist("NOSUCHBODY", "NONE", "EARTH", "=>", 1.0, 0.0, GF_DAY, c)
+        )
+        both(
+            :invalidoption, () -> gfdist(ctx, "MOON", "LT+X", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfdist("MOON", "LT+X", "EARTH", "=", 1.0, 0.0, GF_DAY, c)
+        )
         # A body without ephemeris data has the kind of `spkezr`.
-        both(:spkinsuffdata, () -> gfdist(ctx, "PHOBOS", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
-            () -> GFO.gfdist("PHOBOS", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c))
+        both(
+            :spkinsuffdata, () -> gfdist(ctx, "PHOBOS", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, cn),
+            () -> GFO.gfdist("PHOBOS", "NONE", "EARTH", "=", 1.0, 0.0, GF_DAY, c)
+        )
     end
 
     FULL && @testset "search time against CSPICE (reported, not asserted)" begin
         cn = Window([et("2020 JAN 01"), et("2030 JAN 01")])
         c = collect(cn)
         cases = (
-            ("gfdist Moon-Earth, 10 years, step 1 d, '=', NONE",
+            (
+                "gfdist Moon-Earth, 10 years, step 1 d, '=', NONE",
                 () -> gfdist(ctx, "MOON", "NONE", "EARTH", "=", 3.9e5, 0.0, GF_DAY, cn),
-                () -> GFO.gfdist("MOON", "NONE", "EARTH", "=", 3.9e5, 0.0, GF_DAY, c)),
-            ("gfdist Moon-Earth, 10 years, step 1 d, LOCMIN, LT+S",
+                () -> GFO.gfdist("MOON", "NONE", "EARTH", "=", 3.9e5, 0.0, GF_DAY, c),
+            ),
+            (
+                "gfdist Moon-Earth, 10 years, step 1 d, LOCMIN, LT+S",
                 () -> gfdist(ctx, "MOON", "LT+S", "EARTH", "LOCMIN", 0.0, 0.0, GF_DAY, cn),
-                () -> GFO.gfdist("MOON", "LT+S", "EARTH", "LOCMIN", 0.0, 0.0, GF_DAY, c)),
-            ("gfsep Moon-Sun spheres, 10 years, step 1 d, '<', LT+S",
-                () -> gfsep(ctx, "MOON", "SPHERE", "IAU_MOON", "SUN", "SPHERE", "IAU_SUN", "LT+S",
-                    "EARTH", "<", 0.5, 0.0, GF_DAY, cn),
-                () -> GFO.gfsep("MOON", "SPHERE", "IAU_MOON", "SUN", "SPHERE", "IAU_SUN", "LT+S",
-                    "EARTH", "<", 0.5, 0.0, GF_DAY, c)),
-            ("gfrr Moon-Earth, 10 years, step 1 d, '=', CN",
+                () -> GFO.gfdist("MOON", "LT+S", "EARTH", "LOCMIN", 0.0, 0.0, GF_DAY, c),
+            ),
+            (
+                "gfsep Moon-Sun spheres, 10 years, step 1 d, '<', LT+S",
+                () -> gfsep(
+                    ctx, "MOON", "SPHERE", "IAU_MOON", "SUN", "SPHERE", "IAU_SUN", "LT+S",
+                    "EARTH", "<", 0.5, 0.0, GF_DAY, cn
+                ),
+                () -> GFO.gfsep(
+                    "MOON", "SPHERE", "IAU_MOON", "SUN", "SPHERE", "IAU_SUN", "LT+S",
+                    "EARTH", "<", 0.5, 0.0, GF_DAY, c
+                ),
+            ),
+            (
+                "gfrr Moon-Earth, 10 years, step 1 d, '=', CN",
                 () -> gfrr(ctx, "MOON", "CN", "EARTH", "=", 0.0, 0.0, GF_DAY, cn),
-                () -> GFO.gfrr("MOON", "CN", "EARTH", "=", 0.0, 0.0, GF_DAY, c)),
-            ("gfpa Moon-Sun-Earth, 10 years, step 1 d, ABSMAX adjust, LT+S",
+                () -> GFO.gfrr("MOON", "CN", "EARTH", "=", 0.0, 0.0, GF_DAY, c),
+            ),
+            (
+                "gfpa Moon-Sun-Earth, 10 years, step 1 d, ABSMAX adjust, LT+S",
                 () -> gfpa(ctx, "MOON", "SUN", "LT+S", "EARTH", "ABSMAX", 0.0, 0.2, GF_DAY, cn),
-                () -> GFO.gfpa("MOON", "SUN", "LT+S", "EARTH", "ABSMAX", 0.0, 0.2, GF_DAY, c)),
+                () -> GFO.gfpa("MOON", "SUN", "LT+S", "EARTH", "ABSMAX", 0.0, 0.2, GF_DAY, c),
+            ),
         )
         for (name, neo, ora) in cases
             @test gf_compare("timing", neo(), ora())
             tn, to = gf_time(neo), gf_time(ora)
-            measured(@sprintf("  %-58s Almanac %8.2f ms  CSPICE %8.2f ms  ratio %.2f", name,
-                1e3 * tn, 1e3 * to, to / tn))
+            measured(
+                @sprintf(
+                    "  %-58s Almanac %8.2f ms  CSPICE %8.2f ms  ratio %.2f", name,
+                    1.0e3 * tn, 1.0e3 * to, to / tn
+                )
+            )
         end
     end
 

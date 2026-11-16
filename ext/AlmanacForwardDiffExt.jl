@@ -22,7 +22,7 @@ import StaticArrays
 Almanac.primal(x::Dual) = Almanac.primal(value(x))
 
 depth(::Type{<:Real}) = 0
-depth(::Type{Dual{T,V,P}}) where {T,V,P} = 1 + depth(V)
+depth(::Type{Dual{T, V, P}}) where {T, V, P} = 1 + depth(V)
 
 """
     lift(k, jet, x)
@@ -32,7 +32,7 @@ Return the derivative of order `k` of a function of time at the epoch `x`, where
 `k + depth(typeof(x)) < length(jet)`. For a dual `x` the value is order `k` at
 `value(x)` and each partial is order `k+1` at `value(x)` times the partial of `x`.
 """
-@inline lift(k::Int, jet::Tuple, ::Real) = jet[k+1]
+@inline lift(k::Int, jet::Tuple, ::Real) = jet[k + 1]
 @inline function lift(k::Int, jet::Tuple, x::Dual{T}) where {T}
     v = lift(k, jet, value(x))
     d = lift(k + 1, jet, value(x))
@@ -44,27 +44,31 @@ end
 @inline lift_jet(jet::Tuple, x::Dual, ::Val{N}) where {N} =
     ntuple(i -> lift(i - 1, jet, x), Val(N + 1))
 
-function Almanac.spk_jet(ks::KernelSet, targ::Int32, et::D, ref::Int32, obs::Int32,
-        v::Val{N}) where {D<:Dual,N}
+function Almanac.spk_jet(
+        ks::KernelSet, targ::Int32, et::D, ref::Int32, obs::Int32,
+        v::Val{N}
+    ) where {D <: Dual, N}
     jet = spk_jet(ks, targ, primal(et), ref, obs, Val(N + depth(D)))
     return lift_jet(jet, et, v)
 end
 
-function Almanac.frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::D) where {D<:Dual}
+function Almanac.frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::D) where {D <: Dual}
     jet = rotation_jet(ks, from, to, primal(et), Val(depth(D)))
     return lift(0, jet, et)
 end
 
 Almanac.frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Dual, ::Val{0}) =
     (frame_rotation(ks, from, to, et),)
-function Almanac.frame_jet(ks::KernelSet, from::Int32, to::Int32, et::D,
-        v::Val{N}) where {D<:Dual,N}
+function Almanac.frame_jet(
+        ks::KernelSet, from::Int32, to::Int32, et::D,
+        v::Val{N}
+    ) where {D <: Dual, N}
     jet = rotation_jet(ks, from, to, primal(et), Val(N + depth(D)))
     return lift_jet(jet, et, v)
 end
 
 "`_ad_order(Dual)`: a dual number carries one derivative order more than its value type."
-Almanac._ad_order(::Type{ForwardDiff.Dual{Tg,V,N}}) where {Tg,V,N} = 1 + Almanac._ad_order(V)
+Almanac._ad_order(::Type{ForwardDiff.Dual{Tg, V, N}}) where {Tg, V, N} = 1 + Almanac._ad_order(V)
 
 "`_with_primal(x::Dual, p)`: `x` with the plain value `p` and the same partials."
 Almanac._with_primal(x::ForwardDiff.Dual{Tg}, p::Float64) where {Tg} =
@@ -83,19 +87,23 @@ Almanac._with_primal(x::ForwardDiff.Dual{Tg}, p::Float64) where {Tg} =
 # aberration and the frame change are rotations.
 
 "Light time `|r| / c` of a dual position; zero for the zero vector (a body from itself)."
-@inline function _dual_lt(r::Almanac.Vec3{D}) where {D<:Dual}
+@inline function _dual_lt(r::Almanac.Vec3{D}) where {D <: Dual}
     iszero(primal(r[1])) && iszero(primal(r[2])) && iszero(primal(r[3])) && return zero(D)
     return sqrt(r[1] * r[1] + r[2] * r[2] + r[3] * r[3]) / Almanac.CLIGHT
 end
 
-function Almanac.abcorr_jet(ks::KernelSet, targ::Int32, et::D, ref::Int32,
-        corr::Almanac.Aberration, obs::Int32, v::Val{N}) where {D<:Dual,N}
+function Almanac.abcorr_jet(
+        ks::KernelSet, targ::Int32, et::D, ref::Int32,
+        corr::Almanac.Aberration, obs::Int32, v::Val{N}
+    ) where {D <: Dual, N}
     jet = Almanac.abcorr_jet(ks, targ, primal(et), ref, corr, obs, Val(N + depth(D)))
     return lift_jet(jet, et, v)
 end
 
-function Almanac.abcorr_position(ks::KernelSet, targ::Int32, et::D, ref::Int32,
-        corr::Almanac.Aberration, obs::Int32) where {D<:Dual}
+function Almanac.abcorr_position(
+        ks::KernelSet, targ::Int32, et::D, ref::Int32,
+        corr::Almanac.Aberration, obs::Int32
+    ) where {D <: Dual}
     t = primal(et)
     jet = Almanac.abcorr_jet(ks, targ, t, ref, corr, obs, Val(depth(D)))
     r0, _ = Almanac.abcorr_position(ks, targ, t, ref, corr, obs)
@@ -103,8 +111,10 @@ function Almanac.abcorr_position(ks::KernelSet, targ::Int32, et::D, ref::Int32,
     return r, _dual_lt(r)
 end
 
-function Almanac.abcorr_state(ks::KernelSet, targ::Int32, et::D, ref::Int32,
-        corr::Almanac.Aberration, obs::Int32) where {D<:Dual}
+function Almanac.abcorr_state(
+        ks::KernelSet, targ::Int32, et::D, ref::Int32,
+        corr::Almanac.Aberration, obs::Int32
+    ) where {D <: Dual}
     t = primal(et)
     jet = Almanac.abcorr_jet(ks, targ, t, ref, corr, obs, Val(depth(D) + 1))
     s0, _ = Almanac.abcorr_state(ks, targ, t, ref, corr, obs)

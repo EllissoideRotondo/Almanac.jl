@@ -18,11 +18,13 @@ import ForwardDiff
 isdefined(@__MODULE__, :CS) || include("mathoracle.jl")
 
 "Points on the axes, in the coordinate planes and on the longitude branch cut."
-const SPECIAL_POINTS = (SVector(0.0, 0.0, 0.0), SVector(0.0, 0.0, 1.0), SVector(0.0, 0.0, -3.0),
+const SPECIAL_POINTS = (
+    SVector(0.0, 0.0, 0.0), SVector(0.0, 0.0, 1.0), SVector(0.0, 0.0, -3.0),
     SVector(1.0, 0.0, 0.0), SVector(-2.0, 0.0, 0.0), SVector(0.0, 5.0, 0.0), SVector(0.0, -5.0, 0.0),
     SVector(-1.0, 0.0, 1.0), SVector(-1.0, -0.0, 0.0), SVector(1.0, 1.0, 0.0), SVector(0.0, 1.0, 1.0),
-    SVector(-1.0, 1e-300, 0.0), SVector(-1.0, -1e-300, 0.0), SVector(6378.0, 0.0, 0.0),
-    SVector(0.0, 0.0, 6356.0))
+    SVector(-1.0, 1.0e-300, 0.0), SVector(-1.0, -1.0e-300, 0.0), SVector(6378.0, 0.0, 0.0),
+    SVector(0.0, 0.0, 6356.0),
+)
 
 group("14. math: coordinates", Kernels.PCK11) do
     rng = MersenneTwister(SEED + 14)
@@ -30,7 +32,7 @@ group("14. math: coordinates", Kernels.PCK11) do
     t = Tally()
     oracle_load((Kernels.PCK11,))
     ctx = neo_context((Kernels.PCK11,))
-    rpt() = rand(rng) < 0.2 ? rand(rng, SPECIAL_POINTS) : rvec(rng; special=0.0)
+    rpt() = rand(rng) < 0.2 ? rand(rng, SPECIAL_POINTS) : rvec(rng; special = 0.0)
     rang() = rand(rng) < 0.15 ? rand(rng, (0.0, pi, -pi, pi / 2, -pi / 2, 2pi)) : 4pi * rand(rng) - 2pi
     rrad() = rand(rng) < 0.05 ? 0.0 : rmag(rng)
 
@@ -38,14 +40,18 @@ group("14. math: coordinates", Kernels.PCK11) do
         for _ in 1:n
             p = rpt()
             r, a1, a2, z = rrad(), rang(), rang(), rmag(rng) * randn(rng)
-            for (name, neo, c) in ((:reclat, reclat, CS.reclat), (:recrad, recrad, CS.recrad),
-                (:recsph, recsph, CS.recsph), (:reccyl, reccyl, CS.reccyl))
+            for (name, neo, c) in (
+                    (:reclat, reclat, CS.reclat), (:recrad, recrad, CS.recrad),
+                    (:recsph, recsph, CS.recsph), (:reccyl, reccyl, CS.reccyl),
+                )
                 versus!(t, name, () -> neo(p), () -> c(p))
             end
-            for (name, neo, c) in ((:latrec, latrec, CS.latrec), (:radrec, radrec, CS.radrec),
-                (:sphrec, sphrec, CS.sphrec), (:cyllat, cyllat, CS.cyllat),
-                (:latcyl, latcyl, CS.latcyl), (:cylsph, cylsph, CS.cylsph),
-                (:sphcyl, sphcyl, CS.sphcyl), (:sphlat, sphlat, CS.sphlat), (:latsph, latsph, CS.latsph))
+            for (name, neo, c) in (
+                    (:latrec, latrec, CS.latrec), (:radrec, radrec, CS.radrec),
+                    (:sphrec, sphrec, CS.sphrec), (:cyllat, cyllat, CS.cyllat),
+                    (:latcyl, latcyl, CS.latcyl), (:cylsph, cylsph, CS.cylsph),
+                    (:sphcyl, sphcyl, CS.sphcyl), (:sphlat, sphlat, CS.sphlat), (:latsph, latsph, CS.latsph),
+                )
                 versus!(t, name, () -> neo(r, a1, a2), () -> c(r, a1, a2))
             end
             versus!(t, :cylrec, () -> cylrec(r, a1, z), () -> CS.cylrec(r, a1, z))
@@ -71,15 +77,17 @@ group("14. math: coordinates", Kernels.PCK11) do
         @test reclat([-1.0, 0.0, 0.0])[2] == Float64(pi)
         @test reclat([-1.0, -0.0, 0.0])[2] == -Float64(pi) == CS.reclat([-1.0, -0.0, 0.0])[2]
         @test recrad([1.0, -1.0, 0.0])[2] ≈ 7pi / 4
-        @test 0.0 <= recrad([-1.0, -1e-300, 0.0])[2] <= 2pi
+        @test 0.0 <= recrad([-1.0, -1.0e-300, 0.0])[2] <= 2pi
         @test recsph([0.0, 0.0, -1.0]) == (1.0, Float64(pi), 0.0)
         @test reccyl([0.0, 0.0, 4.0]) == (0.0, 0.0, 4.0)
         @test reccyl([0.0, -1.0, 4.0])[2] ≈ 3pi / 2
     end
 
     @apart @testset "geodetic and planetographic" begin
-        shapes = ((6378.1366, 1 / 298.25642), (3396.19, 0.00589), (1.0, 0.0), (10.0, 0.9), (2.0, -1.5),
-            (1e-3, 0.3), (1e8, 0.5))
+        shapes = (
+            (6378.1366, 1 / 298.25642), (3396.19, 0.00589), (1.0, 0.0), (10.0, 0.9), (2.0, -1.5),
+            (1.0e-3, 0.3), (1.0e8, 0.5),
+        )
         bodies = ("EARTH", "MARS", "MOON", "SUN", "JUPITER", "VENUS", "399", "PHOBOS", "NOSUCHBODY", "MERCURY")
         for _ in 1:n
             re, f = rand(rng, shapes)
@@ -89,7 +97,7 @@ group("14. math: coordinates", Kernels.PCK11) do
             u = rand(rng)
             p = u < 0.15 ? abs(re) * rand(rng, SPECIAL_POINTS) / 6378.0 :
                 u < 0.5 ? abs(re) * (0.5 + rand(rng)) * SVector(randn(rng), randn(rng), randn(rng)) :
-                u < 0.6 ? abs(re) * 1e-6 * SVector(randn(rng), randn(rng), randn(rng)) : abs(re) * rmag(rng) * 1e-5 * SVector(randn(rng), randn(rng), randn(rng))
+                u < 0.6 ? abs(re) * 1.0e-6 * SVector(randn(rng), randn(rng), randn(rng)) : abs(re) * rmag(rng) * 1.0e-5 * SVector(randn(rng), randn(rng), randn(rng))
             lon, lat = rang(), (rand(rng) < 0.1 ? rand(rng, (pi / 2, -pi / 2, 0.0)) : pi * rand(rng) - pi / 2)
             alt = abs(re) * (rand(rng) < 0.1 ? 0.0 : randn(rng))
             versus!(t, :recgeo, () -> recgeo(p, re, f), () -> CS.recgeo(p, re, f))
@@ -97,7 +105,7 @@ group("14. math: coordinates", Kernels.PCK11) do
             versus!(t, :drdgeo, () -> drdgeo(lon, lat, alt, re, f), () -> CS.drdgeo(lon, lat, alt, re, f))
             # deep inside the spheroid the Jacobian has entries of the size of the
             # distance from the center, which carry the rounding error of the radius
-            deep = vnorm(p) < 1e-2 * abs(re)
+            deep = vnorm(p) < 1.0e-2 * abs(re)
             versus!(t, deep ? :dgeodr_deep : :dgeodr, () -> dgeodr(p..., re, f), () -> CS.dgeodr(p..., re, f))
             b = rand(rng, bodies)
             versus!(t, :recpgr, () -> recpgr(ctx, b, p, re, f), () -> CS.recpgr(b, p, re, f))
@@ -106,12 +114,14 @@ group("14. math: coordinates", Kernels.PCK11) do
             versus!(t, deep ? :dpgrdr_deep : :dpgrdr, () -> dpgrdr(ctx, b, p..., re, f), () -> CS.dpgrdr(b, p..., re, f))
             if re > 0 && f < 1 && abs(f) < 0.95
                 g = recgeo(p, re, f)
-                @test vdist(georec(g..., re, f), p) <= 1e-9 * max(vnorm(p), re)
+                @test vdist(georec(g..., re, f), p) <= 1.0e-9 * max(vnorm(p), re)
             end
         end
         # Fixed case: the centre of the spheroid, where the near point is not unique.
-        versus!(t, :recgeo, () -> recgeo([0.0, 0.0, 0.0], 6378.1366, 1 / 298.25642),
-            () -> CS.recgeo([0.0, 0.0, 0.0], 6378.1366, 1 / 298.25642))
+        versus!(
+            t, :recgeo, () -> recgeo([0.0, 0.0, 0.0], 6378.1366, 1 / 298.25642),
+            () -> CS.recgeo([0.0, 0.0, 0.0], 6378.1366, 1 / 298.25642)
+        )
         @test throws_kind(() -> recgeo([1.0, 2.0, 3.0], -1.0, 0.1), :valueoutofrange)
         @test throws_kind(() -> georec(0.1, 0.2, 3.0, 1.0, 1.0), :valueoutofrange)
         @test throws_kind(() -> drdgeo(0.1, 0.2, 3.0, -1.0, 0.5), :badradius)
@@ -151,30 +161,32 @@ group("14. math: coordinates", Kernels.PCK11) do
         q = SVector(1.3, -0.4, 0.9)
         x = SVector(3100.0, -4200.0, 2500.0)
         re, f = 6378.1366, 1 / 298.25642
-        @test drdlat(q...) ≈ ForwardDiff.jacobian(v -> latrec(v...), q) rtol = 1e-14
-        @test drdsph(q...) ≈ ForwardDiff.jacobian(v -> sphrec(v...), q) rtol = 1e-14
-        @test drdcyl(q...) ≈ ForwardDiff.jacobian(v -> cylrec(v...), q) rtol = 1e-14
+        @test drdlat(q...) ≈ ForwardDiff.jacobian(v -> latrec(v...), q) rtol = 1.0e-14
+        @test drdsph(q...) ≈ ForwardDiff.jacobian(v -> sphrec(v...), q) rtol = 1.0e-14
+        @test drdcyl(q...) ≈ ForwardDiff.jacobian(v -> cylrec(v...), q) rtol = 1.0e-14
         @test drdgeo(q[1], q[2], 300.0, re, f) ≈
-              ForwardDiff.jacobian(v -> georec(v[1], v[2], v[3], re, f), SVector(q[1], q[2], 300.0)) rtol = 1e-13
-        @test dlatdr(x...) ≈ ForwardDiff.jacobian(v -> SVector(reclat(v)), x) rtol = 1e-13
-        @test dsphdr(x...) ≈ ForwardDiff.jacobian(v -> SVector(recsph(v)), x) rtol = 1e-13
-        @test dcyldr(x...) ≈ ForwardDiff.jacobian(v -> SVector(reccyl(v)), x) rtol = 1e-13
+            ForwardDiff.jacobian(v -> georec(v[1], v[2], v[3], re, f), SVector(q[1], q[2], 300.0)) rtol = 1.0e-13
+        @test dlatdr(x...) ≈ ForwardDiff.jacobian(v -> SVector(reclat(v)), x) rtol = 1.0e-13
+        @test dsphdr(x...) ≈ ForwardDiff.jacobian(v -> SVector(recsph(v)), x) rtol = 1.0e-13
+        @test dcyldr(x...) ≈ ForwardDiff.jacobian(v -> SVector(reccyl(v)), x) rtol = 1.0e-13
         # `recgeo` runs the iteration of `nearpt`; its derivative comes from the
         # stationarity condition of the near point
-        @test dgeodr(x..., re, f) ≈ ForwardDiff.jacobian(v -> SVector(recgeo(v, re, f)), x) rtol = 1e-10
+        @test dgeodr(x..., re, f) ≈ ForwardDiff.jacobian(v -> SVector(recgeo(v, re, f)), x) rtol = 1.0e-10
         @test dpgrdr(ctx, "MARS", x..., 3396.19, 0.00589) ≈
-              ForwardDiff.jacobian(v -> SVector(recpgr(ctx, "MARS", v, 3396.19, 0.00589)), x) rtol = 1e-10
+            ForwardDiff.jacobian(v -> SVector(recpgr(ctx, "MARS", v, 3396.19, 0.00589)), x) rtol = 1.0e-10
         @test drdpgr(ctx, "MARS", q[1], q[2], 300.0, 3396.19, 0.00589) ≈
-              ForwardDiff.jacobian(v -> pgrrec(ctx, "MARS", v[1], v[2], v[3], 3396.19, 0.00589),
-            SVector(q[1], q[2], 300.0)) rtol = 1e-13
-        @test dlatdr(x...) * drdlat(reclat(x)...) ≈ I atol = 1e-12
+            ForwardDiff.jacobian(
+            v -> pgrrec(ctx, "MARS", v[1], v[2], v[3], 3396.19, 0.00589),
+            SVector(q[1], q[2], 300.0)
+        ) rtol = 1.0e-13
+        @test dlatdr(x...) * drdlat(reclat(x)...) ≈ I atol = 1.0e-12
         @test throws_kind(() -> dlatdr(0.0, 0.0, 1.0), :pointonzaxis)
         @test throws_kind(() -> dsphdr(0.0, 0.0, 1.0), :pointonzaxis)
         @test throws_kind(() -> dcyldr(0.0, 0.0, 1.0), :pointonzaxis)
         # a Taylor series passes through the conversions that need sine and cosine only
         tt = Almanac.taylor_var(0.0, Val(1))
         v = latrec(2.0 + 0.1 * tt, 0.3 + 0.2 * tt, -0.4 + 0.5 * tt)
-        @test map(c -> Almanac.derivatives(c)[2], v) ≈ drdlat(2.0, 0.3, -0.4) * [0.1, 0.2, 0.5] rtol = 1e-14
+        @test map(c -> Almanac.derivatives(c)[2], v) ≈ drdlat(2.0, 0.3, -0.4) * [0.1, 0.2, 0.5] rtol = 1.0e-14
         @test Almanac.derivatives(sphrec(2.0, 0.3 + tt, 0.4)[3])[2] ≈ -2.0 * sin(0.3)
         @test Almanac.derivatives(cylrec(2.0, 0.3 + tt, 0.4)[1])[2] ≈ -2.0 * sin(0.3)
     end
@@ -190,27 +202,27 @@ group("14. math: coordinates", Kernels.PCK11) do
             s = if isys == "RECTANGULAR"
                 vcat(rand(rng) < 0.15 ? rand(rng, SPECIAL_POINTS) : 7000.0 * SVector(randn(rng), randn(rng), randn(rng)), vel)
             elseif isys == "CYLINDRICAL"
-                SVector(7000.0 * rand(rng), rang(), 7000.0 * randn(rng), randn(rng), 1e-3 * randn(rng), randn(rng))
+                SVector(7000.0 * rand(rng), rang(), 7000.0 * randn(rng), randn(rng), 1.0e-3 * randn(rng), randn(rng))
             elseif isys == "GEODETIC" || isys == "PLANETOGRAPHIC"
-                SVector(rang(), pi * rand(rng) - pi / 2, 500.0 * randn(rng), 1e-3 * randn(rng), 1e-3 * randn(rng), randn(rng))
+                SVector(rang(), pi * rand(rng) - pi / 2, 500.0 * randn(rng), 1.0e-3 * randn(rng), 1.0e-3 * randn(rng), randn(rng))
             else
-                SVector(7000.0 * rand(rng), rang(), rang() / 2, randn(rng), 1e-3 * randn(rng), 1e-3 * randn(rng))
+                SVector(7000.0 * rand(rng), rang(), rang() / 2, randn(rng), 1.0e-3 * randn(rng), 1.0e-3 * randn(rng))
             end
             # next to the z axis the rate of the longitude is the quotient of two
             # rounding errors, in CSPICE as here
             rect = outcome(() -> xfmsta(ctx, s, isys, "RECTANGULAR", "EARTH"))
-            pole = !(rect isa Symbol) && hypot(rect[1], rect[2]) < 1e-6 * hypot(rect[1], rect[2], rect[3])
+            pole = !(rect isa Symbol) && hypot(rect[1], rect[2]) < 1.0e-6 * hypot(rect[1], rect[2], rect[3])
             versus!(t, pole ? :xfmsta_pole : :xfmsta, () -> xfmsta(ctx, s, isys, osys, b), () -> CS.xfmsta(s, isys, osys, b))
         end
         s = SVector(3100.0, -4200.0, 2500.0, 1.0, 2.0, -3.0)
         for sys in systems[2:end]
             back = xfmsta(ctx, xfmsta(ctx, s, "rectangular", sys, "EARTH"), sys, "RECTANGULAR", "EARTH")
-            @test back ≈ s rtol = 1e-11
+            @test back ≈ s rtol = 1.0e-11
         end
         # the rates are the time derivatives of the coordinates
         lat = xfmsta(ctx, s, "RECTANGULAR", "LATITUDINAL", "EARTH")
         d = ForwardDiff.derivative(τ -> SVector(reclat(SVector(s[1], s[2], s[3]) + τ * SVector(s[4], s[5], s[6]))), 0.0)
-        @test lat[SVector(4, 5, 6)] ≈ d rtol = 1e-13
+        @test lat[SVector(4, 5, 6)] ≈ d rtol = 1.0e-13
         @test xfmsta(ctx, s, " rectangular ", "RECTANGULAR", "anything") == s
         @test throws_kind(() -> xfmsta(ctx, s, "RECTANGULAR", "POLAR", "EARTH"), :coordsysnotrec)
         @test throws_kind(() -> xfmsta(ctx, s, "RECTANGULAR", "GEODETIC", "NOSUCHBODY"), :idcodenotfound)
@@ -219,17 +231,19 @@ group("14. math: coordinates", Kernels.PCK11) do
     end
 
     @apart @testset "unit conversion" begin
-        units = ("RADIANS", "DEGREES", "ARCMINUTES", "ARCSECONDS", "HOURANGLE", "MINUTEANGLE", "SECONDANGLE",
+        units = (
+            "RADIANS", "DEGREES", "ARCMINUTES", "ARCSECONDS", "HOURANGLE", "MINUTEANGLE", "SECONDANGLE",
             "METERS", "KM", "CM", "MM", "LIGHTSECS", "AU", "M", "KILOMETERS", "CENTIMETERS", "MILLIMETERS",
             "FEET", "INCHES", "STATUTE_MILES", "NAUTICAL_MILES", "YARDS", "LIGHTYEARS", "PARSECS", "SECONDS",
-            "MINUTES", "HOURS", "DAYS", "JULIAN_YEARS", "TROPICAL_YEARS", "YEARS", "FURLONGS", "km", "Degrees ")
+            "MINUTES", "HOURS", "DAYS", "JULIAN_YEARS", "TROPICAL_YEARS", "YEARS", "FURLONGS", "km", "Degrees ",
+        )
         # `convrt` multiplies by the factor of the input unit and divides by the factor of
         # the output unit, after the check that the two units have one class. The default
         # run therefore takes each unit as input and as output against one unit of each
         # class (angle, distance, time) and against itself; the exhaustive run takes every
         # pair.
         pairs = FULL ? [(a, b) for a in units for b in units] :
-                [p for a in units for b in ("RADIANS", "KM", "SECONDS", a) for p in ((a, b), (b, a))]
+            [p for a in units for b in ("RADIANS", "KM", "SECONDS", a) for p in ((a, b), (b, a))]
         for (from, to) in pairs
             x = rmag(rng) * randn(rng)
             versus!(t, :convrt, () -> convrt(x, from, to), () -> CS.convrt(x, from, to))
@@ -247,17 +261,22 @@ group("14. math: coordinates", Kernels.PCK11) do
         # near point: the altitude of a point 1e5 radii away has the rounding error of
         # the distance, and the inverse Jacobians divide by the distance from the axis.
         e = 4eps()
-        report!(t, "coordinates"; tol=e, tols=Dict(:recgeo => 1e-14, :recpgr => 1e-14, :georec => 1e-14,
-            :pgrrec => 1e-14, :drdgeo => 1e-13, :drdpgr => 1e-13, :dgeodr => 1e-12, :dpgrdr => 1e-12,
-            :dgeodr_deep => 1e-1, :dpgrdr_deep => 1e-1, :xfmsta_pole => 1e-3,
-            :dlatdr => 1e-14, :dsphdr => 1e-14, :dcyldr => 1e-14, :xfmsta => 1e-11, :convrt => 0.0))
+        report!(
+            t, "coordinates"; tol = e, tols = Dict(
+                :recgeo => 1.0e-14, :recpgr => 1.0e-14, :georec => 1.0e-14,
+                :pgrrec => 1.0e-14, :drdgeo => 1.0e-13, :drdpgr => 1.0e-13, :dgeodr => 1.0e-12, :dpgrdr => 1.0e-12,
+                :dgeodr_deep => 1.0e-1, :dpgrdr_deep => 1.0e-1, :xfmsta_pole => 1.0e-3,
+                :dlatdr => 1.0e-14, :dsphdr => 1.0e-14, :dcyldr => 1.0e-14, :xfmsta => 1.0e-11, :convrt => 0.0
+            )
+        )
     end
 
     @apart @testset "inferred types and no allocation for static arguments" begin
         p = SVector(3100.0, -4200.0, 2500.0)
         re, f = 6378.1366, 1 / 298.25642
-        T3, V3, M3 = NTuple{3,Float64}, SVector{3,Float64}, SMatrix{3,3,Float64,9}
-        calls = Any[(reclat, (p,), T3), (recrad, (p,), T3), (recsph, (p,), T3), (reccyl, (p,), T3),
+        T3, V3, M3 = NTuple{3, Float64}, SVector{3, Float64}, SMatrix{3, 3, Float64, 9}
+        calls = Any[
+            (reclat, (p,), T3), (recrad, (p,), T3), (recsph, (p,), T3), (reccyl, (p,), T3),
             (latrec, (1.0, 0.2, 0.3), V3), (radrec, (1.0, 0.2, 0.3), V3), (sphrec, (1.0, 0.2, 0.3), V3),
             (cylrec, (1.0, 0.2, 0.3), V3), (cyllat, (1.0, 0.2, 0.3), T3), (latcyl, (1.0, 0.2, 0.3), T3),
             (cylsph, (1.0, 0.2, 0.3), T3), (sphcyl, (1.0, 0.2, 0.3), T3), (sphlat, (1.0, 0.2, 0.3), T3),
@@ -267,7 +286,8 @@ group("14. math: coordinates", Kernels.PCK11) do
             (drdgeo, (0.1, 0.2, 300.0, re, f), M3), (dgeodr, (p[1], p[2], p[3], re, f), M3),
             (convrt, (1.0, "KM", "AU"), Float64),
             (recpgr, (ctx, 499, p, re, f), T3), (pgrrec, (ctx, 499, 0.1, 0.2, 300.0, re, f), V3),
-            (drdpgr, (ctx, 499, 0.1, 0.2, 300.0, re, f), M3), (dpgrdr, (ctx, 499, p[1], p[2], p[3], re, f), M3)]
+            (drdpgr, (ctx, 499, 0.1, 0.2, 300.0, re, f), M3), (dpgrdr, (ctx, 499, p[1], p[2], p[3], re, f), M3),
+        ]
         for (fn, args, T) in calls
             @test (@inferred fn(args...)) isa T
         end
@@ -277,7 +297,7 @@ group("14. math: coordinates", Kernels.PCK11) do
             @test alloc_of(fn, args...) == 0
         end
         s = SVector(3100.0, -4200.0, 2500.0, 1.0, 2.0, -3.0)
-        @test (@inferred xfmsta(ctx, s, "RECTANGULAR", "LATITUDINAL", "EARTH")) isa SVector{6,Float64}
+        @test (@inferred xfmsta(ctx, s, "RECTANGULAR", "LATITUDINAL", "EARTH")) isa SVector{6, Float64}
     end
     SPICE.kclear()
 end

@@ -41,8 +41,10 @@ function _sclk_build(pool::AbstractDict, sc::Integer)
     (length(pstart) == length(pstop) && !isempty(pstart)) || return nothing
     (length(nf) == 1 && length(del) == 1) || return nothing
     nfield = round(Int, nf[1])
-    (1 <= nfield <= _SCLK_MXNFLD && length(moduli) >= nfield &&
-     length(offsets) >= nfield) || return nothing
+    (
+        1 <= nfield <= _SCLK_MXNFLD && length(moduli) >= nfield &&
+            length(offsets) >= nfield
+    ) || return nothing
     ts = num("SCLK01_TIME_SYSTEM")
     timsys = (ts === nothing || isempty(ts)) ? 1 : round(Int, ts[1])
     tikmsc = 1.0
@@ -53,8 +55,10 @@ function _sclk_build(pool::AbstractDict, sc::Integer)
     for i in eachindex(pstart)        # invariant: mxtick = rounded length of partitions 1:i-1
         mxtick = _dnint(pstop[i] - pstart[i] + mxtick)
     end
-    return SclkType1(Int32(sc), coef, pstart, pstop, moduli, offsets, Int32(nfield),
-        Int32(round(Int, del[1])), Int32(timsys), tikmsc, mxtick)
+    return SclkType1(
+        Int32(sc), coef, pstart, pstop, moduli, offsets, Int32(nfield),
+        Int32(round(Int, del[1])), Int32(timsys), tikmsc, mxtick
+    )
 end
 
 """
@@ -66,7 +70,7 @@ incomplete data is left out, so that loading a kernel never fails; a conversion 
 that clock then throws `SpiceError`.
 """
 function build_sclk(pool::AbstractDict)
-    out = Dict{Int32,SclkType1}()
+    out = Dict{Int32, SclkType1}()
     prefix = "SCLK_DATA_TYPE_"
     for (name, value) in pool
         startswith(name, prefix) || continue
@@ -93,9 +97,13 @@ Throws `SpiceError(:kernelvarnotfound)` if no SCLK kernel for `sc` is loaded.
 function sctype(ks::KernelSet, sc::Integer)
     name = "SCLK_DATA_TYPE_$(-Int(sc))"
     v = _pool_numbers(ks.pool, name)
-    (v === nothing || isempty(v)) && throw(SpiceError(:kernelvarnotfound,
-        "kernel variable $name was not found in the kernel pool; no SCLK kernel is " *
-        "loaded for the clock $sc"))
+    (v === nothing || isempty(v)) && throw(
+        SpiceError(
+            :kernelvarnotfound,
+            "kernel variable $name was not found in the kernel pool; no SCLK kernel is " *
+                "loaded for the clock $sc"
+        )
+    )
     return round(Int, v[1])
 end
 
@@ -103,8 +111,12 @@ end
 @noinline function _sclk_missing(ks::KernelSet, sc::Integer)
     t = sctype(ks, sc)
     t == 1 || throw(SpiceError(:notsupported, "clock type $t of the clock $sc is not supported"))
-    throw(SpiceError(:kernelvarnotfound, "the SCLK01_* or SCLK_PARTITION_* kernel " *
-        "variables of the spacecraft clock $sc are absent or malformed"))
+    throw(
+        SpiceError(
+            :kernelvarnotfound, "the SCLK01_* or SCLK_PARTITION_* kernel " *
+                "variables of the spacecraft clock $sc are absent or malformed"
+        )
+    )
 end
 
 """
@@ -119,14 +131,30 @@ incomplete data) or `:notsupported` (a clock type other than 1).
     return clock
 end
 
-@noinline _sclk_range(sc, what) = throw(SpiceError(:valueoutofrange,
-    "$what of the spacecraft clock $sc is outside the range of the SCLK kernel"))
-@noinline _sclk_badrate(sc) = throw(SpiceError(:valueoutofrange,
-    "invalid SCLK rate (not positive) for the spacecraft clock $sc"))
-@noinline _sclk_badsys(sc, sys) = throw(SpiceError(:valueoutofrange,
-    "invalid time system code $sys was found for the spacecraft clock $sc"))
-@noinline _sclk_nolsk() = throw(SpiceError(:missingtimeinfo,
-    "a spacecraft clock with parallel time system TDT needs a leap-second kernel"))
+@noinline _sclk_range(sc, what) = throw(
+    SpiceError(
+        :valueoutofrange,
+        "$what of the spacecraft clock $sc is outside the range of the SCLK kernel"
+    )
+)
+@noinline _sclk_badrate(sc) = throw(
+    SpiceError(
+        :valueoutofrange,
+        "invalid SCLK rate (not positive) for the spacecraft clock $sc"
+    )
+)
+@noinline _sclk_badsys(sc, sys) = throw(
+    SpiceError(
+        :valueoutofrange,
+        "invalid time system code $sys was found for the spacecraft clock $sc"
+    )
+)
+@noinline _sclk_nolsk() = throw(
+    SpiceError(
+        :missingtimeinfo,
+        "a spacecraft clock with parallel time system TDT needs a leap-second kernel"
+    )
+)
 
 """
     _sclk_record(coef, col, x) -> Int
@@ -137,11 +165,11 @@ before all, found with the bisection of `scte01`. Requires `length(coef) >= 3`.
 """
 @inline function _sclk_record(coef::Vector{Float64}, col::Int, x::Float64)
     n = length(coef) ÷ 3
-    @inbounds x < coef[3*(n-1)+col] || return n
+    @inbounds x < coef[3 * (n - 1) + col] || return n
     lower, upper = 1, n
     while lower < upper - 1     # invariant: record `lower` is <= x or lower == 1; record `upper` is > x
         middle = (lower + upper) ÷ 2
-        if @inbounds x < coef[3*(middle-1)+col]
+        if @inbounds x < coef[3 * (middle - 1) + col]
             upper = middle
         else
             lower = middle
@@ -151,7 +179,7 @@ before all, found with the bisection of `scte01`. Requires `length(coef) >= 3`.
 end
 
 "TDB seconds past J2000 of the parallel time `partim` of `clock` (`unitim_`), generic over the number type."
-@inline function _sclk_to_tdb(ks::KernelSet, clock::SclkType1, partim::T) where {T<:Real}
+@inline function _sclk_to_tdb(ks::KernelSet, clock::SclkType1, partim::T) where {T <: Real}
     clock.timsys == 1 && return partim
     clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
     l = ks.lsk
@@ -161,7 +189,7 @@ end
 end
 
 "Parallel time of `clock` for the TDB epoch `et` (`unitim_`, three fixed-point steps), generic over the number type."
-@inline function _sclk_from_tdb(ks::KernelSet, clock::SclkType1, et::T) where {T<:Real}
+@inline function _sclk_from_tdb(ks::KernelSet, clock::SclkType1, et::T) where {T <: Real}
     clock.timsys == 1 && return et
     clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
     l = ks.lsk
@@ -181,12 +209,12 @@ ET of the encoded SCLK `sclkdp` (`scte01`). The function is piecewise linear, so
 `Taylor` or dual number passes through; the record is chosen with `primal`. Throws
 `SpiceError(:valueoutofrange)` for ticks outside the clock range.
 """
-@inline function _sct2e(ks::KernelSet, clock::SclkType1, sclkdp::T) where {T<:Real}
+@inline function _sct2e(ks::KernelSet, clock::SclkType1, sclkdp::T) where {T <: Real}
     coef = clock.coef
     p = primal(sclkdp)
     (p < coef[1] || p > clock.mxtick || isnan(p)) && _sclk_range(clock.id, "the encoded SCLK $p")
     k = 3 * (_sclk_record(coef, 1, p) - 1)
-    @inbounds c1, c2, c3 = coef[k+1], coef[k+2], coef[k+3]
+    @inbounds c1, c2, c3 = coef[k + 1], coef[k + 2], coef[k + 3]
     c3 <= 0.0 && _sclk_badrate(clock.id)
     rate = c3 / clock.tikmsc
     return _sclk_to_tdb(ks, clock, c2 + rate * (sclkdp - c1))
@@ -199,13 +227,13 @@ Continuous encoded SCLK of the ET `et` (`scec01`), piecewise linear and generic 
 number type as `_sct2e`. Throws `SpiceError(:valueoutofrange)` for an epoch outside the
 clock range.
 """
-@inline function _sce2c(ks::KernelSet, clock::SclkType1, et::T) where {T<:Real}
+@inline function _sce2c(ks::KernelSet, clock::SclkType1, et::T) where {T <: Real}
     coef = clock.coef
     partim = _sclk_from_tdb(ks, clock, et)
     p = primal(partim)
     (p < coef[2] || isnan(p)) && _sclk_range(clock.id, "the epoch $(primal(et))")
     k = 3 * (_sclk_record(coef, 2, p) - 1)
-    @inbounds c1, c2, c3 = coef[k+1], coef[k+2], coef[k+3]
+    @inbounds c1, c2, c3 = coef[k + 1], coef[k + 2], coef[k + 3]
     c3 <= 0.0 && _sclk_badrate(clock.id)
     rate = 1.0 / (c3 / clock.tikmsc)
     sclkdp = c1 + rate * (partim - c2)
@@ -225,7 +253,7 @@ Throws `SpiceError(:valueoutofrange)` if the rounded value is outside the clock 
     partim = _sclk_from_tdb(ks, clock, et)
     lower = partim < coef[2] ? 1 : _sclk_record(coef, 2, partim)
     k = 3 * (lower - 1)
-    @inbounds c1, c2, c3 = coef[k+1], coef[k+2], coef[k+3]
+    @inbounds c1, c2, c3 = coef[k + 1], coef[k + 2], coef[k + 3]
     c3 <= 0.0 && _sclk_badrate(clock.id)
     rate = 1.0 / (c3 / clock.tikmsc)
     sclkdp = _dnint(c1 + rate * (partim - c2))
@@ -368,8 +396,8 @@ end
 function _sclk_cmptks(clock::SclkType1)
     nfield = Int(clock.nfield)
     cmptks = ones(nfield)
-    for i in nfield-1:-1:1          # invariant: cmptks[i+1:nfield] are final
-        cmptks[i] = cmptks[i+1] * clock.moduli[i+1]
+    for i in (nfield - 1):-1:1          # invariant: cmptks[i+1:nfield] are final
+        cmptks[i] = cmptks[i + 1] * clock.moduli[i + 1]
     end
     return cmptks
 end
@@ -397,8 +425,12 @@ function sctiks(ks::KernelSet, sc::Integer, clkstr::AbstractString)
     isempty(strip(clkstr)) && throw(SpiceError(:invalidsclkstring, "the clock string is blank"))
     cmptks = _sclk_cmptks(clock)
     items = _lparsm(clkstr, _SCLK_DELIMS, _SCLK_MXNFLD)
-    length(items) > clock.nfield && throw(SpiceError(:invalidsclkstring,
-        "the clock string '$clkstr' has $(length(items)) fields, which is too many"))
+    length(items) > clock.nfield && throw(
+        SpiceError(
+            :invalidsclkstring,
+            "the clock string '$clkstr' has $(length(items)) fields, which is too many"
+        )
+    )
     ticks = 0.0
     for (i, item) in enumerate(items)       # invariant: ticks = sum over the fields 1:i-1
         value = if isempty(strip(item))
@@ -408,14 +440,22 @@ function sctiks(ks::KernelSet, sc::Integer, clkstr::AbstractString)
                 _nparsd(strip(item))
             catch err
                 err isa SpiceError || rethrow()
-                throw(SpiceError(:invalidsclkstring,
-                    "could not parse SCLK component '$item' of '$clkstr' as a number"))
+                throw(
+                    SpiceError(
+                        :invalidsclkstring,
+                        "could not parse SCLK component '$item' of '$clkstr' as a number"
+                    )
+                )
             end
         end
         value -= clock.offsets[i]
-        _dnint(value) < 0 && throw(SpiceError(:invalidsclkstring,
-            "component number $i of the SCLK string '$clkstr' is less than its field " *
-            "offset $(clock.offsets[i])"))
+        _dnint(value) < 0 && throw(
+            SpiceError(
+                :invalidsclkstring,
+                "component number $i of the SCLK string '$clkstr' is less than its field " *
+                    "offset $(clock.offsets[i])"
+            )
+        )
         ticks += value * cmptks[i]
     end
     return ticks
@@ -442,10 +482,18 @@ function scfmt(ks::KernelSet, sc::Integer, ticks::Real)
     nfield = Int(clock.nfield)
     cmptks = _sclk_cmptks(clock)
     rem = _dnint(Float64(ticks))
-    (rem < 0 || !isfinite(rem)) && throw(SpiceError(:valueoutofrange,
-        "negative or non-finite value for SCLK ticks: $ticks"))
-    1 <= clock.delim <= 5 || throw(SpiceError(:valueoutofrange,
-        "output delimiter code $(clock.delim) of the clock $sc is not in 1:5"))
+    (rem < 0 || !isfinite(rem)) && throw(
+        SpiceError(
+            :valueoutofrange,
+            "negative or non-finite value for SCLK ticks: $ticks"
+        )
+    )
+    1 <= clock.delim <= 5 || throw(
+        SpiceError(
+            :valueoutofrange,
+            "output delimiter code $(clock.delim) of the clock $sc is not in 1:5"
+        )
+    )
     delim = _SCLK_OUTPUT_DELIM[clock.delim]
     io = IOBuffer()
     for i in 1:nfield       # invariant: fields 1:i-1 are written, rem is what they leave
@@ -506,11 +554,19 @@ function scencd(ks::KernelSet, sc::Integer, sclkch::AbstractString)
     pos = findfirst('/', sclkch)
     # the fields are checked before the partition number, as in CSPICE
     fields = pos === nothing ? sclkch : SubString(sclkch, nextind(sclkch, pos))
-    isempty(strip(fields)) && throw(SpiceError(:invalidsclkstring,
-        "no SCLK components follow the slash in the SCLK string '$sclkch'"))
+    isempty(strip(fields)) && throw(
+        SpiceError(
+            :invalidsclkstring,
+            "no SCLK components follow the slash in the SCLK string '$sclkch'"
+        )
+    )
     pos !== nothing && isempty(strip(SubString(sclkch, 1, prevind(sclkch, pos)))) &&
-        throw(SpiceError(:badpartnumber,
-            "unable to parse the partition number from the SCLK string '$sclkch'"))
+        throw(
+        SpiceError(
+            :badpartnumber,
+            "unable to parse the partition number from the SCLK string '$sclkch'"
+        )
+    )
     ticks = _dnint(sctiks(ks, sc, fields))
     part = 1
     if pos !== nothing
@@ -518,22 +574,38 @@ function scencd(ks::KernelSet, sc::Integer, sclkch::AbstractString)
             _nparsd(strip(SubString(sclkch, 1, prevind(sclkch, pos))))
         catch err
             err isa SpiceError || rethrow()
-            throw(SpiceError(:badpartnumber,
-                "unable to parse the partition number from the SCLK string '$sclkch'"))
+            throw(
+                SpiceError(
+                    :badpartnumber,
+                    "unable to parse the partition number from the SCLK string '$sclkch'"
+                )
+            )
         end
-        (1 <= trunc(x) <= nparts) || throw(SpiceError(:badpartnumber,
-            "partition number $(trunc(x)) of the SCLK string '$sclkch' is not in 1:$nparts"))
+        (1 <= trunc(x) <= nparts) || throw(
+            SpiceError(
+                :badpartnumber,
+                "partition number $(trunc(x)) of the SCLK string '$sclkch' is not in 1:$nparts"
+            )
+        )
         part = trunc(Int, x)
-        (ticks < pstart[part] || ticks > pstop[part]) && throw(SpiceError(:notinpart,
-            "SCLK count $ticks is not inside partition number $part"))
+        (ticks < pstart[part] || ticks > pstop[part]) && throw(
+            SpiceError(
+                :notinpart,
+                "SCLK count $ticks is not inside partition number $part"
+            )
+        )
     else
         while part <= nparts && (ticks < pstart[part] || ticks > pstop[part])
             part += 1                # invariant: partitions 1:part-1 do not hold `ticks`
         end
-        part > nparts && throw(SpiceError(:nopartition,
-            "SCLK count $ticks is not inside any partition of the spacecraft clock $sc"))
+        part > nparts && throw(
+            SpiceError(
+                :nopartition,
+                "SCLK count $ticks is not inside any partition of the spacecraft clock $sc"
+            )
+        )
     end
-    return part > 1 ? ticks - pstart[part] + ptotls[part-1] : ticks - pstart[part]
+    return part > 1 ? ticks - pstart[part] + ptotls[part - 1] : ticks - pstart[part]
 end
 
 """
@@ -555,9 +627,13 @@ function scdecd(ks::KernelSet, sc::Integer, sclkdp::Real)
     nparts = length(pstart)
     ticks = _dnint(Float64(sclkdp))
     part = ticks == ptotls[nparts] ? nparts : searchsortedlast(ptotls, ticks) + 1
-    (ticks < 0 || part > nparts || isnan(ticks)) && throw(SpiceError(:valueoutofrange,
-        "value for ticks, $ticks, is not inside any partition of the spacecraft clock $sc"))
-    ticks = part == 1 ? ticks + pstart[1] : ticks + pstart[part] - ptotls[part-1]
+    (ticks < 0 || part > nparts || isnan(ticks)) && throw(
+        SpiceError(
+            :valueoutofrange,
+            "value for ticks, $ticks, is not inside any partition of the spacecraft clock $sc"
+        )
+    )
+    ticks = part == 1 ? ticks + pstart[1] : ticks + pstart[part] - ptotls[part - 1]
     return string(part, '/', scfmt(ks, sc, ticks))
 end
 

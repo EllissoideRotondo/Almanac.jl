@@ -29,7 +29,7 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
     rng = MersenneTwister(SEED + 6800)
     day = 86400.0
     hour = 3600.0
-    found = Dict{String,Int}()
+    found = Dict{String, Int}()
     start_epoch() = -3.0e8 + 9.0e8 * rand(rng)
     "Make the camera frame an offset of `frame` (J2000 or IAU_EARTH) in the two libraries."
     camera_base!(frame) = both_pcpool(ctx, "TKFRAME_-999100_RELATIVE", frame)
@@ -54,8 +54,10 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
         camera_base!("J2000")
         n = 0
         i = 0
-        for inst in GEO_INSTRUMENTS, corr in GEO_CORRS, (tshape, tframe) in (("ELLIPSOID", "IAU_MOON"),
-                ("POINT", " "))
+        for inst in GEO_INSTRUMENTS, corr in GEO_CORRS, (tshape, tframe) in (
+                    ("ELLIPSOID", "IAU_MOON"),
+                    ("POINT", " "),
+                )
             # (an odd stride takes the two shapes in turn)
             gf_pick(i += 1, 3) || continue
             t0 = start_epoch()
@@ -63,9 +65,11 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
             point_camera!(ctx, near(dir, 0.012), 2pi * rand(rng))
             cn = rand(rng) < 0.7 ? Window([t0 - day, t0 + day]) : gf_random_window(rng, 3, t0 - day, t0 + day)
             step = rand(rng, (300.0, 600.0))
-            ok, w = check("gftfov Moon, J2000 camera, " * lowercase(tshape),
+            ok, w = check(
+                "gftfov Moon, J2000 camera, " * lowercase(tshape),
                 () -> gftfov(ctx, inst, "MOON", tshape, tframe, corr, "EARTH", step, cn),
-                () -> GFO.gftfov(inst, "MOON", tshape, tframe, corr, "EARTH", step, collect(cn)))
+                () -> GFO.gftfov(inst, "MOON", tshape, tframe, corr, "EARTH", step, collect(cn))
+            )
             ok || @info "gftfov case" inst corr tshape t0 step cn
             @test all(t -> wnelmd(cn, t), w)
             n += 1
@@ -81,8 +85,10 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
         n = 0
         half = FULL ? 3.5 * day : 1.5 * day
         n2 = Dict("ELLIPSOID" => 0, "POINT" => 0)
-        for inst in GEO_INSTRUMENTS, corr in GEO_CORRS, (tshape, tframe) in (("ELLIPSOID", "IAU_SUN"),
-                ("POINT", " "))
+        for inst in GEO_INSTRUMENTS, corr in GEO_CORRS, (tshape, tframe) in (
+                    ("ELLIPSOID", "IAU_SUN"),
+                    ("POINT", " "),
+                )
             gf_pick(i += 1, 5) || continue
             n += 1
             n2[tshape] += 1
@@ -90,9 +96,11 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
             dir = spkpos(ctx, "SUN", t0, "IAU_EARTH", corr, "EARTH")[1]
             point_camera!(ctx, near(dir, 0.01), 2pi * rand(rng))
             cn = Window([t0 - half, t0 + half])
-            ok, w = check("gftfov Sun, Earth-fixed camera, " * lowercase(tshape),
+            ok, w = check(
+                "gftfov Sun, Earth-fixed camera, " * lowercase(tshape),
                 () -> gftfov(ctx, inst, "SUN", tshape, tframe, corr, "EARTH", 120.0, cn),
-                () -> GFO.gftfov(inst, "SUN", tshape, tframe, corr, "EARTH", 120.0, collect(cn)))
+                () -> GFO.gftfov(inst, "SUN", tshape, tframe, corr, "EARTH", 120.0, collect(cn))
+            )
             ok || @info "gftfov case" inst corr tshape t0 cn
         end
         # the Sun crosses the camera once a day: 3 times at least in 7 days for the
@@ -115,9 +123,11 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
             dir = pxform(ctx, "J2000", "IAU_EARTH", t0) * ray
             point_camera!(ctx, near(dir, 0.01), 2pi * rand(rng))
             cn = Window([t0 - half, t0 + half])
-            ok, w = check("gfrfov J2000 ray, Earth-fixed camera",
+            ok, w = check(
+                "gfrfov J2000 ray, Earth-fixed camera",
                 () -> gfrfov(ctx, inst, ray, "J2000", corr, "EARTH", 60.0, cn),
-                () -> GFO.gfrfov(inst, ray, "J2000", corr, "EARTH", 60.0, collect(cn)))
+                () -> GFO.gfrfov(inst, ray, "J2000", corr, "EARTH", 60.0, collect(cn))
+            )
             ok || @info "gfrfov case" inst corr ray t0
         end
         # the ray crosses the camera once a sidereal day
@@ -137,17 +147,27 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
             dir = pxform(ctx, "IAU_EARTH", "J2000", t0) * ray
             point_camera!(ctx, near(dir, 0.01), 2pi * rand(rng))
             cn = rand(rng) < 0.5 ? Window([t0 - 2.5 * day, t0 + 2.5 * day]) :
-                 gf_random_window(rng, 4, t0 - 2.5 * day, t0 + 2.5 * day)
-            ok, w = check("gfrfov Earth-fixed ray, J2000 camera",
+                gf_random_window(rng, 4, t0 - 2.5 * day, t0 + 2.5 * day)
+            ok, w = check(
+                "gfrfov Earth-fixed ray, J2000 camera",
                 () -> gfrfov(ctx, inst, ray, "IAU_EARTH", corr, "EARTH", 60.0, cn),
-                () -> GFO.gfrfov(inst, ray, "IAU_EARTH", corr, "EARTH", 60.0, collect(cn)))
+                () -> GFO.gfrfov(inst, ray, "IAU_EARTH", corr, "EARTH", 60.0, collect(cn))
+            )
             ok || @info "gfrfov case" inst corr ray t0 cn
             @test all(t -> wnelmd(cn, t), w)
         end
         @test n == gf_npick(42, 4)
         @test found["gfrfov Earth-fixed ray, J2000 camera"] >= n
-        measured(@sprintf("  gf fov: intervals found: %s", join(["$k: $v" for (k, v) in
-            sort!(collect(found); by=first)], "; ")))
+        measured(
+            @sprintf(
+                "  gf fov: intervals found: %s", join(
+                    [
+                        "$k: $v" for (k, v) in
+                            sort!(collect(found); by = first)
+                    ], "; "
+                )
+            )
+        )
     end
 
     @testset "gffove, forms and threads" begin
@@ -161,21 +181,29 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
         @test wncard(base) >= 5
         ks2 = Almanac.kernelset(ctx)            # the kernel set after the changes of the pool
         @test gftfov(ks2, a..., 120.0, cn) == base
-        @test gftfov(ks2, -999003, 10, "ellipsoid", namfrm(ctx, "IAU_SUN"), Aberration("LT+S"), 399, 120.0,
-            cn) == base
-        @test gftfov(ctx, a..., 120.0, cn; threads=true) == base
+        @test gftfov(
+            ks2, -999003, 10, "ellipsoid", namfrm(ctx, "IAU_SUN"), Aberration("LT+S"), 399, 120.0,
+            cn
+        ) == base
+        @test gftfov(ctx, a..., 120.0, cn; threads = true) == base
         many = gf_random_window(rng, 12, t0 - 3.5 * day, t0 + 3.5 * day)
-        @test gftfov(ctx, a..., 120.0, many; threads=true) == gftfov(ctx, a..., 120.0, many)
+        @test gftfov(ctx, a..., 120.0, many; threads = true) == gftfov(ctx, a..., 120.0, many)
         @test isempty(gftfov(ctx, a..., 120.0, Window()))
-        @test gffove(ctx, "GEO_RECT", "ELLIPSOID", [0.0, 0.0, 0.0], "SUN", "IAU_SUN", "LT+S", "EARTH", 1.0e-6,
-            120.0, gfrefn, cn) == base
-        @test gffove(ks2, "GEO_RECT", "ELLIPSOID", [0.0, 0.0, 0.0], "SUN", "IAU_SUN", "LT+S", "EARTH", 1.0e-6,
-            GFConstStep(120.0), gfrefn, cn; threads=true) == base
+        @test gffove(
+            ctx, "GEO_RECT", "ELLIPSOID", [0.0, 0.0, 0.0], "SUN", "IAU_SUN", "LT+S", "EARTH", 1.0e-6,
+            120.0, gfrefn, cn
+        ) == base
+        @test gffove(
+            ks2, "GEO_RECT", "ELLIPSOID", [0.0, 0.0, 0.0], "SUN", "IAU_SUN", "LT+S", "EARTH", 1.0e-6,
+            GFConstStep(120.0), gfrefn, cn; threads = true
+        ) == base
         quarter(t1, t2, s1, s2) = t1 + 0.25 * (t2 - t1)
-        other = gffove(ctx, "GEO_RECT", "ELLIPSOID", [0.0, 0.0, 0.0], "SUN", "IAU_SUN", "LT+S", "EARTH",
-            1.0e-6, 120.0, quarter, cn)
+        other = gffove(
+            ctx, "GEO_RECT", "ELLIPSOID", [0.0, 0.0, 0.0], "SUN", "IAU_SUN", "LT+S", "EARTH",
+            1.0e-6, 120.0, quarter, cn
+        )
         @test length(other) == length(base) && maximum(abs.(collect(other) .- collect(base))) <= 2.0e-6
-        loose = gftfov(ctx, a..., 120.0, cn; tol=1.0e-1)
+        loose = gftfov(ctx, a..., 120.0, cn; tol = 1.0e-1)
         @test length(loose) == length(base) && 1.0e-6 < maximum(abs.(collect(loose) .- collect(base))) <= 0.2
         gfstol(ctx, 1.0e-1)
         @test gftfov(ctx, a..., 120.0, cn) == loose
@@ -185,17 +213,23 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
         rbase = gfrfov(ctx, "GEO_RECT", ray, "J2000", "S", "EARTH", 60.0, cn)
         @test wncard(rbase) >= 5
         @test gfrfov(ks2, "GEO_RECT", SVector{3}(ray), "J2000", "S", "EARTH", 60.0, cn) == rbase
-        @test gfrfov(ctx, "GEO_RECT", ray, "J2000", "S", "EARTH", 60.0, cn; threads=true) == rbase
+        @test gfrfov(ctx, "GEO_RECT", ray, "J2000", "S", "EARTH", 60.0, cn; threads = true) == rbase
         @test gffove(ctx, "GEO_RECT", "RAY", ray, " ", "J2000", "S", "EARTH", 1.0e-6, 60.0, gfrefn, cn) == rbase
         log = String[]
-        gftfov(ctx, a..., 120.0, cn; report=GFLog(log))
+        gftfov(ctx, a..., 120.0, cn; report = GFLog(log))
         @test log == ["Target visibility search "]
-        @test_throws InterruptException gfrfov(ctx, "GEO_RECT", ray, "J2000", "S", "EARTH", 60.0, cn;
-            bail=GFStop(true))
-        serial = [gftfov(ctx, inst, "SUN", "ELLIPSOID", "IAU_SUN", corr, "EARTH", 120.0, cn)
-                  for inst in GEO_INSTRUMENTS, corr in ("NONE", "LT+S", "XCN")]
-        tasks = [Threads.@spawn gftfov(ctx, inst, "SUN", "ELLIPSOID", "IAU_SUN", corr, "EARTH", 120.0, cn)
-                 for inst in GEO_INSTRUMENTS, corr in ("NONE", "LT+S", "XCN")]
+        @test_throws InterruptException gfrfov(
+            ctx, "GEO_RECT", ray, "J2000", "S", "EARTH", 60.0, cn;
+            bail = GFStop(true)
+        )
+        serial = [
+            gftfov(ctx, inst, "SUN", "ELLIPSOID", "IAU_SUN", corr, "EARTH", 120.0, cn)
+                for inst in GEO_INSTRUMENTS, corr in ("NONE", "LT+S", "XCN")
+        ]
+        tasks = [
+            Threads.@spawn gftfov(ctx, inst, "SUN", "ELLIPSOID", "IAU_SUN", corr, "EARTH", 120.0, cn)
+                for inst in GEO_INSTRUMENTS, corr in ("NONE", "LT+S", "XCN")
+        ]
         @test all(fetch(t) == s for (t, s) in zip(tasks, serial))
     end
 
@@ -210,51 +244,63 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
         with(p...) = (d = Dict(p); ntuple(k -> get(d, k, good[k]), length(good)))
         both(:none, () -> gftfov(ctx, good..., cn), () -> GFO.gftfov(good..., c))
         for (kind, args) in (
-            (:idcodenotfound, with(1 => "NOSUCHINST")),
-            (:idcodenotfound, with(2 => "NOSUCHBODY")),
-            (:idcodenotfound, with(6 => "NOSUCHBODY")),
-            (:bodiesnotdistinct, with(6 => "MOON")),
-            (:invalidshape, with(3 => "SPHERE")),
-            (:invalidoption, with(3 => "RAY")),
-            (:invalidframe, with(4 => " ")),
-            (:invalidframe, with(4 => "NOSUCHFRAME")),
-            (:invalidframe, with(4 => "IAU_EARTH")),
-            (:invalidoption, with(5 => "LT+X")),
-            (:fovtoowide, with(1 => "GEO_FLAT")),
-            (:invalidstep, with(7 => 0.0)),
-            (:invalidstep, with(7 => -1.0)))
+                (:idcodenotfound, with(1 => "NOSUCHINST")),
+                (:idcodenotfound, with(2 => "NOSUCHBODY")),
+                (:idcodenotfound, with(6 => "NOSUCHBODY")),
+                (:bodiesnotdistinct, with(6 => "MOON")),
+                (:invalidshape, with(3 => "SPHERE")),
+                (:invalidoption, with(3 => "RAY")),
+                (:invalidframe, with(4 => " ")),
+                (:invalidframe, with(4 => "NOSUCHFRAME")),
+                (:invalidframe, with(4 => "IAU_EARTH")),
+                (:invalidoption, with(5 => "LT+X")),
+                (:fovtoowide, with(1 => "GEO_FLAT")),
+                (:invalidstep, with(7 => 0.0)),
+                (:invalidstep, with(7 => -1.0)),
+            )
             both(kind, () -> gftfov(ctx, args..., cn), () -> GFO.gftfov(args..., c))
         end
         # the frame of a point is not read; case and blanks
-        both(:none, () -> gftfov(ctx, with(3 => "POINT", 4 => "NOSUCHFRAME")..., cn),
-            () -> GFO.gftfov(with(3 => "POINT", 4 => "NOSUCHFRAME")..., c))
-        both(:none, () -> gftfov(ctx, "geo_rect", "moon", " ellipsoid", "iau_moon", "lt + s", "earth", 600.0, cn),
-            () -> GFO.gftfov("geo_rect", "moon", " ellipsoid", "iau_moon", "lt + s", "earth", 600.0, c))
+        both(
+            :none, () -> gftfov(ctx, with(3 => "POINT", 4 => "NOSUCHFRAME")..., cn),
+            () -> GFO.gftfov(with(3 => "POINT", 4 => "NOSUCHFRAME")..., c)
+        )
+        both(
+            :none, () -> gftfov(ctx, "geo_rect", "moon", " ellipsoid", "iau_moon", "lt + s", "earth", 600.0, cn),
+            () -> GFO.gftfov("geo_rect", "moon", " ellipsoid", "iau_moon", "lt + s", "earth", 600.0, c)
+        )
         # a body that has no field of view
-        both(:framemissing, () -> gftfov(ctx, with(1 => "MARS")..., cn),
-            () -> GFO.gftfov(with(1 => "MARS")..., c))
+        both(
+            :framemissing, () -> gftfov(ctx, with(1 => "MARS")..., cn),
+            () -> GFO.gftfov(with(1 => "MARS")..., c)
+        )
         # inst, raydir, rframe, abcorr, obsrvr, step
         rgood = ("GEO_RECT", [0.0, 0.0, 1.0], "J2000", "S", "EARTH", 600.0)
         rwith(p...) = (d = Dict(p); ntuple(k -> get(d, k, rgood[k]), length(rgood)))
         both(:none, () -> gfrfov(ctx, rgood..., cn), () -> GFO.gfrfov(rgood..., c))
         @test gfrfov(ctx, rgood..., cn) == cn        # the ray is the axis of the camera
         for (kind, args) in (
-            (:idcodenotfound, rwith(1 => "NOSUCHINST")),
-            (:zerovector, rwith(2 => [0.0, 0.0, 0.0])),
-            (:invalidframe, rwith(3 => "NOSUCHFRAME")),
-            (:invalidframe, rwith(3 => " ")),
-            (:invalidoption, rwith(4 => "LT")),
-            (:invalidoption, rwith(4 => "LT+S")),
-            (:invalidoption, rwith(4 => "XCN+S")),
-            (:invalidoption, rwith(4 => "S+X")),
-            (:idcodenotfound, rwith(5 => "NOSUCHBODY")),
-            (:fovtoowide, rwith(1 => "GEO_FLAT")),
-            (:invalidstep, rwith(6 => 0.0)))
+                (:idcodenotfound, rwith(1 => "NOSUCHINST")),
+                (:zerovector, rwith(2 => [0.0, 0.0, 0.0])),
+                (:invalidframe, rwith(3 => "NOSUCHFRAME")),
+                (:invalidframe, rwith(3 => " ")),
+                (:invalidoption, rwith(4 => "LT")),
+                (:invalidoption, rwith(4 => "LT+S")),
+                (:invalidoption, rwith(4 => "XCN+S")),
+                (:invalidoption, rwith(4 => "S+X")),
+                (:idcodenotfound, rwith(5 => "NOSUCHBODY")),
+                (:fovtoowide, rwith(1 => "GEO_FLAT")),
+                (:invalidstep, rwith(6 => 0.0)),
+            )
             both(kind, () -> gfrfov(ctx, args..., cn), () -> GFO.gfrfov(args..., c))
         end
         @test throws_kind(() -> gfrfov(ctx, rwith(2 => [0.0, 1.0])..., cn), :badarg)
-        @test throws_kind(() -> gffove(ctx, "GEO_RECT", "RAY", [0.0, 0.0, 1.0], " ", "J2000", "S", "EARTH", 0.0,
-                600.0, gfrefn, cn), :invalidtolerance)
+        @test throws_kind(
+            () -> gffove(
+                ctx, "GEO_RECT", "RAY", [0.0, 0.0, 1.0], " ", "J2000", "S", "EARTH", 0.0,
+                600.0, gfrefn, cn
+            ), :invalidtolerance
+        )
     end
 
     FULL && @testset "search time against CSPICE (reported, not asserted)" begin
@@ -266,24 +312,36 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
         cn = Window([t0, t0 + 30 * day])
         c = collect(cn)
         cases2 = (
-            ("gftfov Sun as an ellipsoid, rectangle, 30 days, step 120 s, LT+S",
+            (
+                "gftfov Sun as an ellipsoid, rectangle, 30 days, step 120 s, LT+S",
                 () -> gftfov(ctx, "GEO_RECT", "SUN", "ELLIPSOID", "IAU_SUN", "LT+S", "EARTH", 120.0, cn),
-                () -> GFO.gftfov("GEO_RECT", "SUN", "ELLIPSOID", "IAU_SUN", "LT+S", "EARTH", 120.0, c)),
-            ("gftfov Sun as an ellipsoid, ellipse, 30 days, step 120 s, CN",
+                () -> GFO.gftfov("GEO_RECT", "SUN", "ELLIPSOID", "IAU_SUN", "LT+S", "EARTH", 120.0, c),
+            ),
+            (
+                "gftfov Sun as an ellipsoid, ellipse, 30 days, step 120 s, CN",
                 () -> gftfov(ctx, "GEO_ELLIPSE", "SUN", "ELLIPSOID", "IAU_SUN", "CN", "EARTH", 120.0, cn),
-                () -> GFO.gftfov("GEO_ELLIPSE", "SUN", "ELLIPSOID", "IAU_SUN", "CN", "EARTH", 120.0, c)),
-            ("gftfov Sun as a point, polygon, 30 days, step 120 s, NONE",
+                () -> GFO.gftfov("GEO_ELLIPSE", "SUN", "ELLIPSOID", "IAU_SUN", "CN", "EARTH", 120.0, c),
+            ),
+            (
+                "gftfov Sun as a point, polygon, 30 days, step 120 s, NONE",
                 () -> gftfov(ctx, "GEO_POLY", "SUN", "POINT", " ", "NONE", "EARTH", 120.0, cn),
-                () -> GFO.gftfov("GEO_POLY", "SUN", "POINT", " ", "NONE", "EARTH", 120.0, c)),
-            ("gfrfov J2000 ray, circle, 30 days, step 60 s, S",
+                () -> GFO.gftfov("GEO_POLY", "SUN", "POINT", " ", "NONE", "EARTH", 120.0, c),
+            ),
+            (
+                "gfrfov J2000 ray, circle, 30 days, step 60 s, S",
                 () -> gfrfov(ctx, "GEO_CIRCLE", ray, "J2000", "S", "EARTH", 60.0, cn),
-                () -> GFO.gfrfov("GEO_CIRCLE", ray, "J2000", "S", "EARTH", 60.0, c)),
+                () -> GFO.gfrfov("GEO_CIRCLE", ray, "J2000", "S", "EARTH", 60.0, c),
+            ),
         )
         for (name, neo, ora) in cases2
             @test gf_compare("timing", neo(), ora())
             tn, to = gf_time(neo), gf_time(ora)
-            measured(@sprintf("  %-66s Almanac %8.2f ms  CSPICE %8.2f ms  ratio %.2f", name,
-                1e3 * tn, 1e3 * to, to / tn))
+            measured(
+                @sprintf(
+                    "  %-66s Almanac %8.2f ms  CSPICE %8.2f ms  ratio %.2f", name,
+                    1.0e3 * tn, 1.0e3 * to, to / tn
+                )
+            )
         end
     end
 

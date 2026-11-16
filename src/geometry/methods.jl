@@ -35,9 +35,9 @@ struct _GeoMethod
     srflst::Vector{Int}
 end
 
-@inline _geo_ell(subtyp::UInt8, pntdef::UInt8=0x00, trmtyp::UInt8=0x00) =
+@inline _geo_ell(subtyp::UInt8, pntdef::UInt8 = 0x00, trmtyp::UInt8 = 0x00) =
     _GeoMethod(false, subtyp, pntdef, trmtyp, _GEO_NOSURF)
-@inline _geo_dsk(subtyp::UInt8, pntdef::UInt8=0x00, trmtyp::UInt8=0x00) =
+@inline _geo_dsk(subtyp::UInt8, pntdef::UInt8 = 0x00, trmtyp::UInt8 = 0x00) =
     _GeoMethod(true, subtyp, pntdef, trmtyp, _GEO_NOSURF)
 
 """
@@ -87,20 +87,27 @@ end
     isempty(method) && throw(SpiceError(:emptystring, "the method string is empty"))
     shape, subtyp, _, srflst = _dsk_parse_method(ks, bodyid, method)
     sub = subtyp == "" ? 0x00 : subtyp == "NEAR POINT" ? _GEO_NEARPOINT :
-          subtyp == "NADIR" ? _GEO_NADIR : _GEO_INTERCEPT
+        subtyp == "NADIR" ? _GEO_NADIR : _GEO_INTERCEPT
     pntdef = 0x00
     trmtyp = 0x00
     # The parser has accepted the string, so each of these keywords occurs one time at
     # most, and `zzprsmet` takes a keyword only where it follows a '/'. The legacy
     # ellipsoid forms return before the keywords are read.
-    legacy = shape === :ellipsoid && (sub == _GEO_NEARPOINT || (sub == 0x00 &&
-             _dsk_eqstr(method, "ELLIPSOID")) || (sub == _GEO_INTERCEPT && (
-             _dsk_eqstr(method, "INTERCEPT:ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID:INTERCEPT") ||
-             _dsk_eqstr(method, "INTERCEPT/ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID/INTERCEPT"))))
+    legacy = shape === :ellipsoid && (
+        sub == _GEO_NEARPOINT || (
+            sub == 0x00 &&
+                _dsk_eqstr(method, "ELLIPSOID")
+        ) || (
+            sub == _GEO_INTERCEPT && (
+                _dsk_eqstr(method, "INTERCEPT:ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID:INTERCEPT") ||
+                    _dsk_eqstr(method, "INTERCEPT/ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID/INTERCEPT")
+            )
+        )
+    )
     if !legacy
         tok = pushfirst!(_dsk_lex_method(normalize_name(method)), "/")
         for i in 2:length(tok)           # invariant: the keywords of tok[2:i-1] are recorded
-            tok[i-1] == "/" || continue
+            tok[i - 1] == "/" || continue
             t = tok[i]
             t == "TANGENT" && (pntdef = _GEO_TANGENT)
             t == "GUIDED" && (pntdef = _GEO_GUIDED)
@@ -113,9 +120,13 @@ end
 
 # --- aberration corrections, bodies, frames, radii --------------------------------------
 
-@noinline _geo_bad_abcorr(s) = throw(SpiceError(:invalidoption,
-    "the aberration correction \"$s\" is not recognized or not supported; the valid " *
-    "values are NONE, LT, LT+S, CN, CN+S, XLT, XLT+S, XCN, XCN+S"))
+@noinline _geo_bad_abcorr(s) = throw(
+    SpiceError(
+        :invalidoption,
+        "the aberration correction \"$s\" is not recognized or not supported; the valid " *
+            "values are NONE, LT, LT+S, CN, CN+S, XLT, XLT+S, XCN, XCN+S"
+    )
+)
 
 @noinline function _geo_abcorr_slow(s::AbstractString)
     try
@@ -150,8 +161,12 @@ end
 "`s` of the geometry calls: -1 for reception, +1 for transmission, 0 without light time."
 @inline _geo_sign(c::Aberration) = c.uselt ? (c.transmit ? 1.0 : -1.0) : 0.0
 
-@noinline _geo_no_body(what, name) = throw(SpiceError(:idcodenotfound,
-    "the $what, '$name', is not a recognized name for an ephemeris object"))
+@noinline _geo_no_body(what, name) = throw(
+    SpiceError(
+        :idcodenotfound,
+        "the $what, '$name', is not a recognized name for an ephemeris object"
+    )
+)
 
 @inline _geo_body(::KernelSet, id::Integer, ::AbstractString) = Int32(id)
 function _geo_body(ks::KernelSet, name::AbstractString, what::AbstractString)
@@ -178,11 +193,19 @@ _geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(namfrm(ks, ref))
     return Int32(0), Int32(0), false
 end
 
-@noinline _geo_no_frame(ref) = throw(SpiceError(:noframe, "the reference frame $ref is " *
-    "not recognized by the frame subsystem; possibly a frame kernel has not been loaded"))
-@noinline _geo_bad_center(ref, target, center) = throw(SpiceError(:invalidframe,
-    "the reference frame $ref is not centered at the target body $target; the ID code " *
-    "of the frame center is $center"))
+@noinline _geo_no_frame(ref) = throw(
+    SpiceError(
+        :noframe, "the reference frame $ref is " *
+            "not recognized by the frame subsystem; possibly a frame kernel has not been loaded"
+    )
+)
+@noinline _geo_bad_center(ref, target, center) = throw(
+    SpiceError(
+        :invalidframe,
+        "the reference frame $ref is not centered at the target body $target; the ID code " *
+            "of the frame center is $center"
+    )
+)
 
 @inline function _geo_fixfid(ks::KernelSet, fixref::NameOrID, trgcde::Int32, target)
     fixfid = _geo_namfrm(ks, fixref)
@@ -195,12 +218,24 @@ end
 const _GEO_RADII_KEYS = String[string("BODY", i, "_RADII") for i in 1:999]
 
 @noinline function _geo_bad_radii(body, v)
-    v === nothing && throw(SpiceError(:kernelvarnotfound,
-        "the variable BODY$(body)_RADII could not be found in the kernel pool"))
-    v isa Vector{Float64} || throw(SpiceError(:typemismatch,
-        "the variable BODY$(body)_RADII is not numeric"))
-    length(v) == 3 || throw(SpiceError(length(v) > 3 ? :arraytoosmall : :invalidcount,
-        "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"))
+    v === nothing && throw(
+        SpiceError(
+            :kernelvarnotfound,
+            "the variable BODY$(body)_RADII could not be found in the kernel pool"
+        )
+    )
+    v isa Vector{Float64} || throw(
+        SpiceError(
+            :typemismatch,
+            "the variable BODY$(body)_RADII is not numeric"
+        )
+    )
+    length(v) == 3 || throw(
+        SpiceError(
+            length(v) > 3 ? :arraytoosmall : :invalidcount,
+            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
+        )
+    )
     throw(SpiceError(:badaxislength, "a radius of the body $body is not positive: $v"))
 end
 
@@ -212,8 +247,10 @@ end
 Postcondition: the three values are positive. No allocation for an ID in 1:999.
 """
 @inline function _geo_radii(ks::KernelSet, body::Integer)
-    v = get(ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
-            string("BODY", body, "_RADII"), nothing)
+    v = get(
+        ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
+            string("BODY", body, "_RADII"), nothing
+    )
     v isa Vector{Float64} || _geo_bad_radii(body, v)
     length(v) == 3 || _geo_bad_radii(body, v)
     a, b, c = @inbounds v[1], v[2], v[3]
@@ -224,14 +261,16 @@ end
 @inline _geo_v3(a::Vec3) = a
 @inline function _geo_v3(a::AbstractVector)
     length(a) == 3 || throw(SpiceError(:badarg, "a vector must have 3 elements"))
-    @inbounds return Vec3(float(a[begin]), float(a[begin+1]), float(a[begin+2]))
+    @inbounds return Vec3(float(a[begin]), float(a[begin + 1]), float(a[begin + 2]))
 end
 
 # --- positions --------------------------------------------------------------------------
 
 "`spkezp_`: position of `targ` relative to `obs` in frame `ref` and the light time."
-@inline function _geo_spkezp(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
-        obs::Int32)
+@inline function _geo_spkezp(
+        ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
+        obs::Int32
+    )
     if corr.geometric || targ == obs
         (r,) = spk_jet(ks, targ, et, ref, obs, Val(0))
         return r, _norm3(r) / CLIGHT
@@ -240,8 +279,10 @@ end
 end
 
 "`spkez_`: state of `targ` relative to `obs` in frame `ref` and the light time."
-@inline function _geo_spkez(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
-        obs::Int32)
+@inline function _geo_spkez(
+        ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
+        obs::Int32
+    )
     if corr.geometric || targ == obs
         r, v = spk_jet(ks, targ, et, ref, obs, Val(1))
         return vcat(r, v), _norm3(r) / CLIGHT
@@ -275,8 +316,10 @@ end
 "`zzsuelin`: the ellipsoid of the body `trgcde`."
 @inline function _geo_ellshape(ks::KernelSet, trgcde::Int32, fixfid::Int32)
     a, b, c = _geo_radii(ks, trgcde)
-    return _GeoShape(false, trgcde, fixfid, a, b, c, min(min(a, b), c), max(max(a, b), c),
-        _GEO_NOSURF, _DSK_DEFAULT_TOLS)
+    return _GeoShape(
+        false, trgcde, fixfid, a, b, c, min(min(a, b), c), max(max(a, b), c),
+        _GEO_NOSURF, _DSK_DEFAULT_TOLS
+    )
 end
 
 "`zzdsksph` for the body `trgcde`; `SpiceError(:noloadeddskfiles)` without DSK files,
@@ -297,8 +340,12 @@ end
 @inline _geo_shape(ks::KernelSet, tols::DSKTolerances, m::_GeoMethod, trgcde::Int32, fixfid::Int32) =
     m.dsk ? _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst) : _geo_ellshape(ks, trgcde, fixfid)
 
-@noinline _geo_dsk_epoch() = throw(SpiceError(:notsupported,
-    "a DSK shape needs a plain (Float64) epoch: the plate model is not differentiated"))
+@noinline _geo_dsk_epoch() = throw(
+    SpiceError(
+        :notsupported,
+        "a DSK shape needs a plain (Float64) epoch: the plate model is not differentiated"
+    )
+)
 
 @inline _geo_plain(v::Vec3{Float64}) = v
 @inline _geo_plain(x::Float64) = x
@@ -311,12 +358,16 @@ _geo_plain(::Any) = _geo_dsk_epoch()
 frame of the shape, epoch `et` for the DSK segment selection) meets the surface.
 Generic over the number type for an ellipsoid; no allocation.
 """
-@inline function _geo_rayx(ks::KernelSet, sh::_GeoShape, vertex::SVector{3,T},
-        raydir::SVector{3,T}, et) where {T}
+@inline function _geo_rayx(
+        ks::KernelSet, sh::_GeoShape, vertex::SVector{3, T},
+        raydir::SVector{3, T}, et
+    ) where {T}
     if sh.dsk
-        xpt, _, _, found = _dsk_bux(ks, sh.tols, sh.trgcde, sh.srflst, _geo_plain(et),
-            sh.fixfid, _geo_plain(vertex), _geo_plain(raydir))
-        return found, SVector{3,T}(xpt)
+        xpt, _, _, found = _dsk_bux(
+            ks, sh.tols, sh.trgcde, sh.srflst, _geo_plain(et),
+            sh.fixfid, _geo_plain(vertex), _geo_plain(raydir)
+        )
+        return found, SVector{3, T}(xpt)
     end
     return _m_surfpt(vertex, raydir, sh.a, sh.b, sh.c)
 end
@@ -328,9 +379,11 @@ end
 end
 
 "`zzsbfnrm` with `vhat`: the outward unit normal of the shape at the surface point `spoint`."
-@inline function _geo_normal(ks::KernelSet, sh::_GeoShape, spoint::SVector{3,T}, et) where {T}
+@inline function _geo_normal(ks::KernelSet, sh::_GeoShape, spoint::SVector{3, T}, et) where {T}
     sh.dsk || return _m_surfnm(sh.a, sh.b, sh.c, spoint)
-    n = _dsk_bun(ks, sh.tols, sh.trgcde, sh.srflst, _geo_plain(et), sh.fixfid,
-        _geo_plain(spoint))
-    return SVector{3,T}(_dsk_vhat(n))
+    n = _dsk_bun(
+        ks, sh.tols, sh.trgcde, sh.srflst, _geo_plain(et), sh.fixfid,
+        _geo_plain(spoint)
+    )
+    return SVector{3, T}(_dsk_vhat(n))
 end

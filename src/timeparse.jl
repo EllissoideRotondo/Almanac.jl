@@ -34,7 +34,8 @@ const _TK_RECOG = (
 )
 
 "Names of the token classes for the messages of `zzunpck`."
-const _TK_NAMES = Dict{Char,String}('\'' => "\"Year Abbreviation Mark\"", ',' => "comma",
+const _TK_NAMES = Dict{Char, String}(
+    '\'' => "\"Year Abbreviation Mark\"", ',' => "comma",
     '-' => "dash", '.' => "period", '/' => "slash", ':' => "colon", 'D' => "Day of Month",
     'H' => "Hour", 'M' => "Minute", 'N' => "AM/PM indicator", 'O' => "UTC-Offset indicator",
     'S' => "Second", 'Y' => "Year", 'Z' => "Time-Zone indicator", '[' => "Left Parenthesis",
@@ -42,7 +43,8 @@ const _TK_NAMES = Dict{Char,String}('\'' => "\"Year Abbreviation Mark\"", ',' =>
     'e' => "Era", 'i' => "Integer", 'j' => "Julian Date indicator", 'm' => "Month",
     'n' => "Decimal Number", 'o' => "UTC-Offset indicator",
     's' => "Time System specification", 't' => "ISO Time Separator", 'w' => "Weekday",
-    'y' => "Day of Year")
+    'y' => "Day of Year"
+)
 
 "Built-in token patterns of `zztpats.c` and their meanings, in the order of the source."
 const _TK_PATTERNS = (
@@ -118,13 +120,15 @@ const _TK_PATTERNS = (
 )
 
 "Pattern key (12 characters, blank padded) to meaning (12 characters, blank padded)."
-const _TK_KNOWN = Dict{String,String}(rpad(k, 12) => rpad(m, 12) for (k, m) in _TK_PATTERNS)
+const _TK_KNOWN = Dict{String, String}(rpad(k, 12) => rpad(m, 12) for (k, m) in _TK_PATTERNS)
 
 const _TK_ZONES = ("EST", "EDT", "CST", "CDT", "MST", "MDT", "PST", "PDT")
 const _TK_OFFSETS = ("UTC-5", "UTC-4", "UTC-6", "UTC-5", "UTC-7", "UTC-6", "UTC-8", "UTC-7")
 
-const _MONTH_NAMES = ("January", "February", "March", "April", "May", "June", "July", "August",
-    "September", "October", "November", "December")
+const _MONTH_NAMES = (
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December",
+)
 
 # Indices of the five modifiers of a time string.
 const _MOD_ERA = 1
@@ -174,7 +178,7 @@ _sub(s::Vector{UInt8}, b::Int, e::Int) =
 function _marked(s::Vector{UInt8}, b::Int, e::Int)
     b = clamp(b, 1, length(s) + 1)
     e = clamp(e, b - 1, length(s))
-    return string(String(s[1:b-1]), '<', String(s[b:e]), '>', String(s[e+1:end]))
+    return string(String(s[1:(b - 1)]), '<', String(s[b:e]), '>', String(s[(e + 1):end]))
 end
 
 "Contract: `dest` is a blank-padded buffer; writes `text` into `dest[from:to]`, cut or blank padded to that length (the Fortran substring assignment)."
@@ -194,18 +198,18 @@ function _repsub(buf::Vector{UInt8}, left::Int, right::Int, text)
     out = UInt8[]
     append!(out, @view buf[1:clamp(left - 1, 0, n)])
     append!(out, codeunits(text))
-    append!(out, @view buf[clamp(right, 0, n)+1:n])
+    append!(out, @view buf[(clamp(right, 0, n) + 1):n])
     m = length(out)
     resize!(out, n)
-    m < n && fill!(view(out, m+1:n), _BLANK)
+    m < n && fill!(view(out, (m + 1):n), _BLANK)
     return out
 end
 
 "Contract: returns the first position `b` in `1:n` at which `pat` starts inside `rep[1:n]`, or 0 (`pos`)."
 function _pos(rep::Vector{UInt8}, n::Int, pat)::Int
     p = codeunits(pat)
-    for b in 1:n-length(p)+1
-        @views rep[b:b+length(p)-1] == p && return b
+    for b in 1:(n - length(p) + 1)
+        @views rep[b:(b + length(p) - 1)] == p && return b
     end
     return 0
 end
@@ -214,7 +218,7 @@ end
 function _posr(rep::Vector{UInt8}, n::Int, start::Int, pat)::Int
     p = codeunits(pat)
     for b in min(n - length(p) + 1, start):-1:1
-        @views rep[b:b+length(p)-1] == p && return b
+        @views rep[b:(b + length(p) - 1)] == p && return b
     end
     return 0
 end
@@ -273,8 +277,8 @@ function _zznote!(st::_Tokens, letter::Char)
     b, e = st.begs[put], st.ends[put]
     _shift!(st, put, put + 1)
     # Loop invariant: `rep[put0:i-1]` holds the letters that were at `put0+1:i`.
-    for i in put:st.size-1
-        st.rep[i] = st.rep[i+1]
+    for i in put:(st.size - 1)
+        st.rep[i] = st.rep[i + 1]
     end
     st.rep[st.size] = _BLANK
     st.size -= 1
@@ -300,7 +304,7 @@ function _zzremt!(st::_Tokens, letter::Char)::Bool
         end
     end
     st.size = put
-    fill!(view(st.rep, put+1:_MAXTOK), _BLANK)
+    fill!(view(st.rep, (put + 1):_MAXTOK), _BLANK)
     return did
 end
 
@@ -324,7 +328,7 @@ function _zzsubt!(st::_Tokens, pat::String, transl::String, l2r::Bool)::Bool
     elseif p[k] == UInt8('>') && k > 1
         from = max(1, st.size - k + 2)
         to = st.size
-        (to - from + 1 == k - 1 && @views(st.rep[from:to] == p[1:k-1])) || return false
+        (to - from + 1 == k - 1 && @views(st.rep[from:to] == p[1:(k - 1)])) || return false
         _assign!(st.rep, from, to, transl)
         return true
     end
@@ -367,7 +371,7 @@ function _samsbi(s::Vector{UInt8}, from::Int, to::Int, text::String)::Bool
     to <= length(s) || return false
     t = codeunits(text)
     @inbounds for i in from:to
-        _upper(s[i]) == t[i-from+1] || return false
+        _upper(s[i]) == t[i - from + 1] || return false
     end
     return true
 end
@@ -390,14 +394,20 @@ function _zztokns(str::AbstractString)
     end
     last == 0 && return nothing, "The input time string is blank."
     resize!(bytes, last)
-    st = _Tokens(bytes, fill(_BLANK, _MAXTOK), 0, zeros(Int, _MAXTOK), zeros(Int, _MAXTOK),
-        zeros(Int, _MAXTOK), zeros(Int, _MAXTOK), fill(_BLANK, _MAXPIC), false)
-    toomany(b, e) = (nothing, "The input time string '$str' cannot be processed " *
-        "because it contains more than $_MAXTOK recognizable tokens. The token that " *
-        "could not be processed was '$(_sub(bytes, b, e))'.")
-    toolong(b, e) = (nothing, "The input time string '$str' cannot be processed " *
-        "because the internal picture describing it requires more than $_MAXPIC " *
-        "characters. The token that could not be processed was '$(_sub(bytes, b, e))'.")
+    st = _Tokens(
+        bytes, fill(_BLANK, _MAXTOK), 0, zeros(Int, _MAXTOK), zeros(Int, _MAXTOK),
+        zeros(Int, _MAXTOK), zeros(Int, _MAXTOK), fill(_BLANK, _MAXPIC), false
+    )
+    toomany(b, e) = (
+        nothing, "The input time string '$str' cannot be processed " *
+            "because it contains more than $_MAXTOK recognizable tokens. The token that " *
+            "could not be processed was '$(_sub(bytes, b, e))'.",
+    )
+    toolong(b, e) = (
+        nothing, "The input time string '$str' cannot be processed " *
+            "because the internal picture describing it requires more than $_MAXPIC " *
+            "characters. The token that could not be processed was '$(_sub(bytes, b, e))'.",
+    )
     next = 1
     pnext = 1
     put = 0
@@ -409,7 +419,7 @@ function _zztokns(str::AbstractString)
         pfrom = pnext
         item = bytes[next]
         to = from - 1
-        while to < last && _isdigit(bytes[to+1])
+        while to < last && _isdigit(bytes[to + 1])
             to += 1
         end
         nchar = to - from + 1
@@ -426,7 +436,7 @@ function _zztokns(str::AbstractString)
             put += 1
             put > _MAXTOK && return toomany(from, from)
             to = from
-            while to < last && bytes[to+1] == _BLANK
+            while to < last && bytes[to + 1] == _BLANK
                 to += 1
             end
             st.rep[put] = UInt8('b')
@@ -447,8 +457,8 @@ function _zztokns(str::AbstractString)
             st.pictur[pfrom] = _BLANK
         elseif item < 32 || item > 126
             return nothing, "There is a non-printing, non-tab character (ASCII " *
-                            "$(Int(item))) at position $next of the time string: " *
-                            String(bytes[1:next-1]) * "<>" * String(bytes[next+1:end])
+                "$(Int(item))) at position $next of the time string: " *
+                String(bytes[1:(next - 1)]) * "<>" * String(bytes[(next + 1):end])
         else
             up = _upper(item)
             found = false
@@ -459,16 +469,16 @@ function _zztokns(str::AbstractString)
                 if class == 'm' || class == 'w'
                     # A month or a weekday: the token runs as far as the name matches.
                     r = ncodeunits(text)
-                    while w < r && to < last && _upper(bytes[to+1]) == codeunit(text, w + 1)
+                    while w < r && to < last && _upper(bytes[to + 1]) == codeunit(text, w + 1)
                         w += 1
                         to += 1
                     end
                     kind = w >= r ? 1 : 2
                     case = up != item ? 1 :
-                           (_sub(bytes, next, next + 2) == text[1:3] ? 2 : 3)
+                        (_sub(bytes, next, next + 2) == text[1:3] ? 2 : 3)
                     mark = class == 'm' ?
-                           (("month", "MONTH", "Month"), ("mon", "MON", "Mon"))[kind][case] :
-                           (("weekday", "WEEKDAY", "Weekday"), ("wkd", "WKD", "Wkd"))[kind][case]
+                        (("month", "MONTH", "Month"), ("mon", "MON", "Mon"))[kind][case] :
+                        (("weekday", "WEEKDAY", "Weekday"), ("wkd", "WKD", "Wkd"))[kind][case]
                     pto = pfrom + ncodeunits(mark) - 1
                     pto > _MAXPIC && return toolong(from, to)
                     pnext = pto + 1
@@ -606,22 +616,22 @@ function _zzunpck(st::_Tokens, yabbrv::Bool)
     end
     pictur = String(rstrip(String(copy(pic)), ' '))
     if nyear == 1 && nmon == 1 && nday == 1 && ndoy == 0 && njd == 0 && nhour <= 1 &&
-       nmin <= nhour && nsec <= nmin
+            nmin <= nhour && nsec <= nmin
         tvec[4], tvec[5], tvec[6] = hms
         return true, tvec, ntvec, "YMD", pictur, ""
     elseif nyear == 1 && nmon == 0 && nday == 0 && njd == 0 && ndoy == 1 && nhour <= 1 &&
-           nmin <= nhour && nsec <= nmin
+            nmin <= nhour && nsec <= nmin
         tvec[3], tvec[4], tvec[5] = hms
         return true, tvec, ntvec, "YD", pictur, ""
     elseif nyear == 0 && nmon == 0 && nday == 0 && njd == 1 && ndoy == 0 && nhour <= 0 &&
-           nmin <= 0 && nsec <= 0
+            nmin <= 0 && nsec <= 0
         return true, tvec, ntvec, "JD", pictur, ""
     end
     str = String(copy(s))
     twice(what) = "Two substrings indicating $what were identified in the input time " *
-                  "string \"$str\""
+        "string \"$str\""
     error = if nyear == 0 && nday == 0 && njd == 0 && ndoy == 0 && nhour == 0 && nmin == 0 &&
-               nsec == 0
+            nsec == 0
         "No numeric components were supplied in the time string."
     elseif njd == 1
         "The string possesses calendar components in addition to Julian Date specifier."
@@ -649,16 +659,16 @@ function _zzunpck(st::_Tokens, yabbrv::Bool)
         "Neither a month nor day of year could be identified in the input time string: \"$str\""
     elseif nmon == 1 && nday == 0
         "A month was identified in the time string \"$str\", but a day of month could " *
-        "not be identified."
+            "not be identified."
     elseif nmon == 0 && nday == 1
         "A day of month was identified in the time string \"$str\", but the month it " *
-        "belongs to could not be identified."
+            "belongs to could not be identified."
     elseif nmin > nhour
         "A minutes components of the time was identified in the time string \"$str\", " *
-        "but the hours component could not be identified."
+            "but the hours component could not be identified."
     elseif nsec > nmin
         "A seconds components of the time was identified in the time string \"$str\", " *
-        "but the minutes component could not be identified."
+            "but the minutes component could not be identified."
     else
         "The time string \"$str\" could not be parsed."
     end
@@ -720,7 +730,7 @@ and at last resolve hours, minutes, seconds and the integers next to a month nam
 """
 function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
     modify = fill("", 5)
-    fail(error; pictur="") =
+    fail(error; pictur = "") =
         _TimeParts(false, zeros(Float64, 8), 0, "", modify, false, false, pictur, error)
     st, error = _zztokns(str)
     st === nothing && return fail(error)
@@ -775,8 +785,10 @@ function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
     # With the ISO separator only the built-in patterns are tried.
     if _zzist(st, 't')
         known() && return finish(false, false)
-        return fail("The input string uses the ISO \"T\" date/time delimiter but does " *
-                    "not match any of the accepted ISO formats.")
+        return fail(
+            "The input string uses the ISO \"T\" date/time delimiter but does " *
+                "not match any of the accepted ISO formats."
+        )
     end
 
     # Abbreviated years: a quote and an integer below 100.
@@ -810,17 +822,21 @@ function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
 
     # Two delimiters in a row, or a delimiter at one end, make the string ambiguous.
     pair, from, to = _zzispt(st, ",/-:d.")
-    pair && return fail("There are two successive delimiters <$(_sub(s, from, to))> in " *
-                        "the input string. This is an ambiguous input. '" *
-                        _marked(s, from, to) * "'")
+    pair && return fail(
+        "There are two successive delimiters <$(_sub(s, from, to))> in " *
+            "the input string. This is an ambiguous input. '" *
+            _marked(s, from, to) * "'"
+    )
     rep = _zzgrep(st)
     r = something(findlast(!=(' '), rep), 1)
     edge = rep[1] in ",/-:." ? rep[1:1] : (rep[r] in ",/-:." ? rep[r:r] : "")
     if edge != ""
         _zzsubt!(st, edge, "Q", l2r)
         _, from, to = _zznote!(st, 'Q')
-        return fail("An unexpected delimiter ('$(_sub(s, from, to))') was encountered " *
-                    "in the input string. '" * _marked(s, from, to) * "'")
+        return fail(
+            "An unexpected delimiter ('$(_sub(s, from, to))') was encountered " *
+                "in the input string. '" * _marked(s, from, to) * "'"
+        )
     end
 
     # Remove commas, then dashes, then slashes, and try the patterns after each step.
@@ -835,34 +851,44 @@ function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
         found, b, e = _zznote!(st, c)
         found && break
     end
-    b > 0 && return fail("The substring \"$(_sub(s, b, e))\" is a duplicate modifier of " *
-                         "the input string: '" * _marked(s, b, e) * "'")
+    b > 0 && return fail(
+        "The substring \"$(_sub(s, b, e))\" is a duplicate modifier of " *
+            "the input string: '" * _marked(s, b, e) * "'"
+    )
     for c in ('[', ']', 'O', 'o', 'z')
         found, b, e = _zznote!(st, c)
         found && break
     end
-    b > 0 && return fail("The substring \"$(_sub(s, b, e))\" could not be resolved in " *
-                         "the input string: '" * _marked(s, b, e) * "'")
+    b > 0 && return fail(
+        "The substring \"$(_sub(s, b, e))\" could not be resolved in " *
+            "the input string: '" * _marked(s, b, e) * "'"
+    )
     if _zzist(st, 'm') && _zzist(st, 'd')
         _, b1, e1 = _zznote!(st, 'm')
         _, b2, e2 = _zznote!(st, 'd')
-        return fail("Both a month \"$(_sub(s, b1, e1))\" and day of year delimiter " *
-                    "\"$(_sub(s, b2, e2))\" appear in the input string: '$str'")
+        return fail(
+            "Both a month \"$(_sub(s, b1, e1))\" and day of year delimiter " *
+                "\"$(_sub(s, b2, e2))\" appear in the input string: '$str'"
+        )
     end
 
     # Hours, minutes and seconds: the rightmost run of numbers with colons.
-    for (pat, meaning) in (("i:i:i:n", "D*H*M*S"), ("i:i:i:i", "D*H*M*S"), ("i:i:n", "H*M*S"),
-        ("i:i:i", "H*M*S"), ("i:n", "H*M"), ("i:i", "H*M"))
+    for (pat, meaning) in (
+            ("i:i:i:n", "D*H*M*S"), ("i:i:i:i", "D*H*M*S"), ("i:i:n", "H*M*S"),
+            ("i:i:i", "H*M*S"), ("i:n", "H*M"), ("i:i", "H*M"),
+        )
         _zzrept!(st, pat, meaning, r2l) && break
     end
     _zzremt!(st, ':')
 
     # An integer next to a month name, and the day-of-year forms.
-    for (pat, meaning, remove) in (("<miiH", "mDY", false), ("<mi", "mD", false),
-        ("Siim>", "SYDm", false), ("im>", "Dm", false), ("miY>", "mDY", false),
-        ("Ymi", "YmD", false), ("Smi", "SmD", false), ("Mmi", "MmD", false),
-        ("imY", "DmY", false), ("imH", "DmH", false), ("Yid", "Yy*", true),
-        ("iYd", "yY*", true), ("Ydi", "Y*y", true))
+    for (pat, meaning, remove) in (
+            ("<miiH", "mDY", false), ("<mi", "mD", false),
+            ("Siim>", "SYDm", false), ("im>", "Dm", false), ("miY>", "mDY", false),
+            ("Ymi", "YmD", false), ("Smi", "SmD", false), ("Mmi", "MmD", false),
+            ("imY", "DmY", false), ("imH", "DmH", false), ("Yid", "Yy*", true),
+            ("iYd", "yY*", true), ("Ydi", "Y*y", true),
+        )
         (remove ? _zzrept!(st, pat, meaning, l2r) : _zzsubt!(st, pat, meaning, l2r)) && break
     end
 
@@ -873,14 +899,14 @@ end
 
 "Message for a Julian date whose number cannot be read (CSPICE returns the value of an earlier call for such a string)."
 const _NOJDVALUE = "The Julian date of the string has no value: the sign and the number " *
-                   "must be one token, as in 'JD -2451545.5'."
+    "must be one token, as in 'JD -2451545.5'."
 
 # ---------------------------------------------------------------------------------
 # Checks and small rules: TCHECK, TEXPYR, ZZUTCPM
 # ---------------------------------------------------------------------------------
 
 "Contract: returns a year 0..99 as the year of the 100 years from `lbound` (1969..2068 at start) that it abbreviates, and another year unchanged (`texpyr`; bound)."
-function _expand_year(year::Int, lbound::Int=1969)::Int
+function _expand_year(year::Int, lbound::Int = 1969)::Int
     (year >= 100 || year < 0) && return year
     y = year + lbound ÷ 100 * 100
     return y < lbound ? y + 100 : y
@@ -930,7 +956,7 @@ function _zone_offsets(zone::AbstractString)
     return hoff, moff, ok
 end
 
-_num(x::Float64) = isinteger(x) && abs(x) < 1e15 ? string(Int(x)) : string(x)
+_num(x::Float64) = isinteger(x) && abs(x) < 1.0e15 ? string(Int(x)) : string(x)
 
 """
     _tcheck(tvec, type, mods, modify) -> (ok, error)
@@ -975,25 +1001,27 @@ function _tcheck(tvec::Vector{Float64}, type::String, mods::Bool, modify::Vector
             "$(_num(tvec[3])). For $(_MONTH_NAMES[month]) the day must be at least 1 " *
             "and less than $(_num(dinmon(month) + 1.0))."
         doy = 0.0
-        for i in 1:month-1
+        for i in 1:(month - 1)
             doy += dinmon(i)
         end
         doy += tvec[3]
     end
     hour, minute, second = day + 1, day + 2, day + 3
     (tvec[hour] >= hubnd || tvec[hour] < hlbnd) && return false, "The hours component " *
-        "of the time specified was $(_num(tvec[hour])). " * (ampm ?
-        "When either A.M. or P.M. is specified with the time the hours component must " *
-        "be at least 1 and less than 13." :
-        "The hours component must be greater than or equal to 0 and less than 24.")
+        "of the time specified was $(_num(tvec[hour])). " * (
+            ampm ?
+            "When either A.M. or P.M. is specified with the time the hours component must " *
+            "be at least 1 and less than 13." :
+            "The hours component must be greater than or equal to 0 and less than 24."
+        )
     (tvec[minute] >= 60.0 || tvec[minute] < 0.0) && return false, "The minutes " *
         "component of the time specified was $(_num(tvec[minute])). This value must " *
         "be greater than or equal to 0 and less than 60."
     if tvec[second] >= 60.0 || tvec[second] < 0.0
         pm = mods && modify[_MOD_AMPM] == "P.M."
         leapsec = tvec[second] < 61.0 && tvec[second] > 0.0 && tvec[minute] == 59.0 &&
-                  (tvec[hour] == 23.0 || (tvec[hour] == 11.0 && pm)) &&
-                  (doy == dinyr || doy == jun30)
+            (tvec[hour] == 23.0 || (tvec[hour] == 11.0 && pm)) &&
+            (doy == dinyr || doy == jun30)
         leapsec || return false, "The seconds component of time must be at least 0 and " *
             "less than 60 (61 during the last minute of June 30 and December 31). The " *
             "value supplied was $(_num(tvec[second]))."
@@ -1003,11 +1031,11 @@ function _tcheck(tvec::Vector{Float64}, type::String, mods::Bool, modify::Vector
     # component that is not zero.
     for i in day:minute
         tvec[i] == Float64(_nint(tvec[i])) && continue
-        for j in i+1:second
-            tvec[j] == 0.0 || return false, "The '$(names[i-day+1])' component of the " *
+        for j in (i + 1):second
+            tvec[j] == 0.0 || return false, "The '$(names[i - day + 1])' component of the " *
                 "date has a fractional component. This is allowed only if all " *
                 "components of lesser significance have value 0. However the " *
-                "'$(names[j-day+1])' component has value $(_num(tvec[j]))."
+                "'$(names[j - day + 1])' component has value $(_num(tvec[j]))."
         end
     end
     return true, ""
@@ -1030,25 +1058,41 @@ function _timdef_set(defs::TimeDefaults, item::AbstractString, value::AbstractSt
     it = uppercase(strip(item, ' '))
     val = uppercase(first(strip(value, ' '), 16))
     if it == "SYSTEM"
-        val in ("TDB", "TDT", "TT", "UTC") || throw(SpiceError(:baddefaultvalue,
-            "the default time system '$value' is not one of UTC, TDB, TDT, TT"))
+        val in ("TDB", "TDT", "TT", "UTC") || throw(
+            SpiceError(
+                :baddefaultvalue,
+                "the default time system '$value' is not one of UTC, TDB, TDT, TT"
+            )
+        )
         return TimeDefaults(defs.calendar, val, "", defs.yearbound, defs.check)
     elseif it == "ZONE"
         zone = findfirst(==(val), _TK_ZONES)
         zone === nothing || (val = _TK_OFFSETS[zone])
         val = first(val, 14)
         _, _, ok = _zone_offsets(val)
-        ok || throw(SpiceError(:baddefaultvalue, "the default time zone '$value' is not " *
-            "one of EST, EDT, CST, CDT, MST, MDT, PST, PDT and is not an offset " *
-            "UTC+h[:mm] or UTC-h[:mm] with h below 13"))
+        ok || throw(
+            SpiceError(
+                :baddefaultvalue, "the default time zone '$value' is not " *
+                    "one of EST, EDT, CST, CDT, MST, MDT, PST, PDT and is not an offset " *
+                    "UTC+h[:mm] or UTC-h[:mm] with h below 13"
+            )
+        )
         return TimeDefaults(defs.calendar, "", String(val), defs.yearbound, defs.check)
     elseif it == "CALENDAR"
-        val in ("JULIAN", "GREGORIAN", "MIXED") || throw(SpiceError(:baddefaultvalue,
-            "the default calendar '$value' is not one of GREGORIAN, JULIAN, MIXED"))
+        val in ("JULIAN", "GREGORIAN", "MIXED") || throw(
+            SpiceError(
+                :baddefaultvalue,
+                "the default calendar '$value' is not one of GREGORIAN, JULIAN, MIXED"
+            )
+        )
         return TimeDefaults(val, defs.system, defs.zone, defs.yearbound, defs.check)
     end
-    throw(SpiceError(:badtimeitem,
-        "the default item '$item' is not one of CALENDAR, SYSTEM, ZONE"))
+    throw(
+        SpiceError(
+            :badtimeitem,
+            "the default item '$item' is not one of CALENDAR, SYSTEM, ZONE"
+        )
+    )
 end
 
 "Contract: returns the value of the default `item` (`CALENDAR`, `SYSTEM` or `ZONE`, any case) in `defs`; throws `SpiceError(:badtimeitem)` for another item."
@@ -1057,8 +1101,12 @@ function _timdef_get(defs::TimeDefaults, item::AbstractString)::String
     it == "CALENDAR" && return defs.calendar
     it == "SYSTEM" && return defs.system
     it == "ZONE" && return defs.zone
-    throw(SpiceError(:badtimeitem,
-        "the default item '$item' is not one of CALENDAR, SYSTEM, ZONE"))
+    throw(
+        SpiceError(
+            :badtimeitem,
+            "the default item '$item' is not one of CALENDAR, SYSTEM, ZONE"
+        )
+    )
 end
 
 # ---------------------------------------------------------------------------------
@@ -1119,7 +1167,7 @@ timout(et, "YYYY-MM-DDTHR:MN:SC.### ::UTC ::RND")    # back to a string, rounded
 
 See also [`timout`](@ref), [`et2utc`](@ref), [`utc2et`](@ref), [`tparse`](@ref).
 """
-function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefaults())::Float64
+function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
     isempty(s) && throw(SpiceError(:emptystring, "str2et: the time string is empty"))
     l = _lsk(ks)
     dhoff, dmoff, _ = defs.zone == "" ? (0.0, 0.0, true) : _zone_offsets(defs.zone)
@@ -1129,9 +1177,11 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
     mods = p.mods
     tvec = p.tvec
     type = p.type
-    (modify[_MOD_ZONE] != "" && modify[_MOD_SYSTEM] != "") && _badtime(s,
+    (modify[_MOD_ZONE] != "" && modify[_MOD_SYSTEM] != "") && _badtime(
+        s,
         "both a time system '$(modify[_MOD_SYSTEM])' and a time zone " *
-        "'$(modify[_MOD_ZONE])' are specified; specify one of them only", :timeconflict)
+            "'$(modify[_MOD_ZONE])' are specified; specify one of them only", :timeconflict
+    )
     zoned = false
     hoff = moff = 0.0
     if modify[_MOD_ZONE] == "" && modify[_MOD_SYSTEM] == ""
@@ -1142,8 +1192,10 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
     elseif modify[_MOD_ZONE] != ""
         zoned = true
         hoff, moff, ok = _zone_offsets(modify[_MOD_ZONE])
-        ok || _badtime(s, "the time zone '$(modify[_MOD_ZONE])' is not an offset UTC+h[:mm] " *
-                          "or UTC-h[:mm] with h below 13", :timezoneerror)
+        ok || _badtime(
+            s, "the time zone '$(modify[_MOD_ZONE])' is not an offset UTC+h[:mm] " *
+                "or UTC-h[:mm] with h below 13", :timezoneerror
+        )
     end
     system = modify[_MOD_SYSTEM]
 
@@ -1180,12 +1232,16 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
     end
     ok || _badtime(s, error, :badtimestring)
     adjust && (tvec[sc] += 1.0)
-    ((system == "TDT" || system == "TDB") && tvec[sc] >= 60.0) && _badtime(s,
+    ((system == "TDT" || system == "TDB") && tvec[sc] >= 60.0) && _badtime(
+        s,
         "the seconds component is $(_num(tvec[sc])), and the time system $system has " *
-        "no leap seconds: the seconds must be less than 60", :badtimestring)
-    (modify[_MOD_ERA] == "B.C." && p.yabbrv) && _badtime(s,
+            "no leap seconds: the seconds must be less than 60", :badtimestring
+    )
+    (modify[_MOD_ERA] == "B.C." && p.yabbrv) && _badtime(
+        s,
         "the year is abbreviated with a quote and the era is B.C.; these do not go together",
-        :badtimestring)
+        :badtimestring
+    )
     modify[_MOD_ERA] == "B.C." && (tvec[yr] = 1.0 - tvec[yr])
     if modify[_MOD_AMPM] == "P.M."
         tvec[hr] < 12.0 && (tvec[hr] += 12.0)
@@ -1199,8 +1255,10 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
 
     dojul = if calndr == "MIXED"
         yd ? (tvec[yr] < 1582.0 || (tvec[yr] == 1582.0 && tvec[dy] < 279.0)) :
-        (tvec[yr] < 1582.0 || (tvec[yr] <= 1582.0 && tvec[mm] < 10.0) ||
-         (tvec[yr] <= 1582.0 && tvec[mm] <= 10.0 && tvec[dy] < 6.0))
+            (
+                tvec[yr] < 1582.0 || (tvec[yr] <= 1582.0 && tvec[mm] < 10.0) ||
+                (tvec[yr] <= 1582.0 && tvec[mm] <= 10.0 && tvec[dy] < 6.0)
+            )
     else
         calndr == "JULIAN"
     end
@@ -1236,10 +1294,16 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
     if adjust
         modify[_MOD_AMPM] = ""
         ok, _ = _tcheck(tvec, type, false, modify)
-        ok || _badtime(s, "the seconds component is out of range: " * (zoned ?
-            "in the time zone $(modify[_MOD_ZONE]) " : "") * (dojul ? "on the Julian " *
-            "calendar " : "") * "a leap second can occur in the year $orgnyr only in the " *
-            "second that follows 23:59:59 UTC on June 30 and December 31", :badtimestring)
+        ok || _badtime(
+            s, "the seconds component is out of range: " * (
+                zoned ?
+                    "in the time zone $(modify[_MOD_ZONE]) " : ""
+            ) * (
+                dojul ? "on the Julian " *
+                    "calendar " : ""
+            ) * "a leap second can occur in the year $orgnyr only in the " *
+                "second that follows 23:59:59 UTC on June 30 and December 31", :badtimestring
+        )
     end
     return _ttrans(l, ptype, _TT_TDB, tv())[1]
 end
@@ -1274,20 +1338,26 @@ Throws `SpiceError(:emptystring)` if `s` is `""`, and
 with the check on, if a component is out of range, as CSPICE does for every such
 string, and `SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
 """
-function utc2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefaults())::Float64
+function utc2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
     isempty(s) && throw(SpiceError(:emptystring, "utc2et: the time string is empty"))
     l = _lsk(ks)
     p = _tpartv(s, 8)
     p.ok || _badtime(s, p.error, :invalidtimestring)
     modify = p.modify
-    (modify[_MOD_SYSTEM] != "" && modify[_MOD_SYSTEM] != "UTC") && _badtime(s,
+    (modify[_MOD_SYSTEM] != "" && modify[_MOD_SYSTEM] != "UTC") && _badtime(
+        s,
         "utc2et does not support a time system in the string; the time system " *
-        "$(modify[_MOD_SYSTEM]) was specified. Use str2et.", :invalidtimestring)
-    modify[_MOD_ZONE] != "" && _badtime(s, "utc2et does not support a time zone in the " *
-        "string; the time zone '$(modify[_MOD_ZONE])' was specified. Use str2et.",
-        :invalidtimestring)
-    modify[_MOD_AMPM] != "" && _badtime(s,
-        "utc2et does not support the A.M./P.M. conventions. Use str2et.", :invalidtimestring)
+            "$(modify[_MOD_SYSTEM]) was specified. Use str2et.", :invalidtimestring
+    )
+    modify[_MOD_ZONE] != "" && _badtime(
+        s, "utc2et does not support a time zone in the " *
+            "string; the time zone '$(modify[_MOD_ZONE])' was specified. Use str2et.",
+        :invalidtimestring
+    )
+    modify[_MOD_AMPM] != "" && _badtime(
+        s,
+        "utc2et does not support the A.M./P.M. conventions. Use str2et.", :invalidtimestring
+    )
     tvec = p.tvec
     p.type == "JD" && isnan(tvec[1]) && _badtime(s, _NOJDVALUE, :invalidtimestring)
     p.type == "JD" && return _ttrans(l, _TT_JDUTC, _TT_TDB, _tvec(tvec[1]))[1]
@@ -1339,12 +1409,18 @@ function tparse(s::AbstractString, defs::TimeDefaults)::Float64
     p = _tpartv(s, 8)
     p.ok || _badtime(s, p.error, :unparsedtime)
     modify = p.modify
-    modify[_MOD_SYSTEM] != "" && _badtime(s, "tparse does not support a time system " *
-        "in the string; the time system $(modify[_MOD_SYSTEM]) was specified.", :unparsedtime)
-    modify[_MOD_ZONE] != "" && _badtime(s, "tparse does not support a time zone in " *
-        "the string; the time zone '$(modify[_MOD_ZONE])' was specified.", :unparsedtime)
-    modify[_MOD_AMPM] != "" && _badtime(s, "tparse does not support the A.M./P.M. conventions.",
-        :unparsedtime)
+    modify[_MOD_SYSTEM] != "" && _badtime(
+        s, "tparse does not support a time system " *
+            "in the string; the time system $(modify[_MOD_SYSTEM]) was specified.", :unparsedtime
+    )
+    modify[_MOD_ZONE] != "" && _badtime(
+        s, "tparse does not support a time zone in " *
+            "the string; the time zone '$(modify[_MOD_ZONE])' was specified.", :unparsedtime
+    )
+    modify[_MOD_AMPM] != "" && _badtime(
+        s, "tparse does not support the A.M./P.M. conventions.",
+        :unparsedtime
+    )
     tvec = p.tvec
     p.type == "JD" && isnan(tvec[1]) && _badtime(s, _NOJDVALUE, :unparsedtime)
     p.type == "JD" && return (tvec[1] - _JD2000) * _SPD
@@ -1370,7 +1446,7 @@ function tparse(s::AbstractString, defs::TimeDefaults)::Float64
         q -= 1
     end
     day = year * 367 - div((year + div(month + 9, 12)) * 7, 4) -
-          div((div(year + div(month - 9, 7), 100) + 1) * 3, 4) + div(month * 275, 9) + day - 730516
+        div((div(year + div(month - 9, 7), 100) + 1) * 3, 4) + div(month * 275, 9) + day - 730516
     adjust && (day += q * 146097)
     day = Int(day % Int32)
     return (Float64(day) - 0.5) * _SPD + tvec[4] * 3600.0 + tvec[5] * 60.0 + tvec[6]

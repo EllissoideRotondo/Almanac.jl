@@ -18,7 +18,7 @@ group("static checks: Aqua and ExplicitImports") do
         @test EI.check_no_stale_explicit_imports(Almanac) === nothing
         @test EI.check_all_explicit_imports_via_owners(Almanac) === nothing
         deps = (Base, Core, Almanac.StaticArrays, Almanac.LinearAlgebra, Almanac.Mmap)
-        @test EI.check_all_explicit_imports_are_public(Almanac; from=deps) === nothing
+        @test EI.check_all_explicit_imports_are_public(Almanac; from = deps) === nothing
         @test EI.check_all_qualified_accesses_via_owners(Almanac) === nothing
         @test EI.check_no_self_qualified_accesses(Almanac) === nothing
         # Names that Base does not declare public, each kept for a reason:
@@ -26,7 +26,9 @@ group("static checks: Aqua and ExplicitImports") do
         # concrete type of `Ref(x)` for a field without boxing; `setindex`, the copy of
         # a tuple with one element replaced; `Filesystem.open`, the only open with
         # O_EXCL (a file is created only if it does not exist).
-        @test EI.check_all_qualified_accesses_are_public(Almanac; from=deps,
-            ignore=(:broadcastable, :RefValue, :setindex, :open)) === nothing
+        @test EI.check_all_qualified_accesses_are_public(
+            Almanac; from = deps,
+            ignore = (:broadcastable, :RefValue, :setindex, :open)
+        ) === nothing
     end
 end

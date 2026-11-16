@@ -17,13 +17,15 @@
 const _TLE_GEOPHS_NAMES = ("J2", "J3", "J4", "KE", "QO", "SO", "ER", "AE")
 
 "Powers of ten for the exponents of NDD60 and BSTAR, which have one digit."
-const _TLE_POWER = (1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9)
+const _TLE_POWER = (1.0, 1.0e1, 1.0e2, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e9)
 
 "The terms of a two-line element set in the order in which `zzgetelm` parses them: name, line, first and last character."
-const _TLE_TERMS = (("YEAR", 1, 19, 20), ("DAY", 1, 21, 32), ("NDT20", 1, 34, 43),
+const _TLE_TERMS = (
+    ("YEAR", 1, 19, 20), ("DAY", 1, 21, 32), ("NDT20", 1, 34, 43),
     ("NDD60", 1, 45, 45), ("IEXP", 1, 51, 52), ("BSTAR", 1, 54, 54), ("IBEXP", 1, 60, 61),
     ("INCL", 2, 9, 16), ("NODE0", 2, 18, 25), ("ECC", 2, 27, 33), ("OMEGA", 2, 35, 42),
-    ("MO", 2, 44, 51), ("NO", 2, 53, 63))
+    ("MO", 2, 44, 51), ("NO", 2, 53, 63),
+)
 
 @noinline _tle_error(msg::String) = throw(SpiceError(:badtle, "Error in TLE set. " * msg))
 
@@ -41,18 +43,22 @@ a number.
 function _tle_number(text::AbstractString, term::Int, integer::Bool)
     name, line, first, last = _TLE_TERMS[term]
     where = "\"$name\" (characters $first to $last of the " *
-            (line == 1 ? "first" : "second") * " line of a two-line element set)"
+        (line == 1 ? "first" : "second") * " line of a two-line element set)"
     x = try
         _nparsd(text)
     catch err
         err isa SpiceError || rethrow()
-        _tle_error("An error occurred while trying to parse the term $where. The " *
-                   "diagnostic was:  $(err.msg) ")
+        _tle_error(
+            "An error occurred while trying to parse the term $where. The " *
+                "diagnostic was:  $(err.msg) "
+        )
     end
     integer || return x
-    abs(trunc(x)) <= 2147483647.0 || _tle_error("An error occurred while trying to parse " *
-        "the term $where. The diagnostic was:  NPARSI: Value entered is beyond the " *
-        "bounds of representable integers. ")
+    abs(trunc(x)) <= 2147483647.0 || _tle_error(
+        "An error occurred while trying to parse " *
+            "the term $where. The diagnostic was:  NPARSI: Value entered is beyond the " *
+            "bounds of representable integers. "
+    )
     return trunc(x)
 end
 
@@ -104,27 +110,39 @@ state = evsgp4(epoch + 3600.0, geophs, elems)      # km and km/s, frame TEME (se
 See also [`evsgp4`](@ref), [`spkw10`](@ref).
 """
 function getelm(ks::KernelSet, frstyr::Integer, lines)
-    length(lines) == 2 || throw(SpiceError(:badarg,
-        "getelm: `lines` must hold two lines, it holds $(length(lines))"))
+    length(lines) == 2 || throw(
+        SpiceError(
+            :badarg,
+            "getelm: `lines` must hold two lines, it holds $(length(lines))"
+        )
+    )
     l = _lsk(ks)
     raw = (String(lines[1]), String(lines[2]))
     (isascii(raw[1]) && isascii(raw[2])) ||
         _tle_error("A line of the TLE pair has a character that is not ASCII.")
     ln = (_tle_pad(raw[1], 69), _tle_pad(raw[2], 69))
-    ln[1][2:7] == ln[2][2:7] || _tle_error("Line 1 of the TLE pair tagged with vehicle ID " *
-        "$(ln[1][2:7]),  line 2 of TLE pair tagged with vehicle ID $(ln[2][2:7])")
+    ln[1][2:7] == ln[2][2:7] || _tle_error(
+        "Line 1 of the TLE pair tagged with vehicle ID " *
+            "$(ln[1][2:7]),  line 2 of TLE pair tagged with vehicle ID $(ln[2][2:7])"
+    )
     for k in 1:2          # invariant: the lines before `k` have 68 or 69 characters
         n = _daf_lastnb(raw[k])
-        (n == 68 || n == 69) || _tle_error("Line $k of the TLE has incorrect data length. " *
-            "Expected length 68 or 69 elements, actual length: $n. TLE line value: $(raw[k])")
+        (n == 68 || n == 69) || _tle_error(
+            "Line $k of the TLE has incorrect data length. " *
+                "Expected length 68 or 69 elements, actual length: $n. TLE line value: $(raw[k])"
+        )
     end
     a, b = ln
     # The pieces of the two lines; NDD60, BSTAR and ECC have an implied decimal point.
-    text = (a[19:20], a[21:32], a[34:43], a[45:45] * "." * a[46:50], a[51:52],
+    text = (
+        a[19:20], a[21:32], a[34:43], a[45:45] * "." * a[46:50], a[51:52],
         a[54:54] * "." * a[55:59], a[60:61], b[9:16], b[18:25], "0." * b[27:33], b[35:42],
-        b[44:51], b[53:63])
-    isint = (true, false, false, false, true, false, true, false, false, false, false, false,
-        false)
+        b[44:51], b[53:63],
+    )
+    isint = (
+        true, false, false, false, true, false, true, false, false, false, false, false,
+        false,
+    )
     val = ntuple(i -> _tle_number(text[i], i, isint[i]), Val(13))
     yr, day, ndt20, ndd60, nexp, bstar, bexp, incl, node0, ecc, omega, mo, no = val
     abs(nexp) > 9 && _tle_error("NEXP (exponent) not a single digit. Actual value $(Int(nexp))")
@@ -139,7 +157,7 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
         _tle_error("INCL (inclination) expected bounds [0,180). Actual value $incl")
     (no > 20.0 || no < 0.0) &&
         _tle_error("NO (mean motion) expected bounds (0,20). Actual value $no")
-    pow10(n) = n >= 0 ? _TLE_POWER[Int(n)+1] : 1.0 / _TLE_POWER[1-Int(n)]
+    pow10(n) = n >= 0 ? _TLE_POWER[Int(n) + 1] : 1.0 / _TLE_POWER[1 - Int(n)]
     ndd60 *= pow10(nexp)
     bstar *= pow10(bexp)
     d2r = Float64(pi) / 180.0
@@ -156,15 +174,19 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
     year = div(first, 100) * 100 + Int(yr)
     year < first && (year += 100)
     epoch = _ttrans(l, _TT_YDD, _TT_TDB, _tvec(year, day))[1]
-    return epoch, SVector{10,Float64}(ndt20, ndd60, bstar, incl, node0, ecc, omega, mo, no, epoch)
+    return epoch, SVector{10, Float64}(ndt20, ndd60, bstar, incl, node0, ecc, omega, mo, no, epoch)
 end
 getelm(ctx::SpiceContext, frstyr::Integer, lines) = getelm(kernelset(ctx), frstyr, lines)
 getelm(frstyr::Integer, lines) = getelm(default_context(), frstyr, lines)
 
 @inline function _tle_tuple(who::String, what::String, x, ::Val{N}) where {N}
-    length(x) == N || throw(SpiceError(:badarg,
-        "$who: `$what` must have $N elements but has $(length(x))"))
-    return ntuple(i -> Float64(@inbounds x[firstindex(x)+i-1]), Val(N))
+    length(x) == N || throw(
+        SpiceError(
+            :badarg,
+            "$who: `$what` must have $N elements but has $(length(x))"
+        )
+    )
+    return ntuple(i -> Float64(@inbounds x[firstindex(x) + i - 1]), Val(N))
 end
 
 """
@@ -234,9 +256,11 @@ Throws `SpiceError`:
 - `:numpacketsnotpos` if there is no element set;
 - `:unorderedrefs` unless the epochs are strictly increasing.
 """
-function spkw10(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw10(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, consts, elems,
-        epochs)
+        epochs
+    )
     who = "spkw10"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -248,31 +272,47 @@ function spkw10(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     _seg_idlen(who, segid)
     cu = codeunits(String(segid))
     for i in 1:_daf_lastnb(segid)
-        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(SpiceError(:nonprintingchars,
-            "$who: the segment identifier contains a nonprinting character at location $i"))
+        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
+            SpiceError(
+                :nonprintingchars,
+                "$who: the segment identifier contains a nonprinting character at location $i"
+            )
+        )
     end
-    n <= 0 && throw(SpiceError(:numpacketsnotpos,
-        "$who: the number of packets to store is not positive: $n"))
+    n <= 0 && throw(
+        SpiceError(
+            :numpacketsnotpos,
+            "$who: the number of packets to store is not positive: $n"
+        )
+    )
     for i in 2:n          # invariant: ep[1:i-1] is strictly increasing
-        ep[i-1] >= ep[i] && throw(SpiceError(:unorderedrefs,
-            "$who: reference values are out of order; the value $(ep[i-1]) was found to " *
-            "be out of order for index $(i - 1)"))
+        ep[i - 1] >= ep[i] && throw(
+            SpiceError(
+                :unorderedrefs,
+                "$who: reference values are out of order; the value $(ep[i - 1]) was found to " *
+                    "be out of order for index $(i - 1)"
+            )
+        )
     end
     packets = Vector{Float64}(undef, 14n)
     for i in 1:n          # invariant: the packets of the sets before `i` are in `packets`
         copyto!(packets, 14(i - 1) + 1, el, 10(i - 1) + 1, 10)
         psi, eps, dpsi, deps = _t10_wahr(ep[i])
-        packets[14i-3:14i] .= (eps, psi, deps, dpsi)
+        packets[(14i - 3):14i] .= (eps, psi, deps, dpsi)
     end
     dafbna(h, descr, segid)
     dafada(h, _t10_data(con, ep, packets))
     dafena(h)
     return nothing
 end
-spkw10(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, consts, elems, epochs) =
-    spkw10(default_context(), h, body, center, frame, first, last, segid, consts, elems,
-        epochs)
+spkw10(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, consts, elems, epochs
+) =
+    spkw10(
+    default_context(), h, body, center, frame, first, last, segid, consts, elems,
+    epochs
+)
 
 """
     _t10_data(consts, refs, packets) -> Vector{Float64}
@@ -282,8 +322,10 @@ eight constants, one record of the epoch and the 14 doubles of each packet, the 
 every 100th epoch, and the 17 meta data items. `packets` holds the packets one after the
 other.
 """
-function _t10_data(con::AbstractVector{Float64}, refs::AbstractVector{Float64},
-        packets::AbstractVector{Float64})
+function _t10_data(
+        con::AbstractVector{Float64}, refs::AbstractVector{Float64},
+        packets::AbstractVector{Float64}
+    )
     n = length(refs)
     @assert length(con) == 8 && length(packets) == 14n
     data = Vector{Float64}(undef, 0)
@@ -291,16 +333,20 @@ function _t10_data(con::AbstractVector{Float64}, refs::AbstractVector{Float64},
     append!(data, con)
     for i in 1:n          # invariant: the records of the packets before `i` are in `data`
         push!(data, refs[i])
-        append!(data, @view packets[14(i-1)+1:14i])
+        append!(data, @view packets[(14(i - 1) + 1):14i])
     end
     append!(data, refs)
-    for i in 1:(n-1)÷100
+    for i in 1:((n - 1) ÷ 100)
         push!(data, refs[100i])
     end
     # Meta data: CONBAS, NCON, RDRBAS, NRDR, RDRTYP, REFBAS, NREF, PDRBAS, NPDR, PDRTYP,
     # PKTBAS, NPKT, RSVBAS, NRSV, PKTSZ, PKTOFF, NMETA.
     refbas = 8 + 15 * n
-    append!(data, Float64[0, 8, refbas + n, (n - 1) ÷ 100, 4, refbas, n, 0, 0, 0, 8, n, 0, 0,
-        14, 1, 17])
+    append!(
+        data, Float64[
+            0, 8, refbas + n, (n - 1) ÷ 100, 4, refbas, n, 0, 0, 0, 8, n, 0, 0,
+            14, 1, 17,
+        ]
+    )
     return data
 end

@@ -14,9 +14,9 @@
 # `SpiceError(:invaliddegree, …)` for SPICE(INVALIDDEGREE).
 
 "Reference frame of a segment writer: a frame name or a frame ID."
-const SegFrame = Union{AbstractString,Integer}
+const SegFrame = Union{AbstractString, Integer}
 "Where a segment writer resolves a frame name."
-const SegContext = Union{SpiceContext,KernelSet}
+const SegContext = Union{SpiceContext, KernelSet}
 
 _seg_ks(ctx::SpiceContext) = kernelset(ctx)
 _seg_ks(ks::KernelSet) = ks
@@ -35,31 +35,47 @@ Frame ID of `frame` (a name resolved in `ctx`, or an ID). Throws
 """
 function _seg_refcode(who::AbstractString, ctx::SegContext, frame::SegFrame)
     code = frame isa Integer ? Int(frame) : namfrm(_seg_ks(ctx), frame)
-    code == 0 && throw(SpiceError(:invalidrefframe,
-        "$who: the reference frame $frame is not supported"))
+    code == 0 && throw(
+        SpiceError(
+            :invalidrefframe,
+            "$who: the reference frame $frame is not supported"
+        )
+    )
     return code
 end
 
 function _seg_idlen(who::AbstractString, segid::AbstractString)
-    _daf_lastnb(segid) > 40 && throw(SpiceError(:segidtoolong,
-        "$who: segment identifier contains more than 40 characters"))
+    _daf_lastnb(segid) > 40 && throw(
+        SpiceError(
+            :segidtoolong,
+            "$who: segment identifier contains more than 40 characters"
+        )
+    )
     return nothing
 end
 
 function _seg_idchars(who::AbstractString, segid::AbstractString)
     cu = codeunits(String(segid))
     for i in 1:_daf_lastnb(segid)
-        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(SpiceError(:nonprintablechars,
-            "$who: the segment identifier contains nonprintable characters"))
+        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
+            SpiceError(
+                :nonprintablechars,
+                "$who: the segment identifier contains nonprintable characters"
+            )
+        )
     end
     return nothing
 end
 
 "The checks of `chckid` for a segment identifier of the kernel type `what`: `:idstringtoolong`, then `:nonprintablechars`."
-function _seg_chckid(who::AbstractString, segid::AbstractString, what::AbstractString="SPK")
-    _daf_lastnb(segid) > 40 && throw(SpiceError(:idstringtoolong,
-        "$who: the $what segment identifier is invalid; its last non-blank character " *
-        "is at position $(_daf_lastnb(segid)); the maximum allowed length is 40"))
+function _seg_chckid(who::AbstractString, segid::AbstractString, what::AbstractString = "SPK")
+    _daf_lastnb(segid) > 40 && throw(
+        SpiceError(
+            :idstringtoolong,
+            "$who: the $what segment identifier is invalid; its last non-blank character " *
+                "is at position $(_daf_lastnb(segid)); the maximum allowed length is 40"
+        )
+    )
     _seg_idchars(who, segid)
     return nothing
 end
@@ -76,24 +92,40 @@ shape does not fit.
 function _seg_flat(who::AbstractString, what::AbstractString, x, rowlen::Int)
     if x isa AbstractMatrix{<:Real}
         m = size(x, 1)
-        (rowlen == 0 || m == rowlen) || throw(SpiceError(:badarg,
-            "$who: `$what` must have $rowlen rows (one table row in each column), it has $m"))
+        (rowlen == 0 || m == rowlen) || throw(
+            SpiceError(
+                :badarg,
+                "$who: `$what` must have $rowlen rows (one table row in each column), it has $m"
+            )
+        )
         return _vec_of(Float64, x), size(x, 2), m
     elseif x isa AbstractVector{<:Real}
-        rowlen > 0 || throw(SpiceError(:badarg,
-            "$who: `$what` must be a matrix or a vector of vectors"))
-        length(x) % rowlen == 0 || throw(SpiceError(:badarg,
-            "$who: the length $(length(x)) of `$what` is not a multiple of $rowlen"))
+        rowlen > 0 || throw(
+            SpiceError(
+                :badarg,
+                "$who: `$what` must be a matrix or a vector of vectors"
+            )
+        )
+        length(x) % rowlen == 0 || throw(
+            SpiceError(
+                :badarg,
+                "$who: the length $(length(x)) of `$what` is not a multiple of $rowlen"
+            )
+        )
         return _vec_of(Float64, x), length(x) ÷ rowlen, rowlen
     elseif x isa AbstractVector
         n = length(x)
         m = rowlen == 0 ? (n == 0 ? 0 : length(x[1])) : rowlen
         flat = Vector{Float64}(undef, m * n)
         for (k, row) in enumerate(x)     # invariant: rows 1 .. k-1 are copied
-            length(row) == m || throw(SpiceError(:badarg,
-                "$who: element $k of `$what` has $(length(row)) values, expected $m"))
+            length(row) == m || throw(
+                SpiceError(
+                    :badarg,
+                    "$who: element $k of `$what` has $(length(row)) values, expected $m"
+                )
+            )
             for j in 1:m
-                flat[(k-1)*m+j] = Float64(row[j])
+                flat[(k - 1) * m + j] = Float64(row[j])
             end
         end
         return flat, n, m
@@ -104,8 +136,12 @@ end
 "The vector `x` as `Vector{Float64}`; throws `SpiceError(:badarg)` unless it has `n` elements (`n < 0`: any length)."
 function _seg_vec(who::AbstractString, what::AbstractString, x, n::Int)
     x isa AbstractVector{<:Real} || throw(SpiceError(:badarg, "$who: `$what` must be a vector of numbers"))
-    (n < 0 || length(x) == n) || throw(SpiceError(:badarg,
-        "$who: `$what` must have $n elements but has $(length(x))"))
+    (n < 0 || length(x) == n) || throw(
+        SpiceError(
+            :badarg,
+            "$who: `$what` must have $n elements but has $(length(x))"
+        )
+    )
     return _vec_of(Float64, x)
 end
 
@@ -116,9 +152,13 @@ end
 
 function _seg_increasing(who::AbstractString, epochs::Vector{Float64})
     for i in 2:length(epochs)            # invariant: epochs[1:i-1] is strictly increasing
-        epochs[i] <= epochs[i-1] && throw(SpiceError(:timesoutoforder,
-            "$who: epoch $(epochs[i]) having index $i is not greater than its " *
-            "predecessor $(epochs[i-1])"))
+        epochs[i] <= epochs[i - 1] && throw(
+            SpiceError(
+                :timesoutoforder,
+                "$who: epoch $(epochs[i]) having index $i is not greater than its " *
+                    "predecessor $(epochs[i - 1])"
+            )
+        )
     end
     return nothing
 end
@@ -141,31 +181,55 @@ Throws `SpiceError`:
 - `:baddescrtimes` unless `first < last`;
 - `:unknownspktype` unless `1 <= type <= 1000`.
 """
-function spkpds(ctx::SegContext, body::Integer, center::Integer, frame::SegFrame,
-        type::Integer, first::Real, last::Real)
-    body == 0 && throw(SpiceError(:barycenterephem, "spkpds: you've attempted to create " *
-        "a segment for the solar system barycenter; this is not supported"))
-    body == center && throw(SpiceError(:bodyandcentersame, "spkpds: you've attempted to " *
-        "create a segment for a body relative to itself; the body ID code was $body"))
+function spkpds(
+        ctx::SegContext, body::Integer, center::Integer, frame::SegFrame,
+        type::Integer, first::Real, last::Real
+    )
+    body == 0 && throw(
+        SpiceError(
+            :barycenterephem, "spkpds: you've attempted to create " *
+                "a segment for the solar system barycenter; this is not supported"
+        )
+    )
+    body == center && throw(
+        SpiceError(
+            :bodyandcentersame, "spkpds: you've attempted to " *
+                "create a segment for a body relative to itself; the body ID code was $body"
+        )
+    )
     refcod = _seg_refcode("spkpds", ctx, frame)
-    first >= last && throw(SpiceError(:baddescrtimes, "spkpds: the segment start time " *
-        "$first is at or after the segment stop time $last"))
-    (type <= 0 || type > 1000) && throw(SpiceError(:unknownspktype,
-        "spkpds: the type $type is not supported within the SPK system"))
+    first >= last && throw(
+        SpiceError(
+            :baddescrtimes, "spkpds: the segment start time " *
+                "$first is at or after the segment stop time $last"
+        )
+    )
+    (type <= 0 || type > 1000) && throw(
+        SpiceError(
+            :unknownspktype,
+            "spkpds: the type $type is not supported within the SPK system"
+        )
+    )
     return dafps(Float64[first, last], Int[body, center, refcod, type, 0, 0])
 end
-spkpds(body::Integer, center::Integer, frame::SegFrame, type::Integer, first::Real,
-    last::Real) = spkpds(default_context(), body, center, frame, type, first, last)
+spkpds(
+    body::Integer, center::Integer, frame::SegFrame, type::Integer, first::Real,
+    last::Real
+) = spkpds(default_context(), body, center, frame, type, first, last)
 
-function _spk_add!(h::DAFHandle, body::Integer, center::Integer, refcod::Int, dtype::Int,
-        first::Real, last::Real, segid::AbstractString, data::Vector{Float64})
+function _spk_add!(
+        h::DAFHandle, body::Integer, center::Integer, refcod::Int, dtype::Int,
+        first::Real, last::Real, segid::AbstractString, data::Vector{Float64}
+    )
     _daf_add_array!(h, Float64[first, last], Int[body, center, refcod, dtype, 0, 0], segid, data)
     return nothing
 end
 
-function _spk_add_pds!(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame,
+function _spk_add_pds!(
+        h::DAFHandle, body::Integer, center::Integer, frame::SegFrame,
         dtype::Int, first::Real, last::Real, segid::AbstractString, data::Vector{Float64},
-        ctx::SegContext)
+        ctx::SegContext
+    )
     descr = spkpds(ctx, body, center, frame, dtype, first, last)
     dafbna(h, descr, segid)
     dafada(h, data)
@@ -187,14 +251,24 @@ end
 Throws `SpiceError(:coveragegap)` if the descriptor interval [`first`, `last`] passes
 the data interval [`btime`, `ltime`] by more than `tol`.
 """
-function _seg_coverage_gap(who::AbstractString, first::Float64, last::Float64,
-        btime::Float64, ltime::Float64, tol::Float64)
-    first < btime - tol && throw(SpiceError(:coveragegap, "$who: the segment descriptor " *
-        "start time $first is too much less than the beginning time of the segment " *
-        "data $btime; the difference is $(btime - first) s, the tolerance is $tol s"))
-    last > ltime + tol && throw(SpiceError(:coveragegap, "$who: the segment descriptor " *
-        "end time $last is too much greater than the end time of the segment data " *
-        "$ltime; the difference is $(last - ltime) s, the tolerance is $tol s"))
+function _seg_coverage_gap(
+        who::AbstractString, first::Float64, last::Float64,
+        btime::Float64, ltime::Float64, tol::Float64
+    )
+    first < btime - tol && throw(
+        SpiceError(
+            :coveragegap, "$who: the segment descriptor " *
+                "start time $first is too much less than the beginning time of the segment " *
+                "data $btime; the difference is $(btime - first) s, the tolerance is $tol s"
+        )
+    )
+    last > ltime + tol && throw(
+        SpiceError(
+            :coveragegap, "$who: the segment descriptor " *
+                "end time $last is too much greater than the end time of the segment data " *
+                "$ltime; the difference is $(last - ltime) s, the tolerance is $tol s"
+        )
+    )
     return nothing
 end
 
@@ -243,7 +317,7 @@ true
 See also [`spkopa`](@ref), [`spkw02`](@ref), [`spk14b`](@ref), [`dafac`](@ref) to add
 comments.
 """
-function spkopn(path::AbstractString, ifname::AbstractString, ncomch::Integer=0)
+function spkopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
     _seg_chkfstr("spkopn", "path", path)
     _seg_chkfstr("spkopn", "ifname", ifname)
     ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
@@ -267,11 +341,19 @@ file of the type SPK, `:unsupportedbff` if it has the other byte order, and
 """
 function spkopa(path::AbstractString)
     _chk_filename("spkopa", path)
-    _isfile(path) || throw(SpiceError(:filenotfound,
-        "spkopa: the file $path is not recognized as an existing file"))
+    _isfile(path) || throw(
+        SpiceError(
+            :filenotfound,
+            "spkopa: the file $path is not recognized as an existing file"
+        )
+    )
     arch, kind = getfat(path)
-    (arch == "DAF" && kind == "SPK") || throw(SpiceError(:fileisnotspk, "spkopa: the file " *
-        "$path was not an SPK file; its architecture and type are $arch and $kind"))
+    (arch == "DAF" && kind == "SPK") || throw(
+        SpiceError(
+            :fileisnotspk, "spkopa: the file " *
+                "$path was not an SPK file; its architecture and type are $arch and $kind"
+        )
+    )
     return dafopw(path)
 end
 
@@ -280,9 +362,13 @@ function _seg_close(h::DAFHandle, what::AbstractString)
     h.isopen || return nothing
     if h.writable
         dafbfs(h)
-        daffna(h) || throw(SpiceError(:nosegmentsfound, "no segments were found in the " *
-            "$what file $(h.path); there must be at least one segment in the file when " *
-            "it is closed"))
+        daffna(h) || throw(
+            SpiceError(
+                :nosegmentsfound, "no segments were found in the " *
+                    "$what file $(h.path); there must be at least one segment in the file when " *
+                    "it is closed"
+            )
+        )
     end
     dafcls(h)
     return nothing
@@ -308,30 +394,50 @@ spkcls(h::DAFHandle) = _seg_close(h, "SPK")
 # ---------------------------------------------------------------------------------------
 
 "Checks and data that `spkw02` and `spkw03` share; `per` is 3 (positions) or 6 (states)."
-function _spk_cheby(who::AbstractString, dtype::Int, per::Int, h::DAFHandle, body, center,
-        frame, first, last, segid, intlen, cdata, btime, ctx)
+function _spk_cheby(
+        who::AbstractString, dtype::Int, per::Int, h::DAFHandle, body, center,
+        frame, first, last, segid, intlen, cdata, btime, ctx
+    )
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
     _seg_chkfstr(who, "segid", segid)
     cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
     first, last, intlen, btime = Float64(first), Float64(last), Float64(intlen), Float64(btime)
-    n <= 0 && throw(SpiceError(:numcoeffsnotpos,
-        "$who: the number of sets of coordinate coefficients is not positive: $n"))
-    ninrec % per == 0 && ninrec > 0 || throw(SpiceError(:badarg, "$who: every record of " *
-        "`cdata` must hold $per * (degree + 1) coefficients, it holds $ninrec"))
+    n <= 0 && throw(
+        SpiceError(
+            :numcoeffsnotpos,
+            "$who: the number of sets of coordinate coefficients is not positive: $n"
+        )
+    )
+    ninrec % per == 0 && ninrec > 0 || throw(
+        SpiceError(
+            :badarg, "$who: every record of " *
+                "`cdata` must hold $per * (degree + 1) coefficients, it holds $ninrec"
+        )
+    )
     polydg = ninrec ÷ per - 1
-    (polydg < 0 || polydg > 27) && throw(SpiceError(:invaliddegree, "$who: the " *
-        "interpolating polynomials have degree $polydg; the valid degree range is [0, 27]"))
+    (polydg < 0 || polydg > 27) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $polydg; the valid degree range is [0, 27]"
+        )
+    )
     intlen <= 0.0 && throw(SpiceError(:intlennotpos, "$who: the interval length is not positive: $intlen"))
     refcod = _seg_refcode(who, ctx, frame)
-    first > last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
-    tol = max(abs(first), abs(last)) * 1e-13
+    first > last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
+    tol = max(abs(first), abs(last)) * 1.0e-13
     ltime = btime + n * intlen
     _seg_coverage_gap(who, first, last, btime, ltime, tol)
     _seg_chckid(who, segid)
-    _spk_add!(h, body, center, refcod, dtype, first, last, segid,
-        _seg_cheb_records(cd, n, ninrec, intlen, btime))
+    _spk_add!(
+        h, body, center, refcod, dtype, first, last, segid,
+        _seg_cheb_records(cd, n, ninrec, intlen, btime)
+    )
     return nothing
 end
 
@@ -343,20 +449,22 @@ SPK types 2 and 3 and binary PCK type 2 store it: each record is the midpoint an
 radius of its interval followed by its `ninrec` coefficients from `cd`, and the trailer
 is `btime`, `intlen`, the record size `ninrec + 2` and `n`.
 """
-function _seg_cheb_records(cd::Vector{Float64}, n::Int, ninrec::Int, intlen::Float64,
-        btime::Float64)
+function _seg_cheb_records(
+        cd::Vector{Float64}, n::Int, ninrec::Int, intlen::Float64,
+        btime::Float64
+    )
     @assert length(cd) == n * ninrec
     data = Vector{Float64}(undef, n * (ninrec + 2) + 4)
     radius = intlen / 2.0
     for i in 1:n                         # invariant: records 1 .. i-1 are in data
         base = (i - 1) * (ninrec + 2)
-        data[base+1] = btime + radius + (i - 1) * intlen
-        data[base+2] = radius
+        data[base + 1] = btime + radius + (i - 1) * intlen
+        data[base + 2] = radius
         copyto!(data, base + 3, cd, (i - 1) * ninrec + 1, ninrec)
     end
-    data[end-3] = btime
-    data[end-2] = intlen
-    data[end-1] = Float64(ninrec + 2)
+    data[end - 3] = btime
+    data[end - 2] = intlen
+    data[end - 1] = Float64(ninrec + 2)
     data[end] = Float64(n)
     return data
 end
@@ -424,11 +532,15 @@ See also [`spkw01`](@ref), [`spkw03`](@ref), [`spkw05`](@ref), [`spkw08`](@ref),
 [`spkw17`](@ref), [`spkw18`](@ref), [`spkw19`](@ref), [`spkw20`](@ref), [`spkw21`](@ref),
 [`spk14b`](@ref).
 """
-spkw02(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer, frame::SegFrame,
-    first::Real, last::Real, segid::AbstractString, intlen::Real, cdata, btime::Real) =
+spkw02(
+    ctx::SegContext, h::DAFHandle, body::Integer, center::Integer, frame::SegFrame,
+    first::Real, last::Real, segid::AbstractString, intlen::Real, cdata, btime::Real
+) =
     _spk_cheby("spkw02", 2, 3, h, body, center, frame, first, last, segid, intlen, cdata, btime, ctx)
-spkw02(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real, last::Real,
-    segid::AbstractString, intlen::Real, cdata, btime::Real) =
+spkw02(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real, last::Real,
+    segid::AbstractString, intlen::Real, cdata, btime::Real
+) =
     spkw02(default_context(), h, body, center, frame, first, last, segid, intlen, cdata, btime)
 
 """
@@ -443,11 +555,15 @@ on intervals of equal length), as
 those of x, y, z (km) and then of dx, dy, dz (km/s). The other arguments and the errors
 are those of [`spkw02`](@ref).
 """
-spkw03(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer, frame::SegFrame,
-    first::Real, last::Real, segid::AbstractString, intlen::Real, cdata, btime::Real) =
+spkw03(
+    ctx::SegContext, h::DAFHandle, body::Integer, center::Integer, frame::SegFrame,
+    first::Real, last::Real, segid::AbstractString, intlen::Real, cdata, btime::Real
+) =
     _spk_cheby("spkw03", 3, 6, h, body, center, frame, first, last, segid, intlen, cdata, btime, ctx)
-spkw03(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real, last::Real,
-    segid::AbstractString, intlen::Real, cdata, btime::Real) =
+spkw03(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real, last::Real,
+    segid::AbstractString, intlen::Real, cdata, btime::Real
+) =
     spkw03(default_context(), h, body, center, frame, first, last, segid, intlen, cdata, btime)
 
 """
@@ -478,9 +594,11 @@ Throws `SpiceError`:
   `1e-13 * max(abs(b), abs(e))`;
 - `:idstringtoolong` or `:nonprintablechars` if `segid` is not valid.
 """
-function spkw20(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw20(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, intlen::Real,
-        cdata, dscale::Real, tscale::Real, initjd::Real, initfr::Real)
+        cdata, dscale::Real, tscale::Real, initjd::Real, initfr::Real
+    )
     who = "spkw20"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -488,33 +606,53 @@ function spkw20(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
     first, last, intlen = Float64(first), Float64(last), Float64(intlen)
     dscale, tscale, initjd, initfr = Float64(dscale), Float64(tscale), Float64(initjd), Float64(initfr)
-    n <= 0 && throw(SpiceError(:invalidcount,
-        "$who: the number of sets of coordinate coefficients is not positive: $n"))
-    (ninrec % 3 == 0 && ninrec >= 6) || throw(SpiceError(:badarg, "$who: every record of " *
-        "`cdata` must hold 3 * (degree + 2) values, it holds $ninrec"))
+    n <= 0 && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: the number of sets of coordinate coefficients is not positive: $n"
+        )
+    )
+    (ninrec % 3 == 0 && ninrec >= 6) || throw(
+        SpiceError(
+            :badarg, "$who: every record of " *
+                "`cdata` must hold 3 * (degree + 2) values, it holds $ninrec"
+        )
+    )
     polydg = ninrec ÷ 3 - 2
-    polydg > 50 && throw(SpiceError(:invaliddegree, "$who: the interpolating polynomials " *
-        "have degree $polydg; the valid degree range is [0, 50]"))
+    polydg > 50 && throw(
+        SpiceError(
+            :invaliddegree, "$who: the interpolating polynomials " *
+                "have degree $polydg; the valid degree range is [0, 50]"
+        )
+    )
     intlen <= 0.0 && throw(SpiceError(:intlennotpos, "$who: the interval length is not positive: $intlen"))
     refcod = _seg_refcode(who, ctx, frame)
-    first > last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    first > last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     dscale <= 0.0 && throw(SpiceError(:nonpositivescale, "$who: the distance scale is not positive: $dscale"))
     tscale <= 0.0 && throw(SpiceError(:nonpositivescale, "$who: the time scale is not positive: $tscale"))
     btime = 86400.0 * (initjd - 2451545.0 + initfr)
     ltime = btime + n * intlen * 86400.0
-    tol = max(abs(btime), abs(ltime)) * 1e-13
+    tol = max(abs(btime), abs(ltime)) * 1.0e-13
     _seg_coverage_gap(who, first, last, btime, ltime, tol)
     _seg_chckid(who, segid)
     data = append!(cd, (dscale, tscale, initjd, initfr, intlen, Float64(ninrec), Float64(n)))
     _spk_add!(h, body, center, refcod, 20, first, last, segid, data)
     return nothing
 end
-spkw20(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+spkw20(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
     last::Real, segid::AbstractString, intlen::Real, cdata, dscale::Real, tscale::Real,
-    initjd::Real, initfr::Real) =
-    spkw20(default_context(), h, body, center, frame, first, last, segid, intlen, cdata,
-        dscale, tscale, initjd, initfr)
+    initjd::Real, initfr::Real
+) =
+    spkw20(
+    default_context(), h, body, center, frame, first, last, segid, intlen, cdata,
+    dscale, tscale, initjd, initfr
+)
 
 # ---------------------------------------------------------------------------------------
 # Types 5, 8, 9, 12, 13, 18: discrete states
@@ -539,9 +677,11 @@ Throws `SpiceError`:
 - `:baddescrtimes` if `first > last`;
 - `:nonprintablechars` or `:segidtoolong` if `segid` is not valid.
 """
-function spkw05(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw05(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, gm::Real, states,
-        epochs)
+        epochs
+    )
     who = "spkw05"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -550,13 +690,21 @@ function spkw05(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     ep = _seg_vec(who, "epochs", epochs, n)
     gm <= 0 && throw(SpiceError(:nonpositivemass, "$who: GM = $gm; non-positive gravitational parameter"))
     refcod = _seg_refcode(who, ctx, frame)
-    n <= 0 && throw(SpiceError(:numstatesnotpos,
-        "$who: the number of states and epochs is not positive: $n"))
+    n <= 0 && throw(
+        SpiceError(
+            :numstatesnotpos,
+            "$who: the number of states and epochs is not positive: $n"
+        )
+    )
     for i in 2:n
-        ep[i] <= ep[i-1] && throw(SpiceError(:unorderedtimes, "$who: epoch $i is out of order"))
+        ep[i] <= ep[i - 1] && throw(SpiceError(:unorderedtimes, "$who: epoch $i is out of order"))
     end
-    first > last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    first > last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
     data = append!(st, ep)
@@ -565,10 +713,14 @@ function spkw05(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     _spk_add!(h, body, center, refcod, 5, first, last, segid, data)
     return nothing
 end
-spkw05(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, gm::Real, states, epochs) =
-    spkw05(default_context(), h, body, center, frame, first, last, segid, gm, states,
-        epochs)
+spkw05(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, gm::Real, states, epochs
+) =
+    spkw05(
+    default_context(), h, body, center, frame, first, last, segid, gm, states,
+    epochs
+)
 
 """
     spkw08([ctx,] handle, body, center, frame, first, last, segid, degree, states, epoch1,
@@ -591,9 +743,11 @@ Throws `SpiceError`:
 - `:coveragegap` unless [`first`, `last`] is inside [`epoch1`, `epoch1 + (n - 1) * step`],
   with the tolerance `1e-13 * max(abs(first), abs(last))`.
 """
-function spkw08(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw08(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, degree::Integer,
-        states, epoch1::Real, step::Real)
+        states, epoch1::Real, step::Real
+    )
     who = "spkw08"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -603,24 +757,40 @@ function spkw08(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     refcod = _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    (degree < 1 || degree > 27) && throw(SpiceError(:invaliddegree, "$who: the " *
-        "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"))
-    n <= degree && throw(SpiceError(:toofewstates, "$who: at least $(degree + 1) states " *
-        "are required to define a polynomial of degree $degree; number of states supplied: $n"))
-    first >= last && throw(SpiceError(:baddescrtimes, "$who: the segment start time " *
-        "$first is greater than or equal to the segment end time $last"))
+    (degree < 1 || degree > 27) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
+        )
+    )
+    n <= degree && throw(
+        SpiceError(
+            :toofewstates, "$who: at least $(degree + 1) states " *
+                "are required to define a polynomial of degree $degree; number of states supplied: $n"
+        )
+    )
+    first >= last && throw(
+        SpiceError(
+            :baddescrtimes, "$who: the segment start time " *
+                "$first is greater than or equal to the segment end time $last"
+        )
+    )
     step <= 0.0 && throw(SpiceError(:invalidstepsize, "$who: the step size must be > 0 but was $step"))
-    tol = max(abs(first), abs(last)) * 1e-13
+    tol = max(abs(first), abs(last)) * 1.0e-13
     ltime = begtim + (n - 1) * step
     _seg_coverage_gap(who, first, last, begtim, ltime, tol)
     data = push!(st, begtim, step, Float64(degree), Float64(n))
     _spk_add!(h, body, center, refcod, 8, first, last, segid, data)
     return nothing
 end
-spkw08(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, degree::Integer, states, epoch1::Real, step::Real) =
-    spkw08(default_context(), h, body, center, frame, first, last, segid, degree, states,
-        epoch1, step)
+spkw08(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, degree::Integer, states, epoch1::Real, step::Real
+) =
+    spkw08(
+    default_context(), h, body, center, frame, first, last, segid, degree, states,
+    epoch1, step
+)
 
 """
     spkw09([ctx,] handle, body, center, frame, first, last, segid, degree, states, epochs)
@@ -640,9 +810,11 @@ Throws `SpiceError`:
 - `:toofewstates` unless `n > degree`;
 - `:timesoutoforder` unless the epochs are strictly increasing.
 """
-function spkw09(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw09(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, degree::Integer,
-        states, epochs)
+        states, epochs
+    )
     who = "spkw09"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -650,29 +822,53 @@ function spkw09(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     st, n, _ = _seg_flat(who, "states", states, 6)
     ep = _seg_vec(who, "epochs", epochs, n)
     refcod = _seg_refcode(who, ctx, frame)
-    first >= last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    first >= last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
-    (degree < 1 || degree > 27) && throw(SpiceError(:invaliddegree, "$who: the " *
-        "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"))
-    n <= degree && throw(SpiceError(:toofewstates, "$who: at least $(degree + 1) states " *
-        "are required to define a polynomial of degree $degree; number of states supplied: $n"))
+    (degree < 1 || degree > 27) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
+        )
+    )
+    n <= degree && throw(
+        SpiceError(
+            :toofewstates, "$who: at least $(degree + 1) states " *
+                "are required to define a polynomial of degree $degree; number of states supplied: $n"
+        )
+    )
     _seg_increasing(who, ep)
-    ep[1] > first && throw(SpiceError(:baddescrtimes,
-        "$who: segment start time $first precedes first epoch $(ep[1])"))
-    ep[n] < last && throw(SpiceError(:baddescrtimes,
-        "$who: segment end time $last follows last epoch $(ep[n])"))
+    ep[1] > first && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment start time $first precedes first epoch $(ep[1])"
+        )
+    )
+    ep[n] < last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment end time $last follows last epoch $(ep[n])"
+        )
+    )
     data = append!(st, ep)
     _seg_directory!(data, ep, (n - 1) ÷ 100)
     push!(data, Float64(degree), Float64(n))
     _spk_add!(h, body, center, refcod, 9, first, last, segid, data)
     return nothing
 end
-spkw09(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, degree::Integer, states, epochs) =
-    spkw09(default_context(), h, body, center, frame, first, last, segid, degree, states,
-        epochs)
+spkw09(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, degree::Integer, states, epochs
+) =
+    spkw09(
+    default_context(), h, body, center, frame, first, last, segid, degree, states,
+    epochs
+)
 
 """
     spkw12([ctx,] handle, body, center, frame, first, last, segid, degree, states, epoch1,
@@ -696,9 +892,11 @@ Throws `SpiceError`:
   with the tolerance `1e-13 * max(abs(first), abs(last))`;
 - `:barycenterephem` if `body == 0`, `:bodyandcentersame` if `body == center`.
 """
-function spkw12(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw12(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, degree::Integer,
-        states, epoch1::Real, step::Real)
+        states, epoch1::Real, step::Real
+    )
     who = "spkw12"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -709,26 +907,46 @@ function spkw12(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    (degree < 1 || degree > 27) && throw(SpiceError(:invaliddegree, "$who: the " *
-        "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"))
-    iseven(degree) && throw(SpiceError(:invaliddegree, "$who: the interpolating " *
-        "polynomials have degree $degree; for SPK type 12, the degree must be odd"))
-    n < winsiz && throw(SpiceError(:toofewstates, "$who: at least $winsiz states are " *
-        "required to define a Hermite polynomial of degree $degree; number of states supplied: $n"))
-    first >= last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    (degree < 1 || degree > 27) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
+        )
+    )
+    iseven(degree) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the interpolating " *
+                "polynomials have degree $degree; for SPK type 12, the degree must be odd"
+        )
+    )
+    n < winsiz && throw(
+        SpiceError(
+            :toofewstates, "$who: at least $winsiz states are " *
+                "required to define a Hermite polynomial of degree $degree; number of states supplied: $n"
+        )
+    )
+    first >= last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     step <= 0.0 && throw(SpiceError(:invalidstepsize, "$who: the step size must be > 0 but was $step"))
-    tol = max(abs(first), abs(last)) * 1e-13
+    tol = max(abs(first), abs(last)) * 1.0e-13
     ltime = begtim + (n - 1) * step
     _seg_coverage_gap(who, first, last, begtim, ltime, tol)
     data = push!(st, begtim, step, Float64(winsiz - 1), Float64(n))
     _spk_add_pds!(h, body, center, frame, 12, first, last, segid, data, ctx)
     return nothing
 end
-spkw12(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, degree::Integer, states, epoch1::Real, step::Real) =
-    spkw12(default_context(), h, body, center, frame, first, last, segid, degree, states,
-        epoch1, step)
+spkw12(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, degree::Integer, states, epoch1::Real, step::Real
+) =
+    spkw12(
+    default_context(), h, body, center, frame, first, last, segid, degree, states,
+    epoch1, step
+)
 
 """
     spkw13([ctx,] handle, body, center, frame, first, last, segid, degree, states, epochs)
@@ -749,9 +967,11 @@ Throws `SpiceError`:
 - `:timesoutoforder` unless the epochs are strictly increasing;
 - `:barycenterephem` if `body == 0`, `:bodyandcentersame` if `body == center`.
 """
-function spkw13(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw13(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, degree::Integer,
-        states, epochs)
+        states, epochs
+    )
     who = "spkw13"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -762,29 +982,57 @@ function spkw13(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    (degree < 1 || degree > 27) && throw(SpiceError(:invaliddegree, "$who: the " *
-        "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"))
-    iseven(degree) && throw(SpiceError(:invaliddegree, "$who: the interpolating " *
-        "polynomials have degree $degree; for SPK type 13, the degree must be odd"))
-    n < winsiz && throw(SpiceError(:toofewstates, "$who: at least $winsiz states are " *
-        "required to define a Hermite polynomial of degree $degree; number of states supplied: $n"))
-    first >= last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    (degree < 1 || degree > 27) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
+        )
+    )
+    iseven(degree) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the interpolating " *
+                "polynomials have degree $degree; for SPK type 13, the degree must be odd"
+        )
+    )
+    n < winsiz && throw(
+        SpiceError(
+            :toofewstates, "$who: at least $winsiz states are " *
+                "required to define a Hermite polynomial of degree $degree; number of states supplied: $n"
+        )
+    )
+    first >= last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     _seg_increasing(who, ep)
-    ep[1] > first && throw(SpiceError(:baddescrtimes,
-        "$who: segment start time $first precedes first epoch $(ep[1])"))
-    ep[n] < last && throw(SpiceError(:baddescrtimes,
-        "$who: segment end time $last follows last epoch $(ep[n])"))
+    ep[1] > first && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment start time $first precedes first epoch $(ep[1])"
+        )
+    )
+    ep[n] < last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment end time $last follows last epoch $(ep[n])"
+        )
+    )
     data = append!(st, ep)
     _seg_directory!(data, ep, (n - 1) ÷ 100)
     push!(data, Float64(winsiz - 1), Float64(n))
     _spk_add_pds!(h, body, center, frame, 13, first, last, segid, data, ctx)
     return nothing
 end
-spkw13(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, degree::Integer, states, epochs) =
-    spkw13(default_context(), h, body, center, frame, first, last, segid, degree, states,
-        epochs)
+spkw13(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, degree::Integer, states, epochs
+) =
+    spkw13(
+    default_context(), h, body, center, frame, first, last, segid, degree, states,
+    epochs
+)
 
 "Subtype code of an SPK type 18 segment from the code or the SPICE.jl symbol `:S18TP0`, `:S18TP1`."
 _spk18_subtype(s::Integer) = Int(s)
@@ -821,16 +1069,22 @@ Throws `SpiceError`:
 - `:baddescrtimes` unless `first <= last`, `epochs[1] <= first` and `epochs[n] >= last`;
 - `:timesoutoforder` unless the epochs are strictly increasing.
 """
-function spkw18(ctx::SegContext, h::DAFHandle, subtyp::Union{Integer,Symbol}, body::Integer,
+function spkw18(
+        ctx::SegContext, h::DAFHandle, subtyp::Union{Integer, Symbol}, body::Integer,
         center::Integer, frame::SegFrame, first::Real, last::Real, segid::AbstractString,
-        degree::Integer, packts, epochs)
+        degree::Integer, packts, epochs
+    )
     who = "spkw18"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
     _seg_chkfstr(who, "segid", segid)
     sub = _spk18_subtype(subtyp)
-    (sub == 0 || sub == 1) || throw(SpiceError(:invalidvalue,
-        "$who: unexpected SPK type 18 subtype requested: $subtyp"))
+    (sub == 0 || sub == 1) || throw(
+        SpiceError(
+            :invalidvalue,
+            "$who: unexpected SPK type 18 subtype requested: $subtyp"
+        )
+    )
     packsz = sub == 0 ? 12 : 6
     winsiz = sub == 0 ? (degree + 1) ÷ 2 : degree + 1
     pk, n, _ = _seg_flat(who, "packts", packts, packsz)
@@ -838,31 +1092,59 @@ function spkw18(ctx::SegContext, h::DAFHandle, subtyp::Union{Integer,Symbol}, bo
     refcod = _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    (degree < 1 || degree > 15) && throw(SpiceError(:invaliddegree, "$who: the " *
-        "interpolating polynomials have degree $degree; the valid degree range is [1, 15]"))
-    isodd(winsiz) && throw(SpiceError(:invaliddegree, "$who: the interpolating " *
-        "polynomials have degree $degree; for SPK type 18, the degree must be " *
-        "equivalent to 3 mod 4 for Hermite interpolation and odd for Lagrange interpolation"))
-    n < 2 && throw(SpiceError(:toofewstates,
-        "$who: at least 2 packets are required for SPK type 18; number of packets supplied: $n"))
-    first > last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    (degree < 1 || degree > 15) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 15]"
+        )
+    )
+    isodd(winsiz) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the interpolating " *
+                "polynomials have degree $degree; for SPK type 18, the degree must be " *
+                "equivalent to 3 mod 4 for Hermite interpolation and odd for Lagrange interpolation"
+        )
+    )
+    n < 2 && throw(
+        SpiceError(
+            :toofewstates,
+            "$who: at least 2 packets are required for SPK type 18; number of packets supplied: $n"
+        )
+    )
+    first > last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     _seg_increasing(who, ep)
-    ep[1] > first && throw(SpiceError(:baddescrtimes,
-        "$who: segment start time $first precedes first epoch $(ep[1])"))
-    ep[n] < last && throw(SpiceError(:baddescrtimes,
-        "$who: segment end time $last follows last epoch $(ep[n])"))
+    ep[1] > first && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment start time $first precedes first epoch $(ep[1])"
+        )
+    )
+    ep[n] < last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment end time $last follows last epoch $(ep[n])"
+        )
+    )
     data = append!(pk, ep)
     _seg_directory!(data, ep, (n - 1) ÷ 100)
     push!(data, Float64(sub), Float64(winsiz), Float64(n))
     _spk_add!(h, body, center, refcod, 18, first, last, segid, data)
     return nothing
 end
-spkw18(h::DAFHandle, subtyp::Union{Integer,Symbol}, body::Integer, center::Integer,
+spkw18(
+    h::DAFHandle, subtyp::Union{Integer, Symbol}, body::Integer, center::Integer,
     frame::SegFrame, first::Real, last::Real, segid::AbstractString, degree::Integer,
-    packts, epochs) =
-    spkw18(default_context(), h, subtyp, body, center, frame, first, last, segid, degree,
-        packts, epochs)
+    packts, epochs
+) =
+    spkw18(
+    default_context(), h, subtyp, body, center, frame, first, last, segid, degree,
+    packts, epochs
+)
 
 # ---------------------------------------------------------------------------------------
 # Types 15 and 17: precessing conic elements
@@ -913,9 +1195,11 @@ Throws `SpiceError`:
 - `:segidtoolong` or `:nonprintablechars` if `segid` is not valid;
 - the error kinds of [`spkpds`](@ref).
 """
-function spkw15(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw15(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, epoch::Real, tp,
-        pa, p::Real, ecc::Real, j2flg::Real, pv, gm::Real, j2::Real, radius::Real)
+        pa, p::Real, ecc::Real, j2flg::Real, pv, gm::Real, j2::Real, radius::Real
+    )
     who = "spkw15"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -934,18 +1218,26 @@ function spkw15(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     all(iszero, pv) && throw(SpiceError(:badvector, "$who: the central pole vector had length zero"))
     radius < 0 && throw(SpiceError(:badradius, "$who: the central body radius was negative: $radius"))
     dot = mypa[1] * mytp[1] + mypa[2] * mytp[2] + mypa[3] * mytp[3]
-    abs(dot) > 1e-5 && throw(SpiceError(:badinitstate,
-        "$who: the periapsis and trajectory pole vectors are not orthogonal (dot product $dot)"))
+    abs(dot) > 1.0e-5 && throw(
+        SpiceError(
+            :badinitstate,
+            "$who: the periapsis and trajectory pole vectors are not orthogonal (dot product $dot)"
+        )
+    )
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
     _spk_add_pds!(h, body, center, frame, 15, first, last, segid, record, ctx)
     return nothing
 end
-spkw15(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+spkw15(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
     last::Real, segid::AbstractString, epoch::Real, tp, pa, p::Real, ecc::Real, j2flg::Real,
-    pv, gm::Real, j2::Real, radius::Real) =
-    spkw15(default_context(), h, body, center, frame, first, last, segid, epoch, tp, pa, p,
-        ecc, j2flg, pv, gm, j2, radius)
+    pv, gm::Real, j2::Real, radius::Real
+) =
+    spkw15(
+    default_context(), h, body, center, frame, first, last, segid, epoch, tp, pa, p,
+    ecc, j2flg, pv, gm, j2, radius
+)
 
 """
     spkw17([ctx,] handle, body, center, frame, first, last, segid, epoch, eqel, rapol,
@@ -981,9 +1273,11 @@ Throws `SpiceError`:
 - `:segidtoolong` or `:nonprintablechars` if `segid` is not valid;
 - the error kinds of [`spkpds`](@ref).
 """
-function spkw17(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw17(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, epoch::Real, eqel,
-        rapol::Real, decpol::Real)
+        rapol::Real, decpol::Real
+    )
     who = "spkw17"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -993,17 +1287,25 @@ function spkw17(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     a = record[2]
     ecc = sqrt(record[3] * record[3] + record[4] * record[4])
     a <= 0.0 && throw(SpiceError(:badsemiaxis, "$who: the semimajor axis must be positive; it was $a"))
-    ecc > 0.9 && throw(SpiceError(:badeccentricity,
-        "$who: the eccentricity $ecc is greater than 0.9"))
+    ecc > 0.9 && throw(
+        SpiceError(
+            :badeccentricity,
+            "$who: the eccentricity $ecc is greater than 0.9"
+        )
+    )
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
     _spk_add_pds!(h, body, center, frame, 17, first, last, segid, record, ctx)
     return nothing
 end
-spkw17(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, epoch::Real, eqel, rapol::Real, decpol::Real) =
-    spkw17(default_context(), h, body, center, frame, first, last, segid, epoch, eqel,
-        rapol, decpol)
+spkw17(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, epoch::Real, eqel, rapol::Real, decpol::Real
+) =
+    spkw17(
+    default_context(), h, body, center, frame, first, last, segid, epoch, eqel,
+    rapol, decpol
+)
 
 # ---------------------------------------------------------------------------------------
 # Types 1 and 21: modified difference arrays
@@ -1029,8 +1331,10 @@ Throws `SpiceError`:
 - `:timesoutoforder` unless the epochs are strictly increasing;
 - `:barycenterephem` if `body == 0`, `:bodyandcentersame` if `body == center`.
 """
-function spkw01(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
-        frame::SegFrame, first::Real, last::Real, segid::AbstractString, dlines, epochs)
+function spkw01(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+        frame::SegFrame, first::Real, last::Real, segid::AbstractString, dlines, epochs
+    )
     who = "spkw01"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
@@ -1040,21 +1344,35 @@ function spkw01(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    n < 1 && throw(SpiceError(:invalidcount,
-        "$who: the difference line count was $n; the count must be at least one"))
-    first >= last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    n < 1 && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: the difference line count was $n; the count must be at least one"
+        )
+    )
+    first >= last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     _seg_increasing(who, ep)
-    ep[n] < last && throw(SpiceError(:baddescrtimes,
-        "$who: segment end time $last follows last epoch $(ep[n])"))
+    ep[n] < last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment end time $last follows last epoch $(ep[n])"
+        )
+    )
     data = append!(dl, ep)
     _seg_directory!(data, ep, n ÷ 100)
     push!(data, Float64(n))
     _spk_add_pds!(h, body, center, frame, 1, first, last, segid, data, ctx)
     return nothing
 end
-spkw01(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, dlines, epochs) =
+spkw01(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, dlines, epochs
+) =
     spkw01(default_context(), h, body, center, frame, first, last, segid, dlines, epochs)
 
 """
@@ -1079,36 +1397,62 @@ Throws `SpiceError`:
 - `:zerostep` if a step size inside a line is zero;
 - `:barycenterephem` if `body == 0`, `:bodyandcentersame` if `body == center`.
 """
-function spkw21(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
-        frame::SegFrame, first::Real, last::Real, segid::AbstractString, dlines, epochs)
+function spkw21(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+        frame::SegFrame, first::Real, last::Real, segid::AbstractString, dlines, epochs
+    )
     who = "spkw21"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
     _seg_chkfstr(who, "segid", segid)
     dl, n, dlsize = _seg_flat(who, "dlines", dlines, 0)
     ep = _seg_vec(who, "epochs", epochs, n)
-    dlsize > 111 && throw(SpiceError(:difflinetoolarge,
-        "$who: the input difference line size is $dlsize, the maximum supported is 111"))
-    dlsize < 71 && throw(SpiceError(:difflinetoosmall,
-        "$who: the input difference line size is $dlsize, the minimum supported is 71"))
+    dlsize > 111 && throw(
+        SpiceError(
+            :difflinetoolarge,
+            "$who: the input difference line size is $dlsize, the maximum supported is 111"
+        )
+    )
+    dlsize < 71 && throw(
+        SpiceError(
+            :difflinetoosmall,
+            "$who: the input difference line size is $dlsize, the minimum supported is 71"
+        )
+    )
     _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    n < 1 && throw(SpiceError(:invalidcount,
-        "$who: the difference line count was $n; the count must be at least one"))
-    first > last && throw(SpiceError(:baddescrtimes,
-        "$who: the segment start time $first is greater than the segment end time $last"))
+    n < 1 && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: the difference line count was $n; the count must be at least one"
+        )
+    )
+    first > last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is greater than the segment end time $last"
+        )
+    )
     _seg_increasing(who, ep)
-    ep[n] < last && throw(SpiceError(:coveragegap,
-        "$who: segment has coverage gap: segment end time $last follows last epoch $(ep[n])"))
+    ep[n] < last && throw(
+        SpiceError(
+            :coveragegap,
+            "$who: segment has coverage gap: segment end time $last follows last epoch $(ep[n])"
+        )
+    )
     maxdim = (dlsize - 11) ÷ 4
     kqmloc = 4 * maxdim + 8
     for i in 1:n                         # invariant: lines 1 .. i-1 have no zero step
         base = (i - 1) * dlsize
-        kqmax1 = round(Int, dl[base+kqmloc], RoundNearestTiesAway)
-        for j in 2:kqmax1-1
-            dl[base+j] == 0.0 && throw(SpiceError(:zerostep, "$who: step size was zero " *
-                "at step size vector index $(j - 1) within difference line $i"))
+        kqmax1 = round(Int, dl[base + kqmloc], RoundNearestTiesAway)
+        for j in 2:(kqmax1 - 1)
+            dl[base + j] == 0.0 && throw(
+                SpiceError(
+                    :zerostep, "$who: step size was zero " *
+                        "at step size vector index $(j - 1) within difference line $i"
+                )
+            )
         end
     end
     data = append!(dl, ep)
@@ -1117,8 +1461,10 @@ function spkw21(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     _spk_add_pds!(h, body, center, frame, 21, first, last, segid, data, ctx)
     return nothing
 end
-spkw21(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
-    last::Real, segid::AbstractString, dlines, epochs) =
+spkw21(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+    last::Real, segid::AbstractString, dlines, epochs
+) =
     spkw21(default_context(), h, body, center, frame, first, last, segid, dlines, epochs)
 
 # ---------------------------------------------------------------------------------------
@@ -1166,63 +1512,117 @@ For a mini-segment it throws:
 - `:timesoutoforder` unless its epochs are strictly increasing;
 - `:boundsdisagree` unless its epochs cover its interval.
 """
-function spkw19(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
+function spkw19(
+        ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         frame::SegFrame, first::Real, last::Real, segid::AbstractString,
         npkts::AbstractVector{<:Integer}, subtps::AbstractVector{<:Integer},
-        degres::AbstractVector{<:Integer}, packts, epochs, ivlbds, sellst::Bool)
+        degres::AbstractVector{<:Integer}, packts, epochs, ivlbds, sellst::Bool
+    )
     who = "spkw19"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
     _seg_chkfstr(who, "segid", segid)
     nintvl = length(npkts)
-    (length(subtps) == nintvl && length(degres) == nintvl) || throw(SpiceError(:badarg,
-        "$who: `npkts`, `subtps` and `degres` must have the same length"))
+    (length(subtps) == nintvl && length(degres) == nintvl) || throw(
+        SpiceError(
+            :badarg,
+            "$who: `npkts`, `subtps` and `degres` must have the same length"
+        )
+    )
     pk = _seg_vec(who, "packts", packts, -1)
     ep = _seg_vec(who, "epochs", epochs, -1)
     bd = _seg_vec(who, "ivlbds", ivlbds, nintvl < 1 ? -1 : nintvl + 1)
-    last < first && throw(SpiceError(:baddescrtimes, "$who: segment start time is " *
-        "$first; stop time is $last; bounds must be in nondecreasing order"))
+    last < first && throw(
+        SpiceError(
+            :baddescrtimes, "$who: segment start time is " *
+                "$first; stop time is $last; bounds must be in nondecreasing order"
+        )
+    )
     refcod = _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    nintvl < 1 && throw(SpiceError(:invalidcount,
-        "$who: mini-segment/interval count was $nintvl; this count must be positive"))
+    nintvl < 1 && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: mini-segment/interval count was $nintvl; this count must be positive"
+        )
+    )
     for i in 1:nintvl
-        bd[i] >= bd[i+1] && throw(SpiceError(:boundsoutoforder, "$who: interval bounds at " *
-            "indices $i and $(i + 1) are $(bd[i]) and $(bd[i+1]); they must be strictly increasing"))
+        bd[i] >= bd[i + 1] && throw(
+            SpiceError(
+                :boundsoutoforder, "$who: interval bounds at " *
+                    "indices $i and $(i + 1) are $(bd[i]) and $(bd[i + 1]); they must be strictly increasing"
+            )
+        )
     end
-    (first < bd[1] || last > bd[nintvl+1]) && throw(SpiceError(:coveragegap, "$who: " *
-        "segment coverage [$first, $last] must be contained within the union of the " *
-        "interpolation intervals [$(bd[1]), $(bd[nintvl+1])]"))
+    (first < bd[1] || last > bd[nintvl + 1]) && throw(
+        SpiceError(
+            :coveragegap, "$who: " *
+                "segment coverage [$first, $last] must be contained within the union of the " *
+                "interpolation intervals [$(bd[1]), $(bd[nintvl + 1])]"
+        )
+    )
     winsizes = zeros(Int, nintvl)
     eepix = 0
     npk = 0
     for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are valid
-        npkts[i] < 2 && throw(SpiceError(:toofewpackets, "$who: at least 2 packets are " *
-            "required for SPK type 19; $(npkts[i]) were supplied in mini-segment $i"))
+        npkts[i] < 2 && throw(
+            SpiceError(
+                :toofewpackets, "$who: at least 2 packets are " *
+                    "required for SPK type 19; $(npkts[i]) were supplied in mini-segment $i"
+            )
+        )
         subtyp = Int(subtps[i])
-        (subtyp < 0 || subtyp > 2) && throw(SpiceError(:invalidsubtype,
-            "$who: unexpected SPK type 19 subtype $subtyp found in mini-segment $i"))
+        (subtyp < 0 || subtyp > 2) && throw(
+            SpiceError(
+                :invalidsubtype,
+                "$who: unexpected SPK type 19 subtype $subtyp found in mini-segment $i"
+            )
+        )
         winsiz = subtyp == 1 ? degres[i] + 1 : (degres[i] + 1) ÷ 2
-        (degres[i] < 1 || degres[i] > 27) && throw(SpiceError(:invaliddegree, "$who: the " *
-            "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
-            "valid degree range is [1, 27]"))
-        isodd(winsiz) && throw(SpiceError(:badwindowsize, "$who: the interpolating " *
-            "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"))
+        (degres[i] < 1 || degres[i] > 27) && throw(
+            SpiceError(
+                :invaliddegree, "$who: the " *
+                    "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
+                    "valid degree range is [1, 27]"
+            )
+        )
+        isodd(winsiz) && throw(
+            SpiceError(
+                :badwindowsize, "$who: the interpolating " *
+                    "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"
+            )
+        )
         winsizes[i] = winsiz
         bepix = eepix + 1
         eepix = bepix - 1 + Int(npkts[i])
-        npk += Int(npkts[i]) * _SPK19_PKTSZS[subtyp+1]
-        (length(ep) >= eepix && length(pk) >= npk) || throw(SpiceError(:badarg,
-            "$who: `epochs` or `packts` is shorter than the packet counts require"))
-        for k in bepix:eepix-1
-            ep[k] >= ep[k+1] && throw(SpiceError(:timesoutoforder, "$who: in mini-segment " *
-                "$i, epoch $(ep[k]) having index $k is greater than or equal to its successor"))
+        npk += Int(npkts[i]) * _SPK19_PKTSZS[subtyp + 1]
+        (length(ep) >= eepix && length(pk) >= npk) || throw(
+            SpiceError(
+                :badarg,
+                "$who: `epochs` or `packts` is shorter than the packet counts require"
+            )
+        )
+        for k in bepix:(eepix - 1)
+            ep[k] >= ep[k + 1] && throw(
+                SpiceError(
+                    :timesoutoforder, "$who: in mini-segment " *
+                        "$i, epoch $(ep[k]) having index $k is greater than or equal to its successor"
+                )
+            )
         end
-        ep[bepix] > bd[i] && throw(SpiceError(:boundsdisagree, "$who: interpolation interval " *
-            "$i start time $(bd[i]) precedes mini-segment's first epoch $(ep[bepix])"))
-        ep[eepix] < bd[i+1] && throw(SpiceError(:boundsdisagree, "$who: interpolation interval " *
-            "$i end time $(bd[i+1]) exceeds mini-segment's last epoch $(ep[eepix])"))
+        ep[bepix] > bd[i] && throw(
+            SpiceError(
+                :boundsdisagree, "$who: interpolation interval " *
+                    "$i start time $(bd[i]) precedes mini-segment's first epoch $(ep[bepix])"
+            )
+        )
+        ep[eepix] < bd[i + 1] && throw(
+            SpiceError(
+                :boundsdisagree, "$who: interpolation interval " *
+                    "$i end time $(bd[i + 1]) exceeds mini-segment's last epoch $(ep[eepix])"
+            )
+        )
     end
     data = Float64[]
     pktend = 0
@@ -1230,15 +1630,15 @@ function spkw19(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     pointers = Float64[]
     segend = 0
     for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are in data
-        pktsiz = _SPK19_PKTSZS[subtps[i]+1]
+        pktsiz = _SPK19_PKTSZS[subtps[i] + 1]
         n = Int(npkts[i])
-        append!(data, view(pk, pktend+1:pktend+n*pktsiz))
+        append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
         pktend += n * pktsiz
         bepix = eepix + 1
         eepix = bepix - 1 + n
         append!(data, view(ep, bepix:eepix))
-        for j in 1:(n-1)÷100
-            push!(data, ep[bepix-1+100j])
+        for j in 1:((n - 1) ÷ 100)
+            push!(data, ep[bepix - 1 + 100j])
         end
         push!(data, Float64(subtps[i]), Float64(winsizes[i]), Float64(n))
         minisz = n * (pktsiz + 1) + (n - 1) ÷ 100 + 3
@@ -1246,7 +1646,7 @@ function spkw19(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
         segend += minisz
     end
     append!(data, bd)
-    for i in 1:nintvl÷100
+    for i in 1:(nintvl ÷ 100)
         push!(data, bd[100i])
     end
     append!(data, pointers)
@@ -1254,12 +1654,16 @@ function spkw19(ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,
     _spk_add!(h, body, center, refcod, 19, first, last, segid, data)
     return nothing
 end
-spkw19(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
+spkw19(
+    h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
     last::Real, segid::AbstractString, npkts::AbstractVector{<:Integer},
     subtps::AbstractVector{<:Integer}, degres::AbstractVector{<:Integer}, packts, epochs,
-    ivlbds, sellst::Bool) =
-    spkw19(default_context(), h, body, center, frame, first, last, segid, npkts, subtps,
-        degres, packts, epochs, ivlbds, sellst)
+    ivlbds, sellst::Bool
+) =
+    spkw19(
+    default_context(), h, body, center, frame, first, last, segid, npkts, subtps,
+    degres, packts, epochs, ivlbds, sellst
+)
 
 """
     SPK14Writer
@@ -1280,8 +1684,10 @@ mutable struct SPK14Writer
     open::Bool
 end
 
-Base.show(io::IO, w::SPK14Writer) = print(io, "SPK14Writer(\"", w.segid, "\", ",
-    length(w.refs), " records", w.open ? "" : ", ended", ")")
+Base.show(io::IO, w::SPK14Writer) = print(
+    io, "SPK14Writer(\"", w.segid, "\", ",
+    length(w.refs), " records", w.open ? "" : ", ended", ")"
+)
 
 """
     spk14b([ctx,] handle, segid, body, center, frame, first, last, chbdeg) -> SPK14Writer
@@ -1332,21 +1738,29 @@ julia> state == [11.0, 0.0, 0.0, 0.02, 0.0, 0.0]
 true
 ```
 """
-function spk14b(ctx::SegContext, h::DAFHandle, segid::AbstractString, body::Integer,
-        center::Integer, frame::SegFrame, first::Real, last::Real, chbdeg::Integer)
+function spk14b(
+        ctx::SegContext, h::DAFHandle, segid::AbstractString, body::Integer,
+        center::Integer, frame::SegFrame, first::Real, last::Real, chbdeg::Integer
+    )
     who = "spk14b"
     _daf_check_write(h, who)
     frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
     _seg_chkfstr(who, "segid", segid)
-    chbdeg < 0 && throw(SpiceError(:invalidargument, "$who: the degree of the " *
-        "Chebyshev polynomial was negative, $chbdeg; the degree must be greater than or equal to zero"))
+    chbdeg < 0 && throw(
+        SpiceError(
+            :invalidargument, "$who: the degree of the " *
+                "Chebyshev polynomial was negative, $chbdeg; the degree must be greater than or equal to zero"
+        )
+    )
     descr = spkpds(ctx, body, center, frame, 14, first, last)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
     return SPK14Writer(h, descr, String(segid), Int(chbdeg) + 1, Float64[], Float64[], true)
 end
-spk14b(h::DAFHandle, segid::AbstractString, body::Integer, center::Integer, frame::SegFrame,
-    first::Real, last::Real, chbdeg::Integer) =
+spk14b(
+    h::DAFHandle, segid::AbstractString, body::Integer, center::Integer, frame::SegFrame,
+    first::Real, last::Real, chbdeg::Integer
+) =
     spk14b(default_context(), h, segid, body, center, frame, first, last, chbdeg)
 
 """
@@ -1377,23 +1791,35 @@ function spk14a(w::SPK14Writer, ncsets::Integer, coeffs, epochs)
     who = "spk14a"
     w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
     _daf_check_write(w.handle, who)
-    ncsets <= 0 && throw(SpiceError(:invalidargument, "$who: the number of coefficient " *
-        "sets and epochs to be added to the SPK segment was not positive; its value was $ncsets"))
+    ncsets <= 0 && throw(
+        SpiceError(
+            :invalidargument, "$who: the number of coefficient " *
+                "sets and epochs to be added to the SPK segment was not positive; its value was $ncsets"
+        )
+    )
     n = Int(ncsets)
     pktsiz = 2 + 6 * w.ncoef
     cf = _seg_vec(who, "coeffs", vec(collect(Float64, coeffs)), n * pktsiz)
     ep = _seg_vec(who, "epochs", epochs, n)
     if !isempty(w.refs) && w.refs[end] >= ep[1]
-        throw(SpiceError(:unorderedrefs, "$who: the epoch $(ep[1]) is not after the " *
-            "last epoch $(w.refs[end]) of the addition of records before"))
+        throw(
+            SpiceError(
+                :unorderedrefs, "$who: the epoch $(ep[1]) is not after the " *
+                    "last epoch $(w.refs[end]) of the addition of records before"
+            )
+        )
     end
     for i in 2:n                    # invariant: ep[1:i-1] is strictly increasing
-        ep[i-1] >= ep[i] && throw(SpiceError(:unorderedrefs,
-            "$who: the epoch $(ep[i]) having index $i is not after its predecessor $(ep[i-1])"))
+        ep[i - 1] >= ep[i] && throw(
+            SpiceError(
+                :unorderedrefs,
+                "$who: the epoch $(ep[i]) having index $i is not after its predecessor $(ep[i - 1])"
+            )
+        )
     end
     for i in 1:n                    # invariant: records 1:i-1 are in `w.packets`, each after its epoch
         push!(w.packets, ep[i])
-        append!(w.packets, @view cf[(i-1)*pktsiz+1:i*pktsiz])
+        append!(w.packets, @view cf[((i - 1) * pktsiz + 1):(i * pktsiz)])
     end
     append!(w.refs, ep)
     @assert length(w.packets) == length(w.refs) * (pktsiz + 1)
@@ -1431,8 +1857,12 @@ function spk14e(w::SPK14Writer)
     # Meta data of `sgwes` for packets of fixed size with explicit reference values:
     # CONBAS, NCON, RDRBAS, NRDR, RDRTYP, REFBAS, NREF, PDRBAS, NPDR, PDRTYP, PKTBAS,
     # NPKT, RSVBAS, NRSV, PKTSZ, PKTOFF, NMETA.
-    append!(data, Float64[0, 1, refbas + n, ndir, 3, refbas, n, 0, 0, 0, pktbas, n, 0, 0,
-        pktsiz, 1, 17])
+    append!(
+        data, Float64[
+            0, 1, refbas + n, ndir, 3, refbas, n, 0, 0, 0, pktbas, n, 0, 0,
+            pktsiz, 1, 17,
+        ]
+    )
     dafbna(w.handle, w.descr, w.segid)
     dafada(w.handle, data)
     dafena(w.handle)

@@ -31,7 +31,7 @@ from the recurrence `r_k = (1/(k x_0)) Σ_{j=1}^{k} (p j - (k - j)) x_j r_{k-j}`
 Requires `primal(x) > 0` (not checked).
 """
 @inline _sgp4_pow(x::Real, p::Float64) = x^p
-@generated function _sgp4_pow(x::Taylor{N,T}, p::Float64) where {N,T<:Real}
+@generated function _sgp4_pow(x::Taylor{N, T}, p::Float64) where {N, T <: Real}
     ex = _unpack(:a, :x, N)
     push!(ex, :(r0 = _sgp4_pow(a0, p)))
     for k in 1:N
@@ -57,8 +57,10 @@ One pass of the loop of `zzdscm` over the solar and the lunar terms: the values
 orientation constants and the coefficient `cc`. `c` holds the values of the orbit
 (`cosim`, `sinim`, `cosomm`, `sinomm`, `emsq`, `betasq`, `rtemsq`, `eccm`, `xnoi`).
 """
-@inline function _sgp4_lsterms(zcosg::Float64, zsing::Float64, zcosi::Float64,
-        zsini::Float64, zcosh::Float64, zsinh::Float64, cc::Float64, c)
+@inline function _sgp4_lsterms(
+        zcosg::Float64, zsing::Float64, zcosi::Float64,
+        zsini::Float64, zcosh::Float64, zsinh::Float64, cc::Float64, c
+    )
     cosim, sinim, cosomm, sinomm = c.cosim, c.sinim, c.cosomm, c.sinomm
     emsq, betasq, rtemsq = c.emsq, c.betasq, c.rtemsq
     a1 = zcosg * zcosh + zsing * zcosi * zsinh
@@ -87,11 +89,11 @@ orientation constants and the coefficient `cc`. `c` holds the values of the orbi
     z3 = (a3 * a3 + a4 * a4) * 3.0 + z33 * emsq
     z11 = a1 * -6.0 * a5 + emsq * (x1 * -24.0 * x7 - x3 * 6.0 * x5)
     z12 = (a1 * a6 + a3 * a5) * -6.0 +
-          emsq * ((x2 * x7 + x1 * x8) * -24.0 - (x3 * x6 + x4 * x5) * 6.0)
+        emsq * ((x2 * x7 + x1 * x8) * -24.0 - (x3 * x6 + x4 * x5) * 6.0)
     z13 = a3 * -6.0 * a6 + emsq * (x2 * -24.0 * x8 - x4 * 6.0 * x6)
     z21 = a2 * 6.0 * a5 + emsq * (x1 * 24.0 * x5 - x3 * 6.0 * x7)
     z22 = (a4 * a5 + a2 * a6) * 6.0 +
-          emsq * ((x2 * x5 + x1 * x6) * 24.0 - (x4 * x7 + x3 * x8) * 6.0)
+        emsq * ((x2 * x5 + x1 * x6) * 24.0 - (x4 * x7 + x3 * x8) * 6.0)
     z23 = a4 * 6.0 * a6 + emsq * (x2 * 24.0 * x6 - x4 * 6.0 * x8)
     z1 = z1 + z1 + betasq * z31
     z2 = z2 + z2 + betasq * z32
@@ -103,8 +105,10 @@ orientation constants and the coefficient `cc`. `c` holds the values of the orbi
     s5 = x1 * x3 + x2 * x4
     s6 = x2 * x3 + x1 * x4
     s7 = x2 * x4 - x1 * x3
-    return (; s1, s2, s3, s4, s5, s6, s7, z1, z2, z3, z11, z12, z13, z21, z22, z23,
-        z31, z32, z33)
+    return (;
+        s1, s2, s3, s4, s5, s6, s7, z1, z2, z3, z11, z12, z13, z21, z22, z23,
+        z31, z32, z33,
+    )
 end
 
 """
@@ -120,8 +124,10 @@ Contract: `epoch` is in days from 1949 December 31 00:00 UTC, the angles are in
 radians, `no` is the mean motion in radians per minute after the removal of the
 Kozai correction, with `no != 0` and `0 <= ecco < 1`.
 """
-function _sgp4_dscom(epoch::Float64, ecco::Float64, argpo::Float64, inclo::Float64,
-        nodeo::Float64, no::Float64)
+function _sgp4_dscom(
+        epoch::Float64, ecco::Float64, argpo::Float64, inclo::Float64,
+        nodeo::Float64, no::Float64
+    )
     zes = 0.01675
     zel = 0.0549
     c1ss = 2.9864797e-6
@@ -151,10 +157,12 @@ function _sgp4_dscom(epoch::Float64, ecco::Float64, argpo::Float64, inclo::Float
     zx = atan(zx, zy)
     zx = gam + zx - xnodce
     zsingl, zcosgl = sincos(zx)
-    c = (; cosim, sinim, cosomm, sinomm, emsq, betasq, rtemsq, eccm, xnoi=1.0 / no)
+    c = (; cosim, sinim, cosomm, sinomm, emsq, betasq, rtemsq, eccm, xnoi = 1.0 / no)
     sun = _sgp4_lsterms(zcosgs, zsings, zcosis, zsinis, cnodm, snodm, c1ss, c)
-    moon = _sgp4_lsterms(zcosgl, zsingl, zcosil, zsinil, zcoshl * cnodm + zsinhl * snodm,
-        snodm * zcoshl - cnodm * zsinhl, c1l, c)
+    moon = _sgp4_lsterms(
+        zcosgl, zsingl, zcosil, zsinil, zcoshl * cnodm + zsinhl * snodm,
+        snodm * zcoshl - cnodm * zsinhl, c1l, c
+    )
     zmol = rem(day * 0.2299715 + 4.7199672 - gam, _SGP4_TWOPI)
     zmos = rem(day * 0.017201977 + 6.2565837, _SGP4_TWOPI)
     # Solar terms.
@@ -183,9 +191,11 @@ function _sgp4_dscom(epoch::Float64, ecco::Float64, argpo::Float64, inclo::Float
     xgh4 = moon.s4 * -18.0 * zel
     xh2 = moon.s2 * -2.0 * moon.z22
     xh3 = moon.s2 * -2.0 * (moon.z23 - moon.z21)
-    return (; sun, moon, sinim, cosim, emsq, zmol, zmos, se2, se3, si2, si3, sl2, sl3,
+    return (;
+        sun, moon, sinim, cosim, emsq, zmol, zmos, se2, se3, si2, si3, sl2, sl3,
         sl4, sgh2, sgh3, sgh4, sh2, sh3, ee2, e3, xi2, xi3, xl2, xl3, xl4, xgh2, xgh3,
-        xgh4, xh2, xh3)
+        xgh4, xh2, xh3,
+    )
 end
 
 """
@@ -200,9 +210,11 @@ element epoch (`T = TC = 0`). `irez` is 0 for no resonance, 1 for a one-day orbi
 Contract: `c` is the result of `_sgp4_dscom` for the same elements; `xke` is the
 fourth geophysical constant.
 """
-function _sgp4_dsinit(xke::Float64, c, argpo::Float64, gsto::Float64, mo::Float64,
+function _sgp4_dsinit(
+        xke::Float64, c, argpo::Float64, gsto::Float64, mo::Float64,
         mdot::Float64, no::Float64, nodeo::Float64, nodedot::Float64, xpidot::Float64,
-        ecco::Float64, eccsq::Float64, inclo::Float64)
+        ecco::Float64, eccsq::Float64, inclo::Float64
+    )
     q22 = 1.7891679e-6
     q31 = 2.1460748e-6
     q33 = 2.2123015e-7
@@ -297,14 +309,18 @@ function _sgp4_dsinit(xke::Float64, c, argpo::Float64, gsto::Float64, mo::Float6
             f322 = sinim * -1.875 * (cosim * 2.0 + 1.0 - cosisq * 3.0)
             f441 = sini2 * 35.0 * f220
             f442 = sini2 * 39.375 * sini2
-            f522 = sinim * 9.84375 * (sini2 * (1.0 - cosim * 2.0 - cosisq * 5.0) +
-                                      (cosim * 4.0 - 2.0 + cosisq * 6.0) * 0.33333333)
-            f523 = sinim * (sini2 * 4.92187512 * (-2.0 - cosim * 4.0 + cosisq * 10.0) +
-                            (cosim * 2.0 + 1.0 - cosisq * 3.0) * 6.56250012)
+            f522 = sinim * 9.84375 * (
+                sini2 * (1.0 - cosim * 2.0 - cosisq * 5.0) +
+                    (cosim * 4.0 - 2.0 + cosisq * 6.0) * 0.33333333
+            )
+            f523 = sinim * (
+                sini2 * 4.92187512 * (-2.0 - cosim * 4.0 + cosisq * 10.0) +
+                    (cosim * 2.0 + 1.0 - cosisq * 3.0) * 6.56250012
+            )
             f542 = sinim * 29.53125 *
-                   (2.0 - cosim * 8.0 + cosisq * (cosim * 8.0 - 12.0 + cosisq * 10.0))
+                (2.0 - cosim * 8.0 + cosisq * (cosim * 8.0 - 12.0 + cosisq * 10.0))
             f543 = sinim * 29.53125 *
-                   (-2.0 - cosim * 8.0 + cosisq * (cosim * 8.0 + 12.0 - cosisq * 10.0))
+                (-2.0 - cosim * 8.0 + cosisq * (cosim * 8.0 + 12.0 - cosisq * 10.0))
             xno2 = xn * xn
             ainv2 = aonv * aonv
             temp1 = xno2 * 3.0 * ainv2
@@ -345,8 +361,10 @@ function _sgp4_dsinit(xke::Float64, c, argpo::Float64, gsto::Float64, mo::Float6
             xfact = mdot + xpidot - rptim + dmdt + domdt + dnodt - no
         end
     end
-    return (; irez, dedt, didt, dmdt, dnodt, domdt, d2201, d2211, d3210, d3222, d4410,
-        d4422, d5220, d5232, d5421, d5433, del1, del2, del3, xfact, xlamo)
+    return (;
+        irez, dedt, didt, dmdt, dnodt, domdt, d2201, d2211, d3210, d3222, d4410,
+        d4422, d5220, d5232, d5421, d5433, del1, del2, del3, xfact, xlamo,
+    )
 end
 
 """
@@ -363,10 +381,10 @@ function _sgp4_gsto(epoch::Float64, opmode::Int)
         temp = epoch + 2433281.5
         tut1 = (trunc(temp - 0.5) + 0.5 - 2451545.0) / 36525.0
         tut1 * 628.331970688841 + 1.75336855923327 + tut1 * 6.77071394490334e-6 * tut1 -
-        tut1 * 4.50876723431868e-10 * tut1 * tut1 + radday * (temp - 0.5 - trunc(temp - 0.5))
+            tut1 * 4.50876723431868e-10 * tut1 * tut1 + radday * (temp - 0.5 - trunc(temp - 0.5))
     elseif opmode == _SGP4_AFSPC
         ts70 = epoch - 7305.0
-        ids70 = Float64(unsafe_trunc(Int, clamp(ts70 + 1e-8, -1.0e15, 1.0e15)))
+        ids70 = Float64(unsafe_trunc(Int, clamp(ts70 + 1.0e-8, -1.0e15, 1.0e15)))
         tfrac = ts70 - ids70
         c1 = 0.0172027916940703639
         thgr70 = 1.7321343856509374
@@ -398,8 +416,10 @@ NaN), where CSPICE signals no error at the initialization and keeps the constant
 the element set before. As in CSPICE, QO, SO and AE
 are not read: the atmosphere bounds 120 km and 78 km are fixed in the code.
 """
-function _sgp4_init(geophs::NTuple{8,Float64}, elems::NTuple{10,Float64}, epoch::Float64,
-        opmode::Int)
+function _sgp4_init(
+        geophs::NTuple{8, Float64}, elems::NTuple{10, Float64}, epoch::Float64,
+        opmode::Int
+    )
     bstar, inclo, nodeo, ecco = elems[3], elems[4], elems[5], elems[6]
     argpo, mo, no = elems[7], elems[8], elems[9]
     j2, j3, j4, xke, er = geophs[1], geophs[2], geophs[3], geophs[4], geophs[7]
@@ -433,8 +453,10 @@ function _sgp4_init(geophs::NTuple{8,Float64}, elems::NTuple{10,Float64}, epoch:
     rp = ao * (1.0 - ecco)
     gsto = _sgp4_gsto(epoch, opmode)
     rp < 1.0 && _sgp4_error(:suborbital, "TLE elements suborbital.")
-    (omeosq >= 0.0 || no >= 0.0) || _sgp4_error(:invalidelements,
-        "the eccentricity is above 1 and the mean motion is negative")
+    (omeosq >= 0.0 || no >= 0.0) || _sgp4_error(
+        :invalidelements,
+        "the eccentricity is above 1 and the mean motion is negative"
+    )
 
     dosimp = rp < 220.0 / er + 1.0
     sfour = ss
@@ -459,33 +481,39 @@ function _sgp4_init(geophs::NTuple{8,Float64}, elems::NTuple{10,Float64}, epoch:
     d *= d
     coef = qzms24 * (d * d)
     coef1 = coef / _sgp4_realpow(psisq, 3.5)
-    cc2 = coef1 * no * (ao * (etasq * 1.5 + 1.0 + eeta * (etasq + 4.0)) +
-                        j2 * 0.375 * tsi / psisq * con41 * (etasq * 3.0 * (etasq + 8.0) + 8.0))
+    cc2 = coef1 * no * (
+        ao * (etasq * 1.5 + 1.0 + eeta * (etasq + 4.0)) +
+            j2 * 0.375 * tsi / psisq * con41 * (etasq * 3.0 * (etasq + 8.0) + 8.0)
+    )
     cc1 = bstar * cc2
     cc3 = 0.0
-    ecco > 1e-4 && (cc3 = coef * -2.0 * tsi * j3oj2 * no * sinio / ecco)
+    ecco > 1.0e-4 && (cc3 = coef * -2.0 * tsi * j3oj2 * no * sinio / ecco)
     x1mth2 = 1.0 - cosio2
     cc4 = no * 2.0 * coef1 * ao * omeosq *
-          (eta * (etasq * 0.5 + 2.0) + ecco * (etasq * 2.0 + 0.5) -
-           j2 * tsi / (ao * psisq) *
-           (con41 * -3.0 * (1.0 - eeta * 2.0 + etasq * (1.5 - eeta * 0.5)) +
-            x1mth2 * 0.75 * (etasq * 2.0 - eeta * (etasq + 1.0)) * cos(argpo * 2.0)))
+        (
+        eta * (etasq * 0.5 + 2.0) + ecco * (etasq * 2.0 + 0.5) -
+            j2 * tsi / (ao * psisq) *
+            (
+            con41 * -3.0 * (1.0 - eeta * 2.0 + etasq * (1.5 - eeta * 0.5)) +
+                x1mth2 * 0.75 * (etasq * 2.0 - eeta * (etasq + 1.0)) * cos(argpo * 2.0)
+        )
+    )
     cc5 = coef1 * 2.0 * ao * omeosq * ((etasq + eeta) * 2.75 + 1.0 + eeta * etasq)
     cosio4 = cosio2 * cosio2
     temp1 = j2 * 1.5 * pinvsq * no
     temp2 = temp1 * 0.5 * j2 * pinvsq
     temp3 = j4 * -0.46875 * pinvsq * pinvsq * no
     mdot = no + temp1 * 0.5 * rteosq * con41 +
-           temp2 * 0.0625 * rteosq * (13.0 - cosio2 * 78.0 + cosio4 * 137.0)
+        temp2 * 0.0625 * rteosq * (13.0 - cosio2 * 78.0 + cosio4 * 137.0)
     argpdot = temp1 * -0.5 * con42 + temp2 * 0.0625 * (7.0 - cosio2 * 114.0 + cosio4 * 395.0) +
-              temp3 * (3.0 - cosio2 * 36.0 + cosio4 * 49.0)
+        temp3 * (3.0 - cosio2 * 36.0 + cosio4 * 49.0)
     xhdot1 = -temp1 * cosio
     nodedot = xhdot1 +
-              (temp2 * 0.5 * (4.0 - cosio2 * 19.0) + temp3 * 2.0 * (3.0 - cosio2 * 7.0)) * cosio
+        (temp2 * 0.5 * (4.0 - cosio2 * 19.0) + temp3 * 2.0 * (3.0 - cosio2 * 7.0)) * cosio
     xpidot = argpdot + nodedot
     omgcof = bstar * cc3 * cos(argpo)
     xmcof = 0.0
-    ecco > 1e-4 && (xmcof = -x2o3 * coef * bstar / eeta)
+    ecco > 1.0e-4 && (xmcof = -x2o3 * coef * bstar / eeta)
     xnodcf = omeosq * 3.5 * xhdot1 * cc1
     t2cof = cc1 * 1.5
     # Guard against a division by zero at an inclination of 180 degrees.
@@ -503,22 +531,30 @@ function _sgp4_init(geophs::NTuple{8,Float64}, elems::NTuple{10,Float64}, epoch:
     # Deep space: period of 225 minutes or more.
     dodeep = _SGP4_TWOPI / no >= 225.0
     z = 0.0
-    ds = (; irez=0, dedt=z, didt=z, dmdt=z, dnodt=z, domdt=z, d2201=z, d2211=z, d3210=z,
-        d3222=z, d4410=z, d4422=z, d5220=z, d5232=z, d5421=z, d5433=z, del1=z, del2=z,
-        del3=z, xfact=z, xlamo=z)
-    pr = (; zmol=z, zmos=z, se2=z, se3=z, si2=z, si3=z, sl2=z, sl3=z, sl4=z, sgh2=z,
-        sgh3=z, sgh4=z, sh2=z, sh3=z, ee2=z, e3=z, xi2=z, xi3=z, xl2=z, xl3=z, xl4=z,
-        xgh2=z, xgh3=z, xgh4=z, xh2=z, xh3=z)
+    ds = (;
+        irez = 0, dedt = z, didt = z, dmdt = z, dnodt = z, domdt = z, d2201 = z, d2211 = z, d3210 = z,
+        d3222 = z, d4410 = z, d4422 = z, d5220 = z, d5232 = z, d5421 = z, d5433 = z, del1 = z, del2 = z,
+        del3 = z, xfact = z, xlamo = z,
+    )
+    pr = (;
+        zmol = z, zmos = z, se2 = z, se3 = z, si2 = z, si3 = z, sl2 = z, sl3 = z, sl4 = z, sgh2 = z,
+        sgh3 = z, sgh4 = z, sh2 = z, sh3 = z, ee2 = z, e3 = z, xi2 = z, xi3 = z, xl2 = z, xl3 = z, xl4 = z,
+        xgh2 = z, xgh3 = z, xgh4 = z, xh2 = z, xh3 = z,
+    )
     if dodeep
         dosimp = true
         c = _sgp4_dscom(epoch, ecco, argpo, inclo, nodeo, no)
         # The call of ZZDSPR at this place in CSPICE changes nothing: the offsets
         # PEO, PINCO, PLO, PGHO and PHO of the periodics stay at zero.
-        ds = _sgp4_dsinit(xke, c, argpo, gsto, mo, mdot, no, nodeo, nodedot, xpidot, ecco,
-            eccsq, inclo)
-        pr = (; c.zmol, c.zmos, c.se2, c.se3, c.si2, c.si3, c.sl2, c.sl3, c.sl4, c.sgh2,
+        ds = _sgp4_dsinit(
+            xke, c, argpo, gsto, mo, mdot, no, nodeo, nodedot, xpidot, ecco,
+            eccsq, inclo
+        )
+        pr = (;
+            c.zmol, c.zmos, c.se2, c.se3, c.si2, c.si3, c.sl2, c.sl3, c.sl4, c.sgh2,
             c.sgh3, c.sgh4, c.sh2, c.sh3, c.ee2, c.e3, c.xi2, c.xi3, c.xl2, c.xl3, c.xl4,
-            c.xgh2, c.xgh3, c.xgh4, c.xh2, c.xh3)
+            c.xgh2, c.xgh3, c.xgh4, c.xh2, c.xh3,
+        )
     end
     d2 = d3 = d4 = t3cof = t4cof = t5cof = 0.0
     if !dosimp
@@ -531,10 +567,12 @@ function _sgp4_init(geophs::NTuple{8,Float64}, elems::NTuple{10,Float64}, epoch:
         t4cof = (d3 * 3.0 + cc1 * (d2 * 12.0 + cc1sq * 10.0)) * 0.25
         t5cof = (d4 * 3.0 + cc1 * 12.0 * d3 + d2 * 6.0 * d2 + cc1sq * 15.0 * (d2 * 2.0 + cc1sq)) * 0.2
     end
-    return (; opmode, dodeep, dosimp, j2, j3oj2, xke, er, bstar, inclo, nodeo, ecco, argpo,
+    return (;
+        opmode, dodeep, dosimp, j2, j3oj2, xke, er, bstar, inclo, nodeo, ecco, argpo,
         mo, no, gsto, con41, x1mth2, x7thm1, cc1, cc4, cc5, mdot, argpdot, nodedot, omgcof,
         xmcof, xnodcf, t2cof, xlcof, aycof, delmo, sinmao, eta, d2, d3, d4, t3cof, t4cof,
-        t5cof, ds, pr)
+        t5cof, ds, pr,
+    )
 end
 
 "`x` to the power `p` for plain numbers; a negative `x` gives NaN, as `pow` of C, and no error."
@@ -554,7 +592,7 @@ can continue the integration from the time of the previous call; the steps are t
 same from the epoch, so the result is the same. Loop invariant: `atime` is a whole
 number of steps from the epoch, and `xli`, `xni` are the integrated values at `atime`.
 """
-@inline function _sgp4_dspace(r, t::T, eccm, argpm, inclm, mm, nodem) where {T<:Real}
+@inline function _sgp4_dspace(r, t::T, eccm, argpm, inclm, mm, nodem) where {T <: Real}
     ds = r.ds
     fasx2 = 0.13130908
     fasx4 = 2.8843198
@@ -584,10 +622,10 @@ number of steps from the epoch, and `xli`, `xni` are the integrated values at `a
         if ds.irez != 2
             # Terms of the near-synchronous resonance.
             xndt = ds.del1 * sin(xli - fasx2) + ds.del2 * sin((xli - fasx4) * 2.0) +
-                   ds.del3 * sin((xli - fasx6) * 3.0)
+                ds.del3 * sin((xli - fasx6) * 3.0)
             xldot = xni + ds.xfact
             xnddt = ds.del1 * cos(xli - fasx2) + ds.del2 * 2.0 * cos((xli - fasx4) * 2.0) +
-                    ds.del3 * 3.0 * cos((xli - fasx6) * 3.0)
+                ds.del3 * 3.0 * cos((xli - fasx6) * 3.0)
             xnddt *= xldot
         else
             # Terms of the near-half-day resonance.
@@ -595,16 +633,18 @@ number of steps from the epoch, and `xli`, `xni` are the integrated values at `a
             x2omi = xomi + xomi
             x2li = xli + xli
             xndt = ds.d2201 * sin(x2omi + xli - g22) + ds.d2211 * sin(xli - g22) +
-                   ds.d3210 * sin(xomi + xli - g32) + ds.d3222 * sin(-xomi + xli - g32) +
-                   ds.d4410 * sin(x2omi + x2li - g44) + ds.d4422 * sin(x2li - g44) +
-                   ds.d5220 * sin(xomi + xli - g52) + ds.d5232 * sin(-xomi + xli - g52) +
-                   ds.d5421 * sin(xomi + x2li - g54) + ds.d5433 * sin(-xomi + x2li - g54)
+                ds.d3210 * sin(xomi + xli - g32) + ds.d3222 * sin(-xomi + xli - g32) +
+                ds.d4410 * sin(x2omi + x2li - g44) + ds.d4422 * sin(x2li - g44) +
+                ds.d5220 * sin(xomi + xli - g52) + ds.d5232 * sin(-xomi + xli - g52) +
+                ds.d5421 * sin(xomi + x2li - g54) + ds.d5433 * sin(-xomi + x2li - g54)
             xldot = xni + ds.xfact
             xnddt = ds.d2201 * cos(x2omi + xli - g22) + ds.d2211 * cos(xli - g22) +
-                    ds.d3210 * cos(xomi + xli - g32) + ds.d3222 * cos(-xomi + xli - g32) +
-                    ds.d5220 * cos(xomi + xli - g52) + ds.d5232 * cos(-xomi + xli - g52) +
-                    (ds.d4410 * cos(x2omi + x2li - g44) + ds.d4422 * cos(x2li - g44) +
-                     ds.d5421 * cos(xomi + x2li - g54) + ds.d5433 * cos(-xomi + x2li - g54)) * 2.0
+                ds.d3210 * cos(xomi + xli - g32) + ds.d3222 * cos(-xomi + xli - g32) +
+                ds.d5220 * cos(xomi + xli - g52) + ds.d5232 * cos(-xomi + xli - g52) +
+                (
+                ds.d4410 * cos(x2omi + x2li - g44) + ds.d4422 * cos(x2li - g44) +
+                    ds.d5421 * cos(xomi + x2li - g54) + ds.d5433 * cos(-xomi + x2li - g54)
+            ) * 2.0
             xnddt *= xldot
         end
         abs(t0 - atime) >= stepp || break
@@ -633,7 +673,7 @@ orbit at `t` minutes from the epoch, as `zzdspr` outside the initialization. For
 inclination below 0.2 radians the node and the argument of perigee change by the
 Lyddane form; the choice follows the plain value of the inclination.
 """
-@inline function _sgp4_dpper(r, t::T, eccp, inclp, nodep, argpp, mp) where {T<:Real}
+@inline function _sgp4_dpper(r, t::T, eccp, inclp, nodep, argpp, mp) where {T <: Real}
     p = r.pr
     zes = 0.01675
     zel = 0.0549
@@ -718,7 +758,7 @@ Loop invariant: `e` is the iterate that precedes the step `tem5`.
     e = u
     temp = 9999.9
     iter = 0
-    while temp >= 1e-12 && iter < 10
+    while temp >= 1.0e-12 && iter < 10
         iter += 1
         e = eo1
         sineo1, coseo1 = sincos(eo1)
@@ -748,7 +788,7 @@ radii), `:badpeccentricity` (perturbed eccentricity outside `[0, 1]`),
 `:badsemilatus` (negative semi-latus rectum) and `:orbitdecay` (radius below one
 Earth radius). No allocation.
 """
-@inline function _sgp4_eval(r, t::T) where {T<:Real}
+@inline function _sgp4_eval(r, t::T) where {T <: Real}
     x2o3 = _SGP4_X2O3
     temp4 = 1.5e-12
     kps = r.er * r.xke / 60.0
@@ -782,18 +822,24 @@ Earth radius). No allocation.
     if r.dodeep
         eccm, argpm, inclm, mm, nodem, xn = _sgp4_dspace(r, t, eccm, argpm, inclm, mm, nodem)
     end
-    primal(xn) <= 0.0 && _sgp4_error(:badmeanmotion,
-        "Mean motion less-than zero. This error may indicate a bad TLE set.")
+    primal(xn) <= 0.0 && _sgp4_error(
+        :badmeanmotion,
+        "Mean motion less-than zero. This error may indicate a bad TLE set."
+    )
     am = _sgp4_pow(r.xke / xn, x2o3) * (tempa * tempa)
     xn = r.xke / _sgp4_pow(am, 1.5)
     eccm = eccm - tempe
-    (primal(eccm) >= 1.0 || primal(eccm) < -0.001) && _sgp4_error(:badmeccentricity,
+    (primal(eccm) >= 1.0 || primal(eccm) < -0.001) && _sgp4_error(
+        :badmeccentricity,
         "Mean eccentricity value beyond allowed bounds [-0.001,1.0). This error may " *
-        "indicate a bad TLE set.")
-    primal(am) < 0.95 && _sgp4_error(:badmsemimajor,
+            "indicate a bad TLE set."
+    )
+    primal(am) < 0.95 && _sgp4_error(
+        :badmsemimajor,
         "Mean semi-major axis value below allowed minimum of 0.95. This error may " *
-        "indicate a bad TLE set or a decayed orbit.")
-    primal(eccm) < 1e-6 && (eccm = convert(T, 1e-6))
+            "indicate a bad TLE set or a decayed orbit."
+    )
+    primal(eccm) < 1.0e-6 && (eccm = convert(T, 1.0e-6))
     mm = mm + r.no * templ
     xlm = mm + argpm + nodem
     nodem = _sgp4_mod(nodem, _SGP4_TWOPI)
@@ -819,9 +865,11 @@ Earth radius). No allocation.
             nodep = nodep + Float64(pi)
             argpp = argpp - Float64(pi)
         end
-        (primal(eccp) < 0.0 || primal(eccp) > 1.0) && _sgp4_error(:badpeccentricity,
+        (primal(eccp) < 0.0 || primal(eccp) > 1.0) && _sgp4_error(
+            :badpeccentricity,
             "Perturbed eccentricity value beyond allowed bounds [0,1]. This error may " *
-            "indicate a bad TLE set.")
+                "indicate a bad TLE set."
+        )
         # Long-period periodics of a deep-space orbit.
         sinip, cosip = sincos(xincp)
         aycof = r.j3oj2 * -0.5 * sinip
@@ -890,8 +938,10 @@ Earth radius). No allocation.
     vy = xmy * cossu - snod * sinsu
     vz = sini * cossu
     pos = Vec3{T}(mr * ux * r.er, mr * uy * r.er, mr * uz * r.er)
-    vel = Vec3{T}((mv * ux + rvdot * vx) * kps, (mv * uy + rvdot * vy) * kps,
-        (mv * uz + rvdot * vz) * kps)
+    vel = Vec3{T}(
+        (mv * ux + rvdot * vx) * kps, (mv * uy + rvdot * vy) * kps,
+        (mv * uz + rvdot * vz) * kps
+    )
     primal(mr) < 1.0 && _sgp4_error(:orbitdecay, "Satellite has decayed.")
     return pos, vel
 end
