@@ -43,13 +43,15 @@ set by two calls (`pcpool`, then `pipool`), so the state between the calls must 
 valid snapshot; the pair is used as soon as it is consistent. A pool without edits is
 returned as it is, and `build_names` reports its errors.
 """
+const _NAMES_POOL_KINDS = (:missingkpv, :baddimensions, :blanknameassigned)   # of `build_names`
+
 function _pool_x_namepool(pool::Dict{String,PoolValue}, edited::Bool)
     edited || return pool
     try
         build_names(pool)
         return pool
     catch e
-        (e isa SpiceError && e.kind === :badpool) || rethrow()
+        (e isa SpiceError && e.kind in _NAMES_POOL_KINDS) || rethrow()
         reduced = copy(pool)
         delete!(reduced, "NAIF_BODY_NAME")
         delete!(reduced, "NAIF_BODY_CODE")
@@ -142,6 +144,10 @@ function _pool_x_swap_loaded!(ctx::SpiceContext, list::Vector{Loaded}, entries::
         for name in METAKERNEL_VARIABLES
             delete!(pool, name)
         end
+        # Only a pair of direct edits may be incomplete between two calls: a kernel that
+        # assigns the body names is checked at the load, as in CSPICE.
+        any(e -> e.content isa TextKernel && any(a -> a.name in ("NAIF_BODY_NAME",
+            "NAIF_BODY_CODE"), e.content.assignments), entries) && build_names(pool)
     end
     ks = build_kernelset(list, pool, old.bodydefs)
     @atomic ctx.ks = ks
@@ -329,8 +335,8 @@ assignment can continue on the next line. The lines start in a data section, and
 `\\begintext` and `\\begindata` work as in a file. The variables are direct edits of
 the pool, with the rules of [`pdpool`](@ref).
 
-Throws `SpiceError(:badkernel)` if an assignment is malformed; the pool is then
-unchanged.
+Throws the errors of a malformed assignment that [`ldpool`](@ref) lists; the pool is
+then unchanged.
 
 # Examples
 ```jldoctest
@@ -363,8 +369,14 @@ variables are direct edits of the pool, with the rules of [`pdpool`](@ref). A
 `KERNELS_TO_LOAD` list in the file is not followed. A file whose name ends in `.json`
 is read as a [text kernel in JSON](@ref "Text kernels in JSON").
 
-Throws `SpiceError(:emptystring)` if `fname` is empty, `SpiceError(:fileopenfailed)` if the
-file does not exist and `SpiceError(:badkernel)` if an assignment is malformed.
+Throws `SpiceError`:
+- `:emptystring` if `fname` is empty;
+- `:fileopenfailed` if the file does not exist;
+- for a malformed assignment, the kind of CSPICE: `:badvarassign` for an assignment
+  without the form `NAME = value` or with a vector `( )` of no values, `:badvarname` for
+  a name of more than 32 characters, `:typemismatch` for strings and numbers in one
+  variable or an empty string, `:numberexpected` for a value that is not a number, and
+  `:badtime` for an `@` time that cannot be parsed. A JSON kernel throws `:badkernel`.
 """
 function ldpool(ctx::SpiceContext, fname::AbstractString)
     isempty(fname) && throw(SpiceError(:emptystring, "ldpool: the file name is empty"))

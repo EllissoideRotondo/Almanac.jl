@@ -162,7 +162,8 @@ of its hash table. `nothing` takes the place of the `found` flag.
 
 Throws `SpiceError(:invalidframedef)` if a `FRAME_*_CLASS` variable that the search
 meets is not a number, or a matching definition lacks its `_CLASS_ID`, `_NAME` or
-`FRAME_<name>` variable.
+`FRAME_<name>` variable, and `SpiceError(:kernelvarnotfound)` if it lacks its
+`FRAME_<code>_CENTER` variable.
 
 # Examples
 ```jldoctest
@@ -194,7 +195,8 @@ end
 The checks of the pool search of `ccifrm_`, on the `FRAME_*_CLASS` variables in sorted
 order up to the first that matches: a class that is not a number, or a matching class
 without `_CLASS_ID`, a matching ID without `_NAME`, or a name without `FRAME_<name>`,
-throws `SpiceError(:invalidframedef)`. CSPICE takes the order of its hash table, so it
+throws `SpiceError(:invalidframedef)`; a definition without `FRAME_<code>_CENTER`
+throws `SpiceError(:kernelvarnotfound)`. CSPICE takes the order of its hash table, so it
 can return a match before it meets a malformed definition that this check meets first.
 """
 function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
@@ -216,6 +218,10 @@ function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
         (code isa Vector{Float64} && !isempty(code)) || throw(SpiceError(:invalidframedef,
             "invalid frame specification found in kernel pool: frame name is " *
             "$(strip(name[1])) but associated frame ID assignment was not found"))
+        center = "FRAME_$(round(Int, code[1]))_CENTER"
+        haskey(ks.pool, center) || throw(SpiceError(:kernelvarnotfound,
+            "the center of frame $(strip(name[1])), the kernel variable $center, is not in " *
+            "the kernel pool"))
         return nothing
     end
     return nothing

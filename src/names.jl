@@ -745,10 +745,12 @@ const (BUILTIN_NAME2CODE, BUILTIN_CODE2NAME) = _name_dicts(BUILTIN_BODIES)
 
 Contract: reads `NAIF_BODY_NAME` and `NAIF_BODY_CODE` from `pool`; returns
 `name2code::Dict{String,Int32}` keyed by normalized name and
-`code2name::Dict{Int32,String}` with the name as the kernel wrote it (blanks removed
-at both ends). A later element has priority over an earlier one. Both are empty if
-neither variable exists. Throws `SpiceError(:badpool)` if only one variable exists,
-if the sizes differ, or if a name is blank.
+`code2name::Dict{Int32,String}` with the name as the kernel wrote it (trailing blanks
+removed; leading blanks kept, as in CSPICE). A later element has priority over an
+earlier one. Both are empty if neither variable exists. Throws, with the kinds of
+`zzbodker`, `SpiceError(:missingkpv)` if only one variable exists or one has the wrong
+type, `SpiceError(:baddimensions)` if the sizes differ, and
+`SpiceError(:blanknameassigned)` if a name is blank.
 """
 function build_names(pool::AbstractDict{String,PoolValue})
     name2code = Dict{String,Int32}()
@@ -756,13 +758,13 @@ function build_names(pool::AbstractDict{String,PoolValue})
     names = get(pool, "NAIF_BODY_NAME", nothing)
     codes = get(pool, "NAIF_BODY_CODE", nothing)
     names === nothing && codes === nothing && return name2code, code2name
-    names isa Vector{String} && codes isa Vector{Float64} || throw(SpiceError(:badpool,
+    names isa Vector{String} && codes isa Vector{Float64} || throw(SpiceError(:missingkpv,
         "NAIF_BODY_NAME (strings) and NAIF_BODY_CODE (numbers) must both be present"))
-    length(names) == length(codes) || throw(SpiceError(:badpool,
+    length(names) == length(codes) || throw(SpiceError(:baddimensions,
         "NAIF_BODY_NAME has $(length(names)) elements and NAIF_BODY_CODE has " *
         "$(length(codes))"))
     normalized = map(normalize_name, names)
-    any(isempty, normalized) && throw(SpiceError(:badpool, "NAIF_BODY_NAME has a blank name"))
+    any(isempty, normalized) && throw(SpiceError(:blanknameassigned, "NAIF_BODY_NAME has a blank name"))
     # As `zzbodker` of CSPICE: of the entries with the same name only the last counts,
     # and the name of a code is that of its last entry that counts. A code whose name
     # was given again to another code later in the list has no name.
@@ -771,7 +773,7 @@ function build_names(pool::AbstractDict{String,PoolValue})
         last[normalized[i]] == i || continue
         c = round(Int32, code)
         name2code[normalized[i]] = c
-        code2name[c] = String(strip(name, ' '))
+        code2name[c] = String(rstrip(name, ' '))
     end
     return name2code, code2name
 end

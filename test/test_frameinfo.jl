@@ -189,6 +189,27 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
     ctx = neo_context(set)
     ks = Almanac.kernelset(ctx)
 
+    # A definition without its center: KERNELVARNOTFOUND in CSPICE (tspice F_CCIFRM).
+    @apart @testset "ccifrm: a frame without a center" begin
+        lines = ["FRAME_-999_CLASS = 3", "FRAME_-999_CLASS_ID = -1",
+            "FRAME_-999_NAME = 'BADFRAME'", "FRAME_BADFRAME = -999"]
+        c2 = SpiceContext()
+        lmpool(c2, lines)
+        @test throws_kind(() -> ccifrm(c2, 3, -1), :kernelvarnotfound)
+        lmpool(c2, ["FRAME_-999_CENTER = 399"])
+        @test ccifrm(c2, 3, -1) == (-999, "BADFRAME", 399)
+        try
+            SPICE.lmpool(lines)
+            ccall((:ccifrm_c, SPICE.libcspice), Cvoid, (Cint, Cint, Cint, Ref{Cint}, Ptr{UInt8},
+                Ref{Cint}, Ref{Cint}), 3, -1, 33, Ref{Cint}(0), zeros(UInt8, 33), Ref{Cint}(0),
+                Ref{Cint}(0))
+            @test cspice_kind() === :kernelvarnotfound
+        finally
+            foreach(SPICE.dvpool, ["FRAME_-999_CLASS", "FRAME_-999_CLASS_ID", "FRAME_-999_NAME",
+                "FRAME_BADFRAME"])
+        end
+    end
+
     @apart @testset "ccifrm: a frame class that is not a number" begin
         c2 = SpiceContext()
         lmpool(c2, ["FRAME_-999_CLASS = 'X'"])

@@ -212,7 +212,7 @@ end
 @inline _is_inertial(ks::KernelSet, ref::Int32) =
     ref == Int32(1) || frame_def(ks, ref).class == Int32(1)
 
-@noinline _throw_not_inertial(ks, ref) = throw(SpiceError(:badarg,
+@noinline _throw_not_inertial(ks, ref) = throw(SpiceError(:badframe,
     "the frame with ID $ref is not an inertial frame; this call needs one"))
 
 @inline function _need_inertial(ks::KernelSet, ref::Int32)
@@ -302,7 +302,7 @@ end
 
 # --- stellar aberration -------------------------------------------------------------
 
-@noinline _throw_vobs() = throw(SpiceError(:badarg,
+@noinline _throw_vobs() = throw(SpiceError(:valueoutofrange,
     "the speed of the observer is not below the speed of light"))
 
 """
@@ -310,7 +310,7 @@ end
 
 The computation of `stelab`: `pobj` rotated by the angle `asin(|u × vobs/c|)` about
 `u × vobs/c`, with `u` the unit vector along `pobj`. Requires `|vobs| < c`
-(`SpiceError(:badarg)` otherwise). Postcondition: the norm of `pobj` is kept.
+(`SpiceError(:valueoutofrange)` otherwise). Postcondition: the norm of `pobj` is kept.
 """
 @inline function _stelab(pobj, vobs)
     u = _vhat(pobj)
@@ -742,18 +742,21 @@ state, corrected for light time, with the light time and its rate, as
 derivative of `lt` (no unit). The `LT` forms make one iteration. The `CN` forms make
 at most five and stop when the light time changes by less than `1e-17 * max(1, |epoch|)`.
 
-Throws `SpiceError(:badarg)` if `ref` is not inertial, `stobs` does not have 6
-elements, `et` is not finite, or the range rate of the target
-is above `(1 - 1e-10)` times the speed of light. Throws `SpiceError(:invalidoption)` if
-`abcorr` is not valid, and the SPK errors of [`spkgeo`](@ref).
+Throws `SpiceError`:
+- `:invalidoption` if `abcorr` is not valid (checked first, as in CSPICE);
+- `:badframe` if `ref` is not inertial;
+- `:badarg` if `stobs` does not have 6 elements, `et` is not finite, or the range rate
+  of the target is above `(1 - 1e-10)` times the speed of light;
+- the SPK errors of [`spkgeo`](@ref).
 
 See also [`spkaps`](@ref), [`spkacs`](@ref).
 """
 function spkltc(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
         stobs::AbstractVector)
+    corr = Aberration(abcorr)
     robs, vobs = _split_state(stobs)
     q = _ltc(ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
-        Aberration(abcorr), robs, vobs)
+        corr, robs, vobs)
     return vcat(q.r, q.v), q.lt, q.dlt
 end
 spkltc(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
@@ -784,9 +787,10 @@ See also [`spkacs`](@ref).
 """
 function spkaps(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
         stobs::AbstractVector, accobs::AbstractVector)
+    corr = Aberration(abcorr)
     robs, vobs = _split_state(stobs)
     q = _aps(ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
-        Aberration(abcorr), robs, vobs, _vec3(accobs))
+        corr, robs, vobs, _vec3(accobs))
     return vcat(q.r, q.v), q.lt, q.dlt
 end
 spkaps(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
@@ -837,18 +841,22 @@ is an `SVector{3}` in km
 and `lt` is in seconds. The `LT` forms make one light-time iteration and the `CN`
 forms exactly three, as in CSPICE. Note the argument order: `sobs` is before `abcorr`.
 
-Throws `SpiceError(:badarg)` if `ref` is not inertial, `sobs` does not have 6
-elements, `et` is not finite, or (for `+S`) the speed of the
-observer is not below the speed of light. Throws `SpiceError(:spkinvalidoption)` if
-`abcorr` is not valid, and the SPK errors of [`spkgeo`](@ref).
+Throws `SpiceError`:
+- `:spkinvalidoption` if `abcorr` is not valid (checked first, as in CSPICE);
+- `:badframe` if `ref` is not inertial;
+- `:badarg` if `sobs` does not have 6 elements or `et` is not finite;
+- `:valueoutofrange` if (for `+S`) the speed of the observer is not below the speed of
+  light;
+- the SPK errors of [`spkgeo`](@ref).
 
 See also [`spkpos`](@ref), [`spkltc`](@ref).
 """
 function spkapo(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector,
         abcorr::AbcorrArg)
+    corr = _spk_abcorr(abcorr)
     robs, vobs = _split_state(sobs)
     return _apo(ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
-        _spk_abcorr(abcorr), robs, vobs)
+        corr, robs, vobs)
 end
 spkapo(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector,
     abcorr::AbcorrArg) = spkapo(kernelset(ctx), targ, et, ref, sobs, abcorr)
@@ -868,12 +876,13 @@ are in seconds past J2000 TDB; `elapsd = |ettarg - etobs|` is in seconds. `obs` 
 `targ` are NAIF ID codes. The call makes three iterations after the geometric start,
 as CSPICE does.
 
-Throws `SpiceError(:badarg)` if `dir` is not `"->"` or `"<-"` (blanks are not
-ignored) or `etobs` is not finite, and the SPK errors of [`spkgeo`](@ref).
+Throws `SpiceError(:baddirection)` if `dir` is not `"->"` or `"<-"` (blanks are not
+ignored), `SpiceError(:badarg)` if `etobs` is not finite, and the SPK errors of
+[`spkgeo`](@ref).
 """
 function ltime(ks::KernelSet, etobs::Real, obs::Integer, dir::AbstractString, targ::Integer)
     s = dir == "->" ? 1 : dir == "<-" ? -1 :
-        throw(SpiceError(:badarg, "ltime: the direction must be \"->\" or \"<-\", not \"$dir\""))
+        throw(SpiceError(:baddirection, "ltime: the direction must be \"->\" or \"<-\", not \"$dir\""))
     et = check_epoch(etobs)
     robs = _ssbpos(ks, Int32(obs), et, Int32(1))
     elapsd = _norm3(_ssbpos(ks, Int32(targ), et, Int32(1)) - robs) / CLIGHT
@@ -901,8 +910,8 @@ velocity of the observer relative to the solar system barycenter, in the same
 inertial frame (3 elements each; km and km/s). The result is `pobj` rotated toward
 `vobs`; its norm is the norm of `pobj`.
 
-Throws `SpiceError(:badarg)` if a vector does not have 3 elements or the speed
-`|vobs|` is not below the speed of light.
+Throws `SpiceError(:badarg)` if a vector does not have 3 elements, and
+`SpiceError(:valueoutofrange)` if the speed `|vobs|` is not below the speed of light.
 
 # Examples
 ```jldoctest

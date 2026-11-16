@@ -184,7 +184,8 @@ Throws `SpiceError(:emptystring)` if `path` is empty, `SpiceError(:blankfilename
 holds only blanks, `SpiceError(:nosuchfile)` if the
 file (or a file that a meta-kernel lists) does not exist, and
 `SpiceError(:recursiveloading)` if a meta-kernel lists a meta-kernel. A binary file that is damaged throws
-`SpiceError(:baddaf)`, and a meta-kernel that is not consistent throws
+`SpiceError(:baddaf)`, a malformed assignment in a text kernel throws the kinds that
+[`ldpool`](@ref) lists, and a meta-kernel that is not consistent throws
 `SpiceError(:badkernel)`.
 
 # Examples

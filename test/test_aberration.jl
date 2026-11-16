@@ -288,17 +288,23 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         for name in sort!(collect(keys(worst)))
             measured(@sprintf("  %-58s max=%.3e", name * ", relative", worst[name]))
         end
-        # Errors of the low-level calls.
+        # Errors of the low-level calls, with the short messages of CSPICE N0067 (checked
+        # with SPICE.jl): a frame that is not inertial is BADFRAME, and a bad correction
+        # is reported before it.
         st = spkssb(ctx, 399, 0.0, "J2000")
-        @test throws_kind(() -> spkltc(ctx, 301, 0.0, "IAU_EARTH", "LT", st), :badarg)
-        @test throws_kind(() -> spkaps(ctx, 301, 0.0, "IAU_EARTH", "LT", st, zeros(3)), :badarg)
-        @test throws_kind(() -> spkacs(ctx, 301, 0.0, "IAU_EARTH", "LT", 399), :badarg)
-        @test throws_kind(() -> spkapo(ctx, 301, 0.0, "IAU_EARTH", st, "LT"), :badarg)
+        @test throws_kind(() -> spkltc(ctx, 301, 0.0, "IAU_EARTH", "LT", st), :badframe)
+        @test throws_kind(() -> spkaps(ctx, 301, 0.0, "IAU_EARTH", "LT", st, zeros(3)), :badframe)
+        @test throws_kind(() -> spkacs(ctx, 301, 0.0, "IAU_EARTH", "LT", 399), :badframe)
+        @test throws_kind(() -> spkapo(ctx, 301, 0.0, "IAU_EARTH", st, "LT"), :badframe)
+        @test throws_kind(() -> spkltc(ctx, 301, 0.0, "IAU_EARTH", "XYZ", st), :invalidoption)
+        @test throws_kind(() -> spkaps(ctx, 301, 0.0, "IAU_EARTH", "S", st, zeros(3)), :invalidoption)
+        @test throws_kind(() -> spkapo(ctx, 301, 0.0, "IAU_EARTH", st, "XYZ"), :spkinvalidoption)
         @test throws_kind(() -> spkltc(ctx, 301, 0.0, "J2000", "LT", zeros(5)), :badarg)
         @test throws_kind(() -> spkaps(ctx, 301, 0.0, "J2000", "LT", st, zeros(2)), :badarg)
         @test throws_kind(() -> spkltc(ctx, 301, 0.0, "J2000", "S", st), :invalidoption)
-        @test throws_kind(() -> ltime(ctx, 0.0, 399, "<>", 301), :badarg)
-        @test throws_kind(() -> stelab(SVector(1.0, 0.0, 0.0), SVector(3e5, 0.0, 0.0)), :badarg)
+        @test throws_kind(() -> ltime(ctx, 0.0, 399, "<>", 301), :baddirection)
+        @test throws_kind(() -> stelab(SVector(1.0, 0.0, 0.0), SVector(3e5, 0.0, 0.0)), :valueoutofrange)
+        @test throws_kind(() -> stlabx(SVector(1.0, 0.0, 0.0), SVector(3e5, 0.0, 0.0)), :valueoutofrange)
         @test throws_kind(() -> stelab([1.0, 0.0], [0.0, 0.0, 0.0]), :badarg)
         # An epoch whose light-time corrected epoch leaves the coverage.
         @test throws_kind(() -> spkezr(ctx, 8, DE440S_COVERAGE[1] - 86000.0, "J2000", "LT", 399), :spkinsuffdata)

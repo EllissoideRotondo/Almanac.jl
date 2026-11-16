@@ -170,6 +170,8 @@ group("5b. body names that later pool entries take over, against CSPICE") do
         ["NAIF_BODY_CODE = ( 1011 1012 1011 )", "NAIF_BODY_NAME = ( 'F_X' 'f_x' 'F_Y' )"],
         ["NAIF_BODY_CODE = ( 1011 1012 1013 )", "NAIF_BODY_NAME = ( 'A' 'B' 'A' )"],
         ["NAIF_BODY_CODE = ( 1012 )", "NAIF_BODY_NAME = ( 'EARTH' )"],
+        # leading blanks of a name are kept (F_ZZBDTRN)
+        ["NAIF_BODY_CODE = ( 1013 )", "NAIF_BODY_NAME = ( '   A' )"],
     ]
     try
         for cv in cases

@@ -1017,11 +1017,15 @@ const MAPPINGS = Dict{String,Function}(
         # table: compare the sets when SPICELIB returned all of them.
         a = Dict(x.name => jl(x) for x in c.inputs)
         out = Dict(o.name => o.values for o in c.outputs)
+        # the checks of the arguments (room), then all the names
+        gnpool(ctx, a["name"], 1, a["room"])
         r = gnpool(ctx, a["name"])
         found, n = out["found"][1], out["n"][1]
         isempty(r) && return [("found", Any[found], Any[false])]
         found || return [("found", Any[false], Any[true])]
-        (a["start"] == 1 && n < a["room"]) || return [("n", Any[min(n, 1)], Any[1])]
+        # past the start: the count of the names that are left, up to the room
+        (a["start"] == 1 && n < a["room"]) ||
+            return [("n", Any[n], Any[clamp(length(r) - max(a["start"], 1) + 1, 0, a["room"])])]
         return [("cvals", sort(out["cvals"][1:n]), Any[sort(r)...])]
     end,
     "ktotal" => (ctx, c) -> [("count", c.outputs[1].values, Any[ktotal(ctx, jl(c.inputs[1]))])],

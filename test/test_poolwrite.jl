@@ -482,6 +482,33 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         @test throws_kind(() -> gnpool(ctx, "*", 1, -1), :badarraysize)
     end
 
+    # A malformed text kernel: the kind is the short message of CSPICE (tspice F_POOL,
+    # F_BODCOD), for ldpool and for furnsh of a context with and without direct edits.
+    @apart @testset "malformed text kernels give the error kinds of CSPICE" begin
+        cases = [["PW_BAD"], ["PW_BAD 1 2"], ["PW_BAD = ( ABC )"], ["PW_BAD = ''"],
+            ["PW_BAD = ( )"], ["PW_BAD += ( )"], ["PW_BAD = (", " )"], ["PW_BAD = 1, 'a'"],
+            ["PW_BAD = 'a', 1"], ["PW_BAD_" * "X"^30 * " = 1"],
+            ["NAIF_BODY_NAME = 'PW_SPUD'", "NAIF_BODY_CODE = ( 1009, 1010 )"],
+            ["NAIF_BODY_NAME = 'PW_SPUD'"], ["NAIF_BODY_NAME = ' '", "NAIF_BODY_CODE = 1009"]]
+        for (i, lines) in enumerate(cases)
+            k = pw_kernel("bad$i.tpc", lines)
+            ccall((:furnsh_c, SPICE.libcspice), Cvoid, (Cstring,), k)
+            kc = cspice_kind()
+            ccall((:unload_c, SPICE.libcspice), Cvoid, (Cstring,), k)
+            for v in ("PW_BAD", "NAIF_BODY_NAME", "NAIF_BODY_CODE")
+                ccall((:dvpool_c, SPICE.libcspice), Cvoid, (Cstring,), v)
+            end
+            cspice_kind()
+            @test kc !== :none
+            @test throws_kind(() -> furnsh(SpiceContext(), k), kc)
+            edited = SpiceContext()
+            pdpool(edited, "PW_EDIT", [1.0])
+            @test throws_kind(() -> furnsh(edited, k), kc)
+            any(l -> startswith(l, "NAIF"), lines) ||
+                @test throws_kind(() -> ldpool(SpiceContext(), k), kc)
+        end
+    end
+
     if Threads.nthreads() == 1
         skip_notice("18. threads", "one thread only")
     else

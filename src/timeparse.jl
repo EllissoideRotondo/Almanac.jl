@@ -1023,13 +1023,14 @@ end
 Contract: `item` is `"CALENDAR"`, `"SYSTEM"` or `"ZONE"` and `value` a value that
 `timdef` accepts for it, both in any case with leading blanks allowed. Returns the new
 defaults: a system clears the zone and a zone clears the system, as in CSPICE. Throws
-`SpiceError(:badtimedefault)` for another item or value. Pure.
+`SpiceError(:badtimeitem)` for another item and `SpiceError(:baddefaultvalue)` for
+another value. Pure.
 """
 function _timdef_set(defs::TimeDefaults, item::AbstractString, value::AbstractString)
     it = uppercase(strip(item, ' '))
     val = uppercase(first(strip(value, ' '), 16))
     if it == "SYSTEM"
-        val in ("TDB", "TDT", "TT", "UTC") || throw(SpiceError(:badtimedefault,
+        val in ("TDB", "TDT", "TT", "UTC") || throw(SpiceError(:baddefaultvalue,
             "the default time system '$value' is not one of UTC, TDB, TDT, TT"))
         return TimeDefaults(defs.calendar, val, "", defs.yearbound, defs.check)
     elseif it == "ZONE"
@@ -1037,26 +1038,26 @@ function _timdef_set(defs::TimeDefaults, item::AbstractString, value::AbstractSt
         zone === nothing || (val = _TK_OFFSETS[zone])
         val = first(val, 14)
         _, _, ok = _zone_offsets(val)
-        ok || throw(SpiceError(:badtimedefault, "the default time zone '$value' is not " *
+        ok || throw(SpiceError(:baddefaultvalue, "the default time zone '$value' is not " *
             "one of EST, EDT, CST, CDT, MST, MDT, PST, PDT and is not an offset " *
             "UTC+h[:mm] or UTC-h[:mm] with h below 13"))
         return TimeDefaults(defs.calendar, "", String(val), defs.yearbound, defs.check)
     elseif it == "CALENDAR"
-        val in ("JULIAN", "GREGORIAN", "MIXED") || throw(SpiceError(:badtimedefault,
+        val in ("JULIAN", "GREGORIAN", "MIXED") || throw(SpiceError(:baddefaultvalue,
             "the default calendar '$value' is not one of GREGORIAN, JULIAN, MIXED"))
         return TimeDefaults(val, defs.system, defs.zone, defs.yearbound, defs.check)
     end
-    throw(SpiceError(:badtimedefault,
+    throw(SpiceError(:badtimeitem,
         "the default item '$item' is not one of CALENDAR, SYSTEM, ZONE"))
 end
 
-"Contract: returns the value of the default `item` (`CALENDAR`, `SYSTEM` or `ZONE`, any case) in `defs`; throws `SpiceError(:badtimedefault)` for another item."
+"Contract: returns the value of the default `item` (`CALENDAR`, `SYSTEM` or `ZONE`, any case) in `defs`; throws `SpiceError(:badtimeitem)` for another item."
 function _timdef_get(defs::TimeDefaults, item::AbstractString)::String
     it = uppercase(strip(item, ' '))
     it == "CALENDAR" && return defs.calendar
     it == "SYSTEM" && return defs.system
     it == "ZONE" && return defs.zone
-    throw(SpiceError(:badtimedefault,
+    throw(SpiceError(:badtimeitem,
         "the default item '$item' is not one of CALENDAR, SYSTEM, ZONE"))
 end
 

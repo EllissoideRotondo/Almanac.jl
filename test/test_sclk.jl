@@ -155,6 +155,8 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         @test throws_kind(() -> scencd(ctx, sc, "x/100.5"), :badpartnumber)
         @test throws_kind(() -> scencd(ctx, sc, "3/100.5"), :badpartnumber)
         @test throws_kind(() -> scencd(ctx, sc, "1/"), :invalidsclkstring)
+        # no fields and no partition: the fields are checked first, as CSPICE (F_SCLK0)
+        @test throws_kind(() -> scencd(ctx, sc, " /"), :invalidsclkstring)
         # A character of several bytes in a field is an error of the string, not of the code.
         @test all(s -> try scencd(ctx, sc, s); false catch e; e isa Almanac.SpiceError end,
             ("1/é:2", "1/100:4é", "é"))

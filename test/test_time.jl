@@ -20,6 +20,15 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 import ForwardDiff
 
+"The error kind of `timdef_c` for the arguments (`:none` without an error); a failed call changes no default."
+function cspice_timdef(action, item, value)
+    buf = zeros(UInt8, 64)
+    copyto!(buf, codeunits(value))
+    ccall((:timdef_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cint, Ptr{UInt8}),
+        action, item, 64, buf)
+    return cspice_kind()
+end
+
 "Value of `f()` from CSPICE, or `nothing` if CSPICE signals an error."
 function oracle_outcome(f)
     try
@@ -848,11 +857,11 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             for (item, value) in (("SYSTEM", "TAI"), ("ZONE", "XYZ"), ("ZONE", "UTC+13"), ("ZONE", "UTC"),
                 ("CALENDAR", "ROMAN"), ("EPOCH", "J2000"), ("SYSTEM", ""))
                 before = (timdef(ctx, "GET", "CALENDAR"), timdef(ctx, "GET", "SYSTEM"), timdef(ctx, "GET", "ZONE"))
-                @test oracle_outcome(() -> SPICE.timdef("SET", item, value)) === nothing
-                @test throws_kind(() -> timdef(ctx, "SET", item, value), :badtimedefault)
+                @test throws_kind(() -> timdef(ctx, "SET", item, value), cspice_timdef("SET", item, value))
                 @test before == (timdef(ctx, "GET", "CALENDAR"), timdef(ctx, "GET", "SYSTEM"), timdef(ctx, "GET", "ZONE"))
             end
-            @test throws_kind(() -> timdef(ctx, "PUT", "ZONE", "PST"), :badtimedefault)
+            @test throws_kind(() -> timdef(ctx, "PUT", "ZONE", "PST"), cspice_timdef("PUT", "ZONE", "PST"))
+            @test throws_kind(() -> timdef(ctx, "GET", "YEAR"), cspice_timdef("GET", "YEAR", ""))
             # The defaults belong to one context: another context keeps its own.
             other = neo_context([Kernels.LSK])
             timdef(ctx, "SET", "SYSTEM", "TDB")

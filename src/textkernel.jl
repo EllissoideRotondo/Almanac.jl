@@ -350,8 +350,19 @@ end
 const _BEGINDATA = Vector{UInt8}(codeunits("\\begindata"))
 const _BEGINTEXT = Vector{UInt8}(codeunits("\\begintext"))
 
-@noinline _tk_fail(path, lineno::Int, msg) =
-    throw(SpiceError(:badkernel, "$msg (line $lineno of '$path')"))
+# The kinds are the short messages of `zzrvar`: BADVARASSIGN, BADVARNAME, TYPEMISMATCH,
+# NUMBEREXPECTED; a bad `@` time is `:badtime`, as for every time string.
+@noinline _tk_fail(path, lineno::Int, msg, kind::Symbol=:badvarassign) =
+    throw(SpiceError(kind, "$msg (line $lineno of '$path')"))
+
+function _tk_number(path, lineno, bytes)
+    try
+        return _nparsd(bytes)
+    catch e
+        (e isa SpiceError && e.kind === :badnumber) || rethrow()
+        _tk_fail(path, lineno, e.msg, :numberexpected)
+    end
+end
 
 "Contract: `kind` is 0 (no value), 1 (strings) or 2 (numbers); adds the assignment of `name` with the values of its kind to `out`, and nothing for kind 0."
 function _tk_finish!(out::Vector{Assignment}, kind::Int, name, append::Bool, strs, nums)
@@ -368,8 +379,8 @@ Contract: `lines` iterates the physical lines of a text kernel; returns the
 assignments in file order with the values CSPICE puts in the kernel pool. `path` is
 used for the result and for error messages only; `yearbound` is the bound of `tsetyr`
 for a year of two digits in an `@` date, and `check` the range check of `tparch` for
-it. Throws `SpiceError(:badkernel)` for
-a malformed assignment.
+it. Throws `SpiceError` for a malformed assignment, with the kind that `zzrvar` gives
+(`:badvarassign`, `:badvarname`, `:typemismatch`, `:numberexpected`, `:badtime`).
 """
 function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
         check::Bool=false)::TextKernel
@@ -400,7 +411,8 @@ function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
             count >= 3 || _tk_fail(path, lineno, "a kernel variable assignment must have the form " *
                                 "'<name> [+]= <values>'")
             ends[1] - begs[1] + 1 <= _TK_MAXNAME ||
-                _tk_fail(path, lineno, "a variable name is longer than $_TK_MAXNAME characters")
+                _tk_fail(path, lineno, "a variable name is longer than $_TK_MAXNAME characters",
+                    :badvarname)
             name = String(line[begs[1]:ends[1]])
             types[2] == _TOK_EQUAL || types[2] == _TOK_PLUSEQ ||
                 _tk_fail(path, lineno, "the assignment operator of '$name' is neither '=' nor '+='")
@@ -429,21 +441,24 @@ function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
             end
             if kind == 1
                 t == _TOK_QUOTED || _tk_fail(path, lineno, "'$name' is a string variable but a value " *
-                                          "is not a string")
-                b + 1 >= e && _tk_fail(path, lineno, "there is a quoted string with no characters")
+                                          "is not a string", :typemismatch)
+                b + 1 >= e && _tk_fail(path, lineno, "there is a quoted string with no characters",
+                    :typemismatch)
                 push!(strs, _string_value(line, b, e))
             else
                 t == _TOK_VALUE || _tk_fail(path, lineno, "'$name' is a numeric variable but a value " *
-                                         "is not a number or a time")
+                                         "is not a number or a time", :typemismatch)
                 if line[b] == UInt8('@')
-                    e == b && _tk_fail(path, lineno, "'@' is not followed by a time")
+                    e == b && _tk_fail(path, lineno, "'@' is not followed by a time", :badtime)
                     push!(nums, _tparse(String(line[b+1:e]), yearbound, check))
                 else
-                    push!(nums, _nparsd(view(line, b:e)))
+                    push!(nums, _tk_number(path, lineno, view(line, b:e)))
                 end
             end
             nxt += 1
         end
+        # `( )`: a closing parenthesis before the first value
+        nxt <= count && kind == 0 && _tk_fail(path, lineno, "the vector assigned to '$name' has no values")
         invec = nxt > count
         invec || _tk_finish!(out, kind, name, append, strs, nums)
     end
