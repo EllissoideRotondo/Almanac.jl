@@ -69,7 +69,7 @@ export gfdist, gfsep, gfposc, gfrr, gfpa, gfuds, gfudb, gfevnt, gfstol, gfrefn, 
 export gfsubc, gfsntc, gfilum, gfoclt, gftfov, gfrfov, gfocce, gffove
 export add_ephemeris!, add_frame!
 export StateQuery, state_query, RotationQuery, rotation_query
-export Orbit, orbit, element, elements, keplerian, keplerian_orbit, with_element, with_apsides, two_body, vinf_periapsis, vinf_turn_angle
+export Orbit, orbit, element, elements, keplerian, keplerian_orbit, with_element, with_apsides, two_body, vinf_periapsis, vinf_turn_angle, local_frame, local_frame_state, relative_state
 export EphemerisTable, ephemeris_table, table_position, table_state, table_jet, table_span
 export RotationTable, rotation_table, table_rotation, table_rotation_jet, table_to_spk
 export EKColumnAttr, EKSegmentSummary
@@ -158,6 +158,7 @@ include("analysis/orbit.jl")     # Orbit, orbit: a state about a central body
 include("analysis/elements.jl")  # element, elements: the scalar quantities of an Orbit
 include("analysis/brouwer.jl")   # Brouwer mean elements of an Orbit
 include("analysis/build.jl")     # keplerian_orbit, with_element, with_apsides, two_body
+include("analysis/local_frames.jl")  # local_frame, local_frame_state, relative_state
 include("ek/file.jl")       # EK pages, trees, segment and column descriptors
 include("ek/columns.jl")    # EK column entries of classes 1 to 9
 include("ek/query_parse.jl")  # EK query language: scan, parse, resolve names and times, check

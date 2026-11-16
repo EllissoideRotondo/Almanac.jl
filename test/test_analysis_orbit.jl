@@ -14,10 +14,11 @@
 # definitions; the Brouwer mean elements with the round trips of ANISE's own tests
 # (orbit_mean_elements.rs). `keplerian_orbit` is compared with `conics` on random orbits,
 # `with_element`, `with_apsides` with the loops of ANISE's verif_with_init, and `two_body` with
-# `prop2b` and with ANISE's verif_orbit_at_epoch.
+# `prop2b` and with ANISE's verif_orbit_at_epoch. The local frames are checked for orthonormality,
+# against the axes as ANISE lists them, and the exact rate against ForwardDiff of `two_body`.
 #
-# Run time of the group: 16 to 27 s (one process; 23.8 to 27.4 s measured with the load of the
-# machine; 25.1 s in the last run before the commit). About 12 s of it is the load of the
+# Run time of the group: 16 to 29 s (one process; 23.8 to 28.8 s measured with the load of the
+# machine; 29.9 s in the last run before the commit). About 12 s of it is the load of the
 # oracle and the fixtures before the first testset.
 
 import ForwardDiff
@@ -127,6 +128,12 @@ const TOL_ATEPOCH = (2e-11, 1e-15, 1e-15, 1e-15, 5e-8)
 const TOL_TWOBODY = (7e-12, 5e-12, 3e-14)
 # A dual epoch: the derivative of the state is (v, -gm r/r^3) to 2.9e-12, relative.
 const TOL_DUALDT = 1.5e-11
+# Local frames (20 random orbits, 4 kinds; seed SEED + 54): the largest |R'R - I| and |det R - 1|
+# are 5.6e-16 (a few roundings of unit vectors), the largest difference of the exact rate from
+# the ForwardDiff derivative of the frame of `two_body` is 1.2e-15 1/s (the two code paths
+# round differently; the rates are of order 1e-3 1/s). The limits are about five times the
+# measured values.
+const TOL_LF = (3e-15, 3e-15, 6e-15)
 
 group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         Kernels.GM_TPC, Kernels.PCK11) do
@@ -791,5 +798,74 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         od = Orbit(o.state, ForwardDiff.Dual(0.0, 1.0), 399, 1, gm)
         @test two_body(od, 50.0) isa Orbit{<:ForwardDiff.Dual}
         @test two_body(o, ForwardDiff.Dual(o.et, 1.0)).state isa SVector{6,<:ForwardDiff.Dual}
+    end
+
+    @testset "local frames and relative states" begin
+        rng = Xoshiro(SEED + 54)
+        kinds = (:ric, :vnc, :rcn, :tnw)
+        w = zeros(3)
+        for _ in 1:nsample(20, 200)
+            o = random_orbit(rng)
+            r, v, h = o.position, o.velocity, o.hvec
+            rh, vh, hh = r / norm(r), v / norm(v), h / norm(h)
+            firsts = (:ric => rh, :vnc => vh, :rcn => rh, :tnw => vh)
+            for (k, c1) in firsts
+                R = local_frame(o, k)
+                @test R isa SMatrix{3,3,Float64,9}
+                w[1] = max(w[1], maximum(abs, R' * R - I))
+                w[2] = max(w[2], abs(det(R) - 1))
+                @test R[:, 1] ≈ c1 atol = 1e-15
+                @test R[:, 3] ≈ (k in (:ric, :rcn, :tnw) ? hh : cross(vh, hh)) atol = 1e-15
+                # the exact rate against the derivative of the frame of the propagated orbit
+                S = local_frame_state(o, k)
+                @test S isa SMatrix{6,6,Float64,36}
+                @test S[1:3, 1:3] == R && S[4:6, 4:6] == R && all(iszero, S[1:3, 4:6])
+                D = ForwardDiff.derivative(t -> local_frame(two_body(o, t), k), o.et)
+                w[3] = max(w[3], maximum(abs, S[4:6, 1:3] - D))
+            end
+        end
+        measured(@sprintf("  local frames: |R'R - I| %.1e, |det R - 1| %.1e, rate against ForwardDiff %.1e 1/s", w...))
+        @test w[1] < TOL_LF[1] && w[2] < TOL_LF[2] && w[3] < TOL_LF[3]
+        o = random_orbit(rng)
+        @test local_frame(o, :rcn) == local_frame(o, :ric)
+        # the axes as ANISE lists them
+        r, v, h = o.position, o.velocity, o.hvec
+        rh, vh, hh = normalize(r), normalize(v), normalize(h)
+        @test local_frame(o, :ric) ≈ [rh cross(hh, rh) hh] atol = 1e-15
+        @test local_frame(o, :vnc) ≈ [vh hh cross(vh, hh)] atol = 1e-15
+        @test local_frame(o, :tnw) ≈ [vh cross(hh, vh) hh] atol = 1e-15
+        # relative states
+        for k in kinds
+            @test relative_state(o, o, k) == zeros(6)
+        end
+        # (the position has the magnitude of 1e4 km, so the offset is exact to about 1e-11 km)
+        radial = Orbit(o.state + SVector(o.position / norm(o.position)..., 0, 0, 0), o.et, 399, 1, o.gm)
+        @test relative_state(radial, o, :ric) ≈ SVector(1, 0, 0, 0, 0, 0) atol = 1e-10
+        # the definition: the transpose of the 6 by 6 matrix on the difference
+        other = Orbit(o.state + SVector(0.3, -0.2, 0.1, 1e-3, 2e-3, -1e-3), o.et, 399, 1, o.gm)
+        dv = other.state - o.state
+        for k in kinds
+            @test relative_state(other, o, k) ≈ transpose(local_frame_state(o, k)) * dv rtol = 1e-14
+        end
+        # dual numbers pass through
+        od = Orbit(o.state, ForwardDiff.Dual(o.et, 1.0), 399, 1, o.gm)
+        @test local_frame(od, :tnw) isa SMatrix{3,3,<:ForwardDiff.Dual}
+        @test relative_state(other, od, :vnc) isa SVector{6,<:ForwardDiff.Dual}
+        # errors
+        @test throws_kind(() -> local_frame(o, :xyz), :badarg)
+        @test throws_kind(() -> local_frame_state(o, :xyz), :badarg)
+        @test throws_kind(() -> relative_state(o, o, :xyz), :badarg)
+        @test throws_kind(() -> relative_state(Orbit(o.state, o.et + 1, 399, 1, o.gm), o, :ric), :badarg)
+        @test throws_kind(() -> relative_state(Orbit(o.state, o.et, 301, 1, o.gm), o, :ric), :badarg)
+        @test throws_kind(() -> relative_state(Orbit(o.state, o.et, 399, 2, o.gm), o, :ric), :badarg)
+        # ANISE fails through hvec/hmag for h = 0; no NaN leaves these calls
+        for st in (SVector(7000.0, 0, 0, 7.0, 0, 0), SVector(7000.0, 0, 0, 0, 0, 0), SVector(0.0, 0, 0, 0, 7.0, 0))
+            z = Orbit(st, 0.0, 399, 1, GMAT_GM)
+            for k in kinds
+                @test throws_kind(() -> local_frame(z, k), :degeneratecase)
+                @test throws_kind(() -> local_frame_state(z, k), :degeneratecase)
+                @test throws_kind(() -> relative_state(o, z, k), :degeneratecase)
+            end
+        end
     end
 end

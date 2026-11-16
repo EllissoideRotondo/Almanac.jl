@@ -1,0 +1,157 @@
+# Local orbit frames of an `Orbit` (RIC, VNC, RCN, TNW) and the states relative to them.
+# The axes follow ANISE (src/astro/orbit.rs at b3aaadc, `dcm3x3_from_*_to_inertial`); the
+# rate of the 6 by 6 matrix is the exact derivative along the two-body motion, where ANISE
+# differences two states 1 ms apart.
+
+const _LOCAL_FRAME_KINDS = (:ric, :vnc, :rcn, :tnw)
+
+# The 3 by 3 matrix of the columns `a`, `b`, `c`.
+@inline _lf_cols(a::SVector{3,T}, b::SVector{3,T}, c::SVector{3,T}) where {T} =
+    SMatrix{3,3,T,9}(a[1], a[2], a[3], b[1], b[2], b[3], c[1], c[2], c[3])
+
+# The matrix of the local axes and its time derivative along the two-body motion. The
+# angular momentum is constant there, so only the unit vectors of the radius and of the
+# velocity turn: with `a = -gm r / |r|^3`, d(r/|r|)/dt = (v - r̂ (r̂.v)) / |r| and
+# d(v/|v|)/dt = (a - v̂ (v̂.a)) / |v|. The checks are those of `hvec()` and `hmag()`
+# in ANISE, which fail where h is zero (a rectilinear orbit, or a zero radius or velocity).
+function _local_frame_pair(name::Symbol, o::Orbit{T}, kind::Symbol) where {T}
+    kind in _LOCAL_FRAME_KINDS || throw(SpiceError(:badarg,
+        "$name: the kind is :$kind; it must be one of :ric, :vnc, :rcn, :tnw"))
+    h = _hvec_for(:hmag, o)
+    hm = norm(h)
+    primal(hm) > 0 || _degenerate(:hmag, "the angular momentum is zero")
+    r, v = o.position, o.velocity
+    hh = h / hm
+    z = zero(SVector{3,T})
+    if kind === :ric || kind === :rcn
+        rm = norm(r)
+        rh = r / rm
+        rd = (v - rh * dot(rh, v)) / rm
+        return _lf_cols(rh, cross(hh, rh), hh), _lf_cols(rd, cross(hh, rd), z)
+    end
+    vm = norm(v)
+    vh = v / vm
+    a = (-getfield(o, :gm) / norm(r)^3) * r
+    vd = (a - vh * dot(vh, a)) / vm
+    kind === :vnc && return _lf_cols(vh, hh, cross(vh, hh)), _lf_cols(vd, z, cross(vd, hh))
+    return _lf_cols(vh, cross(hh, vh), hh), _lf_cols(vd, cross(hh, vd), z)
+end
+
+"""
+    local_frame(o, kind) -> SMatrix{3,3}
+
+The rotation from a local frame of the orbit `o` to the frame of `o`. This call has no
+CSPICE counterpart; it matches `Orbit::dcm3x3_from_ric_to_inertial`, `..._vnc_...`,
+`..._rcn_...` and `..._tnw_...` of ANISE.
+
+`kind` is `:ric`, `:vnc`, `:rcn` or `:tnw`. With `r̂ = r/|r|`, `v̂ = v/|v|` and `ĥ = r × v/|r × v|`,
+the columns are the axes of the local frame in the frame of `o`:
+
+| `kind` | columns |
+|:--|:--|
+| `:ric` (radial, in-track, cross-track) | `r̂`, `ĥ × r̂`, `ĥ` |
+| `:vnc` (velocity, normal, co-normal) | `v̂`, `ĥ`, `v̂ × ĥ` |
+| `:rcn` (radial, cross, normal) | the same as `:ric` |
+| `:tnw` (tangential, normal, orbit normal) | `v̂`, `ĥ × v̂`, `ĥ` |
+
+The frame of `o` must be inertial, as in ANISE; no check is made. The element type of the
+result is the number type of `o`, so a dual epoch or state is carried through.
+
+Throws `SpiceError(:badarg)` for another `kind`, and `SpiceError(:degeneratecase)` where
+the angular momentum is zero, which is where ANISE fails in `hvec()` or `hmag()`.
+
+# Examples
+```jldoctest
+julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415);
+
+julia> local_frame(o, :ric)
+3×3 SMatrix{3, 3, Float64, 9} with indices SOneTo(3)×SOneTo(3):
+ 1.0  0.0  0.0
+ 0.0  1.0  0.0
+ 0.0  0.0  1.0
+```
+"""
+local_frame(o::Orbit, kind::Symbol) = _local_frame_pair(:local_frame, o, kind)[1]
+
+"""
+    local_frame_state(o, kind) -> SMatrix{6,6}
+
+The rotation of states from a local frame of the orbit `o` to the frame of `o`, in the
+block form `[R 0; Ṙ R]`, where `R` is [`local_frame`](@ref)`(o, kind)` and `Ṙ` its time
+derivative along the two-body motion of `o`. This call has no CSPICE counterpart; it matches
+`Orbit::dcm_from_ric_to_inertial`, `..._vnc_...`, `..._rcn_...` and `..._tnw_...` of ANISE.
+
+ANISE takes `Ṙ` from the difference of the matrices of two states 1 ms before and after
+the epoch; here `Ṙ` is the analytic derivative: `ṙ = v` and `v̇ = -gm r/|r|³`, and the
+angular momentum is constant. The two differ by the error of the difference quotient.
+
+Throws what [`local_frame`](@ref) throws.
+
+# Examples
+```jldoctest
+julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415);
+
+julia> S = local_frame_state(o, :ric); S[5, 1], S[1, 4]
+(0.0010714285714285715, 0.0)
+```
+"""
+function local_frame_state(o::Orbit, kind::Symbol)
+    R, Rd = _local_frame_pair(:local_frame_state, o, kind)
+    T = eltype(R)
+    z = zero(T)
+    return SMatrix{6,6,T,36}(
+        R[1, 1], R[2, 1], R[3, 1], Rd[1, 1], Rd[2, 1], Rd[3, 1],
+        R[1, 2], R[2, 2], R[3, 2], Rd[1, 2], Rd[2, 2], Rd[3, 2],
+        R[1, 3], R[2, 3], R[3, 3], Rd[1, 3], Rd[2, 3], Rd[3, 3],
+        z, z, z, R[1, 1], R[2, 1], R[3, 1],
+        z, z, z, R[1, 2], R[2, 2], R[3, 2],
+        z, z, z, R[1, 3], R[2, 3], R[3, 3])
+end
+
+"""
+    relative_state(o, chief, kind) -> SVector{6}
+
+The state of the orbit `o` relative to the orbit `chief`, in the local frame `kind` of
+`chief`: `transpose(local_frame_state(chief, kind)) * (o.state - chief.state)`. This call
+has no CSPICE counterpart; it matches `Orbit::ric_difference_unchecked`,
+`vnc_difference_unchecked` and `tnw_difference_unchecked` of ANISE (`kind` `:ric` or
+`:rcn`, `:vnc`, `:tnw`), with the rate of the frame exact.
+
+Both orbits must have the same epoch, center and frame, as `ric_difference` requires. The
+result is the position and velocity of the difference, with the components in the axes
+of the local frame (for `:ric`, the radial, in-track and cross-track offsets).
+
+Throws `SpiceError(:badarg)` if the epoch, the center or the frame differ, or `kind` is
+unknown, and `SpiceError(:degeneratecase)` where the angular momentum of `chief` is zero.
+
+# Examples
+```jldoctest
+julia> chief = Orbit([7000.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415);
+
+julia> o = Orbit([7001.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415);
+
+julia> relative_state(o, chief, :ric)
+6-element SVector{6, Float64} with indices SOneTo(6):
+ 1.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+```
+"""
+function relative_state(o::Orbit{S}, chief::Orbit{U}, kind::Symbol) where {S,U}
+    primal(o.et) == primal(chief.et) || throw(SpiceError(:badarg,
+        "relative_state: the epochs differ ($(primal(o.et)) and $(primal(chief.et)))"))
+    o.center == chief.center || throw(SpiceError(:badarg,
+        "relative_state: the centers differ ($(o.center) and $(chief.center))"))
+    o.frame == chief.frame || throw(SpiceError(:badarg,
+        "relative_state: the frames differ ($(o.frame) and $(chief.frame))"))
+    R, Rd = _local_frame_pair(:relative_state, chief, kind)
+    d = o.state - chief.state
+    dr = SVector(d[1], d[2], d[3])
+    dv = SVector(d[4], d[5], d[6])
+    p = _m_mtxv(R, dr) + _m_mtxv(Rd, dv)
+    v = _m_mtxv(R, dv)
+    return SVector(p[1], p[2], p[3], v[1], v[2], v[3])
+end
