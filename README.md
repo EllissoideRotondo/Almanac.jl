@@ -74,7 +74,8 @@ Beyond CSPICE:
 - **Independent kernel sets.** A `SpiceContext` holds its own kernels and settings, so you
   can compare two ephemerides or keep two missions apart.
 - **Derivatives.** `spkder` and `pxder` return time derivatives of any order, and states,
-  rotations and surface points accept ForwardDiff.jl dual numbers as epochs.
+  rotations and surface points differentiate with respect to the epoch with ForwardDiff.jl,
+  Enzyme.jl, Mooncake.jl, Zygote.jl, ReverseDiff.jl and Tracker.jl.
 - **Fast tables.** `ephemeris_table` and `rotation_table` compress a trajectory or a rotation
   into Chebyshev coefficients, for inner loops and for code that runs on a GPU.
 
