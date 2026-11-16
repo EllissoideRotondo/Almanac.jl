@@ -12,12 +12,13 @@
 # (src/astro/orbit.rs, b3aaadc). The altitudes and geodetic elements are compared with
 # Vallado's examples as ANISE prints them and with `recgeo`; the equinoctial ones with their
 # definitions; the Brouwer mean elements with the round trips of ANISE's own tests
-# (orbit_mean_elements.rs).
+# (orbit_mean_elements.rs). `keplerian_orbit` is compared with `conics` on random orbits,
+# `with_element`, `with_apsides` with the loops of ANISE's verif_with_init, and `two_body` with
+# `prop2b` and with ANISE's verif_orbit_at_epoch.
 #
-# Run time of the group: 15 to 21 s (one process; the same code measured 12.5 to 18.1 s
-# with the load of the machine). 12 s of it is the load of the oracle and the fixtures
-# before the first testset; the ten testsets together take 1 s, the B-plane and
-# v-infinity ones 0.7 s.
+# Run time of the group: 16 to 27 s (one process; 23.8 to 27.4 s measured with the load of the
+# machine; 25.1 s in the last run before the commit). About 12 s of it is the load of the
+# oracle and the fixtures before the first testset.
 
 import ForwardDiff
 isdefined(@__MODULE__, :CS) || include("mathoracle.jl")
@@ -32,7 +33,9 @@ include("gmat_cases.jl")
 const RTOL_GMAT = 1e-12
 const ATOL_GMAT = 1e-12
 
-# A random orbit from the CSPICE conic elements (`keplerian_orbit` comes in a later task):
+# A random orbit from the CSPICE conic elements (not from `keplerian_orbit`, which would
+# change the rounding of the sampled orbits and the earlier measured tolerances, and is itself
+# tested against `conics` below):
 # periapsis 6500 to 50000 km, ecc in [0.005, 0.95] or [1.05, 5], inclination in
 # [0.02, pi - 0.02], angles uniform. The bounds keep away from the circular and the
 # equatorial orbit, where the angles are ill conditioned and the two codes may differ.
@@ -97,6 +100,33 @@ const TOL_RECGEO = (2e-15, 2e-15, 5e-15)
 # is TOL_ID); the conversion back to Keplerian elements (the sine and arc tangent of
 # half the inclination and of p, q) measured 3.1e-15, limit 1.5e-14.
 const TOL_EQ_BACK = 1.5e-14
+const _KEP6 = (:sma, :ecc, :inc, :raan, :aop, :ta)
+# Building, editing and propagating (the `measured` lines of the testsets print the
+# values; the limit is about five times the largest measured, 200 random orbits, seeds
+# SEED + 51 to 53).
+# keplerian_orbit against `conics`, relative: position 1.2e-12 and velocity 2.5e-12 (the two
+# codes solve Kepler's equation by different iterations, and the position error is the
+# velocity error times the orbit's conditioning near the apsides); round trip of the state
+# through the elements, the apsides or the true anomaly 1.7e-14 (a few ulps of acos and atan2);
+# the elements read back 3.7e-14.
+const TOL_BUILD = (6e-12, 1.2e-11, 1e-13, 2e-13)
+# with_element: the asked element 7.4e-14 relative or rad (rounding of the conversion and of
+# the element read back); the five others 9.5e-12 (raan, aop and ta of a rebuilt state are
+# ill conditioned near the poles of acos), the same cause as TOL_OSC.
+const TOL_WITH = (4e-13, 5e-11)
+# verif_with_init of ANISE (loops of 900 or 360 values), largest 1.5e-11 (km or rad): the
+# rounding of values of 8e3 to 1e4 km (ulp 1e-12 to 2e-12 each, summed over the conversion).
+const TOL_INIT = 8e-11
+# verif_orbit_at_epoch of ANISE: sma 3.6e-12 km (ANISE 1e-10), ecc 4.1e-16 (1e-7 deg), inc 0,
+# raan 0, aop 3.3e-8 rad = 1.9e-6 deg (ANISE 3e-6 deg): the aop of an orbit of ecc 1e-8 is
+# the angle of a vector of length 1e-8 whose rounding error is 1e-16.
+const TOL_ATEPOCH = (2e-11, 1e-15, 1e-15, 1e-15, 5e-8)
+# two_body against `prop2b`, relative, up to +-10 periods: position 1.3e-12, velocity 9.2e-13,
+# sma 5.8e-15; the mean longitude is advanced by n dt of up to 60 rad, whose rounding is a few
+# ulps of 60 (1e-14), scaled by the conditioning of the orbit.
+const TOL_TWOBODY = (7e-12, 5e-12, 3e-14)
+# A dual epoch: the derivative of the state is (v, -gm r/r^3) to 2.9e-12, relative.
+const TOL_DUALDT = 1.5e-11
 
 group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         Kernels.GM_TPC, Kernels.PCK11) do
@@ -533,5 +563,233 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         e = Orbit(ctx, [7000.0, 0.0, 0.0, 0.0, 8.0, 0.0], 0.0, 399, "J2000")
         @test e.radii == [6378.1366, 6378.1366, 6356.7519]
         @test e.altitude == e.rmag - 6378.1366 && e.sma_altitude == e.sma - 6378.1366
+    end
+
+    @testset "keplerian_orbit against conics and the round trip" begin
+        rng = Xoshiro(SEED + 51)
+        gm = 398600.4415
+        worst = zeros(4)
+        for _ in 1:nsample(200, 5000)
+            ecc = rand(rng) < 0.5 ? 0.005 + 0.945 * rand(rng) : 1.05 + 3.95 * rand(rng)
+            rp = 6500.0 + 43500.0 * rand(rng)
+            inc = 0.02 + (π - 0.04) * rand(rng)
+            raan, aop = 2π * rand(rng), 2π * rand(rng)
+            m0 = ecc < 1 ? 2π * rand(rng) : 6 * rand(rng) - 3
+            ref = conics([rp, ecc, inc, raan, aop, m0, 0.0, gm], 0.0)
+            sma = rp / (1 - ecc)
+            o = keplerian_orbit(0.0, 399, 1; sma, ecc, inc, raan, aop, ma=m0, gm)
+            # the same orbit by the radii of the apsides and by the true anomaly, and the round trip
+            ra = sma * (1 + ecc)
+            o2 = ecc < 1 ? keplerian_orbit(0.0, 399, 1; periapsis=rp, apoapsis=ra, inc, raan, aop,
+                ta=o.ta, gm) : o
+            o3 = keplerian_orbit(0.0, 399, 1; sma, ecc, inc, raan, aop, ta=o.ta, gm)
+            dr = norm(o.position - ref[1:3]) / norm(ref[1:3])
+            dv = norm(o.velocity - ref[4:6]) / norm(ref[4:6])
+            # round trip through the elements of the state
+            k = keplerian(o)
+            o4 = keplerian_orbit(0.0, 399, 1; k..., gm)
+            dk = maximum(x -> norm(x.state - o.state) / norm(o.state), (o2, o3, o4))
+            worst .= max.(worst, (dr, dv, dk, 0.0))
+            @test dr < TOL_BUILD[1] && dv < TOL_BUILD[2] && dk < TOL_BUILD[3]
+            @test o.et === 0.0 && o.gm == gm && o.center === Int32(399) && o.frame === Int32(1)
+            @test all(isnan, o.radii)
+            kk = keplerian(o4)
+            de = max(abs(kk.sma - k.sma) / abs(k.sma), abs(kk.ecc - k.ecc), angdiff(kk.inc, k.inc),
+                angdiff(kk.raan, k.raan), angdiff(kk.aop, k.aop), angdiff(kk.ta, k.ta))
+            worst[4] = max(worst[4], de)
+            @test de < TOL_BUILD[4]
+        end
+        measured(@sprintf("  keplerian_orbit against conics, relative: position %.2e, velocity %.2e; round trip of the state %.2e, of the elements %.2e", worst...))
+    end
+
+    @testset "keplerian_orbit: signs, errors and number types" begin
+        gm = 398600.4415
+        kw = (inc=0.5, raan=1.0, aop=2.0, gm=gm)
+        o = keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=0.1, ta=0.3, kw...)
+        # ANISE changes the sign of a negative ecc and of an sma of the wrong sign
+        @test keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=-0.1, ta=0.3, kw...).state == o.state
+        @test keplerian_orbit(0.0, 399, 1; sma=-8000.0, ecc=0.1, ta=0.3, kw...).state == o.state
+        h = keplerian_orbit(0.0, 399, 1; sma=-20000.0, ecc=1.5, ta=0.3, kw...)
+        @test keplerian_orbit(0.0, 399, 1; sma=20000.0, ecc=1.5, ta=0.3, kw...).state == h.state
+        # periapsis above apoapsis: the eccentricity is negative, and its sign changes
+        @test keplerian_orbit(0.0, 399, 1; periapsis=9000.0, apoapsis=7000.0, ta=0.3, kw...).ecc ≈ 0.125 rtol=1e-12
+        # argument errors
+        for bad in (
+                () -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=0.1, ta=0.3, ma=0.3, kw...),
+                () -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=0.1, kw...),
+                () -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ta=0.3, kw...),
+                () -> keplerian_orbit(0.0, 399, 1; ecc=0.1, ta=0.3, kw...),
+                () -> keplerian_orbit(0.0, 399, 1; ta=0.3, kw...),
+                () -> keplerian_orbit(0.0, 399, 1; periapsis=7000.0, ta=0.3, kw...),
+                () -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=0.1, periapsis=7000.0,
+                    apoapsis=9000.0, ta=0.3, kw...),
+                () -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=0.1, apoapsis=9000.0, ta=0.3, kw...))
+            @test throws_kind(bad, :badarg)
+        end
+        # the failures of ANISE: parabola, anomaly beyond the asymptotes, radii of apsis
+        @test throws_kind(() -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=1.0, ta=0.3, kw...), :degeneratecase)
+        @test throws_kind(() -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=1 + 5e-12, ta=0.3, kw...), :degeneratecase)
+        @test keplerian_orbit(0.0, 399, 1; sma=-8000.0, ecc=1 + 2e-11, ta=0.3, kw...) isa Orbit
+        @test throws_kind(() -> keplerian_orbit(0.0, 399, 1; sma=-8000.0, ecc=2.0, ta=2.5, kw...), :degeneratecase)
+        @test keplerian_orbit(0.0, 399, 1; sma=-8000.0, ecc=2.0, ta=-2.0, kw...) isa Orbit    # inbound leg
+        @test throws_kind(() -> keplerian_orbit(0.0, 399, 1; periapsis=0.0, apoapsis=9000.0, ta=0.3, kw...), :degeneratecase)
+        @test throws_kind(() -> keplerian_orbit(0.0, 399, 1; periapsis=7000.0, apoapsis=-1.0, ta=0.3, kw...), :degeneratecase)
+        @test throws_kind(() -> keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=1.0, ma=0.3, kw...), :degeneratecase)
+        # no kernels with gm and integer names; the kernel forms read GM and the radii
+        ctx0 = SpiceContext()
+        @test keplerian_orbit(ctx0, 0.0, 399, 1; sma=8000.0, ecc=0.1, ta=0.3, kw...).state == o.state
+        @test throws_kind(() -> keplerian_orbit(ctx0, 0.0, 399, 1; sma=8000.0, ecc=0.1, ta=0.3,
+            inc=0.5, raan=1.0, aop=2.0), :kernelvarnotfound)
+        ctx = neo_context([Kernels.LSK, Kernels.DE440S, Kernels.GM_TPC, Kernels.PCK11])
+        ok = keplerian_orbit(ctx, 5.0, "EARTH", "J2000"; sma=8000.0, ecc=0.1, ta=0.3, inc=0.5, raan=1.0, aop=2.0)
+        @test ok.gm == bodvcd(ctx, 399, "GM")[1] && ok.radii == bodvcd(ctx, 399, "RADII") && ok.et == 5.0
+        @test ok == Orbit(ctx, keplerian_orbit(5.0, 399, 1; sma=8000.0, ecc=0.1, ta=0.3, inc=0.5, raan=1.0,
+            aop=2.0, gm=ok.gm).state, 5.0, "EARTH", "J2000")
+        ks = Almanac.kernelset(ctx)
+        @test keplerian_orbit(ks, 5.0, 399, 1; sma=8000.0, ecc=0.1, ta=0.3, inc=0.5, raan=1.0, aop=2.0) == ok
+        # dual numbers flow through the elements and the epoch
+        d = ForwardDiff.derivative(x -> keplerian_orbit(0.0, 399, 1; sma=x, ecc=0.1, ta=0.3, kw...).sma, 8000.0)
+        @test d ≈ 1 atol=1e-9
+        dm = keplerian_orbit(ForwardDiff.Dual(0.0, 1.0), 399, 1; sma=8000.0, ecc=0.1, ma=0.3, kw...)
+        @test dm isa Orbit{<:ForwardDiff.Dual} && ForwardDiff.partials(dm.et)[1] == 1.0
+    end
+
+    @testset "with_element and with_apsides" begin
+        rng = Xoshiro(SEED + 52)
+        worst = zeros(2)
+        for _ in 1:nsample(100, 2000), name in (:sma, :ecc, :inc, :raan, :aop, :ta)
+            o = random_orbit(rng)
+            hyp = o.ecc > 1
+            lim = hyp ? π - acos(1 / o.ecc) : π
+            new = if name === :sma
+                o.sma * (1 + 0.3 * rand(rng))
+            elseif name === :ecc
+                hyp ? o.ecc * (1 + 0.1 * rand(rng)) : 0.005 + 0.945 * rand(rng)
+            elseif name === :inc
+                0.02 + (π - 0.04) * rand(rng)
+            elseif name === :ta
+                0.9 * lim * (2rand(rng) - 1)
+            else
+                2π * rand(rng)
+            end
+            p = with_element(o, name, new)
+            before, after = keplerian(o), keplerian(p)
+            # the asked element, and the other five unchanged (angles modulo a turn)
+            got = getproperty(after, name)
+            want = getproperty(before, name)
+            d = name in (:sma, :ecc) ? abs(got - new) / abs(new) : angdiff(got, new)
+            others = map(filter(!=(name), collect(_KEP6))) do n
+                n === :sma ? abs(after.sma - before.sma) / abs(before.sma) :
+                n === :ecc ? abs(after.ecc - before.ecc) : angdiff(getproperty(after, n), getproperty(before, n))
+            end
+            worst .= max.(worst, (d, maximum(others)))
+            @test d < TOL_WITH[1] && maximum(others) < TOL_WITH[2]
+            @test isequal((p.et, p.center, p.frame, p.gm, p.radii), (o.et, o.center, o.frame, o.gm, o.radii))
+        end
+        measured(@sprintf("  with_element: asked element %.2e, others %.2e (relative or rad)", worst...))
+        # ANISE verif_with_init (tests/astro/orbit.rs): the same loops, in rad
+        kep = keplerian_orbit(0.0, 399, 1; sma=8191.93, ecc=0.0245, inc=_d(12.85), raan=_d(306.614),
+            aop=_d(314.19), ta=_d(99.8877), gm=GMAT_GM)
+        w = zeros(8)
+        for incr in 100:999
+            w[1] = max(w[1], abs(with_element(kep, :sma, kep.sma + incr).sma - (kep.sma + incr)))
+        end
+        for incr in 0:99
+            e = kep.ecc + incr / 100
+            w[2] = max(w[2], abs(with_element(kep, :ecc, e).ecc - e))
+        end
+        for incr in 0:359
+            x = _d(incr)
+            w[3] = max(w[3], angdiff(with_element(kep, :aop, mod(kep.aop + x, 2π)).aop, kep.aop + x))
+            w[4] = max(w[4], angdiff(with_element(kep, :raan, mod(kep.raan + x, 2π)).raan, kep.raan + x))
+            w[5] = max(w[5], angdiff(with_element(kep, :ta, mod(kep.ta + x, 2π)).ta, kep.ta + x))
+            inc = abs(rem2pi(kep.inc + x, RoundNearest))
+            w[6] = max(w[6], abs(with_element(kep, :inc, kep.inc + x).inc - inc))
+        end
+        for delta in 100:999
+            ra, rp = kep.apoapsis + delta, kep.periapsis - delta
+            q = with_apsides(kep, rp, ra)
+            w[7] = max(w[7], abs(q.apoapsis - ra))
+            w[8] = max(w[8], abs(q.periapsis - rp))
+        end
+        measured(@sprintf("  verif_with_init: sma %.1e km, ecc %.1e, aop %.1e, raan %.1e, ta %.1e, inc %.1e rad, ra %.1e, rp %.1e km", w...))
+        # ANISE compares with 1e-10 (km or deg); the limit is that of the largest measured
+        @test all(<(TOL_INIT), w)
+        # the others stay when the apsides change
+        q = with_apsides(kep, 7000.0, 9000.0)
+        @test q.periapsis ≈ 7000.0 && q.apoapsis ≈ 9000.0 && angdiff(q.inc, kep.inc) < 1e-12 &&
+              angdiff(q.raan, kep.raan) < 1e-12 && angdiff(q.aop, kep.aop) < 1e-11 && angdiff(q.ta, kep.ta) < 1e-11
+        # errors: argument names, radii, and the circular orbit (no true anomaly)
+        @test throws_kind(() -> with_element(kep, :foo, 1.0), :badarg)
+        @test throws_kind(() -> with_element(kep, :ma, 1.0), :badarg)
+        @test throws_kind(() -> with_apsides(kep, 0.0, 9000.0), :degeneratecase)
+        @test throws_kind(() -> with_apsides(kep, 7000.0, 0.0), :degeneratecase)
+        circ = Orbit(SVector(7000.0, 0, 0, 0, 0, sqrt(GMAT_GM / 7000)), 0.0, 399, 1, GMAT_GM)
+        for n in (:sma, :ecc, :inc, :raan, :aop)
+            @test throws_kind(() -> with_element(circ, n, 1.0), :degeneratecase)
+        end
+        @test throws_kind(() -> with_apsides(circ, 7000.0, 9000.0), :degeneratecase)
+        @test with_element(circ, :ta, 1.0) isa Orbit      # ANISE set_ta_deg does not read ta
+        @test with_element(kep, :sma, kep.sma) isa Orbit{Float64}
+        dual = Orbit(kep.state, ForwardDiff.Dual(0.0, 1.0), 399, 1, GMAT_GM)
+        @test with_element(dual, :aop, 1.0) isa Orbit{<:ForwardDiff.Dual}
+    end
+
+    @testset "two_body" begin
+        rng = Xoshiro(SEED + 53)
+        gm = 398600.4415
+        worst = zeros(3)
+        for _ in 1:nsample(200, 5000)
+            o = random_orbit(rng)
+            n = o.mean_motion
+            dt = o.ecc < 1 ? 20 * (rand(rng) - 0.5) * 2π / n : (2rand(rng) - 1) * 3 / n
+            ref = prop2b(gm, o.state, dt)
+            t = two_body(o, o.et + dt)
+            dr = norm(t.position - ref[1:3]) / norm(ref[1:3])
+            dv = norm(t.velocity - ref[4:6]) / norm(ref[4:6])
+            ds = abs(t.sma - o.sma) / abs(o.sma)
+            worst .= max.(worst, (dr, dv, ds))
+            @test dr < TOL_TWOBODY[1] && dv < TOL_TWOBODY[2] && ds < TOL_TWOBODY[3]
+            @test t.et == o.et + dt && isequal((t.center, t.frame, t.gm, t.radii), (o.center, o.frame, o.gm, o.radii))
+        end
+        measured(@sprintf("  two_body against prop2b, relative: position %.2e, velocity %.2e; sma %.2e", worst...))
+        # the same epoch: the orbit itself
+        o = random_orbit(rng)
+        @test two_body(o, o.et) === o
+        # ANISE verif_orbit_at_epoch: half a period later only the anomaly has changed
+        kep(args...) = keplerian_orbit(0.0, 399, 1; sma=8191.93, ecc=args[1], inc=_d(args[2]),
+            raan=_d(306.614), aop=_d(314.19), ta=_d(args[3]), gm=GMAT_GM)
+        rv, vv = 26559.381, 3.874002
+        cases = (kep(1e-8, 12.85, 99.8877), kep(0.2, 12.85, -99.8877), kep(1e-8, 1e-5, -99.8877),
+            (Orbit(SVector(a, b, 0, c, d, 0), 0.0, 399, 1, GMAT_GM) for (a, b, c, d) in
+                ((rv, 0.0, 0.0, vv), (0.0, rv, -vv, 0.0), (-rv, 0.0, 0.0, -vv), (0.0, -rv, vv, 0.0)))...)
+        w = zeros(5)
+        for orb in cases
+            f = two_body(orb, orb.et + 0.5 * orb.period)
+            w .= max.(w, (abs(orb.sma - f.sma), abs(orb.ecc - f.ecc), angdiff(orb.inc, f.inc),
+                angdiff(orb.raan, f.raan), angdiff(orb.aop, f.aop)))
+        end
+        measured(@sprintf("  verif_orbit_at_epoch: sma %.1e km, ecc %.1e, inc %.1e, raan %.1e, aop %.1e rad", w...))
+        # ANISE: sma and raan 1e-10, ecc and inc 1e-7 deg, aop 3e-6 deg; the limits are of the measured
+        @test w[1] < TOL_ATEPOCH[1] && w[2] < TOL_ATEPOCH[2] && w[3] < TOL_ATEPOCH[3] &&
+              w[4] < TOL_ATEPOCH[4] && w[5] < TOL_ATEPOCH[5]
+        # the true anomaly advanced as the mean anomaly: half a period of a circular-ish orbit
+        c = cases[1]
+        @test angdiff(two_body(c, c.et + c.period).ta, c.ta) < 1e-6
+        # an exactly circular orbit has no mean anomaly: ANISE fails, so does this
+        circ = Orbit(SVector(7000.0, 0, 0, 0, 0, sqrt(GMAT_GM / 7000)), 0.0, 399, 1, GMAT_GM)
+        @test throws_kind(() -> two_body(circ, 100.0), :degeneratecase)
+        @test two_body(circ, 0.0) === circ
+        # a dual epoch: the derivative of the state is the velocity and the acceleration
+        o = random_orbit(rng)
+        s = ForwardDiff.derivative(t -> Vector(two_body(o, t).state), 100.0)
+        r = norm(two_body(o, 100.0).position)
+        st = two_body(o, 100.0).state
+        dd = (norm(s[1:3] - st[4:6]) / norm(st[4:6]), norm(s[4:6] + gm * st[1:3] / r^3) / (gm / r^2))
+        measured(@sprintf("  two_body with a dual epoch, relative: dr/dt - v %.2e, dv/dt + gm r/r^3 %.2e", dd...))
+        @test all(<(TOL_DUALDT), dd)
+        od = Orbit(o.state, ForwardDiff.Dual(0.0, 1.0), 399, 1, gm)
+        @test two_body(od, 50.0) isa Orbit{<:ForwardDiff.Dual}
+        @test two_body(o, ForwardDiff.Dual(o.et, 1.0)).state isa SVector{6,<:ForwardDiff.Dual}
     end
 end

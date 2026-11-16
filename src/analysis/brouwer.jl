@@ -10,11 +10,15 @@ const J2_EARTH = 1.082_626_925_638_815e-3
 _brouwer_fail(msg::AbstractString) = throw(SpiceError(:degeneratecase,
     "the Brouwer mean elements are undefined: $msg"))
 
+# The conversions below are also those of `keplerian_orbit`, `with_element` and `two_body`
+# (build.jl), so their errors do not name the Brouwer elements.
+_conv_fail(msg::AbstractString) = throw(SpiceError(:degeneratecase, "undefined: $msg"))
+
 # ANISE `mean_anomaly_to_true_anomaly_rad` (src/astro/utils.rs): GTDS MathSpec 3-180, 3-181,
 # 3-186 by Newton iteration. Its `MathError`s are `:degeneratecase`.
 const _MA_EPSILON = 1e-12
 function _ma_to_ta(rm::T, ecc::T) where {T}
-    fail(what) = _brouwer_fail("the mean to true anomaly conversion $what")
+    fail(what) = _conv_fail("the mean to true anomaly conversion $what")
     if primal(ecc) <= 1
         e2 = rm + ecc * sin(rm)
         iter = 0
@@ -61,7 +65,7 @@ end
 # ANISE `try_keplerian` (src/astro/orbit.rs): GMAT's KeplerianToCartesian, with its errors
 # (parabola, true anomaly beyond the asymptotes, infinite radius, zero parameter).
 function _kep_to_cart(sma::T, ecc::T, inc::T, raan::T, aop::T, ta::T, gm::Real) where {T}
-    fail(what) = _brouwer_fail("the Keplerian to Cartesian conversion $what")
+    fail(what) = _conv_fail("the Keplerian to Cartesian conversion $what")
     ecc = primal(ecc) < 0 ? -ecc : ecc
     sma = if primal(ecc) > 1 && primal(sma) > 0
         -sma
