@@ -5,6 +5,8 @@
 # (val_state_def_circ_inc) for an Earth GM of 398600.4415 km^3/s^2. The kernel part
 # checks that `orbit` and `Orbit(ctx, ...)` read the same state, GM and radii as
 # `spkezr` and `bodvcd`.
+#
+# Run time of the group: about 4 s (3.9 s measured, one process).
 
 import ForwardDiff
 
@@ -33,8 +35,14 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         s = SVector(7000.0, 100.0, -50.0, 0.1, 7.5, 1.0)
         o = Orbit(s, ForwardDiff.Dual(1.0, 1.0), 399, 1, 398600.4415)
         @test o isa Orbit{<:ForwardDiff.Dual} && o.rmag isa ForwardDiff.Dual
-        o32 = Orbit(Float32.(s), 0.0, 399, 1, 398600.4415)
+        o32 = Orbit(Float32.(s), 0.0f0, 399, 1, 398600.4415)
         @test o32 isa Orbit{Float64} && o32.state isa SVector{6,Float64}
+        @test Orbit(SVector(7000, 0, 0, 0, 7, 0), 0, 399, 1, 1.0e5) isa Orbit{Float64}
+        for orb in (Orbit(s, 0.0, 399, 1, 398600.4415), o), n in elements()
+            r = Ref(n)
+            T = typeof(orb).parameters[1]
+            @test (@inferred element(orb, r[])) isa T
+        end
         @test throws_kind(() -> Orbit(s[1:5], 0.0, 399, 1, 1.0), :badarg)
         @test throws_kind(() -> Orbit(s, 0.0, 399, 1, 1.0, [1.0, 2.0]), :badarg)
     end

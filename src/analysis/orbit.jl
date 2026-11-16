@@ -5,28 +5,28 @@
 """
     Orbit(state, et, center, frame, gm[, radii])
     Orbit([ctx,] state, et, center, frame)
-    orbit([ctx,] targ, et, ref, abcorr, obs)
 
 A state about a central body, in km and km/s, with the central body's GM (km³/s²) and
 radii (km). This call has no CSPICE counterpart; it matches the `Orbit` of ANISE.
 
 `state` is `[x, y, z, vx, vy, vz]` in the frame `frame`, relative to `center`, at the
 epoch `et` (seconds past J2000 TDB). The orbit is taken in the frame it is given; no
-rotation is applied. The number type `T` of the orbit is the promoted type of `state`
-and `et`, so a dual number in either flows through every element. `gm` and `radii`
+rotation is applied. The number type `T` of the orbit is the promoted type of `state`,
+`et` and `Float64`, so every element has the one type `T`, and a dual number in either
+flows through every element. `gm` and `radii`
 stay `Float64`.
 
 The form with `gm` needs no kernels; `radii` defaults to NaN, which is what an unknown
 radius is. The form with `center` and `frame` as names or NAIF IDs reads `BODYnnn_GM`
-and, when present, `BODYnnn_RADII` of the kernel pool. `orbit` takes the state from
-[`spkezr`](@ref) with the center `obs` and the frame `ref`.
+and, when present, `BODYnnn_RADII` of the kernel pool; see [`orbit`](@ref) for the
+state from the kernels.
 
 The fields are `state`, `et`, `center`, `frame`, `gm` and `radii`. The properties
 `position`, `velocity` and `hvec` are `SVector{3,T}`; every symbol of [`elements`](@ref)
 is a property too (see [`element`](@ref)).
 
-Throws `SpiceError(:kernelvarnotfound)` if the pool has no GM for `center`, and the
-errors of [`spkezr`](@ref) for `orbit`.
+Throws `SpiceError(:badarg)` if `state` does not have 6 elements or `radii` 3, and
+`SpiceError(:kernelvarnotfound)` if the pool has no GM for `center`.
 
 # Examples
 ```jldoctest
@@ -53,7 +53,7 @@ function Orbit(state::AbstractVector{S}, et::E, center::Integer, frame::Integer,
         "Orbit: the state has $(length(state)) elements, not 6"))
     length(radii) == 3 || throw(SpiceError(:badarg,
         "Orbit: the radii have $(length(radii)) elements, not 3"))
-    T = promote_type(S, E)
+    T = promote_type(S, E, Float64)
     return Orbit{T}(SVector{6,T}(state), T(et), Int32(center), Int32(frame), Float64(gm),
         SVector{3,Float64}(radii))
 end
@@ -69,6 +69,17 @@ end
 Orbit(state::AbstractVector{<:Real}, et::Real, center::NameOrID, frame::NameOrID) =
     Orbit(default_context(), state, et, center, frame)
 
+"""
+    orbit([ctx,] targ, et, ref, abcorr, obs) -> Orbit
+
+The [`Orbit`](@ref) of `targ` about `obs` at `et` (seconds past J2000 TDB): the state of
+[`spkezr`](@ref) (same arguments, same order) in the frame `ref`, with the center `obs`
+and its GM and radii from the kernel pool. This call has no CSPICE counterpart; it
+matches the construction of an `Orbit` from an ephemeris state in ANISE.
+
+Throws the errors of [`spkezr`](@ref), and `SpiceError(:kernelvarnotfound)` if the pool
+has no GM for `obs`.
+"""
 function orbit(ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID,
         abcorr::AbstractString, obs::NameOrID)
     state, _ = spkezr(ctx, targ, et, ref, abcorr, obs)
