@@ -7,12 +7,15 @@
 # SPICELIB interface on which tspice passes) at the commit below into OUTDIR/pepper,
 # instruments that interface with instrument.py for the routines of routines.txt,
 # builds it with fpm (gfortran 16, as PEPPER requires), and runs each family in its own
-# directory with the log OUTDIR/logs/F_XXX.log. Nothing here is committed to Almanac.jl:
+# directory with the log OUTDIR/logs/F_XXX.log.gz. Nothing here is committed to Almanac.jl:
 # the tspice sources stay in the clone, and the logs and the copies of the kernels that
 # the families write stay in OUTDIR.
 #
 # Environment: PEPPER_COMMIT (default below), JOBS (parallel families, default nproc),
-# TIMEOUT (seconds per family, default 1800).
+# TIMEOUT (seconds per family, default 1800), TSPICE_ALL=1 (log every call; by default a
+# routine without state, or a query between two changes of state, is logged once per
+# distinct input, and a routine without state at most TSPICE_MAXPURE times per family,
+# default 20000; see instrument.py).
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
@@ -39,13 +42,21 @@ else
     families=$("$exe" --list)
 fi
 
+# The log is written into a FIFO that gzip compresses to F_XXX.log.gz.
 run_family() {
-    local fam=$1 wd="$out/work/$1"
-    rm -rf "$wd" "$out/logs/$fam.log" "$out/logs/$fam.log.files"
+    local fam=$1 wd="$out/work/$1" log="$out/logs/$1.log" ok=0 gz
+    rm -rf "$wd" "$log" "$log.gz" "$log.files"
     mkdir -p "$wd"
-    (cd "$wd" && TSPICE_LOG="$out/logs/$fam.log" timeout "$timeout" "$exe" "$fam" > output.txt 2>&1) \
-        && echo "$fam passed" || echo "$fam FAILED (see $wd/output.txt)"
+    mkfifo "$log"
+    gzip -1 < "$log" > "$log.gz" &
+    gz=$!
+    (cd "$wd" && TSPICE_LOG="$log" timeout "$timeout" "$exe" "$fam" > output.txt 2>&1) || ok=1
+    # a family that wrote nothing never opened the FIFO: let gzip see its end
+    kill -0 "$gz" 2>/dev/null && timeout 5 sh -c ": > '$log'" 2>/dev/null
+    wait "$gz"
+    rm -f "$log"
+    [ $ok = 0 ] && echo "$fam passed" || echo "$fam FAILED (see $wd/output.txt)"
 }
 export -f run_family
-export out exe timeout
+export out exe timeout TSPICE_ALL TSPICE_MAXPURE
 printf '%s\n' $families | xargs -P "$jobs" -I{} bash -c 'run_family {}'

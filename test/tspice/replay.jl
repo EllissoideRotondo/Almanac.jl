@@ -3,9 +3,9 @@
 #
 #     julia --project=test test/tspice/replay.jl LOGDIR [FAMILY ...]
 #
-# LOGDIR holds one log per tspice family (`F_XXX.log`, written by record.sh through the
-# instrumented SPICELIB interface of PEPPER, see instrument.py), with the copies of the
-# working directory that the log names. Each family is replayed in a new
+# LOGDIR holds one log per tspice family (`F_XXX.log.gz` or `F_XXX.log`, written by
+# record.sh through the instrumented SPICELIB interface of PEPPER, see instrument.py),
+# with the copies of the working directory that the log names. Each family is replayed in a new
 # `SpiceContext`, call by call, in the order of the log. A call is:
 #
 # - `match`: Almanac gives the outputs of SPICELIB within `RTOL`, or throws the
@@ -62,13 +62,16 @@ struct Call
     snapshot::String
 end
 
+"The log at `path`, decompressed if it ends in `.gz`."
+open_log(f, path) = endswith(path, ".gz") ? open(f, `gzip -dc $path`) : open(f, path)
+
 """
 Call `f(call)` for each call of the log at `path`, in order, reading the log as a stream.
 A call of a routine for which `want(name)` is false is passed with no arguments, which
 saves the parsing of its values.
 """
 function foreach_call(f, path; want=_ -> true)
-    open(path) do io
+    open_log(path) do io
         pending = nothing                   # a line read ahead
         lineno = 0
         nextline() = (pending === nothing ? (lineno += 1; readline(io)) : (l = pending; pending = nothing; l))
@@ -804,7 +807,7 @@ end
 Tally() = Tally(0, 0, 0, 0, 0, 0, 0, 0)
 
 function replay_family(path, tallies, mismatches)
-    family = replace(basename(path), ".log" => "")
+    family = replace(basename(path), r"\.log(\.gz)?$" => "")
     ctx = SpiceContext()
     empty!(HANDLES)
     empty!(HMAP)
@@ -908,16 +911,38 @@ function describe(c::Call)
     return "$(c.name)($(first(ins, 240)))"
 end
 
+"The logs of LOGDIR (`F_XXX.log` or `F_XXX.log.gz`), of the families named, or all."
+function family_logs(logdir, families)
+    logs = sort(filter(f -> occursin(r"^F_.*\.log(\.gz)?$", basename(f)), readdir(logdir; join=true)))
+    wanted = Set("F_" * uppercase(replace(fam, r"^F_"i => "")) for fam in families)
+    isempty(families) || filter!(f -> uppercase(replace(basename(f), r"\.log(\.gz)?$" => "")) in wanted, logs)
+    return logs
+end
+
+const TALLY_FIELDS = fieldnames(Tally)
+
+"`tallies` as a table, one routine per line: the name and the counts of `Tally`."
+function write_tallies(path, tallies)
+    open(path, "w") do io
+        println(io, join(["routine"; String.(collect(TALLY_FIELDS))], '\t'))
+        for name in sort(collect(keys(tallies)))
+            t = tallies[name]
+            println(io, join([name; [string(getfield(t, f)) for f in TALLY_FIELDS]], '\t'))
+        end
+    end
+end
+
+# The results go to TSPICE_OUT (default LOGDIR): replay.tsv, the mismatches, and
+# tally.tsv, the counts per routine (read by run.jl).
 function main(args)
     logdir = abspath(args[1])
+    outdir = abspath(get(ENV, "TSPICE_OUT", logdir))
+    mkpath(outdir)
     # The writers that the families call create files in the working directory.
     cd(mktempdir())
-    families = args[2:end]
-    logs = sort(filter(f -> endswith(f, ".log"), readdir(logdir; join=true)))
-    wanted = Set("F_" * uppercase(replace(fam, r"^F_"i => "")) * ".LOG" for fam in families)
-    isempty(families) || filter!(f -> uppercase(basename(f)) in wanted, logs)
+    logs = family_logs(logdir, args[2:end])
     tallies = Dict{String,Tally}()
-    mismatches = Mismatches(open(joinpath(logdir, "replay.tsv"), "w"), Dict{Tuple{String,String},Int}())
+    mismatches = Mismatches(open(joinpath(outdir, "replay.tsv"), "w"), Dict{Tuple{String,String},Int}())
     for path in logs
         println(stderr, basename(path))
         flush(stderr)
@@ -938,6 +963,7 @@ function main(args)
     end
     println(rpad("all", 10), lpad(tot.match, 10), lpad(tot.cspice, 8), lpad(tot.near, 8), lpad(tot.spread, 8), lpad(tot.value, 8), lpad(tot.error, 8), lpad(tot.adapter, 10), lpad(tot.skipped, 10))
     close(mismatches.io)
+    write_tallies(joinpath(outdir, "tally.tsv"), tallies)
     return tot
 end
 

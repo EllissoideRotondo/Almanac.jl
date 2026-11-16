@@ -33,7 +33,7 @@ CSPICE itself is the reference. The test suite calls each routine of this packag
 | Derivative | The first derivative with the velocity of CSPICE, and each higher derivative with automatic differentiation of the one below it |
 | Error | The kind of the error, and the text of the message where a program can depend on it |
 | Concurrency | Answers from many threads during changes of the loaded kernels with the answers of one thread |
-| NAIF's test suite | The calls that tspice, the test suite of SPICELIB, makes in its 400 test families, recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against this package; a difference from SPICELIB is checked against CSPICE (`test/tspice/`, not part of the default run) |
+| NAIF's test suite | The calls that tspice, the test suite of SPICELIB, makes in its 400 test families, recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against this package; a difference from SPICELIB is checked against CSPICE ([how to run it](@ref "Run NAIF's test suite"); not part of the default run) |
 | Allocation | A static proof (AllocCheck.jl) that 61 numeric routines cannot allocate: vector, matrix, rotation, coordinate and ellipsoid calls, conic elements, `unitim`, `deltet` and the table queries ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_alloccheck.jl)) |
 
 | Measure | Value |
@@ -42,6 +42,14 @@ CSPICE itself is the reference. The test suite calls each routine of this packag
 | Comparisons in the exhaustive run (`ALMANAC_TEST_FULL=1`), with larger samples, longer search spans and larger files | about 100,000 |
 | Line coverage of `src/` | 96.6 % |
 | Julia versions tested | 1.10 and 1.13 |
+
+## Run NAIF's test suite
+
+```sh
+julia --project=test test/tspice/run.jl
+```
+
+The first run builds PEPPER with gfortran 16 and fpm, which must be on `PATH`, and records the calls of the about 400 tspice families into `~/.cache/almanac-tspice` (about 1 GB, 15 to 40 minutes). Later runs only replay them, in one process per CPU thread. The recording keeps each distinct call of a routine without state once, and a query once between two changes of the loaded kernels or the settings; `TSPICE_ALL=1` keeps every call. The run fails if a routine has more mismatches of value, of error kind, or of the script itself than `test/tspice/baseline.tsv` allows; the mismatches are in `results/replay.tsv`. `--record` records again, `--update-baseline` makes the counts of the run the new baseline, and a list of families (`F_SPK08 F_CK06`) restricts the run to them.
 
 ## Known limits of accuracy
 
