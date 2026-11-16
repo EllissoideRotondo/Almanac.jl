@@ -167,7 +167,9 @@ end
     c_pckw20(h, a)
 
 `pckw20_` of CSPICE N0067, which has no C wrapper `pckw20_c`: the f2c routine, with
-every argument by reference and the lengths of the two strings at the end. The summary
+every argument by reference and the lengths of the two strings at the end, as `ftnlen`
+(`Cint` in CSPICE). A `Clong` there passes on x86-64 and gives a segment name of
+length 0 on Apple arm64, which packs stack arguments by their size. The summary
 buffer is set as for [`c_pckw02`](@ref).
 """
 function c_pckw20(h, a)
@@ -176,7 +178,7 @@ function c_pckw20(h, a)
     ninrec, n = size(a.cdata)
     ccall((:pckw20_, LIBCSPICE), Cvoid, (Ref{Cint}, Ref{Cint}, Cstring, Ref{Cdouble},
         Ref{Cdouble}, Cstring, Ref{Cdouble}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble}, Ref{Cdouble},
-        Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Clong, Clong), h, a.clssid, a.frame,
+        Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Cint, Cint), h, a.clssid, a.frame,
         a.first, a.last, a.segid, a.intlen, n, ninrec ÷ 3 - 2, Matrix{Float64}(a.cdata),
         a.ascale, a.tscale, a.initjd, a.initfr, ncodeunits(a.frame), ncodeunits(a.segid))
     SPICE.handleerror()
@@ -2169,9 +2171,11 @@ group("9. DAF access, SPK and CK writers") do
                 @test spkuds(dn) == SPICE.spkuds(dc)
                 furnsh(ctxs, src)
                 # Type 17: the evaluator of the package differs by 8.9e-15 relative at most.
-                # Type 5: the two-body propagation differs by rounding (one ulp, 2.2e-16
-                # relative, measured with the default seed).
-                rtol = c.name == "spkw17" ? 1e-14 : c.name == "spkw05" ? 1e-15 : 0.0
+                # Types 5 and 15: the two-body propagation takes `cos` and `sin` from Julia
+                # and CSPICE from the C library, which differ in the last bit for some
+                # arguments (type 5: 2.2e-16 relative; type 15: 4.1e-16, two ulps, on the
+                # stream of Julia 1.10 with the default seed).
+                rtol = c.name == "spkw17" ? 1e-14 : c.name in ("spkw05", "spkw15") ? 1e-15 : 0.0
                 for et in (a.first, a.last, x)
                     rc = SPICE.spkpvn(hc, dc, et)
                     rn = spkpvn(ctxs, hn, dn, et)
@@ -2335,6 +2339,9 @@ group("9. DAF access, SPK and CK writers") do
         unload(ctx, files[1])
         furnsh(ctx, files[2])
         @test (spkgeo(ctx, -9, 5.0, "J2000", 399), spkgeo(ctx, -8, 5.0, "J2000", 399)) == a
+        # Windows refuses to remove a mapped file; the snapshots release their maps.
+        unload(ctx, files[2])
+        GC.gc()
         rm.(files)
     end
 end
