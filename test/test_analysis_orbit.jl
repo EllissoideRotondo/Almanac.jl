@@ -9,9 +9,12 @@
 # The Keplerian elements are compared with the GMAT cases of ANISE (gmat_cases.jl),
 # with Almanac's `oscltx` (validated against CSPICE in group math_conics) on random
 # orbits, and on the degenerate orbits, where each expectation follows the ANISE source
-# (src/astro/orbit.rs, b3aaadc).
+# (src/astro/orbit.rs, b3aaadc). The altitudes and geodetic elements are compared with
+# Vallado's examples as ANISE prints them and with `recgeo`; the equinoctial ones with their
+# definitions; the Brouwer mean elements with the round trips of ANISE's own tests
+# (orbit_mean_elements.rs).
 #
-# Run time of the group: 13 to 18 s (one process; the same code measured 12.5 to 18.1 s
+# Run time of the group: 15 to 21 s (one process; the same code measured 12.5 to 18.1 s
 # with the load of the machine). 12 s of it is the load of the oracle and the fixtures
 # before the first testset; the ten testsets together take 1 s, the B-plane and
 # v-infinity ones 0.7 s.
@@ -81,6 +84,20 @@ const TOL_VINF_SMA = 1e-9
 # b_plane_davis: ha 1.1e-11 rad measured; ANISE's 1e-9 deg.
 const TOL_DAVIS_HA = _d(1e-9)
 
+# Geodetic elements against the values of ANISE (Vallado's examples, which ANISE prints with
+# 16 digits): measured latitude 2.2e-16 rad, longitude 1.1e-16 rad, height 2.1e-12 km (a value of
+# 5e3 km has an ulp of 9e-13), altitudes 4.2e-12 km; limits at about five times these.
+const TOL_GEODETIC_ANG = 1e-15
+const TOL_GEODETIC_KM = 2e-11
+# Against `recgeo` (iteration of CSPICE), 900 points on three bodies at 1 to 4 equatorial radii:
+# measured latitude 3.9e-16 rad, longitude 4.4e-16 rad, height 1.1e-15 equatorial radii, rounding
+# of the two algorithms; limits at about five times these.
+const TOL_RECGEO = (2e-15, 2e-15, 5e-15)
+# The equinoctial identities are the same expressions as the elements (measured 0.0, the limit
+# is TOL_ID); the conversion back to Keplerian elements (the sine and arc tangent of
+# half the inclination and of p, q) measured 3.1e-15, limit 1.5e-14.
+const TOL_EQ_BACK = 1.5e-14
+
 group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         Kernels.GM_TPC, Kernels.PCK11) do
     @testset "Orbit: construction and Cartesian elements" begin
@@ -96,7 +113,11 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         @test element(o, :hz) === o.hz
         @test all(n -> n in propertynames(o), elements())
         # every element is a Float64, or the degenerate error of ANISE (:ha of an ellipse)
-        @test all(n -> (y = outcome(() -> element(o, n)); y isa Float64 || y === :degeneratecase),
+        # (with radii: the altitudes, geodetic and Brouwer elements need them, see below)
+        oe = Orbit(s, 0.0, 399, 1, 398600.4415, VALLADO_RADII)
+        @test all(n -> (y = outcome(() -> element(oe, n)); y isa Float64 || y === :degeneratecase),
+            elements())
+        @test all(n -> outcome(() -> element(o, n)) in (:badarg, outcome(() -> element(oe, n))),
             elements())
         @test throws_kind(() -> element(o, :foo), :badarg)
         @test throws_kind(() -> o.foo, :badarg)
@@ -115,8 +136,11 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         # the degenerate error of ANISE (:ha of an ellipse, :ea of a hyperbola) is not a
         # type instability.
         sh = SVector(7000.0, 100.0, -50.0, 0.1, 11.5, 1.0)
-        for orb in (Orbit(s, 0.0, 399, 1, 398600.4415), o,
-                Orbit(sh, 0.0, 399, 1, 398600.4415), Orbit(sh, ForwardDiff.Dual(1.0, 1.0), 399, 1, 398600.4415)),
+        gm = 398600.4415
+        for orb in (Orbit(s, 0.0, 399, 1, gm, VALLADO_RADII),
+                Orbit(s, ForwardDiff.Dual(1.0, 1.0), 399, 1, gm, VALLADO_RADII),
+                Orbit(sh, 0.0, 399, 1, gm, VALLADO_RADII),
+                Orbit(sh, ForwardDiff.Dual(1.0, 1.0), 399, 1, gm, VALLADO_RADII)),
                 n in elements()
             r = Ref(n)
             T = typeof(orb).parameters[1]
@@ -199,7 +223,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
 
     @testset "Keplerian elements: degenerate cases" begin
         gm = 398600.4415
-        orb(v) = Orbit(SVector{6,Float64}(v), 0.0, 399, 1, gm)
+        orb(v) = Orbit(SVector{6,Float64}(v), 0.0, 399, 1, gm, VALLADO_RADII)
         circ = orb((7000.0, 0, 0, 0, 0, sqrt(gm / 7000)))      # polar, ecc ~ 0 (rounding only)
         pro = orb((7000.0, 0, 0, 0, 8.0, 0))                   # equatorial, inc == 0
         retro = orb((7000.0, 0, 0, 0, -8.0, 0))                # equatorial, inc == pi
@@ -389,5 +413,125 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         @test throws_kind(() -> vinf_turn_angle(h, NaN), :degeneratecase)
         @test vinf_turn_angle(h, 0.0) == Float64(π)                            # rho = 0: a head-on pass turns by pi
         @test vinf_turn_angle(h, 8000.0) isa Float64
+    end
+    @testset "Geodetic and altitude elements: Vallado ($(c.name))" for c in VALLADO_CASES
+        o = Orbit(vcat(c.pos, zeros(3)), 0.0, 399, 1, GMAT_GM, VALLADO_RADII)
+        dl, dn, dh = abs(o.latitude - c.lat), angdiff(o.longitude, c.lon), abs(o.height - c.height)
+        measured(@sprintf("  geodetic %-12s latitude %.3e rad, longitude %.3e rad, height %.3e km",
+            c.name, dl, dn, dh))
+        @test dl < TOL_GEODETIC_ANG && dn < TOL_GEODETIC_ANG && dh < TOL_GEODETIC_KM
+        @test -π <= o.longitude < π
+        if c.alts !== nothing
+            d = (abs(o.sma_altitude - c.alts.sma), abs(o.apoapsis_altitude - c.alts.apoapsis),
+                abs(o.periapsis_altitude - c.alts.periapsis))
+            measured(@sprintf("  altitudes %-11s sma %.3e, apoapsis %.3e, periapsis %.3e km", c.name, d...))
+            @test all(<(TOL_GEODETIC_KM), d)
+            @test o.altitude == o.rmag - 6378.14
+        end
+    end
+
+    @testset "Geodetic elements against recgeo" begin
+        rng = Xoshiro(SEED + 41)
+        bodies = ((6378.1366, 6378.1366, 6356.7519), (3396.19, 3396.19, 3376.2),
+            (1000.0, 1000.0, 900.0))                       # the last is flattened far beyond any planet
+        worst = zeros(3)
+        for radii in bodies
+            re = radii[1]
+            f = (radii[1] - radii[3]) / radii[1]
+            for _ in 1:nsample(300, 10000)
+                u = randn(rng, 3)
+                p = (1 + 3 * rand(rng)) * re * u / norm(u)     # 1 to 4 equatorial radii
+                o = Orbit(vcat(p, 0.0, 0.0, 0.0), 0.0, 399, 1, GMAT_GM, collect(radii))
+                lon, lat, alt = recgeo(p, re, f)
+                d = (angdiff(o.latitude, lat), angdiff(o.longitude, lon), abs(o.height - alt) / re)
+                worst .= max.(worst, d)
+                @test d[1] < TOL_RECGEO[1] && d[2] < TOL_RECGEO[2] && d[3] < TOL_RECGEO[3]
+            end
+        end
+        measured(@sprintf("  geodetic against recgeo, largest differences: latitude %.1e rad, longitude %.1e rad, height %.1e radii",
+            worst...))
+        # the pole (p = 0) gives no NaN
+        pole = Orbit(SVector(0.0, 0.0, 6356.7519 + 100, 0, 0, 0), 0.0, 399, 1, GMAT_GM,
+            [6378.1366, 6378.1366, 6356.7519])
+        @test pole.latitude ≈ π / 2 && abs(pole.height - 100) < 1e-8 && pole.longitude == 0.0
+    end
+
+    @testset "Equinoctial elements" begin
+        rng = Xoshiro(SEED + 42)
+        worst = [0.0, 0.0]
+        for _ in 1:nsample(200, 5000)
+            o = random_orbit(rng)
+            o.ecc < 1 || continue
+            d = max(abs(o.equinoctial_h - o.ecc * sin(o.aop + o.raan)),
+                abs(o.equinoctial_k - o.ecc * cos(o.aop + o.raan)),
+                abs(o.equinoctial_p - sin(o.inc / 2) * sin(o.raan)),
+                abs(o.equinoctial_q - sin(o.inc / 2) * cos(o.raan)),
+                abs(o.equinoctial_lambda - (o.raan + o.aop + o.ma)))
+            # ANISE equinoctial_to_keplerian returns the Keplerian elements
+            sma, ecc, inc, raan, aop, ma = Almanac._equinoctial_to_kep(o.equinoctial_a, o.equinoctial_h,
+                o.equinoctial_k, o.equinoctial_p, o.equinoctial_q, o.equinoctial_lambda)
+            b = max(abs(ecc - o.ecc), abs(inc - o.inc), angdiff(raan, o.raan), angdiff(aop, o.aop),
+                angdiff(ma, o.ma))
+            worst .= max.(worst, (d, b))
+            @test d < TOL_ID && o.equinoctial_a == o.sma && sma == o.sma && b < TOL_EQ_BACK
+        end
+        measured(@sprintf("  equinoctial identities %.1e, conversion back to Keplerian %.1e", worst...))
+        hyp = Orbit(gmat_kep_state(-20000.0, 1.5, _d(28.5), _d(10), _d(20), _d(30)), 0.0, 399, 1, GMAT_GM)
+        @test hyp.equinoctial_h ≈ 1.5 * sin(hyp.aop + hyp.raan) && hyp.equinoctial_lambda ≈ hyp.raan + hyp.aop + hyp.ma
+        # the errors are those of the Keplerian elements (a circular orbit has no ta, ma)
+        circ = Orbit(SVector(7000.0, 0, 0, 0, 0, sqrt(GMAT_GM / 7000)), 0.0, 399, 1, GMAT_GM)
+        @test throws_kind(() -> circ.equinoctial_lambda, :degeneratecase)
+        @test isfinite(circ.equinoctial_h) && circ.equinoctial_a == circ.sma
+    end
+
+    @testset "Brouwer mean elements: ANISE round trips ($(c.name))" for c in BROUWER_CASES
+        re, gm = VALLADO_RADII[1], GMAT_GM
+        osc = Almanac._brouwer_mean_to_osc(c.mean..., re, Almanac.J2_EARTH)
+        o = Orbit(Almanac._kep_ma_to_cart(osc..., gm), 0.0, 399, 1, gm, VALLADO_RADII)
+        got = (o.brouwer_sma, o.brouwer_ecc, o.brouwer_inc, o.brouwer_raan, o.brouwer_aop, o.brouwer_ma)
+        d = (abs(c.mean[1] - got[1]), abs(c.mean[2] - got[2]),
+            (angdiff(c.mean[i], got[i]) for i in 3:6)...)
+        measured(@sprintf("  brouwer %-14s sma %.2e km, ecc %.2e, inc %.2e, raan %.2e, aop %.2e, ma %.2e rad",
+            c.name, d...))
+        # ANISE: 4 km, 1e-2, 0.7 degrees; then the limits of this test
+        @test d[1] < 4.0 && d[2] < 1e-2 && all(<(_d(0.7)), d[3:6])
+        @test d[1] < c.tol[1] && d[2] < c.tol[2] && all(<(c.tol[3]), d[3:6])
+    end
+
+    @testset "Brouwer mean elements: validity" begin
+        gm = GMAT_GM
+        good = gmat_kep_state(7000.0, 0.01, _d(51.6), _d(30), _d(20), _d(10))
+        o = Orbit(good, 0.0, 399, 1, gm, VALLADO_RADII)
+        @test o.brouwer_sma isa Float64
+        # no radii: the equatorial radius is unknown
+        @test throws_kind(() -> Orbit(good, 0.0, 399, 1, gm).brouwer_sma, :badarg)
+        # ANISE: Earth-centered only, periapsis above 3000 km, elliptic
+        @test throws_kind(() -> Orbit(good, 0.0, 301, 1, gm, VALLADO_RADII).brouwer_sma, :degeneratecase)
+        low = Orbit(gmat_kep_state(5000.0, 0.5, _d(30), 0.0, 0.0, 1.0), 0.0, 399, 1, gm, VALLADO_RADII)
+        @test low.periapsis < 3000
+        hyp = Orbit(gmat_kep_state(-20000.0, 1.5, _d(28.5), _d(10), _d(20), _d(30)), 0.0, 399, 1, gm, VALLADO_RADII)
+        for n in (:brouwer_sma, :brouwer_ecc, :brouwer_inc, :brouwer_raan, :brouwer_aop, :brouwer_ma)
+            @test throws_kind(() -> element(low, n), :degeneratecase)
+            @test throws_kind(() -> element(hyp, n), :degeneratecase)
+        end
+        @test 0 <= o.brouwer_raan < 2π && 0 <= o.brouwer_aop < 2π && 0 <= o.brouwer_ma < 2π
+        od = Orbit(good, ForwardDiff.Dual(0.0, 1.0), 399, 1, gm, VALLADO_RADII)
+        @test od.brouwer_sma isa ForwardDiff.Dual && ForwardDiff.value(od.brouwer_sma) == o.brouwer_sma
+    end
+
+    @testset "Elements that need the radii of the center" begin
+        ctx = neo_context([Kernels.LSK, Kernels.DE440S, Kernels.GM_TPC, Kernels.PCK11])
+        o = Orbit(ctx, [7000.0, 0.0, 0.0, 0.0, 8.0, 0.0], 0.0, 3, "J2000")   # EMB: a GM, no radii
+        @test all(isnan, o.radii) && o.sma isa Float64
+        for n in (:altitude, :periapsis_altitude, :apoapsis_altitude, :sma_altitude, :latitude,
+                :height)
+            @test throws_kind(() -> element(o, n), :badarg)
+        end
+        # Brouwer: ANISE checks the center (Earth only) before it reads the shape
+        @test throws_kind(() -> o.brouwer_sma, :degeneratecase)
+        @test o.longitude == 0.0                    # ANISE longitude_deg needs no shape
+        e = Orbit(ctx, [7000.0, 0.0, 0.0, 0.0, 8.0, 0.0], 0.0, 399, "J2000")
+        @test e.radii == [6378.1366, 6378.1366, 6356.7519]
+        @test e.altitude == e.rmag - 6378.1366 && e.sma_altitude == e.sma - 6378.1366
     end
 end

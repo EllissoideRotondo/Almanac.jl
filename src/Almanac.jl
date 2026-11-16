@@ -156,6 +156,7 @@ include("queries.jl")       # StateQuery, state_query, RotationQuery, rotation_q
 include("table.jl")         # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
 include("analysis/orbit.jl")     # Orbit, orbit: a state about a central body
 include("analysis/elements.jl")  # element, elements: the scalar quantities of an Orbit
+include("analysis/brouwer.jl")   # Brouwer mean elements of an Orbit
 include("ek/file.jl")       # EK pages, trees, segment and column descriptors
 include("ek/columns.jl")    # EK column entries of classes 1 to 9
 include("ek/query_parse.jl")  # EK query language: scan, parse, resolve names and times, check

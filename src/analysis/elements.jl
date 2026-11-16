@@ -7,8 +7,13 @@ const ELEMENT_NAMES = (:x, :y, :z, :vx, :vy, :vz, :rmag, :vmag,
     :aol, :tlong, :period, :mean_motion, :ta_dot,
     :energy, :c3, :fpa, :semi_parameter, :semi_minor_axis,
     :hmag, :hx, :hy, :hz, :periapsis, :apoapsis,
-    :right_ascension, :declination, :velocity_declination, :light_time,
-    :bplane_bt, :bplane_br, :bplane_mag, :bplane_angle, :bplane_ltof)
+    :periapsis_altitude, :apoapsis_altitude, :sma_altitude, :altitude,
+    :right_ascension, :declination, :velocity_declination,
+    :latitude, :longitude, :height, :light_time,
+    :bplane_bt, :bplane_br, :bplane_mag, :bplane_angle, :bplane_ltof,
+    :equinoctial_a, :equinoctial_h, :equinoctial_k, :equinoctial_p, :equinoctial_q,
+    :equinoctial_lambda,
+    :brouwer_sma, :brouwer_ecc, :brouwer_inc, :brouwer_raan, :brouwer_aop, :brouwer_ma)
 
 """
     elements() -> NTuple{N,Symbol}
@@ -58,6 +63,31 @@ for an incoming asymptote within `1e-12` of the `z` axis (ANISE: `InfiniteValue`
 time of flight as a `Duration` of nanosecond resolution; `element` returns the unrounded
 value. See also [`vinf_periapsis`](@ref) and [`vinf_turn_angle`](@ref).
 
+The altitudes (`:altitude`, `:sma_altitude`, `:periapsis_altitude`, `:apoapsis_altitude`, in
+km) are the radius, `:sma` and the apsis radii minus the mean equatorial radius,
+`(radii[1] + radii[2]) / 2`, of the center. `:latitude` (rad, in [-π/2, π/2]) and `:height`
+(km) are geodetic, on the ellipsoid of semi-axes `radii[1]`, `radii[2]` and `radii[3]` with the
+non-iterative procedure of Heikkinen that `latlongalt` of ANISE uses; `:longitude` is the
+angle `atan(y, x)` in [-π, π). The state must be in the body-fixed frame of the center. The
+altitudes, `:latitude` and `:height` throw `SpiceError(:badarg)` if the pool holds no radii of
+the center (`o.radii` is NaN).
+
+The equinoctial elements follow `Orbit` of ANISE: `:equinoctial_a` is `:sma`, `:equinoctial_h`
+and `:equinoctial_k` are `ecc * sin(aop + raan)` and `ecc * cos(aop + raan)`, `:equinoctial_p`
+and `:equinoctial_q` are `sin(inc / 2) * sin(raan)` and `sin(inc / 2) * cos(raan)`, and
+`:equinoctial_lambda` is the mean longitude `raan + aop + ma` in rad (not wrapped). They
+throw where the Keplerian elements they use throw.
+
+The Brouwer mean elements (`:brouwer_sma` in km, `:brouwer_ecc`, and `:brouwer_inc`,
+`:brouwer_raan`, `:brouwer_aop`, `:brouwer_ma` in rad, the last four in [0, 2π) except the
+inclination) are the mean elements of the Brouwer-Lyddane theory with the short-period terms
+only, from the iteration of GMAT that ANISE ports (`sma_brouwer_short_km`, ...). They use the
+J2 of the Earth, `1.082626925638815e-3`, and the mean equatorial radius of the center, and
+are valid for orbits about the Earth only. As in ANISE they throw
+`SpiceError(:degeneratecase)` if the center is not body 399, or the periapsis is not above
+3000 km, or the orbit is not elliptic, or the iteration meets a Kepler equation without
+solution, and `SpiceError(:badarg)` if the radii of the center are missing.
+
 The vectors `position`, `velocity`, `hvec` and `evec` are properties only: `element` throws for
 them, so that a name known only at run time never gives a union of scalar and vector.
 
@@ -103,6 +133,13 @@ function element(o::Orbit, name::Symbol)
     name === :right_ascension && return _el_right_ascension(o)
     name === :declination && return _el_declination(o)
     name === :velocity_declination && return _el_velocity_declination(o)
+    name === :periapsis_altitude && return _el_periapsis_altitude(o)
+    name === :apoapsis_altitude && return _el_apoapsis_altitude(o)
+    name === :sma_altitude && return _el_sma_altitude(o)
+    name === :altitude && return _el_altitude(o)
+    name === :latitude && return _el_latitude(o)
+    name === :longitude && return _el_longitude(o)
+    name === :height && return _el_height(o)
     name === :energy && return _el_energy(o)
     name === :hmag && return _el_hmag(o)
     name === :hx && return _el_hx(o)
@@ -114,6 +151,18 @@ function element(o::Orbit, name::Symbol)
     name === :bplane_mag && return _el_bplane_mag(o)
     name === :bplane_angle && return _el_bplane_angle(o)
     name === :bplane_ltof && return _el_bplane_ltof(o)
+    name === :equinoctial_a && return _el_equinoctial_a(o)
+    name === :equinoctial_h && return _el_equinoctial_h(o)
+    name === :equinoctial_k && return _el_equinoctial_k(o)
+    name === :equinoctial_p && return _el_equinoctial_p(o)
+    name === :equinoctial_q && return _el_equinoctial_q(o)
+    name === :equinoctial_lambda && return _el_equinoctial_lambda(o)
+    name === :brouwer_sma && return _el_brouwer_sma(o)
+    name === :brouwer_ecc && return _el_brouwer_ecc(o)
+    name === :brouwer_inc && return _el_brouwer_inc(o)
+    name === :brouwer_raan && return _el_brouwer_raan(o)
+    name === :brouwer_aop && return _el_brouwer_aop(o)
+    name === :brouwer_ma && return _el_brouwer_ma(o)
     throw(SpiceError(:badarg, "element: unknown name :$name; the names are " *
         join(elements(), ", ")))
 end
@@ -332,6 +381,88 @@ julia> k = keplerian(o); (round(k.sma), round(k.ecc; digits=3), k.inc, k.ta)
 """
 keplerian(o::Orbit) = (; sma=_el_sma(o), ecc=_el_ecc(o), inc=_el_inc(o), raan=_el_raan(o),
     aop=_el_aop(o), ta=_el_ta(o))
+
+# Altitudes and geodetic coordinates: src/astro/orbit_geodetic.rs of ANISE. The radii of the
+# center come from the pool; where it has none they are NaN and these elements are errors.
+function _radii_missing(name::Symbol, o::Orbit)
+    throw(SpiceError(:badarg, "element :$name needs the radii of body $(o.center), " *
+        "which the pool does not hold"))
+end
+
+# ANISE `Frame::mean_equatorial_radius_km`: the mean of the two equatorial radii.
+function _mean_eq_radius(name::Symbol, o::Orbit)
+    r = getfield(o, :radii)
+    (isnan(r[1]) || isnan(r[2])) && _radii_missing(name, o)
+    return (r[1] + r[2]) / 2
+end
+
+_polar_radius(name::Symbol, o::Orbit) =
+    isnan(getfield(o, :radii)[3]) ? _radii_missing(name, o) : getfield(o, :radii)[3]
+
+_el_altitude(o::Orbit) = _el_rmag(o) - _mean_eq_radius(:altitude, o)
+_el_sma_altitude(o::Orbit) = _el_sma(o) - _mean_eq_radius(:sma_altitude, o)
+_el_periapsis_altitude(o::Orbit) = _el_periapsis(o) - _mean_eq_radius(:periapsis_altitude, o)
+_el_apoapsis_altitude(o::Orbit) = _el_apoapsis(o) - _mean_eq_radius(:apoapsis_altitude, o)
+
+# ANISE `latlongalt`: the procedure of Heikkinen, which is not iterative, on the ellipsoid
+# of semi-axes (a, a, b) with a the mean equatorial radius. Returns the geodetic latitude
+# (rad, ANISE: degrees) and the height (km). A NaN (the center of the body) is an error.
+function _latlongalt(name::Symbol, o::Orbit)
+    a_km = _mean_eq_radius(name, o)
+    b_km = _polar_radius(name, o)
+    s = getfield(o, :state)
+    x, y, z = s[1], s[2], s[3]
+    e2 = (a_km^2 - b_km^2) / a_km^2
+    e_prime2 = (a_km^2 - b_km^2) / b_km^2
+    p = sqrt(x^2 + y^2)
+    big_f = 54 * b_km^2 * z^2
+    big_g = p^2 + (1 - e2) * z^2 - e2 * (a_km^2 - b_km^2)
+    c = (e2^2 * big_f * p^2) / big_g^3
+    sc = (1 + c + sqrt(c^2 + 2 * c))^(1.0 / 3.0)
+    k = sc + 1 + 1 / sc
+    big_p = big_f / (3 * k^2 * big_g^2)
+    big_q = sqrt(1 + 2 * e2^2 * big_p)
+    r0 = (-big_p * e2 * p) / (1 + big_q) +
+        sqrt(0.5 * a_km^2 * (1 + 1 / big_q) - (big_p * (1 - e2) * z^2) / (big_q * (1 + big_q)) -
+            0.5 * big_p * p^2)
+    big_u = sqrt((p - e2 * r0)^2 + z^2)
+    big_v = sqrt((p - e2 * r0)^2 + (1 - e2) * z^2)
+    z0 = b_km^2 * z / (a_km * big_v)
+    alt = big_u * (1 - b_km^2 / (a_km * big_v))
+    lat = atan((z + e_prime2 * z0) / p)
+    return _nonan(name, lat), _nonan(name, alt)
+end
+
+_el_latitude(o::Orbit) = _latlongalt(:latitude, o)[1]
+_el_height(o::Orbit) = _latlongalt(:height, o)[2]
+
+# ANISE `longitude_deg`: the longitude in [-180, 180) degrees, 0 for a NaN position; the
+# state is in the body-fixed frame.
+function _el_longitude(o::Orbit{T}) where {T}
+    s = getfield(o, :state)
+    (isnan(s[1]) || isnan(s[2])) && return zero(T)
+    a = mod(atan(s[2], s[1]), 2 * T(π))
+    return a >= T(π) ? a - 2 * T(π) : a
+end
+
+# Equinoctial elements: src/astro/orbit_equinoctial.rs of ANISE (rad here). The mean
+# longitude is raan + aop + ma and is not wrapped.
+_el_equinoctial_a(o::Orbit) = _el_sma(o)
+_el_equinoctial_h(o::Orbit) = _el_ecc(o) * sin(_el_aop(o) + _el_raan(o))
+_el_equinoctial_k(o::Orbit) = _el_ecc(o) * cos(_el_aop(o) + _el_raan(o))
+_el_equinoctial_p(o::Orbit) = sin(_el_inc(o) / 2) * sin(_el_raan(o))
+_el_equinoctial_q(o::Orbit) = sin(_el_inc(o) / 2) * cos(_el_raan(o))
+_el_equinoctial_lambda(o::Orbit) = _el_raan(o) + _el_aop(o) + _el_ma(o)
+
+# ANISE `equinoctial_to_keplerian`: (sma, ecc, inc, raan, aop, ma), the angles not wrapped.
+function _equinoctial_to_kep(sma, h, k, p, q, lambda)
+    ecc = sqrt(h * h + k * k)
+    s_sq = p * p + q * q                       # sin^2(i/2)
+    inc = primal(s_sq) <= 1 ? acos(1 - 2 * s_sq) : oftype(s_sq, π)   # rounding beyond 1: ANISE gives acos(-1)
+    raan = atan(p, q)
+    aop_plus_raan = atan(h, k)
+    return (sma, ecc, inc, raan, aop_plus_raan - raan, lambda - aop_plus_raan)
+end
 
 # B-plane: ANISE `BPlane::new` (src/astro/orbit_hyperbolic.rs). The triad is built on the
 # +z axis of the frame of the orbit. Returns (b_t, b_r, s_hat) of the hyperbola.

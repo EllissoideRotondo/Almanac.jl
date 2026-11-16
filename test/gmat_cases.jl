@@ -158,3 +158,30 @@ const VINF_CASES = Any[
     [(name="excess_velocity_ta$(Int(ta))", gm=GMAT_GM,
         state=gmat_kep_state(-20_000.0, 1.5, _d(28.5), _d(10), _d(20), _d(ta)),
         ecc=1.5, sma=-20_000.0) for ta in (0.0, 30.0, 90.0, 120.0)]...]
+
+# `verif_geodetic_vallado` of the tests of ANISE: Vallado, 4th Ed., page 173, examples 3-3
+# and 3-4, in the Earth frame of ANISE's `pck08.pca` (radii 6378.14, 6378.14, 6356.75 km, which
+# are not those of PCK11). `lat`, `lon` (in [-pi, pi)), `height` are the values ANISE prints
+# for `latitude_deg()`, `longitude_deg()` and `height_km()`; `alts` are its altitudes of the
+# first state (`sma_altitude_km`, `apoapsis_altitude_km`, `periapsis_altitude_km`).
+const VALLADO_RADII = SVector(6378.14, 6378.14, 6356.75)
+const VALLADO_CASES = Any[
+    (name="vallado_3_3", pos=SVector(6524.834, 6862.875, 6448.296),
+        lat=_d(34.352_519_916_935_62), lon=_d(46.446_416_856_789_96),
+        height=5_085.217_419_357_936,
+        alts=(sma=-649.854_189_724_88, apoapsis=5_078.431_620_550_23, periapsis=-6378.14)),
+    (name="vallado_3_4", pos=SVector(6_119.403_233_271_109, -1_571.480_316_600_378_3,
+            -871.560_226_712_024_7),
+        lat=_d(-7.906_635_699_999_994_5), lon=_d(345.5975 - 360.0), height=0.056_000_000_000_494_765,
+        alts=nothing)]
+
+# The round-trip cases of the tests of `orbit_mean_elements.rs` of ANISE: mean Brouwer
+# elements `(sma km, ecc, inc, raan, aop, ma rad)`, converted to osculating and back. ANISE's
+# limits are 4 km, 1e-2 and 0.7 degrees; `tol` are the limits of this port,
+# about five times the largest difference measured (the retrograde case is the one whose
+# argument of perigee ANISE does not map back from the flipped orbit: 0.62 degrees, against
+# ANISE's own limit of 0.7).
+const BROUWER_CASES = Any[
+    (name="prograde_leo", mean=(7000.0, 0.01, _d(51.6), _d(30), _d(20), _d(10)), tol=(2e-10, 1e-12, 2e-10)),
+    (name="retrograde", mean=(7200.0, 0.02, _d(177), _d(45), _d(10), _d(5)), tol=(1.5e-2, 2e-6, 1.2e-2)),
+    (name="gto", mean=(24365.0, 0.7, _d(28.5), _d(60), _d(90), _d(25)), tol=(1e-8, 5e-12, 1e-11))]
