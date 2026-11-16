@@ -10,7 +10,8 @@ const _HX_DIGITS = "0123456789ABCDEF"
 """
     dp2hx(number) -> String
 
-Return the base 16 string of `number`, as `dp2hx_c` of CSPICE.
+Return the base 16 string of `number`, as
+[`dp2hx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dp2hx_c.html) of CSPICE.
 
 The string is an optional minus sign, the hexadecimal digits of the mantissa in
 [1/16, 1), a caret `^` and the exponent of 16 in hexadecimal, as in `"2A^3"` for 672.
@@ -130,7 +131,8 @@ end
 """
     hx2dp(str) -> Float64
 
-Return the double of the base 16 string `str`, as `hx2dp_c` of CSPICE.
+Return the double of the base 16 string `str`, as
+[`hx2dp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/hx2dp_c.html) of CSPICE.
 
 The string has the form that [`dp2hx`](@ref) writes: an optional sign, at most 31
 hexadecimal digits of the mantissa, a caret `^` and the exponent of 16 in hexadecimal

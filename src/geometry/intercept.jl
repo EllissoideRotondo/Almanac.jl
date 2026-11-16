@@ -157,7 +157,7 @@ end
 
 Return the first point where the ray from `obsrvr` along `dvec` meets the surface of
 `target`, as `(spoint, trgepc, srfvec)`, or `nothing` if the ray misses the target. As
-`sincpt_c` of CSPICE, which returns a `found` flag instead of `nothing`.
+[`sincpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sincpt_c.html) of CSPICE, which returns a `found` flag instead of `nothing`.
 
 - `spoint`: the intercept, in km, in the body-fixed frame `fixref` of the target.
 - `trgepc`: the epoch at the intercept (seconds past J2000 TDB). With a light time
@@ -224,7 +224,8 @@ sincpt(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abc
     srfrec([ctx,] body, lon, lat) -> SVector{3}
 
 Return the point of the reference ellipsoid of `body` at the planetocentric longitude
-`lon` and latitude `lat` (radians), in km in the body-fixed frame, as `srfrec_c` of
+`lon` and latitude `lat` (radians), in km in the body-fixed frame, as
+[`srfrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfrec_c.html) of
 CSPICE.
 
 `body` is a name or an integer ID. The radii come from the pool variable

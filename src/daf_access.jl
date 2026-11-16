@@ -229,7 +229,8 @@ _daf_frint(raw::Vector{UInt8}, off::Int, swap::Bool) =
     idw2at(idword) -> (arch, kind)
 
 Architecture and type of a kernel from its ID word (the first eight characters of the
-file), as `idw2at` of SPICELIB: `("DAF", "SPK")` for `DAF/SPK`, `("DAF", "?")` for the
+file), as
+[`idw2at`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/idw2at.html) of SPICELIB: `("DAF", "SPK")` for `DAF/SPK`, `("DAF", "?")` for the
 old `NAIF/DAF`, `("KPL", "LSK")` for `KPL/LSK`, and `("?", "?")` if the word is not
 recognized.
 """
@@ -297,7 +298,8 @@ end
 """
     dafopr(path) -> DAFHandle
 
-Open the DAF file `path` for reading and return its handle, as `dafopr_c`.
+Open the DAF file `path` for reading and return its handle, as
+[`dafopr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafopr_c.html).
 
 The file can have either byte order. No array search is begun. Close the handle with
 [`dafcls`](@ref).
@@ -367,7 +369,8 @@ end
 """
     dafcls(handle) -> Nothing
 
-Close the DAF file of `handle`, as `dafcls_c`.
+Close the DAF file of `handle`, as
+[`dafcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafcls_c.html).
 
 The close writes no data: every write call puts its bytes on disk before it returns,
 except [`spk14b`](@ref) and [`spk14a`](@ref) (see [`DAFHandle`](@ref)). An array that
@@ -389,7 +392,8 @@ end
 """
     dafhsf(handle) -> (nd, ni)
 
-Return the summary format of the DAF file, as `dafhsf` of SPICELIB: the number of double
+Return the summary format of the DAF file, as
+[`dafhsf`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafhsf.html) of SPICELIB: the number of double
 precision components `nd` and of integer components `ni` of an array summary.
 """
 function dafhsf(h::DAFHandle)
@@ -408,7 +412,8 @@ end
 """
     dafrfr(handle) -> (nd, ni, ifname, fward, bward, free)
 
-Return the contents of the file record, as `dafrfr_c`: the summary format `nd`, `ni`, the
+Return the contents of the file record, as
+[`dafrfr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafrfr_c.html): the summary format `nd`, `ni`, the
 internal file name without trailing blanks, the record numbers of the first and of the
 last summary record, and the first free address, at which the next array begins.
 
@@ -424,7 +429,8 @@ end
 """
     getfat(path) -> (arch, kind)
 
-Return the file architecture and the kernel type of the file `path`, as `getfat_c`.
+Return the file architecture and the kernel type of the file `path`, as
+[`getfat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getfat_c.html).
 
 Results are, for example, `("DAF", "SPK")`, `("DAF", "CK")`, `("DAF", "PCK")`,
 `("DAS", "DSK")` and `("KPL", "LSK")`. The result is `("?", "?")` for a file that is not
@@ -503,7 +509,8 @@ end
     dafps(dc, ic) -> Vector{Float64}
 
 Pack the double precision components `dc` and the integer components `ic` of an array
-summary into `length(dc) + (length(ic) + 1) ÷ 2` doubles, as `dafps_c`.
+summary into `length(dc) + (length(ic) + 1) ÷ 2` doubles, as
+[`dafps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafps_c.html).
 
 The integers are stored as 32-bit values, two in the space of one double, in native byte
 order. [`dafus`](@ref) is the inverse.
@@ -541,7 +548,8 @@ end
     dafus(sum, nd, ni) -> (dc::Vector{Float64}, ic::Vector{Int})
 
 Unpack the array summary `sum` into its `nd` double precision components and its `ni`
-integer components, as `dafus_c`.
+integer components, as
+[`dafus_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafus_c.html).
 
 Throws `SpiceError(:dafinvalidparams)` if `sum` has fewer than `nd + (ni + 1) ÷ 2`
 doubles.
@@ -584,7 +592,8 @@ end
 """
     dafbfs(handle) -> Nothing
 
-Begin a forward search for the arrays of the DAF file, as `dafbfs_c`.
+Begin a forward search for the arrays of the DAF file, as
+[`dafbfs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafbfs_c.html).
 
 No array is current after the call; the first [`daffna`](@ref) moves to the first array.
 
@@ -605,7 +614,8 @@ end
 """
     dafbbs(handle) -> Nothing
 
-Begin a backward search for the arrays of the DAF file, as `dafbbs_c`.
+Begin a backward search for the arrays of the DAF file, as
+[`dafbbs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafbbs_c.html).
 
 No array is current after the call; the first [`daffpa`](@ref) moves to the last array.
 
@@ -633,7 +643,8 @@ end
 """
     daffna(handle) -> Bool
 
-Move to the next array of the search on `handle`, as `daffna_c`. Return `true` if there
+Move to the next array of the search on `handle`, as
+[`daffna_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/daffna_c.html). Return `true` if there
 is one and `false` if the search is past the last array.
 
 Throws `SpiceError(:dafnosearch)` if neither `dafbfs` nor `dafbbs` was called on the
@@ -663,7 +674,8 @@ end
 """
     daffpa(handle) -> Bool
 
-Move to the previous array of the search on `handle`, as `daffpa_c`. Return `true` if
+Move to the previous array of the search on `handle`, as
+[`daffpa_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/daffpa_c.html). Return `true` if
 there is one and `false` if the search is before the first array.
 
 Throws `SpiceError(:dafnosearch)` if neither `dafbfs` nor `dafbbs` was called on the
@@ -700,7 +712,8 @@ end
 """
     dafgs(handle) -> Vector{Float64}
 
-Return the packed summary of the current array of the search on `handle`, as `dafgs_c`.
+Return the packed summary of the current array of the search on `handle`, as
+[`dafgs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafgs_c.html).
 
 The result has `nd + (ni + 1) ÷ 2` doubles; unpack it with [`dafus`](@ref). An SPK file
 and a CK file have `nd = 2` and `ni = 6`:
@@ -728,7 +741,7 @@ end
     dafgn(handle) -> String
 
 Return the name of the current array of the search on `handle`, without trailing blanks,
-as `dafgn_c`.
+as [`dafgn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafgn_c.html).
 
 Throws `SpiceError(:dafnosearch)` if no search was begun, and `:nocurrentarray` unless the
 last `daffna` or `daffpa` returned `true`.
@@ -748,7 +761,8 @@ end
 """
     dafgda(handle, first, last) -> Vector{Float64}
 
-Return the doubles at the DAF addresses `first:last`, as `dafgda_c`. Addresses start at 1,
+Return the doubles at the DAF addresses `first:last`, as
+[`dafgda_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafgda_c.html). Addresses start at 1,
 as in CSPICE.
 
 Two results differ from CSPICE:
@@ -779,7 +793,8 @@ end
 """
     dafgsr(handle, recno, first, last) -> Union{Vector{Float64},Nothing}
 
-Return the doubles `first:last` of summary record `recno`, as `dafgsr_c`, or `nothing`
+Return the doubles `first:last` of summary record `recno`, as
+[`dafgsr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafgsr_c.html), or `nothing`
 if the record is not in the file.
 
 A record has 128 doubles, numbered from 1. `nothing` replaces the `found` flag of CSPICE.
@@ -829,7 +844,8 @@ end
 
 Return all lines of the comment area of the DAF file, in order.
 
-One call returns the whole comment area, where `dafec_c` returns one buffer of lines on
+One call returns the whole comment area, where
+[`dafec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafec_c.html) returns one buffer of lines on
 each call. The result is empty if the file has no comments.
 
 Throws `SpiceError(:badcommentarea)` if the comment area is damaged.

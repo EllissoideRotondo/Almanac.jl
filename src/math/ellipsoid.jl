@@ -73,7 +73,7 @@ end
     surfnm(a, b, c, point) -> SVector{3}
 
 Return the outward unit normal of an ellipsoid at the surface point `point`, as
-`surfnm_c` of CSPICE.
+[`surfnm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/surfnm_c.html) of CSPICE.
 
 `point` is not checked to be on the surface.
 
@@ -124,7 +124,8 @@ end
     surfpt(positn, u, a, b, c) -> Union{SVector{3},Nothing}
 
 Return the first point where a ray meets an ellipsoid, or `nothing` if the ray misses,
-as `surfpt_c` of CSPICE.
+as
+[`surfpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/surfpt_c.html) of CSPICE.
 
 The ray starts at `positn` and has the direction `u`. The ellipsoid has the semi-axes
 `a`, `b`, `c`. CSPICE returns a `found` flag in place of `nothing`. A start point
@@ -155,7 +156,7 @@ end
     edpnt(p, a, b, c) -> SVector{3}
 
 Return the point of an ellipsoid on the ray from the center through the point `p`, as
-`edpnt_c` of CSPICE. The ellipsoid has the semi-axes `a`, `b`, `c`.
+[`edpnt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/edpnt_c.html) of CSPICE. The ellipsoid has the semi-axes `a`, `b`, `c`.
 
 Throws `SpiceError(:invalidradii)` if a semi-axis is not positive, and
 `SpiceError(:zerovector)` if `p` is zero. Throws `SpiceError(:pointtoosmall)` if
@@ -183,7 +184,7 @@ end
     ednmpt(a, b, c, normal) -> SVector{3}
 
 Return the point of an ellipsoid where the outward normal is parallel to `normal`, as
-`ednmpt_c` of CSPICE. The ellipsoid has the semi-axes `a`, `b`, `c`.
+[`ednmpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ednmpt_c.html) of CSPICE. The ellipsoid has the semi-axes `a`, `b`, `c`.
 
 Throws:
 - `SpiceError(:badaxislength)` if a semi-axis is not positive.
@@ -530,7 +531,8 @@ end
     nearpt(positn, a, b, c) -> (npoint::SVector{3}, alt)
 
 Return the point of an ellipsoid that is nearest to the point `positn`, and the
-altitude of `positn` above the ellipsoid, as `nearpt_c` of CSPICE.
+altitude of `positn` above the ellipsoid, as
+[`nearpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/nearpt_c.html) of CSPICE.
 
 The ellipsoid has the semi-axes `a`, `b`, `c`. `alt` is negative for a point inside.
 The results have the unit of the arguments.
@@ -560,7 +562,8 @@ nearpt(positn::AbstractVector, a::Real, b::Real, c::Real) =
     dnearp(state, a, b, c) -> Union{Tuple{SVector{6},SVector{2}},Nothing}
 
 Return the state of the point of an ellipsoid that is nearest to the position of
-`state`, and the altitude with its rate, as `dnearp_c` of CSPICE.
+`state`, and the altitude with its rate, as
+[`dnearp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dnearp_c.html) of CSPICE.
 
 The first result is the position and the velocity of the near point. The second is
 `(alt, dalt/dt)`. The result is `nothing` where the velocity of the near point is not
@@ -601,7 +604,8 @@ end
 """
     surfpv(stvrtx, stdir, a, b, c) -> Union{SVector{6},Nothing}
 
-Return the state of the point where a ray meets an ellipsoid, as `surfpv_c` of CSPICE.
+Return the state of the point where a ray meets an ellipsoid, as
+[`surfpv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/surfpv_c.html) of CSPICE.
 
 `stvrtx` is the state of the start point of the ray, and `stdir` holds the direction
 and its time derivative. The result is the position and the velocity of the intercept
@@ -656,7 +660,8 @@ end
 """
     nvc2pl(normal, konst) -> SpicePlane
 
-Return the plane of the points `x` with `normal ⋅ x == konst`, as `nvc2pl_c` of CSPICE.
+Return the plane of the points `x` with `normal ⋅ x == konst`, as
+[`nvc2pl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/nvc2pl_c.html) of CSPICE.
 
 The result has a unit normal and a constant that is not negative: `normal` is scaled,
 and both values change sign if needed.
@@ -680,7 +685,8 @@ end
 """
     nvp2pl(normal, point) -> SpicePlane
 
-Return the plane through `point` with the normal vector `normal`, as `nvp2pl_c` of
+Return the plane through `point` with the normal vector `normal`, as
+[`nvp2pl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/nvp2pl_c.html) of
 CSPICE. The result has a unit normal and a constant that is not negative.
 
 Throws `SpiceError(:zerovector)` if `normal` is zero.
@@ -700,7 +706,7 @@ end
     psv2pl(point, span1, span2) -> SpicePlane
 
 Return the plane through `point` that the vectors `span1` and `span2` span, as
-`psv2pl_c` of CSPICE. The result has a unit normal and a constant that is not negative.
+[`psv2pl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/psv2pl_c.html) of CSPICE. The result has a unit normal and a constant that is not negative.
 
 Throws `SpiceError(:degeneratecase)` if `span1` and `span2` are parallel or one is
 zero.
@@ -717,7 +723,8 @@ end
 """
     pl2nvc(plane) -> (normal::SVector{3}, konst)
 
-Return the normal vector and the constant of a plane, as `pl2nvc_c` of CSPICE.
+Return the normal vector and the constant of a plane, as
+[`pl2nvc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pl2nvc_c.html) of CSPICE.
 
 See also [`nvc2pl`](@ref), [`pl2nvp`](@ref), [`pl2psv`](@ref).
 """
@@ -727,14 +734,16 @@ pl2nvc(plane::SpicePlane) = plane.normal, plane.constant
     pl2nvp(plane) -> (normal::SVector{3}, point::SVector{3})
 
 Return the normal vector of a plane and the point of the plane nearest to the origin,
-as `pl2nvp_c` of CSPICE.
+as
+[`pl2nvp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pl2nvp_c.html) of CSPICE.
 
 See also [`nvp2pl`](@ref), [`pl2nvc`](@ref), [`pl2psv`](@ref).
 """
 pl2nvp(plane::SpicePlane) = plane.normal, plane.constant * plane.normal
 
 """
-Right-handed orthonormal frame `(x, y, z)` whose first axis is along `x`, as `frame_c`:
+Right-handed orthonormal frame `(x, y, z)` whose first axis is along `x`, as
+[`frame_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frame_c.html):
 `y` has a zero in the smallest component of `x`. A zero `x` gives the standard basis.
 """
 @inline function _m_frame(x0::SVector{3})
@@ -768,7 +777,8 @@ end
     pl2psv(plane) -> (point::SVector{3}, span1::SVector{3}, span2::SVector{3})
 
 Return the point of a plane nearest to the origin and two orthonormal vectors that
-span the plane, as `pl2psv_c` of CSPICE. `span1 × span2` is the normal of the plane.
+span the plane, as
+[`pl2psv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pl2psv_c.html) of CSPICE. `span1 × span2` is the normal of the plane.
 
 See also [`psv2pl`](@ref), [`pl2nvc`](@ref), [`pl2nvp`](@ref).
 """
@@ -783,7 +793,8 @@ end
 """
     vprjp(vin, plane) -> SVector{3}
 
-Return the orthogonal projection of the vector `vin` on a plane, as `vprjp_c` of
+Return the orthogonal projection of the vector `vin` on a plane, as
+[`vprjp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vprjp_c.html) of
 CSPICE.
 
 Throws `SpiceError(:badarg)` if `vin` does not have 3 elements.
@@ -802,7 +813,8 @@ vprjp(vin::AbstractVector, plane::SpicePlane) = _m_vprjp(_m_v3(vin), plane)
     vprjpi(vin, projpl, invpl) -> Union{SVector{3},Nothing}
 
 Return the vector in the plane `invpl` whose orthogonal projection on the plane
-`projpl` is `vin`, as `vprjpi_c` of CSPICE.
+`projpl` is `vin`, as
+[`vprjpi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vprjpi_c.html) of CSPICE.
 
 The result is `nothing` if the planes are orthogonal, or so near to orthogonal that the
 result would overflow. CSPICE returns a `found` flag.
@@ -830,7 +842,8 @@ end
 """
     inrypl(vertex, dir, plane) -> (nxpts::Int, xpt::SVector{3})
 
-Return the number of points where a ray meets a plane, and the point, as `inrypl_c` of
+Return the number of points where a ray meets a plane, and the point, as
+[`inrypl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/inrypl_c.html) of
 CSPICE. The ray starts at `vertex` and has the direction `dir`.
 
 | `nxpts` | Case                      | `xpt`             |
@@ -888,7 +901,8 @@ end
 # --- ellipses -----------------------------------------------------------------------------
 
 """
-Roots of `a x^2 + b x + c` as `rquad_c`: `((re1, im1), (re2, im2))`. Requires that `a`
+Roots of `a x^2 + b x + c` as
+[`rquad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rquad_c.html): `((re1, im1), (re2, im2))`. Requires that `a`
 and `b` are not both zero (`SpiceError(:degeneratecase)`).
 """
 @inline function _m_rquad(a::T, b::T, c::T) where {T<:Real}
@@ -932,7 +946,8 @@ end
 end
 
 """
-Diagonalization of the symmetric matrix `[s11 s12; s12 s22]` as `diags2_c`: the two
+Diagonalization of the symmetric matrix `[s11 s12; s12 s22]` as
+[`diags2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/diags2_c.html): the two
 diagonal values and the rotation `(c11, c12, c21, c22)` whose columns are the
 eigenvectors.
 """
@@ -975,7 +990,8 @@ end
     saelgv(vec1, vec2) -> (smajor::SVector{3}, sminor::SVector{3})
 
 Return the semi-major and the semi-minor axis of the ellipse that two generating
-vectors define, as `saelgv_c` of CSPICE.
+vectors define, as
+[`saelgv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/saelgv_c.html) of CSPICE.
 
 The ellipse is the set of the points `cos(θ) * vec1 + sin(θ) * vec2`. The results are
 orthogonal, and `smajor` is not shorter than `sminor`.
@@ -1001,7 +1017,8 @@ end
     cgv2el(center, vec1, vec2) -> SpiceEllipse
 
 Return the ellipse with the center `center` and the generating vectors `vec1` and
-`vec2`, as `cgv2el_c` of CSPICE. The semi-axes of the result come from
+`vec2`, as
+[`cgv2el_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cgv2el_c.html) of CSPICE. The semi-axes of the result come from
 [`saelgv`](@ref).
 
 Throws `SpiceError(:badarg)` if a vector does not have 3 elements.
@@ -1014,7 +1031,8 @@ cgv2el(center::AbstractVector, vec1::AbstractVector, vec2::AbstractVector) =
 """
     el2cgv(ellipse) -> (center, smajor, sminor)
 
-Return the center and the two semi-axes of an ellipse, as `el2cgv_c` of CSPICE.
+Return the center and the two semi-axes of an ellipse, as
+[`el2cgv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/el2cgv_c.html) of CSPICE.
 
 See also [`cgv2el`](@ref).
 """
@@ -1045,7 +1063,8 @@ end
     inedpl(a, b, c, plane) -> Union{SpiceEllipse,Nothing}
 
 Return the ellipse where a plane cuts an ellipsoid, or `nothing` if they do not meet,
-as `inedpl_c` of CSPICE.
+as
+[`inedpl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/inedpl_c.html) of CSPICE.
 
 The ellipsoid has the semi-axes `a`, `b`, `c`. CSPICE returns a `found` flag in place
 of `nothing`. A tangent plane gives an ellipse of one point, with zero semi-axes.
@@ -1078,7 +1097,7 @@ end
     inelpl(ellips, plane) -> (nxpts::Int, xpt1::SVector{3}, xpt2::SVector{3})
 
 Return the number of points where an ellipse meets a plane, and the points, as
-`inelpl_c` of CSPICE.
+[`inelpl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/inelpl_c.html) of CSPICE.
 
 `nxpts` is 0, 1 or 2, or -1 if the ellipse is in the plane. With one point, `xpt1` and
 `xpt2` are equal. With no point, and for -1, both are zero.
@@ -1155,7 +1174,8 @@ end
 """
     pjelpl(elin, plane) -> SpiceEllipse
 
-Return the orthogonal projection of the ellipse `elin` on a plane, as `pjelpl_c` of
+Return the orthogonal projection of the ellipse `elin` on a plane, as
+[`pjelpl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pjelpl_c.html) of
 CSPICE.
 
 See also [`vprjp`](@ref), [`cgv2el`](@ref).
@@ -1165,7 +1185,8 @@ pjelpl(elin::SpiceEllipse, plane::SpicePlane) = _m_pjelpl(elin, plane)
 """
     edlimb(a, b, c, viewpt) -> SpiceEllipse
 
-Return the limb of an ellipsoid as seen from the point `viewpt`, as `edlimb_c` of
+Return the limb of an ellipsoid as seen from the point `viewpt`, as
+[`edlimb_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/edlimb_c.html) of
 CSPICE.
 
 The limb is the set of the surface points where the line of sight is tangent to the
@@ -1222,7 +1243,8 @@ end
     nplnpt(linpt, lindir, point) -> (pnear::SVector{3}, dist)
 
 Return the point of a line that is nearest to `point`, and the distance between the
-two, as `nplnpt_c` of CSPICE. The line goes through `linpt` and has the direction
+two, as
+[`nplnpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/nplnpt_c.html) of CSPICE. The line goes through `linpt` and has the direction
 `lindir`.
 
 Throws `SpiceError(:zerovector)` if `lindir` is zero.
@@ -1272,7 +1294,8 @@ end
     npelpt(point, ellips) -> (pnear::SVector{3}, dist)
 
 Return the point of an ellipse that is nearest to `point`, and the distance between the
-two, as `npelpt_c` of CSPICE.
+two, as
+[`npelpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/npelpt_c.html) of CSPICE.
 
 Throws `SpiceError(:degeneratecase)` if a semi-axis of the ellipse is zero.
 
@@ -1284,7 +1307,8 @@ npelpt(point::AbstractVector, ellips::SpiceEllipse) = _m_npelpt(_m_v3(point), el
     npedln(a, b, c, linept, linedr) -> (pnear::SVector{3}, dist)
 
 Return the point of an ellipsoid that is nearest to a line, and the distance between
-the two, as `npedln_c` of CSPICE.
+the two, as
+[`npedln_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/npedln_c.html) of CSPICE.
 
 The ellipsoid has the semi-axes `a`, `b`, `c`. The line goes through `linept` and has
 the direction `linedr`. A line that meets the ellipsoid gives one of the intersection
@@ -1435,7 +1459,8 @@ end
         -> (trgepc, obspos::SVector{3}, trmpts::Vector{SVector{3,Float64}})
 
 Return `npts` points of the terminator of an ellipsoidal body that a spherical body
-lights, as `edterm_c` of CSPICE.
+lights, as
+[`edterm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/edterm_c.html) of CSPICE.
 
 `trmtyp` is `"UMBRAL"` or `"PENUMBRAL"`. `source` is the illumination source and
 `target` the lit body. `et` is the epoch at the observer `obsrvr`, in seconds past

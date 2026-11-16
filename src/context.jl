@@ -164,7 +164,8 @@ end
 """
     furnsh([ctx,] path) -> Nothing
 
-Load the kernel file at `path` into `ctx`, as `furnsh_c`.
+Load the kernel file at `path` into `ctx`, as
+[`furnsh_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/furnsh_c.html).
 
 The type is read from the file: SPK, binary PCK, CK, DSK, EK, text kernel or
 meta-kernel. A file whose name ends in `.json` is a
@@ -214,7 +215,8 @@ end
 """
     unload([ctx,] path) -> Nothing
 
-Remove the kernel that was loaded from `path` out of `ctx`, as `unload_c`.
+Remove the kernel that was loaded from `path` out of `ctx`, as
+[`unload_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unload_c.html).
 
 `path` is compared as a string with the `file` of [`kdata`](@ref): the path given to
 [`furnsh`](@ref), or for a file of a meta-kernel its `KERNELS_TO_LOAD` entry after the
@@ -257,7 +259,8 @@ end
 """
     kclear([ctx]) -> Nothing
 
-Unload every kernel of `ctx` and empty its kernel pool, as `kclear_c`.
+Unload every kernel of `ctx` and empty its kernel pool, as
+[`kclear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kclear_c.html).
 
 Direct edits of the pool are removed and the pool watchers are told of the change.
 The names of [`boddef`](@ref) stay, as in CSPICE. The time defaults of

@@ -298,7 +298,8 @@ end
         -> (state, lt)
 
 Return the state of `target` relative to an observer that moves at a constant velocity
-relative to the body `obsctr`, as `spkcvo_c` of CSPICE. `state` is an `SVector{6}` (km,
+relative to the body `obsctr`, as
+[`spkcvo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcvo_c.html) of CSPICE. `state` is an `SVector{6}` (km,
 km/s) in the frame `outref`; `lt` is the one-way light time in seconds.
 
 `obssta` is the state of the observer relative to the center of `obsctr` (km, km/s, 6
@@ -347,7 +348,8 @@ end
     spkcpo([ctx,] target, et, outref, refloc, abcorr, obspos, obsctr, obsref) -> (state, lt)
 
 Return the state of `target` relative to an observer at a constant position on the
-body `obsctr`, as `spkcpo_c` of CSPICE. `state` is an `SVector{6}` (km, km/s) in the
+body `obsctr`, as
+[`spkcpo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcpo_c.html) of CSPICE. `state` is an `SVector{6}` (km, km/s) in the
 frame `outref`; `lt` is the one-way light time in seconds.
 
 `obspos` is the observer position relative to the center of `obsctr` (km, 3 elements)
@@ -375,7 +377,8 @@ end
         -> (state, lt)
 
 Return the state, relative to the observer `obsrvr`, of a target that moves at a
-constant velocity relative to the body `trgctr`, as `spkcvt_c` of CSPICE. `state` is an
+constant velocity relative to the body `trgctr`, as
+[`spkcvt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcvt_c.html) of CSPICE. `state` is an
 `SVector{6}` (km, km/s) in the frame `outref`; `lt` is the one-way light time in seconds.
 
 `trgsta` is the state of the target relative to the center of `trgctr` (km, km/s, 6
@@ -406,7 +409,8 @@ end
     spkcpt([ctx,] trgpos, trgctr, trgref, et, outref, refloc, abcorr, obsrvr) -> (state, lt)
 
 Return the state, relative to the observer `obsrvr`, of a target at a constant position
-on the body `trgctr`, as `spkcpt_c` of CSPICE. `state` is an `SVector{6}` (km, km/s) in
+on the body `trgctr`, as
+[`spkcpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcpt_c.html) of CSPICE. `state` is an `SVector{6}` (km, km/s) in
 the frame `outref`; `lt` is the one-way light time in seconds.
 
 `trgpos` is the target position relative to the center of `trgctr` (km, 3 elements) in

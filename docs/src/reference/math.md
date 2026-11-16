@@ -8,8 +8,6 @@ The calls of this page need no kernel, except [`recpgr`](@ref), [`pgrrec`](@ref)
   `Float64` input gives the CSPICE result. The `*` of StaticArrays can round in another
   way.
 - An input of the wrong size throws `SpiceError(:badarg)`.
-- A call that cites a routine "of SPICELIB" ports a Fortran routine for which CSPICE has
-  no `_c` wrapper.
 
 ## Vectors
 

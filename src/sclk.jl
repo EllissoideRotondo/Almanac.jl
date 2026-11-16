@@ -82,7 +82,8 @@ end
 """
     sctype([ctx,] sc) -> Int
 
-Return the data type of the spacecraft clock `sc`, as `sctype_c`.
+Return the data type of the spacecraft clock `sc`, as
+[`sctype`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/sctype.html) of SPICELIB.
 
 `sc` is the NAIF ID of the spacecraft, a negative number. The value is the one of
 `SCLK_DATA_TYPE_<-sc>`. The conversion calls of the package support type 1.
@@ -242,7 +243,8 @@ end
     sct2e([ctx,] sc, sclkdp) -> Real
 
 Return the epoch, in seconds past J2000 TDB, of the encoded spacecraft clock value
-`sclkdp` of the clock `sc`, as `sct2e_c`.
+`sclkdp` of the clock `sc`, as
+[`sct2e_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sct2e_c.html).
 
 `sc` is the NAIF ID of the spacecraft. `sclkdp` is in ticks, the counts of the last
 field of the clock, from the start of the first partition; [`scencd`](@ref) makes it
@@ -276,7 +278,7 @@ sct2e(ks::KernelSet, sc::Integer, sclkdp::Real) =
     sce2c([ctx,] sc, et) -> Real
 
 Return the continuous encoded spacecraft clock value of the clock `sc` at `et`, as
-`sce2c_c`.
+[`sce2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2c_c.html).
 
 `et` is in seconds past J2000 TDB. The result is in ticks from the start of the first
 partition and can have a fraction, which makes it continuous; [`sce2t`](@ref) gives
@@ -292,7 +294,8 @@ sce2c(ks::KernelSet, sc::Integer, et::Real) = _sce2c(ks, _sclk(ks, sc), _sclk_nu
     sce2t([ctx,] sc, et) -> Float64
 
 Return the discrete encoded spacecraft clock value of the clock `sc` at `et`, in
-whole ticks, as `sce2t_c`.
+whole ticks, as
+[`sce2t_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2t_c.html).
 
 `et` is in seconds past J2000 TDB. A dual-number `et` is taken at its plain value: the
 result is a step function and has no derivative.
@@ -305,7 +308,7 @@ sce2t(ks::KernelSet, sc::Integer, et::Real) = _sce2t(ks, _sclk(ks, sc), primal(e
     scpart([ctx,] sc) -> (pstart::Vector{Float64}, pstop::Vector{Float64})
 
 Return the start and stop times of the partitions of the clock `sc`, in ticks, as
-`scpart_c`.
+[`scpart_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scpart_c.html).
 
 The two vectors are new and have one element for each partition; their length takes
 the place of the `nparts` result of CSPICE. [`sct2e`](@ref) says what a partition is.
@@ -374,7 +377,8 @@ end
 """
     sctiks([ctx,] sc, clkstr) -> Float64
 
-Return the tick count of the clock string `clkstr` of the clock `sc`, as `sctiks_c`.
+Return the tick count of the clock string `clkstr` of the clock `sc`, as
+[`sctiks_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sctiks_c.html).
 
 `clkstr` has no partition number. Its fields are given most significant first and are
 separated by `.`, `:`, `-`, `,` or blanks. Each field counts from its offset, the
@@ -421,7 +425,8 @@ end
     scfmt([ctx,] sc, ticks) -> String
 
 Return the clock string of the tick count `ticks` of the clock `sc`, without a
-partition number, as `scfmt_c`.
+partition number, as
+[`scfmt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scfmt_c.html).
 
 `ticks` is rounded to a whole number and split into the fields of the clock. Each
 field is written with leading zeros to the width of its largest value, with the
@@ -475,7 +480,8 @@ end
     scencd([ctx,] sc, sclkch) -> Float64
 
 Return the encoded spacecraft clock value of the clock string `sclkch` of the clock
-`sc`, as `scencd_c`.
+`sc`, as
+[`scencd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scencd_c.html).
 
 `sclkch` has the form `"partition/fields"`, such as `"1/0123456789:123"`; the
 partition number is optional. The result is in ticks from the start of the first
@@ -533,7 +539,8 @@ end
     scdecd([ctx,] sc, sclkdp) -> String
 
 Return the clock string `"partition/fields"` of the encoded spacecraft clock value
-`sclkdp` of the clock `sc`, as `scdecd_c`.
+`sclkdp` of the clock `sc`, as
+[`scdecd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scdecd_c.html).
 
 `sclkdp` is in ticks from the start of the first partition and is rounded to whole
 ticks. This is the inverse of [`scencd`](@ref).
@@ -557,7 +564,8 @@ end
     sce2s([ctx,] sc, et) -> String
 
 Return the clock string `"partition/fields"` of the clock `sc` at `et` (seconds past
-J2000 TDB), as `sce2s_c`.
+J2000 TDB), as
+[`sce2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2s_c.html).
 
 The result is [`scdecd`](@ref) of [`sce2t`](@ref), and the errors are theirs.
 
@@ -569,7 +577,8 @@ sce2s(ks::KernelSet, sc::Integer, et::Real) = scdecd(ks, sc, sce2t(ks, sc, et))
     scs2e([ctx,] sc, sclkch) -> Float64
 
 Return the epoch, in seconds past J2000 TDB, of the clock string `sclkch` of the
-clock `sc`, as `scs2e_c`.
+clock `sc`, as
+[`scs2e_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scs2e_c.html).
 
 The result is [`sct2e`](@ref) of [`scencd`](@ref), and the errors are theirs.
 

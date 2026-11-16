@@ -10,7 +10,8 @@ end
 """
     gdpool([ctx,] name) -> Vector{Float64}
 
-Return the numeric values of the kernel-pool variable `name`, as `gdpool_c`.
+Return the numeric values of the kernel-pool variable `name`, as
+[`gdpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gdpool_c.html).
 
 The result is a new vector with every value of the variable. Different from CSPICE,
 the call has no `start` and `room` arguments and no `found` flag: an absent variable
@@ -45,7 +46,8 @@ end
     gipool([ctx,] name) -> Vector{Int}
 
 Return the values of the numeric kernel-pool variable `name` rounded to the nearest
-integers, as `gipool_c`.
+integers, as
+[`gipool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gipool_c.html).
 
 The result holds every value; there is no `found` flag (see [`gdpool`](@ref)).
 
@@ -57,7 +59,8 @@ gipool(ks::KernelSet, name::AbstractString) = Int[round(Int, x) for x in gdpool(
 """
     gcpool([ctx,] name) -> Vector{String}
 
-Return the character values of the kernel-pool variable `name`, as `gcpool_c`.
+Return the character values of the kernel-pool variable `name`, as
+[`gcpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gcpool_c.html).
 
 The result is a new vector with every value; there is no `found` flag (see
 [`gdpool`](@ref)).
@@ -86,7 +89,7 @@ end
     bodvrd([ctx,] body, item) -> Vector{Float64}
 
 Return the values of the kernel-pool variable `BODY<id>_<item>` for `body`, as
-`bodvrd_c`.
+[`bodvrd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodvrd_c.html).
 
 `body` is a body name, a string that holds an integer (`"399"`) or an integer NAIF ID
 code. `item` is case sensitive, as in CSPICE;
@@ -112,7 +115,7 @@ bodvrd(ks::KernelSet, body::NameOrID, item::AbstractString) =
     bods2c([ctx,] name) -> Union{Int,Nothing}
 
 Return the NAIF ID code of the body `name`, or `nothing` if the name is not known, as
-`bods2c_c`.
+[`bods2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bods2c_c.html).
 
 `name` is a body name or a string that holds an integer, such as `"399"`. Letter case
 and blanks around the name are ignored. Names from the kernel pool and from
@@ -140,7 +143,8 @@ end
     bodn2c([ctx,] name) -> Union{Int,Nothing}
 
 Return the NAIF ID code of the body name `name`, or `nothing` if the name is not
-known, as `bodn2c_c`.
+known, as
+[`bodn2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodn2c_c.html).
 
 Different from [`bods2c`](@ref), a string that holds an integer is not a name.
 `nothing` takes the place of the `found` flag of CSPICE.
@@ -165,7 +169,8 @@ end
     bodc2n([ctx,] code) -> Union{String,Nothing}
 
 Return the name of the body with the NAIF ID `code`, or `nothing` if the code has no
-name, as `bodc2n_c`.
+name, as
+[`bodc2n_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodc2n_c.html).
 
 A name from the kernel pool or from [`boddef`](@ref) has priority over the built-in
 name.
@@ -184,7 +189,8 @@ bodc2n(ks::KernelSet, code::Integer) = body_name(ks, code)
     bodc2s([ctx,] code) -> String
 
 Return the name of the body with the NAIF ID `code`, or the decimal text of `code` if
-the code has no name, as `bodc2s_c`.
+the code has no name, as
+[`bodc2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodc2s_c.html).
 
 The name is the one of [`bodc2n`](@ref).
 
@@ -204,7 +210,8 @@ end
 """
     namfrm([ctx,] name) -> Int
 
-Return the ID of the frame `name`, or 0 if the frame is not known, as `namfrm_c`.
+Return the ID of the frame `name`, or 0 if the frame is not known, as
+[`namfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/namfrm_c.html).
 
 Built-in frames and frames defined in the kernel pool are known.
 
@@ -229,7 +236,7 @@ end
     frmnam([ctx,] id) -> String
 
 Return the name of the frame with ID `id`, or `""` if the frame is not known, as
-`frmnam_c`.
+[`frmnam_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frmnam_c.html).
 
 # Examples
 ```jldoctest

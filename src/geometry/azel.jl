@@ -6,7 +6,8 @@
     azlrec(range, az, el; azccw=true, elplsz=true) -> SVector{3}
 
 Return the rectangular coordinates of the point at distance `range`, azimuth `az` and
-elevation `el` (radians), as `azlrec_c` of CSPICE.
+elevation `el` (radians), as
+[`azlrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/azlrec_c.html) of CSPICE.
 
 The azimuth is zero along +X. `azccw` tells whether it grows counterclockwise about +Z,
 seen from +Z. `elplsz` tells whether the elevation grows toward +Z. The ranges of the
@@ -27,7 +28,8 @@ azlrec(range::Real, az::Real, el::Real; azccw::Bool=true, elplsz::Bool=true) =
     recazl(rectan; azccw=true, elplsz=true) -> (range, az, el)
 
 Return the distance, the azimuth in [0, 2π) and the elevation in [-π/2, π/2] (radians)
-of the point `rectan`, as `recazl_c` of CSPICE.
+of the point `rectan`, as
+[`recazl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recazl_c.html) of CSPICE.
 
 `rectan` has 3 elements. The flags are those of [`azlrec`](@ref), which is the inverse
 conversion.
@@ -51,7 +53,8 @@ recazl(rectan::AbstractVector; azccw::Bool=true, elplsz::Bool=true) =
     dazldr(x, y, z; azccw=true, elplsz=true) -> SMatrix{3,3}
 
 Return the Jacobian of the conversion from rectangular coordinates to (range, azimuth,
-elevation) at the point `(x, y, z)`, as `dazldr_c` of CSPICE.
+elevation) at the point `(x, y, z)`, as
+[`dazldr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dazldr_c.html) of CSPICE.
 
 Row `i` holds the partial derivatives of coordinate `i` of (range, azimuth, elevation)
 with respect to `x`, `y` and `z`. The flags are those of [`azlrec`](@ref).
@@ -77,7 +80,8 @@ dazldr(x::Real, y::Real, z::Real; azccw::Bool=true, elplsz::Bool=true) =
     drdazl(range, az, el; azccw=true, elplsz=true) -> SMatrix{3,3}
 
 Return the Jacobian of the conversion from (range, azimuth, elevation) to rectangular
-coordinates, as `drdazl_c` of CSPICE.
+coordinates, as
+[`drdazl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdazl_c.html) of CSPICE.
 
 Column `j` holds the partial derivatives of `x`, `y` and `z` with respect to coordinate
 `j` of (range, azimuth, elevation). The angles are in radians. The flags are those of
@@ -105,7 +109,8 @@ drdazl(range::Real, az::Real, el::Real; azccw::Bool=true, elplsz::Bool=true) =
 
 Return the range, azimuth and elevation of `target` and their rates, seen from an
 observer at a constant position on the body `obsctr`, and the one-way light time `lt`
-(s), as `azlcpo_c` of CSPICE.
+(s), as
+[`azlcpo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/azlcpo_c.html) of CSPICE.
 
 `azlsta` is an `SVector{6}`: range (km), azimuth and elevation (rad), then their rates
 (km/s, rad/s). `obspos` is the observer position relative to the center of `obsctr`

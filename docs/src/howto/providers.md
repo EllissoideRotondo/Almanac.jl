@@ -1,11 +1,6 @@
 # Bodies and frames from your own functions
 
-A trajectory that a program computes (the result of a propagator, an optimizer or an
-interpolation) need not be written to an SPK file before the geometry calls can use it.
-[`add_ephemeris!`](@ref) makes a function the source of the state of a body, and
-[`add_frame!`](@ref) makes a function the source of the orientation of a frame. Every
-call that takes a body or a frame then uses them: states with any aberration
-correction, surface geometry, event searches, tables.
+A trajectory computed by the program (a propagator, an optimizer, an interpolation) can be used directly, without writing an SPK. [`add_ephemeris!`](@ref) makes a function the source of a body's state, [`add_frame!`](@ref) of a frame's orientation. All calls that take a body or a frame then use them: any aberration correction, surface geometry, event searches, tables.
 
 ```@setup prov
 using Almanac
@@ -15,14 +10,12 @@ foreach(furnsh, DocKernels.write(mktempdir()))
 
 ## A body
 
-The function receives an epoch (ET, seconds past J2000 TDB) and returns the position
-(km) and the velocity (km/s) relative to the center, in the frame of the call. Here a
-second spacecraft moves in a circular orbit of 8000 km around the Earth.
+The function takes ET and returns position (km) and velocity (km/s) relative to the center, in the given frame. Here, a circular orbit of 8000 km around the Earth:
 
 ```@example prov
 using Almanac
 
-μ = 3.986004418e5                           # km^3/s^2, the Earth
+μ = 3.986004418e5                           # km³/s², the Earth
 r = 8000.0                                  # km
 n = sqrt(μ / r^3)                           # rad/s
 circular(et) = [r * cos(n * et), r * sin(n * et), 0.0,
@@ -34,9 +27,7 @@ state, light_time = spkezr(-1000, t0 + 600.0, "J2000", "LT+S", "PROBE")
 round.(state; digits = 3)
 ```
 
-The body behaves as a file loaded at that moment: it has priority over the files loaded
-before it, the files apply outside its interval, and [`unload`](@ref) with its name
-removes it.
+The body acts as a file loaded at that moment: it takes priority over earlier files, those files still apply outside its interval, and [`unload`](@ref) with its name removes it.
 
 ```@example prov
 kinfo("my orbit")                           # (type, meta-kernel, handle)
@@ -44,8 +35,7 @@ kinfo("my orbit")                           # (type, meta-kernel, handle)
 
 ## A frame
 
-The function returns the matrix that takes vectors from the new frame to the frame
-named as relative, the direction of [`pxform`](@ref)`(new, relative, et)`.
+The function returns the rotation from the new frame to its relative frame, the matrix of [`pxform`](@ref)`(new, relative, et)`.
 
 ```@example prov
 spin(et) = (c = cos(n * et); s = sin(n * et); [c -s 0; s c 0; 0 0 1])
@@ -54,19 +44,10 @@ add_frame!(spin, "ORBIT_FIXED", 1_400_000, "EARTH", "J2000")
 spkpos(-1000, t0 + 600.0, "ORBIT_FIXED", "NONE", "EARTH")[1]
 ```
 
-In that frame the spacecraft stands still on the X axis.
+In that frame the spacecraft stays on the X axis.
 
-## Derivatives and epochs that are not numbers
+## Requirements on the function
 
-A call can pass the function an epoch that is not a `Float64`: a `ForwardDiff.Dual`
-when the caller differentiates, and a Taylor number of this package for derivatives of
-order 2 and more, which an `LT+S` state of an observer and [`sxform`](@ref) of a frame
-need. A function that uses arithmetic and the functions of `Base` (`sin`, `cos`, `sqrt`,
-...) works with all of them. A function that cannot (one that branches on the epoch, or
-calls a library that takes only `Float64`) works only in the calls that need no
-derivative of order 2, such as geometric states and positions and [`pxform`](@ref).
+The epoch passed in is not always a `Float64`: it is a `ForwardDiff.Dual` when the caller differentiates, and an internal Taylor number when a call needs derivatives of order 2 or more (an `LT+S` state of an observer, [`sxform`](@ref) of a frame). Plain arithmetic and `Base` functions (`sin`, `cos`, `sqrt`, ...) work with all of them. A function that branches on the epoch or calls `Float64`-only code works only in calls that need no derivative of order 2, such as geometric states and [`pxform`](@ref), and only with a `Float64` epoch.
 
-The function is called from any thread that makes a query, so it must not change data
-that other threads read. A closure changes such data without showing it when it assigns
-a variable that the enclosing function also assigns: the two share the variable. Declare
-the variables of the closure `local`, or give them names of their own.
+The function is called from every thread that queries, so it must not mutate shared data. Beware of closures that assign a variable of the enclosing function: they share it. Declare such variables `local` in the closure, or give them names the enclosing function does not use.

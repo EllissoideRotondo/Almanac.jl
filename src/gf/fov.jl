@@ -268,7 +268,8 @@ end
            tol=gfstol(ctx), bail=nothing, report=nothing, threads=false) -> Window
 
 Return the window of epochs, in seconds past J2000 TDB, on which the body `target` is in
-the field of view of the instrument `inst`, as seen from `obsrvr`, as `gftfov_c`.
+the field of view of the instrument `inst`, as seen from `obsrvr`, as
+[`gftfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gftfov_c.html).
 
 The result is a new `Window` that is a subset of the confinement window `cnfine`;
 `cnfine` is not modified. The test at each epoch is the one of [`fovtrg`](@ref).
@@ -333,7 +334,8 @@ gftfov(inst::NameOrID, target::NameOrID, tshape::AbstractString, tframe::NameOrI
            tol=gfstol(ctx), bail=nothing, report=nothing, threads=false) -> Window
 
 Return the window of epochs, in seconds past J2000 TDB, on which the ray from `obsrvr`
-along `raydir` is in the field of view of the instrument `inst`, as `gfrfov_c`.
+along `raydir` is in the field of view of the instrument `inst`, as
+[`gfrfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrfov_c.html).
 
 `raydir` is a vector of 3 elements in the frame `rframe`. `abcorr` is `"NONE"`, `"S"`
 (the direction is corrected for the stellar aberration of the observer, as for light
@@ -369,7 +371,8 @@ gfrfov(inst::NameOrID, raydir::AbstractVector, rframe::NameOrID, abcorr::AbcorrA
            udrefn, cnfine; bail=nothing, report=nothing, threads=false) -> Window
 
 Return the visibility window of [`gftfov`](@ref) or [`gfrfov`](@ref), found with a
-step and a refinement function that the caller supplies, as `gffove_c`.
+step and a refinement function that the caller supplies, as
+[`gffove_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gffove_c.html).
 
 `tshape` is `"ELLIPSOID"`, `"POINT"` or `"RAY"`. For a ray, `raydir` is the direction,
 `tframe` its frame, and `target` is not read. For a body, `raydir` is not read, but it

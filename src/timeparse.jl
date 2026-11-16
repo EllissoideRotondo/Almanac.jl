@@ -1070,7 +1070,8 @@ end
 """
     str2et([ctx,] s) -> Float64
 
-Return the epoch of the time string `s` in seconds past J2000 TDB, as `str2et_c`.
+Return the epoch of the time string `s` in seconds past J2000 TDB, as
+[`str2et_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/str2et_c.html).
 
 A leap-second kernel must be loaded. The string forms of CSPICE are accepted:
 
@@ -1243,7 +1244,8 @@ end
 """
     utc2et([ctx,] s) -> Float64
 
-Return the epoch of the UTC time string `s` in seconds past J2000 TDB, as `utc2et_c`.
+Return the epoch of the UTC time string `s` in seconds past J2000 TDB, as
+[`utc2et_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/utc2et_c.html).
 
 [`str2et`](@ref) is the call for new code; this one keeps the behavior of the older
 CSPICE routine:
@@ -1289,7 +1291,7 @@ end
     tparse([ctx,] s) -> Float64
 
 Return the seconds past J2000 of the time string `s` on a formal calendar, as
-`tparse_c`.
+[`tparse_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tparse_c.html).
 
 On the formal calendar every day has 86400 seconds: there are no leap seconds, and
 the call needs no kernel. The result is the count that [`etcal`](@ref) writes back,
@@ -1359,7 +1361,8 @@ end
     tpictr([ctx,] sample) -> String
 
 Return the picture with which [`timout`](@ref) writes epochs in the form of the time
-string `sample`, as `tpictr_c`.
+string `sample`, as
+[`tpictr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tpictr_c.html).
 
 `sample` has a form that [`str2et`](@ref) accepts. The call needs no kernel; `ctx` is
 accepted and not used.

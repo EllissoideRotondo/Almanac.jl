@@ -273,7 +273,8 @@ end
 """
     _gf_wncond(w, amount) -> Window
 
-Copy of `w` with each interval contracted by `amount` at both ends, as `wncond_c`: an
+Copy of `w` with each interval contracted by `amount` at both ends, as
+[`wncond_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wncond_c.html): an
 interval that is shorter than `2 amount` is removed.
 """
 function _gf_wncond(w::Window, amount::Float64)
@@ -382,7 +383,8 @@ end
 
 Return the window of epochs, in seconds past J2000 TDB, on which the coordinate `coord`
 of the sub-observer point on `target`, as seen from `obsrvr`, satisfies the relation
-`relate` with `refval`, as `gfsubc_c`.
+`relate` with `refval`, as
+[`gfsubc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsubc_c.html).
 
 The point is the one of [`subpnt`](@ref), in the body-fixed frame `fixref`, which must
 be centered on `target`. `method` is one of the older forms of `subpnt`,
@@ -457,7 +459,8 @@ gfsubc(target::NameOrID, fixref::NameOrID, method::AbstractString, abcorr::Abcor
 
 Return the window of epochs, in seconds past J2000 TDB, on which the coordinate `coord`
 of a surface intercept point on `target` satisfies the relation `relate` with `refval`,
-as `gfsntc_c`. The point is where the ray from `obsrvr` along `dvec` meets the reference
+as
+[`gfsntc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsntc_c.html). The point is where the ray from `obsrvr` along `dvec` meets the reference
 ellipsoid of `target`.
 
 `dvec` is a vector of 3 elements in the frame `dref`. The point is the one of

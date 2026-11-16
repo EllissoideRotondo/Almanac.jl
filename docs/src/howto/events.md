@@ -1,6 +1,6 @@
 # Event searches
 
-The geometry finder answers questions of the form "when is this quantity equal to, above or below a value, or at an extremum?". Each search takes a confinement window, which is the set of times to search, and returns the window of times at which the condition holds.
+The geometry finder (`gf` calls) answers "when is this quantity equal to, above or below a value, or at an extremum?". Each search takes a confinement window of times to search and returns the window where the condition holds.
 
 ```@setup gf
 using Almanac
@@ -10,7 +10,7 @@ foreach(furnsh, DocKernels.write(mktempdir()))
 
 ## Windows
 
-A [`Window`](@ref) is a sorted list of disjoint intervals of time. [`wninsd!`](@ref) adds an interval, [`wncard`](@ref) counts the intervals, and [`wnfetd`](@ref) returns one of them, with indices from 1.
+A [`Window`](@ref) is a sorted list of disjoint intervals. [`wninsd!`](@ref) adds an interval, [`wncard`](@ref) counts them, [`wnfetd`](@ref) returns one (indices from 1).
 
 ```@example gf
 using Almanac
@@ -23,18 +23,16 @@ wncard(search)
 
 ## The step
 
-Every search samples its quantity at the step that the caller gives and then refines each change that it finds, to the tolerance in seconds of the keyword `tol`; without `tol`, the tolerance is the one that [`gfstol`](@ref) sets for the context, by default one microsecond. A long step is fast, and a step that is too long loses events:
+A search samples its quantity at the given step, then refines each change to the tolerance `tol` (s); the default comes from [`gfstol`](@ref), 1 µs unless changed. A step that is too long misses events silently:
 
 | Search | The step must be shorter than |
 |---|---|
 | A condition that holds or not (`"="`, `"<"`, `">"`, an occultation, a field of view) | the shortest interval on which the condition holds, and the shortest gap between two such intervals |
-| An extremum (`"LOCMIN"`, `"LOCMAX"`, `"ABSMIN"`, `"ABSMAX"`) | the shortest interval on which the quantity only increases or only decreases |
-
-An event that begins and ends between two samples is not found, and the search gives no warning.
+| An extremum (`"LOCMIN"`, `"LOCMAX"`, `"ABSMIN"`, `"ABSMAX"`) | the shortest interval on which the quantity is monotone |
 
 ## Eclipses
 
-[`gfoclt`](@ref) finds the times at which one body hides another from an observer. The spacecraft of the examples is in the shadow of the Earth when the Earth occults the Sun as seen from the spacecraft. The arguments are the kind of occultation (`"ANY"` accepts partial and full), then the name, the shape and the body-fixed frame of the front body and of the back body, the aberration correction, the observer, the step and the window. The first eclipse below lasts less than two minutes, so the step is 60 seconds; with 300 seconds the samples can fall on both sides of it, and the search then does not report it.
+[`gfoclt`](@ref) finds when one body hides another from an observer. `PROBE` is in the Earth's shadow when the Earth occults the Sun as seen from `PROBE`. Arguments: the occultation type (`"ANY"`: partial or full), name, shape and body-fixed frame of the front body, then of the back body, correction, observer, step, window. The first eclipse lasts under two minutes, hence the 60 s step; a 300 s step can step over it.
 
 ```@example gf
 eclipses = gfoclt("ANY", "EARTH", "ELLIPSOID", "IAU_EARTH",
@@ -48,7 +46,7 @@ end
 
 ## A condition on a coordinate
 
-[`gfposc`](@ref) searches on one coordinate of a position. The search below finds when the spacecraft is north of 20 degrees of latitude; `rpd()` is the number of radians in a degree. After the relation come the reference value, an adjustment that only the absolute extrema use, and the step. The first result of [`wnsumd`](@ref) is the total duration.
+[`gfposc`](@ref) searches on one coordinate of a position: here, latitude above 20°. After the relation: reference value, adjustment (absolute extrema only), step. [`wnsumd`](@ref)`[1]` is the total duration.
 
 ```@example gf
 north = gfposc("PROBE", "IAU_EARTH", "NONE", "EARTH", "LATITUDINAL", "LATITUDE",
@@ -58,7 +56,7 @@ wnsumd(north)[1] / 3600                     # hours
 
 ## A function of your own
 
-[`gfuds`](@ref) searches on any scalar function of time. It needs the function and a second function that says whether the first one decreases at an epoch; [`uddc`](@ref) builds that answer from a numerical derivative over the interval that its third argument gives, here 10 seconds.
+[`gfuds`](@ref) searches on any scalar function of time. It also needs a function that tells whether the first decreases at an epoch; [`uddc`](@ref) derives it from a numerical derivative over the given interval, here 10 s.
 
 ```@example gf
 speed(t) = vnorm(spkezr("PROBE", t, "J2000", "NONE", "EARTH")[1][4:6])
@@ -68,4 +66,4 @@ wncard(fast)                                # intervals with a speed above 8 km/
 
 ## Several threads
 
-Every search accepts the keyword `threads=true`, which searches the intervals of a window on separate threads when Julia runs with several threads. The window is the confinement window, and for a condition on a value (`"="`, `"<"`, `">"`) also the intervals on which the quantity only increases or only decreases, which the search finds first. An absolute extremum (`"ABSMIN"`, `"ABSMAX"`) with a nonzero adjustment is split as a condition on a value. A search for any other extremum, an occultation or a field of view on a window of one interval therefore gains nothing. A function given to `gfuds` or `gfudb` is then called from several threads at once and must be safe for that.
+Every search takes `threads=true`, which processes intervals on separate threads. The intervals are those of the confinement window and, for `"="`, `"<"`, `">"`, and `"ABSMIN"` or `"ABSMAX"` with a nonzero adjustment, the monotone intervals found first. Other extrema, occultations and field-of-view searches on a one-interval window gain nothing. Functions given to `gfuds` or `gfudb` are then called concurrently and must be thread-safe.

@@ -59,7 +59,8 @@ end
 """
     getelm([ctx | ks,] frstyr, lines) -> (epoch::Float64, elems::SVector{10,Float64})
 
-Parse the two lines `lines` of a two-line element set, as `getelm_c`, and return the epoch
+Parse the two lines `lines` of a two-line element set, as
+[`getelm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getelm_c.html), and return the epoch
 of the elements (seconds past J2000 TDB) and the ten elements.
 
 `frstyr` is the first year of the 100-year interval in which the two-digit year of the
@@ -170,7 +171,8 @@ end
     evsgp4([ctx | ks,] et, geophs, elems) -> SVector{6}
 
 Return the state (km, km/s) in the TEME frame (true equator, mean equinox), at the epoch
-`et` (seconds past J2000 TDB), of the two-line element set `elems`, as `evsgp4_c`.
+`et` (seconds past J2000 TDB), of the two-line element set `elems`, as
+[`evsgp4_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/evsgp4_c.html).
 
 `elems` holds the ten elements that [`getelm`](@ref) returns. `geophs` holds eight
 geophysical constants of the Earth:
@@ -214,7 +216,8 @@ evsgp4(et::Real, geophs, elems) = evsgp4(default_context(), et, geophs, elems)
     spkw10([ctx,] handle, body, center, frame, first, last, segid, consts, elems, epochs)
         -> Nothing
 
-Write an SPK segment of type 10 (two-line element sets), as `spkw10_c`.
+Write an SPK segment of type 10 (two-line element sets), as
+[`spkw10_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw10_c.html).
 
 `consts` holds the eight geophysical constants of [`evsgp4`](@ref). `elems`
 holds `n` element sets of ten numbers each, in the form that [`getelm`](@ref) returns, and
