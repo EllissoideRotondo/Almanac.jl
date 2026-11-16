@@ -1,6 +1,6 @@
 # Writing kernels
 
-Almanac.jl writes SPK, CK, binary PCK, DSK and EK files, each byte-identical to what the CSPICE writer produces from the same input in a [new process](@ref "No state between calls"). All writers follow open, write, close; this page writes an SPK and reads it back.
+Almanac.jl writes SPK, CK, binary PCK, DSK and EK files with the contents that the CSPICE writers produce from the same input in a [new process](@ref "No state between calls"): SPK, CK and binary PCK files byte for byte, DSK and EK files word for word in their data, since CSPICE fills the padding of a DAS record with what its buffers held before. All writers follow open, write, close; this page writes an SPK and reads it back.
 
 ## Write an SPK
 

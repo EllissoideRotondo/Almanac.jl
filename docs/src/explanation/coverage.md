@@ -29,7 +29,7 @@ CSPICE itself is the reference: the tests call each routine and its CSPICE count
 | Kind of check | What it compares |
 |---|---|
 | Differential | A result with the CSPICE result of the same call |
-| File | A kernel written by Almanac.jl with the one CSPICE writes, byte for byte |
+| File | A kernel written by Almanac.jl with the one CSPICE writes: SPK, CK and binary PCK files byte for byte, DSK and EK files word for word |
 | Derivative | The first derivative with the velocity of CSPICE, and each higher derivative with automatic differentiation of the one below it |
 | Error | The kind of the error, and the text of the message where a program can depend on it |
 | Concurrency | Answers from many threads, while kernels are loaded and unloaded, with the answers of one thread |
