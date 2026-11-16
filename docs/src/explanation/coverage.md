@@ -41,7 +41,7 @@ CSPICE itself is the reference: the tests call each routine and its CSPICE count
 |---|---|
 | Comparisons in the default run | about 40,000 |
 | Comparisons in the exhaustive run (`ALMANAC_TEST_FULL=1`), with larger samples, longer search spans and larger files | about 100,000 |
-| Line coverage of `src/` | 96.6 % |
+| Line coverage of `src/` | 96.6 % (the coverage job of CI measures it on each push) |
 | Julia versions tested | 1.10 and 1.13 |
 
 ## Run NAIF's test suite
@@ -50,7 +50,9 @@ CSPICE itself is the reference: the tests call each routine and its CSPICE count
 julia --project=test test/tspice/run.jl
 ```
 
-The first run builds PEPPER with gfortran 16 and fpm, which must be on `PATH`, and records the calls of the about 400 tspice families into `~/.cache/almanac-tspice` (about 2 GB, 15 to 40 minutes). Later runs only replay them, in one process per CPU thread. The recording keeps each distinct call of a routine without state once, and a query once between two changes of the loaded kernels or the settings; `TSPICE_ALL=1` keeps every call. The run fails if a routine has more mismatches of value, of error kind, or of the script itself than `test/tspice/baseline.tsv` allows; the mismatches are in `results/replay.tsv`. Each routine of the baseline has a class and a note: `documented`, a difference that a docstring or this manual states; `cspice`, Almanac follows CSPICE where SPICELIB differs; `gap`, a call that the replay cannot reproduce, such as a read of a file that the test wrote with routines outside the recording; `unexplained`. `--record` records again, `--update-baseline` makes the counts of the run the new baseline and keeps the classes, and a list of families (`F_SPK08 F_CK06`) restricts the run to them.
+The first run builds PEPPER with gfortran 16 and fpm, which must be on `PATH`, and records the calls of the about 400 tspice families into `~/.cache/almanac-tspice` (about 2 GB, 15 to 40 minutes), with a manifest of the families and of the PEPPER commit. Later runs only replay them, in parallel processes. The recording keeps each distinct call of a routine without state once, and a query once between two changes of the loaded kernels or the settings; `TSPICE_ALL=1` keeps every call.
+
+A run without a list of families is the full check. It stops if a family is missing from the recording, failed to record, or fails to replay. It fails if a mismatch of value, of error kind, or of the script itself is not in the baseline (`test/tspice/baseline_ids.tsv.gz`): each mismatch is identified by family, routine, kind and a hash of its inputs, so a new mismatch fails even when another one went away. It also fails if a routine has more calls skipped or compared with a tolerance than `test/tspice/coverage.tsv` records, or fewer calls compared. The mismatches are in `results/replay.tsv` and `results/ids.tsv`. Each routine of `test/tspice/baseline.tsv` has a class and a note: `documented`, a difference that a docstring or this manual states; `cspice`, Almanac follows CSPICE where SPICELIB differs; `gap`, a call that the replay cannot reproduce, such as a read of a file that the test wrote with routines outside the recording; `unexplained`. `--record` records again, `--update-baseline` makes the full run the new baseline and keeps the classes, and a list of families (`F_SPK08 F_CK06`) restricts the run to them, without the coverage check. `test/tspice/selftest.jl` checks the gate itself: on a copy of the recording it removes a mismatch from the baseline, deletes a log, damages a log and marks a family as failed, and requires the run to fail each time.
 
 ## Known limits of accuracy
 

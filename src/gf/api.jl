@@ -113,10 +113,11 @@ another thread does not change a search that runs, and several searches can run 
 same time.
 
 Throws `SpiceError` with the kind
-- `:invalidstep` if `step <= 0`, `:invalidtolerance` if `tol <= 0`;
+- `:invalidstep` if `step <= 0` or a step does not advance the time (CSPICE then
+  loops for ever), `:invalidtolerance` if `tol <= 0`;
 - `:notrecognized` if `relate` is not a relation;
-- `:valueoutofrange` if `adjust < 0`, `:invalidvalue` if `adjust` is not zero with a
-  relation other than `"ABSMIN"` and `"ABSMAX"`;
+- `:valueoutofrange` if `adjust < 0` or is not finite, `:invalidvalue` if `adjust` is
+  not zero with a relation other than `"ABSMIN"` and `"ABSMAX"` or `refval` is NaN;
 - `:idcodenotfound` if a body name is not known, `:bodiesnotdistinct` if the two bodies
   are the same;
 - `:invalidoption` if `abcorr` is not a correction.
@@ -406,10 +407,12 @@ The search reads no kernel, and `ctx` only gives the default of `tol`. A kernel 
 in `udfuns` reads the kernels that are loaded at the time of that call, not those of
 the start of the search.
 
-Throws `SpiceError(:invalidstep)` if `step <= 0`, `SpiceError(:invalidtolerance)` if
+Throws `SpiceError(:invalidstep)` if `step <= 0` or a step does not advance the time
+(CSPICE then loops for ever), `SpiceError(:invalidtolerance)` if
 `tol <= 0`, `SpiceError(:notrecognized)` if `relate` is not a relation,
-`SpiceError(:valueoutofrange)` if `adjust < 0`, and `SpiceError(:invalidvalue)` if
-`adjust` is not zero with a relation other than `"ABSMIN"` and `"ABSMAX"`.
+`SpiceError(:valueoutofrange)` if `adjust < 0` or is not finite, and
+`SpiceError(:invalidvalue)` if `adjust` is not zero with a relation other than
+`"ABSMIN"` and `"ABSMAX"` or `refval` is NaN.
 
 # Examples
 ```jldoctest
@@ -459,7 +462,8 @@ the bracket is not longer than `tol`. `step` must therefore be shorter than the 
 interval on which `udfunb` keeps one value. The keywords are those of [`gfdist`](@ref),
 and `ctx` acts as in [`gfuds`](@ref).
 
-Throws `SpiceError(:invalidstep)` if `step <= 0` and `SpiceError(:invalidtolerance)` if
+Throws `SpiceError(:invalidstep)` if `step <= 0` or a step does not advance the time
+(CSPICE then loops for ever) and `SpiceError(:invalidtolerance)` if
 `tol <= 0`.
 
 # Examples

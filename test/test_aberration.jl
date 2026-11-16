@@ -306,6 +306,11 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         @test throws_kind(() -> stelab(SVector(1.0, 0.0, 0.0), SVector(3e5, 0.0, 0.0)), :valueoutofrange)
         @test throws_kind(() -> stlabx(SVector(1.0, 0.0, 0.0), SVector(3e5, 0.0, 0.0)), :valueoutofrange)
         @test throws_kind(() -> stelab([1.0, 0.0], [0.0, 0.0, 0.0]), :badarg)
+        # extreme magnitudes: the unit vector is scaled as in `vhat` (audit of 2026-11-16)
+        for mag in (1e-300, 1e-200, 1e200, 1e300), d in ((1.0, 0.0, 0.0), (0.6, 0.8, 0.0))
+            p = mag .* collect(d)
+            @test stelab(p, [0.0, 30.0, 0.0]) == SPICE.stelab(p, [0.0, 30.0, 0.0])
+        end
         # An epoch whose light-time corrected epoch leaves the coverage.
         @test throws_kind(() -> spkezr(ctx, 8, DE440S_COVERAGE[1] - 86000.0, "J2000", "LT", 399), :spkinsuffdata)
     end

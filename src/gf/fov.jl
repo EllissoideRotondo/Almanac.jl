@@ -291,7 +291,8 @@ The result is a new `Window` that is a subset of the confinement window `cnfine`
 
 The keywords are those of [`gfdist`](@ref).
 
-Throws `SpiceError(:invalidstep)` if `step <= 0`, `SpiceError(:invalidtolerance)` if
+Throws `SpiceError(:invalidstep)` if `step <= 0` or a step does not advance the time
+(CSPICE then loops for ever), `SpiceError(:invalidtolerance)` if
 `tol <= 0`, and
 - `SpiceError(:invalidoption)` if `tshape` is `"RAY"` (use [`gfrfov`](@ref)) or `abcorr`
   is not a correction;

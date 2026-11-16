@@ -40,6 +40,10 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         end
         @test throws_kind(() -> uddf(f1, 1.0, 0.0), :dividebyzero)
         @test GFO.kind(() -> GFO.uddf(f1, 1.0, 0.0)) === :dividebyzero
+        # the zero step is refused before the function runs (CSPICE calls it twice first)
+        calls = Ref(0)
+        @test throws_kind(() -> uddf(x -> (calls[] += 1; x), 1.0, 0.0), :dividebyzero)
+        @test calls[] == 0
     end
 
     @testset "gfuds: every relation, bit for bit" begin
@@ -196,6 +200,22 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         end
         @test throws_kind(() -> gfudb(GFState(t -> true), 0.0, cn), :invalidstep)
         @test GFO.kind(() -> GFO.gfudb(t -> true, 0.0, collect(cn))) === :invalidstep
+        # Differences from CSPICE (audit of 2026-11-16): a step below the spacing of the
+        # floating-point numbers at the epoch, with which CSPICE loops for ever, and a NaN
+        # adjustment or reference value, with which CSPICE finds no event.
+        far = Window([1e9, 1e9 + 1.0])
+        @test throws_kind(() -> gfudb(GFState(t -> true), 1e-9, far), :invalidstep)
+        # the step function of the geometric searches, through the solver
+        @test throws_kind(() -> Almanac._gf_scan!(Window(), et -> true, far,
+            Almanac._gf_run(et -> 1e-9, 1e-6), false), :invalidstep)
+        @test throws_kind(() -> gfuds(f1, qdec, "<", 0.0, 0.0, 1e-9, far), :invalidstep)
+        @test collect(gfudb(GFState(t -> true), 0.25, far)) == [1e9, 1e9 + 1.0]
+        @test collect(gfudb(GFState(t -> true), 1e-9, Window([1e9, 1e9]))) == [1e9, 1e9]
+        @test collect(gfudb(GFState(t -> true), 1.0, Window([1e9, nextfloat(1e9, 3)]))) ==
+              [1e9, nextfloat(1e9, 3)]
+        @test throws_kind(() -> gfuds(f1, qdec, "ABSMIN", 0.0, NaN, 0.3, cn), :valueoutofrange)
+        @test throws_kind(() -> gfuds(f1, qdec, "ABSMAX", 0.0, Inf, 0.3, cn), :valueoutofrange)
+        @test throws_kind(() -> gfuds(f1, qdec, "<", NaN, 0.0, 0.3, cn), :invalidvalue)
         @test throws_kind(() -> gfuds(f1, qdec, "=", 0.0, 0.0, 0.3, cn; tol=0.0), :invalidtolerance)
         @test throws_kind(() -> gfudb(GFState(t -> true), 0.3, cn; tol=-1.0), :invalidtolerance)
         # relations are read without regard to case and outer blanks

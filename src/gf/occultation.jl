@@ -159,7 +159,8 @@ ground station under `front = "EARTH"`, gives `:notdisjoint` or a wrong window; 
 rising and setting of a body, search the elevation of [`azlcpo`](@ref) with
 [`gfuds`](@ref).
 
-Throws `SpiceError(:invalidstep)` if `step <= 0`, `SpiceError(:invalidtolerance)` if
+Throws `SpiceError(:invalidstep)` if `step <= 0` or a step does not advance the time
+(CSPICE then loops for ever), `SpiceError(:invalidtolerance)` if
 `tol <= 0`, and
 - `SpiceError(:invalidshapecombo)` if both shapes are `"POINT"`, or if one shape is DSK
   and the other is not a point;

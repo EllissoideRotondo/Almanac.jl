@@ -1149,15 +1149,38 @@ end
 
 """
 The mismatches go to `replay.tsv` as they are found, the first `MAXROWS` of each routine
-and kind; the others are only counted.
+and kind; the others are only counted. Every mismatch of a gated kind (value, error,
+adapter) also goes to `ids.tsv` with its identity: family, routine, kind and a hash of
+all its inputs, which does not depend on the line of the log. run.jl compares these
+identities with the baseline, so that a new mismatch fails even when another one went
+away.
 """
 mutable struct Mismatches
     io::IO
     rows::Dict{Tuple{String,String},Int}
+    ids::Union{IO,Nothing}
 end
+Mismatches(io::IO, rows) = Mismatches(io, rows, nothing)
 const MAXROWS = 200
+const GATED_KINDS = ("value", "error", "adapter")
+
+"FNV-1a hash of a string, 64 bits: stable across Julia versions, unlike `hash`."
+function fnv64(s::AbstractString)
+    h = 0xcbf29ce484222325
+    for b in codeunits(s)
+        h = (h ⊻ b) * 0x100000001b3
+    end
+    return h
+end
+
+"The identity of a mismatch of the call `c`: a hash of its name and all its inputs."
+call_id(c::Call) = string(fnv64(c.name * "(" * join(["$(a.name)=$(repr(a.values))" for a in c.inputs], ",") * ")");
+    base=16, pad=16)
 
 function record!(m::Mismatches, (fam, c, kind, msg))
+    if m.ids !== nothing && kind in GATED_KINDS
+        println(m.ids, fam, '\t', lowercase(c.name), '\t', kind, '\t', call_id(c))
+    end
     key = (c.name, kind)
     n = get(m.rows, key, 0) + 1
     m.rows[key] = n
@@ -1201,16 +1224,29 @@ function main(args)
     cd(mktempdir())
     logs = family_logs(logdir, args[2:end])
     tallies = Dict{String,Tally}()
-    mismatches = Mismatches(open(joinpath(outdir, "replay.tsv"), "w"), Dict{Tuple{String,String},Int}())
+    mismatches = Mismatches(open(joinpath(outdir, "replay.tsv"), "w"),
+        Dict{Tuple{String,String},Int}(), open(joinpath(outdir, "ids.tsv"), "w"))
+    # families.tsv: the status of each family, `done` or `failed` with the error. A family
+    # that fails is not a mismatch that the baseline can allow: the exit status is 1.
+    failed = 0
+    status = open(joinpath(outdir, "families.tsv"), "w")
     for path in logs
+        fam = replace(basename(path), r"\.log(\.gz)?$" => "")
         println(stderr, basename(path))
         flush(stderr)
         try
             replay_family(path, tallies, mismatches)
+            println(status, fam, "\tdone")
         catch e
-            println("family $(basename(path)): ", first(sprint(showerror, e), 300))
+            failed += 1
+            msg = replace(first(sprint(showerror, e), 300), r"\s+" => " ")
+            println("family $fam FAILED: ", msg)
+            println(status, fam, "\tfailed\t", msg)
         end
+        flush(status)
     end
+    close(status)
+    close(mismatches.ids)
     println(rpad("routine", 10), lpad("match", 10), lpad("cspice", 8), lpad("near", 8), lpad("spread", 8), lpad("value", 8), lpad("error", 8), lpad("adapter", 10), lpad("skipped", 10))
     tot = Tally()
     for name in sort(collect(keys(tallies)))
@@ -1223,9 +1259,9 @@ function main(args)
     println(rpad("all", 10), lpad(tot.match, 10), lpad(tot.cspice, 8), lpad(tot.near, 8), lpad(tot.spread, 8), lpad(tot.value, 8), lpad(tot.error, 8), lpad(tot.adapter, 10), lpad(tot.skipped, 10))
     close(mismatches.io)
     write_tallies(joinpath(outdir, "tally.tsv"), tallies)
-    return tot
+    return failed
 end
 
 if abspath(PROGRAM_FILE) == @__FILE__
-    main(ARGS)
+    exit(main(ARGS) == 0 ? 0 : 1)
 end

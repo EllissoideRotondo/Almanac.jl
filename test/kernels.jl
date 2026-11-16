@@ -1,8 +1,8 @@
 # Kernel paths for the tests and the benchmarks, in one place.
 #
 # The kernels are NAIF generic kernels. `fetch_kernels` downloads
-# the missing ones into `test/data/` (not under version control) and checks their
-# SHA-256. Environment variables:
+# the missing ones into `test/data/` (not under version control) and checks the SHA-256
+# of every kernel, downloaded now or before. Environment variables:
 #   ALMANAC_KERNEL_DIR        directory of the text kernels and the binary PCK
 #   ALMANAC_DE440S            path of de440s.bsp
 #   ALMANAC_DE430             path of de430.bsp
@@ -99,6 +99,7 @@ time never see a partial file. A failed download is reported on `io` and leaves 
 kernel missing; a file with the wrong SHA-256 is deleted and throws an error.
 """
 function fetch_kernels(io::IO=stdout)
+    verify_kernels()
     get(ENV, "ALMANAC_DOWNLOAD_KERNELS", "1") == "0" && return missing_kernels(all_kernels()...)
     for path in all_kernels()     # invariant: the kernels before `path` were fetched or reported
         (isfile(path) || !haskey(SOURCES, basename(path))) && continue
@@ -120,6 +121,24 @@ function fetch_kernels(io::IO=stdout)
     gone = missing_kernels(all_kernels()...)
     @assert all(p -> !isfile(p), gone)
     return gone
+end
+
+"""
+    verify_kernels()
+
+Check the SHA-256 of every kernel on disk that has a known source, cached or given by an
+environment variable, so that the oracle runs on the kernels it expects: a file changed
+after its download fails here, not as a mismatch with CSPICE. About a second.
+"""
+function verify_kernels()
+    for path in all_kernels()
+        (isfile(path) && haskey(SOURCES, basename(path))) || continue
+        sha = SOURCES[basename(path)][2]
+        got = bytes2hex(open(SHA.sha256, path))
+        got == sha || error("SHA-256 of $path is $got, expected $sha: delete the file to " *
+                            "download it again")
+    end
+    return nothing
 end
 
 "Paths of `paths` that are not regular files."

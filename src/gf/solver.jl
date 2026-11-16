@@ -108,6 +108,21 @@ end
 @inline _gf_repf(run::_GFRun) = (run.report === nothing || run.report(:final); nothing)
 
 """
+    _gf_advance(t, step, finish) -> Float64
+
+The next sample `min(t + step, finish)` after `t < finish`. Throws
+`SpiceError(:invalidstep)` if it is not after `t`: a step below the spacing of the
+floating-point numbers at `t`. CSPICE samples `t` again for ever.
+"""
+@inline function _gf_advance(t::Float64, step::Float64, finish::Float64)
+    nxt = min(t + step, finish)
+    nxt > t || _gf_nostep(t, step)
+    return nxt
+end
+@noinline _gf_nostep(t, step) = throw(SpiceError(:invalidstep, "the step $step s does " *
+    "not advance the time $t s: it is below the spacing of the floating-point numbers there"))
+
+"""
     _gf_solve!(result, cond, run, cstep, step, start, finish) -> result
 
 The search of `zzgfsolvx`: insert into `result` the intervals of [`start`, `finish`] on
@@ -140,7 +155,7 @@ function _gf_solve!(result::Window, cond::F, run::_GFRun, cstep::Bool, step::Flo
     # `svdtim`, and `begtim` is the start of the open interval if `instat`
     while svdtim < finish
         cstep || (timest = _gf_step(run, curtim))
-        curtim = min(curtim + timest, finish)
+        curtim = _gf_advance(curtim, timest, finish)
         curste = cond(curtim)::Bool
         # invariant: the state is `savst` at every sample from the last transition to
         # `svdtim`; `curtim` is the sample after `svdtim`
@@ -150,7 +165,7 @@ function _gf_solve!(result::Window, cond::F, run::_GFRun, cstep::Bool, step::Flo
             svdtim = curtim
             savst = curste
             cstep || (timest = _gf_step(run, curtim))
-            nxt = min(curtim + timest, finish)
+            nxt = curtim < finish ? _gf_advance(curtim, timest, finish) : finish
             # CSPICE evaluates the state at `finish` a second time here; the state is a
             # function of the epoch, so the value in hand is used.
             nxt == curtim || (curste = cond(nxt)::Bool)
@@ -350,8 +365,9 @@ is negative, `SpiceError(:invalidvalue)` if it is not zero and the relation is n
 absolute extremum.
 """
 function _gf_checkadjust(rel::Int, adjust::Real)
-    adjust < 0 && throw(SpiceError(:valueoutofrange,
-        "ADJUST was $adjust; must be non-negative."))
+    # NaN and Inf are refused too: CSPICE takes them and finds no event
+    (isfinite(adjust) && adjust >= 0) || throw(SpiceError(:valueoutofrange,
+        "ADJUST was $adjust; must be non-negative and finite."))
     (rel == _GF_ABSMIN || rel == _GF_ABSMAX || adjust == 0) || throw(SpiceError(:invalidvalue,
         "ADJUST should have value zero for all comparison operators except ABSMAX and ABSMIN"))
     return nothing
@@ -394,6 +410,8 @@ function _gf_relx(value::V, decreasing::D, relate::AbstractString, refval::Real,
         prefix::NTuple{2,String}=("", ""), suffix::String="") where {V,D}
     rel = _gf_relcode(relate)
     _gf_checkadjust(rel, adjust)
+    isnan(refval) && throw(SpiceError(:invalidvalue,
+        "the reference value is NaN; CSPICE takes it and finds no event"))
     card(cnfine) == 0 && return Window()
     # CSPICE compares the relation as it was given with "=", so an equality relation
     # with a leading blank gets no expansion; this is kept.
@@ -481,7 +499,7 @@ Return the numerical derivative of the scalar function `udfunc` at `x`, as
 The result is the central difference `(udfunc(x + dx) - udfunc(x - dx)) / (2 dx)`.
 Unlike CSPICE, `udfunc` takes the abscissa alone.
 
-Throws `SpiceError(:dividebyzero)` if `dx == 0`.
+Throws `SpiceError(:dividebyzero)` if `dx == 0`, before `udfunc` is called.
 
 # Examples
 ```jldoctest
@@ -493,10 +511,11 @@ See also [`uddc`](@ref), [`gfuds`](@ref).
 """
 function uddf(udfunc::F, x::Real, dx::Real) where {F}
     h = Float64(dx)
-    f0 = Float64(udfunc(Float64(x) - h))
-    f2 = Float64(udfunc(Float64(x) + h))
+    # checked before `udfunc` is called; CSPICE calls it twice first
     h == 0.0 && throw(SpiceError(:dividebyzero,
         "Delta abscissa value is zero; a non-zero value is required."))
+    f0 = Float64(udfunc(Float64(x) - h))
+    f2 = Float64(udfunc(Float64(x) + h))
     return (0.5 / h) * f2 + (-0.5 / h) * f0
 end
 
