@@ -986,6 +986,7 @@ function bad_pckw20(a)
     ]
 end
 
+const PCKW20_RNG = MersenneTwister(SEED + 920)
 const WRITER_CASES = WriterCase[
     WriterCase("spkw13", :spk, gen_w13,
         (h, a) -> spkw13(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, a.states, a.epochs),
@@ -1057,7 +1058,9 @@ const WRITER_CASES = WriterCase[
     WriterCase("pckw02", :pck, gen_pckw02,
         (h, a) -> pckw02(h, a.clssid, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.btime),
         c_pckw02, bad_pckw02),
-    WriterCase("pckw20", :pck, gen_pckw20,
+    # pckw20 came after the other cases: it draws from a stream of its own, so that the
+    # cases after it in the shared stream keep their data
+    WriterCase("pckw20", :pck, (rng, k) -> gen_pckw20(PCKW20_RNG, k),
         (h, a) -> pckw20(h, a.clssid, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.ascale, a.tscale, a.initjd, a.initfr),
         c_pckw20, bad_pckw20),
 ]
@@ -2060,7 +2063,7 @@ group("9. DAF access, SPK and CK writers") do
         # Type 20 was found missing by the replay of NAIF's tspice (F_PCK20).
         c = writer_case("pckw$(lpad(type, 2, '0'))")
         # One segment for each body-fixed frame, each with another base frame.
-        segs = [merge(c.gen(rng, k), (clssid=id, frame=base)) for (k, (id, base)) in
+        segs = [merge(c.gen(type == 2 ? rng : PCKW20_RNG, k), (clssid=id, frame=base)) for (k, (id, base)) in
                 enumerate(zip(sort!(collect(keys(PCK_FRAMES))), ("ECLIPJ2000", "J2000", "B1950")))]
         pc, pn = write_both(c, dir, "pck_readback_$type", segs)
         @test read(pc) == read(pn)
@@ -2322,7 +2325,7 @@ group("9. DAF access, SPK and CK writers") do
         @test dafus(SVector{5}(sum), 2, 6) == dafus(sum, 2, 6)
         st = [7000.0, 0, 0, 0, 7.5, 0, 7000.0, 75, 0, 0, 7.5, 0]
         files = map((st, SVector{12}(st))) do states
-            p = tempname() * ".bsp"
+            p = joinpath(mktempdir(), "static.bsp")    # removed at exit: Windows keeps it open
             h = spkopn(p, "static")
             spkw05(h, -9, 399, "J2000", 0.0, 10.0, "s", 3.986e5, states[1:6], [0.0])
             spkw08(h, -8, 399, "J2000", 0.0, 10.0, "s", 1, states, 0.0, 10.0)
@@ -2335,8 +2338,6 @@ group("9. DAF access, SPK and CK writers") do
         unload(ctx, files[1])
         furnsh(ctx, files[2])
         @test (spkgeo(ctx, -9, 5.0, "J2000", 399), spkgeo(ctx, -8, 5.0, "J2000", 399)) == a
-        unload(ctx, files[2])          # Windows does not delete a file that is open
-        rm.(files)
     end
 end
 
