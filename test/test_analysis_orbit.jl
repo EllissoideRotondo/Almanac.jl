@@ -187,11 +187,13 @@ const TOL_TWOBODY = (25, 25, 3e-14)
 # A dual epoch: the derivative of the state is (v, -gm r/r^3), relative: 9e-15 at most over
 # 1000 orbits (the derivative of the Kepler solver is exact; it was 3e-12 with the old lag).
 const TOL_DUALDT = 4e-14
-# The derivative of the true anomaly from the Kepler solver, against the closed forms, relative:
-# d nu/dM 1.5e-14 (rounding), d nu/de (ellipses) 4.7e-12: the solver stops at 1e-12 rad, and the
-# derivative is that of the implicit function at the converged E, not at the root. Limits 4 times
-# those (seeds SEED and 1 to 4, 50000 samples).
-const TOL_KEPLER_D = (6e-14, 2e-11)
+# The derivatives of the true anomaly from the Kepler solver against the closed forms, relative
+# (seeds SEED and 1 to 4, 50000 samples each): d nu/dM 1.5e-14 (rounding), d nu/de on ellipses
+# 4.2e-15, d2 nu/dM2 (nested ForwardDiff, relative to its bound) 1.8e-11: the closed form is taken
+# at the true anomaly of the converged E, which stops 1e-12 rad from the root, and the second
+# derivative amplifies that by up to (1 + e)/(1 - e). With one Newton step the second derivative
+# was 0.5 off, with the residual not taken out d nu/de was 4.7e-12. Limits four times the largest.
+const TOL_KEPLER_D = (6e-14, 1.7e-14, 7e-11)
 # Local frames: the largest |R'R - I| and |det R - 1| are 8.9e-16 and 6.7e-16 in 5000 orbits (a
 # few roundings of unit vectors, limit 3e-15). The rate of the frame of `two_body` by ForwardDiff
 # against the exact rate at the state that `two_body` returns (the state of `o` differs from it
@@ -836,6 +838,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         # errors up to 5e-8. The samples include M within 1e-9 of pi, where the solver
         # returns E itself as the true anomaly (|E - pi| < 1e-8) and the derivative is
         # sqrt((1 - e)/(1 + e)) dE.
+        @test Almanac._ma_to_ta(1.0, 0.5) isa Float64
         rng = Xoshiro(SEED + 56)
         worst = zeros(3)
         for i in 1:nsample(2000, 50000)
@@ -843,7 +846,6 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             ecc = hyp ? 1.05 + 3.95 * rand(rng) : 0.001 + 0.949 * rand(rng)
             m = hyp ? 6 * rand(rng) - 3 : (i % 5 == 0 ? π + 2e-9 * (rand(rng) - 0.5) : 6π * (2rand(rng) - 1))
             ta = Almanac._ma_to_ta(promote(m, ecc)...)
-            @test ta isa Float64
             dta = ForwardDiff.derivative(x -> Almanac._ma_to_ta(promote(x, ecc)...), m)
             # in the branch |E - pi| < 1e-8 the solver returns E, which differs from nu by (1 - c) (E - pi)
             nu = !hyp && abs(ta - π) < 1e-8 ? π + sqrt((1 - ecc) / (1 + ecc)) * (ta - π) : ta
@@ -851,6 +853,16 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             e1 = abs(dta - want) / want
             worst[1] = max(worst[1], e1)
             @test e1 < TOL_KEPLER_D[1]
+            # the second derivative (nested ForwardDiff, as a Hessian through `two_body` does):
+            # d2 nu / dM2 = -2 e sin nu (1 + e cos nu)^3 / |1 - e^2|^3, scaled by its bound
+            if abs(ta - π) >= 1e-8
+                d2 = ForwardDiff.derivative(
+                    y -> ForwardDiff.derivative(x -> Almanac._ma_to_ta(promote(x, ecc)...), y), m)
+                bound = 2 * ecc * (1 + ecc * cos(nu))^3 / abs(1 - ecc^2)^3
+                e3 = abs(d2 + bound * sin(nu)) / bound
+                worst[3] = max(worst[3], e3)
+                @test e3 < TOL_KEPLER_D[3]
+            end
             if !hyp
                 dte = ForwardDiff.derivative(x -> Almanac._ma_to_ta(promote(m, x)...), ecc)
                 wante = sin(nu) * (2 + ecc * cos(nu)) / (1 - ecc^2)
@@ -859,7 +871,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
                 @test e2 < TOL_KEPLER_D[2]
             end
         end
-        measured(@sprintf("  Kepler solver: d nu/dM relative error %.2e, d nu/de (ellipses) %.2e", worst[1:2]...))
+        measured(@sprintf("  Kepler solver: d nu/dM relative error %.2e, d nu/de (ellipses) %.2e, d2 nu/dM2 (to its bound) %.2e", worst...))
     end
 
     @testset "two_body" begin

@@ -22,11 +22,15 @@ const _MA_EPSILON = 1e-12
 # The iteration runs on the primal values, so the Float64 result is that of ANISE bit for bit.
 # The derivative is carried by one more Newton step in the number type T at the converged value
 # `x0`: `step` is the correction of that step, and `x0 + (step - primal(step))` has the primal
-# value of `x0` and the exact first derivative of the solution (implicit function theorem). The
-# old loop returned an iterate whose dual part lagged the solution by one step, a derivative
+# value of `x0` and the exact first derivative of the solution (implicit function theorem). A
+# Newton step doubles the number of exact orders, so the step is taken twice: orders 1 to 3, which
+# nested ForwardDiff (Hessians) needs up to the second. The residual `r0` of the converged value
+# (up to 1e-12) is taken out of the steps: they solve the equation for M - r0, whose root is
+# exactly `x0`, so the derivative carries no residual times the derivative of the denominator
+# (that was the error of d nu/de, 4.7e-12). The old loop returned an iterate whose dual part lagged the solution by one step, a derivative
 # error up to 5e-8. A plain Float64 has no derivative, and `_carry` returns `x0`.
 _carry(x0::Float64, step::Float64) = x0
-_carry(x0::Float64, step) = x0 + (step - primal(step))
+_carry(x0, step) = x0 + (step - primal(step))
 
 function _ma_to_ta(rm::T, ecc::T) where {T}
     fail(what) = _conv_fail("the mean to true anomaly conversion $what")
@@ -43,7 +47,9 @@ function _ma_to_ta(rm::T, ecc::T) where {T}
             abs(e2 - e1) < _MA_EPSILON && break
             e2 = e1
         end
-        e2 = _carry(e2, (rm - (e2 - ecc * sin(e2))) / (1 - ecc * cos(e2)))
+        r0 = rp - (e2 - ep * sin(e2))
+        e2 = _carry(e2, (rm - (e2 - ecc * sin(e2)) - r0) / (1 - ecc * cos(e2)))
+        e2 = _carry(e2, (rm - (e2 - ecc * sin(e2)) - r0) / (1 - ecc * cos(e2)))
         e = primal(e2) < 0 ? e2 + 2 * T(π) : e2
         ta = if abs(primal(e) - π) >= 1e-8
             normalized = 1 - ecc
@@ -70,7 +76,9 @@ function _ma_to_ta(rm::T, ecc::T) where {T}
         abs(f2 - f1) < _MA_EPSILON && break
         f2 = f1
     end
-    f2 = _carry(f2, (rm - (ecc * sinh(f2) - f2)) / (ecc * cosh(f2) - 1))
+    r0 = rp - (ep * sinh(f2) - f2)
+    f2 = _carry(f2, (rm - (ecc * sinh(f2) - f2) - r0) / (ecc * cosh(f2) - 1))
+    f2 = _carry(f2, (rm - (ecc * sinh(f2) - f2) - r0) / (ecc * cosh(f2) - 1))
     normalized = ecc - 1
     abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
     ratio = (ecc + 1) / normalized
