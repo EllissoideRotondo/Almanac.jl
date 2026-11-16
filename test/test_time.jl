@@ -473,7 +473,7 @@ function oracle_ttrans(from::String, to::String, tvec)
     v = zeros(Float64, 10)
     v[1:length(tvec)] .= tvec
     ccall((:reset_c, SPICE.libcspice), Cvoid, ())
-    ccall((:ttrans_, SPICE.libcspice), Cint, (Cstring, Cstring, Ptr{Float64}, Clong, Clong),
+    ccall((:ttrans_, SPICE.libcspice), Cint, (Cstring, Cstring, Ptr{Float64}, Cint, Cint),
         from, to, v, sizeof(from), sizeof(to))
     return oracle_outcome(() -> (SPICE.handleerror(); Tuple(v[1:7])))
 end

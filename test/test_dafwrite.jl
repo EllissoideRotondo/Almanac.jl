@@ -176,7 +176,7 @@ function c_pckw20(h, a)
     ninrec, n = size(a.cdata)
     ccall((:pckw20_, LIBCSPICE), Cvoid, (Ref{Cint}, Ref{Cint}, Cstring, Ref{Cdouble},
         Ref{Cdouble}, Cstring, Ref{Cdouble}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble}, Ref{Cdouble},
-        Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Clong, Clong), h, a.clssid, a.frame,
+        Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Cint, Cint), h, a.clssid, a.frame,
         a.first, a.last, a.segid, a.intlen, n, ninrec ÷ 3 - 2, Matrix{Float64}(a.cdata),
         a.ascale, a.tscale, a.initjd, a.initfr, ncodeunits(a.frame), ncodeunits(a.segid))
     SPICE.handleerror()
@@ -2335,6 +2335,7 @@ group("9. DAF access, SPK and CK writers") do
         unload(ctx, files[1])
         furnsh(ctx, files[2])
         @test (spkgeo(ctx, -9, 5.0, "J2000", 399), spkgeo(ctx, -8, 5.0, "J2000", 399)) == a
+        unload(ctx, files[2])          # Windows does not delete a file that is open
         rm.(files)
     end
 end
