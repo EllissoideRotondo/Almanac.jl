@@ -168,8 +168,10 @@ evaluator pair `spkrNN`/`spkeNN` of CSPICE, so a plain epoch gives the CSPICE st
   Chebyshev expansion for SPK type 20 and for the public `chbigr`; `_eqn_state(et,
   epoch, a, h, k, l, p, q, dlpdt, mldt, nodedt, rapol, decpol) -> (pos, vel)` in
   `conic.jl` is the state of `eqncpv` for SPK type 17 and for the public `eqncpv`. It
-  reduces the mean longitude with `_f2c_dmod`, the `d_mod` of f2c, and throws
+  reduces the mean longitude with `f2c_dmod`, the `d_mod` of f2c, and throws
   `SpiceError(:eccoutofbounds)` for an eccentricity of 0.9 or more, as `kepleq` does.
+  `_spk15` reduces the mean anomaly with `f2c_dmod` too, as `spke15` does; the exact
+  `rem` moves the state from CSPICE's by up to 3e-12 relative after 3e5 revolutions.
 
 ## `textkernel.jl`
 
