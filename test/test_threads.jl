@@ -91,7 +91,9 @@ group("7. thread safety", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.PCK1
                 yield()
             end
         end
-        nreaders = max(2, Threads.nthreads() - 1)
+        # one thread is left to the writer: with 2 threads and 2 readers that spin, the
+        # writer ran 18 cycles in 120 s and no reader saw its snapshot
+        nreaders = max(1, Threads.nthreads() - 1)
         target_cycles = 30                    # writer cycles that the readers must span
         deadline = time() + 120
         readers = map(1:nreaders) do r
