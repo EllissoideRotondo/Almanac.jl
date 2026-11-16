@@ -208,14 +208,19 @@ seconds past J2000 without leap seconds that `tparse` gives, since the reader of
 (`zzrvar_`) calls `tparse_` for such a date. A year of two digits is a year of the 100
 years from `yearbound` (the bound of `tsetyr`), and `check` is the range check of
 `tparch`. Both are the settings of the context at the load. Throws
-`SpiceError(:badtime)` for a string that `tparse` rejects. The check is off at start,
+`SpiceError(:badtimespec)` for a string that `tparse` rejects. The check is off at start,
 as in CSPICE (there `str2et_` can leave the check on, and the reader then rejects dates
 such as `@1-JAN-49` that it accepted before).
 """
 function _tparse(s::AbstractString, yearbound::Int=1969, check::Bool=false)::Float64
     @assert yearbound > 0
     d = TimeDefaults()
-    return tparse(s, TimeDefaults(d.calendar, d.system, d.zone, yearbound, check))
+    try
+        return tparse(s, TimeDefaults(d.calendar, d.system, d.zone, yearbound, check))
+    catch e
+        e isa SpiceError && e.kind in (:unparsedtime, :badtimestring) || rethrow()
+        throw(SpiceError(:badtimespec, e.msg))
+    end
 end
 
 # ---------------------------------------------------------------------------------
@@ -351,7 +356,7 @@ const _BEGINDATA = Vector{UInt8}(codeunits("\\begindata"))
 const _BEGINTEXT = Vector{UInt8}(codeunits("\\begintext"))
 
 # The kinds are the short messages of `zzrvar`: BADVARASSIGN, BADVARNAME, TYPEMISMATCH,
-# NUMBEREXPECTED; a bad `@` time is `:badtime`, as for every time string.
+# NUMBEREXPECTED, BADTIMESPEC.
 @noinline _tk_fail(path, lineno::Int, msg, kind::Symbol=:badvarassign) =
     throw(SpiceError(kind, "$msg (line $lineno of '$path')"))
 
@@ -380,7 +385,7 @@ assignments in file order with the values CSPICE puts in the kernel pool. `path`
 used for the result and for error messages only; `yearbound` is the bound of `tsetyr`
 for a year of two digits in an `@` date, and `check` the range check of `tparch` for
 it. Throws `SpiceError` for a malformed assignment, with the kind that `zzrvar` gives
-(`:badvarassign`, `:badvarname`, `:typemismatch`, `:numberexpected`, `:badtime`).
+(`:badvarassign`, `:badvarname`, `:typemismatch`, `:numberexpected`, `:badtimespec`).
 """
 function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
         check::Bool=false)::TextKernel
@@ -449,7 +454,7 @@ function parse_text_lines(path::AbstractString, lines, yearbound::Int=1969,
                 t == _TOK_VALUE || _tk_fail(path, lineno, "'$name' is a numeric variable but a value " *
                                          "is not a number or a time", :typemismatch)
                 if line[b] == UInt8('@')
-                    e == b && _tk_fail(path, lineno, "'@' is not followed by a time", :badtime)
+                    e == b && _tk_fail(path, lineno, "'@' is not followed by a time", :badtimespec)
                     push!(nums, _tparse(String(line[b+1:e]), yearbound, check))
                 else
                     push!(nums, _tk_number(path, lineno, view(line, b:e)))

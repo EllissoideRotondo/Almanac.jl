@@ -487,7 +487,8 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
     @apart @testset "malformed text kernels give the error kinds of CSPICE" begin
         cases = [["PW_BAD"], ["PW_BAD 1 2"], ["PW_BAD = ( ABC )"], ["PW_BAD = ''"],
             ["PW_BAD = ( )"], ["PW_BAD += ( )"], ["PW_BAD = (", " )"], ["PW_BAD = 1, 'a'"],
-            ["PW_BAD = 'a', 1"], ["PW_BAD_" * "X"^30 * " = 1"],
+            ["PW_BAD = 'a', 1"], ["PW_BAD_" * "X"^30 * " = 1"], ["PW_BAD = @"],
+            ["PW_BAD = @JUNK"], ["PW_BAD = @2000 JAN 1 PST"],
             ["NAIF_BODY_NAME = 'PW_SPUD'", "NAIF_BODY_CODE = ( 1009, 1010 )"],
             ["NAIF_BODY_NAME = 'PW_SPUD'"], ["NAIF_BODY_NAME = ' '", "NAIF_BODY_CODE = 1009"]]
         for (i, lines) in enumerate(cases)

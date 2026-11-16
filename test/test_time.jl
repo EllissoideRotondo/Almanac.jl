@@ -20,6 +20,17 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 import ForwardDiff
 
+"The error kind of `str2et_c` or `utc2et_c` (`f`) for the string `s`, `:none` without one."
+function cspice_time_kind(f::Symbol, s)
+    et = Ref(0.0)
+    if f === :str2et_c
+        ccall((:str2et_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Float64}), s, et)
+    else
+        ccall((:utc2et_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Float64}), s, et)
+    end
+    return cspice_kind()
+end
+
 "The error kind of `timdef_c` for the arguments (`:none` without an error); a failed call changes no default."
 function cspice_timdef(action, item, value)
     buf = zeros(UInt8, 64)
@@ -577,9 +588,19 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test corpus["out of range"] != [] && accepted > 15n ÷ 2
         println("  strings with a value in CSPICE that depends on the call before: ", length(stale))
         @test all(oracle_stale, stale)
-        @test all(s -> throws_kind(() -> str2et(ctx, s), :badtime), stale)
-        @test all(s -> throws_kind(() -> utc2et(ctx, s), :badtime), stale)
-        @test all(s -> throws_kind(() -> tparse(s), :badtime), filter(s -> !occursin("TDB", s), stale))
+        # a Julian date without a value: the kind of CSPICE for "JD" alone
+        @test all(s -> throws_kind(() -> str2et(ctx, s), :unparsedtime), stale)
+        @test all(s -> throws_kind(() -> utc2et(ctx, s), :invalidtimestring), stale)
+        @test all(s -> throws_kind(() -> tparse(s), :unparsedtime), filter(s -> !occursin("TDB", s), stale))
+        # The error kinds are the short messages of CSPICE, for every string that both reject.
+        cases = filter(!in(Set(stale)), unique(reduce(vcat, [corpus[name] for name in order])))
+        for (f, cf) in ((str2et, :str2et_c), (utc2et, :utc2et_c))
+            got(s) = try f(ctx, s); :none catch e; e isa SpiceError ? e.kind : rethrow() end
+            bad = [(s, k, got(s)) for s in cases for k in (cspice_time_kind(cf, s),)
+                   if k !== :none && got(s) !== :none && k !== got(s)]
+            isempty(bad) || @info "error kinds that differ from CSPICE" f first(bad, 5)
+            @test isempty(bad)
+        end
     end
 
     @apart @testset "str2et, header examples and malformed strings" begin
@@ -591,7 +612,10 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test r.mixed == 0 && r.unequal == 0
         @test r.rejected >= length(TS_MALFORMED) - 6
         kind(s) = try str2et(ctx, s); nothing catch e; e isa SpiceError ? e.kind : rethrow() end
-        @test all(s -> kind(s) in (nothing, :badtime), TS_MALFORMED)
+        bad = [(s, kind(s), cspice_time_kind(:str2et_c, s)) for s in TS_MALFORMED]
+        filter!(x -> x[2] !== nothing && x[2] !== x[3], bad)
+        isempty(bad) || @info "malformed strings: kinds that differ from CSPICE" bad
+        @test isempty(bad)
         # A Julian date whose day number is outside the 32-bit integers: the day
         # arithmetic of CSPICE wraps, and the result has the sign of the wrapped number.
         jds = filter(!cast_dependent, ["238409829538 Jd", "238409829538.5 JD", "JD 5373484.5"])
@@ -605,7 +629,9 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test occursin("seconds", lowercase(msg("2000 Jan 1 23:59:60")))
         @test occursin("blank", msg("  "))
         @test throws_kind(() -> str2et(Almanac.empty_kernelset(), "2000 Jan 1"), :noleapseconds)
-        @test throws_kind(() -> str2et(ctx, "not a time"), :badtime)
+        @test throws_kind(() -> str2et(ctx, "not a time"), :unparsedtime)
+        @test throws_kind(() -> str2et(ctx, "2000 JAN 1 12:00 TDB PST"), :timeconflict)
+        @test throws_kind(() -> str2et(ctx, "2000 JAN 1 12:00 UTC+13"), :timezoneerror)
     end
 
     @apart @testset "utc2et, tparse, tpictr, tparch" begin
@@ -677,7 +703,7 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             @test oracle_outcome(() -> SPICE.et2utc(0.0, bad, 3)) === nothing
             @test throws_kind(() -> et2utc(ctx, 0.0, bad, 3), :badformat)
         end
-        @test throws_kind(() -> et2utc(ctx, -7.0e10, "ISOC", 0), :badtime)
+        @test throws_kind(() -> et2utc(ctx, -7.0e10, "ISOC", 0), :yearoutofrange)
         # Round trip through a string with nine decimals.
         @test all(abs(str2et(ctx, et2utc(ctx, et, "C", 9)) - et) < 2e-6 for et in modern[1:200])
     end

@@ -692,7 +692,8 @@ function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
         secs = tv[4] * 3600.0 + tv[5] * 60.0 + tv[6]
     elseif pfrom == _TT_YMWD || pfrom == _TT_YMWDF
         month = _cint(tv[2])
-        (1 <= month <= 12) || throw(SpiceError(:badtime,
+        # CSPICE aborts here on a subscript out of range (BADSUBSCRIPT)
+        (1 <= month <= 12) || throw(SpiceError(:badsubscript,
             "the month $month of a year-month-week-day time vector is not in 1..12"))
         week = _cint(tv[3]) - 1
         day = _cint(tv[4])

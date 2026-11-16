@@ -376,7 +376,7 @@ Throws `SpiceError`:
   without the form `NAME = value` or with a vector `( )` of no values, `:badvarname` for
   a name of more than 32 characters, `:typemismatch` for strings and numbers in one
   variable or an empty string, `:numberexpected` for a value that is not a number, and
-  `:badtime` for an `@` time that cannot be parsed. A JSON kernel throws `:badkernel`.
+  `:badtimespec` for an `@` time that cannot be parsed. A JSON kernel throws `:badkernel`.
 """
 function ldpool(ctx::SpiceContext, fname::AbstractString)
     isempty(fname) && throw(SpiceError(:emptystring, "ldpool: the file name is empty"))

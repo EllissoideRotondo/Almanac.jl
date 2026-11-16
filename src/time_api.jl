@@ -171,7 +171,7 @@ julia> try
        catch err
            err.kind
        end
-:badtime
+:badtimestring
 ```
 """
 function tparch(ctx::SpiceContext, type::AbstractString)

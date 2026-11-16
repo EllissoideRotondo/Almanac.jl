@@ -1065,8 +1065,12 @@ end
 # Public calls: STR2ET, UTC2ET, TPARSE, TPICTR
 # ---------------------------------------------------------------------------------
 
-@noinline _badtime(s, why) =
-    throw(SpiceError(:badtime, "cannot convert the time string '$s': $why"))
+# The kinds of CSPICE: for `str2et`, UNPARSEDTIME for a string that does not parse,
+# BADTIMESTRING for a component out of range, TIMECONFLICT and TIMEZONEERROR; for
+# `utc2et`, INVALIDTIMESTRING for every reason. `tparse_c` and `tpictr_c` return the
+# message without an error; here they throw the kinds of `str2et`.
+@noinline _badtime(s, why, kind::Symbol) =
+    throw(SpiceError(kind, "cannot convert the time string '$s': $why"))
 
 """
     str2et([ctx,] s) -> Float64
@@ -1096,8 +1100,13 @@ a zone and a system together. A year can be abbreviated as `'97` or given with t
 - The components are checked against their ranges whatever [`tparch`](@ref) set, so
   `"1996-02-30"` throws.
 
-Throws `SpiceError(:badtime)`, with the reason in the message, if `s` is not a time
-string of these forms, and `SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
+Throws `SpiceError`, with the reason in the message:
+- `:emptystring` if `s` is `""`;
+- `:unparsedtime` if `s` is not a time string of these forms;
+- `:badtimestring` if a component is out of range;
+- `:timeconflict` if `s` names both a time system and a time zone;
+- `:timezoneerror` if the time zone is not one of the above;
+- `:noleapseconds` if no leap-second kernel is loaded.
 
 # Examples
 ```julia
@@ -1111,17 +1120,18 @@ timout(et, "YYYY-MM-DDTHR:MN:SC.### ::UTC ::RND")    # back to a string, rounded
 See also [`timout`](@ref), [`et2utc`](@ref), [`utc2et`](@ref), [`tparse`](@ref).
 """
 function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefaults())::Float64
+    isempty(s) && throw(SpiceError(:emptystring, "str2et: the time string is empty"))
     l = _lsk(ks)
     dhoff, dmoff, _ = defs.zone == "" ? (0.0, 0.0, true) : _zone_offsets(defs.zone)
     p = _tpartv(s, 16)
-    p.ok || _badtime(s, p.error)
+    p.ok || _badtime(s, p.error, :unparsedtime)
     modify = copy(p.modify)
     mods = p.mods
     tvec = p.tvec
     type = p.type
     (modify[_MOD_ZONE] != "" && modify[_MOD_SYSTEM] != "") && _badtime(s,
         "both a time system '$(modify[_MOD_SYSTEM])' and a time zone " *
-        "'$(modify[_MOD_ZONE])' are specified; specify one of them only")
+        "'$(modify[_MOD_ZONE])' are specified; specify one of them only", :timeconflict)
     zoned = false
     hoff = moff = 0.0
     if modify[_MOD_ZONE] == "" && modify[_MOD_SYSTEM] == ""
@@ -1133,12 +1143,12 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
         zoned = true
         hoff, moff, ok = _zone_offsets(modify[_MOD_ZONE])
         ok || _badtime(s, "the time zone '$(modify[_MOD_ZONE])' is not an offset UTC+h[:mm] " *
-                          "or UTC-h[:mm] with h below 13")
+                          "or UTC-h[:mm] with h below 13", :timezoneerror)
     end
     system = modify[_MOD_SYSTEM]
 
     if type == "JD"
-        isnan(tvec[1]) && _badtime(s, _NOJDVALUE)
+        isnan(tvec[1]) && _badtime(s, _NOJDVALUE, :unparsedtime)
         from = system == "TDB" ? _TT_JDTDB : (system == "TDT" ? _TT_JDTDT : _TT_JDUTC)
         return _ttrans(l, from, _TT_TDB, _tvec(tvec[1]))[1]
     end
@@ -1168,13 +1178,14 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
     else
         ok, error = _tcheck(tvec, type, mods, modify)
     end
-    ok || _badtime(s, error)
+    ok || _badtime(s, error, :badtimestring)
     adjust && (tvec[sc] += 1.0)
     ((system == "TDT" || system == "TDB") && tvec[sc] >= 60.0) && _badtime(s,
         "the seconds component is $(_num(tvec[sc])), and the time system $system has " *
-        "no leap seconds: the seconds must be less than 60")
+        "no leap seconds: the seconds must be less than 60", :badtimestring)
     (modify[_MOD_ERA] == "B.C." && p.yabbrv) && _badtime(s,
-        "the year is abbreviated with a quote and the era is B.C.; these do not go together")
+        "the year is abbreviated with a quote and the era is B.C.; these do not go together",
+        :badtimestring)
     modify[_MOD_ERA] == "B.C." && (tvec[yr] = 1.0 - tvec[yr])
     if modify[_MOD_AMPM] == "P.M."
         tvec[hr] < 12.0 && (tvec[hr] += 12.0)
@@ -1228,17 +1239,17 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefault
         ok || _badtime(s, "the seconds component is out of range: " * (zoned ?
             "in the time zone $(modify[_MOD_ZONE]) " : "") * (dojul ? "on the Julian " *
             "calendar " : "") * "a leap second can occur in the year $orgnyr only in the " *
-            "second that follows 23:59:59 UTC on June 30 and December 31")
+            "second that follows 23:59:59 UTC on June 30 and December 31", :badtimestring)
     end
     return _ttrans(l, ptype, _TT_TDB, tv())[1]
 end
 
 # The range check of `tcheck_` that `tparch` turns on, for `utc2et` and `tparse`: it
 # runs on the components as parsed, before a year of two digits is expanded.
-function _tparch_check(s::AbstractString, defs::TimeDefaults, p)
+function _tparch_check(s::AbstractString, defs::TimeDefaults, p, kind::Symbol)
     defs.check || return nothing
     ok, why = _tcheck(p.tvec, p.type, p.mods, p.modify)
-    ok || _badtime(s, why)
+    ok || _badtime(s, why, kind)
     return nothing
 end
 
@@ -1258,26 +1269,29 @@ CSPICE routine:
 - The components are not checked against their ranges, so `1996-02-30` is March 1,
   unless [`tparch`](@ref) has turned the check on for the context.
 
-Throws `SpiceError(:badtime)` if `s` is not a time string of these forms or, with the
-check on, if a component is out of range, and `SpiceError(:noleapseconds)` if no
-leap-second kernel is loaded.
+Throws `SpiceError(:emptystring)` if `s` is `""`, and
+`SpiceError(:invalidtimestring)` if `s` is not a time string of these forms or,
+with the check on, if a component is out of range, as CSPICE does for every such
+string, and `SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
 """
 function utc2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults=TimeDefaults())::Float64
+    isempty(s) && throw(SpiceError(:emptystring, "utc2et: the time string is empty"))
     l = _lsk(ks)
     p = _tpartv(s, 8)
-    p.ok || _badtime(s, p.error)
+    p.ok || _badtime(s, p.error, :invalidtimestring)
     modify = p.modify
     (modify[_MOD_SYSTEM] != "" && modify[_MOD_SYSTEM] != "UTC") && _badtime(s,
         "utc2et does not support a time system in the string; the time system " *
-        "$(modify[_MOD_SYSTEM]) was specified. Use str2et.")
+        "$(modify[_MOD_SYSTEM]) was specified. Use str2et.", :invalidtimestring)
     modify[_MOD_ZONE] != "" && _badtime(s, "utc2et does not support a time zone in the " *
-        "string; the time zone '$(modify[_MOD_ZONE])' was specified. Use str2et.")
+        "string; the time zone '$(modify[_MOD_ZONE])' was specified. Use str2et.",
+        :invalidtimestring)
     modify[_MOD_AMPM] != "" && _badtime(s,
-        "utc2et does not support the A.M./P.M. conventions. Use str2et.")
+        "utc2et does not support the A.M./P.M. conventions. Use str2et.", :invalidtimestring)
     tvec = p.tvec
-    p.type == "JD" && isnan(tvec[1]) && _badtime(s, _NOJDVALUE)
+    p.type == "JD" && isnan(tvec[1]) && _badtime(s, _NOJDVALUE, :invalidtimestring)
     p.type == "JD" && return _ttrans(l, _TT_JDUTC, _TT_TDB, _tvec(tvec[1]))[1]
-    _tparch_check(s, defs, p)
+    _tparch_check(s, defs, p, :invalidtimestring)
     year = _nint(tvec[1])
     if modify[_MOD_ERA] == "B.C."
         year = 1 - year
@@ -1305,9 +1319,11 @@ A year of two digits follows [`tsetyr`](@ref) of the context: at start the year 
 `"1996-02-30"` is March 1, unless [`tparch`](@ref) has turned the check on for the
 context.
 
-Throws `SpiceError(:badtime)` if the string cannot be parsed or, with the check on, if
-a component is out of range; the message is the one that `tparse_c` returns in
-`errmsg`.
+Throws `SpiceError(:emptystring)` if `s` is `""`, `SpiceError(:unparsedtime)` if the
+string cannot be parsed and, with the check
+on, `SpiceError(:badtimestring)` if a component is out of range: the kinds of
+[`str2et`](@ref). The message is the one that `tparse_c` returns in `errmsg`;
+`tparse_c` signals no error.
 
 # Examples
 ```jldoctest
@@ -1319,18 +1335,20 @@ julia> tparse("2 JAN 2000")
 ```
 """
 function tparse(s::AbstractString, defs::TimeDefaults)::Float64
+    isempty(s) && throw(SpiceError(:emptystring, "tparse: the time string is empty"))
     p = _tpartv(s, 8)
-    p.ok || _badtime(s, p.error)
+    p.ok || _badtime(s, p.error, :unparsedtime)
     modify = p.modify
     modify[_MOD_SYSTEM] != "" && _badtime(s, "tparse does not support a time system " *
-        "in the string; the time system $(modify[_MOD_SYSTEM]) was specified.")
+        "in the string; the time system $(modify[_MOD_SYSTEM]) was specified.", :unparsedtime)
     modify[_MOD_ZONE] != "" && _badtime(s, "tparse does not support a time zone in " *
-        "the string; the time zone '$(modify[_MOD_ZONE])' was specified.")
-    modify[_MOD_AMPM] != "" && _badtime(s, "tparse does not support the A.M./P.M. conventions.")
+        "the string; the time zone '$(modify[_MOD_ZONE])' was specified.", :unparsedtime)
+    modify[_MOD_AMPM] != "" && _badtime(s, "tparse does not support the A.M./P.M. conventions.",
+        :unparsedtime)
     tvec = p.tvec
-    p.type == "JD" && isnan(tvec[1]) && _badtime(s, _NOJDVALUE)
+    p.type == "JD" && isnan(tvec[1]) && _badtime(s, _NOJDVALUE, :unparsedtime)
     p.type == "JD" && return (tvec[1] - _JD2000) * _SPD
-    _tparch_check(s, defs, p)
+    _tparch_check(s, defs, p, :badtimestring)
     if p.type == "YD"
         tvec[6] = tvec[5]
         tvec[5] = tvec[4]
@@ -1368,8 +1386,10 @@ string `sample`, as
 `sample` has a form that [`str2et`](@ref) accepts. The call needs no kernel; `ctx` is
 accepted and not used.
 
-Throws `SpiceError(:badtime)` if `sample` is not a time string; the message is the one
-that `tpictr_c` returns in `errmsg`.
+Throws `SpiceError(:emptystring)` if `sample` is `""`, and `SpiceError(:unparsedtime)`,
+the kind of [`str2et`](@ref), if `sample` is not a
+time string; the message is the one that `tpictr_c` returns in `errmsg`, and
+`tpictr_c` signals no error.
 
 # Examples
 ```jldoctest
@@ -1381,7 +1401,8 @@ julia> tpictr("2025-03-01T12:00:00.000")
 ```
 """
 function tpictr(sample::AbstractString)::String
+    isempty(sample) && throw(SpiceError(:emptystring, "tpictr: the sample is empty"))
     p = _tpartv(sample, 8)
-    strip(p.pictur, ' ') == "" && _badtime(sample, p.error)
+    strip(p.pictur, ' ') == "" && _badtime(sample, p.error, :unparsedtime)
     return String(rstrip(p.pictur, ' '))
 end

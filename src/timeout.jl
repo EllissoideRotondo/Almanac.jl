@@ -795,7 +795,7 @@ date, as in CSPICE. The fraction is rounded. The seconds are 60 inside a leap se
 before 1000 has `A.D.` or `B.C.` in the formats `C` and `D`.
 
 Throws `SpiceError(:badformat)` if `format` is not one of the five,
-`SpiceError(:badtime)` if the year is before 1 A.D. in an ISO format, and
+`SpiceError(:yearoutofrange)` if the year is before 1 A.D. in an ISO format, and
 `SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded.
 
 # Examples
@@ -847,7 +847,7 @@ function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer):
     elseif year > 0
         calendar_style ? string(year, " A.D.") : string(year)
     else
-        calendar_style || throw(SpiceError(:badtime,
+        calendar_style || throw(SpiceError(:yearoutofrange,
             "the year $(1 - year) B.C. cannot be written in an ISO format"))
         string(1 - year, " B.C.")
     end
