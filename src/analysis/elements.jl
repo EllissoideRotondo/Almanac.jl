@@ -18,8 +18,8 @@ const ELEMENT_NAMES = (:x, :y, :z, :vx, :vy, :vz, :rmag, :vmag,
 """
     elements() -> NTuple{N,Symbol}
 
-The names that [`element`](@ref) accepts, in the order of the manual. This call has no
-CSPICE counterpart.
+The names that [`element`](@ref) accepts, in the order of the table in
+[Orbits](@ref "Element names"). No CSPICE call has this interface.
 """
 elements() = ELEMENT_NAMES
 
@@ -27,83 +27,25 @@ elements() = ELEMENT_NAMES
     element(o::Orbit, name::Symbol) -> T
 
 One scalar quantity of the orbit `o`, in km, s and rad and their combinations; the
-property `o.name` returns the same. This call has no CSPICE counterpart; the names are
-those of `StateElement` of ANISE (`element(o, :rmag)` is `rmag_km`, `:hmag` is `hmag`,
-`:energy` is `energy_km2_s2`, `:light_time` is `light_time`). The light time is the
-distance divided by [`clight`](@ref), in s.
+property `o.name` returns the same. `name` is one of [`elements`](@ref); the table in
+[Orbits](@ref "Element names") gives the unit and the name in ANISE of each, and says
+how each group behaves. The elements are those of `oscltx` (classical elements, period)
+and `recgeo` (geodetic coordinates) where CSPICE has them; no CSPICE call has this
+interface, and the other names follow `OrbitalElement` of ANISE.
 
-The Keplerian elements (`:sma`, `:ecc`, `:inc`, `:raan`, `:aop`, `:ta`, `:ma`, `:ea`,
-`:ha`, `:aol`, `:tlong`, `:period`, `:mean_motion`, `:ta_dot`, `:c3`, `:fpa`,
-`:semi_parameter`, `:semi_minor_axis`, `:periapsis`, `:apoapsis`, `:right_ascension`,
-`:declination`, `:velocity_declination`) follow the functions of `Orbit` of ANISE
-(`sma_km`, `ecc`, `inc_deg`, ...) with angles in rad and `:mean_motion` and `:ta_dot` in
-rad/s. The ranges are those of ANISE: `:inc` is in [0, π]; `:ta`, `:aop`, `:raan`, `:aol`,
-`:tlong`, `:ha` and `:right_ascension` are in [0, 2π], where `:raan` and `:aop` can be
-exactly 2π; `:ea` is in (-π, π]; the elliptic `:ma` is in [0, 2π] and the hyperbolic `:ma`
-is unbounded; `:declination` is in [-π/2, π/2].
+The Keplerian elements are valid in an inertial frame, the geodetic ones in the
+body-fixed frame of the center, and the B-plane ones need an inertial frame; no frame is
+checked, and in another frame the numbers are those of the wrong quantity. Where a
+quantity is undefined for the orbit (a circular orbit has no true anomaly; a zero
+position or velocity has no angular momentum), `element` throws
+`SpiceError(:degeneratecase)`. It never returns NaN, with one exception: `:period` is 0
+for an orbit that is not elliptic, and `:ta_dot` is then `Inf`.
 
-Where ANISE returns an error for an undefined quantity, `element` throws
-`SpiceError(:degeneratecase)`: `:ta` and everything built on it (`:ea`, `:ma`, `:fpa`,
-`:tlong`, `:ha`) for `ecc < 1e-11`, `:aol` for an orbit within `1e-6` degrees of the
-equator, `:ma` for `|ecc - 1| < 1e-11`, `:ea` for `ecc > 1`, `:ha` for `ecc <= 1`, and
-every element that needs the angular momentum (`:hmag`, `:hx`, `:hy`, `:hz`, `:inc`, ...)
-or the eccentricity vector, or `:energy`, for a zero position or velocity. Where ANISE
-substitutes a value, so does `element`: `:raan` and `:aop` give 0 where the arc cosine has
-no value (an equatorial orbit has `:raan == 0`), and π where its argument rounds above 1.
-Where ANISE returns NaN (a parabola, whose `:sma` is infinite, a zero velocity or a
-rectilinear orbit: `:inc`, `:aol`, `:ha`, `:ea`, `:fpa`, `:semi_parameter`,
-`:semi_minor_axis`, `:periapsis`, `:apoapsis`), `element` throws
-`SpiceError(:degeneratecase)`, so no NaN is returned. `:period` is 0 for an orbit that is
-not elliptic, so `:ta_dot` is `Inf` there.
-
-The B-plane quantities (`:bplane_bt`, `:bplane_br`, `:bplane_mag`, `:bplane_angle`,
-`:bplane_ltof`) follow `BPlane` of ANISE (`b_t_km`, `b_r_km`, `b_plane_mag_km`,
-`b_plane_angle_deg`, `b_ltof`) with the angle in rad in [-π, π) and the linearized time of
-flight in s. The orbit is taken in the frame it is given, and the triad is built on the
-`+z` axis of that frame, as in ANISE; the orbit must be hyperbolic and in an inertial
-frame. They throw `SpiceError(:degeneratecase)` for `ecc <= 1` (ANISE: `NotHyperbolic`),
-for an incoming asymptote within `1e-12` of the `z` axis (ANISE: `InfiniteValue`), and
-`:bplane_ltof` also for `c3 <= 0` (ANISE takes `sqrt(c3)` there). ANISE returns the
-time of flight as a `Duration` of nanosecond resolution; `element` returns the unrounded
-value. See also [`vinf_periapsis`](@ref) and [`vinf_turn_angle`](@ref).
-
-The altitudes (`:altitude`, `:sma_altitude`, `:periapsis_altitude`, `:apoapsis_altitude`,
-in km) are the radius, `:sma` and the apsis radii minus the mean equatorial radius,
-`(radii[1] + radii[2]) / 2`, of the center. `:latitude` (rad, in [-π/2, π/2]) and
-`:height` (km) are geodetic, on the spheroid of semi-axes `a`, `a` and `b`, with `a` the
-mean equatorial radius `(radii[1] + radii[2]) / 2` and `b = radii[3]`, by the
-non-iterative procedure of Heikkinen that `latlongalt` of ANISE uses; `:longitude` is the
-angle `atan(y, x)` in [-π, π). The state must be in the body-fixed frame of the center. The
-altitudes, `:latitude` and `:height` throw `SpiceError(:badarg)` if the pool holds no radii
-of the center (`o.radii` is NaN).
-
-The equinoctial elements follow `Orbit` of ANISE: `:equinoctial_a` is `:sma`,
-`:equinoctial_h` and `:equinoctial_k` are `ecc * sin(aop + raan)` and
-`ecc * cos(aop + raan)`, `:equinoctial_p` and `:equinoctial_q` are
-`sin(inc / 2) * sin(raan)` and `sin(inc / 2) * cos(raan)`, and `:equinoctial_lambda` is
-the mean longitude `raan + aop + ma` in rad (not wrapped). They throw where the Keplerian
-elements they use throw.
-
-The Brouwer mean elements (`:brouwer_sma` in km, `:brouwer_ecc`, and `:brouwer_inc`,
-`:brouwer_raan`, `:brouwer_aop`, `:brouwer_ma` in rad, the last four in [0, 2π) except the
-inclination) are the mean elements of the Brouwer-Lyddane theory with the short-period
-terms only, from the iteration of GMAT that ANISE ports (`sma_brouwer_short_km`, ...).
-They use the J2 of the Earth, `1.082626925638815e-3`, and the mean equatorial radius of the
-center, and are valid for orbits about the Earth only. As in ANISE they throw
-`SpiceError(:degeneratecase)` if the center is not body 399, or the periapsis is not above
-3000 km, or the orbit is not elliptic, or the iteration meets a Kepler equation without
-solution, and `SpiceError(:badarg)` if the radii of the center are missing. For an
-inclination above 175° the iteration works on a pseudo-state with the inclination
-`π - inc` and the signs of `raan` and `aop` reversed; ANISE maps back the inclination and
-`raan` but not `aop`, and so does `element`, so `:brouwer_aop` of such an orbit carries
-an error of about twice the short-period correction of the argument of periapsis (0.6° for
-an orbit of 7200 km and inclination 177°).
-
-The vectors `position`, `velocity`, `hvec` and `evec` are properties only: `element`
-throws for them, so that a name known only at run time never gives a union of scalar and
-vector.
-
-Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref).
+Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref); also for the vectors
+`position`, `velocity`, `hvec` and `evec`, which are properties only, so that a name
+known only at run time never gives a union of scalar and vector. The altitudes,
+`:latitude`, `:height` and the Brouwer elements throw `SpiceError(:badarg)` too if the
+radii of the center are NaN (`o.radii`).
 
 # Examples
 ```jldoctest
@@ -375,8 +317,8 @@ end
 
 The classical elements of `o`: semi-major axis (km, negative for a hyperbola),
 eccentricity, inclination, right ascension of the ascending node, argument of periapsis
-and true anomaly (rad). This call has no CSPICE counterpart; it matches
-`Orbit.to_keplerian_vec` of ANISE, with angles in rad.
+and true anomaly (rad). `oscltx` returns these elements of a state with more; this call
+matches `Orbit.to_keplerian_vec` of ANISE, with angles in rad.
 
 The values are those of the properties of the same names (see [`element`](@ref)), so the
 degenerate cases are the same: `:ta` throws `SpiceError(:degeneratecase)` for a circular
@@ -530,12 +472,14 @@ end
 Return the periapsis radius in km (a number; a `Dual` where `o` or `turn_angle` is one)
 of a flyby of the center of `o` that turns the excess velocity by `turn_angle` rad, for
 the excess speed of the hyperbola `o`:
-`(1 / cos((π - turn_angle) / 2) - 1) μ / C3`. This call has no CSPICE counterpart; it
-matches `Orbit.vinf_periapsis_km` of ANISE, with the angle in rad. It is the inverse of
+`(1 / cos((π - turn_angle) / 2) - 1) μ / C3`, where `C3 = o.c3` (km²/s²) is the square
+of the excess speed and `μ = o.gm`. No CSPICE call has this interface; it matches
+`Orbit.vinf_periapsis_km` of ANISE, with the angle in rad. It is the inverse of
 [`vinf_turn_angle`](@ref).
 
-Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic (`ecc <= 1`, ANISE:
-`NotHyperbolic`) or the result is NaN. A `turn_angle` of π gives 0.
+`turn_angle` is in [0, π]: π gives 0 and 0 gives a very large radius; outside [0, π] the
+formula is evaluated without a check. Throws `SpiceError(:degeneratecase)` if the orbit
+is not hyperbolic (`ecc <= 1`, ANISE: `NotHyperbolic`) or the result is NaN.
 
 # Examples
 ```jldoctest
@@ -554,16 +498,18 @@ end
 """
     vinf_turn_angle(o::Orbit, periapsis::Real)
 
-Return the angle in rad (a number; a `Dual` where `o` or `periapsis` is one), in [0, 2π),
-by which a flyby of the center of `o` with periapsis radius `periapsis` km turns the
+Return the angle in rad (a number; a `Dual` where `o` or `periapsis` is one) by which a
+flyby of the center of `o` with periapsis radius `periapsis` km turns the
 excess velocity of the hyperbola `o`:
-`π - 2 acos(1 / (1 + C3 periapsis / μ))`. This call has no CSPICE counterpart; it matches
+`π - 2 acos(1 / (1 + C3 periapsis / μ))`, where `C3 = o.c3` (km²/s²) is the square of the
+excess speed and `μ = o.gm`. No CSPICE call has this interface; it matches
 `Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad. It depends on the excess
 speed only, not on where along the trajectory `o` is. It is the inverse of
 [`vinf_periapsis`](@ref).
 
-Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic (`ecc <= 1`, ANISE:
-`NotHyperbolic`) or the arc cosine has no value (ANISE: NaN), as for a negative
+The result is in [0, π] for `periapsis >= 0` (π for 0), and is wrapped into [0, 2π) for a
+negative one. Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic
+(`ecc <= 1`, ANISE: `NotHyperbolic`) or the arc cosine has no value (ANISE: NaN), as for a negative
 `periapsis` below `-μ / C3`.
 
 # Examples

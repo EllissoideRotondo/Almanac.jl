@@ -7,7 +7,9 @@
     Orbit([ctx,] state, et, center, frame)
 
 A state about a central body, in km and km/s, with the central body's GM (km³/s²) and
-radii (km). This call has no CSPICE counterpart; it matches the `Orbit` of ANISE.
+radii (km). No CSPICE call has this interface; the elements of the orbit are those of
+`oscltx`, `recgeo` and `conics` for the same state, and the type matches the `Orbit` of
+ANISE.
 
 `state` is `[x, y, z, vx, vy, vz]` in the frame `frame`, relative to `center`, at the
 epoch `et` (seconds past J2000 TDB). The orbit is taken in the frame it is given; no
@@ -15,17 +17,20 @@ rotation is applied. The number type `T` of the orbit is the promoted type of `s
 `et` and `Float64`, so every element has the one type `T`, and a dual number in either
 flows through every element. `gm` and `radii` stay `Float64`.
 
-The form with `gm` needs no kernels; `radii` defaults to NaN, which is what an unknown
-radius is. The form with `center` and `frame` as names or NAIF IDs reads `BODYnnn_GM`
-and, when present, `BODYnnn_RADII` of the kernel pool; see [`orbit`](@ref) for the
+The form with `gm` needs no kernels, and `center` and `frame` are NAIF IDs. `radii`
+defaults to NaN, which is what an unknown radius is; the altitudes, `:latitude` and
+`:height` then throw `SpiceError(:badarg)`. The form without `gm` takes `center` and
+`frame` as names or NAIF IDs and reads `BODYnnn_GM` and, when present, `BODYnnn_RADII`
+of the kernel pool (of `ctx`, or of the default context); see [`orbit`](@ref) for the
 state from the kernels.
 
 The fields are `state`, `et`, `center`, `frame`, `gm` and `radii`. The properties
 `position`, `velocity`, `hvec` and `evec` (the eccentricity vector) are `SVector{3,T}`;
 every symbol of [`elements`](@ref) is a property too (see [`element`](@ref)).
 
-Throws `SpiceError(:badarg)` if `state` does not have 6 elements or `radii` 3, and
-`SpiceError(:kernelvarnotfound)` if the pool has no GM for `center`.
+Throws `SpiceError(:badarg)` if `state` does not have 6 elements or `radii` 3, and, in
+the form without `gm`, `SpiceError(:kernelvarnotfound)` if the pool has no GM for
+`center`.
 
 # Examples
 ```jldoctest
@@ -72,9 +77,11 @@ Orbit(state::AbstractVector{<:Real}, et::Real, center::NameOrID, frame::NameOrID
     orbit([ctx,] targ, et, ref, abcorr, obs) -> Orbit
 
 The [`Orbit`](@ref) of `targ` about `obs` at `et` (seconds past J2000 TDB): the state of
-[`spkezr`](@ref) (same arguments, same order) in the frame `ref`, with the center `obs`
-and its GM and radii from the kernel pool. This call has no CSPICE counterpart; it
-matches the construction of an `Orbit` from an ephemeris state in ANISE.
+[`spkezr`](@ref) (same arguments, same order, with the correction `abcorr`) in the frame
+`ref`, with the center `obs` and its GM and radii from the kernel pool. The epoch of the
+orbit is `et`, the epoch of the observer, and the state is not rotated: it stays in
+`ref`. No CSPICE call has this interface; it matches the construction of an `Orbit` from
+an ephemeris state in ANISE.
 
 Throws the errors of [`spkezr`](@ref), and `SpiceError(:kernelvarnotfound)` if the pool
 has no GM for `obs`.

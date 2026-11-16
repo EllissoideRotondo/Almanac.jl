@@ -24,12 +24,13 @@ function _apsides_to_sma_ecc(periapsis, apoapsis)
 end
 
 """
-    keplerian_orbit([ctx,] et, center, frame; sma, ecc, inc, raan, aop, ta, gm) -> Orbit
-    keplerian_orbit([ctx,] et, center, frame; periapsis, apoapsis, inc, raan, aop, ma, gm)
+    keplerian_orbit([ctx,] et, center, frame; sma, ecc, inc, raan, aop, ta[, gm]) -> Orbit
+    keplerian_orbit([ctx,] et, center, frame; periapsis, apoapsis, inc, raan, aop, ma[, gm]) -> Orbit
 
 The [`Orbit`](@ref) of Keplerian elements about `center` in `frame` at the epoch `et`
-(seconds past J2000 TDB). Lengths are in km and angles in rad. This call has no CSPICE
-counterpart; it matches `Orbit::try_keplerian`, `try_keplerian_apsis_radii` and
+(seconds past J2000 TDB). Lengths are in km and angles in rad. No CSPICE call has this
+interface; `conics` returns the state of conic elements about a body of given GM, and
+this call matches `Orbit::try_keplerian`, `try_keplerian_apsis_radii` and
 `try_keplerian_mean_anomaly` of ANISE.
 
 The shape is given by `sma` and `ecc` or by `periapsis` and `apoapsis` (radii), and the
@@ -39,13 +40,15 @@ wrong sign for the eccentricity (a positive one for `ecc > 1`, a negative one fo
 `ecc < 1`) changes its sign, as in ANISE.
 
 `gm` (km³/s²) defaults to the `BODYnnn_GM` of the kernel pool, and then so do the radii
-of `center`; with `gm` given, the radii are NaN and the call reads no kernels when
+of `center`; with `gm` given, the radii are NaN (so the altitudes, `:latitude` and
+`:height` of the orbit throw `SpiceError(:badarg)`) and the call reads no kernels when
 `center` and `frame` are NAIF IDs. With a `KernelSet` or a
 [`SpiceContext`](@ref) first the kernels are those of the snapshot or of the context;
 without, those of the default context. The elements and the epoch may be dual numbers.
 
-Throws `SpiceError(:badarg)` unless exactly one of the pairs `sma`, `ecc` and `periapsis`,
-`apoapsis` and exactly one of `ta`, `ma` is given. It throws `SpiceError(:degeneratecase)`
+Throws `SpiceError(:badarg)` unless the shape is given by exactly one of the two pairs
+(`sma` and `ecc`, or `periapsis` and `apoapsis`) and the position by exactly one of `ta`
+and `ma`. It throws `SpiceError(:degeneratecase)`
 where ANISE fails: a parabola (`|ecc - 1| < 1e-11`), a true anomaly beyond the asymptotes
 of a hyperbola, an infinite radius, a zero semi-parameter, a radius of apsis not above
 `eps(Float64)`, or a mean anomaly that does not converge; and
@@ -101,9 +104,10 @@ const _KEP_NAMES = (:sma, :ecc, :inc, :raan, :aop, :ta)
 
 A copy of the [`Orbit`](@ref) `o` with the Keplerian element `name` (one of `:sma`,
 `:ecc`, `:inc`, `:raan`, `:aop`, `:ta`) set to `value` (km or rad) and the other five
-unchanged. The epoch, center, frame, GM and radii stay. This call has no CSPICE
-counterpart; it matches `Orbit::with_sma_km`, `with_ecc`, `with_inc_deg`, `with_raan_deg`,
-`with_aop_deg` and `with_ta_deg` of ANISE.
+unchanged. The epoch, center, frame, GM and radii stay. `value` is in km (`:sma`), rad
+or dimensionless (`:ecc`). No CSPICE call has this interface; `oscltx` and `conics`
+convert between the state and the elements, and this call matches `Orbit::with_sma_km`,
+`with_ecc`, `with_inc_deg`, `with_raan_deg`, `with_aop_deg` and `with_ta_deg` of ANISE.
 
 The orbit is rebuilt as by [`keplerian_orbit`](@ref), so its sign rules for `sma` and
 `ecc` apply, and the angles are not wrapped. A circular orbit has no true anomaly, so
@@ -134,8 +138,8 @@ end
     with_apsides(o, periapsis, apoapsis) -> Orbit
 
 A copy of the [`Orbit`](@ref) `o` with the radii of periapsis and apoapsis (km) given,
-and its inclination, `raan`, `aop` and true anomaly unchanged. This call has no CSPICE
-counterpart; it matches `Orbit::with_apoapsis_periapsis_km` of ANISE (whose arguments are
+and its inclination, `raan`, `aop` and true anomaly unchanged. No CSPICE call has this
+interface; it matches `Orbit::with_apoapsis_periapsis_km` of ANISE (whose arguments are
 in the order apoapsis, periapsis).
 
 Throws `SpiceError(:degeneratecase)` for a radius not above `eps(Float64)`, for a circular
@@ -161,14 +165,11 @@ end
 
 The [`Orbit`](@ref) `o` advanced to the epoch `et2` by two-body motion: the equinoctial
 mean longitude moves by the mean motion times `et2 - o.et`, and the other equinoctial
-elements stay. No force model is applied. This call has no CSPICE counterpart; it matches
-`Orbit::at_epoch` of ANISE.
-
-For a hyperbola the mean anomaly of `o` is advanced directly; ANISE adds the motion to the
-mean longitude, which is wrong for a hyperbola whose `raan + aop` is outside (-π, π].
-`et2` may be a dual number, and then so is the state. Where `et2` and `o.et` are both
-`Float64` and equal, `o` is returned, as in ANISE; with a dual `et2` the orbit is
-converted so that the derivative is kept.
+elements stay. No force model is applied; `et2` may be earlier or later than `o.et`,
+and may be a dual number, and then so is the state. No CSPICE call has this interface;
+`prop2b` propagates a state by two-body motion, and this call matches `Orbit::at_epoch`
+of ANISE. For a hyperbola it differs from ANISE; see
+[Coverage and validation](@ref "Beyond CSPICE").
 
 Throws `SpiceError(:degeneratecase)` where an equinoctial element is undefined (a circular
 orbit has no mean anomaly, see [`element`](@ref)) or the conversion fails (see
