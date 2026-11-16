@@ -509,8 +509,8 @@ speed only, not on where along the trajectory `o` is. It is the inverse of
 
 The result is in [0, π] for `periapsis >= 0` (π for 0), and is wrapped into [0, 2π) for a
 negative one. Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic
-(`ecc <= 1`, ANISE: `NotHyperbolic`) or the arc cosine has no value (ANISE: NaN), as for a negative
-`periapsis` below `-μ / C3`.
+(`ecc <= 1`, ANISE: `NotHyperbolic`) or the arc cosine has no value (ANISE: NaN), as for
+a negative `periapsis` below `-μ / C3`.
 
 # Examples
 ```jldoctest
