@@ -51,21 +51,62 @@ end
 
 angdiff(a, b) = abs(rem2pi(a - b, RoundNearest))
 
-# Tolerances against `oscltx`: the largest differences measured in 200 random orbits
-# (seed SEED + 31) are rp 9.6e-15, ecc 2.7e-15, inc 1.3e-15, raan 4.0e-13, aop 1.1e-14,
-# ta 2.2e-12, ma 1.1e-11, sma and period 2.8e-15. The limit is about five times the
-# measured value; raan, ta and ma are larger because the two codes compute them from the
-# eccentricity and node vectors by different formulas (acos and atan2 near their
-# unit-circle ends lose the digits of the argument).
-const TOL_OSC = Dict(:rp => 5e-14, :ecc => 1.5e-14, :inc => 7e-15, :raan => 2e-12,
-    :aop => 6e-14, :ta => 1e-11, :ma => 5e-11, :sma_period => 1.5e-14)
+# Conditioning of the shape: periapsis radius, eccentricity and semi-major axis come from
+# cancellations near ecc = 1 (1 - e in a(1 - e) and in p / (1 - e); 1 - e^2 in the semi-minor
+# axis), so the rounding is amplified by 1/|1 - e| (power 1) or 1/|1 - e^2| (power 2).
+# Error of a state that comes out of Kepler's equation: the Newton iteration stops at 1e-12 rad
+# (`_MA_EPSILON` of ANISE, `conics` and `prop2b` of CSPICE stop at their own tolerances), and the
+# state follows the anomaly with a factor that grows as 1/sqrt(|1 - e^2|) near the apsides.
+cond_kepler(ecc) = 1e-12 * max(1, 1 / sqrt(abs(1 - ecc^2)))
+
+cond_shape(o, power=1) = eps() * (1 + 1 / abs(1 - o.ecc^power))
+# The eccentricity comes from sqrt(1 - p/a)-like forms too, whose rounding is amplified by 1/ecc
+# for a small ecc.
+cond_ecc(o) = cond_shape(o) + eps() / min(o.ecc, 1.0)
+
+# Conditioning of the angles of an orbit (the model of the anise group, `cond_scale` of
+# test/anise/runtests.jl). An element that is an arc cosine of a ratio of vectors has the rounding
+# error eps of the ratio amplified by 1 / |sin angle|; the vectors carry a relative error of their
+# own: eps / ecc for the eccentricity vector (ecc <= 1; a hyperbola has no small ecc in the
+# samples) and eps / sin(inc) for the node vector. So the difference of two codes in
+#   inc:  eps (1 + 1/sin inc)                      (acos of h_z / |h|)
+#   raan: eps (1 + 1/(sin inc |sin raan|))         (acos of the node vector)
+#   aop:  eps (1 + (1/ecc + 1/sin inc) / |sin aop|)
+#   ta:   eps (1 + 1/(ecc |sin ta|)), also for ma and ea (a smooth function of ta)
+#   aol:  the larger of the aop and ta scales (aol = aop + ta)
+#   state: the larger of the raan, aop and ta scales (a state rebuilt from its elements)
+# is measured in units of that scale; the limits below are multiples of it (the `measured` lines
+# print the largest multiple). A sample with an amplifier beyond 1e8 is bounded at 1e8.
+_cs(x) = 1 / max(abs(sin(x)), 1e-8)
+function cond_angle(o, which::Symbol)
+    ae = 1 / min(o.ecc, 1.0)
+    ai = 1 / max(sin(o.inc), 1e-8)
+    which === :inc && return eps() * (1 + ai)
+    which === :raan && return eps() * (1 + ai * _cs(o.raan))
+    f_aop = 1 + (ae + ai) * _cs(o.aop)
+    f_ta = 1 + ae * _cs(o.ta)
+    f_raan = 1 + ai * _cs(o.raan)
+    return eps() * (which === :aop ? f_aop : which === :ta ? f_ta : which === :aol ? max(f_aop, f_ta) :
+        max(f_aop, f_ta, f_raan))
+end
+
+# Tolerances against `oscltx`, in units of the conditioning models above (`cond_shape` for rp,
+# ecc, sma_period and the semi-minor axis, `cond_angle` for the angles). A limit in absolute
+# terms failed at 5000 samples, because the worst sample of 200 has a condition number of
+# 1e3 and that of 5000 one of 1e5. Largest multiples measured in the exhaustive tier (5000
+# orbits, six seeds: SEED and 1 to 5): rp 9.4, ecc 11, inc 1.9, raan 2.0, aop 3.3, ta 6.0,
+# ma 17, sma_period 7.2, aol 3.0, semi_minor 39. The limit is four to five times the largest
+# (the multiples are stable: the extremes of the samples are in the model).
+const TOL_OSC = Dict(:rp => 40, :ecc => 45, :inc => 8, :raan => 8,
+    :aop => 14, :ta => 25, :ma => 70, :sma_period => 30)
 # Identities between elements of one orbit, 200 orbits: measured c3 1.6e-16, mean_motion
-# 2.8e-16, ta_dot 2.4e-16, semi_minor 2.0e-14 (the square of a difference of ulps of
-# sqrt(1-e^2)), ra 8.9e-16, dec 1.6e-15, vdec 4.4e-16, ha 8.9e-16: rounding of a few
-# ulps, limit 1e-13. aol = aop + ta inherits the conditioning of aop and ta (2.2e-12
-# measured), limit 1e-11.
+# 2.8e-16, ta_dot 2.4e-16, ra 8.9e-16, dec 1.6e-15, vdec 4.4e-16, ha 8.9e-16 (also 5000 orbits:
+# 4.4e-15 at most): rounding of a few ulps, limit 1e-13. The semi-minor axis is the square of
+# a difference of ulps of sqrt(1-e^2), which `cond_shape(o, 2)` models (TOL_SEMIMINOR), and
+# aol = aop + ta inherits the conditioning of aop and ta (TOL_AOL, units of cond_angle).
 const TOL_ID = 1e-13
-const TOL_AOL = 1e-11
+const TOL_AOL = 12
+const TOL_SEMIMINOR = 160     # units of cond_shape(o, 2)
 # B-plane of the GMAT case: the expected values are GMAT's (as in ANISE's test) and the
 # limits are those of ANISE (1 km, 0.01 deg). Measured: 0.65 km at most (br), 2e-5 rad for
 # the angle. The formula agrees with an independent B = b (S x h) form to 1e-10 km; a change
@@ -98,23 +139,31 @@ const TOL_GEODETIC_KM = 2e-11
 # of the two algorithms; limits at about five times these.
 const TOL_RECGEO = (2e-15, 2e-15, 5e-15)
 # The equinoctial identities are the same expressions as the elements (measured 0.0, the limit
-# is TOL_ID); the conversion back to Keplerian elements (the sine and arc tangent of
-# half the inclination and of p, q) measured 3.1e-15, limit 1.5e-14.
-const TOL_EQ_BACK = 1.5e-14
+# is TOL_ID). The conversion back to Keplerian elements (the sine and arc tangent of half the
+# inclination and of p, q) has the rounding of the sum raan + aop + ma of three angles (up to
+# 6 pi, ulp 3.6e-15 = 16 eps) and the acos of the inclination (1/sin inc): measured 1.9 at most
+# in units of eps (16 + 1/sin inc) in 5000 orbits, six seeds; limit 8.
+const TOL_EQ_BACK = 8
 const _KEP6 = (:sma, :ecc, :inc, :raan, :aop, :ta)
 # Building, editing and propagating (the `measured` lines of the testsets print the
 # values; the limit is about five times the largest measured, 200 random orbits, seeds
 # SEED + 51 to 53).
-# keplerian_orbit against `conics`, relative: position 1.2e-12 and velocity 2.5e-12 (the two
-# codes solve Kepler's equation by different iterations, and the position error is the
-# velocity error times the orbit's conditioning near the apsides); round trip of the state
-# through the elements, the apsides or the true anomaly 1.7e-14 (a few ulps of acos and atan2);
-# the elements read back 3.7e-14.
-const TOL_BUILD = (6e-12, 1.2e-11, 1e-13, 2e-13)
-# with_element: the asked element 7.4e-14 relative or rad (rounding of the conversion and of
-# the element read back); the five others 9.5e-12 (raan, aop and ta of a rebuilt state are
-# ill conditioned near the poles of acos), the same cause as TOL_OSC.
-const TOL_WITH = (4e-13, 5e-11)
+# keplerian_orbit against `conics`, relative, in units of `cond_kepler` (the Newton iteration of
+# the Kepler equation stops at 1e-12 rad in ANISE, `conics` and `prop2b` stop at their own
+# tolerance, and the state follows the anomaly with 1/sqrt(|1 - e^2|) at most): position 3.7 and
+# velocity 1.9 at most (5000 orbits, six seeds; 1.2e-11 absolute at e = 0.949, where a fixed
+# limit of 6e-12 failed). Round trip of the state through the elements, the apsides or the true
+# anomaly, in units of cond_angle(o, :state): 125 at most (the raan of the rebuilt state is an
+# arc cosine too, so a node near the x axis, raan = 1e-5, costs 1e5 eps); limit 500. The
+# elements read back: sma and ecc 1.1e-14 (limit 2e-13), the angles 9.2 in units of cond_angle
+# (limit 40).
+const TOL_BUILD = (25, 25, 500, 2e-13, 40)
+# with_element: the asked sma or ecc in units of cond_shape (cond_ecc for ecc: sqrt(1 - p/a)
+# amplifies the rounding by 1/ecc, which is 1.4e-13 at ecc = 0.006): 8.4 at most; the asked
+# angle in units of cond_angle of the new orbit: 6.6; the other sma and ecc 3.3e-14 absolute;
+# the other angles in units of the larger cond_angle of the old and the new orbit: 33 (a
+# raan, aop or ta of a rebuilt state is an arc cosine). Six seeds, 5000 orbits.
+const TOL_WITH = (35, 28, 5e-11, 140)
 # verif_with_init of ANISE (loops of 900 or 360 values), largest 1.5e-11 (km or rad): the
 # rounding of values of 8e3 to 1e4 km (ulp 1e-12 to 2e-12 each, summed over the conversion).
 const TOL_INIT = 8e-11
@@ -122,18 +171,21 @@ const TOL_INIT = 8e-11
 # raan 0, aop 3.3e-8 rad = 1.9e-6 deg (ANISE 3e-6 deg): the aop of an orbit of ecc 1e-8 is
 # the angle of a vector of length 1e-8 whose rounding error is 1e-16.
 const TOL_ATEPOCH = (2e-11, 1e-15, 1e-15, 1e-15, 5e-8)
-# two_body against `prop2b`, relative, up to +-10 periods: position 1.3e-12, velocity 9.2e-13,
-# sma 5.8e-15; the mean longitude is advanced by n dt of up to 60 rad, whose rounding is a few
-# ulps of 60 (1e-14), scaled by the conditioning of the orbit.
-const TOL_TWOBODY = (7e-12, 5e-12, 3e-14)
+# two_body against `prop2b`, relative, up to +-10 periods, in units of `cond_kepler`: position 8.1
+# and velocity 5.5 at most (5000 orbits, six seeds; limit 25); sma 1.0e-14 (limit 3e-14, the
+# mean motion divides by sma^1.5, a few ulps). The rounding of the mean longitude, a few ulps
+# of up to 60 rad (1e-14), is 100 times smaller than the iteration tolerance.
+const TOL_TWOBODY = (25, 25, 3e-14)
 # A dual epoch: the derivative of the state is (v, -gm r/r^3) to 2.9e-12, relative.
 const TOL_DUALDT = 1.5e-11
-# Local frames (the fast sample of 6 orbits gave 4.4e-16, 4.4e-16 and 5.3e-17; 20 orbits gave 5.6e-16,
-# 5.6e-16 and 1.2e-15; 4 kinds, seed SEED + 54): the largest |R'R - I| and |det R - 1| are 5.6e-16 (a few roundings of unit vectors),
-# the largest difference of the exact rate from the ForwardDiff derivative of the frame of `two_body` is 1.2e-15 1/s (the two code paths
-# round differently; the rates are of order 1e-3 1/s). The limits are about five times the
-# measured values.
-const TOL_LF = (3e-15, 3e-15, 6e-15)
+# Local frames: the largest |R'R - I| and |det R - 1| are 8.9e-16 and 6.7e-16 in 5000 orbits (a
+# few roundings of unit vectors, limit 3e-15). The exact rate against the ForwardDiff
+# derivative of the frame of `two_body`: the dual part of the Newton iteration of the Kepler
+# equation (which stops at 1e-12 rad) goes through acos, atan2 and the equinoctial conversion, so
+# the difference is measured in units of 1e-12 |h|/r^2 (the angular rate of the frame) times the
+# larger of 1/|sin ta|, 1/|sin aop| and 1/|sin raan|: 79 at most (samples at ta = pi - 1e-4 gave a
+# raw 2.6e-9 |h|/r^2 where 200 orbits gave 3e-10); limit 320.
+const TOL_LF = (3e-15, 3e-15, 320)
 
 group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         Kernels.GM_TPC, Kernels.PCK11) do
@@ -224,16 +276,16 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         for _ in 1:nsample(200, 5000)
             o = random_orbit(rng)
             el = oscltx(o.state, o.et, o.gm)
-            @test note(:rp, abs(o.periapsis - el[1]) / el[1]) < TOL_OSC[:rp]
-            @test note(:ecc, abs(o.ecc - el[2])) < TOL_OSC[:ecc]
-            @test note(:inc, angdiff(o.inc, el[3])) < TOL_OSC[:inc]
-            @test note(:raan, angdiff(o.raan, el[4])) < TOL_OSC[:raan]
-            @test note(:aop, angdiff(o.aop, el[5])) < TOL_OSC[:aop]
-            @test note(:ta, angdiff(o.ta, el[9])) < TOL_OSC[:ta]
+            @test note(:rp, abs(o.periapsis - el[1]) / el[1] / cond_shape(o)) < TOL_OSC[:rp]
+            @test note(:ecc, abs(o.ecc - el[2]) / cond_ecc(o)) < TOL_OSC[:ecc]
+            @test note(:inc, angdiff(o.inc, el[3]) / cond_angle(o, :inc)) < TOL_OSC[:inc]
+            @test note(:raan, angdiff(o.raan, el[4]) / cond_angle(o, :raan)) < TOL_OSC[:raan]
+            @test note(:aop, angdiff(o.aop, el[5]) / cond_angle(o, :aop)) < TOL_OSC[:aop]
+            @test note(:ta, angdiff(o.ta, el[9]) / cond_angle(o, :ta)) < TOL_OSC[:ta]
             if o.ecc < 1
-                @test note(:ma, angdiff(o.ma, el[6])) < TOL_OSC[:ma]
+                @test note(:ma, angdiff(o.ma, el[6]) / cond_angle(o, :ta)) < TOL_OSC[:ma]
                 @test note(:sma_period, max(abs(o.sma - el[10]) / el[10],
-                    abs(o.period - el[11]) / el[11])) < TOL_OSC[:sma_period]
+                    abs(o.period - el[11]) / el[11]) / cond_shape(o)) < TOL_OSC[:sma_period]
                 @test note(:mean_motion, abs(o.mean_motion * o.period - 2π) / 2π) < TOL_ID
                 @test note(:ta_dot, abs(o.ta_dot - o.mean_motion) / o.mean_motion) < TOL_ID
             else
@@ -245,17 +297,17 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
                 @test note(:ha, max(abs(cosh(H) - (o.ecc + c) / (1 + o.ecc * c)) / cosh(H),
                     abs(sinh(H) - sqrt(o.ecc^2 - 1) * s / (1 + o.ecc * c)) / max(abs(sinh(H)), 1))) < TOL_ID
             end
-            @test note(:aol, angdiff(o.aol, o.aop + o.ta)) < TOL_AOL
+            @test note(:aol, angdiff(o.aol, o.aop + o.ta) / cond_angle(o, :aol)) < TOL_AOL
             @test note(:c3, abs(o.c3 - 2 * o.energy) / abs(o.c3)) < TOL_ID
             @test note(:semi_minor, abs(o.semi_minor_axis^2 - abs(o.sma * o.semi_parameter)) /
-                o.semi_minor_axis^2) < TOL_ID
+                o.semi_minor_axis^2 / cond_shape(o, 2)) < TOL_SEMIMINOR
             _, ra, dec = recrad(o.position)
             @test note(:ra, angdiff(o.right_ascension, ra)) < TOL_ID
             @test note(:dec, abs(o.declination - dec)) < TOL_ID
             @test note(:vdec, abs(o.velocity_declination - recrad(o.velocity)[3])) < TOL_ID
         end
         measured("  oscltx and identities, largest differences: " *
-            join((@sprintf("%s %.1e", k, worst[k]) for k in names), ", "))
+            join((@sprintf("%s %.1e", k, worst[k]) for k in names), ", ") * " (rp, ecc, sma_period, semi_minor in units of cond_shape; inc, raan, aop, ta, ma, aol of cond_angle)")
     end
 
     @testset "Keplerian elements: degenerate cases" begin
@@ -508,11 +560,11 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             sma, ecc, inc, raan, aop, ma = Almanac._equinoctial_to_kep(o.equinoctial_a, o.equinoctial_h,
                 o.equinoctial_k, o.equinoctial_p, o.equinoctial_q, o.equinoctial_lambda)
             b = max(abs(ecc - o.ecc), abs(inc - o.inc), angdiff(raan, o.raan), angdiff(aop, o.aop),
-                angdiff(ma, o.ma))
+                angdiff(ma, o.ma)) / (eps() * (16 + 1 / sin(o.inc)))
             worst .= max.(worst, (d, b))
             @test d < TOL_ID && o.equinoctial_a == o.sma && sma == o.sma && b < TOL_EQ_BACK
         end
-        measured(@sprintf("  equinoctial identities %.1e, conversion back to Keplerian %.1e", worst...))
+        measured(@sprintf("  equinoctial identities %.1e, conversion back to Keplerian %.1e (units of eps (16 + 1/sin inc))", worst...))
         hyp = Orbit(gmat_kep_state(-20000.0, 1.5, _d(28.5), _d(10), _d(20), _d(30)), 0.0, 399, 1, GMAT_GM)
         @test hyp.equinoctial_h ≈ 1.5 * sin(hyp.aop + hyp.raan) && hyp.equinoctial_lambda ≈ hyp.raan + hyp.aop + hyp.ma
         # the errors are those of the Keplerian elements (a circular orbit has no ta, ma)
@@ -575,7 +627,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
     @testset "keplerian_orbit against conics and the round trip" begin
         rng = Xoshiro(SEED + 51)
         gm = 398600.4415
-        worst = zeros(4)
+        worst = zeros(6)
         for _ in 1:nsample(200, 5000)
             ecc = rand(rng) < 0.5 ? 0.005 + 0.945 * rand(rng) : 1.05 + 3.95 * rand(rng)
             rp = 6500.0 + 43500.0 * rand(rng)
@@ -595,18 +647,21 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             # round trip through the elements of the state
             k = keplerian(o)
             o4 = keplerian_orbit(0.0, 399, 1; k..., gm)
-            dk = maximum(x -> norm(x.state - o.state) / norm(o.state), (o2, o3, o4))
-            worst .= max.(worst, (dr, dv, dk, 0.0))
-            @test dr < TOL_BUILD[1] && dv < TOL_BUILD[2] && dk < TOL_BUILD[3]
+            ck = cond_kepler(ecc)
+            dk = maximum(x -> norm(x.state - o.state) / norm(o.state), (o2, o3, o4)) / cond_angle(o, :state)
+            worst[1:3] .= max.(worst[1:3], (dr / ck, dv / ck, dk))
+            @test dr / ck < TOL_BUILD[1] && dv / ck < TOL_BUILD[2] && dk < TOL_BUILD[3]
             @test o.et === 0.0 && o.gm == gm && o.center === Int32(399) && o.frame === Int32(1)
             @test all(isnan, o.radii)
             kk = keplerian(o4)
-            de = max(abs(kk.sma - k.sma) / abs(k.sma), abs(kk.ecc - k.ecc), angdiff(kk.inc, k.inc),
-                angdiff(kk.raan, k.raan), angdiff(kk.aop, k.aop), angdiff(kk.ta, k.ta))
+            de = max(abs(kk.sma - k.sma) / abs(k.sma), abs(kk.ecc - k.ecc))
+            da = max(angdiff(kk.inc, k.inc) / cond_angle(o, :inc), angdiff(kk.raan, k.raan) / cond_angle(o, :raan),
+                angdiff(kk.aop, k.aop) / cond_angle(o, :aop), angdiff(kk.ta, k.ta) / cond_angle(o, :ta))
             worst[4] = max(worst[4], de)
-            @test de < TOL_BUILD[4]
+            worst[5] = max(worst[5], da)
+            @test de < TOL_BUILD[4] && da < TOL_BUILD[5]
         end
-        measured(@sprintf("  keplerian_orbit against conics, relative: position %.2e, velocity %.2e; round trip of the state %.2e, of the elements %.2e", worst...))
+        measured(@sprintf("  keplerian_orbit against conics, relative, in units of 1e-12 max(1, 1/sqrt(|1 - e^2|)): position %.2e, velocity %.2e; round trip of the state %.2e (units of cond_angle), of sma and ecc %.2e, of the angles %.2e (units of cond_angle)", worst[1:5]...))
     end
 
     @testset "keplerian_orbit: signs, errors and number types" begin
@@ -663,7 +718,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
 
     @testset "with_element and with_apsides" begin
         rng = Xoshiro(SEED + 52)
-        worst = zeros(2)
+        worst = zeros(4)
         for _ in 1:nsample(100, 2000), name in (:sma, :ecc, :inc, :raan, :aop, :ta)
             o = random_orbit(rng)
             hyp = o.ecc > 1
@@ -671,7 +726,11 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             new = if name === :sma
                 o.sma * (1 + 0.3 * rand(rng))
             elseif name === :ecc
-                hyp ? o.ecc * (1 + 0.1 * rand(rng)) : 0.005 + 0.945 * rand(rng)
+                # a hyperbola keeps its true anomaly only inside the asymptotes of the new
+                # eccentricity (1 + ecc cos(ta) > 0, as in `try_keplerian` of ANISE, which
+                # refuses the others): the new value stays below -1/cos(ta), at 90% of the gap
+                hyp ? o.ecc + 0.9 * (min(1.1 * o.ecc, cos(o.ta) < 0 ? -1 / cos(o.ta) : Inf) - o.ecc) * rand(rng) :
+                0.005 + 0.945 * rand(rng)
             elseif name === :inc
                 0.02 + (π - 0.04) * rand(rng)
             elseif name === :ta
@@ -684,16 +743,25 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             # the asked element, and the other five unchanged (angles modulo a turn)
             got = getproperty(after, name)
             want = getproperty(before, name)
-            d = name in (:sma, :ecc) ? abs(got - new) / abs(new) : angdiff(got, new)
+            # sma and ecc in relative and absolute difference, the angles in units of cond_angle
+            # (of the new orbit for the asked element, the larger of the two for the others)
+            d = name in (:sma, :ecc) ? abs(got - new) / abs(new) / (name === :ecc ? cond_ecc(p) : cond_shape(p)) : angdiff(got, new) / cond_angle(p, name)
             others = map(filter(!=(name), collect(_KEP6))) do n
                 n === :sma ? abs(after.sma - before.sma) / abs(before.sma) :
-                n === :ecc ? abs(after.ecc - before.ecc) : angdiff(getproperty(after, n), getproperty(before, n))
+                n === :ecc ? abs(after.ecc - before.ecc) :
+                angdiff(getproperty(after, n), getproperty(before, n)) / max(cond_angle(o, n), cond_angle(p, n))
             end
-            worst .= max.(worst, (d, maximum(others)))
-            @test d < TOL_WITH[1] && maximum(others) < TOL_WITH[2]
+            ia = name in (:sma, :ecc) ? 1 : 2
+            worst[ia] = max(worst[ia], d)
+            for (n, x) in zip(filter(!=(name), collect(_KEP6)), others)
+                j = n in (:sma, :ecc) ? 3 : 4
+                worst[j] = max(worst[j], x)
+            end
+            @test d < TOL_WITH[ia] && all(((n, x),) -> x < TOL_WITH[n in (:sma, :ecc) ? 3 : 4],
+                zip(filter(!=(name), collect(_KEP6)), others))
             @test isequal((p.et, p.center, p.frame, p.gm, p.radii), (o.et, o.center, o.frame, o.gm, o.radii))
         end
-        measured(@sprintf("  with_element: asked element %.2e, others %.2e (relative or rad)", worst...))
+        measured(@sprintf("  with_element: asked element sma or ecc %.2e (relative, units of cond_shape, cond_ecc), angle %.2e; the others sma or ecc %.2e, angles %.2e (units of cond_angle)", worst...))
         # ANISE verif_with_init (tests/astro/orbit.rs): the same loops, in rad
         kep = keplerian_orbit(0.0, 399, 1; sma=8191.93, ecc=0.0245, inc=_d(12.85), raan=_d(306.614),
             aop=_d(314.19), ta=_d(99.8877), gm=GMAT_GM)
@@ -755,11 +823,16 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             dr = norm(t.position - ref[1:3]) / norm(ref[1:3])
             dv = norm(t.velocity - ref[4:6]) / norm(ref[4:6])
             ds = abs(t.sma - o.sma) / abs(o.sma)
-            worst .= max.(worst, (dr, dv, ds))
-            @test dr < TOL_TWOBODY[1] && dv < TOL_TWOBODY[2] && ds < TOL_TWOBODY[3]
+            # Kepler's equation is solved by a Newton iteration that stops at 1e-12 rad (`_MA_EPSILON`,
+            # as in ANISE); the state follows the anomaly with the factor 1/sqrt(|1 - e^2|) at most
+            # near the apsides of an eccentric orbit (rounding of the mean longitude, eps |n dt|
+            # with |n dt| < 60, is 20 times smaller)
+            cond = cond_kepler(o.ecc)
+            worst .= max.(worst, (dr / cond, dv / cond, ds))
+            @test dr / cond < TOL_TWOBODY[1] && dv / cond < TOL_TWOBODY[2] && ds < TOL_TWOBODY[3]
             @test t.et == o.et + dt && isequal((t.center, t.frame, t.gm, t.radii), (o.center, o.frame, o.gm, o.radii))
         end
-        measured(@sprintf("  two_body against prop2b, relative: position %.2e, velocity %.2e; sma %.2e", worst...))
+        measured(@sprintf("  two_body against prop2b, relative: position %.2e, velocity %.2e (units of 1e-12 max(1, 1/sqrt(|1 - e^2|))); sma %.2e", worst...))
         # the same epoch: the orbit itself
         o = random_orbit(rng)
         @test two_body(o, o.et) === o
@@ -821,10 +894,11 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
                 @test S isa SMatrix{6,6,Float64,36}
                 @test S[1:3, 1:3] == R && S[4:6, 4:6] == R && all(iszero, S[1:3, 4:6])
                 D = ForwardDiff.derivative(t -> local_frame(two_body(o, t), k), o.et)
-                w[3] = max(w[3], maximum(abs, S[4:6, 1:3] - D))
+                w[3] = max(w[3], maximum(abs, S[4:6, 1:3] - D) / (norm(h) / norm(r)^2) /
+                    (1e-12 * max(_cs(o.ta), _cs(o.aop), _cs(o.raan))))
             end
         end
-        measured(@sprintf("  local frames: |R'R - I| %.1e, |det R - 1| %.1e, rate against ForwardDiff %.1e 1/s", w...))
+        measured(@sprintf("  local frames: |R'R - I| %.1e, |det R - 1| %.1e, rate against ForwardDiff %.1e (in units of 1e-12 |h|/r^2 max(1/|sin ta|, 1/|sin aop|, 1/|sin raan|))", w...))
         @test w[1] < TOL_LF[1] && w[2] < TOL_LF[2] && w[3] < TOL_LF[3]
         o = random_orbit(rng)
         @test local_frame(o, :rcn) == local_frame(o, :ric)
@@ -852,11 +926,13 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         # a pure position offset has a relative velocity: Rdot' dr, which is not zero
         S = local_frame_state(o, :ric)
         R, Rd = S[1:3, 1:3], S[4:6, 1:3]
-        dr = SVector(1.0, 0.0, 0.0) * 1.0
+        # (1 km along the radius: the frame turns at the angular rate |h|/r^2, so the relative
+        # velocity is -|h|/r^2 along the in-track axis)
+        dr = o.position / norm(o.position)
         pure = Orbit(o.state + SVector(dr..., 0, 0, 0), o.et, 399, 1, o.gm)
         rs = relative_state(pure, o, :ric)
         @test rs[4:6] ≈ Rd' * (pure.position - o.position) rtol = 1e-9
-        @test abs(rs[5]) > 1e-5
+        @test abs(rs[5]) ≈ norm(o.hvec) / norm(o.position)^2 rtol = 1e-9
         # dual numbers pass through
         od = Orbit(o.state, ForwardDiff.Dual(o.et, 1.0), 399, 1, o.gm)
         @test local_frame(od, :tnw) isa SMatrix{3,3,<:ForwardDiff.Dual}
