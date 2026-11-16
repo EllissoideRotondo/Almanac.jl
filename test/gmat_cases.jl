@@ -130,3 +130,31 @@ for ecc in (0.1, 0.5, 0.9), ta in (0.0, 45.0, 90.0, 135.0, 180.0, 225.0, 270.0, 
     push!(GMAT_CASES, (name="fpa_ecc$(ecc)_ta$(Int(ta))", gm=GMAT_GM, state=s,
         expected=Dict(:fpa => asin(dot(r, v) / (norm(r) * norm(v))))))
 end
+
+# val_b_plane_gmat (reproduction of the B-plane of GMAT's Ex_LunarTransfer.script): the
+# state is relative to the Earth in the J2000 axes at the TAI epoch below (UTC minus 35 s
+# of leap seconds, as the Rust `from_gregorian_tai`); ANISE transforms it into the Moon
+# ICRS frame, which the test does with `spkezr`. `expected` are ANISE's values in km, the
+# angle in rad (ANISE: 14.84148076633666 deg).
+const BPLANE_CASES = Any[
+    (name="val_b_plane_gmat", gm=GMAT_GM, utc="2014-07-22 11:28:35.811 UTC",
+        state=SVector(-137380.386760, 75679.517105, 21487.708113,
+            -0.232442, -0.446282, 0.085610),
+        c3=-4.775126658014266,     # of the Earth-centered state; ANISE tolerance 1e-5
+        expected=Dict(:bplane_br => 103578.8265522861, :bplane_bt => 390913.1533788401,
+            :bplane_angle => _d(14.84148076633666), :bplane_mag => 404402.3436889349))]
+
+# The hyperbolic cases of ANISE tests that use `vinf_*`: b_plane_davis (a state of the
+# lecture of Dr. Davis, CU Boulder; ANISE checks the hyperbolic anomaly 149.610128737 deg
+# to 1e-9 deg, and the reciprocity of the turn angle and the periapsis at 300 km to 1e-10
+# km) and vinf_turn_angle_uses_excess_velocity (sma = -20000 km, ecc = 1.5, inc = 28.5 deg,
+# raan = 10 deg, aop = 20 deg, ta = 0, 30, 90, 120 deg; turn angle 2 asin(1/ecc) at the
+# periapsis radius to 1e-9 deg, and the periapsis back from it to 1e-6 km).
+const VINF_CASES = Any[
+    (name="b_plane_davis", gm=GMAT_GM,
+        state=SVector(546507.344255845, -527978.380486028, 531109.066836708,
+            -4.9220589268733, 5.36316523097915, -5.22166308425181),
+        ha=_d(149.610128737), ha_tol=_d(1e-9), rp=300.0),
+    [(name="excess_velocity_ta$(Int(ta))", gm=GMAT_GM,
+        state=gmat_kep_state(-20_000.0, 1.5, _d(28.5), _d(10), _d(20), _d(ta)),
+        ecc=1.5, sma=-20_000.0) for ta in (0.0, 30.0, 90.0, 120.0)]...]

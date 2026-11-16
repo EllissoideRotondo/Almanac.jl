@@ -7,7 +7,8 @@ const ELEMENT_NAMES = (:x, :y, :z, :vx, :vy, :vz, :rmag, :vmag,
     :aol, :tlong, :period, :mean_motion, :ta_dot,
     :energy, :c3, :fpa, :semi_parameter, :semi_minor_axis,
     :hmag, :hx, :hy, :hz, :periapsis, :apoapsis,
-    :right_ascension, :declination, :velocity_declination, :light_time)
+    :right_ascension, :declination, :velocity_declination, :light_time,
+    :bplane_bt, :bplane_br, :bplane_mag, :bplane_angle, :bplane_ltof)
 
 """
     elements() -> NTuple{N,Symbol}
@@ -45,6 +46,17 @@ or the eccentricity vector, or `:energy`, for a zero position or velocity. Where
 throws `SpiceError(:degeneratecase)`, so no NaN is returned. `:raan` and `:aop` give 0 where the arc cosine has no value (an equatorial
 orbit has `:raan == 0`), π where its argument rounds above 1. `:period` is 0 for an orbit
 that is not elliptic, so `:ta_dot` is `Inf` there.
+
+The B-plane quantities (`:bplane_bt`, `:bplane_br`, `:bplane_mag`, `:bplane_angle`,
+`:bplane_ltof`) follow `BPlane` of ANISE (`b_t_km`, `b_r_km`, `b_plane_mag_km`,
+`b_plane_angle_deg`, `b_ltof`) with the angle in rad in [-π, π) and the linearized time of
+flight in s. The orbit is taken in the frame it is given, and the triad is built on the
+`+z` axis of that frame, as in ANISE; the orbit must be hyperbolic and in an inertial
+frame. They throw `SpiceError(:degeneratecase)` for `ecc <= 1` (ANISE: `NotHyperbolic`),
+for an incoming asymptote within `1e-12` of the `z` axis (ANISE: `InfiniteValue`), and
+`:bplane_ltof` also for `c3 <= 0` (ANISE takes `sqrt(c3)` there). ANISE returns the
+time of flight as a `Duration` of nanosecond resolution; `element` returns the unrounded
+value. See also [`vinf_periapsis`](@ref) and [`vinf_turn_angle`](@ref).
 
 The vectors `position`, `velocity`, `hvec` and `evec` are properties only: `element` throws for
 them, so that a name known only at run time never gives a union of scalar and vector.
@@ -97,6 +109,11 @@ function element(o::Orbit, name::Symbol)
     name === :hy && return _el_hy(o)
     name === :hz && return _el_hz(o)
     name === :light_time && return _el_light_time(o)
+    name === :bplane_bt && return _el_bplane_bt(o)
+    name === :bplane_br && return _el_bplane_br(o)
+    name === :bplane_mag && return _el_bplane_mag(o)
+    name === :bplane_angle && return _el_bplane_angle(o)
+    name === :bplane_ltof && return _el_bplane_ltof(o)
     throw(SpiceError(:badarg, "element: unknown name :$name; the names are " *
         join(elements(), ", ")))
 end
@@ -315,3 +332,106 @@ julia> k = keplerian(o); (round(k.sma), round(k.ecc; digits=3), k.inc, k.ta)
 """
 keplerian(o::Orbit) = (; sma=_el_sma(o), ecc=_el_ecc(o), inc=_el_inc(o), raan=_el_raan(o),
     aop=_el_aop(o), ta=_el_ta(o))
+
+# B-plane: ANISE `BPlane::new` (src/astro/orbit_hyperbolic.rs). The triad is built on the
+# +z axis of the frame of the orbit. Returns (b_t, b_r, s_hat) of the hyperbola.
+function _bplane(name::Symbol, o::Orbit)
+    ecc = _el_ecc(o)
+    ecc > 1 || _degenerate(name, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
+    e_hat = _evec_for(name, o) / ecc
+    h = _hvec_for(name, o)
+    n_hat = cross(h / norm(h), e_hat)
+    cos_nu = 1 / ecc
+    sin_nu = sqrt(1 - cos_nu^2)
+    s = cos_nu * e_hat + sin_nu * n_hat
+    s_hat = s / norm(s)
+    b_vec = _el_semi_minor_axis(o) * (sin_nu * e_hat - cos_nu * n_hat)
+    t = SVector(s_hat[2], -s_hat[1], zero(eltype(s_hat)))
+    t_norm = norm(t)
+    t_norm > 1e-12 || _degenerate(name, "the incoming asymptote is parallel to the z axis " *
+        "of the frame (|s x z| = $(t_norm) <= 1e-12)")
+    t_hat = t / t_norm
+    r_hat = cross(s_hat, t_hat)
+    return dot(b_vec, t_hat), dot(b_vec, r_hat), s_hat
+end
+
+_el_bplane_bt(o::Orbit) = _bplane(:bplane_bt, o)[1]
+_el_bplane_br(o::Orbit) = _bplane(:bplane_br, o)[2]
+function _el_bplane_mag(o::Orbit)
+    bt, br, _ = _bplane(:bplane_mag, o)
+    return sqrt(bt^2 + br^2)
+end
+# ANISE `between_pm_180` of the arc tangent: [-π, π), so an angle of exactly π is -π.
+function _el_bplane_angle(o::Orbit{T}) where {T}
+    bt, br, _ = _bplane(:bplane_angle, o)
+    a = atan(br, bt)
+    return a >= T(π) ? a - 2 * T(π) : a
+end
+function _el_bplane_ltof(o::Orbit)
+    _, _, s_hat = _bplane(:bplane_ltof, o)
+    c3 = _el_c3(o)
+    c3 > 0 || _degenerate(:bplane_ltof, "c3 = $(c3) <= 0, the excess speed is undefined")
+    return -dot(o.position, s_hat) / sqrt(c3)
+end
+
+# ANISE `vinf_periapsis_km` and `vinf_turn_angle_deg` (src/astro/orbit.rs, c3 form).
+function _vinf_hyperbolic(name::Symbol, o::Orbit)
+    ecc = _el_ecc(o)
+    ecc > 1 || _degenerate(name, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
+    return _el_c3(o)
+end
+
+"""
+    vinf_periapsis(o::Orbit, turn_angle::Real) -> T
+
+The periapsis radius in km of a flyby of the center of `o` that turns the excess velocity
+by `turn_angle` rad, for the excess speed of the hyperbola `o`:
+`(1 / cos((π - turn_angle) / 2) - 1) μ / C3`. This call has no CSPICE counterpart; it
+matches `Orbit.vinf_periapsis_km` of ANISE, with the angle in rad. It is the inverse of
+[`vinf_turn_angle`](@ref).
+
+Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic (`ecc <= 1`, ANISE:
+`NotHyperbolic`) or the result is NaN. A `turn_angle` of π gives 0.
+
+# Examples
+```jldoctest
+julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 12.0, 0.0], 0.0, 399, 1, 398600.4415);
+
+julia> rp = vinf_periapsis(o, vinf_turn_angle(o, 8000.0)); round(rp; digits=6)
+8000.0
+```
+"""
+function vinf_periapsis(o::Orbit, turn_angle::Real)
+    c3 = _vinf_hyperbolic(:vinf_periapsis, o)
+    cos_rho = cos((π - turn_angle) / 2)
+    return _nonan(:vinf_periapsis, (1 / cos_rho - 1) * getfield(o, :gm) / c3)
+end
+
+"""
+    vinf_turn_angle(o::Orbit, periapsis::Real) -> T
+
+The angle in rad, in [0, 2π), by which a flyby of the center of `o` with periapsis radius
+`periapsis` km turns the excess velocity of the hyperbola `o`:
+`π - 2 acos(1 / (1 + C3 periapsis / μ))`. This call has no CSPICE counterpart; it matches
+`Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad. It depends on the excess
+speed only, not on where along the trajectory `o` is. It is the inverse of
+[`vinf_periapsis`](@ref).
+
+Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic (`ecc <= 1`, ANISE:
+`NotHyperbolic`) or the arc cosine has no value (ANISE: NaN), as for a negative
+`periapsis` below `-μ / C3`.
+
+# Examples
+```jldoctest
+julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 12.0, 0.0], 0.0, 399, 1, 398600.4415);
+
+julia> round(rad2deg(vinf_turn_angle(o, 8000.0)); digits=3)
+44.331
+```
+"""
+function vinf_turn_angle(o::Orbit, periapsis::Real)
+    c3 = _vinf_hyperbolic(:vinf_turn_angle, o)
+    x = 1 / (1 + c3 * (periapsis / getfield(o, :gm)))
+    (isnan(x) || abs(x) > 1) && _degenerate(:vinf_turn_angle, "the arc cosine of $(x) has no value; ANISE returns NaN")
+    return _wrap(π - 2 * acos(x))
+end
