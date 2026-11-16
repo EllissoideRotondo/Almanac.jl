@@ -222,7 +222,7 @@ returned on an error, so a load that fails changes nothing.
 """
 function parse_json_kernel(path::AbstractString, yearbound::Int=1969,
         check::Bool=false)::TextKernel
-    isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
     r = _JSONReader(read(path), 1, String(path))
     length(r.text) >= 3 && r.text[1:3] == [0xef, 0xbb, 0xbf] && (r.pos = 4)
     out = Assignment[]

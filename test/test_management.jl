@@ -170,6 +170,8 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             @test_throws Almanac.SpiceError pxform(ctx, "J2000", "MOON_PA_DE440", epochs[1])
             # A missing file gives an error and leaves the context unchanged.
             @test throws_kind(() -> furnsh(ctx, joinpath(tmp, "absent.bsp")), :nosuchfile)
+            # a name longer than the system allows is a missing file, not an IOError
+            @test throws_kind(() -> furnsh(ctx, "B"^300), :nosuchfile)
             @test ktotal(ctx) == 1
             # A meta-kernel that lists a meta-kernel is an error, as in CSPICE.
             outer = joinpath(tmp, "outer.tm")

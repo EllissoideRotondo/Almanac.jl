@@ -193,7 +193,7 @@ The ID words `DAF/SPK`, `DAF/PCK` and `DAF/CK` are accepted, and also the old
 or CK, and `_daf_ckspk` decides from the first segment).
 """
 function open_daf(path::AbstractString)
-    isfile(path) || throw(SpiceError(:filenotfound, "no such file: $path"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "no such file: $path"))
     nbytes = filesize(path)
     nbytes >= 2 * _DAF_RECLEN || throw(SpiceError(:baddaf,
         "file of $nbytes bytes is too short to be a DAF: $path"))

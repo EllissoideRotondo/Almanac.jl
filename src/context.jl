@@ -130,7 +130,7 @@ bound `yearbound` of `tsetyr` and the range check `check` of `tparch` for its `@
 dates); throws `SpiceError` if the file does not exist.
 """
 function read_kernel(path::AbstractString, yearbound::Int=1969, check::Bool=false)
-    isfile(path) || throw(SpiceError(:nosuchfile, "kernel file not found: $path"))
+    _isfile(path) || throw(SpiceError(:nosuchfile, "kernel file not found: $path"))
     arch = kernel_arch(path)
     arch === :DSK && return open_dsk(path)
     arch === :EK && return open_ek(path)

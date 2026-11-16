@@ -230,7 +230,7 @@ See also [`ekfind`](@ref), [`ekntab`](@ref).
 function eklef(ctx::SpiceContext, path::AbstractString)::String
     _chk_filename("eklef", path)
     p = String(path)
-    isfile(p) || throw(SpiceError(:filenotfound, "eklef: kernel file not found: $p"))
+    _isfile(p) || throw(SpiceError(:filenotfound, "eklef: kernel file not found: $p"))
     kernel_arch(p) === :EK || throw(SpiceError(:wrongarchitecture,
         "eklef: the file $p is not an EK file"))
     furnsh(ctx, p)

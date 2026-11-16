@@ -264,7 +264,7 @@ file of the type SPK, `:unsupportedbff` if it has the other byte order, and
 """
 function spkopa(path::AbstractString)
     _chk_filename("spkopa", path)
-    isfile(path) || throw(SpiceError(:filenotfound,
+    _isfile(path) || throw(SpiceError(:filenotfound,
         "spkopa: the file $path is not recognized as an existing file"))
     arch, kind = getfat(path)
     (arch == "DAF" && kind == "SPK") || throw(SpiceError(:fileisnotspk, "spkopa: the file " *

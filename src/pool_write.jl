@@ -362,7 +362,7 @@ file does not exist and `SpiceError(:badkernel)` if an assignment is malformed.
 """
 function ldpool(ctx::SpiceContext, fname::AbstractString)
     isempty(fname) && throw(SpiceError(:emptystring, "ldpool: the file name is empty"))
-    isfile(fname) || throw(SpiceError(:fileopenfailed, "ldpool: could not open $fname"))
+    _isfile(fname) || throw(SpiceError(:fileopenfailed, "ldpool: could not open $fname"))
     defs = timedefaults(ctx)
     tk = parse_text_kernel(String(fname), defs.yearbound, defs.check)
     return _pool_x_edit!(pool -> _pool_x_apply!(pool, tk), ctx)

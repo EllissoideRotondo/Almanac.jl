@@ -263,7 +263,7 @@ kind `:emptystring`, `:blankfilename`, `:filenotfound`, `:filereadfailed`,
 """
 function _daf_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
-    isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
     raw, little = open(path, "r") do io
         raw = read(io, _DAF_RECLEN)
         length(raw) == _DAF_RECLEN || throw(SpiceError(:filereadfailed,
@@ -436,7 +436,7 @@ fewer than 12 bytes and no complete line.
 """
 function getfat(path::AbstractString)
     _chk_filename("getfat", path)
-    isfile(path) || throw(SpiceError(:filenotfound, "getfat: the kernel file $path does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "getfat: the kernel file $path does not exist"))
     head = open(io -> read(io, 12), path, "r")
     # A file of fewer than 12 bytes that has no complete line cannot be read by CSPICE.
     (length(head) < 12 && !(UInt8('\n') in head)) && throw(SpiceError(:filereadfailed,

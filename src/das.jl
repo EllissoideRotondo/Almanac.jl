@@ -117,7 +117,7 @@ before the binary-file-format string (bytes 85 to 92 zero) is taken as native.
 """
 function _das_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
-    isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
     raw = open(io -> read(io, _DAS_RECLEN), path, "r")
     length(raw) == _DAS_RECLEN || throw(SpiceError(:filereadfailed,
         "$who: $path is too short ($(length(raw)) bytes) to hold a DAS file record"))

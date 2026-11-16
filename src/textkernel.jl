@@ -22,7 +22,7 @@ Throws `SpiceError(:filenotfound)` for a missing file and `SpiceError(:notsuppor
 another binary kernel type.
 """
 function kernel_arch(path::AbstractString)::Symbol
-    isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
     head = open(io -> read(io, 16), path)
     n = length(head)
     idword = String(head[1:min(n, 8)])
@@ -463,7 +463,7 @@ A file whose name ends in `.json` is read by `parse_json_kernel` instead.
 """
 function parse_text_kernel(path::AbstractString, yearbound::Int=1969,
         check::Bool=false)::TextKernel
-    isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
     is_json_kernel(path) && return parse_json_kernel(path, yearbound, check)
     text = read(path, String)
     return parse_text_lines(path, _physical_lines(text), yearbound, check)
