@@ -4,7 +4,8 @@
 # so the values differ from ANISE by the rounding of the conversions only. Everything that
 # decides (a branch, a convergence test) does so on `primal`, as the rest of the package.
 
-# The Earth's J2, used whatever the center, as ANISE does.
+# The Earth's J2. The mean elements are those of the Earth only: a center other than
+# body 399 is an error, as in ANISE.
 const J2_EARTH = 1.082_626_925_638_815e-3
 
 _brouwer_fail(msg::AbstractString) = throw(SpiceError(:degeneratecase,

@@ -40,7 +40,7 @@ wrong sign for the eccentricity (a positive one for `ecc > 1`, a negative one fo
 
 `gm` (km³/s²) defaults to the `BODYnnn_GM` of the kernel pool, and then so do the radii
 of `center`; with `gm` given, the radii are NaN and the call reads no kernels when
-`center` and `frame` are NAIF IDs. With a [`KernelSet`](@ref) or a
+`center` and `frame` are NAIF IDs. With a `KernelSet` or a
 [`SpiceContext`](@ref) first the kernels are those of the snapshot or of the context;
 without, those of the default context. The elements and the epoch may be dual numbers.
 

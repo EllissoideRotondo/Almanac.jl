@@ -44,8 +44,8 @@ The rotation from a local frame of the orbit `o` to the frame of `o`. This call 
 CSPICE counterpart; it matches `Orbit::dcm3x3_from_ric_to_inertial`, `..._vnc_...`,
 `..._rcn_...` and `..._tnw_...` of ANISE.
 
-`kind` is `:ric`, `:vnc`, `:rcn` or `:tnw`. With `r̂ = r/|r|`, `v̂ = v/|v|` and `ĥ = r × v/|r × v|`,
-the columns are the axes of the local frame in the frame of `o`:
+`kind` is `:ric`, `:vnc`, `:rcn` or `:tnw`. With `r̂ = r/|r|`, `v̂ = v/|v|` and
+`ĥ = r × v/|r × v|`, the columns are the axes of the local frame in the frame of `o`:
 
 | `kind` | columns |
 |:--|:--|
@@ -64,11 +64,8 @@ the angular momentum is zero, which is where ANISE fails in `hvec()` or `hmag()`
 ```jldoctest
 julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415);
 
-julia> local_frame(o, :ric)
-3×3 SMatrix{3, 3, Float64, 9} with indices SOneTo(3)×SOneTo(3):
- 1.0  0.0  0.0
- 0.0  1.0  0.0
- 0.0  0.0  1.0
+julia> local_frame(o, :ric) == [1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0]
+true
 ```
 """
 local_frame(o::Orbit, kind::Symbol) = _local_frame_pair(:local_frame, o, kind)[1]
@@ -78,8 +75,9 @@ local_frame(o::Orbit, kind::Symbol) = _local_frame_pair(:local_frame, o, kind)[1
 
 The rotation of states from a local frame of the orbit `o` to the frame of `o`, in the
 block form `[R 0; Ṙ R]`, where `R` is [`local_frame`](@ref)`(o, kind)` and `Ṙ` its time
-derivative along the two-body motion of `o`. This call has no CSPICE counterpart; it matches
-`Orbit::dcm_from_ric_to_inertial`, `..._vnc_...`, `..._rcn_...` and `..._tnw_...` of ANISE.
+derivative along the two-body motion of `o`. This call has no CSPICE counterpart; it
+matches `Orbit::dcm_from_ric_to_inertial`, `..._vnc_...`, `..._rcn_...` and
+`..._tnw_...` of ANISE.
 
 ANISE takes `Ṙ` from the difference of the matrices of two states 1 ms before and after
 the epoch; here `Ṙ` is the analytic derivative: `ṙ = v` and `v̇ = -gm r/|r|³`, and the
@@ -113,10 +111,11 @@ end
 
 The state of the orbit `o` relative to the orbit `chief`, in the local frame `kind` of
 `chief`: the difference `o.state - chief.state` multiplied by the inverse of
-[`local_frame_state`](@ref)`(chief, kind)`, which is `[Rᵀ 0; Ṙᵀ Rᵀ]` because `RᵀṘ` is skew:
-the position is `Rᵀ dr` and the velocity `Ṙᵀ dr + Rᵀ dv`. This call has no CSPICE counterpart; it matches `Orbit::ric_difference_unchecked`,
-`vnc_difference_unchecked` and `tnw_difference_unchecked` of ANISE (`kind` `:ric` or
-`:rcn`, `:vnc`, `:tnw`), with the rate of the frame exact.
+[`local_frame_state`](@ref)`(chief, kind)`, which is `[Rᵀ 0; Ṙᵀ Rᵀ]` because `RᵀṘ` is
+skew: the position is `Rᵀ dr` and the velocity `Ṙᵀ dr + Rᵀ dv`. This call has no CSPICE
+counterpart; it matches `Orbit::ric_difference_unchecked`, `vnc_difference_unchecked` and
+`tnw_difference_unchecked` of ANISE (`kind` `:ric` or `:rcn`, `:vnc`, `:tnw`), with the
+rate of the frame exact.
 
 Both orbits must have the same epoch, center and frame, as `ric_difference` requires. The
 result is the position and velocity of the difference, with the components in the axes
@@ -131,14 +130,8 @@ julia> chief = Orbit([7000.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415
 
 julia> o = Orbit([7001.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415);
 
-julia> relative_state(o, chief, :ric)
-6-element SVector{6, Float64} with indices SOneTo(6):
- 1.0
- 0.0
- 0.0
- 0.0
- 0.0
- 0.0
+julia> round.(Tuple(relative_state(o, chief, :ric)); digits=6)
+(1.0, 0.0, 0.0, 0.0, -0.001071, 0.0)
 ```
 """
 function relative_state(o::Orbit{S}, chief::Orbit{U}, kind::Symbol) where {S,U}

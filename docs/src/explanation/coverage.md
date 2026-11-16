@@ -56,3 +56,32 @@ Three limits hold in CSPICE as well, because they come from the size of a number
 - The rotation angle of the Earth in `IAU_EARTH` grows to about 50,000 rad this century; its rounding alone moves the Sun by some meters in that frame.
 - An aberration-corrected position has millimeter steps at the boundaries between SPK [records](@ref "Exact derivatives and the rates of CSPICE"), because target and observer are evaluated at different epochs and cross a boundary at different times.
 - `spkezr` and `spkpos` differ by up to 2e-11 relative with the converged corrections (`CN`, `CN+S`), because they stop iterating by different rules.
+
+## Beyond CSPICE
+
+The calls of [Orbits](@ref) (`Orbit`, `element`, `keplerian_orbit`, `two_body`, the local frames and the rest) have no CSPICE counterpart, so the claims above about agreement with CSPICE and about rounding do not cover them. They follow the source of ANISE (main, commit `b3aaadc`, 1.0.0-beta of 2026-11-15) function by function, including its error and fallback cases. A released ANISE differs from that commit in some definitions. The calls are checked in the test group `analysis_orbit`, with the results below measured in the default run; where CSPICE has an equivalent routine, it is the reference.
+
+| Check | What it compares | Measured result |
+|---|---|---|
+| GMAT cases | The Keplerian elements of three Cartesian and Keplerian state pairs (circular inclined, elliptical, circular equatorial), the equatorial and the two hyperbolic cases, and 24 flight path angles, with the values GMAT gave to the tests of ANISE; angles modulo 2π | largest scaled difference 4.0e-13 (limit 1e-12); flight path angles 2.2e-16 |
+| `oscltx` | `sma`, `ecc`, `inc`, `raan`, `aop`, `ma`, `ta` and `period` of 200 random orbits with the output of `oscltx` | relative 9.6e-15 (periapsis), 2.7e-15 (`ecc`), 1.3e-15 (`inc`), 4.0e-13 (`raan`), 1.1e-14 (`aop`), 2.2e-12 (`ta`), 1.1e-11 (`ma`), 2.8e-15 (`sma`, `period`) |
+| `recgeo` | `latitude`, `longitude` and `height` at 900 random points about three bodies, one of them flattened by 0.1, with `recgeo` | latitude 3.9e-16, longitude 4.4e-16, height 1.1e-15 (in radians and equatorial radii) |
+| Vallado | Longitude, geodetic latitude, height and the altitudes of Examples 3-3 and 3-4 of Vallado, with the radii that ANISE uses | 2.2e-16 rad (latitude), 1.1e-16 rad (longitude), 2.1e-12 km (height), 4.2e-12 km (altitudes) |
+| GMAT B-plane | `bplane_bt`, `bplane_br`, `bplane_mag` and `bplane_angle` of one hyperbolic case with the values of GMAT | 0.117 km, 0.649 km, 0.230 km and 2.0e-5 rad (the limits of ANISE are 1 km and 0.01°; the cause of the 0.65 km is not isolated) |
+| Davis | The hyperbolic anomaly of the state of the lecture of Davis, as ANISE tests it, and `vinf_periapsis` as the inverse of `vinf_turn_angle` | hyperbolic anomaly 1.1e-11 rad; inverse 1.1e-13 km |
+| `conics` | `keplerian_orbit` against the state of `conics` for 200 random orbits | position 1.2e-12, velocity 2.5e-12 (relative) |
+| `prop2b` | `two_body` over ±10 periods against `prop2b` | position 1.3e-12, velocity 9.2e-13, `sma` 5.8e-15 (relative) |
+| ANISE test cases | The round trips of Brouwer mean elements, `with_element` and `with_apsides` on the loops of `verif_with_init`, and `two_body` on `verif_orbit_at_epoch`, as ANISE tests them | Brouwer: `sma` 3.1e-11 km and angles up to 3e-11 rad for a low orbit, 2.4e-9 km for a transfer orbit; `with_element` and `with_apsides` at most 1.5e-11; `verif_orbit_at_epoch` `aop` 3.3e-8 rad (the limit of ANISE is 5.2e-8) |
+| Identities | `aol = aop + ta`, `c3 = 2 energy`, `mean_motion`, the hyperbolic functions of `ha`, the B-plane and the v-infinity formulas, the conversion back from equinoctial elements, `relative_state(o, o) == 0`, orthonormal local frames, the inverse of `local_frame_state` | at most 2.0e-14, except `aol` 2.2e-12; equinoctial conversion 3.1e-15; orthonormality 5.6e-16 |
+| Derivatives | The exact rate of `local_frame_state` against `ForwardDiff.derivative` of the frame of `two_body`; the derivative of the state of `two_body` with respect to the epoch, a `Dual` epoch, against the velocity and the acceleration of two-body motion | 1.2e-15 1/s for the frame rate; 2.9e-12 relative for the state |
+| Allocation | A static proof (AllocCheck.jl) that `element`, `keplerian`, `with_element`, `two_body`, `local_frame`, `local_frame_state` and `relative_state` cannot allocate ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_alloccheck.jl)) | no possible allocation in any of the seven |
+| ANISE | Every element and local frame of a few thousand random states about the Earth and Mars with the same state, epoch and GM | planned (group `anise`, opt-in); not yet written, so not yet run |
+
+Four points are deliberate and are not defects:
+
+- **Brouwer elements.** They are those of the Earth. As in ANISE, a center other than body 399 is an error. For an inclination above 175° the argument of periapsis carries an error of ANISE's pseudo-state, about twice the short-period correction of that angle (0.6° for an orbit of 7200 km); it is reproduced, not corrected. The round trip of the retrograde test case differs by 1.09e-2 rad in `aop` for that reason.
+- **Hyperbolic `two_body`.** ANISE recovers the mean anomaly after a step as the mean longitude minus `atan2(h, k)`; for a hyperbola, whose mean anomaly has no period, that is wrong by a multiple of 2π when `raan + aop` lies outside (-π, π]. `two_body` advances the mean anomaly of a hyperbola directly, so its states can differ from those of ANISE there; elliptical orbits use the formula of ANISE.
+- **Frame rate.** ANISE takes the rate of a local frame from the difference of two frames 1 ms apart. `local_frame_state` uses the exact rate of two-body motion, so it differs by the error of that difference quotient.
+- **No NaN.** Where ANISE returns NaN for an undefined quantity, the calls throw `SpiceError(:degeneratecase)`.
+
+The test group is in the default run, which has a budget of 120 s for all groups; `analysis_orbit` takes 16 to 30 s of it.

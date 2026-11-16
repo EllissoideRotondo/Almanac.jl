@@ -13,8 +13,7 @@ radii (km). This call has no CSPICE counterpart; it matches the `Orbit` of ANISE
 epoch `et` (seconds past J2000 TDB). The orbit is taken in the frame it is given; no
 rotation is applied. The number type `T` of the orbit is the promoted type of `state`,
 `et` and `Float64`, so every element has the one type `T`, and a dual number in either
-flows through every element. `gm` and `radii`
-stay `Float64`.
+flows through every element. `gm` and `radii` stay `Float64`.
 
 The form with `gm` needs no kernels; `radii` defaults to NaN, which is what an unknown
 radius is. The form with `center` and `frame` as names or NAIF IDs reads `BODYnnn_GM`
@@ -22,8 +21,8 @@ and, when present, `BODYnnn_RADII` of the kernel pool; see [`orbit`](@ref) for t
 state from the kernels.
 
 The fields are `state`, `et`, `center`, `frame`, `gm` and `radii`. The properties
-`position`, `velocity`, `hvec` and `evec` (the eccentricity vector) are `SVector{3,T}`; every symbol of [`elements`](@ref)
-is a property too (see [`element`](@ref)).
+`position`, `velocity`, `hvec` and `evec` (the eccentricity vector) are `SVector{3,T}`;
+every symbol of [`elements`](@ref) is a property too (see [`element`](@ref)).
 
 Throws `SpiceError(:badarg)` if `state` does not have 6 elements or `radii` 3, and
 `SpiceError(:kernelvarnotfound)` if the pool has no GM for `center`.

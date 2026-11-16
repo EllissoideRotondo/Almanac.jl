@@ -26,6 +26,7 @@ Use the wrapper [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl) instead when 
 - [First session](@ref): load kernels, compute a state, a rotation and a sub-observer point, search for events.
 - [Differences from CSPICE](@ref): read before porting a CSPICE or SPICE.jl program.
 - The how-to guides cover [threads and contexts](@ref "Contexts and threads"), [derivatives](@ref "Time derivatives"), [tables](@ref "Ephemeris and rotation tables"), [user-defined bodies](@ref "Bodies and frames from your own functions"), [event searches](@ref "Event searches") and [writing kernels](@ref "Writing kernels").
+- [Orbits and relative motion](@ref) covers the analysis calls that CSPICE does not have: orbital elements, two-body propagation and local frames.
 
 The examples run on three small kernels that the manual writes itself: leap seconds, constants of the Sun and the Earth with a spacecraft named `PROBE`, and two-body orbits of the Earth and of `PROBE`. Positions are therefore not those of the real bodies.
 

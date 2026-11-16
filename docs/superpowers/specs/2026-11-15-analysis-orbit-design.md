@@ -166,9 +166,11 @@ recorded because they are not obvious:
   returns the same value. The tests list each case with ANISE's behavior.
 - `:altitude` uses the mean equatorial radius (mean of the first two radii); `:height` is
   geodetic, on the ellipsoid of the center with ANISE's closed-form algorithm.
-- The Brouwer mean elements use the Earth's J2 (`1.082626925638815e-3`) whatever the
-  center, as ANISE does, and are documented as valid for the Earth only; ANISE's validity
-  test (`inc <= 180` deg, `ecc < 1`, periapsis >= 3000 km) becomes a `SpiceError`.
+- The Brouwer mean elements use the Earth's J2 (`1.082626925638815e-3`) and are valid for
+  the Earth only: a center other than body 399 is a `SpiceError(:degeneratecase)`, as in
+  ANISE's source (`ephem_origin_id_match(399)`; ruling R10, which corrects an earlier
+  version of this bullet that said "whatever the center"). ANISE's other validity tests
+  (`inc <= 180` deg, `ecc < 1`, periapsis >= 3000 km) become a `SpiceError` too.
 
 ### Building and editing
 
