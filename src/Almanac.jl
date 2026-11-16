@@ -69,7 +69,7 @@ export gfdist, gfsep, gfposc, gfrr, gfpa, gfuds, gfudb, gfevnt, gfstol, gfrefn, 
 export gfsubc, gfsntc, gfilum, gfoclt, gftfov, gfrfov, gfocce, gffove
 export add_ephemeris!, add_frame!
 export StateQuery, state_query, RotationQuery, rotation_query
-export Orbit, orbit, element, elements
+export Orbit, orbit, element, elements, keplerian
 export EphemerisTable, ephemeris_table, table_position, table_state, table_jet, table_span
 export RotationTable, rotation_table, table_rotation, table_rotation_jet, table_to_spk
 export EKColumnAttr, EKSegmentSummary

@@ -22,7 +22,7 @@ and, when present, `BODYnnn_RADII` of the kernel pool; see [`orbit`](@ref) for t
 state from the kernels.
 
 The fields are `state`, `et`, `center`, `frame`, `gm` and `radii`. The properties
-`position`, `velocity` and `hvec` are `SVector{3,T}`; every symbol of [`elements`](@ref)
+`position`, `velocity`, `hvec` and `evec` (the eccentricity vector) are `SVector{3,T}`; every symbol of [`elements`](@ref)
 is a property too (see [`element`](@ref)).
 
 Throws `SpiceError(:badarg)` if `state` does not have 6 elements or `radii` 3, and
@@ -88,7 +88,7 @@ end
 orbit(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString, obs::NameOrID) =
     orbit(default_context(), targ, et, ref, abcorr, obs)
 
-const _ORBIT_VECTORS = (:position, :velocity, :hvec)
+const _ORBIT_VECTORS = (:position, :velocity, :hvec, :evec)
 
 function Base.getproperty(o::Orbit, s::Symbol)
     hasfield(Orbit, s) && return getfield(o, s)
@@ -97,6 +97,7 @@ function Base.getproperty(o::Orbit, s::Symbol)
     s === :velocity && return SVector(getfield(o, :state)[4], getfield(o, :state)[5],
         getfield(o, :state)[6])
     s === :hvec && return _hvec(o)
+    s === :evec && return _evec_for(:evec, o)
     s in elements() && return element(o, s)
     throw(SpiceError(:badarg, "Orbit: no field, vector or element :$s; the elements are " *
         join(elements(), ", ")))
