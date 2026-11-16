@@ -14,9 +14,13 @@
 #
 # Both libraries get the same Cartesian state, epoch and GM; the radii are given to the ANISE
 # `Frame` as an `Ellipsoid`, so no ANISE data file is needed. A difference is
-# |a - b| / max(|a|, |b|, 1) (angles: the circular difference in rad); where one library has no
-# value (a thrown error, or NaN) and the other has, the state is counted as a definedness
-# mismatch, and where neither has one the state counts as "both undefined".
+# |a - b| / max(|a|, |b|, 1), where for an angle (rad) |a - b| is the circular difference; where
+# one library has no value (a thrown error, or NaN) and the other has, the state is counted as a
+# definedness mismatch, and where neither has one the state counts as "both undefined". The
+# range convention of each angle ((-pi, pi] or [0, 2 pi]) is checked separately, because the
+# circular difference cannot see it. The tolerance of the conditioned quantities is in units of
+# their error model: angles of near-circular orbits in eps/ecc, rates in eps/(2 ms), the
+# rounding error of the difference quotient of ANISE.
 
 using Test, Random, Printf, StaticArrays, LinearAlgebra
 using Almanac
@@ -27,6 +31,7 @@ const AT = pyimport("anise.time")
 
 const FULL = get(ENV, "ALMANAC_TEST_FULL", "0") == "1"
 const N = FULL ? 20000 : 2000                     # states per class
+# the variables and defaults of test/helpers.jl (not included: it loads the CSPICE oracle)
 const SEED = parse(Int, get(ENV, "ALMANAC_TEST_SEED", "20261011"))
 const T0 = time()
 
@@ -36,6 +41,11 @@ const ANISE_VERSION = pyconvert(String, pyimport("importlib.metadata").version("
 # What is known to differ
 # ---------------------------------------------------------------------------------------------
 
+# Evidence for the entries of `pin`: the sdist of 1.0.0b0, src/astro/orbit.rs, compared with
+# the source of main at b3aaadc (diff of orbit.rs: ta check in try_keplerian, fpa, vinf_*, TNW).
+#   https://files.pythonhosted.org/packages/3f/68/054a14788661f4db8803f4c4cd3fdee5ffbf3304efb3cadc041d829e519f/anise-1.0.0b0.tar.gz
+#   sha256 b01ab498ba5f0949c55cdd43acf7ecb56a231df3ed49db870a536f704507ecf4
+# (ma_deg and hyperbolic_anomaly_deg are identical in both, so they are tested.)
 const KNOWN_DIFFERENT_IN_PIN = (
     # (a) 1.0.0b0 differs from main by definition (checked in the sdist of 1.0.0b0, orbit.rs).
     pin = Dict(
@@ -48,8 +58,7 @@ const KNOWN_DIFFERENT_IN_PIN = (
     ),
     # (b) deliberate deviations of Almanac.jl, which stay after the pin moves.
     deliberate = Dict(
-        "*:hyprate" => "ANISE takes the rate of a local frame (and the velocity of a relative state) from two at_epoch states 1 ms apart; for a hyperbola at_epoch differs (R11 above, and 1.0.0b0 raises for an inbound leg), so these rates are reported only",
-        "two_body:hyp_wrap" => "R11: ANISE recovers M as lambda - atan2(h, k), off by 2 pi j for a hyperbola when raan + aop > pi; Almanac advances M_h directly",
+        "two_body:hyp_wrap" => "R11 (also the keys ending in :hyp_wrap: the rates of a local frame, which ANISE differences over at_epoch): ANISE recovers M as lambda - atan2(h, k), off by 2 pi j for a hyperbola when raan + aop > pi; Almanac advances M_h directly",
     ),
 )
 
@@ -132,24 +141,34 @@ mutable struct Acc
     maxd::Float64
     worst::String
     mexample::String
+    maxn::Float64           # the tested value: the difference in units of its error model
+    worstn::String
+    normalised::Bool
+    range::Int              # angle outside its range convention
+    rexample::String
 end
-Acc() = Acc(0, 0, 0, 0.0, "", "")
+Acc() = Acc(0, 0, 0, 0.0, "", "", 0.0, "", false, 0, "")
 const ACCS = Dict{String,Acc}()
 acc(key) = get!(ACCS, key, Acc())
 
 describe(s::Sample) = @sprintf("%s %d et=%.0f state=%s", s.cls, s.body.id, s.et, repr(collect(s.o.state)))
 
-function record!(key, d, s, extra="")
+function record!(key, d, s, extra=""; nv=d)
     a = acc(key)
     a.n += 1
     if d > a.maxd || a.worst == ""
         a.maxd = d
         a.worst = describe(s) * extra
     end
+    if nv > a.maxn || a.worstn == ""
+        a.maxn = nv
+        a.worstn = describe(s) * extra
+    end
+    nv === d || (a.normalised = true)
     return a
 end
 # x, y: the value of Almanac and of ANISE, `nothing` where undefined. `dist(x, y)` is the difference.
-function pair!(key, x, y, s, dist; extra="")
+function pair!(key, x, y, s, dist; extra="", nfun=nothing)
     a = acc(key)
     if x === nothing && y === nothing
         a.both_undef += 1
@@ -158,7 +177,8 @@ function pair!(key, x, y, s, dist; extra="")
         a.mexample == "" && (a.mexample = (x === nothing ? "Almanac undefined, ANISE " * string(y) :
             "ANISE undefined, Almanac " * string(x)) * " | " * describe(s) * extra)
     else
-        record!(key, dist(x, y), s, extra)
+        d = dist(x, y)
+        record!(key, d, s, extra; nv=nfun === nothing ? d : nfun(x, y))
     end
     return nothing
 end
@@ -168,14 +188,68 @@ function scalar_dist(x, y; angle=false)
     d = angle ? abs(mod(x - y + pi, 2pi) - pi) : abs(x - y)
     return d / max(abs(x), abs(y), 1.0)
 end
-outcome!(key, x, y, s; angle=false, extra="") =
-    pair!(key, x, y, s, (p, q) -> scalar_dist(p, q; angle), extra=extra)
+outcome!(key, x, y, s; angle=false, extra="", nfun=nothing) =
+    pair!(key, x, y, s, (p, q) -> scalar_dist(p, q; angle), extra=extra, nfun=nfun)
+
+# Error model of the angles: they come from the arc cosine of a normalised dot product, whose
+# rounding error eps is amplified by 1/sin(angle), and the vectors it uses (the eccentricity
+# vector, the node vector) have a relative error eps/ecc and eps/sin(inc). The difference is
+# measured in units of eps (1/ecc + 1/sin inc) / max(|sin angle|, 1e-8), the angle being the true
+# anomaly (ta, ma, ea), the argument of periapsis (aop), or the larger of the two amplifiers
+# (the rebuilt states). ecc is that of the sample, at most 1.
+function cond_scale(s::Sample, which::Symbol)
+    f(x) = 1 / max(abs(sin(x)), 1e-8)
+    base = 1 / min(s.o.ecc, 1.0) + 1 / max(sin(s.o.inc), 1e-8)
+    fac = which === :ta ? f(s.o.ta) : which === :aop ? f(s.o.aop) : max(f(s.o.ta), f(s.o.aop))
+    return eps() * base * fac
+end
+const COND_KEYS = Dict("el:ta" => :ta, "el:ma" => :ta, "el:ea" => :ta, "el:aop" => :aop,
+    "with_element:ta" => :both, "with_element:aop" => :both, "with_apsides" => :both)
+# Error model of a rate: ANISE differences two at_epoch states 1 ms apart. at_epoch solves the
+# Kepler equation with a Newton iteration that stops when two iterates differ by MA_EPSILON =
+# 1e-12 (src/astro/utils.rs) and returns the older one, so each state carries an error up to
+# 1e-12 rad in the anomaly and the rate an error up to 1e-12/(2 ms) = 5e-10 (absolute). The
+# difference of a rate is measured in units of that.
+const RATE_UNIT = 2e-3 / 1e-12
+is_rate(key) = occursin(r"^lf:\w+:Rdot", key) || occursin(r"^rel:\w+:vel", key)
+
+# Suffix of the key of the quantities that ANISE differences over at_epoch (rates): an
+# outbound hyperbola with raan + aop <= pi is as good as an ellipse, :hyp_wrap is R11, and an
+# inbound leg is rejected by 1.0.0b0.
+function hyp_suffix(s::Sample)
+    s.o.ecc > 1 || return ""
+    s.o.ta > pi && return ":hypin"
+    return s.o.raan + s.o.aop > pi ? ":hyp_wrap" : ":hyp"
+end
+
+# range convention of the angle elements (both ends inclusive, with a slack of 1e-12 rad)
+const RANGES = Dict(:inc => (0.0, pi), :raan => (0.0, 2pi), :aop => (0.0, 2pi), :ta => (0.0, 2pi),
+    :ea => (-pi, pi), :ha => (0.0, 2pi), :aol => (0.0, 2pi), :tlong => (0.0, 2pi),
+    :right_ascension => (0.0, 2pi), :declination => (-pi / 2, pi / 2),
+    :latitude => (-pi / 2, pi / 2), :longitude => (-pi, pi),
+    :brouwer_inc => (0.0, pi), :brouwer_raan => (0.0, 2pi), :brouwer_aop => (0.0, 2pi),
+    :brouwer_ma => (0.0, 2pi), :ma => (0.0, 2pi))   # :ma of an ellipse only
+function check_range!(name, x, y, s)
+    haskey(RANGES, name) || return
+    name === :ma && s.o.ecc > 1 && return
+    lo, hi = RANGES[name]
+    for (who, v) in (("Almanac", x), ("ANISE", y))
+        (v === nothing || lo - 1e-12 <= v <= hi + 1e-12) && continue
+        a = acc("el:$name")
+        a.range += 1
+        a.rexample == "" && (a.rexample = "$who $v outside [$lo, $hi] | " * describe(s))
+    end
+end
 
 # Python errors seen, by message (ANISE raises for an undefined quantity)
 const PYERRORS = Dict{String,Int}()
 function pyerr!(e)
     e isa PyException || return false
+    # ANISE raises the type `Exception` (a PhysicsError); any other type (an AttributeError of a
+    # misspelled method, a TypeError) is a failure of this file, not an undefined quantity
+    pyis(e.t, pybuiltins.Exception) || return false
     k = first(split(sprint(showerror, e), '\n'))
+    k = replace(k, r"-?\d+(\.\d+)?(e[-+]?\d+)?" => "<x>")
     k = length(k) > 110 ? k[1:110] : k
     PYERRORS[k] = get(PYERRORS, k, 0) + 1
     return true
@@ -269,7 +343,9 @@ function compare_elements!(s::Sample)
         angle = measure === :ang
         # the hyperbolic mean anomaly is unbounded, not an angle modulo 2 pi
         name === :ma && s.o.ecc > 1 && (angle = false)
-        outcome!("el:$name", x, y, s; angle)
+        check_range!(name, x, y, s)
+        outcome!("el:$name", x, y, s; angle,
+            nfun=haskey(COND_KEYS, "el:$name") ? (p, q) -> scalar_dist(p, q; angle) / cond_scale(s, COND_KEYS["el:$name"]) : nothing)
     end
 end
 
@@ -316,7 +392,8 @@ function compare_local_frames!(s::Sample)
         d3 !== nothing && any(isnan, d3) && (d3 = nothing)
         d6 !== nothing && any(isnan, d6) && (d6 = nothing)
         pair!("lf:$kind:R", R, d3, s, (p, q) -> maximum(abs.(p .- q)))
-        pair!("lf:$kind:Rdot" * (s.o.ecc > 1 ? ":hyprate" : ""), Rd, d6, s, (p, q) -> maxrel(p, q, 1e-12))
+        pair!("lf:$kind:Rdot" * hyp_suffix(s), Rd, d6, s, (p, q) -> maxrel(p, q, 1e-12),
+            nfun=(p, q) -> maximum(abs.(p .- q)) * RATE_UNIT)
     end
 end
 
@@ -341,8 +418,10 @@ function compare_relative!(rng, s::Sample)
         y !== nothing && any(isnan, y) && (y = nothing)
         for (part, r) in ((:pos, 1:3), (:vel, 4:6))
             fl = part === :pos ? 1.0 : 1e-3
-            pair!("rel:$kind:$part" * (part === :vel && s.o.ecc > 1 ? ":hyprate" : ""), x, y, s,
-                (p, q) -> norm(p[r] - q[r]) / max(norm(p[r]), norm(q[r]), fl))
+            vel = part === :vel
+            pair!("rel:$kind:$part" * (vel ? hyp_suffix(s) : ""), x, y, s,
+                (p, q) -> norm(p[r] - q[r]) / max(norm(p[r]), norm(q[r]), fl);
+                nfun=vel ? (p, q) -> norm(p[r] - q[r]) * RATE_UNIT / norm(dr) : nothing)
         end
     end
 end
@@ -365,7 +444,9 @@ end
 function compare_states!(key, xo, y, s; extra="")
     pair!(key, xo === nothing ? nothing : collect(xo.state), y, s, (x, y) ->
         max(norm(x[1:3] - y[1:3]) / max(norm(x[1:3]), norm(y[1:3]), 1.0),
-            norm(x[4:6] - y[4:6]) / max(norm(x[4:6]), norm(y[4:6]), 1e-3)); extra=extra)
+            norm(x[4:6] - y[4:6]) / max(norm(x[4:6]), norm(y[4:6]), 1e-3)); extra=extra,
+        nfun=haskey(COND_KEYS, key) ? (p, q) -> max(norm(p[1:3] - q[1:3]) / max(norm(p[1:3]), norm(q[1:3]), 1.0),
+            norm(p[4:6] - q[4:6]) / max(norm(p[4:6]), norm(q[4:6]), 1e-3)) / cond_scale(s, COND_KEYS[key]) : nothing)
 end
 
 # the key gets the suffix ":hypin" where the Almanac result is an inbound hyperbola
@@ -464,7 +545,7 @@ end
 # ---------------------------------------------------------------------------------------------
 
 function run_all()
-    rng = MersenneTwister(SEED)
+    rng = Xoshiro(SEED)
     samples = Sample[]
     for cls in CLASSES, i in 1:N
         body = iseven(i) ? EARTH : MARS
@@ -498,8 +579,9 @@ println("run time of the comparison: ", round(time() - T0, digits=1), " s")
 function known_label(key)
     P, D = KNOWN_DIFFERENT_IN_PIN.pin, KNOWN_DIFFERENT_IN_PIN.deliberate
     endswith(key, ":hypin") && haskey(P, "*:hypin") && return ("pin", P["*:hypin"])
+    endswith(key, ":hyp_wrap:hypin") && return ("pin", P["*:hypin"])
     haskey(P, key) && return ("pin", P[key])
-    endswith(key, ":hyprate") && return ("deliberate", D["*:hyprate"])
+    endswith(key, ":hyp_wrap") && return ("deliberate", D["two_body:hyp_wrap"])
     haskey(D, key) && return ("deliberate", D[key])
     return nothing
 end
@@ -515,37 +597,46 @@ for key in sort(collect(keys(ACCS)))
     lab = known_label(key)
     @printf("%-34s %7d %9d %9d %11.3e %s\n", key, a.n, a.both_undef, a.mismatch, a.maxd,
         lab === nothing ? "" : "[$(lab[1]), not tested]")
+    a.normalised && @printf("    in units of %s: %.3f at: %s\n",
+        is_rate(key) ? "1e-12/(2 ms)" : "the angle model", a.maxn, a.worstn)
+    a.range > 0 && println("    RANGE: ", a.range, "x, e.g. ", a.rexample)
     a.worst != "" && println("    largest at: ", a.worst)
     a.mexample != "" && println("    mismatch:   ", a.mexample)
 end
 
-# Tolerances: measured on the first run (seed 20261011, 2000 states per class) and set to a
-# round figure about one decade above the largest difference, with the reason of the size.
+# Tolerances, measured (seed 20261011; the default tier, 2000 states per class, and the exhaustive
+# tier, 20000 per class), each set to a round figure above the largest measured value, with the
+# reason of its size.
 const TOL = Dict{String,Float64}(
-    # Other quantities: the largest difference is 7.7e-12 (tlong), the angle sums and
-    # equinoctial elements, which differ by the last bits of sin/cos in different libms.
-    # The default is about one decade above.
-    # Angles of a near-circular orbit (ecc >= 1e-9): the true anomaly, aop and ma come from
-    # the arc cosine of a dot product divided by ecc, so a rounding error of 1e-16 in the
-    # state is amplified by 1/ecc up to 1e-7; measured 3.95e-8.
-    "el:ta" => 1e-7, "el:aop" => 1e-7, "el:ma" => 1e-7, "el:ea" => 1e-7,
-    "with_element:ta" => 1e-7, "with_element:aop" => 1e-7, "with_apsides" => 1e-7,
-    # Duration of ANISE has a resolution of 1 ns, measured 1.0e-9 s
-    "el:light_time" => 1e-8,
-    # The Brouwer iteration stops at a tolerance, so the two iterations stop at different
-    # points; measured 3.5e-10 (inc)
+    # Angles of near-circular orbits, in units of eps/ecc (see cond_units): C_ANGLE
+    # Brouwer iteration: the worst state is a near-equatorial one (inc ~ 1e-7), where the
+    # angles are ill-conditioned; the largest difference is 3.5e-10 (inc)
     "el:brouwer_sma" => 1e-8, "el:brouwer_ecc" => 1e-8, "el:brouwer_inc" => 1e-8,
     "el:brouwer_raan" => 1e-8, "el:brouwer_aop" => 1e-8, "el:brouwer_ma" => 1e-8,
+    # Duration of ANISE has a resolution of 1 ns, measured 1.0e-9 s
+    "el:light_time" => 1e-8,
     # two_body: the interval is whole milliseconds in both libraries, but the mean motion
-    # of ANISE goes through degrees; near-equatorial orbits amplify; measured 3.6e-9
-    # Rates: ANISE differences two states 1 ms apart, whose rounding error eps/(2 ms n) is
-    # relative to the rate (about n) up to ~1e-6 for the longest periods sampled (sma up to
-    # 3e5 km); Almanac's rate is exact. Measured 9.9e-7.
-    "lf:ric:Rdot" => 1e-5, "lf:rcn:Rdot" => 1e-5, "lf:vnc:Rdot" => 1e-5,
-    "rel:ric:vel" => 1e-5, "rel:rcn:vel" => 1e-5, "rel:vnc:vel" => 1e-5,
+    # of ANISE goes through degrees; the worst state is near-equatorial; measured 3.6e-9
     "two_body" => 1e-8, "two_body:hyp" => 1e-9,
 )
-tol(key) = get(TOL, key, 1e-10)
+# C_ANGLE: the angles in units of the model of cond_scale; largest measured 36 (default tier) and
+# 66 (exhaustive tier, el:ma, whose Kepler-equation step has an amplifier beyond the model);
+# the limit is 100. C_RATE: the rates in units of 1e-12/(2 ms), the error that the stopping
+# rule of the Kepler iteration of ANISE (|E_n - E_n+1| < MA_EPSILON = 1e-12, the older iterate
+# returned) gives to each of the two states of the difference quotient; largest measured 1.45
+# (both tiers, ellipses) and 0.02 (outbound hyperbolas); the limit is 5.
+const C_ANGLE = 100.0
+const C_RATE = 5.0
+function tol(key)
+    haskey(TOL, key) && return TOL[key]
+    haskey(COND_KEYS, key) && return C_ANGLE
+    is_rate(key) && return C_RATE
+    # Other quantities: the largest difference is 7.7e-12 (tlong), the angle sums and
+    # equinoctial elements, which differ by the last bits of sin/cos in different libms;
+    # the default is about one decade above (largest 8.4e-12 in the exhaustive tier, 2e-13 in the
+    # default tier).
+    return 1e-10
+end
 
 @testset "ANISE $(ANISE_VERSION)" begin
     for key in sort(collect(keys(ACCS)))
@@ -553,7 +644,8 @@ tol(key) = get(TOL, key, 1e-10)
         a = ACCS[key]
         @testset "$key" begin
             @test a.mismatch == 0
-            @test a.maxd <= tol(key)
+            @test a.range == 0
+            @test a.maxn <= tol(key)
         end
     end
 end
@@ -575,6 +667,8 @@ function pinned_values()
         end
     end
     push!(out, "# ANISE $(ANISE_VERSION), seed $SEED; elements in km, rad, s (angles converted from degrees)")
+    push!(out, "# Use a tolerance of 1e-7 for :ta, :aop, :ma, :ea of the near-circular states (ecc >= 1e-9):")
+    push!(out, "# they are good to ~4e-8 (1/ecc amplification), the other values to 1e-10.")
     push!(out, "const ANISE_PINNED = [")
     skip = Set([:fpa, :ha])   # fpa differs in the pin; ha is unbounded or errors for ellipses
     for s in pick
