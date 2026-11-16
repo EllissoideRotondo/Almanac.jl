@@ -4,3 +4,4 @@ Manifest*.toml
 *.cov
 test/.group_seconds
 /docs/build/
+/test/anise/.CondaPkg/
