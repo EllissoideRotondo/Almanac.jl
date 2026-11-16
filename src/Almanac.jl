@@ -154,6 +154,7 @@ include("gf/fov.jl")         # gftfov, gfrfov, gffove: visibility in a field of 
 include("providers.jl")     # EphemerisProvider evaluation, add_ephemeris!
 include("queries.jl")       # StateQuery, state_query, RotationQuery, rotation_query
 include("table.jl")         # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
+include("ad.jl")            # derivative rules for the AD package extensions
 include("analysis/orbit.jl")     # Orbit, orbit: a state about a central body
 include("analysis/elements.jl")  # element, elements: the scalar quantities of an Orbit
 include("analysis/brouwer.jl")   # Brouwer mean elements of an Orbit

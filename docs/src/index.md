@@ -14,7 +14,7 @@ Julia 1.10 or later.
 
 - Lock-free queries from any number of threads; each query reads an immutable snapshot of the loaded kernels.
 - Independent kernel sets, one per [`SpiceContext`](@ref).
-- Time derivatives of any order ([`spkder`](@ref), [`pxder`](@ref)) and [dual-number epochs](@ref "Dual-number epochs") with ForwardDiff.jl.
+- Time derivatives of any order ([`spkder`](@ref), [`pxder`](@ref)) and automatic differentiation with ForwardDiff.jl ([dual-number epochs](@ref "Dual-number epochs")), Enzyme.jl, Mooncake.jl, Zygote.jl, ReverseDiff.jl and Tracker.jl ([other AD packages](@ref "Other AD packages")).
 - [Ephemeris and rotation tables](@ref) for inner loops and GPU kernels.
 - Event searches, surface geometry on ellipsoids and DSK shapes, and writers for SPK, CK, binary PCK, DSK and EK files.
 - Bodies and frames defined by Julia functions ([`add_ephemeris!`](@ref), [`add_frame!`](@ref)).

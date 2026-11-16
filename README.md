@@ -1,90 +1,122 @@
 # Almanac.jl
 
+[![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://orbitology.github.io/Almanac.jl/dev/)
 [![CI](https://github.com/Orbitology/Almanac.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/Orbitology/Almanac.jl/actions/workflows/CI.yml)
-[![Manual](https://img.shields.io/badge/docs-dev-blue.svg)](https://orbitology.github.io/Almanac.jl/dev/)
 
-Almanac.jl is a native Julia port of [CSPICE](https://naif.jpl.nasa.gov/naif/toolkit.html)
-N0067, NASA's toolkit for spacecraft and planetary geometry. It reads SPICE kernels and
-computes positions, orientations, times and events in pure Julia, with no C library behind
-it. The calls keep the CSPICE names and, with few exceptions, the argument order, so code
-written for CSPICE or [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl) ports with few
-changes.
+*NASA NAIF's SPICE toolkit, in native Julia*
+
+**Almanac.jl** is a pure-Julia port of [CSPICE](https://naif.jpl.nasa.gov/naif/toolkit.html)
+(toolkit version N0067), the library of NASA's Navigation and Ancillary Information Facility
+(NAIF) for spacecraft and planetary geometry. It reads SPICE kernels and computes positions,
+velocities, orientations, time conversions, surface geometry and event times.
+
+The CSPICE routines keep their names and input arguments, so NAIF's
+[documentation](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/index.html) applies to each
+of them, and code written for CSPICE or [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl)
+carries over with few changes. Because it is plain Julia, Almanac.jl also offers lock-free
+queries from many threads, automatic differentiation with respect to time, and ephemeris
+tables that run on a GPU.
+
+**Note:** This project is *not* affiliated with NASA, NAIF or JPL in any way.
 
 ## Installation
 
-Requires Julia 1.10 or later.
+Almanac.jl requires Julia 1.10 or later. It is not yet registered, so add it from its
+repository:
 
-```julia-repl
-pkg> add https://github.com/Orbitology/Almanac.jl
+```julia
+using Pkg
+Pkg.add(url="https://github.com/Orbitology/Almanac.jl")
 ```
 
-## Example
-
-With the NAIF generic kernels
-[`naif0012.tls`](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls),
-[`de440s.bsp`](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp) and
-[`pck00011.tpc`](https://naif.jpl.nasa.gov/pub/naif/generic_kernels/pck/pck00011.tpc)
-in the working directory:
+## Quickstart
 
 ```julia
 using Almanac
+using Downloads: download
 
-furnsh("naif0012.tls")    # leap seconds
-furnsh("de440s.bsp")      # planets, Moon and Sun
-furnsh("pck00011.tpc")    # orientation and radii of the bodies
+const LSK = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls"
+const SPK = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp"
 
-et = str2et("2025 MAR 01 12:00:00 UTC")              # seconds past J2000 TDB
-state, lt = spkezr("MOON", et, "J2000", "LT+S", "EARTH")
-state[1:3]                                           # position, km
+# Download kernels
+download(LSK, "naif0012.tls")
+download(SPK, "de440s.bsp")
+
+# Load the leap seconds kernel and a planetary ephemeris
+furnsh("naif0012.tls")
+furnsh("de440s.bsp")
+
+# Convert the calendar date to ephemeris seconds past J2000
+et = utc2et("2025-03-01T12:00:00")
+
+# Position of the Moon as seen from the Earth, corrected for light time and stellar aberration
+pos, lt = spkpos("MOON", et, "J2000", "LT+S", "EARTH")
 ```
 
-[SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels)
-downloads these files on first use; after `using SPICEKernels`, write
-`furnsh(naif0012_tls())`, `furnsh(de440s())` and `furnsh(pck00011())`.
+`pos` is in kilometers and `lt`, the one-way light time, in seconds. As in SPICE.jl, outputs
+are returned rather than written into arguments, and indices start at 1; errors throw a
+`SpiceError`.
 
 ## Features
 
-- CSPICE calls with Julia conventions: results are returned, not written to output
-  arguments; indices start at 1; errors throw a `SpiceError`.
-- Lock-free queries from any number of threads, also while another thread loads kernels.
-- Independent kernel sets (`SpiceContext`), for example to compare two ephemerides.
-- Time derivatives of any order (`spkder`, `pxder`) and ForwardDiff.jl dual-number epochs.
-- Chebyshev tables of a trajectory or a rotation for inner loops and GPU kernels.
-- Event searches, surface geometry (ellipsoids and DSK), and writers for SPK, CK, binary
-  PCK, DSK and EK files.
+- **The CSPICE routines.** States, frames, time systems, spacecraft clocks, the kernel pool
+  and the mathematics routines, with every SPK and CK data type.
+- **Geometry and events.** Sub-observer points, illumination angles, occultations and fields
+  of view on ellipsoids and DSK shape models, and event searches with CSPICE's geometry finder
+  (the `gf` routines).
+- **Kernel writers.** SPK, CK, binary PCK, DSK and EK files, with the same contents as the
+  files CSPICE writes.
 
-Results match CSPICE to rounding, checked against CSPICE through SPICE.jl and against
-NAIF's own test suite. The interface may still change.
+Beyond CSPICE:
 
-## Documentation
+- **Thread safety.** Each query reads an immutable snapshot of the loaded kernels, so any
+  number of threads can query at once, even while another thread loads kernels.
+- **Independent kernel sets.** A `SpiceContext` holds its own kernels and settings, so you
+  can compare two ephemerides or keep two missions apart.
+- **Derivatives.** `spkder` and `pxder` return time derivatives of any order, and states,
+  rotations and surface points differentiate with respect to the epoch with ForwardDiff.jl,
+  Enzyme.jl, Mooncake.jl, Zygote.jl, ReverseDiff.jl and Tracker.jl.
+- **Fast tables.** `ephemeris_table` and `rotation_table` compress a trajectory or a rotation
+  into Chebyshev coefficients, for inner loops and for code that runs on a GPU.
 
-The [manual](https://orbitology.github.io/Almanac.jl/dev/) has a tutorial, how-to guides,
-the [differences from CSPICE](https://orbitology.github.io/Almanac.jl/dev/explanation/cspice/)
-and the API reference. Each docstring links to the NAIF page of the routine it ports.
+The test suite compares Almanac.jl with CSPICE through SPICE.jl and replays NAIF's own test
+suite against Almanac.jl. Results agree to within rounding error, apart from a few
+[documented differences](https://orbitology.github.io/Almanac.jl/dev/explanation/cspice/#Numerical-results).
+The package is under active development, and its interface may still change.
 
-## Relationship to NAIF
+## Tutorials and Documentation
 
-Almanac.jl is an independent project, not developed, supported or endorsed by NAIF or JPL.
-Report defects here, not to NAIF. The repository does not redistribute CSPICE or any kernel.
+For information on using the package, see the
+[documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a tutorial that
+goes from loading kernels to an event search, followed by how-to guides and the API
+reference. The docstring of each ported routine links to its NAIF page. If you are porting a
+program from CSPICE or SPICE.jl, start with the
+[differences from CSPICE](https://orbitology.github.io/Almanac.jl/dev/explanation/cspice/).
 
-Publications that use SPICE should cite:
+## Citing
+
+If you publish work that uses Almanac.jl, please cite the SPICE toolkit as NAIF requests:
 
 - C. H. Acton, "Ancillary data services of NASA's Navigation and Ancillary Information
   Facility", *Planetary and Space Science* 44 (1), 65–70, 1996.
-- C. Acton, N. Bachman, B. Semenov, and E. Wright, "A look towards the future in the
-  handling of space science mission geometry", *Planetary and Space Science* 150, 9–12,
-  2018.
+- C. Acton, N. Bachman, B. Semenov, and E. Wright, "A look towards the future in the handling
+  of space science mission geometry", *Planetary and Space Science* 150, 9–12, 2018.
 
 ## Contributing
 
-Questions and defect reports go to the [issues](https://github.com/Orbitology/Almanac.jl/issues).
+Bug reports and questions are welcome in the
+[issues](https://github.com/Orbitology/Almanac.jl/issues). Please report bugs in Almanac.jl
+here, not to NAIF. To run the tests and build the manual locally:
 
 ```sh
-julia --startup-file=no test/parallel.jl                     # tests
+julia --startup-file=no test/parallel.jl                    # tests
 julia --project=docs -e 'using Pkg; Pkg.instantiate()'      # once
-julia --project=docs docs/make.jl                            # manual, in docs/build/
+julia --project=docs docs/make.jl                           # manual, in docs/build/
 ```
 
 ## License
 
-[MIT](LICENSE). The license covers only this repository and grants no rights over CSPICE.
+Almanac.jl is released under the [MIT license](LICENSE), which covers this repository only.
+The repository contains no CSPICE source and no kernels, and the license grants no rights
+over CSPICE, which NAIF distributes under its own
+[rules of use](https://naif.jpl.nasa.gov/naif/rules.html).

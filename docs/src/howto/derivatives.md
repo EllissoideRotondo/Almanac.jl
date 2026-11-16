@@ -52,6 +52,22 @@ apparent(t) = spkpos("PROBE", t, "IAU_EARTH", "LT+S", "EARTH")[1]
 ForwardDiff.derivative(apparent, et)        # km/s in the rotating frame
 ```
 
+## Other AD packages
+
+The same calls differentiate with Enzyme.jl, Mooncake.jl, Zygote.jl (and other users of ChainRulesCore.jl), ReverseDiff.jl and Tracker.jl. Loading the package is enough; an extension gives it the analytical derivatives, so no package differentiates the evaluators, and every package returns the derivative that ForwardDiff returns. [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) selects a package by its backend type:
+
+```julia
+import DifferentiationInterface as DI
+using ADTypes: AutoEnzyme, AutoZygote
+import Enzyme, Zygote
+
+range_km(t) = sum(abs2, spkpos("MOON", t, "J2000", "LT+S", "EARTH")[1]) |> sqrt
+DI.derivative(range_km, AutoEnzyme(), et)   # km/s
+DI.gradient(ts -> sum(range_km, ts), AutoZygote(), [et, et + 3600])
+```
+
+Reverse mode pays off when one number depends on many epochs, as the gradient above. For a second derivative, run ForwardDiff over Zygote, ReverseDiff or Enzyme in forward mode: `DI.SecondOrder(AutoForwardDiff(), AutoZygote())`. Mooncake and Tracker do not take dual numbers, and Enzyme in reverse mode refuses them. ReverseDiff must run without a compiled tape (`AutoReverseDiff(compile=false)`, the default), because a compiled tape keeps the segment and the record of its first epoch.
+
 ## Order 1 and the velocity of `spkezr`
 
 For a geometric position, order 1 is the velocity of `spkezr`. With the `LT` corrections CSPICE approximates the light-time rate, so the two differ by about 1e-8 relative for the Moon seen from the Earth; for some frames `pxder` likewise differs from the rate block of `sxform`. [Exact derivatives and the rates of CSPICE](@ref) gives each case.

@@ -16,7 +16,7 @@ Each fact has one home, and other places link to it.
 | What the package is, who needs it, install, one worked example, where to go next | `README.md` |
 | A task from start to end, a concept, a numerical assumption, a limit | manual page in `docs/src/` |
 | What one call takes, returns, changes and throws | its docstring |
-| Internal interfaces and invariants for maintainers | `CONTRACT.md` and private docstrings |
+| Internal interfaces and invariants for maintainers | `AGENTS.md` and private docstrings |
 
 ## Docstring form for an exported name
 
