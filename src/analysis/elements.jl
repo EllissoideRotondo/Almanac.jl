@@ -382,9 +382,9 @@ function _vinf_hyperbolic(name::Symbol, o::Orbit)
 end
 
 """
-    vinf_periapsis(o::Orbit, turn_angle::Real) -> T
+    vinf_periapsis(o::Orbit, turn_angle::Real)
 
-The periapsis radius in km of a flyby of the center of `o` that turns the excess velocity
+Return the periapsis radius in km (a number; a `Dual` where `o` or `turn_angle` is one) of a flyby of the center of `o` that turns the excess velocity
 by `turn_angle` rad, for the excess speed of the hyperbola `o`:
 `(1 / cos((π - turn_angle) / 2) - 1) μ / C3`. This call has no CSPICE counterpart; it
 matches `Orbit.vinf_periapsis_km` of ANISE, with the angle in rad. It is the inverse of
@@ -408,9 +408,9 @@ function vinf_periapsis(o::Orbit, turn_angle::Real)
 end
 
 """
-    vinf_turn_angle(o::Orbit, periapsis::Real) -> T
+    vinf_turn_angle(o::Orbit, periapsis::Real)
 
-The angle in rad, in [0, 2π), by which a flyby of the center of `o` with periapsis radius
+Return the angle in rad (a number; a `Dual` where `o` or `periapsis` is one), in [0, 2π), by which a flyby of the center of `o` with periapsis radius
 `periapsis` km turns the excess velocity of the hyperbola `o`:
 `π - 2 acos(1 / (1 + C3 periapsis / μ))`. This call has no CSPICE counterpart; it matches
 `Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad. It depends on the excess
@@ -426,7 +426,7 @@ Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic (`ecc <= 1`,
 julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 12.0, 0.0], 0.0, 399, 1, 398600.4415);
 
 julia> round(rad2deg(vinf_turn_angle(o, 8000.0)); digits=3)
-44.331
+77.113
 ```
 """
 function vinf_turn_angle(o::Orbit, periapsis::Real)

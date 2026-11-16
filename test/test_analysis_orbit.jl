@@ -11,8 +11,10 @@
 # orbits, and on the degenerate orbits, where each expectation follows the ANISE source
 # (src/astro/orbit.rs, b3aaadc).
 #
-# Run time of the group: about 18 s (17-18 s measured, one process; most of it is the
-# compilation of the Keplerian code and of the CSPICE oracle wrapper).
+# Run time of the group: 13 to 18 s (one process; the same code measured 12.5 to 18.1 s
+# with the load of the machine). 12 s of it is the load of the oracle and the fixtures
+# before the first testset; the ten testsets together take 1 s, the B-plane and
+# v-infinity ones 0.7 s.
 
 import ForwardDiff
 isdefined(@__MODULE__, :CS) || include("mathoracle.jl")
@@ -57,22 +59,25 @@ const TOL_OSC = Dict(:rp => 5e-14, :ecc => 1.5e-14, :inc => 7e-15, :raan => 2e-1
 # measured), limit 1e-11.
 const TOL_ID = 1e-13
 const TOL_AOL = 1e-11
-# B-plane of the GMAT case: the expected values are those of GMAT (as in ANISE's test), not
-# of ANISE, and ANISE accepts 1 km and 0.01 deg, so the limits are ANISE's. Measured: 0.65
-# km at most (br), 2e-5 rad for the angle; GMAT's ephemeris and axes (the state is in ICRS
-# axes, read here as J2000) are not those of the test, so the formula cannot be tightened
-# against these values.
+# B-plane of the GMAT case: the expected values are GMAT's (as in ANISE's test) and the
+# limits are those of ANISE (1 km, 0.01 deg). Measured: 0.65 km at most (br), 2e-5 rad for
+# the angle. The formula agrees with an independent B = b (S x h) form to 1e-10 km; a change
+# of ephemeris (DE430 for DE440s) or of the epoch scale (A1 - TAI) moves the result by
+# 0.013 km at most, and the rounding of the input values by 0.02 km at most. The rest of
+# the difference lies in the reference values of GMAT, so the limits cannot be tightened.
 const TOL_BPLANE = Dict(:bplane_br => 1.0, :bplane_bt => 1.0, :bplane_mag => 1.0,
     :bplane_angle => _d(0.01))
 # Identities on random hyperbolas (measured: mag 2.2e-16, turn 4.4e-16, periapsis 1.2e-15;
 # each is a few roundings of the same quantities), limit 1e-13 (TOL_ID); |b| against the
 # semi-minor axis is the same number up to the rounding of `sqrt(1 - 1/e^2)` squared.
-const TOL_BMAG = 1e-12
+const TOL_BMAG = 1e-12      # measured 4.4e-16; |b| and the semi-minor axis differ by the rounding of sqrt(1 - 1/e^2)^2
 const TOL_VINF = 1e-13
 const TOL_VINF_RP = 1e-13
 # ANISE cases: measured turn angle 2.2e-16 rad, periapsis 5.5e-12 km (the radius divides
 # by cos(rho) near 1, so the relative error of 1e-16 of ~1e4 km shows as 1e-12 km).
 const TOL_VINF_KM = 1e-10
+# The sma printed by ANISE has 12 digits at 2e4 km: measured 4.0e-11 km (ulp 3.6e-12 km).
+const TOL_VINF_SMA = 1e-9
 # b_plane_davis: ha 1.1e-11 rad measured; ANISE's 1e-9 deg.
 const TOL_DAVIS_HA = _d(1e-9)
 
@@ -286,9 +291,16 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         # Prograde and retrograde equatorial flybys (ANISE's documentation of `BPlane`).
         pro = Orbit(gmat_kep_state(-5000.0, 2.0, 0.0, 0.0, 0.0, _d(-45)), 0.0, 399, 1, GMAT_GM)
         retro = Orbit(gmat_kep_state(-5000.0, 2.0, π, 0.0, 0.0, _d(-45)), 0.0, 399, 1, GMAT_GM)
-        @test pro.bplane_bt > 0 && abs(pro.bplane_br) < 1e-9
-        @test retro.bplane_bt < 0 && abs(retro.bplane_br) < 1e-9
-        @test abs(pro.bplane_mag - pro.semi_minor_axis) < 1e-9 * pro.semi_minor_axis
+        measured(@sprintf("  bplane pro/retro: br %.3e, %.3e km; |b| - semi-minor %.3e km; retro angle %.17g",
+            pro.bplane_br, retro.bplane_br, pro.bplane_mag - pro.semi_minor_axis, retro.bplane_angle))
+        # Measured: br is exactly 0 in both (in the plane of the orbit), |b| equals the semi-minor
+        # axis exactly; the limits of 1e-12 km and 1e-12 relative are roundings of values of 1e4 km.
+        @test pro.bplane_bt > 0 && abs(pro.bplane_br) < 1e-12
+        @test retro.bplane_bt < 0 && abs(retro.bplane_br) < 1e-12
+        @test abs(pro.bplane_mag - pro.semi_minor_axis) < 1e-12 * pro.semi_minor_axis
+        # br = +0 gives atan(0, bt<0) = π exactly, which [-π, π) maps to -π
+        @test retro.bplane_angle === -Float64(π)
+        @test pro.bplane_angle === 0.0
         @test pro.bplane_ltof > 0                                       # inbound: before the crossing
         # The incoming leg far away: the linearized time of flight tends to r / v_inf, with
         # an error of order (b/r)^2 and mu / (r v_inf^2), below 1e-6 at r ~ 1e8 b.
@@ -317,7 +329,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
 
     @testset "B-plane and v-infinity identities on random hyperbolas" begin
         rng = Xoshiro(SEED + 32)
-        names = (:mag, :angle, :turn, :periapsis)
+        names = (:mag, :angle, :turn, :periapsis, :bmag)
         worst = Dict(k => 0.0 for k in names)
         note(k, d) = (worst[k] = max(worst[k], d); d)
         nhyp = ninbound = 0
@@ -327,8 +339,8 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             nhyp += 1
             @test note(:mag, abs(o.bplane_mag - hypot(o.bplane_bt, o.bplane_br)) / o.bplane_mag) < TOL_ID
             @test note(:angle, angdiff(o.bplane_angle, atan(o.bplane_br, o.bplane_bt))) < TOL_ID
-            @test -π <= o.bplane_angle < π
-            @test abs(o.bplane_mag - o.semi_minor_axis) / o.semi_minor_axis < TOL_BMAG
+            @test -Float64(π) <= o.bplane_angle < Float64(π)
+            @test note(:bmag, abs(o.bplane_mag - o.semi_minor_axis) / o.semi_minor_axis) < TOL_BMAG
             @test note(:turn, abs(vinf_turn_angle(o, o.periapsis) - 2 * asin(1 / o.ecc))) < TOL_VINF
             rp = 7000.0 + 30000.0 * rand(rng)
             @test note(:periapsis, abs(vinf_periapsis(o, vinf_turn_angle(o, rp)) - rp) / rp) < TOL_VINF_RP
@@ -354,7 +366,8 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
             measured(@sprintf("  vinf %-24s reciprocity %.3e km", c.name, abs(vinf_periapsis(o, phi) - c.rp)))
         else
             expected = 2 * asin(1 / o.ecc)
-            @test abs(o.ecc - c.ecc) < 1e-12 && abs(o.sma - c.sma) < 1e-7
+            measured(@sprintf("  vinf %-24s ecc %.3e, sma %.3e km", c.name, abs(o.ecc - c.ecc), abs(o.sma - c.sma)))
+            @test abs(o.ecc - c.ecc) < 1e-12 && abs(o.sma - c.sma) < TOL_VINF_SMA
             d1 = abs(vinf_turn_angle(o, o.periapsis) - expected)
             d2 = abs(vinf_periapsis(o, expected) - o.periapsis)
             measured(@sprintf("  vinf %-24s turn angle %.3e rad, periapsis %.3e km", c.name, d1, d2))

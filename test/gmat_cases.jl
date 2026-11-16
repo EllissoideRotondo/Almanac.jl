@@ -134,7 +134,7 @@ end
 # val_b_plane_gmat (reproduction of the B-plane of GMAT's Ex_LunarTransfer.script): the
 # state is relative to the Earth in the J2000 axes at the TAI epoch below (UTC minus 35 s
 # of leap seconds, as the Rust `from_gregorian_tai`); ANISE transforms it into the Moon
-# ICRS frame, which the test does with `spkezr`. `expected` are ANISE's values in km, the
+# ICRS frame, which the test does with `spkezr`. `expected` are GMAT's values (as in the ANISE test) in km, the
 # angle in rad (ANISE: 14.84148076633666 deg).
 const BPLANE_CASES = Any[
     (name="val_b_plane_gmat", gm=GMAT_GM, utc="2014-07-22 11:28:35.811 UTC",
