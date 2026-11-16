@@ -20,10 +20,11 @@
 #     `Dual`; ReverseDiff and Tracker in a plain-epoch call)
 #
 # Tolerance. A backend and ForwardDiff take the same analytical jets, so they differ only
-# in the order in which the chain rule adds and multiplies the parts. `AD_RTOL` (1e-13)
-# is a margin of about 20 over the largest measured difference (5.6e-15, `subpnt`);
-# `AD_RTOL2` (1e-11) is that of order 2 in group 3, where the rounding of the second
-# derivative is amplified (measured 4.7e-13).
+# in the order in which the chain rule adds and multiplies the parts. `AD_BACKEND_RTOL`
+# (1e-13) is a margin of about 20 over the largest measured difference (5.6e-15,
+# `subpnt`); `AD_BACKEND_RTOL2` (1e-11) is that of order 2 in group 3, where the rounding
+# of the second derivative is amplified (measured 4.7e-13). The names differ from
+# `AD_RTOL` of group 3, because all groups share `Main` in one process.
 #
 # Size. The compilation of a backend for a call takes most of the time. The default run
 # differentiates one function per backend that passes through every derivative point
@@ -35,8 +36,8 @@ import ForwardDiff
 import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
 
-const AD_RTOL = 1e-13
-const AD_RTOL2 = 1e-11
+const AD_BACKEND_RTOL = 1e-13
+const AD_BACKEND_RTOL2 = 1e-11
 
 "Relative difference `|a - b| / |b|`; for `b == 0` the absolute difference."
 ad_reldiff(a, b) = (nb = norm(b); nb == 0 ? norm(a - b) : norm(a - b) / nb)
@@ -136,7 +137,7 @@ function ad_check(bname, backend, ctx, epochs, default, full; gradient::Bool,
                 y, d = DI.value_and_derivative(f, backend, t)
                 err = ad_reldiff(d, ref)
                 worst = max(worst, err)
-                @test err <= AD_RTOL || (@info "derivative" bname cname t d ref; false)
+                @test err <= AD_BACKEND_RTOL || (@info "derivative" bname cname t d ref; false)
                 # Within 2 eps, not bit for bit: with tracked numbers the closure's own
                 # arithmetic (`dot`, `sum`) runs without fused multiply-adds.
                 @test isapprox(Almanac.primal(y), f(t); rtol=2eps())
@@ -148,14 +149,14 @@ function ad_check(bname, backend, ctx, epochs, default, full; gradient::Bool,
             @testset "batched forward" begin
                 d = ForwardDiff.derivative(range_km, epochs[1])
                 dd = DI.pushforward(range_km, backend, epochs[1], (1.0, 2.0))
-                @test ad_reldiff(collect(dd), [d, 2d]) <= AD_RTOL
+                @test ad_reldiff(collect(dd), [d, 2d]) <= AD_BACKEND_RTOL
             end
         end
         if gradient
             @testset "gradient" begin
                 ts = collect(epochs[1] .+ 86400.0 .* (0:3))
                 total(x) = sum(range_km, x)
-                @test ad_reldiff(DI.gradient(total, backend, ts), ForwardDiff.gradient(total, ts)) <= AD_RTOL
+                @test ad_reldiff(DI.gradient(total, backend, ts), ForwardDiff.gradient(total, ts)) <= AD_BACKEND_RTOL
             end
         end
         if nested
@@ -163,7 +164,7 @@ function ad_check(bname, backend, ctx, epochs, default, full; gradient::Bool,
                 t = epochs[1]
                 ref = ForwardDiff.derivative(s -> ForwardDiff.derivative(range_km, s), t)
                 d2 = DI.second_derivative(range_km, DI.SecondOrder(AutoForwardDiff(), backend), t)
-                @test ad_reldiff(d2, ref) <= AD_RTOL2
+                @test ad_reldiff(d2, ref) <= AD_BACKEND_RTOL2
             end
         end
     end

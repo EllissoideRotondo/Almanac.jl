@@ -64,7 +64,7 @@ end
 # Lookups, the snapshot of a context and the parsing of strings have no derivative.
 for f in _AD_CONSTANT
     @eval begin
-        ChainRulesCore.frule(_, ::$(_ad_typeof(f)), args...; kw...) = ($f(args...; kw...), NoTangent())
+        ChainRulesCore.frule(ṫ, ::$(_ad_typeof(f)), args...; kw...) = ($f(args...; kw...), NoTangent())
         ChainRulesCore.rrule(::$(_ad_typeof(f)), args...; kw...) =
             ($f(args...; kw...), _ -> (NoTangent(), map(_ -> NoTangent(), args)...))
     end
