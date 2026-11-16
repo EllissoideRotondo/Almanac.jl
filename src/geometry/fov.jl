@@ -126,7 +126,8 @@ end
 """
     getfov([ctx,] instid, room=10000) -> (shape, frame, bsight, bounds)
 
-Return the field of view of the instrument with the integer ID `instid`, as `getfov_c`
+Return the field of view of the instrument with the integer ID `instid`, as
+[`getfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getfov_c.html)
 of CSPICE.
 
 - `shape`: `"CIRCLE"`, `"ELLIPSE"`, `"RECTANGLE"` or `"POLYGON"`.
@@ -171,7 +172,8 @@ getfov(instid::Integer, room::Integer=_GEO_MAXVRT) = getfov(default_context(), i
 """
     getfvn([ctx,] inst, room=10000) -> (shape, frame, bsight, bounds)
 
-Return the field of view of the instrument with the name `inst`, as `getfvn_c` of
+Return the field of view of the instrument with the name `inst`, as
+[`getfvn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getfvn_c.html) of
 CSPICE. The outputs and the errors are those of [`getfov`](@ref).
 
 `inst` is a name that the loaded kernels map to an ID, or the ID written as a string.
@@ -614,7 +616,8 @@ end
     fovtrg([ctx,] inst, target, tshape, tframe, abcorr, obsrvr, et) -> Bool
 
 Return `true` if the body `target` is in the field of view of the instrument `inst` at
-`et` (seconds past J2000 TDB), as seen by `obsrvr`, as `fovtrg_c` of CSPICE.
+`et` (seconds past J2000 TDB), as seen by `obsrvr`, as
+[`fovtrg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/fovtrg_c.html) of CSPICE.
 
 `tshape` is the model of the target:
 
@@ -683,7 +686,8 @@ fovtrg(inst::NameOrID, target::NameOrID, tshape::AbstractString, tframe::NameOrI
     fovray([ctx,] inst, raydir, rframe, abcorr, obsrvr, et) -> Bool
 
 Return `true` if the ray along `raydir` is in the field of view of the instrument `inst`
-at `et` (seconds past J2000 TDB), as `fovray_c` of CSPICE.
+at `et` (seconds past J2000 TDB), as
+[`fovray_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/fovray_c.html) of CSPICE.
 
 `raydir` is a direction (3 elements, not zero) in the frame `rframe`, for example the
 direction of a star in `"J2000"`. `obsrvr` is the body that carries the instrument; its

@@ -251,12 +251,12 @@ function _spk15(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
     (j2flg != 3 && oj2 != 0.0 && ecc < 1.0 && near > rpl) || return pos, vel
 
     # Mean anomaly since periapsis, split in a whole number of revolutions and the
-    # rest in [-pi, pi].
+    # rest in [-pi, pi], with the rounded `d_mod` of `spke15` and not the exact `rem`.
     oneme2 = 1.0 - ecc * ecc
     dmdt = oneme2 / p * sqrt(gm * oneme2 / p)
     twopi = 2.0 * _PI
     manom = dmdt * primal(dt)
-    theta = rem(manom, twopi)
+    theta = f2c_dmod(manom, twopi)
     if abs(theta) > _PI
         theta -= _dsign(twopi, theta)
     end
@@ -321,7 +321,7 @@ function _kepler_equinoctial(h::Float64, k::Float64)
 end
 
 "`x - y * trunc(x / y)`, the remainder of `d_mod` of the f2c library."
-@inline function _f2c_dmod(x::Float64, y::Float64)
+@inline function f2c_dmod(x::Float64, y::Float64)
     q = x / y
     return x - y * (q >= 0.0 ? floor(q) : -floor(-q))
 end
@@ -358,7 +358,7 @@ function _eqn_state(et::T, epoch::Float64, a::Float64, h0::Float64, k0::Float64,
     vg = Vec3(p * 2.0 * q * di, (p * p + 1.0 - q * q) * di, q * 2.0 * di)
     # Mean longitude, with the whole revolutions of the rate term removed.
     mlrate = mldt * dt
-    ml = l + _with_primal(mlrate, _f2c_dmod(primal(mlrate), 2.0 * _PI))
+    ml = l + _with_primal(mlrate, f2c_dmod(primal(mlrate), 2.0 * _PI))
     primal(h)^2 + primal(k)^2 >= 0.81 && throw(SpiceError(:eccoutofbounds,
         "the eccentricity of the equinoctial elements at the epoch is not below 0.9"))
     # Eccentric longitude: ml plus the root of the Kepler equation in the elements

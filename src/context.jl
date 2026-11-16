@@ -41,6 +41,8 @@ function build_kernelset(loaded::Vector{Loaded},
             push!(dskfiles, content)
         elseif content isa EKFile
             any(f -> f.path == content.path, ekfiles) || push!(ekfiles, content)
+        elseif content isa EphemerisProvider || content isa FrameProvider
+            nothing                          # added to the tables below
         elseif edited === nothing
             apply_assignments!(pool, content)
         end
@@ -51,6 +53,12 @@ function build_kernelset(loaded::Vector{Loaded},
     edited === nothing || (pool = edited)
     for i in length(loaded):-1:1
         content = loaded[i].content
+        if content isa EphemerisProvider
+            seg = Segment(content.body, content.center, content.frame, PROVIDER_DTYPE,
+                content.t0, content.t1, Int32(0), i, 0, 0.0, 0.0, Int32(0), Int32(0))
+            push!(get!(() -> Segment[], spk, seg.target), seg)
+            continue
+        end
         content isa DAF || continue
         if content.kind === :CK
             for j in length(content.cksegments):-1:1
@@ -69,6 +77,12 @@ function build_kernelset(loaded::Vector{Loaded},
     name2code, code2name = build_names(npool)
     _pool_x_bodydefs!(name2code, code2name, bodydefs)
     frames, framename2id = build_frames(npool)
+    for (i, entry) in enumerate(loaded)     # frames of add_frame!, later ones first
+        p = entry.content
+        p isa FrameProvider || continue
+        frames[p.id] = FrameDef(p.id, p.name, FRAME_PROVIDER_CLASS, Int32(i), p.center)
+        framename2id[normalize_name(p.name)] = p.id
+    end
     tk = build_tk(pool, frames)
     bodyrot = build_bodyrot(pool)
     lsk = build_lsk(pool)
@@ -150,10 +164,12 @@ end
 """
     furnsh([ctx,] path) -> Nothing
 
-Load the kernel file at `path` into `ctx`, as `furnsh_c`.
+Load the kernel file at `path` into `ctx`, as
+[`furnsh_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/furnsh_c.html).
 
 The type is read from the file: SPK, binary PCK, CK, DSK, EK, text kernel or
-meta-kernel. A meta-kernel loads the files of its `KERNELS_TO_LOAD` list in order,
+meta-kernel. A file whose name ends in `.json` is a
+[text kernel in JSON](@ref "Text kernels in JSON"). A meta-kernel loads the files of its `KERNELS_TO_LOAD` list in order,
 with `PATH_SYMBOLS` and `PATH_VALUES` applied as in CSPICE.
 Without `ctx` the kernel goes into [`default_context`](@ref).
 
@@ -199,7 +215,8 @@ end
 """
     unload([ctx,] path) -> Nothing
 
-Remove the kernel that was loaded from `path` out of `ctx`, as `unload_c`.
+Remove the kernel that was loaded from `path` out of `ctx`, as
+[`unload_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unload_c.html).
 
 `path` is compared as a string with the `file` of [`kdata`](@ref): the path given to
 [`furnsh`](@ref), or for a file of a meta-kernel its `KERNELS_TO_LOAD` entry after the
@@ -242,7 +259,8 @@ end
 """
     kclear([ctx]) -> Nothing
 
-Unload every kernel of `ctx` and empty its kernel pool, as `kclear_c`.
+Unload every kernel of `ctx` and empty its kernel pool, as
+[`kclear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kclear_c.html).
 
 Direct edits of the pool are removed and the pool watchers are told of the change.
 The names of [`boddef`](@ref) stay, as in CSPICE. The time defaults of

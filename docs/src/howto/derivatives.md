@@ -1,6 +1,6 @@
 # Time derivatives
 
-CSPICE returns a position and its first derivative. This package returns derivatives of any order, in two ways that give the same numbers to rounding: a direct call, and automatic differentiation through the ordinary calls.
+CSPICE gives a position and its velocity. Almanac.jl gives derivatives of any order, either from a direct call or by automatic differentiation of the ordinary calls; the two agree to rounding.
 
 ```@setup der
 using Almanac
@@ -10,20 +10,20 @@ foreach(furnsh, DocKernels.write(mktempdir()))
 
 ## Direct calls
 
-[`spkder`](@ref) returns the position of a target relative to an observer and its first `N` time derivatives, and [`pxder`](@ref) does the same for a rotation matrix. The order is a `Val`, so that the result is a tuple of static arrays; with names in upper case, as below, the call allocates no memory.
+[`spkder`](@ref) returns a position and its first `N` derivatives, [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and, with upper-case names, the call does not allocate.
 
 ```@example der
 using Almanac
 
 et = str2et("2025 MAR 01 12:00:00 UTC")
 position, velocity, acceleration = spkder("PROBE", et, "J2000", "EARTH", Val(2))
-acceleration                                # geometric, km/s^2
+acceleration                                # geometric, km/s²
 ```
 
-Without a correction argument the result is geometric, and its second element is the velocity that `spkezr` returns. An aberration correction goes before the observer:
+An aberration correction goes before the observer:
 
 ```@example der
-spkder("PROBE", et, "J2000", "LT+S", "EARTH", Val(2))[3]    # as seen from the Earth, km/s^2
+spkder("PROBE", et, "J2000", "LT+S", "EARTH", Val(2))[3]    # apparent, km/s²
 ```
 
 ```@example der
@@ -33,17 +33,17 @@ rate[1, 1]                                  # 1/s
 
 ## Dual-number epochs
 
-With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in these calls:
+With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in:
 
-- the states: `spkezr`, `spkpos`, `spkgeo`, `spkssb`, the integer-ID forms, `spkltc`, `spkaps`, `spkapo`, `spkacs`, `spkcpo`, `spkcpt`, `spkcvo` and `spkcvt`;
-- the rotations `pxform`, `sxform` and `pxfrm2`;
+- states: `spkezr`, `spkpos`, `spkgeo`, `spkssb`, the integer-ID forms, `spkltc`, `spkaps`, `spkapo`, `spkacs`, `spkcpo`, `spkcpt`, `spkcvo`, `spkcvt`;
+- rotations: `pxform`, `sxform`, `pxfrm2`;
 - `spkder`, `pxder` and the table queries;
-- the surface calls `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq` and `azlcpo`;
-- the time conversions `unitim` and `deltet`.
+- surface calls: `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq`, `azlcpo`;
+- time conversions: `unitim`, `deltet`.
 
-Other calls, such as `limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg` and `et2lst`, take a plain real epoch and throw `SpiceError(:badarg)` for a `Dual`. An event search takes a window of `Float64` epochs.
+Other calls (`limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg`, `et2lst`, ...) throw `SpiceError(:badarg)` for a `Dual`. Event searches take `Float64` windows.
 
-A function built from the calls of the list can be differentiated as a whole, and an optimizer can differentiate through an acceleration from `spkder`. The derivative of the corrected position below includes the change of the light time.
+A function built from these calls differentiates as a whole. The derivative below includes the change of the light time:
 
 ```@example der
 using ForwardDiff
@@ -54,4 +54,4 @@ ForwardDiff.derivative(apparent, et)        # km/s in the rotating frame
 
 ## Order 1 and the velocity of `spkezr`
 
-Order 0 of `spkder` and of `pxder` is the result of `spkpos` and of `pxform`. For a geometric position, order 1 is the velocity that `spkezr` returns, and each higher order is a derivative of that velocity. With the `LT` corrections (`LT`, `LT+S`, `XLT`, `XLT+S`), CSPICE approximates the rate of the light time, so that order 1 differs from the velocity of `spkezr` by about 1e-8 relative for the Moon seen from the Earth; with the `CN` corrections the two agree to about 1e-13 relative. For some frames, order 1 of `pxder` likewise differs from the derivative block of `sxform`, which follows the rates of CSPICE. [Exact derivatives and the rates of CSPICE](@ref) gives the function that is differentiated for each correction and each kind of frame.
+For a geometric position, order 1 is the velocity of `spkezr`. With the `LT` corrections CSPICE approximates the light-time rate, so the two differ by about 1e-8 relative for the Moon seen from the Earth; for some frames `pxder` likewise differs from the rate block of `sxform`. [Exact derivatives and the rates of CSPICE](@ref) gives each case.

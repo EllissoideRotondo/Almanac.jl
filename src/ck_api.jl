@@ -8,7 +8,8 @@
 
 Order 1 rotation jet at a plain epoch, the one behind `sxform`, `spkezr` and `spkgeo`.
 If CK kernels are loaded and one of the two frame chains holds a CK frame, `dR` comes
-from the angular velocity of the CK segment, as `sxform_c` of CSPICE gives it
+from the angular velocity of the CK segment, as
+[`sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html) of CSPICE gives it
 (`_ck_state_rotation`). A chain with a dynamic or a switch frame goes the same way, and
 `dR` is the derivative block of `zzdynfrm_`. Otherwise the result is `rotation_jet`,
 unchanged.
@@ -66,7 +67,8 @@ end
     ckgp([ctx,] inst, sclkdp, tol, ref) -> Union{Nothing,Tuple{SMatrix{3,3},Float64}}
 
 Return the pointing of the instrument or structure `inst` at the encoded spacecraft
-clock value `sclkdp`, as `ckgp_c`.
+clock value `sclkdp`, as
+[`ckgp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgp_c.html).
 
 - `inst`: CK ID of the instrument or structure.
 - `sclkdp`: encoded spacecraft clock, in ticks (see [`sce2c`](@ref)).
@@ -120,7 +122,8 @@ end
     ckgpav([ctx,] inst, sclkdp, tol, ref) -> Union{Nothing,Tuple{SMatrix,SVector,Float64}}
 
 Return the pointing and the angular velocity of the instrument or structure `inst` at
-the encoded spacecraft clock value `sclkdp`, as `ckgpav_c`.
+the encoded spacecraft clock value `sclkdp`, as
+[`ckgpav_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgpav_c.html).
 
 The result is `(cmat, av, clkout)`, where `av` is an `SVector{3}`: the angular velocity
 of the instrument frame relative to `ref`, in rad/s, with components in `ref`. Only
@@ -157,7 +160,8 @@ end
 
 Return the rotation from the CK frame of the instrument or structure `inst` to its base
 frame, the reference frame of the CK segment, at `et`, and the frame ID of the base
-frame, as `ckfrot_c`.
+frame, as
+[`ckfrot_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckfrot_c.html).
 
 - `inst`: CK ID (frame class ID) of the CK frame.
 - `et`: seconds past J2000 TDB.
@@ -202,7 +206,8 @@ end
     ckfxfm([ctx,] inst, et) -> Union{Nothing,Tuple{SMatrix{6,6},Int}}
 
 Return the state transformation from the CK frame of the instrument or structure `inst`
-to its base frame at `et`, and the frame ID of the base frame, as `ckfxfm_c`.
+to its base frame at `et`, and the frame ID of the base frame, as
+[`ckfxfm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckfxfm_c.html).
 
 The matrix is `[R 0; dR R]`: `R` is the rotation of [`ckfrot`](@ref), and `dR` (1/s)
 comes from the angular velocity of the CK segment, as [`sxform`](@ref) gives it for a CK
@@ -230,7 +235,8 @@ end
     ckmeta([ctx,] ckid, meta) -> Int
 
 Return the ID of the spacecraft clock or of the body that belongs to the CK ID
-`ckid`, as `ckmeta_c`.
+`ckid`, as
+[`ckmeta_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckmeta_c.html).
 
 `meta` is `"SCLK"` for the clock ID or `"SPK"` for the body ID; letter case is
 ignored. The kernel-pool variables `CK_<ckid>_SCLK` and `CK_<ckid>_SPK` give the
@@ -279,7 +285,8 @@ end
     ckobj(ck) -> Vector{Int}
 
 Return the CK IDs of the instruments and structures that have a segment in the CK file
-`ck`, sorted and without duplicates, as `ckobj_c`.
+`ck`, sorted and without duplicates, as
+[`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html).
 
 The file is read from disk and need not be loaded.
 
@@ -299,7 +306,7 @@ ckobj(ck::AbstractString) =
     ckobj!(ids, ck) -> ids
 
 Insert the CK IDs that have a segment in the CK file `ck` into the vector `ids`, as
-`ckobj_c` does with a SPICE cell.
+[`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html) does with a SPICE cell.
 
 `ids` is used as a set: on return it is sorted and without duplicates. The vector
 comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
@@ -410,7 +417,8 @@ end
     ckcov!(cover, [ctx,] ck, idcode, needav, level, tol, timsys) -> cover
 
 Insert the coverage of the instrument or structure `idcode` in the CK file `ck` into the
-window `cover`, as `ckcov_c`.
+window `cover`, as
+[`ckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcov_c.html).
 
 The result is the union of the old content of `cover` with the new intervals. The
 window comes first, as in [`spkcov!`](@ref) and [`pckcov!`](@ref); CSPICE and SPICE.jl
@@ -457,7 +465,8 @@ end
     ckcov([ctx,] ck, idcode, needav, level, tol, timsys) -> Window
 
 Return the coverage [`Window`](@ref) of the instrument or structure `idcode` in the CK
-file `ck`, as `ckcov_c`.
+file `ck`, as
+[`ckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcov_c.html).
 
 The window holds the intervals on which the file gives a pointing, as sorted disjoint
 intervals; it is empty if the file has no data for `idcode`. `wnfetd(w, i)` gives

@@ -574,9 +574,12 @@ in the number type of `t` and the quaternion is normalized. `av` is zero unless
     return cmat, av
 end
 
-"Throw `SpiceError` unless `subtyp` is in 0:3 and `wndsiz` is a valid window size for it."
-@inline function _ck_check05(subtyp::Int, wndsiz::Int)
-    0 <= subtyp <= 3 || _ck_bad(:notsupported, "unexpected subtype of a CK type 5 or 6 segment")
+"""
+Throw `SpiceError` unless `subtyp` is in 0:3 and `wndsiz` is a valid window size for it.
+A bad subtype is `kind`: `:notsupported` in `ckr05_`, `:invalidsubtype` in `ckr06_`.
+"""
+@inline function _ck_check05(subtyp::Int, wndsiz::Int, kind::Symbol=:notsupported)
+    0 <= subtyp <= 3 || _ck_bad(kind, "unexpected subtype of a CK type 5 or 6 segment")
     (2 <= wndsiz <= _CK5_MAXWND[subtyp+1] && iseven(wndsiz)) || _ck_bad(:invalidvalue,
         "window size of a CK type 5 or 6 segment is odd or outside the allowed range")
     return nothing
@@ -705,7 +708,7 @@ function _ck_eval06seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Floa
                 continue
             end
         end
-        _ck_check05(subtyp, wndsiz)
+        _ck_check05(subtyp, wndsiz, :invalidsubtype)
         packsz = _CK5_PACKSZ[subtyp+1]
         eb = minib - 1 + npkt * packsz          # epochs are data[eb+1:eb+npkt]
         (npkt >= 1 && eb + npkt <= minie) ||
@@ -890,7 +893,7 @@ function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where 
         fd = frame_def(ks, cur)
         if fd.class == 3
             cur, step = _ck_frame_step(mode, ks, fd, et)
-        elseif fd.class >= 5        # dynamic and switch frames, `dynframes.jl`
+        elseif fd.class == 5 || fd.class == 6     # dynamic and switch frames, `dynframes.jl`
             cur, step = _dyn_chain_step(mode, ks, fd, et)
         else
             cur, step = _frame_step(ks, cur, _ck_epoch(mode, et))
@@ -914,7 +917,7 @@ function _ck_in_chain(ks::KernelSet, id::Int32)
         n += 1
         n > MAX_FRAME_CHAIN && _chain_too_long(id)
         class = frame_def(ks, cur).class
-        (class == 3 || class >= 5) && return true
+        (class == 3 || class == 5 || class == 6) && return true
         cur = _frame_parent(ks, cur)
     end
     return false
@@ -924,7 +927,8 @@ end
     _ck_state_rotation(ks, from, to, et::Float64) -> Mat3{Taylor{1,Float64}}
 
 Matrix from frame `from` to frame `to` at `et` and its derivative as `frmchg_` of
-CSPICE gives them (the two blocks of `sxform_c`): each CK link contributes the angular
+CSPICE gives them (the two blocks of
+[`sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html)): each CK link contributes the angular
 velocity of its segment, and needs a segment that has one. The two chains are followed
 to their first common frame, as in `frame_rotation`.
 """

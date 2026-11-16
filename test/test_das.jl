@@ -398,6 +398,9 @@ group("11. DAS files and DLA segment lists") do
         @test neo_kind(() -> dasadd(h, [1.0])) === :dasinvalidaccess
         @test neo_kind(() -> dasadc(h, "a")) === :dasinvalidaccess
         @test neo_kind(() -> dasudi(h, 1, 1, Cint[1])) === :dasinvalidaccess
+        # the address is checked before the access, as in SPICELIB (F_DAS of tspice)
+        @test neo_kind(() -> dasudi(h, 0, 1, Cint[1])) === :invalidaddress
+        @test neo_kind(() -> dasudc(h, 0, 1, "a")) === :invalidaddress
         @test neo_kind(() -> dasac(h, ["a"])) === :dasinvalidaccess
         @test neo_kind(() -> dasdc(h)) === :dasinvalidaccess
         @test neo_kind(() -> dlabns(h)) === :dasinvalidaccess

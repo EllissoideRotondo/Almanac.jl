@@ -557,6 +557,15 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
             @test ktotal(ctx) == 3
         end
     end
+    @apart @testset "static vectors as values" begin
+        ctx = SpiceContext()
+        pdpool(ctx, "SV_D", SVector(1.0, 2.0))
+        pipool(ctx, "SV_I", SVector(3, 4))
+        pcpool(ctx, "SV_C", SVector("a", "b"))
+        @test gdpool(ctx, "SV_D") == [1.0, 2.0]
+        @test gipool(ctx, "SV_I") == [3, 4]
+        @test gcpool(ctx, "SV_C") == ["a", "b"]
+    end
 end
 
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

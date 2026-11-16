@@ -2,6 +2,21 @@
 # queries read without a lock, and `furnsh`/`unload` replace it as a whole.
 
 const Vec3{T} = SVector{3,T}
+
+"""
+    _vec_of(T, x, f=identity) -> Vector{T}
+
+A new `Vector{T}` of `f(v)` for the elements `v` of `x` in linear order, for any
+iterable: a vector, a static vector, a matrix, a tuple. A typed comprehension is not
+used because over a static vector it gives a `SizedVector` (StaticArrays).
+"""
+function _vec_of(::Type{T}, x, f=identity) where {T}
+    out = Vector{T}(undef, length(x))
+    for (i, v) in enumerate(x)
+        @inbounds out[i] = f(v)
+    end
+    return out
+end
 const Mat3{T} = SMatrix{3,3,T,9}
 
 """
@@ -99,6 +114,50 @@ struct TextKernel
 end
 
 """
+    EphemerisProvider
+
+A body whose state comes from a function of the program instead of a file: `f(et)`
+returns the state (km, km/s) of `body` relative to `center` in frame `frame` for
+`t0 <= et <= t1`. It enters the load list as a file with one SPK segment (`kind` is
+`:SPK`), so the rules of priority and of `unload` are those of a file.
+"""
+struct EphemerisProvider
+    name::String
+    body::Int32
+    center::Int32
+    frame::Int32
+    t0::Float64
+    t1::Float64
+    f::Any
+    kind::Symbol
+end
+
+"""
+    FrameProvider
+
+A frame whose orientation comes from a function of the program: `f(et)` returns the
+3x3 matrix that takes vectors from frame `id` (named `name`, centered on `center`) to
+frame `relative`. It enters the load list as a file (`kind` is `:TEXT`, as a frame
+kernel), and the frame table gives it class `FRAME_PROVIDER_CLASS` with its index in
+the load list as the class ID.
+"""
+struct FrameProvider
+    name::String
+    path::String
+    id::Int32
+    center::Int32
+    relative::Int32
+    f::Any
+    kind::Symbol
+end
+
+"Frame class of a `FrameProvider` (CSPICE uses 1 to 6)."
+const FRAME_PROVIDER_CLASS = Int32(7)
+
+"Data type of the SPK segment of an `EphemerisProvider` (`baddr` is its index in the load list)."
+const PROVIDER_DTYPE = Int32(-1)
+
+"""
     Loaded
 
 One entry of the load list of a `KernelSet`, in load order. `source` is the path of
@@ -107,7 +166,7 @@ the meta-kernel that caused the load, or `""` for a kernel loaded directly.
 struct Loaded
     path::String
     source::String
-    content::Union{DAF,TextKernel,DSKFile,EKFile}
+    content::Union{DAF,TextKernel,DSKFile,EKFile,EphemerisProvider,FrameProvider}
 end
 
 """

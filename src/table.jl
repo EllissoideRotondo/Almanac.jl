@@ -427,7 +427,7 @@ A segment has no aberration correction. Write only a table that was made with
 `abcorr = "NONE"`; the call cannot check this.
 
 Throws `SpiceError(:invalidrefframe)` if `tab.frame` is not a frame of `ctx`, as
-`spkw02_c` for an unknown frame, and the other errors of [`spkw02`](@ref). Among its
+[`spkw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw02_c.html) for an unknown frame, and the other errors of [`spkw02`](@ref). Among its
 conditions: `tab.ncoef <= 28`, and `first` and `last` inside the table.
 
 # Examples

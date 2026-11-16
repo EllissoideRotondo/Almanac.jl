@@ -529,6 +529,53 @@ group("9. SPK data types against CSPICE") do
         @test spkpos(ctx, c.body, et, "J2000", "NONE", EARTH)[1] == byid[1][SOneTo(3)]
     end
 
+    # CSPICE (SPKGEO) subtracts the two states in their common segment frame and rotates
+    # the difference; rotating each state to J2000 first changes the last bit, which is
+    # 3e-8 km at the distance of Mars from the solar system barycenter.
+    @apart @testset "a chain in a frame other than J2000: the CSPICE state to the bit" begin
+        a, b = (only(c for c in cases if c.label == "type $t, degree 3, ECLIPJ2000") for t in (9, 13))
+        lo, hi = max(a.t0, b.t0), min(a.t1, b.t1)
+        for et in random_epochs(MersenneTwister(SEED + 90), 20, lo, hi)   # own stream
+            @test spkgeo(ctx, a.body, et, "J2000", b.body)[1] ==
+                  SPICE.spkgeo(a.body, et, "J2000", b.body)[1]
+        end
+    end
+
+    # `spke15` splits the mean anomaly with the rounded `d_mod` of f2c. The exact `rem`
+    # gave a turn of the periapsis and the node that is off by ulps of the mean anomaly:
+    # 3.1e-13 relative from CSPICE after 3e4 revolutions and 3.4e-12 after 3e5. With
+    # `d_mod` the difference is the last bit of `cos` and `sin`, 7.6e-16 at most.
+    @apart @testset "type 15 far from the periapsis epoch: the mean anomaly as d_mod" begin
+        path15 = joinpath(mktempdir(), "type15_far.bsp")
+        tp = [sind(30.0) * sind(50.0), -cosd(30.0) * sind(50.0), cosd(50.0)]
+        pa = normalize(cross([0.0, 0.0, 1.0], tp))
+        p, ecc, epoch, span = 8000.0, 0.05, 1234.5, 3.0e9      # span: about 95 years
+        period = 2π * sqrt((p / (1 - ecc^2))^3 / GM_EARTH)
+        bodies = (-8501, -8502, -8503)
+        h = SPICE.spkopn(path15, "TYPE 15", 0)
+        for (body, j2flg) in zip(bodies, (0, 1, 2))
+            write_type15!(h, body, "J2000", epoch - span, epoch + span, epoch, tp, pa, p, ecc,
+                j2flg, [0.0, 0.0, 1.0], 1.0826e-3, 6378.14)
+        end
+        SPICE.spkcls(h)
+        ctx15 = neo_context([path15])
+        SPICE.furnsh(path15)
+        try
+            worst = 0.0
+            for body in bodies, revs in (3e4, -3e4, 3e5, -3e5), k in 1:5
+                et = epoch + revs * period * (1 + k / 1000)
+                ref = SPICE.spkgeo(body, et, "J2000", EARTH)[1]
+                st = spkgeo(ctx15, body, et, "J2000", EARTH)[1]
+                worst = max(worst, type_reldiff(st[SOneTo(3)], ref[1:3]),
+                    type_reldiff(st[SVector(4, 5, 6)], ref[4:6]))
+            end
+            measured(@sprintf("  type 15 after 3e4 and 3e5 revolutions: largest relative difference %.2e", worst))
+            @test worst <= 1e-14
+        finally
+            SPICE.unload(path15)
+        end
+    end
+
     @apart @testset "zero allocation and inferred types" begin
         for c in cases
             et = c.t0 + 0.37 * (c.t1 - c.t0)

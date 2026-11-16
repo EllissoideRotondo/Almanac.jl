@@ -367,7 +367,8 @@ end
     timout([ctx,] et, pictur) -> String
 
 Return the epoch `et` (seconds past J2000 TDB) as a string in the form of the picture
-`pictur`, as `timout_c`.
+`pictur`, as
+[`timout_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/timout_c.html).
 
 A leap-second kernel must be loaded. The picture is copied to the result with each
 mark replaced by its component. Marks are case sensitive:
@@ -774,7 +775,8 @@ end
 """
     et2utc([ctx,] et, format, prec) -> String
 
-Return the epoch `et` (seconds past J2000 TDB) as a UTC string, as `et2utc_c`.
+Return the epoch `et` (seconds past J2000 TDB) as a UTC string, as
+[`et2utc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/et2utc_c.html).
 
 A leap-second kernel must be loaded. `format` selects the form; letter case is
 ignored:
@@ -864,7 +866,8 @@ end
     etcal([ctx,] et) -> String
 
 Return the calendar string of `et` (seconds past J2000 TDB) on the formal calendar, on
-which every day has 86400 seconds, as `etcal_c`.
+which every day has 86400 seconds, as
+[`etcal_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/etcal_c.html).
 
 The string has the form `1986 APR 12 16:31:09.814`. It is a TDB date without leap
 seconds, and the call needs no kernel; `ctx` is

@@ -86,7 +86,8 @@ end
 
 """
 Projection of `a` on `b`. With `recip` the scaling is a product with the reciprocal of
-the largest component (`vproj_c`); without it the scaling is a division (`vproj_`).
+the largest component (
+[`vproj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vproj_c.html)); without it the scaling is a division (`vproj_`).
 """
 @inline function _m_proj(a::SVector{3}, b::SVector{3}, recip::Bool)
     biga = _m_maxabs(a)
@@ -100,7 +101,8 @@ end
 
 """
 Component of `a` perpendicular to `b`, with the scaling choice of `_m_proj`. A zero `b`
-gives `a`, as `vperp_` of SPICELIB and the text of `vperp_c` say.
+gives `a`, as `vperp_` of SPICELIB and the text of
+[`vperp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vperp_c.html) say.
 """
 @inline function _m_perp(a::SVector{3}, b::SVector{3}, recip::Bool)
     biga = _m_maxabs(a)
@@ -139,7 +141,8 @@ end
     _m_mxv(m, v) -> SVector{3}
 
 Contract: the product of the 3 by 3 matrix `m` and the vector `v`, each component the
-sum of its three products from left to right, as `mxv_c`. The product `m * v` of
+sum of its three products from left to right, as
+[`mxv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxv_c.html). The product `m * v` of
 StaticArrays lets the compiler join a multiplication and an addition into one fused
 operation, and compilers differ in where they do so; the result of this function does
 not depend on the compiler, which matters where a component is a small difference of
@@ -234,7 +237,8 @@ end
 """
 Unit state of `dvhat`: the unit position and its derivative. With `recip` the
 perpendicular part of the velocity is scaled by a product with a reciprocal, as the
-C function `dvhat_c` does (through `vperp_c`). Without it the scaling is a division,
+C function
+[`dvhat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvhat_c.html) does (through `vperp_c`). Without it the scaling is a division,
 as in the f2c routine `dvhat_` (through `vperp_`), which is the routine that `ducrss_`,
 `dvsep_`, `zztwovxf_` and `surfpv_` call. The two forms differ by rounding, and the
 reciprocal of a velocity below about 5.6e-309 is infinite, so only the division keeps
@@ -287,7 +291,8 @@ end
 """
     vadd(v1, v2) -> SVector{3}
 
-Return the sum `v1 + v2` of two vectors of 3 elements, as `vadd_c` of CSPICE.
+Return the sum `v1 + v2` of two vectors of 3 elements, as
+[`vadd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vadd_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if an argument does not have 3 elements.
 
@@ -304,7 +309,8 @@ vadd(v1::AbstractVector, v2::AbstractVector) = _m_v3(v1) + _m_v3(v2)
 """
     vsub(v1, v2) -> SVector{3}
 
-Return the difference `v1 - v2` of two vectors of 3 elements, as `vsub_c` of CSPICE.
+Return the difference `v1 - v2` of two vectors of 3 elements, as
+[`vsub_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vsub_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if an argument does not have 3 elements.
 
@@ -315,7 +321,8 @@ vsub(v1::AbstractVector, v2::AbstractVector) = _m_v3(v1) - _m_v3(v2)
 """
     vscl(s, v1) -> SVector{3}
 
-Return the product `s * v1` of a scalar and a vector of 3 elements, as `vscl_c` of
+Return the product `s * v1` of a scalar and a vector of 3 elements, as
+[`vscl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vscl_c.html) of
 CSPICE.
 
 Throws `SpiceError(:badarg)` if `v1` does not have 3 elements.
@@ -327,7 +334,8 @@ vscl(s::Real, v1::AbstractVector) = _m_f(s) * _m_v3(v1)
 """
     vminus(v1) -> SVector{3}
 
-Return `-v1` for a vector of 3 elements, as `vminus_c` of CSPICE.
+Return `-v1` for a vector of 3 elements, as
+[`vminus_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vminus_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `v1` does not have 3 elements.
 
@@ -338,7 +346,8 @@ vminus(v1::AbstractVector) = -_m_v3(v1)
 """
     vdot(v1, v2)
 
-Return the dot product of two vectors of 3 elements, as `vdot_c` of CSPICE.
+Return the dot product of two vectors of 3 elements, as
+[`vdot_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vdot_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if an argument does not have 3 elements.
 
@@ -349,7 +358,8 @@ vdot(v1::AbstractVector, v2::AbstractVector) = _m_dot(_m_v3(v1), _m_v3(v2))
 """
     vcrss(v1, v2) -> SVector{3}
 
-Return the cross product `v1 × v2` of two vectors of 3 elements, as `vcrss_c` of CSPICE.
+Return the cross product `v1 × v2` of two vectors of 3 elements, as
+[`vcrss_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vcrss_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if an argument does not have 3 elements.
 
@@ -366,7 +376,8 @@ vcrss(v1::AbstractVector, v2::AbstractVector) = _m_cross(_m_v3(v1), _m_v3(v2))
 """
     vnorm(v1)
 
-Return the Euclidean norm of a vector of 3 elements, as `vnorm_c` of CSPICE.
+Return the Euclidean norm of a vector of 3 elements, as
+[`vnorm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vnorm_c.html) of CSPICE.
 
 The components are divided by the one largest in magnitude before they are squared, so
 the squares do not overflow or underflow. The result is zero only for the zero vector.
@@ -389,7 +400,8 @@ vnorm(v1::AbstractVector) = _m_norm(_m_v3(v1))
 """
     vhat(v1) -> SVector{3}
 
-Return the unit vector along `v1`, as `vhat_c` of CSPICE. The zero vector gives the
+Return the unit vector along `v1`, as
+[`vhat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vhat_c.html) of CSPICE. The zero vector gives the
 zero vector.
 
 Throws `SpiceError(:badarg)` if `v1` does not have 3 elements.
@@ -401,7 +413,8 @@ vhat(v1::AbstractVector) = _m_hat(_m_v3(v1))
 """
     unorm(v1) -> (vout::SVector{3}, vmag)
 
-Return the unit vector along `v1` and the norm of `v1`, as `unorm_c` of CSPICE. The
+Return the unit vector along `v1` and the norm of `v1`, as
+[`unorm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unorm_c.html) of CSPICE. The
 zero vector gives the zero vector and the norm 0.
 
 Throws `SpiceError(:badarg)` if `v1` does not have 3 elements.
@@ -419,7 +432,8 @@ unorm(v1::AbstractVector) = _m_unorm(_m_v3(v1))
 """
     vdist(v1, v2)
 
-Return the distance `vnorm(v1 - v2)` between two points, as `vdist_c` of CSPICE.
+Return the distance `vnorm(v1 - v2)` between two points, as
+[`vdist_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vdist_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if an argument does not have 3 elements.
 
@@ -441,7 +455,8 @@ end
 """
     vsep(v1, v2)
 
-Return the angle between two vectors of 3 elements, in radians in [0, pi], as `vsep_c`
+Return the angle between two vectors of 3 elements, in radians in [0, pi], as
+[`vsep_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vsep_c.html)
 of CSPICE.
 
 The method keeps the precision near 0 and pi. The result is 0 if a vector is zero.
@@ -467,7 +482,8 @@ end
     vrel(v1, v2)
 
 Return the relative difference `|v1 - v2| / max(|v1|, |v2|)` of two vectors of 3
-elements, as `vrel_c` of CSPICE. The result is 0 if the vectors are equal, also if both
+elements, as
+[`vrel_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vrel_c.html) of CSPICE. The result is 0 if the vectors are equal, also if both
 are zero.
 
 Throws `SpiceError(:badarg)` if an argument does not have 3 elements.
@@ -487,7 +503,8 @@ end
 """
     vproj(a, b) -> SVector{3}
 
-Return the projection of the vector `a` on the vector `b`, as `vproj_c` of CSPICE. The
+Return the projection of the vector `a` on the vector `b`, as
+[`vproj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vproj_c.html) of CSPICE. The
 result is the zero vector if `a` or `b` is zero.
 
 Throws `SpiceError(:badarg)` if an argument does not have 3 elements.
@@ -509,7 +526,7 @@ vproj(a::AbstractVector, b::AbstractVector) = _m_proj(_m_v3(a), _m_v3(b), true)
     vperp(a, b) -> SVector{3}
 
 Return the component of the vector `a` that is perpendicular to the vector `b`, as
-`vperp_c` of CSPICE.
+[`vperp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vperp_c.html) of CSPICE.
 
 For a zero `b` this call returns `a`, as the header of `vperp_c` says; the code of
 `vperp_c` in CSPICE version N0067 returns the zero vector.
@@ -523,7 +540,8 @@ vperp(a::AbstractVector, b::AbstractVector) = _m_perp(_m_v3(a), _m_v3(b), true)
 """
     vlcom(a, v1, b, v2) -> SVector{3}
 
-Return the linear combination `a*v1 + b*v2` of two vectors of 3 elements, as `vlcom_c`
+Return the linear combination `a*v1 + b*v2` of two vectors of 3 elements, as
+[`vlcom_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vlcom_c.html)
 of CSPICE.
 
 Throws `SpiceError(:badarg)` if a vector does not have 3 elements.
@@ -537,7 +555,7 @@ vlcom(a::Real, v1::AbstractVector, b::Real, v2::AbstractVector) =
     vlcom3(a, v1, b, v2, c, v3) -> SVector{3}
 
 Return the linear combination `a*v1 + b*v2 + c*v3` of three vectors of 3 elements, as
-`vlcom3_c` of CSPICE.
+[`vlcom3_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vlcom3_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if a vector does not have 3 elements.
 
@@ -549,7 +567,8 @@ vlcom3(a::Real, v1::AbstractVector, b::Real, v2::AbstractVector, c::Real, v3::Ab
 """
     vrotv(v, axis, theta) -> SVector{3}
 
-Return the vector `v` rotated about the vector `axis` by `theta` radians, as `vrotv_c`
+Return the vector `v` rotated about the vector `axis` by `theta` radians, as
+[`vrotv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vrotv_c.html)
 of CSPICE.
 
 The rotation follows the right-hand rule. `axis` need not have unit length; a zero
@@ -571,7 +590,8 @@ vrotv(v::AbstractVector, axis::AbstractVector, theta::Real) =
 """
     vzero(v) -> Bool
 
-Return `true` if all 3 components of `v` are zero, as `vzero_c` of CSPICE.
+Return `true` if all 3 components of `v` are zero, as
+[`vzero_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vzero_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `v` does not have 3 elements.
 
@@ -582,7 +602,8 @@ vzero(v::AbstractVector) = _m_iszero(_m_v3(v))
 """
     vequ(vin) -> SVector{3}
 
-Return the vector `vin` of 3 elements as an `SVector{3}`, as `vequ_c` of CSPICE.
+Return the vector `vin` of 3 elements as an `SVector{3}`, as
+[`vequ_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vequ_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `vin` does not have 3 elements.
 
@@ -593,7 +614,8 @@ vequ(vin::AbstractVector) = _m_v3(vin)
 """
     vpack(x, y, z) -> SVector{3}
 
-Return the vector with the components `x`, `y`, `z`, as `vpack_c` of CSPICE.
+Return the vector with the components `x`, `y`, `z`, as
+[`vpack_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vpack_c.html) of CSPICE.
 
 See also [`vupack`](@ref).
 """
@@ -602,7 +624,8 @@ vpack(x::Real, y::Real, z::Real) = SVector(_m_f(x), _m_f(y), _m_f(z))
 """
     vupack(v) -> (x, y, z)
 
-Return the three components of the vector `v` as a tuple, as `vupack_c` of CSPICE.
+Return the three components of the vector `v` as a tuple, as
+[`vupack_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vupack_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `v` does not have 3 elements.
 
@@ -613,7 +636,8 @@ vupack(v::AbstractVector) = Tuple(_m_v3(v))
 """
     ucrss(v1, v2) -> SVector{3}
 
-Return the unit vector along the cross product `v1 × v2`, as `ucrss_c` of CSPICE.
+Return the unit vector along the cross product `v1 × v2`, as
+[`ucrss_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ucrss_c.html) of CSPICE.
 
 Each vector is scaled by its component largest in magnitude before the product, so the
 product does not overflow. The result is the zero vector if the vectors are parallel or
@@ -629,7 +653,8 @@ ucrss(v1::AbstractVector, v2::AbstractVector) = _m_ucrss(_m_v3(v1), _m_v3(v2))
     vtmv(v1, matrix, v2)
 
 Return the bilinear form `v1' * matrix * v2` of two vectors of 3 elements and a 3 by 3
-matrix, as `vtmv_c` of CSPICE.
+matrix, as
+[`vtmv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vtmv_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if a vector does not have 3 elements or the matrix is not
 3 by 3.
@@ -652,7 +677,8 @@ end
 """
     mxv(m, vin) -> SVector{3}
 
-Return the product `m * vin` of a 3 by 3 matrix and a vector of 3 elements, as `mxv_c`
+Return the product `m * vin` of a 3 by 3 matrix and a vector of 3 elements, as
+[`mxv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxv_c.html)
 of CSPICE.
 
 Throws `SpiceError(:badarg)` if `m` is not 3 by 3 or `vin` does not have 3 elements.
@@ -676,7 +702,7 @@ mxv(m::AbstractMatrix, vin::AbstractVector) = _m_mxv(_m_m3(m), _m_v3(vin))
     mtxv(m, vin) -> SVector{3}
 
 Return the product of the transpose of the 3 by 3 matrix `m` and the vector `vin`, as
-`mtxv_c` of CSPICE. For a rotation matrix this is the inverse rotation.
+[`mtxv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mtxv_c.html) of CSPICE. For a rotation matrix this is the inverse rotation.
 
 Throws `SpiceError(:badarg)` if `m` is not 3 by 3 or `vin` does not have 3 elements.
 
@@ -687,7 +713,8 @@ mtxv(m::AbstractMatrix, vin::AbstractVector) = _m_mtxv(_m_m3(m), _m_v3(vin))
 """
     mxm(m1, m2) -> SMatrix{3,3}
 
-Return the product `m1 * m2` of two 3 by 3 matrices, as `mxm_c` of CSPICE.
+Return the product `m1 * m2` of two 3 by 3 matrices, as
+[`mxm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxm_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if a matrix is not 3 by 3.
 
@@ -698,7 +725,8 @@ mxm(m1::AbstractMatrix, m2::AbstractMatrix) = _m_mxm(_m_m3(m1), _m_m3(m2))
 """
     mtxm(m1, m2) -> SMatrix{3,3}
 
-Return the product of the transpose of `m1` and `m2`, for 3 by 3 matrices, as `mtxm_c`
+Return the product of the transpose of `m1` and `m2`, for 3 by 3 matrices, as
+[`mtxm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mtxm_c.html)
 of CSPICE.
 
 Throws `SpiceError(:badarg)` if a matrix is not 3 by 3.
@@ -710,7 +738,8 @@ mtxm(m1::AbstractMatrix, m2::AbstractMatrix) = _m_mtxm(_m_m3(m1), _m_m3(m2))
 """
     mxmt(m1, m2) -> SMatrix{3,3}
 
-Return the product of `m1` and the transpose of `m2`, for 3 by 3 matrices, as `mxmt_c`
+Return the product of `m1` and the transpose of `m2`, for 3 by 3 matrices, as
+[`mxmt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxmt_c.html)
 of CSPICE.
 
 Throws `SpiceError(:badarg)` if a matrix is not 3 by 3.
@@ -722,7 +751,8 @@ mxmt(m1::AbstractMatrix, m2::AbstractMatrix) = _m_mxmt(_m_m3(m1), _m_m3(m2))
 """
     xpose(m1) -> SMatrix{3,3}
 
-Return the transpose of a 3 by 3 matrix, as `xpose_c` of CSPICE.
+Return the transpose of a 3 by 3 matrix, as
+[`xpose_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xpose_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `m1` is not 3 by 3.
 
@@ -733,7 +763,8 @@ xpose(m1::AbstractMatrix) = _m_xpose(_m_m3(m1))
 """
     xpose6(m1) -> SMatrix{6,6}
 
-Return the transpose of a 6 by 6 matrix, as `xpose6_c` of CSPICE.
+Return the transpose of a 6 by 6 matrix, as
+[`xpose6_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xpose6_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `m1` is not 6 by 6.
 
@@ -747,7 +778,8 @@ end
 """
     invstm(mat) -> SMatrix{6,6}
 
-Return the inverse of a state transformation matrix, as `invstm_c` of CSPICE.
+Return the inverse of a state transformation matrix, as
+[`invstm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/invstm_c.html) of CSPICE.
 
 A state transformation `[R 0; dR R]`, with a rotation `R` and its time derivative `dR`,
 as [`sxform`](@ref) returns it, has the inverse
@@ -779,7 +811,8 @@ end
 """
     det(m1)
 
-Return the determinant of a 3 by 3 matrix, as `det_c` (expansion along the first row).
+Return the determinant of a 3 by 3 matrix, as
+[`det_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/det_c.html) (expansion along the first row).
 Not exported, because `LinearAlgebra` exports the same name: call `Almanac.det`.
 """
 det(m1::AbstractMatrix) = _m_det(_m_m3(m1))
@@ -787,7 +820,8 @@ det(m1::AbstractMatrix) = _m_det(_m_m3(m1))
 """
     trace(matrix)
 
-Return the trace of a 3 by 3 matrix, as `trace_c` of CSPICE.
+Return the trace of a 3 by 3 matrix, as
+[`trace_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/trace_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `matrix` is not 3 by 3.
 """
@@ -799,7 +833,8 @@ end
 """
     invert(m) -> SMatrix{3,3}
 
-Return the inverse of a 3 by 3 matrix, as `invert_c` of CSPICE.
+Return the inverse of a 3 by 3 matrix, as
+[`invert_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/invert_c.html) of CSPICE.
 
 A matrix whose determinant is below `1e-16` in absolute value counts as singular: the
 result is then the zero matrix, and no error is thrown.
@@ -838,7 +873,8 @@ end
     invort(m) -> SMatrix{3,3}
 
 Return the inverse of a 3 by 3 matrix whose columns are orthogonal and have any
-non-zero length, as `invort_c` of CSPICE.
+non-zero length, as
+[`invort_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/invort_c.html) of CSPICE.
 
 The result is the transpose with each row divided by the squared length of the
 matching column. The columns are not checked to be orthogonal.
@@ -866,7 +902,7 @@ end
     isrot(m, ntol, dtol) -> Bool
 
 Return `true` if the 3 by 3 matrix `m` is a rotation matrix within two tolerances, as
-`isrot_c` of CSPICE.
+[`isrot_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/isrot_c.html) of CSPICE.
 
 Each column must have a norm in `1 ± ntol`, and the matrix of the unit columns must
 have a determinant in `1 ± dtol`.
@@ -885,7 +921,8 @@ end
 """
     ident() -> SMatrix{3,3,Float64}
 
-Return the 3 by 3 identity matrix, as `ident_c` of CSPICE.
+Return the 3 by 3 identity matrix, as
+[`ident_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ident_c.html) of CSPICE.
 """
 ident() = SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 
@@ -893,7 +930,8 @@ ident() = SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
     rotate(angle, iaxis) -> SMatrix{3,3}
 
 Return the matrix that rotates a coordinate system by `angle` radians about the axis
-`iaxis` (1, 2, 3 for x, y, z), as `rotate_c` of CSPICE.
+`iaxis` (1, 2, 3 for x, y, z), as
+[`rotate_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rotate_c.html) of CSPICE.
 
 The product of the result and a vector gives the components of that vector in the
 rotated system. The vector itself is not rotated: [`axisar`](@ref) and [`vrotv`](@ref)
@@ -916,7 +954,8 @@ rotate(angle::Real, iaxis::Integer) = _m_rotate(_m_f(angle), iaxis)
 """
     rotmat(m1, angle, iaxis) -> SMatrix{3,3}
 
-Return `rotate(angle, iaxis) * m1` for a 3 by 3 matrix `m1`, as `rotmat_c` of CSPICE.
+Return `rotate(angle, iaxis) * m1` for a 3 by 3 matrix `m1`, as
+[`rotmat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rotmat_c.html) of CSPICE.
 This is the transformation `m1` followed by a rotation of the coordinate system by
 `angle` radians about the axis `iaxis`.
 
@@ -929,7 +968,8 @@ rotmat(m1::AbstractMatrix, angle::Real, iaxis::Integer) = _m_rotmat(_m_m3(m1), _
 """
     rotvec(v1, angle, iaxis) -> SVector{3}
 
-Return `rotate(angle, iaxis) * v1`, as `rotvec_c` of CSPICE: the components of the
+Return `rotate(angle, iaxis) * v1`, as
+[`rotvec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rotvec_c.html) of CSPICE: the components of the
 vector `v1` in a coordinate system rotated by `angle` radians about the axis `iaxis`.
 
 Throws `SpiceError(:badarg)` if `v1` does not have 3 elements.
@@ -964,7 +1004,8 @@ end
     twovec(axdef, indexa, plndef, indexp) -> SMatrix{3,3}
 
 Return the rotation matrix from the input frame to the right-handed frame that two
-vectors define, as `twovec_c` of CSPICE.
+vectors define, as
+[`twovec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/twovec_c.html) of CSPICE.
 
 Axis `indexa` of the new frame is along `axdef`. Axis `indexp` is in the plane of
 `axdef` and `plndef`, on the side of `plndef`. The rows of the result are the axes of
@@ -1011,7 +1052,7 @@ end
     twovxf(axdef, indexa, plndef, indexp) -> SMatrix{6,6}
 
 Return the 6 by 6 state transformation to the frame that two states define, as
-`twovxf_c` of CSPICE.
+[`twovxf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/twovxf_c.html) of CSPICE.
 
 The position parts of the states `axdef` and `plndef` define the frame as in
 [`twovec`](@ref); the velocity parts give its time derivative. The upper left and lower
@@ -1061,7 +1102,8 @@ end
 """
     frame(x) -> (x̂, y, z)
 
-Return a right-handed orthonormal frame whose first axis is along `x`, as `frame_c` of
+Return a right-handed orthonormal frame whose first axis is along `x`, as
+[`frame_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frame_c.html) of
 CSPICE.
 
 `x̂` is the unit vector along `x`, and `y` and `z` complete the frame; the three are
@@ -1113,7 +1155,8 @@ end
     dvhat(s1) -> SVector{6}
 
 Return the unit vector along the position of the state `s1`, followed by the time
-derivative of that unit vector, as `dvhat_c` of CSPICE.
+derivative of that unit vector, as
+[`dvhat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvhat_c.html) of CSPICE.
 
 A state has 6 elements: a position and a velocity. A zero position gives a zero unit
 vector and the velocity unchanged.
@@ -1134,7 +1177,7 @@ dvhat(s1::AbstractVector) = _m_dvhat(_m_v6(s1))
     dvdot(s1, s2)
 
 Return the time derivative of the dot product of the positions of two states, as
-`dvdot_c` of CSPICE.
+[`dvdot_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvdot_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if a state does not have 6 elements.
 
@@ -1150,7 +1193,8 @@ end
     dvcrss(s1, s2) -> SVector{6}
 
 Return the cross product of the positions of two states, followed by its time
-derivative, as `dvcrss_c` of CSPICE.
+derivative, as
+[`dvcrss_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvcrss_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if a state does not have 6 elements.
 
@@ -1162,7 +1206,8 @@ dvcrss(s1::AbstractVector, s2::AbstractVector) = _m_dvcrss(_m_v6(s1), _m_v6(s2))
     ducrss(s1, s2) -> SVector{6}
 
 Return the unit vector along the cross product of the positions of two states, followed
-by its time derivative, as `ducrss_c` of CSPICE.
+by its time derivative, as
+[`ducrss_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ducrss_c.html) of CSPICE.
 
 Each state is scaled by its largest position component first. Parallel positions give
 a zero unit vector. If a scaled velocity or a product of the scaled states is not
@@ -1177,7 +1222,8 @@ ducrss(s1::AbstractVector, s2::AbstractVector) = _m_ducrss(_m_v6(s1), _m_v6(s2))
 """
     dvnorm(state)
 
-Return the time derivative of the norm of the position of `state`, as `dvnorm_c` of
+Return the time derivative of the norm of the position of `state`, as
+[`dvnorm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvnorm_c.html) of
 CSPICE. A zero position gives 0.
 
 Throws `SpiceError(:badarg)` if `state` does not have 6 elements.
@@ -1195,7 +1241,8 @@ end
     dvsep(s1, s2)
 
 Return the time derivative of the angle between the positions of two states, in rad/s
-for velocities per second, as `dvsep_c` of CSPICE. Parallel positions, or a zero position,
+for velocities per second, as
+[`dvsep_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvsep_c.html) of CSPICE. Parallel positions, or a zero position,
 give 0.
 
 Throws `SpiceError(:numericoverflow)` if the size of the result is above 1e308, and
@@ -1236,7 +1283,8 @@ end
 """
     vaddg(v1, v2)
 
-Return the sum `v1 + v2` of two vectors of equal length, as `vaddg_c` of CSPICE.
+Return the sum `v1 + v2` of two vectors of equal length, as
+[`vaddg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vaddg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
 
@@ -1248,7 +1296,8 @@ vaddg(v1::AbstractVector, v2::AbstractVector) =
 """
     vsubg(v1, v2)
 
-Return the difference `v1 - v2` of two vectors of equal length, as `vsubg_c` of
+Return the difference `v1 - v2` of two vectors of equal length, as
+[`vsubg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vsubg_c.html) of
 CSPICE.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
@@ -1261,7 +1310,8 @@ vsubg(v1::AbstractVector, v2::AbstractVector) =
 """
     vsclg(s, v1)
 
-Return the product `s * v1` of a scalar and a vector of any length, as `vsclg_c` of
+Return the product `s * v1` of a scalar and a vector of any length, as
+[`vsclg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vsclg_c.html) of
 CSPICE.
 
 See also [`vscl`](@ref).
@@ -1274,7 +1324,8 @@ end
 """
     vminug(vin)
 
-Return `-vin` for a vector of any length, as `vminug_c` of CSPICE.
+Return `-vin` for a vector of any length, as
+[`vminug_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vminug_c.html) of CSPICE.
 
 See also [`vminus`](@ref).
 """
@@ -1283,7 +1334,8 @@ vminug(vin::AbstractVector) = _m_gmap(x -> -_m_f(x), vin)
 """
     vequg(vin)
 
-Return a copy of the vector `vin` of any length, as `vequg_c` of CSPICE.
+Return a copy of the vector `vin` of any length, as
+[`vequg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vequg_c.html) of CSPICE.
 
 See also [`vequ`](@ref).
 """
@@ -1292,7 +1344,8 @@ vequg(vin::AbstractVector) = _m_gmap(_m_f, vin)
 """
     vdotg(v1, v2)
 
-Return the dot product of two vectors of equal length, as `vdotg_c` of CSPICE.
+Return the dot product of two vectors of equal length, as
+[`vdotg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vdotg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
 
@@ -1318,7 +1371,8 @@ end
 """
     vnormg(v1)
 
-Return the Euclidean norm of a vector of any length, as `vnormg_c` of CSPICE. The
+Return the Euclidean norm of a vector of any length, as
+[`vnormg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vnormg_c.html) of CSPICE. The
 elements are divided by the one largest in magnitude before they are squared, as in
 [`vnorm`](@ref).
 
@@ -1338,7 +1392,8 @@ end
 """
     vhatg(v1)
 
-Return the unit vector along a vector of any length, as `vhatg_c` of CSPICE. The zero
+Return the unit vector along a vector of any length, as
+[`vhatg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vhatg_c.html) of CSPICE. The zero
 vector gives the zero vector.
 
 See also [`vhat`](@ref), [`unormg`](@ref).
@@ -1349,7 +1404,7 @@ vhatg(v1::AbstractVector) = unormg(v1)[1]
     unormg(v1) -> (vout, vmag)
 
 Return the unit vector along a vector of any length and the norm of that vector, as
-`unormg_c` of CSPICE. The zero vector gives the zero vector and the norm 0.
+[`unormg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unormg_c.html) of CSPICE. The zero vector gives the zero vector and the norm 0.
 
 See also [`unorm`](@ref), [`vhatg`](@ref).
 """
@@ -1365,7 +1420,8 @@ end
 """
     vdistg(v1, v2)
 
-Return the distance between two points of equal dimension, as `vdistg_c` of CSPICE.
+Return the distance between two points of equal dimension, as
+[`vdistg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vdistg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
 
@@ -1392,7 +1448,7 @@ end
 Return the angle between two vectors of equal length, in radians in [0, pi], with the
 method of [`vsep`](@ref). The result is 0 if a vector is zero.
 
-`vsepg_c` of CSPICE N0067 can lose up to half of the digits near 0 and pi, so the
+[`vsepg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vsepg_c.html) of CSPICE N0067 can lose up to half of the digits near 0 and pi, so the
 results of the two differ there.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
@@ -1420,7 +1476,8 @@ end
     vrelg(v1, v2)
 
 Return the relative difference `|v1 - v2| / max(|v1|, |v2|)` of two vectors of equal
-length, as `vrelg_c` of CSPICE. The result is 0 for equal vectors.
+length, as
+[`vrelg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vrelg_c.html) of CSPICE. The result is 0 for equal vectors.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
 
@@ -1438,7 +1495,7 @@ end
     vprojg(a, b)
 
 Return the projection of the vector `a` on the vector `b` of equal length, as
-`vprojg_c` of CSPICE. A zero `b` gives the zero vector.
+[`vprojg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vprojg_c.html) of CSPICE. A zero `b` gives the zero vector.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
 
@@ -1455,7 +1512,7 @@ end
     vlcomg(a, v1, b, v2)
 
 Return the linear combination `a*v1 + b*v2` of two vectors of equal length, as
-`vlcomg_c` of CSPICE.
+[`vlcomg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vlcomg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if the lengths differ.
 
@@ -1470,7 +1527,8 @@ end
 """
     vzerog(v) -> Bool
 
-Return `true` if every element of the vector `v` of any length is zero, as `vzerog_c`
+Return `true` if every element of the vector `v` of any length is zero, as
+[`vzerog_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vzerog_c.html)
 of CSPICE.
 
 See also [`vzero`](@ref).
@@ -1480,7 +1538,8 @@ vzerog(v::AbstractVector) = all(x -> primal(x) == 0.0, v)
 """
     vtmvg(v1, matrix, v2)
 
-Return the bilinear form `v1' * matrix * v2` for any dimensions that fit, as `vtmvg_c`
+Return the bilinear form `v1' * matrix * v2` for any dimensions that fit, as
+[`vtmvg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vtmvg_c.html)
 of CSPICE.
 
 Throws `SpiceError(:badarg)` if `size(matrix) != (length(v1), length(v2))`.
@@ -1503,7 +1562,7 @@ end
     mxvg(m1, v2)
 
 Return the product `m1 * v2` of a matrix and a vector of any sizes that fit, as
-`mxvg_c` of CSPICE.
+[`mxvg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxvg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `size(m1, 2) != length(v2)`.
 
@@ -1539,7 +1598,8 @@ mxvg(m1::StaticMatrix{N,M}, v2::StaticVector{M}) where {N,M} =
     mtxvg(m1, v2)
 
 Return the product of the transpose of `m1` and the vector `v2`, for any sizes that
-fit, as `mtxvg_c` of CSPICE.
+fit, as
+[`mtxvg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mtxvg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `size(m1, 1) != length(v2)`.
 
@@ -1559,7 +1619,8 @@ mtxvg(m1::StaticMatrix{N,M}, v2::StaticVector{N}) where {N,M} =
 """
     mxmg(m1, m2)
 
-Return the product `m1 * m2` of two matrices of any sizes that fit, as `mxmg_c` of
+Return the product `m1 * m2` of two matrices of any sizes that fit, as
+[`mxmg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxmg_c.html) of
 CSPICE.
 
 Throws `SpiceError(:badarg)` if `size(m1, 2) != size(m2, 1)`.
@@ -1582,7 +1643,7 @@ mxmg(m1::StaticMatrix{N,M}, m2::StaticMatrix{M,P}) where {N,M,P} =
     mtxmg(m1, m2)
 
 Return the product of the transpose of `m1` and `m2`, for any sizes that fit, as
-`mtxmg_c` of CSPICE.
+[`mtxmg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mtxmg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `size(m1, 1) != size(m2, 1)`.
 
@@ -1604,7 +1665,7 @@ mtxmg(m1::StaticMatrix{N,M}, m2::StaticMatrix{N,P}) where {N,M,P} =
     mxmtg(m1, m2)
 
 Return the product of `m1` and the transpose of `m2`, for any sizes that fit, as
-`mxmtg_c` of CSPICE.
+[`mxmtg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxmtg_c.html) of CSPICE.
 
 Throws `SpiceError(:badarg)` if `size(m1, 2) != size(m2, 2)`.
 
@@ -1625,7 +1686,8 @@ mxmtg(m1::StaticMatrix{N,M}, m2::StaticMatrix{P,M}) where {N,M,P} =
 """
     xposeg(matrix)
 
-Return the transpose of a matrix of any size, as `xposeg_c` of CSPICE.
+Return the transpose of a matrix of any size, as
+[`xposeg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xposeg_c.html) of CSPICE.
 
 See also [`xpose`](@ref), [`xpose6`](@ref).
 """

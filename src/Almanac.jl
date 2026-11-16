@@ -26,7 +26,7 @@ export spk14b, spk14a, spk14e, SPK14Writer
 export spksfs, spkpvn, spkuds, spksub
 export getelm, evsgp4, spkw10
 export ckopn, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
-export pckopn, pckw02, pckcls
+export pckopn, pckw02, pckw20, pckcls
 export spkobj, spkobj!, spkcov, spkcov!, kinfo, kdata, tkvrsn
 export Window, card, wncard, wninsd!, wnvald!, wnunid, wnintd, wndifd, wncomd
 export wnelmd, wnincd, wnfetd, wnsumd, wnreld, wncond!, wnexpd!, wnextd!, wnfild!, wnfltd!
@@ -67,6 +67,8 @@ export limbpt, termpt, tangpt, fovtrg, fovray, getfov, getfvn
 export spkcpo, spkcpt, spkcvo, spkcvt, azlcpo, azlrec, recazl, dazldr, drdazl
 export gfdist, gfsep, gfposc, gfrr, gfpa, gfuds, gfudb, gfevnt, gfstol, gfrefn, uddc, uddf
 export gfsubc, gfsntc, gfilum, gfoclt, gftfov, gfrfov, gfocce, gffove
+export add_ephemeris!, add_frame!
+export StateQuery, state_query, RotationQuery, rotation_query
 export EphemerisTable, ephemeris_table, table_position, table_state, table_jet, table_span
 export RotationTable, rotation_table, table_rotation, table_rotation_jet, table_to_spk
 export EKColumnAttr, EKSegmentSummary
@@ -85,6 +87,7 @@ include("daf.jl")           # open_daf, segment descriptors
 include("spk_eval.jl")      # spk_eval, pck_eval, find_segment
 include("spk_more.jl")      # SPK types 1, 5, 8, 9, 12 to 15, 17 to 21
 include("textkernel.jl")    # parse_text_kernel, kernel_arch, metakernel_files
+include("jsonkernel.jl")    # parse_json_kernel, is_json_kernel
 include("names.jl")         # body names and codes, built-in and pool-defined
 include("frames.jl")        # frame definitions, built-in and pool-defined
 include("time.jl")          # leap seconds, deltet, unitim, ttrans, calendars, constants
@@ -108,7 +111,7 @@ include("daf_access.jl")    # DAFHandle, dafopr, dafbfs, daffna, dafgs, dafgda, 
 include("daf_write.jl")     # dafonw, dafopw, dafbna, dafada, dafena, dafac, dafdc
 include("spk_write.jl")     # spkopn, spkopa, spkcls, spkw01 ... spkw21
 include("ck_write.jl")      # ckopn, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
-include("pck_write.jl")     # pckopn, pckw02, pckcls
+include("pck_write.jl")     # pckopn, pckw02, pckw20, pckcls
 include("ck_records.jl")    # cknr02, ckgr02, cknr03, ckgr03
 include("das.jl")           # DASHandle, dasopr, dasonw, dascls, dasrdi, dasadi, dasudc, dasac, dasec
 include("dla.jl")           # dlaopn, dlabns, dlaens, dlabfs, dlafns, dlabbs, dlafps
@@ -147,6 +150,8 @@ include("gf/surface.jl")     # gfsubc, gfsntc: sub-observer point and surface in
 include("gf/illumination.jl")  # gfilum: illumination angles at a surface point
 include("gf/occultation.jl") # gfoclt, gfocce: occultations and transits
 include("gf/fov.jl")         # gftfov, gfrfov, gffove: visibility in a field of view
+include("providers.jl")     # EphemerisProvider evaluation, add_ephemeris!
+include("queries.jl")       # StateQuery, state_query, RotationQuery, rotation_query
 include("table.jl")         # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
 include("ek/file.jl")       # EK pages, trees, segment and column descriptors
 include("ek/columns.jl")    # EK column entries of classes 1 to 9

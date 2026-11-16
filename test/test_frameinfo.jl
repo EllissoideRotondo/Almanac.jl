@@ -189,6 +189,18 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
     ctx = neo_context(set)
     ks = Almanac.kernelset(ctx)
 
+    @apart @testset "ccifrm: a frame class that is not a number" begin
+        c2 = SpiceContext()
+        lmpool(c2, ["FRAME_-999_CLASS = 'X'"])
+        @test throws_kind(() -> ccifrm(c2, 3, -1), :invalidframedef)
+        try
+            SPICE.lmpool(["FRAME_-999_CLASS = 'X'"])
+            @test_throws SPICE.SpiceError SPICE.ccifrm(3, -1)
+        finally
+            SPICE.dvpool("FRAME_-999_CLASS")
+        end
+    end
+
     @apart @testset "tipbod and tisbod" begin
         dp = Float64[]; ds = Float64[]; dd = Float64[]
         structure_ok = true
@@ -219,6 +231,11 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         @test (@inferred tisbod(ks, 1, 399, 1.0e8)) isa SMatrix{6,6,Float64,36}
         @test throws_kind(() -> tipbod(ctx, "IAU_EARTH", 399, 0.0), :irfnotrec)
         @test throws_kind(() -> tipbod(ctx, "J2000", 123456, 0.0), :framedatanotfound)
+        # A rotation rate without a pole: CSPICE names the absent variable.
+        c2 = SpiceContext()
+        pdpool(c2, "BODY123456_PM", [10.0, 1.0])
+        pdpool(c2, "BODY123456_POLE_DEC", [80.0])
+        @test throws_kind(() -> tisbod(c2, "J2000", 123456, 0.0), :kernelvarnotfound)
     end
 
     @apart @testset "pckfrm and pckcov" begin

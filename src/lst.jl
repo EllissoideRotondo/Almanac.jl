@@ -47,7 +47,8 @@ _lst_two(n::Integer) = string(n ÷ 10, n % 10)
     et2lst([ctx,] et, body, lon, type) -> (hr, mn, sc, time, ampm)
 
 Return the local solar time at `et` for the longitude `lon` on the body with ID
-`body`, as `et2lst_c`.
+`body`, as
+[`et2lst_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/et2lst_c.html).
 
 - `et`: seconds past J2000 TDB, a plain real number (not a `ForwardDiff.Dual`).
 - `lon`: longitude in radians.
@@ -133,7 +134,8 @@ et2lst(et::Real, body::Integer, lon::Real, type::AbstractString) =
     lspcn([ctx,] body, et, abcorr) -> Float64
 
 Return the planetocentric longitude of the Sun (`Ls`) for `body` at `et`, in radians
-in `[0, 2pi)`, as `lspcn_c`.
+in `[0, 2pi)`, as
+[`lspcn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lspcn_c.html).
 
 `Ls` is the season angle of the body: 0 at its spring equinox of the north, `pi/2` at
 the summer solstice of the north. It is the right ascension of the Sun as seen from

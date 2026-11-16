@@ -40,7 +40,8 @@ end
     prop2b(gm, pvinit, dt) -> SVector{6}
 
 Return the state of a body at the time `dt` after the state `pvinit`, for two-body
-motion about a mass with the gravitational parameter `gm`, as `prop2b_c` of CSPICE.
+motion about a mass with the gravitational parameter `gm`, as
+[`prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html) of CSPICE.
 
 The units must be consistent, for example km, km/s, seconds and km³/s². `gm` and
 `pvinit` are converted to `Float64`. `dt` can be a `ForwardDiff.Dual` or an
@@ -89,7 +90,8 @@ end
     conics(elts, et) -> SVector{6}
 
 Return the state at the epoch `et` of a body on the conic orbit with the elements
-`elts`, as `conics_c` of CSPICE.
+`elts`, as
+[`conics_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/conics_c.html) of CSPICE.
 
 | Index | Name    | Meaning                                    |
 |:------|:--------|:-------------------------------------------|
@@ -226,7 +228,8 @@ end
     oscelt(state, et, mu) -> SVector{8}
 
 Return the osculating conic elements `(rp, ecc, inc, lnode, argp, m0, t0, mu)` of a
-state, as `oscelt_c` of CSPICE.
+state, as
+[`oscelt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscelt_c.html) of CSPICE.
 
 `state` is the position and the velocity at the epoch `et`, relative to a mass with the
 gravitational parameter `mu`. The table in [`conics`](@ref) defines the elements; `t0`
@@ -255,7 +258,8 @@ oscelt(state::AbstractVector, et::Real, mu::Real) = _m_oscelt(_m_v6(state), et, 
     oscltx(state, et, mu) -> SVector{20}
 
 Return the osculating elements of [`oscelt`](@ref) with the true anomaly, the
-semi-major axis and the period, as `oscltx_c` of CSPICE.
+semi-major axis and the period, as
+[`oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html) of CSPICE.
 
 | Index | Content                                                                    |
 |:------|:---------------------------------------------------------------------------|
@@ -329,7 +333,7 @@ end
 
 Return the state at the epoch `et` (seconds past J2000 TDB) of a body whose orbit is
 given by equinoctial elements with the rates of the node and of the periapsis, as
-`eqncpv_c` of CSPICE.
+[`eqncpv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eqncpv_c.html) of CSPICE.
 
 `eqel` holds the elements at `epoch` (seconds past J2000 TDB):
 

@@ -261,11 +261,29 @@ from J2000 to the reference frame of the segment. Requires `seg.t0 <= primal(et)
 end
 
 """
+    _missing_pole(ks, body)
+
+With `BODY<body>_PM` in the pool and a pole angle absent, throw
+`SpiceError(:kernelvarnotfound)` for the first absent one, as `bodvcd_` in `tisbod_`
+does; return otherwise.
+"""
+@noinline function _missing_pole(ks::KernelSet, body::Int32)
+    haskey(ks.pool, "BODY$(body)_PM") || return nothing
+    for item in ("POLE_RA", "POLE_DEC")
+        name = "BODY$(body)_$item"
+        _pool_numbers(ks.pool, name) === nothing && throw(SpiceError(:kernelvarnotfound,
+            "the variable $name could not be found in the kernel pool"))
+    end
+    return nothing
+end
+
+"""
     _body_rotation(ks, classid, et::T) -> Mat3{T}
 
 Matrix from J2000 to the class 2 frame with class ID `classid`: from a binary PCK
 segment if one covers `primal(et)`, otherwise from the text-PCK constants, as
-`tisbod_` does. Throws `SpiceError(:framedatanotfound)` if neither exists.
+`tisbod_` does. Throws `SpiceError(:framedatanotfound)` if neither exists, and
+`SpiceError(:kernelvarnotfound)` if `BODY<id>_PM` exists without a pole angle.
 """
 function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T<:Real}
     segs = get(ks.pck, classid, nothing)
@@ -277,6 +295,7 @@ function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T<:Real}
         end
     end
     br = get(ks.bodyrot, classid, nothing)
+    br === nothing && _missing_pole(ks, classid)
     br === nothing && throw(SpiceError(:framedatanotfound,
         "PCK data required to compute the orientation of the body-fixed frame with " *
         "class ID $classid at ET $(primal(et)) were not found (no binary PCK segment " *
@@ -519,6 +538,9 @@ function _frame_step(ks::KernelSet, id::Int32, et::T) where {T<:Real}
     elseif class == 5
         # A dynamic frame is linked to its base frame (`dynframes.jl`).
         return _dyn_frame_step(_CKExact(), ks, fd, et)
+    elseif class == FRAME_PROVIDER_CLASS
+        p = frame_provider(ks, fd)
+        p === nothing || return p.relative, provider_rotation(p, et)
     end
     throw(SpiceError(:notsupported,
         "frame $id has class $class; only classes 1 to 6 are supported"))
@@ -542,6 +564,10 @@ function _frame_parent(ks::KernelSet, id::Int32)
     end
     (class == 3 || class == 6) && return _J2000_FRAME
     class == 5 && return _dyn_base(ks, id)
+    if class == FRAME_PROVIDER_CLASS
+        p = frame_provider(ks, fd)
+        p === nothing || return p.relative
+    end
     throw(SpiceError(:notsupported,
         "frame $id has class $class; only classes 1 to 6 are supported"))
 end

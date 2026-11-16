@@ -7,7 +7,8 @@ const CSPICE_VERSION = "CSPICE_N0067"
 """
     tkvrsn(item="TOOLKIT") -> String
 
-Return the version string of the toolkit, as `tkvrsn_c`.
+Return the version string of the toolkit, as
+[`tkvrsn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tkvrsn_c.html).
 
 For `item = "TOOLKIT"` the result is `"Almanac_v<package version>/CSPICE_N0067"`.
 The part after the slash is the CSPICE version whose behavior and file formats the
@@ -68,7 +69,8 @@ end
 """
     ktotal([ctx,] kind="ALL") -> Int
 
-Return the number of loaded kernels of the types in `kind`, as `ktotal_c`.
+Return the number of loaded kernels of the types in `kind`, as
+[`ktotal_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ktotal_c.html).
 
 `kind` is `"ALL"` or a blank-separated list of `SPK`, `CK`, `PCK`, `DSK`, `EK`, `TEXT`
 and `META`, in any letter case. A meta-kernel counts once as `META`, and each file
@@ -91,7 +93,8 @@ ktotal(kind::AbstractString) = ktotal(default_context(), kind)
     kdata([ctx,] which, kind="ALL") -> Union{Nothing,Tuple{String,String,String,Int}}
 
 Return `(file, filtyp, source, handle)` of loaded kernel number `which` among the
-kernels of the types in `kind`, as `kdata_c`, or `nothing` if there is no such kernel.
+kernels of the types in `kind`, as
+[`kdata_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kdata_c.html), or `nothing` if there is no such kernel.
 
 `which` counts from 1 in load order, as in SPICE.jl; CSPICE counts from 0. `kind` is
 as for [`ktotal`](@ref). `file` is the path given to [`furnsh`](@ref), or for a file
@@ -125,7 +128,7 @@ kdata(which::Integer, kind::AbstractString="ALL") = kdata(default_context(), whi
     kinfo([ctx,] file) -> Union{Nothing,Tuple{String,String,Int}}
 
 Return `(filtyp, source, handle)` of the loaded kernel with the path `file`, as
-`kinfo_c`, or `nothing` if the file is not loaded.
+[`kinfo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kinfo_c.html), or `nothing` if the file is not loaded.
 
 `file` is compared as a string with the path given to [`furnsh`](@ref), as in CSPICE.
 If the path is loaded more than once, the first entry is reported. The elements have
@@ -201,7 +204,8 @@ end
     spkobj!(ids, path) -> ids
 
 Insert the ID codes of the bodies that have data in the SPK file `path` into the
-vector `ids`, as `spkobj_c` does with a SPICE cell.
+vector `ids`, as
+[`spkobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkobj_c.html) does with a SPICE cell.
 
 `ids` is used as a set: on return it is sorted and without duplicates. The vector
 comes first, as in SPICE.jl; CSPICE has the cell last. The file is read from disk and
@@ -223,7 +227,8 @@ end
     spkobj(path) -> Vector{Int}
 
 Return the ID codes of the bodies that have data in the SPK file `path`, sorted and
-without duplicates, as `spkobj_c`.
+without duplicates, as
+[`spkobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkobj_c.html).
 
 The file is read from disk and need not be loaded.
 
@@ -247,7 +252,8 @@ spkobj(path::AbstractString) = spkobj!(Int[], path)
     spkcov!(cover, path, idcode) -> cover
 
 Insert the coverage of the body `idcode` in the SPK file `path` into the window
-`cover`, as `spkcov_c`.
+`cover`, as
+[`spkcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcov_c.html).
 
 The result is the union of the old content of `cover` with the new intervals. The
 window comes first, as in SPICE.jl; CSPICE has the cell last. See [`spkcov`](@ref) for
@@ -265,7 +271,7 @@ end
     spkcov(path, idcode) -> Window
 
 Return the coverage [`Window`](@ref) of the body `idcode` in the SPK file `path`, as
-`spkcov_c`.
+[`spkcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcov_c.html).
 
 The window is the union of the intervals `[start, stop]` of the segments of that
 body, in seconds past J2000 TDB, as sorted disjoint intervals. `collect(w)` gives the

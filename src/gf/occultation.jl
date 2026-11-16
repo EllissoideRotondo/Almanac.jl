@@ -128,7 +128,8 @@ end
            threads=false) -> Window
 
 Return the window of epochs, in seconds past J2000 TDB, on which the body `front`
-occults the body `back` as seen from `obsrvr`, as `gfoclt_c`. A transit of `front`
+occults the body `back` as seen from `obsrvr`, as
+[`gfoclt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfoclt_c.html). A transit of `front`
 across `back` is the same event.
 
 The result is a new `Window` that is a subset of the confinement window `cnfine`;
@@ -218,7 +219,8 @@ gfoclt(occtyp::AbstractString, front::NameOrID, fshape::AbstractString, fframe::
            tol, udstep, udrefn, cnfine; bail=nothing, report=nothing, threads=false) -> Window
 
 Return the occultation window of [`gfoclt`](@ref), found with a step and a refinement
-function that the caller supplies, as `gfocce_c`.
+function that the caller supplies, as
+[`gfocce_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfocce_c.html).
 
 `tol`, `udstep` and `udrefn` are those of [`gfevnt`](@ref). The other arguments, the
 keywords `bail`, `report` and `threads`, the result and the errors are those of

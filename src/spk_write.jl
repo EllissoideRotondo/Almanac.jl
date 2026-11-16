@@ -78,13 +78,13 @@ function _seg_flat(who::AbstractString, what::AbstractString, x, rowlen::Int)
         m = size(x, 1)
         (rowlen == 0 || m == rowlen) || throw(SpiceError(:badarg,
             "$who: `$what` must have $rowlen rows (one table row in each column), it has $m"))
-        return Float64[Float64(v) for v in vec(x)], size(x, 2), m
+        return _vec_of(Float64, x), size(x, 2), m
     elseif x isa AbstractVector{<:Real}
         rowlen > 0 || throw(SpiceError(:badarg,
             "$who: `$what` must be a matrix or a vector of vectors"))
         length(x) % rowlen == 0 || throw(SpiceError(:badarg,
             "$who: the length $(length(x)) of `$what` is not a multiple of $rowlen"))
-        return Float64[Float64(v) for v in x], length(x) ÷ rowlen, rowlen
+        return _vec_of(Float64, x), length(x) ÷ rowlen, rowlen
     elseif x isa AbstractVector
         n = length(x)
         m = rowlen == 0 ? (n == 0 ? 0 : length(x[1])) : rowlen
@@ -106,12 +106,12 @@ function _seg_vec(who::AbstractString, what::AbstractString, x, n::Int)
     x isa AbstractVector{<:Real} || throw(SpiceError(:badarg, "$who: `$what` must be a vector of numbers"))
     (n < 0 || length(x) == n) || throw(SpiceError(:badarg,
         "$who: `$what` must have $n elements but has $(length(x))"))
-    return Float64[Float64(v) for v in x]
+    return _vec_of(Float64, x)
 end
 
 function _seg_fixed(who::AbstractString, what::AbstractString, v, n::Int)
     length(v) == n || throw(SpiceError(:badarg, "$who: `$what` must have $n elements but has $(length(v))"))
-    return Float64[Float64(x) for x in v]
+    return _vec_of(Float64, v)
 end
 
 function _seg_increasing(who::AbstractString, epochs::Vector{Float64})
@@ -126,7 +126,8 @@ end
 """
     spkpds([ctx,] body, center, frame, type, first, last) -> Vector{Float64}
 
-Return the packed descriptor of an SPK segment (five doubles), as `spkpds_c`.
+Return the packed descriptor of an SPK segment (five doubles), as
+[`spkpds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpds_c.html).
 
 `body` and `center` are NAIF IDs, `frame` is a frame name or a frame ID, `type` is the SPK
 data type, and `first`, `last` are the coverage in seconds past J2000 TDB. A frame name is
@@ -204,7 +205,8 @@ end
 """
     spkopn(path, ifname, ncomch=0) -> DAFHandle
 
-Create the SPK file `path` and open it for writing, as `spkopn_c`.
+Create the SPK file `path` and open it for writing, as
+[`spkopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkopn_c.html).
 
 `ifname` is the internal file name and `ncomch` is the number of comment characters to
 make room for. The file is on disk when the call returns, byte for byte the file that
@@ -251,7 +253,8 @@ end
 """
     spkopa(path) -> DAFHandle
 
-Open the existing SPK file `path` for writing, to append segments, as `spkopa_c`.
+Open the existing SPK file `path` for writing, to append segments, as
+[`spkopa_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkopa_c.html).
 
 The file must have the native byte order, and no other open handle may have it open
 (see [`dafopw`](@ref)). Unload the file from every context before the call, and load it
@@ -288,7 +291,8 @@ end
 """
     spkcls(handle) -> Nothing
 
-Close the SPK file of `handle`, as `spkcls_c`. The call does nothing if the handle is
+Close the SPK file of `handle`, as
+[`spkcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcls_c.html). The call does nothing if the handle is
 closed already. The close writes no data: every write call puts its bytes on disk before it
 returns, except [`spk14b`](@ref) and [`spk14a`](@ref), so a type 14 segment that
 [`spk14e`](@ref) did not end is not in the file. Load the file with [`furnsh`](@ref) after
@@ -362,7 +366,8 @@ end
         -> Nothing
 
 Write an SPK segment of type 2 (Chebyshev polynomials for the position, on intervals of
-equal length) to the file of `handle`, as `spkw02_c`.
+equal length) to the file of `handle`, as
+[`spkw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw02_c.html).
 
 # Arguments
 `ctx`, `handle`, `body`, `center`, `frame`, `first`, `last` and `segid` have the same
@@ -431,7 +436,8 @@ spkw02(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
         -> Nothing
 
 Write an SPK segment of type 3 (Chebyshev polynomials for the position and the velocity,
-on intervals of equal length), as `spkw03_c`.
+on intervals of equal length), as
+[`spkw03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw03_c.html).
 
 `cdata` holds one record for each interval, each with `6 * (polydg + 1)` coefficients:
 those of x, y, z (km) and then of dx, dy, dz (km/s). The other arguments and the errors
@@ -449,7 +455,8 @@ spkw03(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
            tscale, initjd, initfr) -> Nothing
 
 Write an SPK segment of type 20 (Chebyshev polynomials for the velocity, with the position
-at the midpoint of each interval), as `spkw20_c`.
+at the midpoint of each interval), as
+[`spkw20_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw20_c.html).
 
 `cdata` holds one record for each interval, each with `3 * (polydg + 2)` values: the
 `polydg + 1` coefficients of the x velocity, then the x position at the midpoint of the
@@ -518,7 +525,7 @@ spkw20(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
         -> Nothing
 
 Write an SPK segment of type 5 (two-body propagation between discrete states), as
-`spkw05_c`.
+[`spkw05_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw05_c.html).
 
 `states` holds `n` states (x, y, z in km; dx, dy, dz in km/s), `epochs` holds their `n`
 epochs (seconds past J2000 TDB) and `gm` is the gravitational parameter of the central
@@ -568,7 +575,7 @@ spkw05(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
            step) -> Nothing
 
 Write an SPK segment of type 8 (Lagrange interpolation of states at equal time steps), as
-`spkw08_c`.
+[`spkw08_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw08_c.html).
 
 `states` holds `n` states (km, km/s). State `k`, counted from 1, is at the epoch
 `epoch1 + (k - 1) * step` (seconds past J2000 TDB; `step` in s). `degree` is the degree
@@ -620,7 +627,7 @@ spkw08(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
         -> Nothing
 
 Write an SPK segment of type 9 (Lagrange interpolation of states at unequal time steps),
-as `spkw09_c`.
+as [`spkw09_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw09_c.html).
 
 `states` holds `n` states (km, km/s) and `epochs` their `n` epochs (seconds past J2000
 TDB). `degree` is the degree of the interpolating polynomial. See [`spkw02`](@ref) for
@@ -672,7 +679,7 @@ spkw09(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
            step) -> Nothing
 
 Write an SPK segment of type 12 (Hermite interpolation of states at equal time steps), as
-`spkw12_c`.
+[`spkw12_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw12_c.html).
 
 `states` holds `n` states (km, km/s). State `k`, counted from 1, is at the epoch
 `epoch1 + (k - 1) * step` (seconds past J2000 TDB; `step` in s). `degree` is the degree
@@ -728,7 +735,7 @@ spkw12(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
         -> Nothing
 
 Write an SPK segment of type 13 (Hermite interpolation of states at unequal time steps),
-as `spkw13_c`.
+as [`spkw13_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw13_c.html).
 
 `states` holds `n` states (x, y, z in km; dx, dy, dz in km/s) and `epochs` their `n`
 epochs (seconds past J2000 TDB). `degree` is the degree of the interpolating polynomial.
@@ -788,7 +795,8 @@ _spk18_subtype(s::Symbol) = s === :S18TP0 ? 0 : s === :S18TP1 ? 1 : -1
            epochs) -> Nothing
 
 Write an SPK segment of type 18 (Hermite or Lagrange interpolation of packets at unequal
-time steps), as `spkw18_c`.
+time steps), as
+[`spkw18_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw18_c.html).
 
 `subtyp` selects the interpolation and the content of a packet (km, km/s, km/s²):
 
@@ -880,7 +888,8 @@ end
     spkw15([ctx,] handle, body, center, frame, first, last, segid, epoch, tp, pa, p, ecc,
            j2flg, pv, gm, j2, radius) -> Nothing
 
-Write an SPK segment of type 15 (precessing conic propagation), as `spkw15_c`.
+Write an SPK segment of type 15 (precessing conic propagation), as
+[`spkw15_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw15_c.html).
 
 - `epoch`: the epoch of periapsis, seconds past J2000 TDB.
 - `tp`: the trajectory pole, a vector along the orbital angular momentum.
@@ -942,7 +951,8 @@ spkw15(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
     spkw17([ctx,] handle, body, center, frame, first, last, segid, epoch, eqel, rapol,
            decpol) -> Nothing
 
-Write an SPK segment of type 17 (equinoctial elements), as `spkw17_c`.
+Write an SPK segment of type 17 (equinoctial elements), as
+[`spkw17_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw17_c.html).
 
 `eqel` holds the nine equinoctial elements at `epoch` (seconds past J2000 TDB). `rapol`
 and `decpol` are the right ascension and the declination (radians) in `frame` of the pole
@@ -1003,7 +1013,8 @@ spkw17(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
     spkw01([ctx,] handle, body, center, frame, first, last, segid, dlines, epochs)
         -> Nothing
 
-Write an SPK segment of type 1 (modified difference arrays), as `spkw01` of SPICELIB.
+Write an SPK segment of type 1 (modified difference arrays), as
+[`spkw01`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw01.html) of SPICELIB.
 CSPICE has no C wrapper for it.
 
 `dlines` holds `n` difference lines, each the 71 doubles of one modified difference
@@ -1050,8 +1061,8 @@ spkw01(h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Rea
     spkw21([ctx,] handle, body, center, frame, first, last, segid, dlines, epochs)
         -> Nothing
 
-Write an SPK segment of type 21 (extended modified difference arrays), as `spkw21` of
-SPICELIB. CSPICE has no C wrapper for it.
+Write an SPK segment of type 21 (extended modified difference arrays), as
+[`spkw21`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw21.html) of SPICELIB. CSPICE has no C wrapper for it.
 
 `dlines` holds `n` difference lines of equal size `dlsize`: a matrix with one line in each
 column, or a vector of vectors. `n` and `dlsize` follow from its shape. `epochs` holds
@@ -1121,7 +1132,7 @@ const _SPK19_PKTSZS = (12, 6, 6)
            packts, epochs, ivlbds, sellst) -> Nothing
 
 Write an SPK segment of type 19 (mini-segments of Hermite or Lagrange interpolation), as
-`spkw19` of SPICELIB. CSPICE has no C wrapper for it.
+[`spkw19`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw19.html) of SPICELIB. CSPICE has no C wrapper for it.
 
 A mini-segment is a set of packets with its own subtype and degree, valid on its own
 interval. The number of mini-segments is `length(npkts)`.
@@ -1276,7 +1287,8 @@ Base.show(io::IO, w::SPK14Writer) = print(io, "SPK14Writer(\"", w.segid, "\", ",
     spk14b([ctx,] handle, segid, body, center, frame, first, last, chbdeg) -> SPK14Writer
 
 Begin an SPK segment of type 14 (Chebyshev polynomials for the position and the velocity,
-on intervals of unequal length), as `spk14b_c`, and return its writer.
+on intervals of unequal length), as
+[`spk14b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spk14b_c.html), and return its writer.
 
 `chbdeg` is the degree of the polynomials. The other arguments are those of
 [`spkw02`](@ref); note that `segid` comes before `body`. Add records with
@@ -1341,7 +1353,8 @@ spk14b(h::DAFHandle, segid::AbstractString, body::Integer, center::Integer, fram
     spk14a(writer, ncsets, coeffs, epochs) -> Nothing
     spk14a(writer, coeffs, epochs) -> Nothing
 
-Add `ncsets` records to the type 14 segment `writer`, as `spk14a_c`. Without `ncsets`,
+Add `ncsets` records to the type 14 segment `writer`, as
+[`spk14a_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spk14a_c.html). Without `ncsets`,
 the number of records is `length(epochs)`.
 
 A record has `2 + 6 * (chbdeg + 1)` numbers: the midpoint (seconds past J2000 TDB) and
@@ -1391,7 +1404,8 @@ spk14a(w::SPK14Writer, coeffs, epochs) = spk14a(w, length(epochs), coeffs, epoch
 """
     spk14e(writer) -> Nothing
 
-End the type 14 segment `writer` and write it to its file, as `spk14e_c`.
+End the type 14 segment `writer` and write it to its file, as
+[`spk14e_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spk14e_c.html).
 
 [`spk14b`](@ref) and [`spk14a`](@ref) do not change the file, so a segment that is never
 ended is not in the file. The segment is on disk when the call returns, with the data that

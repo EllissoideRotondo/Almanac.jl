@@ -50,10 +50,56 @@ another frame is rotated with the rotation jet of that frame.
 """
 @inline function segment_jet(ks::KernelSet, seg::Segment, et::T, ::Val{N}) where {T<:Real,N}
     # Type 10 (two-line elements) needs the leap seconds: spk_types/type10.jl.
-    jet = seg.dtype == Int32(10) ? _t10_jet(_lsk(ks), ks.daf[seg.file], seg, et, Val(N)) :
+    jet = seg.dtype == PROVIDER_DTYPE ?
+              provider_jet(ks.loaded[seg.baddr].content::EphemerisProvider, et, Val(N)) :
+          seg.dtype == Int32(10) ? _t10_jet(_lsk(ks), ks.daf[seg.file], seg, et, Val(N)) :
           spk_eval(ks.daf[seg.file], seg, et, Val(N))
     seg.frame == Int32(1) && return jet
     return rotate_jet(frame_jet(ks, seg.frame, Int32(1), et, Val(N)), jet)
+end
+
+"Jet of order N of `seg` at `et` in the segment frame `seg.frame`."
+@inline function segment_jet_native(ks::KernelSet, seg::Segment, et::T, ::Val{N}) where {T<:Real,N}
+    seg.dtype == PROVIDER_DTYPE &&
+        return provider_jet(ks.loaded[seg.baddr].content::EphemerisProvider, et, Val(N))
+    seg.dtype == Int32(10) && return _t10_jet(_lsk(ks), ks.daf[seg.file], seg, et, Val(N))
+    return spk_eval(ks.daf[seg.file], seg, et, Val(N))
+end
+
+"`jet` from frame `from` to frame `to` at `et`; `jet` itself if the frames are equal."
+@inline _hop(ks::KernelSet, from::Int32, to::Int32, et, jet::NTuple{M,Any}) where {M} =
+    from == to ? jet : rotate_jet(frame_jet(ks, from, to, et, Val(M - 1)), jet)
+
+"""
+    _chain_add(ks, et, acc, accframe, seg, ::Val{N}) -> (acc, frame)
+
+Add the jet of `seg` to the sum `acc` in frame `accframe` as `SPKGEO` of CSPICE does:
+in the segment frame, after `acc` is rotated to it when the frames differ. With this
+order a chain of segments in a frame other than J2000 (the FK4 segments of some test
+kernels) gives the CSPICE state to the last bit.
+"""
+@inline function _chain_add(ks::KernelSet, et, acc, accframe::Int32, seg::Segment, v::Val)
+    jet = segment_jet_native(ks, seg, et, v)
+    return map(+, _hop(ks, accframe, seg.frame, et, acc), jet), seg.frame
+end
+
+"""
+    _chain_combine(ks, et, tjet, tframe, ojet, oframe, ref) -> jet
+
+`tjet` (frame `tframe`) minus `ojet` (frame `oframe`) in frame `ref`, with the frame
+changes of `SPKGEO` of CSPICE.
+"""
+@inline function _chain_combine(ks::KernelSet, et, tjet, tframe::Int32, ojet, oframe::Int32,
+        ref::Int32)
+    if tframe == oframe
+        jet = map(-, tjet, ojet)
+    elseif tframe == ref
+        jet = map(-, tjet, _hop(ks, oframe, ref, et, ojet))
+        oframe = ref
+    else
+        jet = map(-, _hop(ks, tframe, oframe, et, tjet), ojet)
+    end
+    return _hop(ks, oframe, ref, et, jet)
 end
 
 @inline function chain_index(chain::NTuple{MAXCHAIN,Int32}, n::Int, body::Int32)
@@ -136,6 +182,7 @@ function spk_jet(ks::KernelSet, targ::Int32, et::T, ref::Int32, obs::Int32,
     end
     # Pass 2: walk the observer chain until it meets the target chain.
     ojet = ntuple(_ -> zero(Vec3{T}), Val(N + 1))
+    oframe = Int32(1)
     body = obs
     depth = 0
     common = chain_index(tbody, nt, body)
@@ -147,19 +194,21 @@ function spk_jet(ks::KernelSet, targ::Int32, et::T, ref::Int32, obs::Int32,
         depth += 1
         depth > length(ks.spk) && throw_chain_cycle(targ, obs, t)
         seg = segs[i]
-        ojet = map(+, ojet, segment_jet(ks, seg, et, Val(N)))
+        depth == 1 && (oframe = seg.frame)
+        ojet, oframe = _chain_add(ks, et, ojet, oframe, seg, Val(N))
         body = seg.center
         common = chain_index(tbody, nt, body)
     end
-    # Pass 3: target chain up to the common body.
+    # Pass 3: target chain up to the common body, summed as the observer chain.
     tjet = ntuple(_ -> zero(Vec3{T}), Val(N + 1))
+    tframe = oframe
     for k in 1:common-1
         seg = ks.spk[tbody[k]][tseg[k]]
-        tjet = map(+, tjet, segment_jet(ks, seg, et, Val(N)))
+        k == 1 && (tframe = seg.frame)
+        tjet, tframe = _chain_add(ks, et, tjet, tframe, seg, Val(N))
     end
-    jet = map(-, tjet, ojet)
-    ref == Int32(1) && return jet
-    return rotate_jet(frame_jet(ks, Int32(1), ref, et, Val(N)), jet)
+    depth == 0 && (oframe = tframe)   # no observer segment: CSPICE takes the target frame
+    return _chain_combine(ks, et, tjet, tframe, ojet, oframe, ref)
 end
 
 """
@@ -186,6 +235,7 @@ end
         push!(tbody, body)
     end
     ojet = ntuple(_ -> zero(Vec3{T}), Val(N + 1))
+    oframe = Int32(1)
     body = obs
     depth = 0
     common = findfirst(==(body), tbody)
@@ -196,17 +246,19 @@ end
         i == 0 && throw_no_connection(ks, targ, obs, t, last(tbody), body)
         depth += 1
         depth > length(ks.spk) && throw_chain_cycle(targ, obs, t)
-        ojet = map(+, ojet, segment_jet(ks, segs[i], et, Val(N)))
+        depth == 1 && (oframe = segs[i].frame)
+        ojet, oframe = _chain_add(ks, et, ojet, oframe, segs[i], Val(N))
         body = segs[i].center
         common = findfirst(==(body), tbody)
     end
     tjet = ntuple(_ -> zero(Vec3{T}), Val(N + 1))
+    tframe = oframe
     for k in 1:common-1
-        tjet = map(+, tjet, segment_jet(ks, tseg[k], et, Val(N)))
+        k == 1 && (tframe = tseg[k].frame)
+        tjet, tframe = _chain_add(ks, et, tjet, tframe, tseg[k], Val(N))
     end
-    jet = map(-, tjet, ojet)
-    ref == Int32(1) && return jet
-    return rotate_jet(frame_jet(ks, Int32(1), ref, et, Val(N)), jet)
+    depth == 0 && (oframe = tframe)   # no observer segment: CSPICE takes the target frame
+    return _chain_combine(ks, et, tjet, tframe, ojet, oframe, ref)
 end
 
 @inline function check_epoch(et::Real)
@@ -247,7 +299,8 @@ spkder(targ::NameOrID, et::Real, ref::NameOrID, obs::NameOrID, v::Val) =
     spkgeo([ctx,] targ::Integer, et, ref, obs::Integer) -> (state, lt)
 
 Return the geometric state of body `targ` relative to body `obs` in frame `ref` at
-`et`, and the one-way light time, as `spkgeo_c`.
+`et`, and the one-way light time, as
+[`spkgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgeo_c.html).
 
 `state` is an `SVector{6}`: position in km, then velocity in km/s. `lt` is the
 distance divided by the speed of light, in seconds. `et` is in seconds past J2000
@@ -277,7 +330,8 @@ spkgeo(targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkgps([ctx,] targ::Integer, et, ref, obs::Integer) -> (pos, lt)
 
 Return the geometric position of body `targ` relative to body `obs` in frame `ref` at
-`et`, and the one-way light time, as `spkgps_c`.
+`et`, and the one-way light time, as
+[`spkgps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgps_c.html).
 
 `pos` is an `SVector{3}` in km and `lt` is in seconds. The arguments and the errors are
 those of [`spkgeo`](@ref). As in CSPICE, `targ == obs` gives a zero position and a zero
@@ -299,7 +353,8 @@ spkgps(targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkezr([ctx,] targ, et, ref, abcorr, obs) -> (state, lt)
 
 Return the state of `targ` relative to `obs` in frame `ref` at `et`, and the one-way
-light time, as `spkezr_c`.
+light time, as
+[`spkezr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkezr_c.html).
 
 `state` is an `SVector{6}`: position in km, then velocity in km/s. `lt` is in seconds.
 
@@ -356,7 +411,8 @@ spkezr(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString, obs::Nam
     spkpos([ctx,] targ, et, ref, abcorr, obs) -> (pos, lt)
 
 Return the position of `targ` relative to `obs` in frame `ref` at `et`, and the
-one-way light time, as `spkpos_c`.
+one-way light time, as
+[`spkpos_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpos_c.html).
 
 `pos` is an `SVector{3}` in km and `lt` is in seconds. The arguments and the errors
 are those of [`spkezr`](@ref), except that an `abcorr` that is not valid throws

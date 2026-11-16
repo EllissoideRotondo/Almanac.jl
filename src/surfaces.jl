@@ -109,7 +109,8 @@ end
 """
     srfc2s([ctx | ks,] code, bodyid) -> (srfstr, isname)
 
-Return the name of the surface `code` of the body `bodyid`, as `srfc2s_c`.
+Return the name of the surface `code` of the body `bodyid`, as
+[`srfc2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfc2s_c.html).
 
 `isname` is `true` if the kernel pool assigns a name to the surface, with the variables
 `NAIF_SURFACE_NAME`, `NAIF_SURFACE_CODE` and `NAIF_SURFACE_BODY`. Otherwise `srfstr` is
@@ -132,7 +133,8 @@ end
 """
     srfcss([ctx | ks,] code, bodstr) -> (srfstr, isname)
 
-Return the name of the surface `code` of the body `bodstr`, as `srfcss_c`. `bodstr` is a
+Return the name of the surface `code` of the body `bodstr`, as
+[`srfcss_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfcss_c.html). `bodstr` is a
 body name or a string that holds a body ID; the result is that of [`srfc2s`](@ref).
 
 A body that is not known gives the code as a decimal string and `isname = false`.
@@ -150,7 +152,8 @@ end
 """
     srfscc([ctx | ks,] srfstr, bodyid) -> Union{Int,Nothing}
 
-Return the code of the surface `srfstr` of the body `bodyid`, as `srfscc_c`, or `nothing`
+Return the code of the surface `srfstr` of the body `bodyid`, as
+[`srfscc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfscc_c.html), or `nothing`
 if the string is not a surface name and does not hold an integer.
 
 A name that the kernel pool assigns has priority; case and extra blanks do not matter.
@@ -169,7 +172,8 @@ end
 """
     srfs2c([ctx | ks,] srfstr, bodstr) -> Union{Int,Nothing}
 
-Return the code of the surface `srfstr` of the body `bodstr`, as `srfs2c_c`. `bodstr` is
+Return the code of the surface `srfstr` of the body `bodstr`, as
+[`srfs2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfs2c_c.html). `bodstr` is
 a body name or a string that holds a body ID; the result is that of [`srfscc`](@ref).
 
 A body that is not known gives `nothing`.
@@ -421,7 +425,8 @@ _dsk_count2(a::AbstractVector) = length(a)
     latsrf([ctx,] method, target, et, fixref, lonlat) -> Vector{SVector{3,Float64}}
 
 Return the surface points of `target` (km, in the body-fixed frame `fixref`) at the
-planetocentric longitudes and latitudes `lonlat`, as `latsrf_c`.
+planetocentric longitudes and latitudes `lonlat`, as
+[`latsrf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latsrf_c.html).
 
 `lonlat` holds the pairs (longitude, latitude) in radians: a 2 x n matrix, or a vector of
 n pairs. `target` and `fixref` are names or IDs; the frame must be centered on the target.
@@ -503,7 +508,8 @@ end
     srfnrm([ctx,] method, target, et, fixref, srfpts) -> Vector{SVector{3,Float64}}
 
 Return the outward unit normals of `target` at the surface points `srfpts`, in the
-body-fixed frame `fixref`, as `srfnrm_c`.
+body-fixed frame `fixref`, as
+[`srfnrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfnrm_c.html).
 
 `srfpts` holds the points (km, in the frame `fixref`): a 3 x n matrix, or a vector of n
 3-vectors. `method`, `target`, `et` and `fixref` are as for [`latsrf`](@ref). For a DSK

@@ -136,7 +136,11 @@ velocity series. Types 1, 5, 8, 9, 12 to 15 and 17 to 21 (`spk_more.jl`): order
 `k >= 2` is derivative `k-1` of the velocity function that CSPICE defines. Type 10
 and unknown types throw `SpiceError(:spktypenotsupp, ...)`. No allocation.
 """
+@noinline _empty_segment(seg) = throw(SpiceError(:baddaf,
+    "the segment of body or frame $(seg.target) has no data (addresses $(seg.baddr):$(seg.eaddr))"))
+
 @inline function spk_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T<:Real,N}
+    seg.eaddr < seg.baddr && _empty_segment(seg)
     if seg.dtype == 2
         return _cheb_eval(data, seg, et, 3, 0, v)
     elseif seg.dtype == 3
@@ -149,7 +153,7 @@ end
 """
     pck_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
 
-Euler angles (radians) of a binary PCK type 2 segment at `et` and their time
+Euler angles (radians) of a binary PCK type 2 or 20 segment at `et` and their time
 derivatives to order N, as `pcke02` of CSPICE gives them.
 
 Contract: `seg` is a PCK descriptor from `open_daf` and `data` is the array of the
@@ -160,6 +164,10 @@ frame is `R3(W) * R1(DELTA) * R3(PHI)`. Other types throw
 `SpiceError(:notsupported, ...)`. No allocation.
 """
 @inline function pck_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T<:Real,N}
-    seg.dtype == 2 || _unsupported("binary PCK", seg.dtype)
-    return _cheb_eval(data, seg, et, 3, 0, v)
+    seg.eaddr < seg.baddr && _empty_segment(seg)
+    seg.dtype == 2 && return _cheb_eval(data, seg, et, 3, 0, v)
+    # Type 20 stores the rates of the angles and the angles at the middle of each
+    # record, as SPK type 20 stores velocities and positions (`pcke20_`).
+    seg.dtype == 20 && return _spk_more(data, seg, et, v)
+    _unsupported("binary PCK", seg.dtype)
 end

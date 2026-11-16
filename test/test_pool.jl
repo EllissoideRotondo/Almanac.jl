@@ -160,4 +160,49 @@ group("5. kernel pool and names against CSPICE", Kernels.TEXT_SET_FILES...,
     end
 end
 
+group("5b. body names that later pool entries take over, against CSPICE") do
+    # Found by the replay of NAIF's tspice (F_BODCOD): a name given in the pool to a
+    # second code takes the name away from the first code, as `zzbodker` of CSPICE does,
+    # and a name of the pool takes it away from the code of `boddef` or of the built-in
+    # table that had it (`zzbodc2n`).
+    cases = [
+        ["NAIF_BODY_CODE = ( 1011 1012 )", "NAIF_BODY_NAME = ( 'F_X' 'F_X' )"],
+        ["NAIF_BODY_CODE = ( 1011 1012 1011 )", "NAIF_BODY_NAME = ( 'F_X' 'f_x' 'F_Y' )"],
+        ["NAIF_BODY_CODE = ( 1011 1012 1013 )", "NAIF_BODY_NAME = ( 'A' 'B' 'A' )"],
+        ["NAIF_BODY_CODE = ( 1012 )", "NAIF_BODY_NAME = ( 'EARTH' )"],
+    ]
+    try
+        for cv in cases
+            SPICE.clpool()
+            SPICE.lmpool(cv)
+            ctx = SpiceContext()
+            Almanac.lmpool(ctx, cv)
+            for code in (399, 1011, 1012, 1013)
+                expected = try
+                    SPICE.bodc2n(code)
+                catch
+                    nothing
+                end
+                @test Almanac.bodc2n(ctx, code) == expected
+            end
+            for name in ("F_X", "F_Y", "A", "B", "EARTH")
+                @test Almanac.bodn2c(ctx, name) == SPICE.bodn2c(name)
+            end
+        end
+    finally
+        SPICE.clpool()
+    end
+    # `boddef` cannot be undone in CSPICE, so these cases take the results that tspice
+    # recorded from SPICELIB instead of the oracle.
+    ctx = SpiceContext()
+    Almanac.boddef(ctx, "F_M", 1013)
+    Almanac.lmpool(ctx, ["NAIF_BODY_CODE = 1014", "NAIF_BODY_NAME = 'F_M'"])
+    @test Almanac.bodc2n(ctx, 1013) === nothing && Almanac.bodn2c(ctx, "F_M") == 1014
+    ctx = SpiceContext()
+    Almanac.boddef(ctx, "EARTH", 1017)
+    @test Almanac.bodc2n(ctx, 399) === nothing && Almanac.bodc2n(ctx, 1017) == "EARTH"
+    Almanac.boddef(ctx, "EARTH", 399)
+    @test Almanac.bodc2n(ctx, 399) == "EARTH"
+end
+
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

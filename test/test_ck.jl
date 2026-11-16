@@ -596,6 +596,26 @@ group("10. CK kernels and CK frames against CSPICE", Kernels.LSK, Kernels.PCK11,
             :invalidfiletype)
     end
 
+    # `ckr06_` signals INVALIDSUBTYPE for a mini-segment subtype outside 0:3; `ckr05_`
+    # signals NOTSUPPORTED for the same fault of a type 5 segment.
+    @apart @testset "a type 6 mini-segment of an unknown subtype" begin
+        src = only(p for p in ckpaths if -77006 in ckobj(p))
+        daf = Almanac.open_daf(src)
+        seg = only(s for s in daf.cksegments if s.inst == -77006)
+        d, e = daf.data, seg.eaddr
+        n = round(Int, d[e])
+        ptrbas = e - 2 - (n + 1)
+        minie = round(Int, d[ptrbas+2]) + seg.baddr - 2    # end of the first mini-segment
+        bad = joinpath(mktempdir(), basename(src))
+        cp(src, bad)
+        open(bad, "r+") do io
+            seek(io, 8 * (minie - 2 - 1))
+            write(io, 9.0)                                 # the subtype word
+        end
+        c2 = neo_context([filter(!=(src), set); bad])
+        @test throws_kind(() -> ckgp(c2, -77006, seg.t0, 0.0, "J2000"), :invalidsubtype)
+    end
+
     @apart @testset "frames without data" begin
         tk = CKFix.ticks_tdb()
         et = sct2e(ctx, CKFix.SC_TDB, tk[20] + 1000.0)

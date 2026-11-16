@@ -90,7 +90,7 @@ order because `Loaded`, `KernelSet` and `SpiceContext` have fields of their type
   the container of binary SPK, binary PCK and CK kernels). It validates the file
   record, handles both byte orders, walks the summary records, and fills the
   descriptors in file order: `Segment` for `:SPK` and `:PCK` (including the four
-  directory values for SPK types 2, 3, 20 and PCK type 2), `CKSegment` for `:CK`.
+  directory values for SPK types 2, 3, 20 and PCK types 2, 20), `CKSegment` for `:CK`.
   Postcondition: every segment has finite epochs and
   `1 <= baddr <= eaddr <= length(data)`. Throws `SpiceError(:filenotfound)` or `(:baddaf)`.
   `data` is the only memory map of the file that stays after the call.
@@ -119,7 +119,7 @@ order because `Loaded`, `KernelSet` and `SpiceContext` have fields of their type
   not have, so only a query through a `KernelSet` evaluates it (see `spk_api.jl`).
   Precondition, not checked: `seg.t0 <= primal(et) <= seg.t1`.
 - `pck_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3}`:
-  the stored 3-1-3 Euler angles (PHI, DELTA, W) in radians of a binary PCK type 2
+  the stored 3-1-3 Euler angles (PHI, DELTA, W) in radians of a binary PCK type 2 or 20
   segment, as `pcke02` returns them, and their time derivatives. `PHI = RA + pi/2`,
   `DELTA = pi/2 - DEC`; the matrix from the segment's inertial frame to the body frame
   is `R3(W) * R1(DELTA) * R3(PHI)`.
@@ -168,8 +168,10 @@ evaluator pair `spkrNN`/`spkeNN` of CSPICE, so a plain epoch gives the CSPICE st
   Chebyshev expansion for SPK type 20 and for the public `chbigr`; `_eqn_state(et,
   epoch, a, h, k, l, p, q, dlpdt, mldt, nodedt, rapol, decpol) -> (pos, vel)` in
   `conic.jl` is the state of `eqncpv` for SPK type 17 and for the public `eqncpv`. It
-  reduces the mean longitude with `_f2c_dmod`, the `d_mod` of f2c, and throws
+  reduces the mean longitude with `f2c_dmod`, the `d_mod` of f2c, and throws
   `SpiceError(:eccoutofbounds)` for an eccentricity of 0.9 or more, as `kepleq` does.
+  `_spk15` reduces the mean anomaly with `f2c_dmod` too, as `spke15` does; the exact
+  `rem` moves the state from CSPICE's by up to 3e-12 relative after 3e5 revolutions.
 
 ## `textkernel.jl`
 
@@ -190,6 +192,43 @@ evaluator pair `spkrNN`/`spkeNN` of CSPICE, so a plain epoch gives the CSPICE st
   `SpiceError(:typemismatch)` when `+=` mixes numeric and string values.
 - `_nparsd(s) -> Float64`: the double that `nparsd` of CSPICE computes, which is not
   always the correctly rounded one; throws `SpiceError(:badnumber)`.
+
+## `jsonkernel.jl`
+
+- `is_json_kernel(path) -> Bool`: the name ends in `.json`, in any case; the content
+  is not read. `parse_text_kernel` calls `parse_json_kernel` for such a path, so every
+  reader of text kernels (`read_kernel`, `ldpool`, meta-kernel files) accepts JSON.
+- `parse_json_kernel(path, yearbound=1969, check=false) -> TextKernel`: the same
+  `Assignment`s as the text kernel with the same content, except that numbers are
+  correctly rounded (not `_nparsd`). Names and string values pass the checks of
+  `parse_text_lines` (32 and 80 bytes). Throws `SpiceError(:badkernel)` before
+  returning anything, so a load is atomic.
+
+## `providers.jl` (with `EphemerisProvider` and `FrameProvider` of `types.jl`)
+
+- An `EphemerisProvider` is a `Loaded` content. `build_kernelset` gives it one SPK
+  `Segment` with `dtype == PROVIDER_DTYPE` (-1), `file == 0` and `baddr` = its index in
+  `ks.loaded`, in the priority order of a file loaded at its place in the list.
+- `segment_jet` and `segment_jet_native` (`spk_api.jl`) send such a segment to `provider_jet(p, et, Val(N))`;
+  every other reader of `ks.spk` segments that touches `ks.daf[seg.file]` must test
+  `PROVIDER_DTYPE` first (`spksfs`, `spkpvn` do).
+- `p.f` is untyped: one dynamic call per evaluation; the result is converted to
+  `Vec3{T}`, so callers stay type-stable. Orders >= 2 call `p.f` on a `Taylor` epoch.
+- A `FrameProvider` gets a `FrameDef` of class `FRAME_PROVIDER_CLASS` (7) with
+  `classid` = its index in `ks.loaded`, added after `build_frames` and before
+  `build_tk`, so it replaces a pool frame of the same ID and TK frames may be relative
+  to it. `_frame_step` and `_frame_parent` (`rotations.jl`) link it to `p.relative`
+  through `provider_rotation(p, et)`. A class 7 frame of the pool is not a provider:
+  `frame_provider(ks, fd)` returns `nothing` for it and the error of an unknown class
+  stays. Code that dispatches on frame classes must not
+  treat class 7 as dynamic: write `class == 5 || class == 6`, not `class >= 5`.
+
+## `queries.jl`
+
+- `StateQuery` and `RotationQuery` hold a `KernelSet` and resolved codes; evaluation
+  calls the `KernelSet` methods of `spkezr`, `spkpos`, `pxform`, `sxform` with those
+  codes, so the results are those of the name forms bit for bit. A change of the
+  queried path of those calls changes the queries with it.
 
 ## `names.jl`
 
@@ -416,6 +455,11 @@ the default context, plus an inner form on a `KernelSet`.
   and throws `SpkInsufficientDataError` (`:spkinsuffdata` or `:noloadedfiles`). It is the place where a
   type 10 segment is evaluated, with `_t10_jet` and the leap seconds of `ks`.
   `frame_jet(ks, from, to, et, ::Val{N})` is the rotation jet for any epoch type.
+  `spk_jet` sums each chain in the segment frames and changes frame where a segment's
+  frame changes, then subtracts and rotates to `ref` as `SPKGEO` does
+  (`_chain_add`, `_chain_combine`); a chain of J2000 segments makes no rotation before
+  the one to `ref`. With this order the state equals CSPICE's to the last bit for
+  segments in other frames too.
 - `check_epoch(et)` throws `SpiceError(:badarg)` for an epoch that is not finite;
   `NameOrID = Union{AbstractString,Integer}`; `CLIGHT` is the value of `clight_c`.
 
@@ -492,8 +536,9 @@ open files and one hidden "current array" for each search; here the opened file 
 
 The segment writers: `spkopn`, `spkopa`, `spkcls`, `spkpds`, `spkw01` to `spkw21`
 (types 1, 2, 3, 5, 8, 9, 12, 13, 15, 17 to 21), `ckopn`, `ckcls`, `ckw01`, `ckw02`,
-`ckw03`, `ckw05`, `ckw06`, and `pckopn`, `pckw02`, `pckcls` (binary PCK type 2, whose
-records `_seg_cheb_records` lays out as for SPK types 2 and 3). Each writer makes the input checks of the SPICELIB routine in
+`ckw03`, `ckw05`, `ckw06`, and `pckopn`, `pckw02`, `pckw20`, `pckcls` (binary PCK types 2 and 20; the type 2
+records `_seg_cheb_records` lays out as for SPK types 2 and 3, the type 20 records are
+stored as given, as for SPK type 20). Each writer makes the input checks of the SPICELIB routine in
 the same order, so the data area is equal bit for bit to the one that CSPICE writes
 from the same input.
 
