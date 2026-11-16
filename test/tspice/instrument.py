@@ -62,6 +62,11 @@ kinfo kdata ktotal
 
 FILE_ROUTINES = {"furnsh", "ldpool", "spkcov", "spkobj", "ckcov", "ckobj", "pckcov",
                  "dskobj", "dsksrf", "getfat", "spklef", "pcklof", "cklpf", "eklef"}
+# Opens of an existing file: a snapshot of that file (its first argument) at a call from
+# the test program, not from inside SPICELIB, gives the replay SPICELIB's file where
+# Almanac's copy misses writes. Only the one file: a family such as F_ZZDSKBSR opens each
+# of thousands of files in its directory.
+OPEN_ROUTINES = {"dafopr", "dafopw", "dasopr", "dasopw", "ekopr", "ekopw", "spkopa", "dskopa"}
 
 
 # Lengths that the arguments do not give: SPICELIB's documented sizes.
@@ -75,6 +80,7 @@ FIXED_LENGTHS = {
     "dasadc": {"data": "tlog_nsub(n, bpos, epos, len(data))"},
     "dasudc": {"data": "tlog_nsub(last - first + 1, bpos, epos, len(data))"},
     "spkw10": {"consts": "8", "elems": "max(0, 10*n)"},
+    "pckw02": {"cdata": "max(0, 3*(polydg+1)*n)"},
     "spkw18": {"packts": "max(0, n*merge(12, 6, subtyp == 0))"},
     # arrays of assumed size whose length another argument gives
     "dafps": {"dc": "max(0, nd)", "ic": "max(0, ni)", "sum": "max(0, nd + (ni + 1)/2)"},
@@ -212,10 +218,19 @@ def kind_of(ftype):
     return "c"
 
 
-def length_expr(dims, args, decls):
+# Assumed-size arrays counted by an argument other than the first count of the routine:
+# the plates by NP (DSKRB2 and DSKMI2 also take NV), and the coordinate parameters,
+# which have the fixed size NSYPAR.
+NAMED_COUNTS = {"plates": "np", "vrtces": "nv"}
+FIXED_SIZES = {"corpar": "10"}
+
+
+def length_expr(dims, args, decls, arg=None):
     """The number of elements of an array argument, as a Fortran expression, or None."""
     if dims is None:
         return "1"
+    if arg in FIXED_SIZES and dims.strip() == "*":
+        return FIXED_SIZES[arg]
     parts = [p.strip().lower() for p in dims.split(",")]
     for k, p in enumerate(parts):                    # explicit bounds `lo:hi`
         if ":" in p:
@@ -227,7 +242,8 @@ def length_expr(dims, args, decls):
         # SPICELIB's convention: the count of an assumed-size array is the argument N
         # (or NVALS, NV, NSIZE), which is an input for an input array and an output
         # for an output array.
-        for cand in ("n", "dim", "nvals", "nv", "nsize", "size", "nvars", "npts"):
+        named = [NAMED_COUNTS[arg]] if arg in NAMED_COUNTS else []
+        for cand in named + ["n", "dim", "nvals", "nv", "nsize", "size", "nvars", "npts"]:
             if cand in args and decls.get(cand, ("", None)) == ("i", None):
                 lead = "*".join(f"({p})" for p in parts[:-1]) or "1"
                 return f"max(0, ({lead})*({cand}))"
@@ -291,7 +307,7 @@ def instrument_routine(name, h, body, cands):
             lens[a] = fixed[a]
             continue
         k, dims = decls[a]
-        n = length_expr(dims, args, decls)
+        n = length_expr(dims, args, decls, a)
         if n is None:
             return f"the length of argument {a} ({dims}) is not known"
         lens[a] = n
@@ -307,6 +323,8 @@ def instrument_routine(name, h, body, cands):
     pre = ["      call tlog_begin('" + name.upper() + "')"]
     if name in FILE_ROUTINES:
         pre.append("      call tlog_snapshot()")
+    elif name in OPEN_ROUTINES:
+        pre.append(f"      call tlog_snapshot_file({args[0]})")
     post = ["      call tlog_mark()"]
     for a in args:
         k, _ = decls[a]
@@ -357,7 +375,7 @@ module tspice_log
    use pepper_legacy_context, only: legacy_context
    implicit none
    private
-   public :: tlog_nsub, tlog_begin, tlog_end, tlog_mark, tlog_snapshot, tlog_d, tlog_d1, &
+   public :: tlog_nsub, tlog_begin, tlog_end, tlog_mark, tlog_snapshot, tlog_snapshot_file, tlog_d, tlog_d1, &
       tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1
    integer, save :: unit = 0
    logical, save :: opened = .false.
@@ -520,7 +538,8 @@ contains
 
    !> Link the files of the working directory into a new snapshot directory. If no file
    !> changed since the last snapshot (no newer file, the same count), the new one is a
-   !> symbolic link to it: F_DSKKPR loads 5000 files, one at a time.
+   !> symbolic link to it, relative so that the recording can move: F_DSKKPR loads 5000
+   !> files, one at a time.
    subroutine tlog_snapshot()
       character(1100) :: dir, prev
       if (.not. on()) return
@@ -530,10 +549,30 @@ contains
       call execute_command_line('d="' // trim(dir) // '"; p="' // trim(prev) // '"; ' // &
          'n=$(ls -A . | wc -l); if [ -f "$p/.stamp" ] && [ "$(cat "$p/.count")" = "$n" ] ' // &
          '&& [ -z "$(find . -maxdepth 1 -type f -newer "$p/.stamp" -print -quit)" ]; then ' // &
-         'ln -s "$(readlink -f "$p")" "$d"; else mkdir -p "$d" && ln -f ./* "$d/" 2>/dev/null; ' // &
+         'ln -s "$(basename "$(readlink -f "$p")")" "$d"; else mkdir -p "$d" && ln -f ./* "$d/" 2>/dev/null; ' // &
          'echo "$n" > "$d/.count"; touch "$d/.stamp"; fi')
       call emit('S ' // trim(dir))
    end subroutine tlog_snapshot
+
+   !> Copy the file NAME into a new snapshot directory, at a call from the test program.
+   !> A copy, not a link: the test may later open the file for write and change it. A
+   !> file equal to its last copy (kept in .files/latest) is linked to that copy, which
+   !> nothing changes. Past 256 MB of copies in a family the file is linked, not copied:
+   !> F_ZZDSKBSR writes and opens 5000 DSK files of 4 MB, and never changes one after.
+   subroutine tlog_snapshot_file(name)
+      character(*), intent(in) :: name
+      character(1100) :: dir
+      if (.not. on() .or. depth /= 1) return
+      nsnap = nsnap + 1
+      write(dir, '(a,a,i0)') trim(logpath), '.files/', nsnap
+      call execute_command_line('d="' // trim(dir) // '"; f="' // trim(name) // '"; ' // &
+         'l="' // trim(logpath) // '.files/latest"; mkdir -p "$d" "$l"; b=$(basename "$f"); ' // &
+         'if [ -f "$f" ]; then if cmp -s "$f" "$l/$b"; then ln "$l/$b" "$d/"; ' // &
+         'else t=$(cat "$l/.bytes" 2>/dev/null || echo 0); if [ "$t" -gt 268435456 ]; then ' // &
+         'ln -f "$f" "$d/"; else cp "$f" "$d/" && ln -f "$d/$b" "$l/$b" && ' // &
+         'echo $((t + $(stat -c %s "$f"))) > "$l/.bytes"; fi; fi; fi 2>/dev/null; true')
+      call emit('S ' // trim(dir))
+   end subroutine tlog_snapshot_file
 
    subroutine head(label, kind, n)
       character(*), intent(in) :: label

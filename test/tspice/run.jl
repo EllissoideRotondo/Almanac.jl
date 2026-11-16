@@ -9,10 +9,11 @@
 #     --record           record again, even if DIR/logs has a recording
 #     --jobs N           parallel processes for recording and replay (default: CPU threads)
 #     --no-oracle        do not check the mismatches with CSPICE
-#     --update-baseline  write the counts of this run to baseline.tsv
+#     --update-baseline  write the counts of this run to baseline.tsv; each routine keeps
+#                        its class (documented, gap, unexplained) and note
 #
 # Recording needs gfortran 16 and fpm on PATH and takes 15 to 40 minutes; it writes
-# about 1 GB. The exit status is 1 if a routine has more `value`, `error` or `adapter`
+# about 2 GB. The exit status is 1 if a routine has more `value`, `error` or `adapter`
 # mismatches than baseline.tsv allows, 0 otherwise. The results are DIR/results/tally.tsv
 # (counts per routine) and DIR/results/replay.tsv (the mismatches).
 
@@ -55,16 +56,35 @@ function read_counts(path)
     head = split(lines[1], '\t')
     for l in lines[2:end]
         f = split(l, '\t')
-        t[f[1]] = Dict(String(head[k]) => parse(Int, f[k]) for k in 2:length(f))
+        t[f[1]] = Dict(String(head[k]) => parse(Int, f[k]) for k in 2:length(f) if head[k] in COUNTS)
     end
     return t
 end
 
-function write_counts(path, t, kinds)
+"""
+The class and note of each routine of the baseline: `documented` (a difference from
+SPICELIB that Almanac states), `gap` (a limit of the replay, not of Almanac) or
+`unexplained`, with what it is.
+"""
+function read_notes(path)
+    t = Dict{String,Tuple{String,String}}()
+    isfile(path) || return t
+    lines = readlines(path)
+    head = split(lines[1], '\t')
+    ic, inote = findfirst(==("class"), head), findfirst(==("note"), head)
+    for l in lines[2:end]
+        f = split(l, '\t')
+        t[f[1]] = (ic === nothing ? "unexplained" : String(f[ic]), inote === nothing ? "" : String(f[inote]))
+    end
+    return t
+end
+
+function write_counts(path, t, kinds; notes=nothing)
     open(path, "w") do io
-        println(io, join(["routine"; kinds], '\t'))
+        println(io, join(["routine"; kinds; notes === nothing ? String[] : ["class", "note"]], '\t'))
         for r in sort(collect(keys(t)))
-            println(io, join([r; [string(get(t[r], k, 0)) for k in kinds]], '\t'))
+            extra = notes === nothing ? String[] : collect(get(notes, r, ("unexplained", "")))
+            println(io, join([r; [string(get(t[r], k, 0)) for k in kinds]; extra], '\t'))
         end
     end
 end
@@ -134,11 +154,21 @@ function main(args)
     println(join(["$k $(sums[k])" for k in COUNTS], ", "))
     baseline_path = joinpath(HERE, "baseline.tsv")
     if o["update"]
-        write_counts(baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)), GATED)
+        # a routine keeps its class and note; a new one is `unexplained` until classed
+        notes = read_notes(baseline_path)
+        write_counts(baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)),
+                     GATED; notes)
         println("baseline written to $baseline_path")
         return 0
     end
     base = read_counts(baseline_path)
+    notes = read_notes(baseline_path)
+    byclass = Dict{String,Int}()
+    for (r, c) in total, k in GATED
+        cl = first(get(notes, r, ("unexplained", "")))
+        byclass[cl] = get(byclass, cl, 0) + get(c, k, 0)
+    end
+    println("gated mismatches by class: ", join(["$k $(byclass[k])" for k in sort(collect(keys(byclass)))], ", "))
     worse = String[]
     for (r, c) in sort(collect(total); by=first), k in GATED
         n, b = get(c, k, 0), get(get(base, r, Dict{String,Int}()), k, 0)
