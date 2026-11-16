@@ -228,12 +228,13 @@ Base.showerror(io::IO, e::SpkInsufficientDataError) =
 end
 
 # `isfile`, with a path that the system cannot look up (a name longer than the system
-# allows) taken as absent: `isfile` throws `IOError` for it.
-function _isfile(path)
+# allows) taken as absent: `isfile` throws an `IOError` for it, a type that Base does
+# not make public.
+function _isfile(path::AbstractString)
     try
         return isfile(path)
     catch e
-        e isa Base.IOError && return false
-        rethrow()
+        e isa InterruptException && rethrow()
+        return false
     end
 end

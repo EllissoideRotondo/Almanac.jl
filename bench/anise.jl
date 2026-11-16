@@ -1,9 +1,16 @@
 # Minimal binding of the C interface of ANISE (through `anise_jll`), for the benchmarks.
 # The header is `anise_jll.anise_h`.
 
-using anise_jll
-
-const libanise = anise_jll.libanise
+# `anise_jll` is not a dependency of the benchmarks: it is a local build. Add it to the
+# environment to get the ANISE rows (`Pkg.develop(path="<your anise_jll>")`); without it
+# `anise_almanac` throws and the benchmarks leave ANISE out.
+const HAVE_ANISE = Base.find_package("anise_jll") !== nothing
+if HAVE_ANISE
+    using anise_jll
+    const libanise = anise_jll.libanise
+else
+    const libanise = ""
+end
 
 "`AniseState` of anise.h."
 struct AniseState
@@ -31,6 +38,7 @@ end
 
 "New almanac with the files `paths` loaded in order. Throws if a load fails."
 function anise_almanac(paths...)
+    HAVE_ANISE || error("anise_jll is not in the environment of the benchmarks")
     ptr = ccall((:anise_almanac_new, libanise), Ptr{Cvoid}, ())
     ptr == C_NULL && error("anise_almanac_new failed: " * anise_last_error())
     ref = Ref(ptr)

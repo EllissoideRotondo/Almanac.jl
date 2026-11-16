@@ -3,7 +3,7 @@ module AlmanacMooncakeExt
 using Almanac
 using Almanac: KernelSet, SpiceContext, Aberration, spk_jet, frame_rotation, frame_jet,
     abcorr_jet, abcorr_position, abcorr_state, _ad_rule, _AD_CONSTANT, _ad_typeof
-using Mooncake
+using Mooncake: Mooncake
 using Mooncake: DefaultCtx, CoDual, Dual, NoTangent, NoRData, RData, @is_primitive,
     @zero_derivative, zero_fcodual
 using StaticArrays: StaticArray

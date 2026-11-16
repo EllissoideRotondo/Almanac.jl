@@ -2,9 +2,8 @@
 #
 #     julia --startup-file=no --threads=8 --project=bench bench/states.jl
 #
-# `anise_jll` is a local build of ANISE: `[sources]` of `bench/Project.toml` gives its
-# path. Change the path to that of your build, or remove `anise_jll` from the
-# environment to run the other benchmarks.
+# ANISE is optional: `anise_jll` is a local build and is not in `bench/Project.toml`.
+# Without it the ANISE rows are left out; `bench/anise.jl` says how to add it.
 #
 # The main case mirrors the benchmark of ANISE itself: 100 epochs evenly spaced from
 # 1900-01-01 12:00 ET to 2099-01-01 12:00 ET (end excluded) on de440s.bsp, the Earth

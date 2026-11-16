@@ -3,9 +3,8 @@ module AlmanacEnzymeCoreExt
 using Almanac
 using Almanac: KernelSet, SpiceContext, Aberration, spk_jet, frame_rotation, frame_jet,
     abcorr_jet, abcorr_position, abcorr_state, _ad_rule, _AD_CONSTANT, _ad_typeof
-using EnzymeCore
-using EnzymeCore: Annotation, Const, Active, Duplicated, BatchDuplicated
-using EnzymeCore.EnzymeRules
+using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const, Active, Duplicated,
+    BatchDuplicated
 using EnzymeCore.EnzymeRules: FwdConfig, RevConfig, AugmentedReturn, needs_primal,
     needs_shadow, width
 using LinearAlgebra: dot

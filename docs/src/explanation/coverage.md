@@ -35,6 +35,7 @@ CSPICE itself is the reference: the tests call each routine and its CSPICE count
 | Concurrency | Answers from many threads, while kernels are loaded and unloaded, with the answers of one thread |
 | NAIF's test suite | The calls of tspice, SPICELIB's test suite (400 families), recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against Almanac.jl; a difference from SPICELIB is checked against CSPICE ([how to run it](@ref "Run NAIF's test suite"); not in the default run) |
 | Allocation | A static proof (AllocCheck.jl) that 61 numeric routines cannot allocate: vector, matrix, rotation, coordinate and ellipsoid calls, conic elements, `unitim`, `deltet` and the table queries ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_alloccheck.jl)) |
+| Package code | Aqua.jl: no method ambiguity, unbound type parameter, type piracy, stale dependency or dependency without compat bounds; ExplicitImports.jl: every imported name explicit and public, except four that Base keeps internal ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_static.jl)) |
 
 | Measure | Value |
 |---|---|

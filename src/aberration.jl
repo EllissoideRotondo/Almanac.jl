@@ -476,7 +476,7 @@ end
 # --- derivatives of any order -------------------------------------------------------
 
 "Taylor series of order N of each component from the jet `jet`, starting at element `first`."
-@inline function _series(jet::NTuple{M,Vec3{T}}, first::Int, ::Val{N}) where {M,T,N}
+@inline function _series(jet::Tuple{Vec3{T},Vararg{Vec3{T}}}, first::Int, ::Val{N}) where {T,N}
     return Vec3{Taylor{N,T}}(ntuple(i -> Taylor{N,T}(ntuple(
         j -> jet[j+first-1][i] / factorial(j - 1), Val(N + 1))), Val(3)))
 end

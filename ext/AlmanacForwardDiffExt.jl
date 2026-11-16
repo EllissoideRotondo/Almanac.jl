@@ -1,8 +1,8 @@
 module AlmanacForwardDiffExt
 
 using Almanac
-using Almanac: KernelSet, spk_jet, frame_jet, frame_rotation, rotation_jet, primal
-using ForwardDiff
+using Almanac: KernelSet, spk_jet, frame_rotation, rotation_jet, primal
+using ForwardDiff: ForwardDiff
 using ForwardDiff: Dual, value, partials
 import StaticArrays
 

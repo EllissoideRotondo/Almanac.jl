@@ -3,7 +3,7 @@ module AlmanacChainRulesCoreExt
 using Almanac
 using Almanac: KernelSet, Aberration, spk_jet, frame_rotation, frame_jet, abcorr_jet,
     abcorr_position, abcorr_state, _ad_rule, _AD_CONSTANT, _ad_typeof
-using ChainRulesCore
+using ChainRulesCore: ChainRulesCore
 using ChainRulesCore: AbstractZero, AbstractThunk, NoTangent, Tangent, unthunk, backing
 using LinearAlgebra: dot
 using StaticArrays: StaticArray

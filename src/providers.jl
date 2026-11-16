@@ -25,11 +25,12 @@ numbers.
     end
     s = p.f(taylor_var(et, Val(N - 1)))
     _provider_check(p, s, et)
-    r = Vec3{T}(_tc(T, _tvalue(s[1])), _tc(T, _tvalue(s[2])), _tc(T, _tvalue(s[3])))
+    # a name of its own: a variable that both branches assign is boxed in the closures
+    r0 = Vec3{T}(_tc(T, _tvalue(s[1])), _tc(T, _tvalue(s[2])), _tc(T, _tvalue(s[3])))
     dx = _tderivs(T, s[4], Val(N - 1))
     dy = _tderivs(T, s[5], Val(N - 1))
     dz = _tderivs(T, s[6], Val(N - 1))
-    return ntuple(k -> k == 1 ? r : Vec3{T}(dx[k-1], dy[k-1], dz[k-1]), Val(N + 1))::NTuple{N + 1,Vec3{T}}
+    return ntuple(k -> k == 1 ? r0 : Vec3{T}(dx[k-1], dy[k-1], dz[k-1]), Val(N + 1))::NTuple{N + 1,Vec3{T}}
 end
 
 @inline _tc(::Type{T}, x) where {T} = convert(T, x)::T

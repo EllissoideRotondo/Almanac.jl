@@ -1,8 +1,9 @@
 module Almanac
 
-using StaticArrays
-using Mmap
-using LinearAlgebra
+using StaticArrays: StaticArrays, MMatrix, MVector, SMatrix, SVector, StaticArray,
+    StaticMatrix, StaticVector
+using Mmap: Mmap
+using LinearAlgebra: LinearAlgebra, I, cond, cross, dot, norm, tr
 
 export SpiceContext, default_context
 export SpiceError, SpiceKindError, SpkInsufficientDataError
