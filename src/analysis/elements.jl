@@ -38,8 +38,9 @@ body-fixed frame of the center, and the B-plane ones need an inertial frame; no 
 checked, and in another frame the numbers are those of the wrong quantity. Where a
 quantity is undefined for the orbit (a circular orbit has no true anomaly; a zero
 position or velocity has no angular momentum), `element` throws
-`SpiceError(:degeneratecase)`. It never returns NaN, with one exception: `:period` is 0
-for an orbit that is not elliptic, and `:ta_dot` is then `Inf`.
+`SpiceError(:degeneratecase)`. It never returns NaN. Two quantities are not finite or
+not meaningful on a parabola: `:sma` is `±Inf` there, and `:period` is 0 for an orbit
+that is not elliptic, so that `:ta_dot` is then `Inf`.
 
 Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref); also for the vectors
 `position`, `velocity`, `hvec` and `evec`, which are properties only, so that a name
@@ -123,7 +124,8 @@ end
 
 "Throw the `:degeneratecase` error of `name`, with `what` for the reason."
 _degenerate(name::Symbol, what::AbstractString) =
-    throw(SpiceError(:degeneratecase, "element :$name is undefined: $what"))
+    throw(SpiceError(:degeneratecase,
+        (name in ELEMENT_NAMES ? "element :$name" : "$name") * " is undefined: $what"))
 
 _hvec(o::Orbit) = cross(o.position, o.velocity)
 
@@ -134,15 +136,15 @@ const INC_EPSILON = deg2rad(1e-6)
 
 # hvec and evec as ANISE's `hvec()` and `evec()`: an error for a zero radius or velocity.
 function _hvec_for(name::Symbol, o::Orbit)
-    _el_rmag(o) > eps(Float64) || _degenerate(name, "the radius is zero")
-    _el_vmag(o) > eps(Float64) || _degenerate(name, "the velocity is zero")
+    primal(_el_rmag(o)) > eps(Float64) || _degenerate(name, "the radius is zero")
+    primal(_el_vmag(o)) > eps(Float64) || _degenerate(name, "the velocity is zero")
     return _hvec(o)
 end
 
 function _evec_for(name::Symbol, o::Orbit)
     r, v = o.position, o.velocity
     rm = norm(r)
-    rm > eps(Float64) || _degenerate(name, "the radius is zero")
+    primal(rm) > eps(Float64) || _degenerate(name, "the radius is zero")
     return ((norm(v)^2 - getfield(o, :gm) / rm) * r - dot(r, v) * v) / getfield(o, :gm)
 end
 
@@ -160,7 +162,7 @@ _el_vmag(o::Orbit) = norm(o.velocity)
 # ANISE: energy_km2_s2 errors for a zero radius; hmag, hx, hy, hz go through `hvec()`,
 # which errors for a zero radius or velocity.
 function _el_energy(o::Orbit)
-    _el_rmag(o) > eps(Float64) || _degenerate(:energy, "the radius is zero")
+    primal(_el_rmag(o)) > eps(Float64) || _degenerate(:energy, "the radius is zero")
     return _el_vmag(o)^2 / 2 - getfield(o, :gm) / _el_rmag(o)
 end
 _el_hmag(o::Orbit) = norm(_hvec_for(:hmag, o))
@@ -183,7 +185,7 @@ end
 # The arc cosine of ANISE's `aop_deg` and `raan_deg`: where it has no value (NaN or
 # |c| > 1), 180 degrees if c > 1 and 0 otherwise, so a NaN or c < -1 gives 0.
 function _acos_or_fallback(c::T) where {T}
-    (isnan(c) || abs(c) > 1) && return c > 1 ? T(π) : zero(T)
+    (isnan(c) || abs(primal(c)) > 1) && return primal(c) > 1 ? T(π) : zero(T)
     return acos(c)
 end
 
@@ -192,30 +194,30 @@ function _el_aop(o::Orbit{T}) where {T}
     e = _evec_for(:aop, o)
     n = _node(h)
     c = dot(n, e) / (norm(n) * norm(e))
-    (isnan(c) || abs(c) > 1) && return _acos_or_fallback(c)
+    (isnan(c) || abs(primal(c)) > 1) && return _acos_or_fallback(c)
     aop = acos(c)
-    return e[3] < 0 ? 2 * T(π) - aop : aop
+    return primal(e[3]) < 0 ? 2 * T(π) - aop : aop
 end
 
 function _el_raan(o::Orbit{T}) where {T}
     n = _node(_hvec_for(:raan, o))
     c = n[1] / norm(n)
-    (isnan(c) || abs(c) > 1) && return _acos_or_fallback(c)
+    (isnan(c) || abs(primal(c)) > 1) && return _acos_or_fallback(c)
     raan = acos(c)
-    return n[2] < 0 ? 2 * T(π) - raan : raan
+    return primal(n[2]) < 0 ? 2 * T(π) - raan : raan
 end
 
 function _el_ta(o::Orbit{T}) where {T}
     ecc = _el_ecc_for(:ta, o)
     e = _evec_for(:ta, o)
     ta = acos(clamp(dot(e, o.position) / (ecc * _el_rmag(o)), -1, 1))
-    return dot(o.position, o.velocity) < 0 ? 2 * T(π) - ta : ta
+    return primal(dot(o.position, o.velocity)) < 0 ? 2 * T(π) - ta : ta
 end
 
 # The eccentricity, and the circular-orbit error of the anomalies built on the true one.
 function _el_ecc_for(name::Symbol, o::Orbit)
     ecc = norm(_evec_for(name, o))
-    ecc < ECC_EPSILON && _degenerate(name, "the orbit is circular (ecc = $(ecc) < 1e-11), " *
+    primal(ecc) < ECC_EPSILON && _degenerate(name, "the orbit is circular (ecc = $(ecc) < 1e-11), " *
         "the line of apsides is undefined")
     return ecc
 end
@@ -229,7 +231,7 @@ _nonan(name::Symbol, x) = isnan(x) ? _degenerate(name,
 
 function _el_ea(o::Orbit)
     ecc = _el_ecc_for(:ea, o)
-    ecc > 1 && _degenerate(:ea, "the orbit is hyperbolic; ANISE returns NaN here")
+    primal(ecc) > 1 && _degenerate(:ea, "the orbit is hyperbolic; ANISE returns NaN here")
     s, c = sincos(_el_ta(o))
     d = 1 + ecc * c
     return _nonan(:ea, atan(sqrt(1 - ecc^2) * s / d, (ecc + c) / d))
@@ -237,8 +239,8 @@ end
 
 function _el_ma(o::Orbit)
     ecc = _el_ecc_for(:ma, o)
-    abs(ecc - 1) < ECC_EPSILON && _degenerate(:ma, "the orbit is parabolic (|ecc - 1| < 1e-11)")
-    if ecc < 1
+    abs(primal(ecc) - 1) < ECC_EPSILON && _degenerate(:ma, "the orbit is parabolic (|ecc - 1| < 1e-11)")
+    if primal(ecc) < 1
         ea = _el_ea(o)
         return _wrap(ea - ecc * sin(ea))
     end
@@ -249,7 +251,7 @@ end
 
 function _el_ha(o::Orbit)
     ecc = _el_ecc(o)
-    ecc <= 1 && _degenerate(:ha, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
+    primal(ecc) <= 1 && _degenerate(:ha, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
     s, c = sincos(_el_ta(o))
     return _nonan(:ha, _wrap(asinh(s * sqrt(ecc^2 - 1) / (1 + ecc * c))))
 end
@@ -259,7 +261,7 @@ function _el_aol(o::Orbit)
     h /= norm(h)
     n = _node(h)
     nn = norm(n)
-    nn < INC_EPSILON && _degenerate(:aol, "the orbit is equatorial (|ẑ×ĥ| = $(nn) < 1e-6 deg)")
+    primal(nn) < INC_EPSILON && _degenerate(:aol, "the orbit is equatorial (|ẑ×ĥ| = $(nn) < 1e-6 deg)")
     n /= nn
     m = cross(h, n)
     r = o.position / _el_rmag(o)
@@ -270,7 +272,7 @@ _el_tlong(o::Orbit) = _wrap(_el_aop(o) + _el_raan(o) + _el_ta(o))
 
 function _el_period(o::Orbit{T}) where {T}
     p2 = _el_sma(o)^3 / getfield(o, :gm)
-    return p2 > 0 && isfinite(p2) ? 2 * T(π) * sqrt(p2) : zero(T)
+    return primal(p2) > 0 && isfinite(primal(p2)) ? 2 * T(π) * sqrt(p2) : zero(T)
 end
 
 _el_mean_motion(o::Orbit) = sqrt(getfield(o, :gm) / abs(_el_sma(o))^3)
@@ -288,7 +290,7 @@ _el_semi_parameter(o::Orbit) = _nonan(:semi_parameter, _el_sma(o) * (1 - _el_ecc
 
 function _el_semi_minor_axis(o::Orbit)
     ecc = _el_ecc(o)
-    ecc <= 1 && return _nonan(:semi_minor_axis, _el_sma(o) * sqrt(1 - ecc^2))
+    primal(ecc) <= 1 && return _nonan(:semi_minor_axis, _el_sma(o) * sqrt(1 - ecc^2))
     h = _hvec_for(:semi_minor_axis, o)
     return dot(h, h) / (getfield(o, :gm) * sqrt(ecc^2 - 1))
 end
@@ -296,19 +298,19 @@ end
 _el_periapsis(o::Orbit) = _nonan(:periapsis, _el_sma(o) * (1 - _el_ecc(o)))
 _el_apoapsis(o::Orbit) = _nonan(:apoapsis, _el_sma(o) * (1 + _el_ecc(o)))
 
-# ANISE returns NaN for a zero radius or velocity here; Almanac throws, so no NaN escapes.
+# Right ascension: atan2 of the position, 0 for a zero radius, so it does not throw.
 function _el_right_ascension(o::Orbit)
     s = getfield(o, :state)
     return _wrap(atan(s[2], s[1]))
 end
 
 function _el_declination(o::Orbit)
-    _el_rmag(o) > eps(Float64) || _degenerate(:declination, "the radius is zero")
+    primal(_el_rmag(o)) > eps(Float64) || _degenerate(:declination, "the radius is zero")
     return asin(clamp(getfield(o, :state)[3] / _el_rmag(o), -1, 1))
 end
 
 function _el_velocity_declination(o::Orbit)
-    _el_vmag(o) > eps(Float64) || _degenerate(:velocity_declination, "the velocity is zero")
+    primal(_el_vmag(o)) > eps(Float64) || _degenerate(:velocity_declination, "the velocity is zero")
     return asin(clamp(getfield(o, :state)[6] / _el_vmag(o), -1, 1))
 end
 
@@ -396,7 +398,7 @@ function _el_longitude(o::Orbit{T}) where {T}
     s = getfield(o, :state)
     (isnan(s[1]) || isnan(s[2])) && return zero(T)
     a = mod(atan(s[2], s[1]), 2 * T(π))
-    return a >= T(π) ? a - 2 * T(π) : a
+    return primal(a) >= Float64(π) ? a - 2 * T(π) : a
 end
 
 # Equinoctial elements: src/astro/orbit_equinoctial.rs of ANISE (rad here). The mean
@@ -422,7 +424,7 @@ end
 # +z axis of the frame of the orbit. Returns (b_t, b_r, s_hat) of the hyperbola.
 function _bplane(name::Symbol, o::Orbit)
     ecc = _el_ecc(o)
-    ecc > 1 || _degenerate(name, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
+    primal(ecc) > 1 || _degenerate(name, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
     e_hat = _evec_for(name, o) / ecc
     h = _hvec_for(name, o)
     n_hat = cross(h / norm(h), e_hat)
@@ -433,7 +435,7 @@ function _bplane(name::Symbol, o::Orbit)
     b_vec = _el_semi_minor_axis(o) * (sin_nu * e_hat - cos_nu * n_hat)
     t = SVector(s_hat[2], -s_hat[1], zero(eltype(s_hat)))
     t_norm = norm(t)
-    t_norm > 1e-12 || _degenerate(name, "the incoming asymptote is parallel to the z axis " *
+    primal(t_norm) > 1e-12 || _degenerate(name, "the incoming asymptote is parallel to the z axis " *
         "of the frame (|s x z| = $(t_norm) <= 1e-12)")
     t_hat = t / t_norm
     r_hat = cross(s_hat, t_hat)
@@ -450,19 +452,19 @@ end
 function _el_bplane_angle(o::Orbit{T}) where {T}
     bt, br, _ = _bplane(:bplane_angle, o)
     a = atan(br, bt)
-    return a >= T(π) ? a - 2 * T(π) : a
+    return primal(a) >= Float64(π) ? a - 2 * T(π) : a
 end
 function _el_bplane_ltof(o::Orbit)
     _, _, s_hat = _bplane(:bplane_ltof, o)
     c3 = _el_c3(o)
-    c3 > 0 || _degenerate(:bplane_ltof, "c3 = $(c3) <= 0, the excess speed is undefined")
+    primal(c3) > 0 || _degenerate(:bplane_ltof, "c3 = $(c3) <= 0, the excess speed is undefined")
     return -dot(o.position, s_hat) / sqrt(c3)
 end
 
 # ANISE `vinf_periapsis_km` and `vinf_turn_angle_deg` (src/astro/orbit.rs, c3 form).
 function _vinf_hyperbolic(name::Symbol, o::Orbit)
     ecc = _el_ecc(o)
-    ecc > 1 || _degenerate(name, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
+    primal(ecc) > 1 || _degenerate(name, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
     return _el_c3(o)
 end
 
@@ -523,6 +525,6 @@ julia> round(rad2deg(vinf_turn_angle(o, 8000.0)); digits=3)
 function vinf_turn_angle(o::Orbit, periapsis::Real)
     c3 = _vinf_hyperbolic(:vinf_turn_angle, o)
     x = 1 / (1 + c3 * (periapsis / getfield(o, :gm)))
-    (isnan(x) || abs(x) > 1) && _degenerate(:vinf_turn_angle, "the arc cosine of $(x) has no value; ANISE returns NaN")
+    (isnan(x) || abs(primal(x)) > 1) && _degenerate(:vinf_turn_angle, "the arc cosine of $(x) has no value; ANISE returns NaN")
     return _wrap(π - 2 * acos(x))
 end

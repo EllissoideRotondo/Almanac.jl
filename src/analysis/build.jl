@@ -15,9 +15,9 @@ end
 
 # ANISE `try_keplerian_apsis_radii`: the semi-major axis and eccentricity of the two radii.
 function _apsides_to_sma_ecc(periapsis, apoapsis)
-    apoapsis > eps(Float64) || throw(SpiceError(:degeneratecase,
+    primal(apoapsis) > eps(Float64) || throw(SpiceError(:degeneratecase,
         "undefined: the radius of apoapsis is $apoapsis km, not above $(eps(Float64))"))
-    periapsis > eps(Float64) || throw(SpiceError(:degeneratecase,
+    primal(periapsis) > eps(Float64) || throw(SpiceError(:degeneratecase,
         "undefined: the radius of periapsis is $periapsis km, not above $(eps(Float64))"))
     sma = (apoapsis + periapsis) / 2
     return sma, apoapsis / sma - 1

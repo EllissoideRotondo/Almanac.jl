@@ -1,5 +1,5 @@
-# Group 54: the analysis layer, part 1 (`Orbit`, its constructors, the Cartesian and
-# kinematic elements, name dispatch; src/analysis/orbit.jl and elements.jl).
+# Group analysis_orbit: the analysis layer (`Orbit`, its constructors, every element, the
+# builders, `two_body`, the local frames and the Brouwer mean elements; src/analysis/).
 #
 # The reference values are those of the GMAT case of the tests of ANISE
 # (val_state_def_circ_inc) for an Earth GM of 398600.4415 km^3/s^2. The kernel part
@@ -17,13 +17,11 @@
 # `prop2b` and with ANISE's verif_orbit_at_epoch. The local frames are checked for orthonormality,
 # against the axes as ANISE lists them, and the exact rate against ForwardDiff of `two_body`.
 #
-# Run time of the group: 16 to 30 s (one process; 23.8 to 29.6 s measured with the load of the
-# machine; 29.6 s in the last run before the commit). About 12 s of it is the load of the
-# oracle and the fixtures before the first testset.
+# Run time of the group: see the log of the last run in the coverage page (default tier).
 
 import ForwardDiff
 isdefined(@__MODULE__, :CS) || include("mathoracle.jl")
-include("gmat_cases.jl")
+isdefined(@__MODULE__, :GMAT_CASES) || include("gmat_cases.jl")
 
 # The tolerances against GMAT: the testset prints the largest difference of each case
 # (`measured`); the largest is 4.0e-13 (circ_inc_kep, elliptical_kep). ANISE prints the
@@ -188,11 +186,12 @@ const TOL_TWOBODY = (25, 25, 3e-14)
 # 1000 orbits (the derivative of the Kepler solver is exact; it was 3e-12 with the old lag).
 const TOL_DUALDT = 4e-14
 # The derivatives of the true anomaly from the Kepler solver against the closed forms, relative
-# (seeds SEED and 1 to 4, 50000 samples each): d nu/dM 1.5e-14 (rounding), d nu/de on ellipses
-# 4.2e-15, d2 nu/dM2 (nested ForwardDiff, relative to its bound) 1.8e-11: the closed form is taken
-# at the true anomaly of the converged E, which stops 1e-12 rad from the root, and the second
-# derivative amplifies that by up to (1 + e)/(1 - e). With one Newton step the second derivative
-# was 0.5 off, with the residual not taken out d nu/de was 4.7e-12. Limits four times the largest.
+# (exhaustive tier, seeds SEED and 1, 50000 samples each): d nu/dM 1.5e-14 (rounding), d nu/de on
+# ellipses 3.9e-15, d2 nu/dM2 (nested ForwardDiff, relative to its bound) 7.7e-12: the error is the
+# rounding of atan(k tan(E/2)) near E = pi (the second derivative of that expression
+# amplifies the rounding of its argument) and the normalisation of small bounds, not the
+# tolerance of the solver. With one Newton step the second derivative
+# was 0.5 off, with the residual not taken out d nu/de was 4.7e-12. Limits at least four times the largest.
 const TOL_KEPLER_D = (6e-14, 1.7e-14, 7e-11)
 # Local frames: the largest |R'R - I| and |det R - 1| are 8.9e-16 and 6.7e-16 in 5000 orbits (a
 # few roundings of unit vectors, limit 3e-15). The rate of the frame of `two_body` by ForwardDiff
@@ -268,6 +267,23 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         @test o.gm == bodvcd(ctx, 399, "GM")[1] && o.radii == bodvcd(ctx, 399, "RADII")
         @test Orbit(ctx, o.state, et, "EARTH", "J2000") == o
         @test throws_kind(() -> Orbit(ctx, o.state, et, -999, "J2000"), :kernelvarnotfound)
+        # the three forms (KernelSet, context, default context) give the same orbit
+        ks = Almanac.kernelset(ctx)
+        @test orbit(ks, "MOON", et, "J2000", "NONE", "EARTH") == o
+        @test orbit(ks, 301, et, "J2000", "LT+S", 399) == orbit(ctx, 301, et, "J2000", "LT+S", 399)
+        @test Orbit(ks, o.state, et, "EARTH", "J2000") == o
+        @test throws_kind(() -> Orbit(ks, o.state, et, -999, "J2000"), :kernelvarnotfound)
+        kclear()
+        try
+            foreach(furnsh, [Kernels.LSK, Kernels.DE440S, Kernels.GM_TPC, Kernels.PCK11])
+            @test orbit("MOON", et, "J2000", "NONE", "EARTH") == o
+            @test Orbit(o.state, et, "EARTH", "J2000") == o
+        finally
+            kclear()
+        end
+        # a dual epoch (and a light-time state) goes through `orbit`: d sma / d et exists
+        dsma = ForwardDiff.derivative(t -> orbit(ctx, "MOON", t, "J2000", "LT+S", "EARTH").sma, et)
+        @test isfinite(dsma) && dsma != 0
     end
 
     @testset "Keplerian elements: GMAT cases ($(c.name))" for c in GMAT_CASES
@@ -1026,6 +1042,13 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
                 @test throws_kind(() -> local_frame(z, k), :degeneratecase)
                 @test throws_kind(() -> local_frame_state(z, k), :degeneratecase)
                 @test throws_kind(() -> relative_state(o, z, k), :degeneratecase)
+            end
+            # the message names the call that was made, not an element
+            for (f, nm) in ((() -> local_frame(z, :ric), "local_frame"),
+                    (() -> local_frame_state(z, :ric), "local_frame_state"),
+                    (() -> relative_state(o, z, :ric), "relative_state"))
+                msg = try f(); "" catch e; e.msg end
+                @test startswith(msg, nm * " is undefined")
             end
         end
     end

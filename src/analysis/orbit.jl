@@ -62,14 +62,15 @@ function Orbit(state::AbstractVector{S}, et::E, center::Integer, frame::Integer,
         SVector{3,Float64}(radii))
 end
 
-function Orbit(ctx::SpiceContext, state::AbstractVector{<:Real}, et::Real, center::NameOrID,
+function Orbit(ks::KernelSet, state::AbstractVector{<:Real}, et::Real, center::NameOrID,
         frame::NameOrID)
-    ks = kernelset(ctx)
     c, f = body_code(ks, center), frame_id(ks, frame)
-    gm = bodvcd(ctx, c, "GM")[1]
-    radii = bodfnd(ctx, c, "RADII") ? SVector{3,Float64}(bodvcd(ctx, c, "RADII")) : _NO_RADII
+    gm = bodvcd(ks, c, "GM")[1]
+    radii = bodfnd(ks, c, "RADII") ? SVector{3,Float64}(bodvcd(ks, c, "RADII")) : _NO_RADII
     return Orbit(state, et, c, f, gm, radii)
 end
+Orbit(ctx::SpiceContext, state::AbstractVector{<:Real}, et::Real, center::NameOrID,
+        frame::NameOrID) = Orbit(kernelset(ctx), state, et, center, frame)
 Orbit(state::AbstractVector{<:Real}, et::Real, center::NameOrID, frame::NameOrID) =
     Orbit(default_context(), state, et, center, frame)
 
@@ -86,11 +87,13 @@ an ephemeris state in ANISE.
 Throws the errors of [`spkezr`](@ref), and `SpiceError(:kernelvarnotfound)` if the pool
 has no GM for `obs`.
 """
-function orbit(ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID,
+function orbit(ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID,
         abcorr::AbstractString, obs::NameOrID)
-    state, _ = spkezr(ctx, targ, et, ref, abcorr, obs)
-    return Orbit(ctx, state, et, obs, ref)
+    state, _ = spkezr(ks, targ, et, ref, abcorr, obs)
+    return Orbit(ks, state, et, obs, ref)
 end
+orbit(ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString,
+        obs::NameOrID) = orbit(kernelset(ctx), targ, et, ref, abcorr, obs)
 orbit(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString, obs::NameOrID) =
     orbit(default_context(), targ, et, ref, abcorr, obs)
 

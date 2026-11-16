@@ -608,7 +608,7 @@ end
 # tier, 20000 per class), each set to a round figure above the largest measured value, with the
 # reason of its size.
 const TOL = Dict{String,Float64}(
-    # Angles of near-circular orbits, in units of eps/ecc (see cond_units): C_ANGLE
+    # Angles of near-circular orbits, in units of eps/ecc (see cond_scale): C_ANGLE
     # Brouwer iteration: the worst state is a near-equatorial one (inc ~ 1e-7), where the
     # angles are ill-conditioned; the largest difference is 3.5e-10 (inc)
     "el:brouwer_sma" => 1e-8, "el:brouwer_ecc" => 1e-8, "el:brouwer_inc" => 1e-8,
@@ -643,6 +643,7 @@ end
         known_label(key) === nothing || continue
         a = ACCS[key]
         @testset "$key" begin
+            @test a.n > 0            # a quantity both libraries fail on is not a pass
             @test a.mismatch == 0
             @test a.range == 0
             @test a.maxn <= tol(key)

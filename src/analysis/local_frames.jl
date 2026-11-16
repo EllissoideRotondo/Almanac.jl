@@ -14,12 +14,18 @@ const _LOCAL_FRAME_KINDS = (:ric, :vnc, :rcn, :tnw)
 # velocity turn: with `a = -gm r / |r|^3`, d(r/|r|)/dt = (v - r̂ (r̂.v)) / |r| and
 # d(v/|v|)/dt = (a - v̂ (v̂.a)) / |v|. The checks are those of `hvec()` and `hmag()`
 # in ANISE, which fail where h is zero (a rectilinear orbit, or a zero radius or velocity).
-function _local_frame_pair(name::Symbol, o::Orbit{T}, kind::Symbol) where {T}
+function _local_frame_pair(name::Symbol, o::Orbit, kind::Symbol)
     kind in _LOCAL_FRAME_KINDS || throw(SpiceError(:badarg,
         "$name: the kind is :$kind; it must be one of :ric, :vnc, :rcn, :tnw"))
-    h = _hvec_for(:hmag, o)
+    # the checks of `hvec()` and `hmag()`, named for the call that was made
+    _hvec_for(name, o)
+    primal(norm(_hvec(o))) > 0 || _degenerate(name, "the angular momentum is zero")
+    return _local_frame_axes(o, kind)
+end
+
+function _local_frame_axes(o::Orbit{T}, kind::Symbol) where {T}
+    h = _hvec(o)
     hm = norm(h)
-    primal(hm) > 0 || _degenerate(:hmag, "the angular momentum is zero")
     r, v = o.position, o.velocity
     hh = h / hm
     z = zero(SVector{3,T})

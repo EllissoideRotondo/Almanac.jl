@@ -246,7 +246,7 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
     osc_ecc = _el_ecc(o)
     osc_inc = _el_inc(o)
     primal(osc_inc) <= π || _brouwer_fail("the orbit is retrograde beyond 180 degrees")
-    _el_periapsis(o) > 3000 || _brouwer_fail("the periapsis is not above 3000 km")
+    primal(_el_periapsis(o)) > 3000 || _brouwer_fail("the periapsis is not above 3000 km")
     0 <= primal(osc_ecc) < 1 || _brouwer_fail("the orbit is not elliptic")
     re = _mean_eq_radius(name, o)
 
