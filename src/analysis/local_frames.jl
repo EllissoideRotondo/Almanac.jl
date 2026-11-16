@@ -23,15 +23,15 @@ function _local_frame_pair(name::Symbol, o::Orbit{T}, kind::Symbol) where {T}
     r, v = o.position, o.velocity
     hh = h / hm
     z = zero(SVector{3,T})
+    rm = norm(r)
     if kind === :ric || kind === :rcn
-        rm = norm(r)
         rh = r / rm
         rd = (v - rh * dot(rh, v)) / rm
         return _lf_cols(rh, cross(hh, rh), hh), _lf_cols(rd, cross(hh, rd), z)
     end
     vm = norm(v)
     vh = v / vm
-    a = (-getfield(o, :gm) / norm(r)^3) * r
+    a = (-getfield(o, :gm) / rm^3) * r
     vd = (a - vh * dot(vh, a)) / vm
     kind === :vnc && return _lf_cols(vh, hh, cross(vh, hh)), _lf_cols(vd, z, cross(vd, hh))
     return _lf_cols(vh, cross(hh, vh), hh), _lf_cols(vd, cross(hh, vd), z)
@@ -112,8 +112,9 @@ end
     relative_state(o, chief, kind) -> SVector{6}
 
 The state of the orbit `o` relative to the orbit `chief`, in the local frame `kind` of
-`chief`: `transpose(local_frame_state(chief, kind)) * (o.state - chief.state)`. This call
-has no CSPICE counterpart; it matches `Orbit::ric_difference_unchecked`,
+`chief`: the difference `o.state - chief.state` multiplied by the inverse of
+[`local_frame_state`](@ref)`(chief, kind)`, which is `[Rᵀ 0; Ṙᵀ Rᵀ]` because `RᵀṘ` is skew:
+the position is `Rᵀ dr` and the velocity `Ṙᵀ dr + Rᵀ dv`. This call has no CSPICE counterpart; it matches `Orbit::ric_difference_unchecked`,
 `vnc_difference_unchecked` and `tnw_difference_unchecked` of ANISE (`kind` `:ric` or
 `:rcn`, `:vnc`, `:tnw`), with the rate of the frame exact.
 
@@ -151,7 +152,7 @@ function relative_state(o::Orbit{S}, chief::Orbit{U}, kind::Symbol) where {S,U}
     d = o.state - chief.state
     dr = SVector(d[1], d[2], d[3])
     dv = SVector(d[4], d[5], d[6])
-    p = _m_mtxv(R, dr) + _m_mtxv(Rd, dv)
-    v = _m_mtxv(R, dv)
+    p = _m_mtxv(R, dr)
+    v = _m_mtxv(Rd, dr) + _m_mtxv(R, dv)
     return SVector(p[1], p[2], p[3], v[1], v[2], v[3])
 end

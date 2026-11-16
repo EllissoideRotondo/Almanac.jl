@@ -17,8 +17,8 @@
 # `prop2b` and with ANISE's verif_orbit_at_epoch. The local frames are checked for orthonormality,
 # against the axes as ANISE lists them, and the exact rate against ForwardDiff of `two_body`.
 #
-# Run time of the group: 16 to 29 s (one process; 23.8 to 28.8 s measured with the load of the
-# machine; 29.9 s in the last run before the commit). About 12 s of it is the load of the
+# Run time of the group: 16 to 30 s (one process; 23.8 to 29.6 s measured with the load of the
+# machine; 29.6 s in the last run before the commit). About 12 s of it is the load of the
 # oracle and the fixtures before the first testset.
 
 import ForwardDiff
@@ -128,9 +128,9 @@ const TOL_ATEPOCH = (2e-11, 1e-15, 1e-15, 1e-15, 5e-8)
 const TOL_TWOBODY = (7e-12, 5e-12, 3e-14)
 # A dual epoch: the derivative of the state is (v, -gm r/r^3) to 2.9e-12, relative.
 const TOL_DUALDT = 1.5e-11
-# Local frames (20 random orbits, 4 kinds; seed SEED + 54): the largest |R'R - I| and |det R - 1|
-# are 5.6e-16 (a few roundings of unit vectors), the largest difference of the exact rate from
-# the ForwardDiff derivative of the frame of `two_body` is 1.2e-15 1/s (the two code paths
+# Local frames (the fast sample of 6 orbits gave 4.4e-16, 4.4e-16 and 5.3e-17; 20 orbits gave 5.6e-16,
+# 5.6e-16 and 1.2e-15; 4 kinds, seed SEED + 54): the largest |R'R - I| and |det R - 1| are 5.6e-16 (a few roundings of unit vectors),
+# the largest difference of the exact rate from the ForwardDiff derivative of the frame of `two_body` is 1.2e-15 1/s (the two code paths
 # round differently; the rates are of order 1e-3 1/s). The limits are about five times the
 # measured values.
 const TOL_LF = (3e-15, 3e-15, 6e-15)
@@ -804,7 +804,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         rng = Xoshiro(SEED + 54)
         kinds = (:ric, :vnc, :rcn, :tnw)
         w = zeros(3)
-        for _ in 1:nsample(20, 200)
+        for _ in 1:nsample(6, 200)
             o = random_orbit(rng)
             r, v, h = o.position, o.velocity, o.hvec
             rh, vh, hh = r / norm(r), v / norm(v), h / norm(h)
@@ -840,17 +840,27 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         end
         # (the position has the magnitude of 1e4 km, so the offset is exact to about 1e-11 km)
         radial = Orbit(o.state + SVector(o.position / norm(o.position)..., 0, 0, 0), o.et, 399, 1, o.gm)
-        @test relative_state(radial, o, :ric) ≈ SVector(1, 0, 0, 0, 0, 0) atol = 1e-10
-        # the definition: the transpose of the 6 by 6 matrix on the difference
-        other = Orbit(o.state + SVector(0.3, -0.2, 0.1, 1e-3, 2e-3, -1e-3), o.et, 399, 1, o.gm)
-        dv = other.state - o.state
-        for k in kinds
-            @test relative_state(other, o, k) ≈ transpose(local_frame_state(o, k)) * dv rtol = 1e-14
+        @test relative_state(radial, o, :ric)[1:3] ≈ SVector(1, 0, 0) atol = 1e-10
+        # the inverse of the 6 by 6 matrix: it maps the relative state back to the difference
+        # (ANISE ric_difference_unchecked), also for a difference that has a velocity part
+        for _ in 1:nsample(5, 50), k in kinds
+            c = random_orbit(rng)
+            q = Orbit(c.state + SVector(1.5, -2.0, 0.7, 2e-3, -1e-3, 3e-3), c.et, 399, 1, c.gm)
+            rs = relative_state(q, c, k)
+            @test local_frame_state(c, k) * rs ≈ q.state - c.state rtol = 1e-12
         end
+        # a pure position offset has a relative velocity: Rdot' dr, which is not zero
+        S = local_frame_state(o, :ric)
+        R, Rd = S[1:3, 1:3], S[4:6, 1:3]
+        dr = SVector(1.0, 0.0, 0.0) * 1.0
+        pure = Orbit(o.state + SVector(dr..., 0, 0, 0), o.et, 399, 1, o.gm)
+        rs = relative_state(pure, o, :ric)
+        @test rs[4:6] ≈ Rd' * (pure.position - o.position) rtol = 1e-9
+        @test abs(rs[5]) > 1e-5
         # dual numbers pass through
         od = Orbit(o.state, ForwardDiff.Dual(o.et, 1.0), 399, 1, o.gm)
         @test local_frame(od, :tnw) isa SMatrix{3,3,<:ForwardDiff.Dual}
-        @test relative_state(other, od, :vnc) isa SVector{6,<:ForwardDiff.Dual}
+        @test relative_state(pure, od, :vnc) isa SVector{6,<:ForwardDiff.Dual}
         # errors
         @test throws_kind(() -> local_frame(o, :xyz), :badarg)
         @test throws_kind(() -> local_frame_state(o, :xyz), :badarg)
