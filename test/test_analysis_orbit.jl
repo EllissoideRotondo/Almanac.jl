@@ -11,7 +11,7 @@
 # orbits, and on the degenerate orbits, where each expectation follows the ANISE source
 # (src/astro/orbit.rs, b3aaadc).
 #
-# Run time of the group: about 10 s (9.8 s measured, one process; most of it is the
+# Run time of the group: about 13 s (12.6 s measured, one process; most of it is the
 # compilation of the Keplerian code and of the CSPICE oracle wrapper).
 
 import ForwardDiff
@@ -41,6 +41,22 @@ function random_orbit(rng, gm=398600.4415)
 end
 
 angdiff(a, b) = abs(rem2pi(a - b, RoundNearest))
+
+# Tolerances against `oscltx`: the largest differences measured in 200 random orbits
+# (seed SEED + 31) are rp 9.6e-15, ecc 2.7e-15, inc 1.3e-15, raan 4.0e-13, aop 1.1e-14,
+# ta 2.2e-12, ma 1.1e-11, sma and period 2.8e-15. The limit is about five times the
+# measured value; raan, ta and ma are larger because the two codes compute them from the
+# eccentricity and node vectors by different formulas (acos and atan2 near their
+# unit-circle ends lose the digits of the argument).
+const TOL_OSC = Dict(:rp => 5e-14, :ecc => 1.5e-14, :inc => 7e-15, :raan => 2e-12,
+    :aop => 6e-14, :ta => 1e-11, :ma => 5e-11, :sma_period => 1.5e-14)
+# Identities between elements of one orbit, 200 orbits: measured c3 1.6e-16, mean_motion
+# 2.8e-16, ta_dot 2.4e-16, semi_minor 2.0e-14 (the square of a difference of ulps of
+# sqrt(1-e^2)), ra 8.9e-16, dec 1.6e-15, vdec 4.4e-16, ha 8.9e-16: rounding of a few
+# ulps, limit 1e-13. aol = aop + ta inherits the conditioning of aop and ta (2.2e-12
+# measured), limit 1e-11.
+const TOL_ID = 1e-13
+const TOL_AOL = 1e-11
 
 group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         Kernels.GM_TPC, Kernels.PCK11) do
@@ -115,24 +131,47 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         measured(@sprintf("  gmat %-24s max scaled difference %.3e", c.name, worst))
     end
 
-    @testset "Keplerian elements against oscltx" begin
+    @testset "Keplerian elements against oscltx, and identities" begin
         rng = Xoshiro(SEED + 31)
-        worst = zeros(8)
+        names = (:rp, :ecc, :inc, :raan, :aop, :ta, :ma, :sma_period,
+            :aol, :c3, :mean_motion, :ta_dot, :semi_minor, :ra, :dec, :vdec, :ha)
+        worst = Dict(k => 0.0 for k in names)
+        note(k, d) = (worst[k] = max(worst[k], d); d)
         for _ in 1:nsample(200, 5000)
             o = random_orbit(rng)
             el = oscltx(o.state, o.et, o.gm)
-            d = (abs(o.periapsis - el[1]) / el[1], abs(o.ecc - el[2]), angdiff(o.inc, el[3]),
-                angdiff(o.raan, el[4]), angdiff(o.aop, el[5]), angdiff(o.ta, el[9]))
-            worst[1:6] .= max.(worst[1:6], d)
-            @test all(<(1e-9), d)
+            @test note(:rp, abs(o.periapsis - el[1]) / el[1]) < TOL_OSC[:rp]
+            @test note(:ecc, abs(o.ecc - el[2])) < TOL_OSC[:ecc]
+            @test note(:inc, angdiff(o.inc, el[3])) < TOL_OSC[:inc]
+            @test note(:raan, angdiff(o.raan, el[4])) < TOL_OSC[:raan]
+            @test note(:aop, angdiff(o.aop, el[5])) < TOL_OSC[:aop]
+            @test note(:ta, angdiff(o.ta, el[9])) < TOL_OSC[:ta]
             if o.ecc < 1
-                d2 = (angdiff(o.ma, el[6]), abs(o.sma - el[10]) / el[10], abs(o.period - el[11]) / el[11])
-                worst[7] = max(worst[7], d2[1]); worst[8] = max(worst[8], d2[2], d2[3])
-                @test all(<(1e-9), d2)
+                @test note(:ma, angdiff(o.ma, el[6])) < TOL_OSC[:ma]
+                @test note(:sma_period, max(abs(o.sma - el[10]) / el[10],
+                    abs(o.period - el[11]) / el[11])) < TOL_OSC[:sma_period]
+                @test note(:mean_motion, abs(o.mean_motion * o.period - 2π) / 2π) < TOL_ID
+                @test note(:ta_dot, abs(o.ta_dot - o.mean_motion) / o.mean_motion) < TOL_ID
+            else
+                @test note(:mean_motion, abs(o.mean_motion - sqrt(o.gm / abs(o.sma)^3)) / o.mean_motion) < TOL_ID
+                @test o.period == 0.0 && o.ta_dot == Inf
+                # the hyperbolic anomaly H of its defining relations with ecc and ta
+                H = rem2pi(o.ha, RoundNearest)
+                c, s = cos(o.ta), sin(o.ta)
+                @test note(:ha, max(abs(cosh(H) - (o.ecc + c) / (1 + o.ecc * c)) / cosh(H),
+                    abs(sinh(H) - sqrt(o.ecc^2 - 1) * s / (1 + o.ecc * c)) / max(abs(sinh(H)), 1))) < TOL_ID
             end
+            @test note(:aol, angdiff(o.aol, o.aop + o.ta)) < TOL_AOL
+            @test note(:c3, abs(o.c3 - 2 * o.energy) / abs(o.c3)) < TOL_ID
+            @test note(:semi_minor, abs(o.semi_minor_axis^2 - abs(o.sma * o.semi_parameter)) /
+                o.semi_minor_axis^2) < TOL_ID
+            _, ra, dec = recrad(o.position)
+            @test note(:ra, angdiff(o.right_ascension, ra)) < TOL_ID
+            @test note(:dec, abs(o.declination - dec)) < TOL_ID
+            @test note(:vdec, abs(o.velocity_declination - recrad(o.velocity)[3])) < TOL_ID
         end
-        measured(@sprintf("  oscltx max differences rp %.2e ecc %.2e inc %.2e raan %.2e aop %.2e ta %.2e ma %.2e sma,period %.2e",
-            worst...))
+        measured("  oscltx and identities, largest differences: " *
+            join((@sprintf("%s %.1e", k, worst[k]) for k in names), ", "))
     end
 
     @testset "Keplerian elements: degenerate cases" begin
@@ -160,6 +199,9 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         @test pro.ta == 0.0                                      # periapsis at the state
         # ANISE main: sma_km is -mu / (2 energy), with no check; a parabola has no
         # exception there (the brief expected one). Only `ma` is an error (ParabolicEccentricity).
+        # This relies on the ecc of this state rounding to exactly 1.0 and its energy to
+        # exactly 0 (sma = -Inf), which the next test line checks.
+        @test para.ecc == 1.0 && para.energy == 0.0
         @test throws_kind(() -> para.ma, :degeneratecase)
         @test abs(para.ecc - 1) < 1e-11 && !isnan(para.sma) && abs(para.sma) > 1e9
         @test para.period == 0.0 && para.ta_dot == Inf           # ANISE: Duration::ZERO, 360/0
@@ -173,6 +215,21 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         @test throws_kind(() -> zv.inc, :degeneratecase)         # hvec needs a velocity
         @test zv.evec isa SVector{3,Float64}                     # evec needs only a radius
         @test throws_kind(() -> zr.evec, :degeneratecase)
+        # ANISE: energy needs a radius; hmag, hx, hy, hz go through hvec() (radius and velocity).
+        @test throws_kind(() -> zr.energy, :degeneratecase)
+        for n in (:hmag, :hx, :hy, :hz), o in (zr, zv)
+            @test throws_kind(() -> element(o, n), :degeneratecase)
+        end
+        # A radial orbit with a velocity (r parallel to v): h = 0, and ANISE gives NaN
+        # for inc and aol (0/0); Almanac throws.
+        rect = orb((7000.0, 0, 0, 5.0, 0, 0))
+        for n in (:inc, :aol)
+            @test throws_kind(() -> element(rect, n), :degeneratecase)
+        end
+        @test rect.hmag == 0.0
+        # zero velocity at ecc rounding above 1: ha = 0/0 (ANISE NaN)
+        zvh = orb((7000.0, 0, 0, 0, 0, 1.0e-10))
+        @test outcome(() -> zvh.ha) isa Symbol || !isnan(zvh.ha)
         # ANISE returns NaN for these (0/0 or Inf*0 at ecc = 1); Almanac throws instead.
         for n in (:semi_parameter, :semi_minor_axis, :periapsis)           # sma = -Inf, ecc = 1
             @test throws_kind(() -> element(para, n), :degeneratecase)
@@ -181,7 +238,7 @@ group("54. analysis: Orbit and Cartesian elements", Kernels.LSK, Kernels.DE440S,
         for n in (:ea, :fpa)                                      # ta = pi at ecc = 1: 0/0
             @test throws_kind(() -> element(zv, n), :degeneratecase)
         end
-        for o in (circ, pro, retro, para, zr, zv), n in elements()   # no NaN escapes
+        for o in (circ, pro, retro, para, zr, zv, rect, zvh), n in elements()   # no NaN escapes
             y = outcome(() -> element(o, n))
             @test y isa Symbol || !isnan(y)
         end

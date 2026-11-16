@@ -30,16 +30,18 @@ The Keplerian elements (`:sma`, `:ecc`, `:inc`, `:raan`, `:aop`, `:ta`, `:ma`, `
 `:ha`, `:aol`, `:tlong`, `:period`, `:mean_motion`, `:ta_dot`, `:c3`, `:fpa`,
 `:semi_parameter`, `:semi_minor_axis`, `:periapsis`, `:apoapsis`, `:right_ascension`,
 `:declination`, `:velocity_declination`) follow the functions of `Orbit` of ANISE
-(`sma_km`, `ecc`, `inc_deg`, ...) with angles in rad (the angles `:inc`, `:ta`, `:aop`,
-`:raan`, ... are in [0, 2π) as in ANISE, `:ea` in (-π, π], `:declination` in [-π/2, π/2])
+(`sma_km`, `ecc`, `inc_deg`, ...) with angles in rad (`:inc` is in [0, π]; `:ta`, `:aop`, `:raan`,
+`:aol`, `:tlong`, `:ha`, `:right_ascension` are in [0, 2π] as in ANISE, where `:raan` and `:aop` can be exactly 2π;
+`:ea` is in (-π, π], the hyperbolic `:ma` is unbounded, the elliptic `:ma` is in [0, 2π], `:declination` is in
+[-π/2, π/2])
 and `:mean_motion` and `:ta_dot` in rad/s. Where ANISE returns an error for an undefined
 quantity, `element` throws `SpiceError(:degeneratecase)`: `:ta` and everything built on
 it (`:ea`, `:ma`, `:fpa`, `:tlong`, `:ha`) for `ecc < 1e-11`, `:aol` for an orbit within
 `1e-6` degrees of the equator, `:ma` for `|ecc - 1| < 1e-11`, `:ea` for `ecc > 1`, `:ha`
-for `ecc <= 1`, and every element that needs the angular momentum or the eccentricity
-vector for a zero position or velocity. Where ANISE substitutes a value, so does
-`element`. Where ANISE returns NaN (a parabola, whose `:sma` is infinite, or a zero velocity:
-`:ea`, `:fpa`, `:semi_parameter`, `:semi_minor_axis`, `:periapsis`, `:apoapsis`), `element`
+for `ecc <= 1`, and every element that needs the angular momentum (`:hmag`, `:hx`, `:hy`, `:hz`, `:inc`, ...)
+or the eccentricity vector, or `:energy`, for a zero position or velocity. Where ANISE substitutes a value, so does
+`element`. Where ANISE returns NaN (a parabola, whose `:sma` is infinite, a zero velocity or a rectilinear orbit:
+`:inc`, `:aol`, `:ha`, `:ea`, `:fpa`, `:semi_parameter`, `:semi_minor_axis`, `:periapsis`, `:apoapsis`), `element`
 throws `SpiceError(:degeneratecase)`, so no NaN is returned. `:raan` and `:aop` give 0 where the arc cosine has no value (an equatorial
 orbit has `:raan == 0`), π where its argument rounds above 1. `:period` is 0 for an orbit
 that is not elliptic, so `:ta_dot` is `Inf` there.
@@ -135,23 +137,27 @@ _el_vy(o::Orbit) = getfield(o, :state)[5]
 _el_vz(o::Orbit) = getfield(o, :state)[6]
 _el_rmag(o::Orbit) = norm(o.position)
 _el_vmag(o::Orbit) = norm(o.velocity)
-_el_energy(o::Orbit) = _el_vmag(o)^2 / 2 - getfield(o, :gm) / _el_rmag(o)
-_el_hmag(o::Orbit) = norm(_hvec(o))
-_el_hx(o::Orbit) = _hvec(o)[1]
-_el_hy(o::Orbit) = _hvec(o)[2]
-_el_hz(o::Orbit) = _hvec(o)[3]
+# ANISE: energy_km2_s2 errors for a zero radius; hmag, hx, hy, hz go through `hvec()`,
+# which errors for a zero radius or velocity.
+function _el_energy(o::Orbit)
+    _el_rmag(o) > eps(Float64) || _degenerate(:energy, "the radius is zero")
+    return _el_vmag(o)^2 / 2 - getfield(o, :gm) / _el_rmag(o)
+end
+_el_hmag(o::Orbit) = norm(_hvec_for(:hmag, o))
+_el_hx(o::Orbit) = _hvec_for(:hx, o)[1]
+_el_hy(o::Orbit) = _hvec_for(:hy, o)[2]
+_el_hz(o::Orbit) = _hvec_for(:hz, o)[3]
 _el_light_time(o::Orbit) = _el_rmag(o) / clight()
 
 # Keplerian elements: ANISE src/astro/orbit.rs (and orbit_hyperbolic.rs for :ha), angles in rad.
 
 _el_ecc(o::Orbit) = norm(_evec_for(:ecc, o))
-_el_sma(o::Orbit) = -getfield(o, :gm) / (2 * _el_energy_for(:sma, o))
-_el_energy_for(name::Symbol, o::Orbit) = (_el_rmag(o) > eps(Float64) ||
-    _degenerate(name, "the radius is zero"); _el_energy(o))
+_el_sma(o::Orbit) = -getfield(o, :gm) / (2 * _el_energy(o))
 
 function _el_inc(o::Orbit)
     h = _hvec_for(:inc, o)
-    return acos(clamp(h[3] / norm(h), -1, 1))     # ANISE: NaN when rounding leaves [-1, 1]
+    # ANISE: NaN for a rectilinear orbit (h = 0, 0/0), and when rounding leaves [-1, 1]
+    return _nonan(:inc, acos(clamp(h[3] / norm(h), -1, 1)))
 end
 
 # The arc cosine of ANISE's `aop_deg` and `raan_deg`: where it has no value (NaN or
@@ -225,7 +231,7 @@ function _el_ha(o::Orbit)
     ecc = _el_ecc(o)
     ecc <= 1 && _degenerate(:ha, "the orbit is not hyperbolic (ecc = $(ecc) <= 1)")
     s, c = sincos(_el_ta(o))
-    return _wrap(asinh(s * sqrt(ecc^2 - 1) / (1 + ecc * c)))
+    return _nonan(:ha, _wrap(asinh(s * sqrt(ecc^2 - 1) / (1 + ecc * c))))
 end
 
 function _el_aol(o::Orbit)
@@ -237,7 +243,7 @@ function _el_aol(o::Orbit)
     n /= nn
     m = cross(h, n)
     r = o.position / _el_rmag(o)
-    return _wrap(atan(dot(r, m), dot(r, n)))
+    return _nonan(:aol, _wrap(atan(dot(r, m), dot(r, n))))   # NaN: rectilinear orbit, h = 0
 end
 
 _el_tlong(o::Orbit) = _wrap(_el_aop(o) + _el_raan(o) + _el_ta(o))
