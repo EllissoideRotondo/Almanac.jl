@@ -18,20 +18,32 @@ _conv_fail(msg::AbstractString) = throw(SpiceError(:degeneratecase, "undefined: 
 # ANISE `mean_anomaly_to_true_anomaly_rad` (src/astro/utils.rs): GTDS MathSpec 3-180, 3-181,
 # 3-186 by Newton iteration. Its `MathError`s are `:degeneratecase`.
 const _MA_EPSILON = 1e-12
+
+# The iteration runs on the primal values, so the Float64 result is that of ANISE bit for bit.
+# The derivative is carried by one more Newton step in the number type T at the converged value
+# `x0`: `step` is the correction of that step, and `x0 + (step - primal(step))` has the primal
+# value of `x0` and the exact first derivative of the solution (implicit function theorem). The
+# old loop returned an iterate whose dual part lagged the solution by one step, a derivative
+# error up to 5e-8. A plain Float64 has no derivative, and `_carry` returns `x0`.
+_carry(x0::Float64, step::Float64) = x0
+_carry(x0::Float64, step) = x0 + (step - primal(step))
+
 function _ma_to_ta(rm::T, ecc::T) where {T}
     fail(what) = _conv_fail("the mean to true anomaly conversion $what")
-    if primal(ecc) <= 1
-        e2 = rm + ecc * sin(rm)
+    rp, ep = primal(rm), primal(ecc)
+    if ep <= 1
+        e2 = rp + ep * sin(rp)
         iter = 0
         while true
             iter += 1
             iter > 1000 && fail("did not converge in 1000 iterations")
-            normalized = 1 - ecc * cos(e2)
-            abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
-            e1 = e2 - (e2 - ecc * sin(e2) - rm) / normalized
-            abs(primal(e2 - e1)) < _MA_EPSILON && break
+            normalized = 1 - ep * cos(e2)
+            abs(normalized) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
+            e1 = e2 - (e2 - ep * sin(e2) - rp) / normalized
+            abs(e2 - e1) < _MA_EPSILON && break
             e2 = e1
         end
+        e2 = _carry(e2, (rm - (e2 - ecc * sin(e2))) / (1 - ecc * cos(e2)))
         e = primal(e2) < 0 ? e2 + 2 * T(π) : e2
         ta = if abs(primal(e) - π) >= 1e-8
             normalized = 1 - ecc
@@ -40,21 +52,25 @@ function _ma_to_ta(rm::T, ecc::T) where {T}
             primal(ratio) < 0 && fail("has a negative eccentricity ratio")
             2 * atan(sqrt(ratio) * tan(e / 2))
         else
-            e
+            # nu = E at E = pi, where the true anomaly is nu = pi + c (E - pi) with
+            # c = sqrt((1 - e) / (1 + e)): the primal value stays E, the derivative is that of nu
+            c = sqrt((1 - ecc) / (1 + ecc))
+            e + (c - 1) * (e - primal(e)) + (c - primal(c)) * (primal(e) - π)
         end
         return primal(ta) < 0 ? ta + 2 * T(π) : ta
     end
-    f2 = zero(T)
+    f2 = 0.0
     iter = 0
     while true
         iter += 1
         iter > 1000 && fail("did not converge in 1000 iterations")
-        normalizer = ecc * cosh(f2) - 1
-        abs(primal(normalizer)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
-        f1 = f2 - (ecc * sinh(f2) - f2 - rm) / normalizer
-        abs(primal(f2 - f1)) < _MA_EPSILON && break
+        normalizer = ep * cosh(f2) - 1
+        abs(normalizer) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
+        f1 = f2 - (ep * sinh(f2) - f2 - rp) / normalizer
+        abs(f2 - f1) < _MA_EPSILON && break
         f2 = f1
     end
+    f2 = _carry(f2, (rm - (ecc * sinh(f2) - f2)) / (ecc * cosh(f2) - 1))
     normalized = ecc - 1
     abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
     ratio = (ecc + 1) / normalized
