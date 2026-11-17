@@ -105,22 +105,30 @@ end
 
 # The Kepler solver of the Orbit layer: both arguments, the mean anomaly and the
 # eccentricity, can be active (see `src/analysis/brouwer.jl`).
-function EnzymeRules.forward(config::FwdConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
-        m::Annotation{<:Real}, e::Annotation{<:Real})
+function EnzymeRules.forward(
+        config::FwdConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
+        m::Annotation{<:Real}, e::Annotation{<:Real}
+    )
     y, (dm, de) = _ad_rule(_ma_to_ta, m.val, e.val)
     W = width(config)
     lm, le = _lanes(m, Val(W)), _lanes(e, Val(W))
     return _fwd_return(config, y, ntuple(i -> dm * lm[i] + de * le[i], Val(W)))
 end
-EnzymeRules.augmented_primal(::RevConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
-    m::Annotation{<:Real}, e::Annotation{<:Real}) = _no_nested_reverse(m)
-function EnzymeRules.augmented_primal(config::RevConfig, ::Const{typeof(_ma_to_ta)},
-        ::Type, m::Annotation{Float64}, e::Annotation{Float64})
+EnzymeRules.augmented_primal(
+    ::RevConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
+    m::Annotation{<:Real}, e::Annotation{<:Real}
+) = _no_nested_reverse(m)
+function EnzymeRules.augmented_primal(
+        config::RevConfig, ::Const{typeof(_ma_to_ta)},
+        ::Type, m::Annotation{Float64}, e::Annotation{Float64}
+    )
     y, dy = _ad_rule(_ma_to_ta, m.val, e.val)
     return AugmentedReturn(needs_primal(config) ? y : nothing, nothing, dy)
 end
-EnzymeRules.reverse(config::RevConfig, ::Const{typeof(_ma_to_ta)}, dret, dy,
-    m::Annotation{Float64}, e::Annotation{Float64}) =
+EnzymeRules.reverse(
+    config::RevConfig, ::Const{typeof(_ma_to_ta)}, dret, dy,
+    m::Annotation{Float64}, e::Annotation{Float64}
+) =
     (_epoch_cotangent(m, dret, dy[1]), _epoch_cotangent(e, dret, dy[2]))
 
 # The snapshot, the context and the correction are data without derivatives, and the

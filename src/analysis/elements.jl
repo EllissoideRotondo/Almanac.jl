@@ -2,7 +2,8 @@
 # `_el_<name>(o)`; `ELEMENT_NAMES` is the one ordered list of the names, in the order of
 # the table of the design (later groups of elements are inserted in that order).
 
-const ELEMENT_NAMES = (:x, :y, :z, :vx, :vy, :vz, :rmag, :vmag,
+const ELEMENT_NAMES = (
+    :x, :y, :z, :vx, :vy, :vz, :rmag, :vmag,
     :sma, :ecc, :inc, :raan, :aop, :ta, :ma, :ea, :ha,
     :aol, :tlong, :period, :mean_motion, :ta_dot,
     :energy, :c3, :fpa, :semi_parameter, :semi_minor_axis,
@@ -13,7 +14,8 @@ const ELEMENT_NAMES = (:x, :y, :z, :vx, :vy, :vz, :rmag, :vmag,
     :bplane_bt, :bplane_br, :bplane_mag, :bplane_angle, :bplane_ltof,
     :equinoctial_a, :equinoctial_h, :equinoctial_k, :equinoctial_p, :equinoctial_q,
     :equinoctial_lambda,
-    :brouwer_sma, :brouwer_ecc, :brouwer_inc, :brouwer_raan, :brouwer_aop, :brouwer_ma)
+    :brouwer_sma, :brouwer_ecc, :brouwer_inc, :brouwer_raan, :brouwer_aop, :brouwer_ma,
+)
 
 """
     elements() -> NTuple{N,Symbol}
@@ -119,21 +121,29 @@ function element(o::Orbit, name::Symbol)
     name === :brouwer_raan && return _el_brouwer_raan(o)
     name === :brouwer_aop && return _el_brouwer_aop(o)
     name === :brouwer_ma && return _el_brouwer_ma(o)
-    throw(SpiceError(:badarg, "element: unknown name :$name; the names are " *
-        join(elements(), ", ")))
+    throw(
+        SpiceError(
+            :badarg, "element: unknown name :$name; the names are " *
+                join(elements(), ", ")
+        )
+    )
 end
 
 "Throw the `:degeneratecase` error of `name`, with `what` for the reason."
 _degenerate(name::Symbol, what::AbstractString) =
-    throw(SpiceError(:degeneratecase,
-        (name in ELEMENT_NAMES ? "element :$name" : "$name") * " is undefined: $what"))
+    throw(
+    SpiceError(
+        :degeneratecase,
+        (name in ELEMENT_NAMES ? "element :$name" : "$name") * " is undefined: $what"
+    )
+)
 
 _hvec(o::Orbit) = cross(o.position, o.velocity)
 
 # ANISE's thresholds: `ECC_EPSILON` and `INC_EPSILON_DEG` (compared as radians) of
 # src/astro/orbit.rs; `f64::EPSILON` guards the zero radius and velocity of `hvec`/`evec`.
-const ECC_EPSILON = 1e-11
-const INC_EPSILON = deg2rad(1e-6)
+const ECC_EPSILON = 1.0e-11
+const INC_EPSILON = deg2rad(1.0e-6)
 
 # hvec and evec as ANISE's `hvec()` and `evec()`: an error for a zero radius or velocity.
 function _hvec_for(name::Symbol, o::Orbit)
@@ -218,8 +228,10 @@ end
 # The eccentricity, and the circular-orbit error of the anomalies built on the true one.
 function _el_ecc_for(name::Symbol, o::Orbit)
     ecc = norm(_evec_for(name, o))
-    primal(ecc) < ECC_EPSILON && _degenerate(name, "the orbit is circular (ecc = $(ecc) < 1e-11), " *
-        "the line of apsides is undefined")
+    primal(ecc) < ECC_EPSILON && _degenerate(
+        name, "the orbit is circular (ecc = $(ecc) < 1e-11), " *
+            "the line of apsides is undefined"
+    )
     return ecc
 end
 
@@ -230,8 +242,10 @@ _wrap(x::Real) = _wrap(primal(x)) + (x - primal(x))
 
 # ANISE returns NaN where a parabola or a zero velocity makes a quotient 0/0 or Inf*0;
 # Almanac throws instead, so that no NaN escapes from `element`.
-_nonan(name::Symbol, x) = isnan(x) ? _degenerate(name,
-    "the formula is 0/0 or Inf*0 here (parabolic orbit or zero velocity); ANISE returns NaN") : x
+_nonan(name::Symbol, x) = isnan(x) ? _degenerate(
+        name,
+        "the formula is 0/0 or Inf*0 here (parabolic orbit or zero velocity); ANISE returns NaN"
+    ) : x
 
 function _el_ea(o::Orbit)
     ecc = _el_ecc_for(:ea, o)
@@ -339,14 +353,20 @@ julia> k = keplerian(o); (round(k.sma), round(k.ecc; digits=3), k.inc, k.ta)
 (7990.0, 0.124, 0.0, 0.0)
 ```
 """
-keplerian(o::Orbit) = (; sma=_el_sma(o), ecc=_el_ecc(o), inc=_el_inc(o), raan=_el_raan(o),
-    aop=_el_aop(o), ta=_el_ta(o))
+keplerian(o::Orbit) = (;
+    sma = _el_sma(o), ecc = _el_ecc(o), inc = _el_inc(o), raan = _el_raan(o),
+    aop = _el_aop(o), ta = _el_ta(o),
+)
 
 # Altitudes and geodetic coordinates: src/astro/orbit_geodetic.rs of ANISE. The radii of the
 # center come from the pool; where it has none they are NaN and these elements are errors.
 function _radii_missing(name::Symbol, o::Orbit)
-    throw(SpiceError(:badarg, "element :$name needs the radii of body $(o.center), " *
-        "which the pool does not hold"))
+    throw(
+        SpiceError(
+            :badarg, "element :$name needs the radii of body $(o.center), " *
+                "which the pool does not hold"
+        )
+    )
 end
 
 # ANISE `Frame::mean_equatorial_radius_km`: the mean of the two equatorial radii.
@@ -383,8 +403,10 @@ function _latlongalt(name::Symbol, o::Orbit)
     big_p = big_f / (3 * k^2 * big_g^2)
     big_q = sqrt(1 + 2 * e2^2 * big_p)
     r0 = (-big_p * e2 * p) / (1 + big_q) +
-        sqrt(0.5 * a_km^2 * (1 + 1 / big_q) - (big_p * (1 - e2) * z^2) / (big_q * (1 + big_q)) -
-            0.5 * big_p * p^2)
+        sqrt(
+        0.5 * a_km^2 * (1 + 1 / big_q) - (big_p * (1 - e2) * z^2) / (big_q * (1 + big_q)) -
+            0.5 * big_p * p^2
+    )
     big_u = sqrt((p - e2 * r0)^2 + z^2)
     big_v = sqrt((p - e2 * r0)^2 + (1 - e2) * z^2)
     z0 = b_km^2 * z / (a_km * big_v)
@@ -439,8 +461,10 @@ function _bplane(name::Symbol, o::Orbit)
     b_vec = _el_semi_minor_axis(o) * (sin_nu * e_hat - cos_nu * n_hat)
     t = SVector(s_hat[2], -s_hat[1], zero(eltype(s_hat)))
     t_norm = norm(t)
-    primal(t_norm) > 1e-12 || _degenerate(name, "the incoming asymptote is parallel to the z axis " *
-        "of the frame (|s x z| = $(t_norm) <= 1e-12)")
+    primal(t_norm) > 1.0e-12 || _degenerate(
+        name, "the incoming asymptote is parallel to the z axis " *
+            "of the frame (|s x z| = $(t_norm) <= 1e-12)"
+    )
     t_hat = t / t_norm
     r_hat = cross(s_hat, t_hat)
     return dot(b_vec, t_hat), dot(b_vec, r_hat), s_hat

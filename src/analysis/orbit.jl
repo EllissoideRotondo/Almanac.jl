@@ -40,37 +40,53 @@ julia> o.rmag, o.hz
 (7000.0, 52500.0)
 ```
 """
-struct Orbit{T<:Real}
-    state::SVector{6,T}
+struct Orbit{T <: Real}
+    state::SVector{6, T}
     et::T
     center::Int32
     frame::Int32
     gm::Float64
-    radii::SVector{3,Float64}
+    radii::SVector{3, Float64}
 end
 
 const _NO_RADII = SVector(NaN, NaN, NaN)
 
-function Orbit(state::AbstractVector{S}, et::E, center::Integer, frame::Integer, gm::Real,
-        radii::AbstractVector{<:Real}=_NO_RADII) where {S<:Real,E<:Real}
-    length(state) == 6 || throw(SpiceError(:badarg,
-        "Orbit: the state has $(length(state)) elements, not 6"))
-    length(radii) == 3 || throw(SpiceError(:badarg,
-        "Orbit: the radii have $(length(radii)) elements, not 3"))
+function Orbit(
+        state::AbstractVector{S}, et::E, center::Integer, frame::Integer, gm::Real,
+        radii::AbstractVector{<:Real} = _NO_RADII
+    ) where {S <: Real, E <: Real}
+    length(state) == 6 || throw(
+        SpiceError(
+            :badarg,
+            "Orbit: the state has $(length(state)) elements, not 6"
+        )
+    )
+    length(radii) == 3 || throw(
+        SpiceError(
+            :badarg,
+            "Orbit: the radii have $(length(radii)) elements, not 3"
+        )
+    )
     T = promote_type(S, E, Float64)
-    return Orbit{T}(SVector{6,T}(state), T(et), Int32(center), Int32(frame), Float64(gm),
-        SVector{3,Float64}(radii))
+    return Orbit{T}(
+        SVector{6, T}(state), T(et), Int32(center), Int32(frame), Float64(gm),
+        SVector{3, Float64}(radii)
+    )
 end
 
-function Orbit(ks::KernelSet, state::AbstractVector{<:Real}, et::Real, center::NameOrID,
-        frame::NameOrID)
+function Orbit(
+        ks::KernelSet, state::AbstractVector{<:Real}, et::Real, center::NameOrID,
+        frame::NameOrID
+    )
     c, f = body_code(ks, center), frame_id(ks, frame)
     gm = bodvcd(ks, c, "GM")[1]
-    radii = bodfnd(ks, c, "RADII") ? SVector{3,Float64}(bodvcd(ks, c, "RADII")) : _NO_RADII
+    radii = bodfnd(ks, c, "RADII") ? SVector{3, Float64}(bodvcd(ks, c, "RADII")) : _NO_RADII
     return Orbit(state, et, c, f, gm, radii)
 end
-Orbit(ctx::SpiceContext, state::AbstractVector{<:Real}, et::Real, center::NameOrID,
-        frame::NameOrID) = Orbit(kernelset(ctx), state, et, center, frame)
+Orbit(
+    ctx::SpiceContext, state::AbstractVector{<:Real}, et::Real, center::NameOrID,
+    frame::NameOrID
+) = Orbit(kernelset(ctx), state, et, center, frame)
 Orbit(state::AbstractVector{<:Real}, et::Real, center::NameOrID, frame::NameOrID) =
     Orbit(default_context(), state, et, center, frame)
 
@@ -87,13 +103,17 @@ an ephemeris state in ANISE.
 Throws the errors of [`spkezr`](@ref), and `SpiceError(:kernelvarnotfound)` if the pool
 has no GM for `obs`.
 """
-function orbit(ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID,
-        abcorr::AbstractString, obs::NameOrID)
+function orbit(
+        ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID,
+        abcorr::AbstractString, obs::NameOrID
+    )
     state, _ = spkezr(ks, targ, et, ref, abcorr, obs)
     return Orbit(ks, state, et, obs, ref)
 end
-orbit(ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString,
-        obs::NameOrID) = orbit(kernelset(ctx), targ, et, ref, abcorr, obs)
+orbit(
+    ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString,
+    obs::NameOrID
+) = orbit(kernelset(ctx), targ, et, ref, abcorr, obs)
 orbit(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString, obs::NameOrID) =
     orbit(default_context(), targ, et, ref, abcorr, obs)
 
@@ -126,12 +146,16 @@ function _orbit_property(o::Orbit, s::Symbol)
     s === :hvec && return _hvec(o)
     s === :evec && return _evec_for(:evec, o)
     s in elements() && return element(o, s)
-    throw(SpiceError(:badarg, "Orbit: no field, vector or element :$s; the elements are " *
-        join(elements(), ", ")))
+    throw(
+        SpiceError(
+            :badarg, "Orbit: no field, vector or element :$s; the elements are " *
+                join(elements(), ", ")
+        )
+    )
 end
 
 Base.propertynames(::Orbit) = (fieldnames(Orbit)..., _ORBIT_VECTORS..., elements()...)
 
 function Base.show(io::IO, o::Orbit)
-    print(io, "Orbit(", o.state, ", ", o.et, ", ", o.center, ", ", o.frame, ", ", o.gm, ")")
+    return print(io, "Orbit(", o.state, ", ", o.et, ", ", o.center, ", ", o.frame, ", ", o.gm, ")")
 end

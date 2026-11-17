@@ -56,7 +56,7 @@ end
 
 # The Kepler solver of the Orbit layer: both arguments, the mean anomaly and the
 # eccentricity, have tangents (see `src/analysis/brouwer.jl`).
-@is_primitive DefaultCtx Tuple{typeof(_ma_to_ta),Float64,Float64}
+@is_primitive DefaultCtx Tuple{typeof(_ma_to_ta), Float64, Float64}
 function Mooncake.frule!!(::Dual{typeof(_ma_to_ta)}, m::Dual, e::Dual)
     y, (dm, de) = _ad_rule(_ma_to_ta, Mooncake.primal(m), Mooncake.primal(e))
     return Dual(y, dm * Mooncake.tangent(m) + de * Mooncake.tangent(e))

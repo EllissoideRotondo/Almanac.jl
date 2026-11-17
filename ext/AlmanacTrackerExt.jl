@@ -36,8 +36,10 @@ Almanac.abcorr_state(
 
 # An array of Tracker has the element type of its data (Float64) and returns tracked
 # numbers, so an `Orbit` takes its elements one by one.
-Almanac.Orbit(state::TrackedVector, et::Real, center::Integer, frame::Integer, gm::Real,
-    radii::AbstractVector{<:Real}=Almanac._NO_RADII) =
+Almanac.Orbit(
+    state::TrackedVector, et::Real, center::Integer, frame::Integer, gm::Real,
+    radii::AbstractVector{<:Real} = Almanac._NO_RADII
+) =
     Almanac.Orbit([state[i] for i in eachindex(state)], et, center, frame, gm, radii)
 
 end # module

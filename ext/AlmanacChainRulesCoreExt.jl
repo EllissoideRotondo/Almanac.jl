@@ -84,14 +84,18 @@ end
 # would compile the pullback of every branch of `element` for the first property it
 # meets (`o.state` as well), which takes about 35 s. These rules differentiate only the
 # branch of the name, with the AD system of the caller.
-function ChainRulesCore.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(element),
-        o::Orbit, name::Symbol)
+function ChainRulesCore.rrule(
+        config::RuleConfig{>:HasReverseMode}, ::typeof(element),
+        o::Orbit, name::Symbol
+    )
     name in elements() || element(o, name)    # throws SpiceError(:badarg)
     y, pb = rrule_via_ad(config, getfield(Almanac, Symbol(:_el_, name)), o)
     return y, ȳ -> (NoTangent(), pb(ȳ)[2], NoTangent())
 end
-function ChainRulesCore.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(getproperty),
-        o::O, s::Symbol) where {O<:Orbit}
+function ChainRulesCore.rrule(
+        config::RuleConfig{>:HasReverseMode}, ::typeof(getproperty),
+        o::O, s::Symbol
+    ) where {O <: Orbit}
     if s in _ORBIT_FIELDS
         field_pb(ȳ) = (NoTangent(), Tangent{O}(; NamedTuple{(s,)}((unthunk(ȳ),))...), NoTangent())
         return getfield(o, s), field_pb

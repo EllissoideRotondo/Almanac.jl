@@ -8,8 +8,12 @@
 # body 399 is an error, as in ANISE.
 const J2_EARTH = 1.082_626_925_638_815e-3
 
-_brouwer_fail(msg::AbstractString) = throw(SpiceError(:degeneratecase,
-    "the Brouwer mean elements are undefined: $msg"))
+_brouwer_fail(msg::AbstractString) = throw(
+    SpiceError(
+        :degeneratecase,
+        "the Brouwer mean elements are undefined: $msg"
+    )
+)
 
 # The conversions below are also those of `keplerian_orbit`, `with_element` and `two_body`
 # (build.jl), so their errors do not name the Brouwer elements.
@@ -17,7 +21,7 @@ _conv_fail(msg::AbstractString) = throw(SpiceError(:degeneratecase, "undefined: 
 
 # ANISE `mean_anomaly_to_true_anomaly_rad` (src/astro/utils.rs): GTDS MathSpec 3-180, 3-181,
 # 3-186 by Newton iteration. Its `MathError`s are `:degeneratecase`.
-const _MA_EPSILON = 1e-12
+const _MA_EPSILON = 1.0e-12
 
 # The iteration runs on the primal values, so the Float64 result is that of ANISE bit for bit.
 # The derivative is carried by one more Newton step in the number type T at the converged value
@@ -79,11 +83,11 @@ function _ma_to_ea(rm::T, ecc::T) where {T}
 end
 
 "The true anomaly of the eccentric (ecc <= 1) or hyperbolic anomaly `e`, as ANISE takes it."
-function _ea_to_ta(e::S, ecc::U) where {S,U}
+function _ea_to_ta(e::S, ecc::U) where {S, U}
     T = promote_type(S, U)
     fail(what) = _conv_fail("the mean to true anomaly conversion $what")
     if primal(ecc) <= 1
-        ta = if abs(primal(e) - π) >= 1e-8
+        ta = if abs(primal(e) - π) >= 1.0e-8
             normalized = 1 - ecc
             abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
             ratio = (1 + ecc) / normalized
@@ -170,7 +174,7 @@ function _kep_to_cart(sma::T, ecc::T, inc::T, raan::T, aop::T, ta::T, gm::Real) 
     vy = sqrt_gm_p * cos_ta_ecc * (-sin_aop * sin_raan + cos_inc * cos_raan * cos_aop) -
         sqrt_gm_p * sin_ta * (cos_aop * sin_raan + cos_inc * cos_raan * sin_aop)
     vz = sqrt_gm_p * (cos_ta_ecc * sin_inc * cos_aop - sin_ta * sin_inc * sin_aop)
-    return SVector{6,T}(x, y, z, vx, vy, vz)
+    return SVector{6, T}(x, y, z, vx, vy, vz)
 end
 
 # ANISE `try_keplerian_mean_anomaly`: the true anomaly from the mean one, then `try_keplerian`.
@@ -193,8 +197,10 @@ end
 # `re` the equatorial radius used to normalize. It checks only that the orbit is not
 # hyperbolic, as ANISE does.
 function _brouwer_mean_to_osc(sma, ecc, inc, raan, aop, ma, re::Real, j2::Real)
-    T = promote_type(typeof(sma), typeof(ecc), typeof(inc), typeof(raan), typeof(aop),
-        typeof(ma), Float64)
+    T = promote_type(
+        typeof(sma), typeof(ecc), typeof(inc), typeof(raan), typeof(aop),
+        typeof(ma), Float64
+    )
     k2 = j2 / 2
     smap = T(sma) / re
     eccp, incp, raanp, aopp, mean_anom = T(ecc), T(inc), T(raan), T(aop), T(ma)
@@ -226,40 +232,64 @@ function _brouwer_mean_to_osc(sma, ecc, inc, raan, aop, ma, re::Real, j2::Real)
     sin_incp = sin(incp)
     theta_sq = theta^2
 
-    sma1 = smap + smap * gm2 * ((adr^3 - 1 / eta^3) * (-1 + 3 * theta_sq) +
-        3 * (1 - theta_sq) * adr^3 * cos(2 * aopp + 2 * tap))
+    sma1 = smap + smap * gm2 * (
+        (adr^3 - 1 / eta^3) * (-1 + 3 * theta_sq) +
+            3 * (1 - theta_sq) * adr^3 * cos(2 * aopp + 2 * tap)
+    )
 
-    decc = eta^2 / 2 * ((3 * (1 / eta^6) * gm2 * (1 - theta_sq) * cos(2 * aopp + 2 * tap) *
-            (3 * eccp * cos(tap)^2 + 3 * cos(tap) + eccp^2 * cos(tap)^3 + eccp)) -
-        (gm2p * (1 - theta_sq) * (3 * cos(2 * aopp + tap) + cos(3 * tap + 2 * aopp))) +
-        (3 * theta_sq - 1) * gm2 / eta^6 *
-        (eccp * eta + eccp / (1 + eta) + 3 * eccp * cos(tap)^2 + 3 * cos(tap) +
-         eccp^2 * cos(tap)^3))
+    decc = eta^2 / 2 * (
+        (
+            3 * (1 / eta^6) * gm2 * (1 - theta_sq) * cos(2 * aopp + 2 * tap) *
+                (3 * eccp * cos(tap)^2 + 3 * cos(tap) + eccp^2 * cos(tap)^3 + eccp)
+        ) -
+            (gm2p * (1 - theta_sq) * (3 * cos(2 * aopp + tap) + cos(3 * tap + 2 * aopp))) +
+            (3 * theta_sq - 1) * gm2 / eta^6 *
+            (
+            eccp * eta + eccp / (1 + eta) + 3 * eccp * cos(tap)^2 + 3 * cos(tap) +
+                eccp^2 * cos(tap)^3
+        )
+    )
 
-    dinc = gm2p / 2 * theta * sin_incp * (3 * cos(2 * aopp + 2 * tap) +
-        3 * eccp * cos(2 * aopp + tap) + eccp * cos(2 * aopp + 3 * tap))
+    dinc = gm2p / 2 * theta * sin_incp * (
+        3 * cos(2 * aopp + 2 * tap) +
+            3 * eccp * cos(2 * aopp + tap) + eccp * cos(2 * aopp + 3 * tap)
+    )
 
-    draan = -gm2p / 2 * theta * (6 * (tap - mean_anom + eccp * sin(tap)) -
-        3 * sin(2 * aopp + 2 * tap) - 3 * eccp * sin(2 * aopp + tap) -
-        eccp * sin(2 * aopp + 3 * tap))
+    draan = -gm2p / 2 * theta * (
+        6 * (tap - mean_anom + eccp * sin(tap)) -
+            3 * sin(2 * aopp + 2 * tap) - 3 * eccp * sin(2 * aopp + tap) -
+            eccp * sin(2 * aopp + 3 * tap)
+    )
 
     lgh = raanp + aopp + mean_anom +
-        gm2p / 4 * (6 * (-1 - 2 * theta + 5 * theta_sq) * (tap - mean_anom + eccp * sin(tap)) +
-            (3 + 2 * theta - 5 * theta_sq) * (3 * sin(2 * aopp + 2 * tap) +
-                3 * eccp * sin(2 * aopp + tap) + eccp * sin(2 * aopp + 3 * tap))) +
+        gm2p / 4 * (
+        6 * (-1 - 2 * theta + 5 * theta_sq) * (tap - mean_anom + eccp * sin(tap)) +
+            (3 + 2 * theta - 5 * theta_sq) * (
+            3 * sin(2 * aopp + 2 * tap) +
+                3 * eccp * sin(2 * aopp + tap) + eccp * sin(2 * aopp + 3 * tap)
+        )
+    ) +
         gm2p / 4 * eta^2 / (eta + 1) * eccp *
-        (3 * (1 - theta_sq) * (sin(3 * tap + 2 * aopp) * (1 / 3 + adr^2 * eta^2 + adr) +
-            sin(2 * aopp + tap) * (1 - adr^2 * eta^2 - adr)) +
-         2 * sin(tap) * (3 * theta_sq - 1) * (1 + adr^2 * eta^2 + adr))
+        (
+        3 * (1 - theta_sq) * (
+            sin(3 * tap + 2 * aopp) * (1 / 3 + adr^2 * eta^2 + adr) +
+                sin(2 * aopp + tap) * (1 - adr^2 * eta^2 - adr)
+        ) +
+            2 * sin(tap) * (3 * theta_sq - 1) * (1 + adr^2 * eta^2 + adr)
+    )
 
-    eccpdl = -eta^3 / 4 * gm2p * (2 * (-1 + 3 * theta_sq) * (adr^2 * eta^2 + adr + 1) * sin(tap) +
-        3 * (1 - theta_sq) * ((-adr^2 * eta^2 - adr + 1) * sin(2 * aopp + tap) +
-            (adr^2 * eta^2 + adr + 1 / 3) * sin(2 * aopp + 3 * tap)))
+    eccpdl = -eta^3 / 4 * gm2p * (
+        2 * (-1 + 3 * theta_sq) * (adr^2 * eta^2 + adr + 1) * sin(tap) +
+            3 * (1 - theta_sq) * (
+            (-adr^2 * eta^2 - adr + 1) * sin(2 * aopp + tap) +
+                (adr^2 * eta^2 + adr + 1 / 3) * sin(2 * aopp + 3 * tap)
+        )
+    )
 
     ecosl = (eccp + decc) * cos(mean_anom) - eccpdl * sin(mean_anom)
     esinl = (eccp + decc) * sin(mean_anom) + eccpdl * cos(mean_anom)
     ecc1 = sqrt(ecosl^2 + esinl^2)
-    ma1 = primal(ecc1) < 1e-11 ? zero(T) : _wrap(atan(esinl, ecosl))
+    ma1 = primal(ecc1) < 1.0e-11 ? zero(T) : _wrap(atan(esinl, ecosl))
 
     sin_half_i, cos_half_i = sincos(incp / 2)
     sinhalfisinh = (sin_half_i + cos_half_i * dinc / 2) * sin(raanp) + sin_half_i * draan * cos(raanp)
@@ -267,7 +297,7 @@ function _brouwer_mean_to_osc(sma, ecc, inc, raan, aop, ma, re::Real, j2::Real)
     sin_half_i_new = sqrt(sinhalfisinh^2 + sinhalficosh^2)
     sin_half_i_new = primal(sin_half_i_new) > 1 ? one(T) : sin_half_i_new
     inc1 = 2 * asin(sin_half_i_new)
-    if abs(primal(inc1)) < 1e-9 || abs(primal(inc1) - π) < 1e-9
+    if abs(primal(inc1)) < 1.0e-9 || abs(primal(inc1) - π) < 1.0e-9
         raan1 = zero(T)
     else
         raan1 = _wrap(atan(sinhalfisinh, sinhalficosh))
@@ -300,16 +330,22 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
     osc = (osc_sma, osc_ecc, osc_inc, _el_raan(o), _el_aop(o), _el_ma(o))
     pseudostate = false
     cart = getfield(o, :state)
-    aeq = (_el_sma(o), _el_equinoctial_h(o), _el_equinoctial_k(o), _el_equinoctial_p(o),
-        _el_equinoctial_q(o), _el_equinoctial_lambda(o))
+    aeq = (
+        _el_sma(o), _el_equinoctial_h(o), _el_equinoctial_k(o), _el_equinoctial_p(o),
+        _el_equinoctial_q(o), _el_equinoctial_lambda(o),
+    )
     if primal(osc[3]) > deg2rad(175.0)
         pseudostate = true
         osc = (osc[1], osc[2], π - osc[3], -osc[4], -osc[5], osc[6])
         cart = _kep_ma_to_cart(osc..., gm)
-        flipped = Orbit{T}(cart, getfield(o, :et), getfield(o, :center), getfield(o, :frame),
-            gm, getfield(o, :radii))
-        aeq = (_el_sma(flipped), _el_equinoctial_h(flipped), _el_equinoctial_k(flipped),
-            _el_equinoctial_p(flipped), _el_equinoctial_q(flipped), _el_equinoctial_lambda(flipped))
+        flipped = Orbit{T}(
+            cart, getfield(o, :et), getfield(o, :center), getfield(o, :frame),
+            gm, getfield(o, :radii)
+        )
+        aeq = (
+            _el_sma(flipped), _el_equinoctial_h(flipped), _el_equinoctial_k(flipped),
+            _el_equinoctial_p(flipped), _el_equinoctial_q(flipped), _el_equinoctial_lambda(flipped),
+        )
     end
 
     aeqmean = _kep_to_aeq(osc...)
@@ -320,7 +356,7 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
     emag = T(0.9)
     emag_old = T(1.0)
     ii = 0
-    while primal(emag) > 1e-8
+    while primal(emag) > 1.0e-8
         sma, ecc, inc, raan, aop, ma = _equinoctial_to_kep(aeqmean2...)
         kep2 = _brouwer_mean_to_osc(sma, ecc, inc, raan, aop, ma, re, J2_EARTH)
         cart2 = _kep_ma_to_cart(kep2..., gm)

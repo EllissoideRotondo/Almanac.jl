@@ -7,18 +7,28 @@
 # The orbit of six Keplerian elements with the epoch, center, frame, GM and radii given:
 # ANISE `try_keplerian`. The six elements get the one number type.
 function _orbit_from_kep(sma, ecc, inc, raan, aop, ta, et, center, frame, gm, radii)
-    T = promote_type(typeof(sma), typeof(ecc), typeof(inc), typeof(raan), typeof(aop),
-        typeof(ta), Float64)
+    T = promote_type(
+        typeof(sma), typeof(ecc), typeof(inc), typeof(raan), typeof(aop),
+        typeof(ta), Float64
+    )
     state = _kep_to_cart(T(sma), T(ecc), T(inc), T(raan), T(aop), T(ta), gm)
     return Orbit(state, et, center, frame, gm, radii)
 end
 
 # ANISE `try_keplerian_apsis_radii`: the semi-major axis and eccentricity of the two radii.
 function _apsides_to_sma_ecc(periapsis, apoapsis)
-    primal(apoapsis) > eps(Float64) || throw(SpiceError(:degeneratecase,
-        "undefined: the radius of apoapsis is $apoapsis km, not above $(eps(Float64))"))
-    primal(periapsis) > eps(Float64) || throw(SpiceError(:degeneratecase,
-        "undefined: the radius of periapsis is $periapsis km, not above $(eps(Float64))"))
+    primal(apoapsis) > eps(Float64) || throw(
+        SpiceError(
+            :degeneratecase,
+            "undefined: the radius of apoapsis is $apoapsis km, not above $(eps(Float64))"
+        )
+    )
+    primal(periapsis) > eps(Float64) || throw(
+        SpiceError(
+            :degeneratecase,
+            "undefined: the radius of periapsis is $periapsis km, not above $(eps(Float64))"
+        )
+    )
     sma = (apoapsis + periapsis) / 2
     return sma, apoapsis / sma - 1
 end
@@ -69,21 +79,33 @@ julia> round.(collect(values(keplerian(o))), digits=9)
     0.3
 ```
 """
-function keplerian_orbit(ks::KernelSet, et::Real, center::NameOrID, frame::NameOrID;
-        sma=nothing, ecc=nothing, periapsis=nothing, apoapsis=nothing,
-        inc, raan, aop, ta=nothing, ma=nothing, gm=nothing)
+function keplerian_orbit(
+        ks::KernelSet, et::Real, center::NameOrID, frame::NameOrID;
+        sma = nothing, ecc = nothing, periapsis = nothing, apoapsis = nothing,
+        inc, raan, aop, ta = nothing, ma = nothing, gm = nothing
+    )
     shape = (sma !== nothing) + (ecc !== nothing) + (periapsis !== nothing) +
         (apoapsis !== nothing)
-    ((sma !== nothing && ecc !== nothing && shape == 2) ||
-        (periapsis !== nothing && apoapsis !== nothing && shape == 2)) ||
-        throw(SpiceError(:badarg, "keplerian_orbit: give exactly one of the pairs " *
-            "sma and ecc, periapsis and apoapsis"))
-    (ta === nothing) == (ma === nothing) && throw(SpiceError(:badarg,
-        "keplerian_orbit: give exactly one of ta and ma"))
+    (
+        (sma !== nothing && ecc !== nothing && shape == 2) ||
+            (periapsis !== nothing && apoapsis !== nothing && shape == 2)
+    ) ||
+        throw(
+        SpiceError(
+            :badarg, "keplerian_orbit: give exactly one of the pairs " *
+                "sma and ecc, periapsis and apoapsis"
+        )
+    )
+    (ta === nothing) == (ma === nothing) && throw(
+        SpiceError(
+            :badarg,
+            "keplerian_orbit: give exactly one of ta and ma"
+        )
+    )
     c, f = body_code(ks, center), frame_id(ks, frame)
     if gm === nothing
         gm = bodvcd(ks, c, "GM")[1]
-        radii = bodfnd(ks, c, "RADII") ? SVector{3,Float64}(bodvcd(ks, c, "RADII")) : _NO_RADII
+        radii = bodfnd(ks, c, "RADII") ? SVector{3, Float64}(bodvcd(ks, c, "RADII")) : _NO_RADII
     else
         radii = _NO_RADII
     end
@@ -127,8 +149,12 @@ julia> round(with_element(o, :sma, 9000.0).sma, digits=6)
 ```
 """
 function with_element(o::Orbit, name::Symbol, value::Real)
-    name in _KEP_NAMES || throw(SpiceError(:badarg,
-        "with_element: no Keplerian element :$name; the names are " * join(_KEP_NAMES, ", ")))
+    name in _KEP_NAMES || throw(
+        SpiceError(
+            :badarg,
+            "with_element: no Keplerian element :$name; the names are " * join(_KEP_NAMES, ", ")
+        )
+    )
     # ANISE evaluates the other five elements in this order before the conversion
     vals = map(n -> n === name ? value : element(o, n), _KEP_NAMES)
     return _orbit_from_kep(vals..., o.et, o.center, o.frame, o.gm, o.radii)

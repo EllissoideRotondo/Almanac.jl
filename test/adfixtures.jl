@@ -210,8 +210,10 @@ const AD_RADII = SVector(6378.1366, 6378.1366, 6356.7519)
 const AD_ELEMENTS = (:sma, :ecc, :inc, :raan, :aop, :ta, :ma, :latitude, :brouwer_sma)
 
 ad_orbit(s) = Orbit(s, 0.0, 399, 1, AD_GM, AD_RADII)
-ad_kep(x) = keplerian_orbit(0.0, 399, 1; sma=x[1], ecc=x[2], inc=x[3], raan=x[4], aop=x[5],
-    ma=x[6], gm=AD_GM).state
+ad_kep(x) = keplerian_orbit(
+    0.0, 399, 1; sma = x[1], ecc = x[2], inc = x[3], raan = x[4], aop = x[5],
+    ma = x[6], gm = AD_GM
+).state
 
 """
     ad_orbit_cases() -> (default, full)
@@ -230,12 +232,20 @@ Mooncake 8 s for each mode, and a backend other than Zygote compiles every branc
 reverse). Each function is divided by its value at the point.
 """
 function ad_orbit_cases()
-    se = Vector(keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=0.1, inc=0.5, raan=1.0, aop=2.0,
-        ta=0.3, gm=AD_GM).state)
-    sh = Vector(keplerian_orbit(0.0, 399, 1; sma=-20000.0, ecc=1.5, inc=0.7, raan=0.4,
-        aop=1.1, ta=0.4, gm=AD_GM).state)
+    se = Vector(
+        keplerian_orbit(
+            0.0, 399, 1; sma = 8000.0, ecc = 0.1, inc = 0.5, raan = 1.0, aop = 2.0,
+            ta = 0.3, gm = AD_GM
+        ).state
+    )
+    sh = Vector(
+        keplerian_orbit(
+            0.0, 399, 1; sma = -20000.0, ecc = 1.5, inc = 0.7, raan = 0.4,
+            aop = 1.1, ta = 0.4, gm = AD_GM
+        ).state
+    )
     chief = ad_orbit(se)
-    sd = se .+ [1.0, -2.0, 0.5, 1e-3, 2e-3, -1e-3]
+    sd = se .+ [1.0, -2.0, 0.5, 1.0e-3, 2.0e-3, -1.0e-3]
     xpi = [8000.0, 0.6, 0.5, 1.0, 2.0, Float64(π)]
     xe, xh = [8000.0, 0.1, 0.5, 1.0, 2.0, 2.0], [-20000.0, 1.5, 0.7, 0.4, 1.1, 0.3]
     element_case(q, s0) = "element $q" => (s -> element(ad_orbit(s), q), s0)
@@ -244,19 +254,28 @@ function ad_orbit_cases()
         "keplerian_orbit ma = pi" => (x -> dot(W6, ad_kep(x)), xpi),
         "keplerian_orbit hyperbola" => (x -> dot(W6, ad_kep(x)), xh),
     ]
-    full = vcat([
-        "two_body ellipse" => (s -> dot(W6, two_body(ad_orbit(s), 3600.0).state), se),
-        "two_body hyperbola" => (s -> dot(W6, two_body(ad_orbit(s), 3600.0).state), sh),
-        "local_frame ric" => (s -> sum(W33 .* local_frame(ad_orbit(s), :ric)), se),
-        "relative_state ric" => (s -> dot(W6, relative_state(ad_orbit(s), chief, :ric)), sd),
-        "elements" => (s -> sum(map(q -> element(ad_orbit(s), q), AD_ELEMENTS) ./
-            map(q -> abs(element(ad_orbit(se), q)), AD_ELEMENTS)), se),
-        element_case(:bplane_bt, sh)], [element_case(q, se) for q in AD_ELEMENTS], [
-        "local_frame vnc" => (s -> sum(W33 .* local_frame(ad_orbit(s), :vnc)), se),
-    ])
+    full = vcat(
+        [
+            "two_body ellipse" => (s -> dot(W6, two_body(ad_orbit(s), 3600.0).state), se),
+            "two_body hyperbola" => (s -> dot(W6, two_body(ad_orbit(s), 3600.0).state), sh),
+            "local_frame ric" => (s -> sum(W33 .* local_frame(ad_orbit(s), :ric)), se),
+            "relative_state ric" => (s -> dot(W6, relative_state(ad_orbit(s), chief, :ric)), sd),
+            "elements" => (
+                s -> sum(
+                    map(q -> element(ad_orbit(s), q), AD_ELEMENTS) ./
+                        map(q -> abs(element(ad_orbit(se), q)), AD_ELEMENTS)
+                ), se,
+            ),
+            element_case(:bplane_bt, sh),
+        ], [element_case(q, se) for q in AD_ELEMENTS], [
+            "local_frame vnc" => (s -> sum(W33 .* local_frame(ad_orbit(s), :vnc)), se),
+        ]
+    )
     # Each case divided by its value at its point.
-    norm1(c) = (f = first(last(c)); x0 = last(last(c)); s0 = abs(f(x0));
-        first(c) => (x -> f(x) / s0, x0))
+    norm1(c) = (
+        f = first(last(c)); x0 = last(last(c)); s0 = abs(f(x0));
+        first(c) => (x -> f(x) / s0, x0)
+    )
     return map(norm1, default), map(norm1, full)
 end
 
@@ -279,10 +298,14 @@ function ad_orbit_check(bname, backend)
             err = ad_reldiff(g, ref)
             worst = max(worst, err)
             @test err <= AD_ORBIT_RTOL || (@info "gradient" bname cname g ref; false)
-            @test isapprox(Almanac.primal(y), f(x); rtol=2eps())
+            @test isapprox(Almanac.primal(y), f(x); rtol = 2eps())
         end
-        measured(@sprintf("  %-18s %2d Orbit function(s), max relative difference to ForwardDiff %.2e",
-            bname, length(cases), worst))
+        measured(
+            @sprintf(
+                "  %-18s %2d Orbit function(s), max relative difference to ForwardDiff %.2e",
+                bname, length(cases), worst
+            )
+        )
     end
     return nothing
 end
