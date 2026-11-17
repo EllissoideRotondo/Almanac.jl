@@ -20,36 +20,33 @@ const ELEMENT_NAMES = (
 """
     elements() -> NTuple{N,Symbol}
 
-The names that [`element`](@ref) accepts, in the order of the table in
-[Orbits](@ref "Element names"). No CSPICE call has this interface.
+Return the names that [`element`](@ref) accepts, in the order of
+[Element names](@ref). No CSPICE call has this interface.
 """
 elements() = ELEMENT_NAMES
 
 """
     element(o::Orbit, name::Symbol) -> T
 
-One scalar quantity of the orbit `o`, in km, s and rad and their combinations; the
-property `o.name` returns the same. `name` is one of [`elements`](@ref); the table in
-[Orbits](@ref "Element names") gives the unit and the name in ANISE of each, and says
-how each group behaves. The elements are those of `oscltx` (classical elements, period)
-and `recgeo` (geodetic coordinates) where CSPICE has them; no CSPICE call has this
-interface, and the other names follow `OrbitalElement` of ANISE.
+Return the quantity `name` of the orbit `o`; `o.name` returns the same. The names, units
+and ranges are in [Element names](@ref). The classical elements and the period are those
+of [`oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html)
+and the geodetic coordinates those of
+[`recgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recgeo_c.html); the
+other names follow `OrbitalElement` of [ANISE](https://github.com/nyx-space/anise).
 
-The Keplerian elements are valid in an inertial frame, the geodetic ones in the
-body-fixed frame of the center, and the B-plane ones need an inertial frame; no frame is
-checked, and in another frame the numbers are those of the wrong quantity. Where a
-quantity is undefined for the orbit (a circular orbit has no true anomaly; a zero
-position or velocity has no angular momentum), `element` throws
-`SpiceError(:degeneratecase)`. It never returns NaN. Three quantities are not finite or
-not meaningful for some orbits: `:sma` is `±Inf` on a parabola, and for every orbit that
-is not elliptic (a parabola or a hyperbola) `:period` is 0 and `:ta_dot`, `2π/period`,
-is `Inf`.
+The frame of `o` is not checked: the Keplerian and B-plane elements assume an inertial
+frame, the geodetic ones the body-fixed frame of the center.
 
-Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref); also for the vectors
-`position`, `velocity`, `hvec` and `evec`, which are properties only, so that a name
-known only at run time never gives a union of scalar and vector. The altitudes,
-`:latitude`, `:height` and the Brouwer elements throw `SpiceError(:badarg)` too if the
-radii of the center are NaN (`o.radii`).
+`element` never returns NaN. Where a quantity is undefined for the orbit (no true anomaly
+on a circular orbit, no angular momentum for a zero position or velocity) it throws
+`SpiceError(:degeneratecase)`. Not finite: `:sma` is `±Inf` on a parabola, and on an
+orbit that is not elliptic `:period` is 0 and `:ta_dot` is `Inf`.
+
+Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref) (the vectors
+`position`, `velocity`, `hvec` and `evec` are properties only), or if the quantity needs
+the radii of the center (altitudes, `:latitude`, `:height`, Brouwer elements) and
+`o.radii` is NaN.
 
 # Examples
 ```jldoctest
@@ -335,15 +332,14 @@ end
 """
     keplerian(o::Orbit) -> NamedTuple{(:sma, :ecc, :inc, :raan, :aop, :ta)}
 
-The classical elements of `o`: semi-major axis (km, negative for a hyperbola),
-eccentricity, inclination, right ascension of the ascending node, argument of periapsis
-and true anomaly (rad). `oscltx` returns these elements of a state with more; this call
-matches `Orbit.to_keplerian_vec` of ANISE, with angles in rad.
+Return the classical elements of `o`: semi-major axis (km, negative for a hyperbola),
+eccentricity, and inclination, node, argument of periapsis and true anomaly (rad), as
+[`element`](@ref) returns them. A subset of
+[`oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html);
+`Orbit.to_keplerian_vec` of ANISE, with angles in rad.
 
-The values are those of the properties of the same names (see [`element`](@ref)), so the
-degenerate cases are the same: `:ta` throws `SpiceError(:degeneratecase)` for a circular
-orbit (`ecc < 1e-11`), while `:raan` and `:aop` have their ANISE fallback values for an
-equatorial orbit.
+Throws `SpiceError(:degeneratecase)` for a circular orbit (`ecc < 1e-11`), which has no
+true anomaly.
 
 # Examples
 ```jldoctest
@@ -499,17 +495,14 @@ end
 """
     vinf_periapsis(o::Orbit, turn_angle::Real)
 
-Return the periapsis radius in km (a number; a `Dual` where `o` or `turn_angle` is one)
-of a flyby of the center of `o` that turns the excess velocity by `turn_angle` rad, for
-the excess speed of the hyperbola `o`:
-`(1 / cos((π - turn_angle) / 2) - 1) μ / C3`, where `C3 = o.c3` (km²/s²) is the square
-of the excess speed and `μ = o.gm`. No CSPICE call has this interface; it matches
-`Orbit.vinf_periapsis_km` of ANISE, with the angle in rad. It is the inverse of
-[`vinf_turn_angle`](@ref).
+Return the periapsis radius (km) of a flyby of the center of `o` that turns the excess
+velocity of the hyperbola `o` by `turn_angle` (rad):
+`(1 / cos((π - turn_angle) / 2) - 1) μ / C3`, with `C3 = o.c3` (km²/s²) and `μ = o.gm`.
+The inverse of [`vinf_turn_angle`](@ref). No CSPICE call has this interface;
+`Orbit.vinf_periapsis_km` of ANISE, with the angle in rad.
 
-`turn_angle` is in [0, π]: π gives 0 and 0 gives a very large radius; outside [0, π] the
-formula is evaluated without a check. Throws `SpiceError(:degeneratecase)` if the orbit
-is not hyperbolic (`ecc <= 1`, ANISE: `NotHyperbolic`) or the result is NaN.
+`turn_angle` is meant to be in [0, π] (π gives 0); outside it the formula is evaluated
+without a check. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the result is NaN.
 
 # Examples
 ```jldoctest
@@ -528,19 +521,15 @@ end
 """
     vinf_turn_angle(o::Orbit, periapsis::Real)
 
-Return the angle in rad (a number; a `Dual` where `o` or `periapsis` is one) by which a
-flyby of the center of `o` with periapsis radius `periapsis` km turns the
-excess velocity of the hyperbola `o`:
-`π - 2 acos(1 / (1 + C3 periapsis / μ))`, where `C3 = o.c3` (km²/s²) is the square of the
-excess speed and `μ = o.gm`. No CSPICE call has this interface; it matches
-`Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad. It depends on the excess
-speed only, not on where along the trajectory `o` is. It is the inverse of
-[`vinf_periapsis`](@ref).
+Return the angle (rad) by which a flyby of the center of `o` with periapsis radius
+`periapsis` (km) turns the excess velocity of the hyperbola `o`:
+`π - 2 acos(1 / (1 + C3 periapsis / μ))`, with `C3 = o.c3` (km²/s²) and `μ = o.gm`. Only
+the excess speed of `o` matters. The inverse of [`vinf_periapsis`](@ref). No CSPICE call
+has this interface; `Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad.
 
-The result is in [0, π] for `periapsis >= 0` (π for 0), and is wrapped into [0, 2π) for a
-negative one. Throws `SpiceError(:degeneratecase)` if the orbit is not hyperbolic
-(`ecc <= 1`, ANISE: `NotHyperbolic`) or the arc cosine has no value (ANISE: NaN), as for
-a negative `periapsis` below `-μ / C3`.
+The result is in [0, π] for `periapsis >= 0` and wrapped into [0, 2π) for
+`periapsis <= -2μ / C3`. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the arc
+cosine has no value (`-2μ / C3 < periapsis < 0`; ANISE returns NaN).
 
 # Examples
 ```jldoctest

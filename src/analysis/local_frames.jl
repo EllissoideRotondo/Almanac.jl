@@ -53,9 +53,9 @@ end
 """
     local_frame(o, kind) -> SMatrix{3,3}
 
-The rotation from a local frame of the orbit `o` to the frame of `o`. No CSPICE call has
-this interface; it matches `Orbit::dcm3x3_from_ric_to_inertial`, `..._vnc_...`,
-`..._rcn_...` and `..._tnw_...` of ANISE.
+Return the rotation from a local frame of the orbit `o` to the frame of `o`. No CSPICE
+call has this interface; `Orbit::dcm3x3_from_ric_to_inertial` and its `vnc`, `rcn` and
+`tnw` forms in ANISE.
 
 `kind` is `:ric`, `:vnc`, `:rcn` or `:tnw`. With `r̂ = r/|r|`, `v̂ = v/|v|` and
 `ĥ = r × v/|r × v|`, the columns are the axes of the local frame in the frame of `o`:
@@ -67,12 +67,10 @@ this interface; it matches `Orbit::dcm3x3_from_ric_to_inertial`, `..._vnc_...`,
 | `:rcn` (radial, cross, normal) | the same as `:ric`; only the axes are named differently |
 | `:tnw` (tangential, normal, orbit normal) | `v̂`, `ĥ × v̂`, `ĥ` |
 
-The frame of `o` must be inertial, as in ANISE; no check is made, and in another frame the
-result is a rotation of the wrong axes. The element type of the
-result is the number type of `o`, so a dual epoch or state is carried through.
+The frame of `o` is assumed inertial and is not checked. The element type is that of `o`.
 
 Throws `SpiceError(:badarg)` for another `kind`, and `SpiceError(:degeneratecase)` where
-the angular momentum is zero, which is where ANISE fails in `hvec()` or `hmag()`.
+the angular momentum is zero.
 
 # Examples
 ```jldoctest
@@ -87,12 +85,11 @@ local_frame(o::Orbit, kind::Symbol) = _local_frame_pair(:local_frame, o, kind)[1
 """
     local_frame_state(o, kind) -> SMatrix{6,6}
 
-The rotation of states from a local frame of the orbit `o` to the frame of `o`, in the
-block form `[R 0; Ṙ R]`, where `R` is [`local_frame`](@ref)`(o, kind)` and `Ṙ` its time
-derivative along the two-body motion of `o`, in 1/s: `ṙ = v`, `v̇ = -gm r/|r|³`, and the
-angular momentum is constant. No CSPICE call has this interface; it matches
-`Orbit::dcm_from_ric_to_inertial`, `..._vnc_...`, `..._rcn_...` and `..._tnw_...` of
-ANISE, whose rate differs ([Coverage and validation](@ref "Beyond CSPICE")).
+Return the rotation of states from a local frame of the orbit `o` to the frame of `o`,
+`[R 0; Ṙ R]`, where `R` is [`local_frame`](@ref)`(o, kind)` and `Ṙ` (1/s) its exact rate
+along the two-body motion of `o`. No CSPICE call has this interface;
+`Orbit::dcm_from_ric_to_inertial` and its forms in ANISE, whose rate is a
+[difference quotient](@ref "Beyond CSPICE").
 
 Throws what [`local_frame`](@ref) throws.
 
@@ -121,20 +118,12 @@ end
 """
     relative_state(o, chief, kind) -> SVector{6}
 
-The state of the orbit `o` relative to the orbit `chief`, in the local frame `kind` of
-`chief`: the difference `o.state - chief.state` multiplied by the inverse of
-[`local_frame_state`](@ref)`(chief, kind)`, so that the position is `Rᵀ dr` and the
-velocity `Ṙᵀ dr + Rᵀ dv` for `dr`, `dv` the differences of position and velocity. No
-CSPICE call has this interface; it matches `Orbit::ric_difference_unchecked`,
-`vnc_difference_unchecked` and `tnw_difference_unchecked` of ANISE (`:ric` and `:rcn` use
-the first; there is no separate function for `:rcn`).
-
-Both orbits must have the same epoch, center and frame. The result is the position (km)
-and velocity (km/s) of `o` minus `chief`, with the components in the axes of the local
-frame (for `:ric`, the radial, in-track and cross-track offsets). The velocity is the
-rate of change of the offset as seen in the rotating frame, so it is not zero for two
-orbits with equal inertial velocities. The frame of the orbits must be inertial; no check
-is made.
+Return the state (km, km/s) of the orbit `o` minus that of `chief`, in the local frame
+`kind` of `chief`: `Rᵀ dr` and `Ṙᵀ dr + Rᵀ dv`, with `dr` and `dv` the differences of
+position and velocity and `R` and `Ṙ` from [`local_frame_state`](@ref)`(chief, kind)`. The velocity is the rate of the offset seen in
+the rotating frame, so it is not zero for equal inertial velocities. No CSPICE call has
+this interface; `Orbit::ric_difference_unchecked` and its `vnc` and `tnw` forms in ANISE
+(`:rcn` uses the `ric` one). The frame is assumed inertial and is not checked.
 
 Throws `SpiceError(:badarg)` if the epoch, the center or the frame differ, or `kind` is
 unknown, and `SpiceError(:degeneratecase)` where the angular momentum of `chief` is zero.

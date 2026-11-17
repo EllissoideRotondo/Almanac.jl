@@ -39,8 +39,8 @@ With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in:
 - rotations: `pxform`, `sxform`, `pxfrm2`;
 - `spkder`, `pxder` and the table queries;
 - surface calls: `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq`, `azlcpo`;
-- time conversions: `unitim`, `deltet`.
-- the Orbit layer: `orbit`, and an `Orbit` built with a dual epoch or state, through `element`, `keplerian_orbit`, `two_body`, the local frames and `relative_state` (see [Orbits](@ref "Orbits and relative motion")).
+- time conversions: `unitim`, `deltet`;
+- [orbits](@ref "Orbits and relative motion"): `orbit`, and an `Orbit` with a dual epoch or state through `element`, `keplerian_orbit`, `two_body`, the local frames and `relative_state`.
 
 Other calls (`limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg`, `et2lst`, ...) throw `SpiceError(:badarg)` for a `Dual`. Event searches take `Float64` windows.
 
@@ -67,7 +67,7 @@ DI.derivative(range_km, AutoEnzyme(), et)   # km/s
 DI.gradient(ts -> sum(range_km, ts), AutoZygote(), [et, et + 3600])
 ```
 
-The calls of the Orbit layer differentiate with the same packages, with respect to the epoch through [`orbit`](@ref) and with respect to a state or to Keplerian elements: [`Orbit`](@ref), [`element`](@ref), [`keplerian_orbit`](@ref), [`two_body`](@ref), [`local_frame`](@ref), [`relative_state`](@ref) and the others. The Kepler solver of `keplerian_orbit` and `two_body` gives each package the exact derivative of the true anomaly, at E = π as well, where ANISE returns the eccentric anomaly for it.
+The orbit calls differentiate with the same packages, with respect to the epoch through [`orbit`](@ref) and with respect to a state or to Keplerian elements:
 
 ```julia
 x = [8000.0, 0.1, 0.5, 1.0, 2.0, 2.0]       # sma, ecc, inc, raan, aop, ma
