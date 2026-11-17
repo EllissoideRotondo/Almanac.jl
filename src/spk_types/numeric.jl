@@ -10,7 +10,7 @@
 Coupled recurrences `s_k = (1/k) Σ_{j=1}^{k} j x_j c_{k-j}` and
 `c_k = (1/k) Σ_{j=1}^{k} j x_j s_{k-j}`, started from `sinh(x_0)` and `cosh(x_0)`.
 """
-@generated function _sinhcosh(x::Taylor{N,T}) where {N,T<:Real}
+@generated function _sinhcosh(x::Taylor{N, T}) where {N, T <: Real}
     ex = _unpack(:a, :x, N)
     push!(ex, :(s0 = sinh(a0)), :(c0 = cosh(a0)))
     for k in 1:N
@@ -31,16 +31,28 @@ Series of the angle of the point `(x, y)`: `r_0 = atan(y_0, x_0)` and
 `r' = (x y' - y x') / (x² + y²)`, by the quotient recurrence on the coefficients of
 the derivative. Requires `x_0² + y_0² > 0` (not checked).
 """
-@generated function Base.atan(y::Taylor{N,T}, x::Taylor{N,T}) where {N,T<:Real}
+@generated function Base.atan(y::Taylor{N, T}, x::Taylor{N, T}) where {N, T <: Real}
     ex = vcat(_unpack(:s, :y, N), _unpack(:c, :x, N))
     push!(ex, :(r0 = atan(s0, c0)))
-    for m in 0:N-1
+    for m in 0:(N - 1)
         # q_m: coefficient m of x² + y²; d: coefficient m of x y' - y x';
         # e_m: coefficient m of the derivative of the angle.
-        q = _sum([:($(_sym(:c, j)) * $(_sym(:c, m - j)) + $(_sym(:s, j)) * $(_sym(:s, m - j)))
-                  for j in 0:m])
-        d = _sum([:($(j + 1) * ($(_sym(:c, m - j)) * $(_sym(:s, j + 1)) -
-                                $(_sym(:s, m - j)) * $(_sym(:c, j + 1)))) for j in 0:m])
+        q = _sum(
+            [
+                :($(_sym(:c, j)) * $(_sym(:c, m - j)) + $(_sym(:s, j)) * $(_sym(:s, m - j)))
+                    for j in 0:m
+            ]
+        )
+        d = _sum(
+            [
+                :(
+                    $(j + 1) * (
+                        $(_sym(:c, m - j)) * $(_sym(:s, j + 1)) -
+                            $(_sym(:s, m - j)) * $(_sym(:c, j + 1))
+                    )
+                ) for j in 0:m
+            ]
+        )
         push!(ex, :($(_sym(:q, m)) = $q))
         if m == 0
             push!(ex, :(e0 = $d / q0))
@@ -71,7 +83,7 @@ than the value type for a `ForwardDiff.Dual` (package extension). Another `Real`
 type gives 8, which is sufficient for a type that carries not more than 8 orders.
 """
 @inline _ad_order(::Type{<:AbstractFloat}) = 0
-@inline _ad_order(::Type{Taylor{N,T}}) where {N,T} = N + _ad_order(T)
+@inline _ad_order(::Type{Taylor{N, T}}) where {N, T} = N + _ad_order(T)
 @inline _ad_order(::Type{<:Real}) = 8
 
 """
@@ -93,8 +105,10 @@ const _PI = Float64(pi)
 @inline _dot(a::Vec3, b::Vec3) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 
 "Cross product in the order of `vcrss`."
-@inline _cross(a::Vec3, b::Vec3) = Vec3(a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3],
-    a[1] * b[2] - a[2] * b[1])
+@inline _cross(a::Vec3, b::Vec3) = Vec3(
+    a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3],
+    a[1] * b[2] - a[2] * b[1]
+)
 
 @inline _maxabs(v::Vec3) = max(abs(primal(v[1])), abs(primal(v[2])), abs(primal(v[3])))
 

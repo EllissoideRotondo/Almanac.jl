@@ -92,16 +92,22 @@ See also [`EKSegmentSummary`](@ref), [`EKColumnAttr`](@ref).
 function ekssum(h::DASHandle, segno::Integer)
     _ek_check_read(h, "ekssum")
     nseg = _ek_nseg(h)
-    (1 <= segno <= nseg) || throw(SpiceError(:indexoutofrange,
-        "Segment index was $segno; valid range is 1:$nseg"))
+    (1 <= segno <= nseg) || throw(
+        SpiceError(
+            :indexoutofrange,
+            "Segment index was $segno; valid range is 1:$nseg"
+        )
+    )
     _, base = _ek_mloc(h, segno)
-    segdsc = view(h.ints, base+1:base+_EK_SDSCSZ)
+    segdsc = view(h.ints, (base + 1):(base + _EK_SDSCSZ))
     ncols = Int(segdsc[_EK_NCIDX])
     tnb = Int(segdsc[_EK_TNMIDX])
     cols = _EKColumn[_ek_column(h, base, i) for i in 1:ncols]
-    return EKSegmentSummary(_ek_rstr(h.chars, tnb + 1, tnb + _EK_TNAMSZ),
+    return EKSegmentSummary(
+        _ek_rstr(h.chars, tnb + 1, tnb + _EK_TNAMSZ),
         Int(segdsc[_EK_NRIDX]), ncols, String[c.name for c in cols],
-        EKColumnAttr[_ek_attr(c) for c in cols])
+        EKColumnAttr[_ek_attr(c) for c in cols]
+    )
 end
 
 """
@@ -113,18 +119,28 @@ segment `segno` and the record pointer of row `recno`. Throws `SpiceError`:
 `:wrongdatatype` unless the data type code of the column is in `types`,
 `:indexoutofrange` for a row number outside `1:nrows`.
 """
-function _ek_locate(h::DASHandle, who::AbstractString, segno::Integer, recno::Integer,
-        column::AbstractString, types::Tuple)
+function _ek_locate(
+        h::DASHandle, who::AbstractString, segno::Integer, recno::Integer,
+        column::AbstractString, types::Tuple
+    )
     _ek_check_read(h, who)
     segdsc = _ek_sdsc(h, segno)
     col = _ek_find_column(h, segdsc, column)
-    col.dtype in types || throw(SpiceError(:wrongdatatype, "Column $(col.name) is of type " *
-        "$(col.dtype); $(uppercase(who)) only works with " *
-        "$(types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ? "integer" : "d.p. or TIME") " *
-        "columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."))
+    col.dtype in types || throw(
+        SpiceError(
+            :wrongdatatype, "Column $(col.name) is of type " *
+                "$(col.dtype); $(uppercase(who)) only works with " *
+                "$(types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ? "integer" : "d.p. or TIME") " *
+                "columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
+        )
+    )
     nrows = Int(segdsc[_EK_NRIDX])
-    (1 <= recno <= nrows) || throw(SpiceError(:indexoutofrange,
-        "$who: record number = $recno; valid range = 1:$nrows. SEGNO = $segno; EK = $(h.path)"))
+    (1 <= recno <= nrows) || throw(
+        SpiceError(
+            :indexoutofrange,
+            "$who: record number = $recno; valid range = 1:$nrows. SEGNO = $segno; EK = $(h.path)"
+        )
+    )
     return col, _ek_rplk(h, segdsc, recno)
 end
 
@@ -239,9 +255,13 @@ See also [`ekfind`](@ref), [`ekntab`](@ref).
 function eklef(ctx::SpiceContext, path::AbstractString)::String
     _chk_filename("eklef", path)
     p = String(path)
-    isfile(p) || throw(SpiceError(:filenotfound, "eklef: kernel file not found: $p"))
-    kernel_arch(p) === :EK || throw(SpiceError(:wrongarchitecture,
-        "eklef: the file $p is not an EK file"))
+    _isfile(p) || throw(SpiceError(:filenotfound, "eklef: kernel file not found: $p"))
+    kernel_arch(p) === :EK || throw(
+        SpiceError(
+            :wrongarchitecture,
+            "eklef: the file $p is not an EK file"
+        )
+    )
     furnsh(ctx, p)
     return p
 end
@@ -274,8 +294,12 @@ Throws `SpiceError(:noloadedfiles)` if no EK file is loaded and
 """
 function ektnam(ks::KernelSet, n::Integer)
     isempty(ks.ektables) && throw(SpiceError(:noloadedfiles, "No E-kernels are currently loaded."))
-    (1 <= n <= length(ks.ektables)) || throw(SpiceError(:invalidindex,
-        "The index $n does not correspond to a loaded table."))
+    (1 <= n <= length(ks.ektables)) || throw(
+        SpiceError(
+            :invalidindex,
+            "The index $n does not correspond to a loaded table."
+        )
+    )
     return ks.ektables[n].name
 end
 ektnam(ctx::SpiceContext, n::Integer) = ektnam(kernelset(ctx), n)
@@ -322,8 +346,12 @@ See also [`EKColumnAttr`](@ref), [`ekccnt`](@ref).
 """
 function ekcii(ks::KernelSet, table::AbstractString, cindex::Integer)
     t = _ek_table(ks, table)
-    (1 <= cindex <= length(t.cnames)) || throw(SpiceError(:invalidindex, "Column indices for " *
-        "table $(t.name) range from 1 to $(length(t.cnames)); requested index was $cindex."))
+    (1 <= cindex <= length(t.cnames)) || throw(
+        SpiceError(
+            :invalidindex, "Column indices for " *
+                "table $(t.name) range from 1 to $(length(t.cnames)); requested index was $cindex."
+        )
+    )
     return t.cnames[cindex], t.attrs[cindex]
 end
 ekcii(ctx::SpiceContext, table::AbstractString, cindex::Integer) = ekcii(kernelset(ctx), table, cindex)
@@ -460,10 +488,18 @@ ekfind(ctx::SpiceContext, query::AbstractString) =
 ekfind(query::AbstractString) = ekfind(default_context(), query)
 
 @inline function _ek_result_entry(res::EKResult, selidx::Integer, row::Integer)
-    (1 <= row <= res.nmrows) || throw(SpiceError(:invalidindex, "Row indices for query " *
-        "result range from 1 to $(res.nmrows); requested row index was $row."))
-    (1 <= selidx <= length(res.seltab)) || throw(SpiceError(:invalidindex,
-        "The SELECT column index $selidx is out of the valid range 1:$(length(res.seltab))"))
+    (1 <= row <= res.nmrows) || throw(
+        SpiceError(
+            :invalidindex, "Row indices for query " *
+                "result range from 1 to $(res.nmrows); requested row index was $row."
+        )
+    )
+    (1 <= selidx <= length(res.seltab)) || throw(
+        SpiceError(
+            :invalidindex,
+            "The SELECT column index $selidx is out of the valid range 1:$(length(res.seltab))"
+        )
+    )
     t = res.seltab[selidx]
     qs = res.segs[res.rowseg[t, row]]
     return qs.file, qs.cols[res.selcol[selidx]], Int(res.rowptr[t, row])
@@ -493,8 +529,12 @@ end
 
 @inline function _ek_fetch_check(col::_EKColumn, elment::Integer, types)
     elment >= 1 || throw(SpiceError(:invalidindex, "ELMENT must be positive but was $elment."))
-    col.dtype in types || throw(SpiceError(:invalidtype,
-        "Column $(col.name) has data type $(_EKQ_TYPSTR[col.dtype])."))
+    col.dtype in types || throw(
+        SpiceError(
+            :invalidtype,
+            "Column $(col.name) has data type $(_EKQ_TYPSTR[col.dtype])."
+        )
+    )
     return nothing
 end
 
@@ -519,7 +559,7 @@ never written.
 See [`ekfind`](@ref) for an example. See also [`ekgd`](@ref), [`ekgi`](@ref),
 [`eknelt`](@ref), [`ekcolumn`](@ref).
 """
-function ekgc(res::EKResult, selidx::Integer, row::Integer, elment::Integer=1)
+function ekgc(res::EKResult, selidx::Integer, row::Integer, elment::Integer = 1)
     f, col, recptr = _ek_result_entry(res, selidx, row)
     _ek_fetch_check(col, elment, (_EK_CHR,))
     v, isnull, found = _ek_elt_c(f, col, recptr, elment)
@@ -540,7 +580,7 @@ Throws `SpiceError(:invalidindex)` for a bad index, as [`ekgc`](@ref),
 `SpiceError(:invalidtype)` if the column has character or integer type, and
 `SpiceError(:uninitializedvalue)` if the entry was never written.
 """
-function ekgd(res::EKResult, selidx::Integer, row::Integer, elment::Integer=1)
+function ekgd(res::EKResult, selidx::Integer, row::Integer, elment::Integer = 1)
     f, col, recptr = _ek_result_entry(res, selidx, row)
     _ek_fetch_check(col, elment, (_EK_DP, _EK_TIME))
     return _ek_elt_d(f, col, recptr, elment)
@@ -560,7 +600,7 @@ Throws `SpiceError(:invalidindex)` for a bad index, as [`ekgc`](@ref),
 `SpiceError(:invalidtype)` if the column does not have integer type, and
 `SpiceError(:uninitializedvalue)` if the entry was never written.
 """
-function ekgi(res::EKResult, selidx::Integer, row::Integer, elment::Integer=1)
+function ekgi(res::EKResult, selidx::Integer, row::Integer, elment::Integer = 1)
     f, col, recptr = _ek_result_entry(res, selidx, row)
     _ek_fetch_check(col, elment, (_EK_INT,))
     return _ek_elt_i(f, col, recptr, elment)
@@ -586,14 +626,18 @@ column and `SpiceError(:uninitializedvalue)` for another column.
 See [`ekfind`](@ref) for an example.
 """
 function ekcolumn(res::EKResult, selidx::Integer)
-    (1 <= selidx <= length(res.seltab)) || throw(SpiceError(:invalidindex,
-        "The SELECT column index $selidx is out of the valid range 1:$(length(res.seltab))"))
+    (1 <= selidx <= length(res.seltab)) || throw(
+        SpiceError(
+            :invalidindex,
+            "The SELECT column index $selidx is out of the valid range 1:$(length(res.seltab))"
+        )
+    )
     out = Vector{Any}(undef, res.nmrows)
     for row in 1:res.nmrows              # invariant: out[1:row-1] is set
         f, col, recptr = _ek_result_entry(res, selidx, row)
         vals, isnull = col.dtype == _EK_CHR ? _ek_entry_c(f, col, recptr) :
-                       col.dtype == _EK_INT ? _ek_entry_i(f, col, recptr) :
-                       _ek_entry_d(f, col, recptr)
+            col.dtype == _EK_INT ? _ek_entry_i(f, col, recptr) :
+            _ek_entry_d(f, col, recptr)
         col.dtype == _EK_CHR && (vals = String[String(rstrip(v, ' ')) for v in vals])
         out[row] = isnull ? missing : (col.cclass <= 3 || col.cclass >= 7) ? vals[1] : vals
     end

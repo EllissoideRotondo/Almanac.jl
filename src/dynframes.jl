@@ -32,7 +32,7 @@ const _DYN_PRODUCT = Int8(6)
 "Number of snapshots below the one that the user holds: levels 1 and 2 of CSPICE."
 const _DYN_LEVELS = 2
 
-const _DYN_NOVECTOR = DynVector(0, 1, false, 0x00, 0, 0, 0, 0, 0, zero(SVector{3,Float64}))
+const _DYN_NOVECTOR = DynVector(0, 1, false, 0x00, 0, 0, 0, 0, 0, zero(SVector{3, Float64}))
 
 # ---------------------------------------------------------------------------------------
 # Parsing
@@ -48,8 +48,10 @@ longer than 32 characters is not searched for. Throws
 `SpiceError(:kernelvarnotfound)` if `required` and no variable exists; returns `nothing`
 if not `required` and no variable exists.
 """
-function _dyn_lookup(pool::AbstractDict, id::Integer, name::AbstractString,
-        item::AbstractString, required::Bool)
+function _dyn_lookup(
+        pool::AbstractDict, id::Integer, name::AbstractString,
+        item::AbstractString, required::Bool
+    )
     k1 = "FRAME_$(id)_$(item)"
     k2 = "FRAME_$(name)_$(item)"
     if length(k1) <= _TK_MAXNAME
@@ -57,22 +59,38 @@ function _dyn_lookup(pool::AbstractDict, id::Integer, name::AbstractString,
         v === nothing || return k1, v
     end
     if length(k2) > _TK_MAXNAME
-        length(k1) > _TK_MAXNAME && throw(SpiceError(:varnametoolong,
-            "kernel variables $k1 and $k2 are longer than $_TK_MAXNAME characters"))
+        length(k1) > _TK_MAXNAME && throw(
+            SpiceError(
+                :varnametoolong,
+                "kernel variables $k1 and $k2 are longer than $_TK_MAXNAME characters"
+            )
+        )
     else
         v = get(pool, k2, nothing)
         v === nothing || return k2, v
     end
     required || return nothing
-    throw(SpiceError(:kernelvarnotfound, "at least one of the kernel variables $k1 or " *
-        "$k2 is needed to define the frame $name, and neither is in the kernel pool"))
+    throw(
+        SpiceError(
+            :kernelvarnotfound, "at least one of the kernel variables $k1 or " *
+                "$k2 is needed to define the frame $name, and neither is in the kernel pool"
+        )
+    )
 end
 
-@noinline _dyn_badtype(key, name, want) = throw(SpiceError(:badvariabletype,
-    "the kernel variable $key of the definition of frame $name must be $want"))
-@noinline _dyn_badsize(key, name, maxn, n) = throw(SpiceError(:badvariablesize,
-    "the kernel variable $key of the definition of frame $name has $n values; at most " *
-    "$maxn are allowed"))
+@noinline _dyn_badtype(key, name, want) = throw(
+    SpiceError(
+        :badvariabletype,
+        "the kernel variable $key of the definition of frame $name must be $want"
+    )
+)
+@noinline _dyn_badsize(key, name, maxn, n) = throw(
+    SpiceError(
+        :badvariablesize,
+        "the kernel variable $key of the definition of frame $name has $n values; at most " *
+            "$maxn are allowed"
+    )
+)
 
 "Contract: the character values (at most `maxn`) of a required definition item, as `zzdynvac_`."
 function _dyn_chars(pool, id, name, item, maxn::Int)
@@ -126,8 +144,12 @@ function _dyn_frameid(ks::KernelSet, id, name, item)
     code = namfrm(ks, v[1])
     code != 0 && return Int32(code)
     n = tryparse(Int32, strip(v[1]))
-    n === nothing && throw(SpiceError(:notranslation, "the kernel variable $key of the " *
-        "definition of frame $name has the value '$(v[1])', which is not a frame name"))
+    n === nothing && throw(
+        SpiceError(
+            :notranslation, "the kernel variable $key of the " *
+                "definition of frame $name has the value '$(v[1])', which is not a frame name"
+        )
+    )
     return n
 end
 
@@ -142,8 +164,12 @@ function _dyn_bodyid(ks::KernelSet, id, name, item)
     length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
     v isa Vector{Float64} && return round(Int32, v[1])
     code = bods2c(ks, v[1])
-    code === nothing && throw(SpiceError(:notranslation, "the body name '$(v[1])' of the " *
-        "kernel variable $key could not be translated to an ID code"))
+    code === nothing && throw(
+        SpiceError(
+            :notranslation, "the body name '$(v[1])' of the " *
+                "kernel variable $key could not be translated to an ID code"
+        )
+    )
     return Int32(code)
 end
 
@@ -197,16 +223,24 @@ function _dyn_abcorr(s::AbstractString, constant::Bool)
     u == "S" && return _aberration(_AB_S)
     u == "XS" && return _aberration(_AB_S | _AB_X)
     c = _dyn_parse_abcorr(s)
-    c.stellar && throw(SpiceError(:invalidoption, "aberration correction '$s' of a " *
-        "constant vector: light time and stellar aberration are mutually exclusive"))
+    c.stellar && throw(
+        SpiceError(
+            :invalidoption, "aberration correction '$s' of a " *
+                "constant vector: light time and stellar aberration are mutually exclusive"
+        )
+    )
     return c
 end
 
 "Class and center of frame `id`; throws `SpiceError(:framedatanotfound)` if the frame is unknown."
 function _dyn_frameinfo(ks::KernelSet, id::Int32, name)
     r = frinfo(ks, id)
-    r === nothing && throw(SpiceError(:framedatanotfound, "the definition of frame " *
-        "$name refers to the frame with ID $id, which has no frame specification"))
+    r === nothing && throw(
+        SpiceError(
+            :framedatanotfound, "the definition of frame " *
+                "$name refers to the frame with ID $id, which has no frame specification"
+        )
+    )
     return Int32(r[2]), Int32(r[1])
 end
 
@@ -223,10 +257,14 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
     negate = startswith(ax, '-')
     ax = replace(ax, '-' => "", '+' => "")
     axis = ax == "X" ? 1 : ax == "Y" ? 2 : ax == "Z" ? 3 : 0
-    axis == 0 && throw(SpiceError(:invalidaxis, "the definition of frame $name has the " *
-        "axis '$ax'; the valid values are X, -X, Y, -Y, Z, -Z"))
+    axis == 0 && throw(
+        SpiceError(
+            :invalidaxis, "the definition of frame $name has the " *
+                "axis '$ax'; the valid values are X, -X, Y, -Y, Z, -Z"
+        )
+    )
     vdef = _dyn_squeeze(_dyn_char(pool, id, name, prefix * "VECTOR_DEF"))
-    zero3 = zero(SVector{3,Float64})
+    zero3 = zero(SVector{3, Float64})
     if vdef == "OBSERVER_TARGET_POSITION"
         targ = _dyn_bodyid(ks, id, name, prefix * "TARGET")
         obs = _dyn_bodyid(ks, id, name, prefix * "OBSERVER")
@@ -244,17 +282,31 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
         obs = _dyn_bodyid(ks, id, name, prefix * "OBSERVER")
         corr = _dyn_abcorr(_dyn_char(pool, id, name, prefix * "ABCORR"), false)
         fix = cidfrm(ks, targ)
-        fix === nothing && throw(SpiceError(:framedatanotfound, "the definition of " *
-            "frame $name needs the body-fixed frame of the target body $targ, and no " *
-            "frame is associated with this body"))
+        fix === nothing && throw(
+            SpiceError(
+                :framedatanotfound, "the definition of " *
+                    "frame $name needs the body-fixed frame of the target body $targ, and no " *
+                    "frame is associated with this body"
+            )
+        )
         radii = bodvcd(ks, targ, "RADII")
-        length(radii) == 3 || throw(SpiceError(:invalidcount,
-            "only $(length(radii)) axes were found for ID $targ; three axes expected"))
-        all(>(0.0), radii) || throw(SpiceError(:badaxislength,
-            "an axis of body $targ is negative or zero: BODY$(targ)_RADII = $radii"))
+        length(radii) == 3 || throw(
+            SpiceError(
+                :invalidcount,
+                "only $(length(radii)) axes were found for ID $targ; three axes expected"
+            )
+        )
+        all(>(0.0), radii) || throw(
+            SpiceError(
+                :badaxislength,
+                "an axis of body $targ is negative or zero: BODY$(targ)_RADII = $radii"
+            )
+        )
         class, center = _dyn_frameinfo(ks, Int32(fix[1]), name)
-        return DynVector(3, axis, negate, corr.flags, targ, obs, fix[1], class, center,
-            SVector{3,Float64}(radii))
+        return DynVector(
+            3, axis, negate, corr.flags, targ, obs, fix[1], class, center,
+            SVector{3, Float64}(radii)
+        )
     elseif vdef == "CONSTANT"
         frid = _dyn_frameid(ks, id, name, prefix * "FRAME")
         cs = _dyn_optchar(pool, id, name, prefix * "ABCORR")
@@ -270,21 +322,29 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
         if spec == "RECTANGULAR"
             v = _dyn_nums(pool, id, name, prefix * "VECTOR", 3)
             length(v) == 3 || _dyn_badsize("FRAME_$(id)_$(prefix)VECTOR", name, 3, length(v))
-            dir = SVector{3,Float64}(v)
+            dir = SVector{3, Float64}(v)
         elseif spec == "LATITUDINAL" || spec == "RA/DEC"
             f = _dyn_degrees(_dyn_char(pool, id, name, prefix * "UNITS"))
             lonitem, latitem = spec == "LATITUDINAL" ? ("LONGITUDE", "LATITUDE") : ("RA", "DEC")
             lon = _dyn_nums(pool, id, name, prefix * lonitem, 1)[1] * f / (180.0 / pi)
             lat = _dyn_nums(pool, id, name, prefix * latitem, 1)[1] * f / (180.0 / pi)
-            dir = SVector{3,Float64}(cos(lon) * cos(lat), sin(lon) * cos(lat), sin(lat))
+            dir = SVector{3, Float64}(cos(lon) * cos(lat), sin(lon) * cos(lat), sin(lat))
         else
-            throw(SpiceError(:notsupported, "the definition of frame $name has the " *
-                "constant vector specification '$spec', which is not supported"))
+            throw(
+                SpiceError(
+                    :notsupported, "the definition of frame $name has the " *
+                        "constant vector specification '$spec', which is not supported"
+                )
+            )
         end
         return DynVector(4, axis, negate, corr.flags, 0, obs, frid, class, center, dir)
     end
-    throw(SpiceError(:notsupported, "the definition of the two-vector frame $name has " *
-        "the vector definition '$vdef', which is not supported"))
+    throw(
+        SpiceError(
+            :notsupported, "the definition of the two-vector frame $name has " *
+                "the vector definition '$vdef', which is not supported"
+        )
+    )
 end
 
 """
@@ -300,9 +360,11 @@ function _dyn_parse(ks::KernelSet, fd::FrameDef)
         return _dyn_parse_checked(ks, fd)
     catch err
         err isa SpiceError || rethrow()
-        return DynFrame(fd.id, fd.name, fd.center, 0, 0, false, 0.0, false, false,
+        return DynFrame(
+            fd.id, fd.name, fd.center, 0, 0, false, 0.0, false, false,
             _DYN_NOVECTOR, _DYN_NOVECTOR, 0.0, (Int32(0), Int32(0), Int32(0)), 0.0, 1.0,
-            Float64[], Float64[], Float64[], Int32[], Int32[], err.kind, err.msg)
+            Float64[], Float64[], Float64[], Int32[], Int32[], err.kind, err.msg
+        )
     end
 end
 
@@ -311,29 +373,45 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     pool, id, name = ks.pool, fd.id, fd.name
     base = _dyn_frameid(ks, id, name, "RELATIVE")
     style = _dyn_char(pool, id, name, "DEF_STYLE")
-    _dyn_eqstr(style, "PARAMETERIZED") || throw(SpiceError(:notsupported,
-        "dynamic frame style '$style' (in the definition of frame $name) is not supported"))
+    _dyn_eqstr(style, "PARAMETERIZED") || throw(
+        SpiceError(
+            :notsupported,
+            "dynamic frame style '$style' (in the definition of frame $name) is not supported"
+        )
+    )
     family = _dyn_squeeze(_dyn_char(pool, id, name, "FAMILY"))
     fam = family == "MEAN_EQUATOR_AND_EQUINOX_OF_DATE" ? _DYN_MEAN_EQ :
-          family == "TRUE_EQUATOR_AND_EQUINOX_OF_DATE" ? _DYN_TRUE_EQ :
-          family == "MEAN_ECLIPTIC_AND_EQUINOX_OF_DATE" ? _DYN_MEAN_ECL :
-          family == "TWO-VECTOR" ? _DYN_TWOVEC : family == "EULER" ? _DYN_EULER :
-          family == "PRODUCT" ? _DYN_PRODUCT : Int8(0)
+        family == "TRUE_EQUATOR_AND_EQUINOX_OF_DATE" ? _DYN_TRUE_EQ :
+        family == "MEAN_ECLIPTIC_AND_EQUINOX_OF_DATE" ? _DYN_MEAN_ECL :
+        family == "TWO-VECTOR" ? _DYN_TWOVEC : family == "EULER" ? _DYN_EULER :
+        family == "PRODUCT" ? _DYN_PRODUCT : Int8(0)
     ofdate = 1 <= fam <= 3
     freeze = _dyn_optnum(pool, id, name, "FREEZE_EPOCH")
     frozen = freeze !== nothing
     rotsta = _dyn_optchar(pool, id, name, "ROTATION_STATE")
-    frozen && rotsta !== nothing && throw(SpiceError(:framedeferror, "the definition " *
-        "of frame $name has both FREEZE_EPOCH and ROTATION_STATE; at most one is allowed"))
-    ofdate && !frozen && rotsta === nothing && throw(SpiceError(:framedeferror,
-        "the definition of frame $name of the family $family has neither FREEZE_EPOCH " *
-        "nor ROTATION_STATE; exactly one is required"))
+    frozen && rotsta !== nothing && throw(
+        SpiceError(
+            :framedeferror, "the definition " *
+                "of frame $name has both FREEZE_EPOCH and ROTATION_STATE; at most one is allowed"
+        )
+    )
+    ofdate && !frozen && rotsta === nothing && throw(
+        SpiceError(
+            :framedeferror,
+            "the definition of frame $name of the family $family has neither FREEZE_EPOCH " *
+                "nor ROTATION_STATE; exactly one is required"
+        )
+    )
     inertial = false
     if rotsta !== nothing
         inertial = _dyn_eqstr(rotsta, "INERTIAL")
-        inertial || _dyn_eqstr(rotsta, "ROTATING") || throw(SpiceError(:notsupported,
-            "the definition of frame $name has ROTATION_STATE = '$rotsta'; the valid " *
-            "values are ROTATING and INERTIAL"))
+        inertial || _dyn_eqstr(rotsta, "ROTATING") || throw(
+            SpiceError(
+                :notsupported,
+                "the definition of frame $name has ROTATION_STATE = '$rotsta'; the valid " *
+                    "values are ROTATING and INERTIAL"
+            )
+        )
     end
     v1 = v2 = _DYN_NOVECTOR
     minsep = 0.0
@@ -342,24 +420,38 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     coef = (Float64[], Float64[], Float64[])
     from, to = Int32[], Int32[]
     if ofdate
-        for (item, model, on) in (("PREC_MODEL", "EARTH_IAU_1976", true),
+        for (item, model, on) in (
+                ("PREC_MODEL", "EARTH_IAU_1976", true),
                 ("NUT_MODEL", "EARTH_IAU_1980", fam == _DYN_TRUE_EQ),
-                ("OBLIQ_MODEL", "EARTH_IAU_1980", fam == _DYN_MEAN_ECL))
+                ("OBLIQ_MODEL", "EARTH_IAU_1980", fam == _DYN_MEAN_ECL),
+            )
             on || continue
             value = _dyn_char(pool, id, name, item)
-            _dyn_eqstr(value, model) || throw(SpiceError(:notsupported, "the definition " *
-                "of frame $name has $item = '$value', which is not recognized"))
-            fd.center == 399 || throw(SpiceError(:invalidselection, "the definition of " *
-                "frame $name has the center $(fd.center) and $item = '$model'; this " *
-                "model is not applicable to that body"))
+            _dyn_eqstr(value, model) || throw(
+                SpiceError(
+                    :notsupported, "the definition " *
+                        "of frame $name has $item = '$value', which is not recognized"
+                )
+            )
+            fd.center == 399 || throw(
+                SpiceError(
+                    :invalidselection, "the definition of " *
+                        "frame $name has the center $(fd.center) and $item = '$model'; this " *
+                        "model is not applicable to that body"
+                )
+            )
         end
     elseif fam == _DYN_TWOVEC
         v1 = _dyn_parse_vector(ks, fd, "PRI_")
         v2 = _dyn_parse_vector(ks, fd, "SEC_")
         sep = _dyn_optnum(pool, id, name, "ANGLE_SEP_TOL")
-        minsep = sep === nothing ? 1e-3 : sep
-        v1.axis == v2.axis && throw(SpiceError(:undefinedframe, "the definition of " *
-            "frame $name gives the same axis to both vectors"))
+        minsep = sep === nothing ? 1.0e-3 : sep
+        v1.axis == v2.axis && throw(
+            SpiceError(
+                :undefinedframe, "the definition of " *
+                    "frame $name gives the same axis to both vectors"
+            )
+        )
     elseif fam == _DYN_EULER
         epoch = _dyn_nums(pool, id, name, "EPOCH", 1)[1]
         key, a = _dyn_lookup(pool, id, name, "AXES", true)
@@ -368,26 +460,44 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
         axes = (round(Int32, a[1]), round(Int32, a[2]), round(Int32, a[3]))
         coef = ntuple(i -> copy(_dyn_nums(pool, id, name, "ANGLE_$(i)_COEFFS", 20)), 3)
         scale = _dyn_degrees(_dyn_char(pool, id, name, "UNITS"))
-        all(x -> 1 <= x <= 3, axes) || throw(SpiceError(:badaxisnumbers,
-            "the Euler axes of frame $name are $axes; each must be 1, 2 or 3"))
+        all(x -> 1 <= x <= 3, axes) || throw(
+            SpiceError(
+                :badaxisnumbers,
+                "the Euler axes of frame $name are $axes; each must be 1, 2 or 3"
+            )
+        )
     elseif fam == _DYN_PRODUCT
         fnames = _dyn_chars(pool, id, name, "FROM_FRAMES", 10)
         tnames = _dyn_chars(pool, id, name, "TO_FRAMES", 10)
-        length(fnames) == length(tnames) || throw(SpiceError(:badframecount,
-            "the product frame $name has $(length(fnames)) \"from\" frames and " *
-            "$(length(tnames)) \"to\" frames; these counts must match"))
+        length(fnames) == length(tnames) || throw(
+            SpiceError(
+                :badframecount,
+                "the product frame $name has $(length(fnames)) \"from\" frames and " *
+                    "$(length(tnames)) \"to\" frames; these counts must match"
+            )
+        )
         from = Int32[namfrm(ks, s) for s in fnames]
         to = Int32[namfrm(ks, s) for s in tnames]
         k = findfirst(==(0), vcat(from, to))
-        k === nothing || throw(SpiceError(:unknownframe, "the product frame $name " *
-            "refers to the frame '$(vcat(fnames, tnames)[k])', which is not known"))
+        k === nothing || throw(
+            SpiceError(
+                :unknownframe, "the product frame $name " *
+                    "refers to the frame '$(vcat(fnames, tnames)[k])', which is not known"
+            )
+        )
     else
-        throw(SpiceError(:notsupported, "dynamic frame family '$family' (in the " *
-            "definition of frame $name) is not supported"))
+        throw(
+            SpiceError(
+                :notsupported, "dynamic frame family '$family' (in the " *
+                    "definition of frame $name) is not supported"
+            )
+        )
     end
-    return DynFrame(id, name, fd.center, base, fam, frozen, frozen ? freeze : 0.0, inertial,
+    return DynFrame(
+        id, name, fd.center, base, fam, frozen, frozen ? freeze : 0.0, inertial,
         1 <= base <= N_INERTIAL_FRAMES, v1, v2, minsep, axes, epoch, scale, coef[1],
-        coef[2], coef[3], from, to, :none, "")
+        coef[2], coef[3], from, to, :none, ""
+    )
 end
 
 """
@@ -397,11 +507,15 @@ end
 Contract: the snapshot with these fields, no dynamic or switch frame definitions, no
 inner snapshot, no pool edits and no `boddef` pairs. `_dyn_levels` completes it.
 """
-KernelSet(loaded, daf, spk, pck, pool, name2code, code2name, frames, framename2id, tk,
-    bodyrot, lsk, ck, sclk, ckmeta) = KernelSet(loaded, daf, spk, pck, pool, name2code,
+KernelSet(
+    loaded, daf, spk, pck, pool, name2code, code2name, frames, framename2id, tk,
+    bodyrot, lsk, ck, sclk, ckmeta
+) = KernelSet(
+    loaded, daf, spk, pck, pool, name2code,
     code2name, frames, framename2id, tk, bodyrot, lsk, ck, sclk, ckmeta,
-    Dict{Int32,DynFrame}(), Dict{Int32,SwitchFrame}(), nothing, false, Tuple{String,Int32}[],
-    DSKFile[], Dict{Int32,Vector{DSKSegment}}(), EKFile[], EKTable[])
+    Dict{Int32, DynFrame}(), Dict{Int32, SwitchFrame}(), nothing, false, Tuple{String, Int32}[],
+    DSKFile[], Dict{Int32, Vector{DSKSegment}}(), EKFile[], EKTable[]
+)
 
 """
     _dyn_levels(base, edited, bodydefs) -> KernelSet
@@ -412,9 +526,9 @@ the result has a chain of `_DYN_LEVELS` inner snapshots (`inner.ks`) with the sa
 the innermost with `inner === nothing`; otherwise `inner === nothing`. No data are
 copied.
 """
-function _dyn_levels(base::KernelSet, edited::Bool, bodydefs::Vector{Tuple{String,Int32}})
-    dyn = Dict{Int32,DynFrame}()
-    sw = Dict{Int32,SwitchFrame}()
+function _dyn_levels(base::KernelSet, edited::Bool, bodydefs::Vector{Tuple{String, Int32}})
+    dyn = Dict{Int32, DynFrame}()
+    sw = Dict{Int32, SwitchFrame}()
     for fd in values(base.frames)
         haskey(BUILTIN_FRAMES, fd.id) && continue
         fd.class == 5 && (dyn[fd.id] = _dyn_parse(base, fd))
@@ -423,11 +537,13 @@ function _dyn_levels(base::KernelSet, edited::Bool, bodydefs::Vector{Tuple{Strin
     ks = nothing
     # invariant: `ks` is the snapshot of the level below the one that is built next
     for _ in 0:(isempty(dyn) ? 0 : _DYN_LEVELS)
-        ks = KernelSet(base.loaded, base.daf, base.spk, base.pck, base.pool,
+        ks = KernelSet(
+            base.loaded, base.daf, base.spk, base.pck, base.pool,
             base.name2code, base.code2name, base.frames, base.framename2id, base.tk,
             base.bodyrot, base.lsk, base.ck, base.sclk, base.ckmeta, dyn, sw,
             ks === nothing ? nothing : DynLevel{KernelSet}(ks), edited, bodydefs,
-            base.dskfiles, base.dsk, base.ekfiles, base.ektables)
+            base.dskfiles, base.dsk, base.ekfiles, base.ektables
+        )
     end
     return ks::KernelSet
 end
@@ -440,20 +556,20 @@ end
 @inline _dyn_pack(r::Vec3{Float64}, v::Vec3{Float64}) = map((a, b) -> Taylor((a, b)), r, v)
 
 "`x` with a zero derivative part (state mode) or `x` itself (plain numbers)."
-@inline _dyn_still(x::Taylor{1,Float64}) = Taylor((x.v, 0.0))
+@inline _dyn_still(x::Taylor{1, Float64}) = Taylor((x.v, 0.0))
 @inline _dyn_still(x::Float64) = x
 
-@inline _dyn_lift(::Type{S}, x::Float64) where {S<:Real} = convert(S, x)
-@inline _dyn_lift(::Type{S}, x::Taylor{1,Float64}) where {S<:Real} = convert(S, _dyn_still(x))
+@inline _dyn_lift(::Type{S}, x::Float64) where {S <: Real} = convert(S, x)
+@inline _dyn_lift(::Type{S}, x::Taylor{1, Float64}) where {S <: Real} = convert(S, _dyn_still(x))
 
 "Unit vector along `a`, or the zero vector if `a` is zero, in any number type."
-@inline function _dyn_unit(a::Vec3{S}) where {S<:Real}
+@inline function _dyn_unit(a::Vec3{S}) where {S <: Real}
     n = _norm3(a)
     return primal(n) == 0 ? zero(a) : a / n
 end
 
 "Unit vector along `a × b`, as `ucrss_` and `ducrss_`, in any number type."
-@inline _dyn_ucross(a::Vec3{S}, b::Vec3{S}) where {S<:Real} = _dyn_unit(cross(a, b))
+@inline _dyn_ucross(a::Vec3{S}, b::Vec3{S}) where {S <: Real} = _dyn_unit(cross(a, b))
 
 "`x - m * trunc(x / m)` with the arithmetic of `d_mod` of the f2c library; the subtracted quantity is a constant, so derivatives are not changed."
 @inline _dyn_dmod(x::Real, m::Float64) = x - m * trunc(primal(x) / m)
@@ -464,7 +580,7 @@ end
 Contract: the coordinate rotation `[angle]_axis` of `rotate_` for `axis in 1:3`, in the
 number type of `angle`.
 """
-@inline function _dyn_rot(angle::S, axis::Integer) where {S<:Real}
+@inline function _dyn_rot(angle::S, axis::Integer) where {S <: Real}
     s, c = sincos(angle)
     o, z = one(S), zero(S)
     axis == 1 && return Mat3{S}(o, z, z, z, c, -s, z, s, c)
@@ -473,7 +589,7 @@ number type of `angle`.
 end
 
 "`[a3]_x3 * [a2]_x2 * [a1]_x1`, as `eul2m_` and (with `Taylor{1}` angles) `eul2xf_`."
-@inline _dyn_eul(a3::S, a2::S, a1::S, x3::Integer, x2::Integer, x1::Integer) where {S<:Real} =
+@inline _dyn_eul(a3::S, a2::S, a1::S, x3::Integer, x2::Integer, x1::Integer) where {S <: Real} =
     _m_mxm(_dyn_rot(a3, x3), _m_mxm(_dyn_rot(a2, x2), _dyn_rot(a1, x1)))
 
 """
@@ -482,10 +598,10 @@ end
 Contract: the matrix from frame `from` to frame `to` at `et`: `frame_rotation` in the
 exact mode (`zzrefch0_`), `_ck_state_rotation` in the state mode (`zzfrmch0_`).
 """
-@inline _dyn_xf(::_CKExact, ks::KernelSet, from::Int32, to::Int32, et::T) where {T<:Real} =
+@inline _dyn_xf(::_CKExact, ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real} =
     frame_rotation(ks, from, to, et)::Mat3{T}
 @inline _dyn_xf(::_CKState, ks::KernelSet, from::Int32, to::Int32, et::Float64) =
-    _ck_state_rotation(ks, from, to, et)::Mat3{Taylor{1,Float64}}
+    _ck_state_rotation(ks, from, to, et)::Mat3{Taylor{1, Float64}}
 
 # ---------------------------------------------------------------------------------------
 # Earth precession, nutation and obliquity models
@@ -503,7 +619,7 @@ Contract: the 1976 IAU precession matrix from J2000 to the mean equator and equi
 of `et` (TDB seconds), `[-z]_3 [theta]_2 [-zeta]_3` of `zzeprc76_`, in the number type
 of `et`.
 """
-@inline function _dyn_prec(et::S) where {S<:Real}
+@inline function _dyn_prec(et::S) where {S <: Real}
     t = et / _DYN_CENTURY
     zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
     z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
@@ -512,7 +628,7 @@ of `et`.
 end
 
 "Contract: the mean obliquity of the ecliptic of date in radians (1980 IAU), as `zzmobliq_`."
-@inline function _dyn_mobliq(et::S) where {S<:Real}
+@inline function _dyn_mobliq(et::S) where {S <: Real}
     t = et / 31557600.0 / 100.0
     return _DYN_ARCSEC * (t * (t * (t * 0.001813 - 5.9e-4) - 46.815) + 84381.448)
 end
@@ -646,7 +762,7 @@ const _DYN_WAHR_ARGS = (
 "Degrees per radian as `zzwahr_` computes it."
 const _DYN_RADIAN = 180.0 / pi
 "Divisor that converts the units of the nutation series to radians."
-const _DYN_WAHR_FACTOR = _DYN_RADIAN * 3600.0 * 1e4
+const _DYN_WAHR_FACTOR = _DYN_RADIAN * 3600.0 * 1.0e4
 
 """
     _dyn_wahr(et) -> (dpsi, deps)
@@ -656,9 +772,9 @@ Contract: nutation in longitude and in obliquity (radians) of the 1980 IAU theor
 a `Taylor` epoch the derivatives are those of the series, including the slow change
 of the coefficients that the rates of `zzwahr_` leave out.
 """
-function _dyn_wahr(et::S) where {S<:Real}
+function _dyn_wahr(et::S) where {S <: Real}
     dj = et / 86400.0
-    dd = dj / 1e4
+    dd = dj / 1.0e4
     dd2 = dd * dd
     t = dj / 365250.0
     ang = map(_DYN_WAHR_ARGS) do c
@@ -695,8 +811,8 @@ of the arguments, without the change of the coefficients.
 """
 function _dyn_wahr_state(et::Float64)
     dj = et / 86400.0
-    dd = dj / 1e4
-    dddj = dd / 1e4
+    dd = dj / 1.0e4
+    dddj = dd / 1.0e4
     dd2 = dd * dd
     t = dj / 365250.0
     ang = map(_DYN_WAHR_ARGS) do c
@@ -741,7 +857,7 @@ Contract: the matrix from the of-date frame `def` (families 1 to 3) to its base 
 at `et`: the transpose of the precession matrix, of nutation times precession, or of
 the obliquity rotation times precession, then the rotation from J2000 to the base.
 """
-function _dyn_ofdate(mode, ks::KernelSet, def::DynFrame, et::T) where {T<:Real}
+function _dyn_ofdate(mode, ks::KernelSet, def::DynFrame, et::T) where {T <: Real}
     tv = _ck_epoch(mode, et)
     m = _dyn_prec(tv)
     if def.family == _DYN_TRUE_EQ
@@ -784,27 +900,29 @@ are those of `spkpos`. For another number type the same algorithm runs on that t
 (one light-time iteration for `LT`, three for `CN`, stellar aberration in closed form),
 so the derivatives are those of the position that `spkpos` returns. No allocation.
 """
-function _dyn_apo(ks::KernelSet, targ::Int32, et::T, ref::Int32, corr,
-        obs::Int32) where {T<:Real}
+function _dyn_apo(
+        ks::KernelSet, targ::Int32, et::T, ref::Int32, corr,
+        obs::Int32
+    ) where {T <: Real}
     # The body relative to itself: zero, and no square root of a zero series.
     targ == obs && return zero(Vec3{T}), zero(T)
     if corr.geometric
         r = spk_jet(ks, targ, et, ref, obs, Val(0))[1]::Vec3{T}
         return r, _norm3(r) / CLIGHT
     end
-    T === Float64 && return abcorr_position(ks, targ, et, ref, corr, obs)::Tuple{Vec3{T},T}
+    T === Float64 && return abcorr_position(ks, targ, et, ref, corr, obs)::Tuple{Vec3{T}, T}
     inertial = _is_inertial(ks, ref)
     iref = inertial ? ref : _J2000_FRAME
     nos = _aberration(corr.flags & ~_AB_S)
-    robs, vobs = _ssb(ks, obs, et, iref)::NTuple{2,Vec3{T}}
-    r, lt = _apo(ks, targ, et, iref, nos, robs, vobs)::Tuple{Vec3{T},T}
+    robs, vobs = _ssb(ks, obs, et, iref)::NTuple{2, Vec3{T}}
+    r, lt = _apo(ks, targ, et, iref, nos, robs, vobs)::Tuple{Vec3{T}, T}
     if corr.stellar && primal(_dot3(r, r)) > 0
         r = _dyn_stelab(r, corr.transmit ? -vobs : +vobs)
     end
     inertial && return r, lt
     center = frame_def(ks, ref).center
     ltc = center == obs ? zero(lt) : center == targ ? lt :
-          _apo(ks, center, et, iref, nos, robs, vobs)[2]::T
+        _apo(ks, center, et, iref, nos, robs, vobs)[2]::T
     return _m_mxv(_dyn_xf(_CKExact(), ks, _J2000_FRAME, ref, et + _ltsign(corr) * ltc), r), lt
 end
 
@@ -816,13 +934,15 @@ with the correction `corr`, as `zzspkez0_` (`spkezr`), in the number type of `et
 velocity is the one of CSPICE (see `spkder` for its difference from the derivative of
 the position). No allocation.
 """
-function _dyn_spkez(ks::KernelSet, targ::Int32, et::T, ref::Int32, corr,
-        obs::Int32) where {T<:Real}
+function _dyn_spkez(
+        ks::KernelSet, targ::Int32, et::T, ref::Int32, corr,
+        obs::Int32
+    ) where {T <: Real}
     if corr.geometric
-        r, v = spk_jet(ks, targ, et, ref, obs, Val(1))::NTuple{2,Vec3{T}}
+        r, v = spk_jet(ks, targ, et, ref, obs, Val(1))::NTuple{2, Vec3{T}}
         return r, v, _norm3(r) / CLIGHT
     end
-    s, lt = abcorr_state(ks, targ, et, ref, corr, obs)::Tuple{SVector{6,T},T}
+    s, lt = abcorr_state(ks, targ, et, ref, corr, obs)::Tuple{SVector{6, T}, T}
     return Vec3{T}(s[1], s[2], s[3]), Vec3{T}(s[4], s[5], s[6]), lt
 end
 
@@ -835,7 +955,7 @@ nearest to the point `p`, in the number type of `p`: the near point of `nearpt`
 from the stationarity condition. Postcondition: the result is on the ellipsoid to
 rounding.
 """
-@inline _dyn_nearpt(p::Vec3{S}, radii::Vec3{Float64}) where {S<:Real} =
+@inline _dyn_nearpt(p::Vec3{S}, radii::Vec3{Float64}) where {S <: Real} =
     Vec3{S}(_m_nearpt(p, radii[1], radii[2], radii[3])[1])
 
 "Epoch `et` moved by the light time `lt` in the direction of the correction `corr`, as `zzcorepc_`."
@@ -860,7 +980,7 @@ the state of the near point for the state of `spkezr`; the constant vector with 
 derivative before the rotation. A stellar aberration correction of a constant vector
 changes the vector and leaves the derivative as it is, as in CSPICE.
 """
-function _dyn_vector(mode::_CKExact, ks::KernelSet, vd::DynVector, et::T) where {T<:Real}
+function _dyn_vector(mode::_CKExact, ks::KernelSet, vd::DynVector, et::T) where {T <: Real}
     corr = _aberration(vd.corr)
     if vd.kind == 1
         return _dyn_apo(ks, vd.target, et, _J2000_FRAME, corr, vd.observer)[1]::Vec3{T}
@@ -870,8 +990,12 @@ function _dyn_vector(mode::_CKExact, ks::KernelSet, vd::DynVector, et::T) where 
         vd.frame == _J2000_FRAME && return u::Vec3{T}
         vet = et
         if corr.uselt && vd.frclass != 1
-            vet = _dyn_corepc(corr, et, _dyn_apo(ks, vd.frcenter, et, _J2000_FRAME, corr,
-                vd.observer)[2])
+            vet = _dyn_corepc(
+                corr, et, _dyn_apo(
+                    ks, vd.frcenter, et, _J2000_FRAME, corr,
+                    vd.observer
+                )[2]
+            )
         end
         return _m_mxv(_dyn_xf(_CKExact(), ks, vd.frame, _J2000_FRAME, vet), u)::Vec3{T}
     elseif vd.kind == 3
@@ -884,8 +1008,12 @@ function _dyn_vector(mode::_CKExact, ks::KernelSet, vd::DynVector, et::T) where 
     # A constant vector.
     fet = et
     if corr.uselt && !corr.stellar && vd.frclass != 1
-        fet = _dyn_corepc(corr, et, _dyn_apo(ks, vd.frcenter, et, _J2000_FRAME, corr,
-            vd.observer)[2])
+        fet = _dyn_corepc(
+            corr, et, _dyn_apo(
+                ks, vd.frcenter, et, _J2000_FRAME, corr,
+                vd.observer
+            )[2]
+        )
     end
     c = Vec3{T}(vd.vec)
     vd.frame == _J2000_FRAME || (c = _m_mxv(_dyn_xf(_CKExact(), ks, vd.frame, _J2000_FRAME, fet), c))
@@ -910,8 +1038,12 @@ function _dyn_vector(mode::_CKState, ks::KernelSet, vd::DynVector, et::Float64)
         vd.frame == _J2000_FRAME && return s
         vet = et
         if corr.uselt && vd.frclass != 1
-            vet = _dyn_corepc(corr, et, _dyn_apo(ks, vd.frcenter, et, _J2000_FRAME, corr,
-                vd.observer)[2])
+            vet = _dyn_corepc(
+                corr, et, _dyn_apo(
+                    ks, vd.frcenter, et, _J2000_FRAME, corr,
+                    vd.observer
+                )[2]
+            )
         end
         return _m_mxv(_dyn_xf(_CKState(), ks, vd.frame, _J2000_FRAME, vet), s)
     elseif vd.kind == 3
@@ -923,8 +1055,12 @@ function _dyn_vector(mode::_CKState, ks::KernelSet, vd::DynVector, et::Float64)
     end
     fet = et
     if corr.uselt && !corr.stellar && vd.frclass != 1
-        fet = _dyn_corepc(corr, et, _dyn_apo(ks, vd.frcenter, et, _J2000_FRAME, corr,
-            vd.observer)[2])
+        fet = _dyn_corepc(
+            corr, et, _dyn_apo(
+                ks, vd.frcenter, et, _J2000_FRAME, corr,
+                vd.observer
+            )[2]
+        )
     end
     c = _dyn_pack(vd.vec, zero(Vec3{Float64}))
     vd.frame == _J2000_FRAME || (c = _m_mxv(_dyn_xf(_CKState(), ks, vd.frame, _J2000_FRAME, fet), c))
@@ -937,10 +1073,14 @@ function _dyn_vector(mode::_CKState, ks::KernelSet, vd::DynVector, et::Float64)
 end
 
 @noinline function _dyn_throw_sep(def::DynFrame, sep, et)
-    throw(SpiceError(:degeneratecase, "angular separation of the vectors that define " *
-        "the two-vector frame $(def.name) is $sep radians at ET $(primal(et)); the " *
-        "minimum allowed difference from 0 or pi is $(def.minsep) radians " *
-        "(keyword ANGLE_SEP_TOL)"))
+    throw(
+        SpiceError(
+            :degeneratecase, "angular separation of the vectors that define " *
+                "the two-vector frame $(def.name) is $sep radians at ET $(primal(et)); the " *
+                "minimum allowed difference from 0 or pi is $(def.minsep) radians " *
+                "(keyword ANGLE_SEP_TOL)"
+        )
+    )
 end
 
 "Angular separation of the non-zero vectors `a` and `b` in radians, as `vsep_`."
@@ -963,7 +1103,7 @@ of the primary vector along that vector, the axis of the secondary vector in the
 half-plane of the two vectors. Throws `SpiceError(:degeneratecase)` if the sine of the
 separation of the vectors is below the sine of `def.minsep`.
 """
-function _dyn_twovec(mode, ks::KernelSet, def::DynFrame, et::T) where {T<:Real}
+function _dyn_twovec(mode, ks::KernelSet, def::DynFrame, et::T) where {T <: Real}
     a = _dyn_vector(mode, ks, def.v1, et)
     b = _dyn_vector(mode, ks, def.v2, et)
     def.v1.negate && (a = -a)
@@ -991,7 +1131,7 @@ end
 Contract: the matrix from the Euler frame `def` to its base frame at `et`,
 `[a1]_x1 [a2]_x2 [a3]_x3` with the angles `a_i` polynomials in `et - def.epoch`.
 """
-function _dyn_euler(mode, def::DynFrame, et::T) where {T<:Real}
+function _dyn_euler(mode, def::DynFrame, et::T) where {T <: Real}
     delta = _ck_epoch(mode, et) - def.epoch
     a1 = _horner(def.coef1, delta) * def.scale / _DYN_RADIAN
     a2 = _horner(def.coef2, delta) * def.scale / _DYN_RADIAN
@@ -1005,7 +1145,7 @@ end
 Contract: the matrix from the product frame `def` to its base frame at `et`: the
 product, last factor on the left, of the matrices from `def.to[i]` to `def.from[i]`.
 """
-function _dyn_product(mode, ks::KernelSet, def::DynFrame, et::T) where {T<:Real}
+function _dyn_product(mode, ks::KernelSet, def::DynFrame, et::T) where {T <: Real}
     x = _dyn_xf(mode, ks, (@inbounds def.to[1]), (@inbounds def.from[1]), et)
     for i in 2:length(def.to)       # invariant: x is the product of the factors 1:i-1
         x = _m_mxm(_dyn_xf(mode, ks, (@inbounds def.to[i]), (@inbounds def.from[i]), et), x)
@@ -1022,12 +1162,14 @@ and otherwise the derivative of the rotation from J2000 to the base, applied to 
 fixed orientation. The exact mode has no derivative part to replace and returns `x`.
 """
 @inline _dyn_inert(::_CKExact, ks::KernelSet, def::DynFrame, et, x) = x
-function _dyn_inert(::_CKState, ks::KernelSet, def::DynFrame, et::Float64,
-        x::Mat3{Taylor{1,Float64}})
+function _dyn_inert(
+        ::_CKState, ks::KernelSet, def::DynFrame, et::Float64,
+        x::Mat3{Taylor{1, Float64}}
+    )
     def.inertial || return x
     def.base_inertial && return map(_dyn_still, x)
     b = _dyn_xf(_CKState(), ks, def.base, _J2000_FRAME, et)
-    out = Mat3{Taylor{1,Float64}}(transpose(b)) * map(_dyn_still, b * x)
+    out = Mat3{Taylor{1, Float64}}(transpose(b)) * map(_dyn_still, b * x)
     return map((a, o) -> Taylor((a.v, o.d[1])), x, out)
 end
 
@@ -1038,7 +1180,7 @@ Contract: the matrix from the dynamic frame `def` to its base frame at `et`, eva
 with the states and frames of `ks` (the inner snapshot of the one that holds `def`).
 Requires `def.errkind === :none`. No allocation.
 """
-function _dyn_eval(mode, ks::KernelSet, def::DynFrame, et::T) where {T<:Real}
+function _dyn_eval(mode, ks::KernelSet, def::DynFrame, et::T) where {T <: Real}
     S = _ck_numtype(mode, T)
     fam = def.family
     x = fam <= _DYN_MEAN_ECL ? _dyn_ofdate(mode, ks, def, et)::Mat3{S} :
@@ -1063,22 +1205,28 @@ end
 # number type, made on first use.
 
 "Pointers of `_dyn_call`, by `Tuple{mode type, number type}`. Replaced, never mutated."
-const _DYN_POINTERS = Ref(IdDict{Any,Ptr{Cvoid}}())
+const _DYN_POINTERS = Ref(IdDict{Any, Ptr{Cvoid}}())
 const _DYN_POINTER_LOCK = ReentrantLock()
 
 "C entry points of `_dyn_call`: `_dyn_eval` with the snapshot of the level `lev`."
-_dyn_entry_exact(lev::DynLevel{KernelSet}, def::DynFrame, et::T) where {T<:Real} =
+_dyn_entry_exact(lev::DynLevel{KernelSet}, def::DynFrame, et::T) where {T <: Real} =
     _dyn_eval(_CKExact(), lev.ks, def, et)
 _dyn_entry_state(lev::DynLevel{KernelSet}, def::DynFrame, et::Float64) =
     _dyn_eval(_CKState(), lev.ks, def, et)
 
 "Make the C function pointer of `_dyn_eval` for the mode and number type of `F`."
-@generated function _dyn_cfunction(::Type{Tuple{_CKExact,T}}) where {T}
-    return :(@cfunction(_dyn_entry_exact, $(Mat3{T}),
-        (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, $T)))
+@generated function _dyn_cfunction(::Type{Tuple{_CKExact, T}}) where {T}
+    return :(
+        @cfunction(
+            _dyn_entry_exact, $(Mat3{T}),
+            (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, $T)
+        )
+    )
 end
-_dyn_cfunction(::Type{Tuple{_CKState,Float64}}) = @cfunction(_dyn_entry_state,
-    Mat3{Taylor{1,Float64}}, (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, Float64))
+_dyn_cfunction(::Type{Tuple{_CKState, Float64}}) = @cfunction(
+    _dyn_entry_state,
+    Mat3{Taylor{1, Float64}}, (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, Float64)
+)
 
 """
     _dyn_pointer_slow(F) -> Ptr{Cvoid}
@@ -1108,7 +1256,7 @@ end
 
 "Forget the pointers of an earlier process (they are not valid in a loaded package image)."
 function __init__()
-    _DYN_POINTERS[] = IdDict{Any,Ptr{Cvoid}}()
+    _DYN_POINTERS[] = IdDict{Any, Ptr{Cvoid}}()
     return nothing
 end
 
@@ -1119,23 +1267,39 @@ Contract: `_dyn_eval(mode, lev.ks, def, et)`, called through the typed function 
 of the mode and of the number type of `et` (see "The recursion barrier"). A number type
 that is not plain bits is evaluated with a direct call. No allocation.
 """
-@generated function _dyn_call(::_CKExact, lev::DynLevel{KernelSet}, def::DynFrame,
-        et::T) where {T<:Real}
+@generated function _dyn_call(
+        ::_CKExact, lev::DynLevel{KernelSet}, def::DynFrame,
+        et::T
+    ) where {T <: Real}
     isbitstype(T) || return :(_dyn_eval(_CKExact(), lev.ks, def, et))
-    return :(ccall(_dyn_pointer(Tuple{_CKExact,$T}), $(Mat3{T}),
-        (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, $T), lev, def, et))
+    return :(
+        ccall(
+            _dyn_pointer(Tuple{_CKExact, $T}), $(Mat3{T}),
+            (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, $T), lev, def, et
+        )
+    )
 end
 @inline _dyn_call(::_CKState, lev::DynLevel{KernelSet}, def::DynFrame, et::Float64) =
-    ccall(_dyn_pointer(Tuple{_CKState,Float64}), Mat3{Taylor{1,Float64}},
-        (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, Float64), lev, def, et)
+    ccall(
+    _dyn_pointer(Tuple{_CKState, Float64}), Mat3{Taylor{1, Float64}},
+    (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, Float64), lev, def, et
+)
 
 @noinline _dyn_throw_def(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
-@noinline _dyn_throw_missing(id) = throw(SpiceError(:framedatanotfound,
-    "no definition of the dynamic frame $id is loaded"))
-@noinline _dyn_throw_depth(def::DynFrame) = throw(SpiceError(:recursiontoodeep,
-    "the dynamic frame $(def.name) is needed for the evaluation of a dynamic frame " *
-    "that is itself needed for the evaluation of a dynamic frame; dynamic frames may " *
-    "not be used at recursion level 1"))
+@noinline _dyn_throw_missing(id) = throw(
+    SpiceError(
+        :framedatanotfound,
+        "no definition of the dynamic frame $id is loaded"
+    )
+)
+@noinline _dyn_throw_depth(def::DynFrame) = throw(
+    SpiceError(
+        :recursiontoodeep,
+        "the dynamic frame $(def.name) is needed for the evaluation of a dynamic frame " *
+            "that is itself needed for the evaluation of a dynamic frame; dynamic frames may " *
+            "not be used at recursion level 1"
+    )
+)
 
 "Contract: returns the matrix `x` with each element in the number type `S` (`_dyn_lift`). The type is an argument with a type parameter: a closure that captures a type is not compiled for it in Julia 1.10, and then allocates."
 @inline _dyn_liftmat(::Type{S}, x::Mat3) where {S} = Mat3{S}(ntuple(i -> _dyn_lift(S, x[i]), Val(9)))
@@ -1150,7 +1314,7 @@ an invalid definition, and `SpiceError(:recursiontoodeep)` at the recursion limi
 No allocation. Not inlined, so that the frame functions that hold the call stay small
 for the frames of the other classes.
 """
-@noinline function _dyn_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T<:Real}
+@noinline function _dyn_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
     def = get(ks.dyn, fd.id, nothing)
     def === nothing && _dyn_throw_missing(fd.id)
     def.errkind === :none || _dyn_throw_def(def.errkind, def.errmsg)
@@ -1183,9 +1347,13 @@ end
 One link of a frame chain for a frame of class 5 (`_dyn_frame_step`) or class 6
 (`_sw_frame_step`). Throws `SpiceError(:unknownframetype)` for a higher class.
 """
-@noinline function _dyn_chain_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T<:Real}
+@noinline function _dyn_chain_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
     fd.class == 5 && return _dyn_frame_step(mode, ks, fd, et)
     fd.class == 6 && return _sw_frame_step(mode, ks, fd, et)
-    throw(SpiceError(:unknownframetype,
-        "frame $(fd.id) has class $(fd.class), which is not supported"))
+    throw(
+        SpiceError(
+            :unknownframetype,
+            "frame $(fd.id) has class $(fd.class), which is not supported"
+        )
+    )
 end

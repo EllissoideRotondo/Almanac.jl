@@ -20,7 +20,7 @@ isdefined(@__MODULE__, :CS) || include("mathoracle.jl")
 "A Almanac result with a missing value as the symbol `:none`."
 nf(x) = x === nothing ? :none : x
 "A CSPICE result with a false found flag (the last output) as the symbol `:none`."
-cf(t::Tuple) = t[end] ? (length(t) == 2 ? t[1] : t[1:end-1]) : :none
+cf(t::Tuple) = t[end] ? (length(t) == 2 ? t[1] : t[1:(end - 1)]) : :none
 "An intersection result without the points that CSPICE does not set."
 pts(r::Tuple, least::Int) = r[1] >= least ? r : r[1]
 
@@ -47,7 +47,7 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
         s = rand(rng) < 0.5 ? 1.0 : rmag(rng)
         u = rand(rng)
         ax = u < 0.15 ? (1.0, 1.0, 1.0) : u < 0.3 ? (1.0, 1.0, 0.1 + 2 * rand(rng)) :
-             u < 0.4 ? (1.0, 0.1 + 2 * rand(rng), 1.0) : (10.0^(2 * rand(rng) - 1), 10.0^(2 * rand(rng) - 1), 10.0^(2 * rand(rng) - 1))
+            u < 0.4 ? (1.0, 0.1 + 2 * rand(rng), 1.0) : (10.0^(2 * rand(rng) - 1), 10.0^(2 * rand(rng) - 1), 10.0^(2 * rand(rng) - 1))
         v = rand(rng)
         v < 0.02 && (ax = (0.0, ax[2], ax[3]))
         v > 0.98 && (ax = (ax[1], ax[2], -ax[3]))
@@ -63,23 +63,23 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             u < 0.8 ? m * rand(rng) * 0.5 * r3() : m * 2 * r3()
         w = rand(rng)
         w < 0.05 && (p = SVector(0.0, 0.0, 0.0))
-        0.05 <= w < 0.10 && (p = SVector(p[1], 0.0, 0.0))
-        0.10 <= w < 0.15 && (p = SVector(0.0, 0.0, p[3]))
-        0.15 <= w < 0.20 && (p = SVector(0.0, p[2], 0.0))
-        0.20 <= w < 0.25 && (p = SVector(p[1], p[2], 0.0))
-        0.25 <= w < 0.30 && (p = SVector(0.0, p[2], p[3]))
-        0.30 <= w < 0.35 && (p = SVector(p[1], 0.0, p[3]))
+        0.05 <= w < 0.1 && (p = SVector(p[1], 0.0, 0.0))
+        0.1 <= w < 0.15 && (p = SVector(0.0, 0.0, p[3]))
+        0.15 <= w < 0.2 && (p = SVector(0.0, p[2], 0.0))
+        0.2 <= w < 0.25 && (p = SVector(p[1], p[2], 0.0))
+        0.25 <= w < 0.3 && (p = SVector(0.0, p[2], p[3]))
+        0.3 <= w < 0.35 && (p = SVector(p[1], 0.0, p[3]))
         return p
     end
     "Plane (validated constructor): random, through the origin, or normal to an axis."
-    function rplane(scale=1.0)
+    function rplane(scale = 1.0)
         u = rand(rng)
         nrm = u < 0.15 ? rand(rng, (SVector(1.0, 0, 0), SVector(0.0, 1, 0), SVector(0.0, 0, -1))) : rmag(rng) * r3()
         k = rand(rng) < 0.15 ? 0.0 : scale * randn(rng) * vnorm(nrm)
         return nvc2pl(nrm, k)
     end
     "Ellipse from generating vectors: general, a circle, a segment or a point."
-    function rellipse(scale=1.0)
+    function rellipse(scale = 1.0)
         u = rand(rng)
         c = rand(rng) < 0.1 ? SVector(0.0, 0.0, 0.0) : scale * r3()
         v1 = scale * r3()
@@ -104,35 +104,35 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             d = versus!(t, :nearpt, () -> nearpt(p, a, b, c), () -> CS.nearpt(p, a, b, c))
             st = vcat(p, rand(rng) < 0.1 ? SVector(0.0, 0.0, 0.0) : r3())
             versus!(t, :dnearp, () -> nf(dnearp(st, a, b, c)), () -> cf(CS.dnearp(st, a, b, c)))
-            sd = vcat(u, rand(rng) < 0.1 ? SVector(0.0, 0.0, 0.0) : vnorm(u) * 1e-3 * r3())
+            sd = vcat(u, rand(rng) < 0.1 ? SVector(0.0, 0.0, 0.0) : vnorm(u) * 1.0e-3 * r3())
             over || versus!(t, :surfpv, () -> nf(surfpv(st, sd, a, b, c)), () -> cf(CS.surfpv(st, sd, a, b, c)))
             versus!(t, :npedln, () -> npedln(a, b, c, p, u), () -> CS.npedln(a, b, c, p, u))
             if a > 0 && b > 0 && c > 0 && isfinite(d)
                 m = max(a, b, c)
                 np, alt = nearpt(p, a, b, c)
                 level = (np[1] / a)^2 + (np[2] / b)^2 + (np[3] / c)^2
-                @test abs(level - 1.0) <= 1e-12                 # on the ellipsoid
+                @test abs(level - 1.0) <= 1.0e-12                 # on the ellipsoid
                 inside = (p[1] / a)^2 + (p[2] / b)^2 + (p[3] / c)^2 < 1.0
                 @test inside ? alt <= 0.0 : alt >= 0.0
-                @test abs(abs(alt) - vdist(p, np)) <= 1e-13 * max(m, vnorm(p))
+                @test abs(abs(alt) - vdist(p, np)) <= 1.0e-13 * max(m, vnorm(p))
                 # A zero direction is not a ray: `surfpt` throws `zerovector` for it, and
                 # the comparison with CSPICE above has that case.
                 x = (iszero(u) || over) ? nothing : surfpt(p, u, a, b, c)
                 if x !== nothing
-                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1e-9
+                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1.0e-9
                 end
             end
         end
         measured("  surfpt, surfpv: $nover of $(2n) inputs not compared (scaled direction not finite in CSPICE)")
         # Fixed case of the guard: the direction divided by a semi-axis is infinite.
-        xo = surfpt([0.0, 0.0, 1e-7], [1e300, 1e300, 1e300], 2e-9, 2e-9, 5e-8)
-        @test ray_overflows([1e300, 1e300, 1e300], 2e-9, 2e-9, 5e-8) &&
-              !ray_overflows([1e300, 1e300, 1e300], 3.0, 2.0, 1.0) && (xo === nothing || all(isnan, xo))
+        xo = surfpt([0.0, 0.0, 1.0e-7], [1.0e300, 1.0e300, 1.0e300], 2.0e-9, 2.0e-9, 5.0e-8)
+        @test ray_overflows([1.0e300, 1.0e300, 1.0e300], 2.0e-9, 2.0e-9, 5.0e-8) &&
+            !ray_overflows([1.0e300, 1.0e300, 1.0e300], 3.0, 2.0, 1.0) && (xo === nothing || all(isnan, xo))
         # the foot of the normal: outside, the offset is along the outward normal
         p = SVector(3.0, -4.0, 5.0)
         np, alt = nearpt(p, 3.0, 2.0, 1.0)
-        @test vsep(p - np, surfnm(3.0, 2.0, 1.0, np)) <= 1e-12
-        @test ednmpt(3.0, 2.0, 1.0, surfnm(3.0, 2.0, 1.0, np)) ≈ np rtol = 1e-13
+        @test vsep(p - np, surfnm(3.0, 2.0, 1.0, np)) <= 1.0e-12
+        @test ednmpt(3.0, 2.0, 1.0, surfnm(3.0, 2.0, 1.0, np)) ≈ np rtol = 1.0e-13
         @test nearpt([0.0, 0.0, 0.0], 3.0, 2.0, 1.0) == ([0.0, 0.0, 1.0], -1.0)
         @test nearpt([0.0, 0.0, 7.0], 3.0, 2.0, 1.0) == ([0.0, 0.0, 1.0], 6.0)
         @test surfpt([10.0, 0, 0], [-1.0, 0, 0], 3.0, 2.0, 1.0) == [3.0, 0.0, 0.0]
@@ -164,16 +164,16 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             dalt = ForwardDiff.gradient(x -> nearpt(x, a, b, c)[2], p)
             dn = dnearp(vcat(p, v), a, b, c)
             @test dn !== nothing
-            @test dn[1][SVector(4, 5, 6)] ≈ jac * v rtol = 1e-9
-            @test dn[2][2] ≈ dalt ⋅ v rtol = 1e-9 atol = 1e-12
+            @test dn[1][SVector(4, 5, 6)] ≈ jac * v rtol = 1.0e-9
+            @test dn[2][2] ≈ dalt ⋅ v rtol = 1.0e-9 atol = 1.0e-12
             # a central difference of the plain iteration
-            h = 1e-3
+            h = 1.0e-3
             fd = (nearpt(p + h * v, a, b, c)[1] - nearpt(p - h * v, a, b, c)[1]) / 2h
-            @test jac * v ≈ fd rtol = 1e-6 atol = 1e-8
+            @test jac * v ≈ fd rtol = 1.0e-6 atol = 1.0e-8
             # the derivative with respect to the semi-axes
             da = ForwardDiff.derivative(s -> nearpt(p, a + s, b, c)[1], 0.0)
             fda = (nearpt(p, a + h, b, c)[1] - nearpt(p, a - h, b, c)[1]) / 2h
-            @test da ≈ fda rtol = 1e-6 atol = 1e-8
+            @test da ≈ fda rtol = 1.0e-6 atol = 1.0e-8
             # the velocity of a ray intercept is the time derivative of `surfpt`
             po = 3 * 6378.0 * normalize(r3())
             u = -po + 3000.0 * r3()
@@ -181,21 +181,21 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             sv = surfpv(vcat(po, v), vcat(u, du), a, b, c)
             sv === nothing && continue
             d = ForwardDiff.derivative(τ -> surfpt(po + τ * v, u + τ * du, a, b, c), 0.0)
-            @test sv[SVector(4, 5, 6)] ≈ d rtol = 1e-9
+            @test sv[SVector(4, 5, 6)] ≈ d rtol = 1.0e-9
             g = ForwardDiff.jacobian(x -> surfnm(a, b, c, x), p)
-            @test norm(g * p) <= 1e-12            # the normal does not change along the ray from the center
+            @test norm(g * p) <= 1.0e-12            # the normal does not change along the ray from the center
             tt = Almanac.taylor_var(0.0, Val(2))
             x = surfpt(po .+ tt .* v, u .+ tt .* du, a, b, c)
-            @test map(q -> Almanac.derivatives(q)[2], x) ≈ d rtol = 1e-9
+            @test map(q -> Almanac.derivatives(q)[2], x) ≈ d rtol = 1.0e-9
             y = nearpt(p .+ tt .* v, a, b, c)[1]
-            @test map(q -> Almanac.derivatives(q)[1], y) ≈ nearpt(p, a, b, c)[1] rtol = 1e-15
-            @test map(q -> Almanac.derivatives(q)[2], y) ≈ jac * v rtol = 1e-9
+            @test map(q -> Almanac.derivatives(q)[1], y) ≈ nearpt(p, a, b, c)[1] rtol = 1.0e-15
+            @test map(q -> Almanac.derivatives(q)[2], y) ≈ jac * v rtol = 1.0e-9
         end
     end
 
     @apart @testset "planes" begin
         for _ in 1:n
-            nrm, pnt = rvec(rng), rvec(rng; special=0.2)
+            nrm, pnt = rvec(rng), rvec(rng; special = 0.2)
             k = rand(rng) < 0.1 ? 0.0 : rmag(rng) * randn(rng)
             s1, s2 = rpair(rng)
             versus!(t, :nvc2pl, () -> nvc2pl(nrm, k), () -> CS.nvc2pl(nrm, k))
@@ -219,7 +219,7 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             @test abs(u1 ⋅ u2) <= 4eps() && abs(u1 ⋅ pl.normal) <= 4eps() && abs(u2 ⋅ pl.normal) <= 4eps()
             @test abs(pt ⋅ pl.normal - pl.constant) <= 4eps() * max(1.0, pl.constant)
             pr = vprjp(pnt, pl)
-            isfinite(vnorm(pr)) && @test abs(pr ⋅ pl.normal - pl.constant) <= 1e-13 * max(vnorm(pnt), pl.constant, floatmin())
+            isfinite(vnorm(pr)) && @test abs(pr ⋅ pl.normal - pl.constant) <= 1.0e-13 * max(vnorm(pnt), pl.constant, floatmin())
         end
         @test flat(nvc2pl([0.0, 0, 2.0], -6.0)) == [0.0, 0.0, -1.0, 3.0]
         @test throws_kind(() -> nvc2pl([0.0, 0, 0], 1.0), :zerovector)
@@ -258,31 +258,31 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             a, b, c = raxes()
             m = max(abs(a), abs(b), abs(c))
             pe = rand(rng) < 0.2 ? nvc2pl(rand(rng, (SVector(1.0, 0, 0), SVector(0.0, 1, 0), SVector(0.0, 0, 1))), m * rand(rng)) :
-                 nvc2pl(r3(), m * 1.5 * rand(rng))
+                nvc2pl(r3(), m * 1.5 * rand(rng))
             versus!(t, :inedpl, () -> nf(inedpl(a, b, c, pe)), () -> cf(CS.inedpl(a, b, c, flat(pe))))
             vp = rpoint(a, b, c)
             versus!(t, :edlimb, () -> edlimb(a, b, c, vp), () -> CS.edlimb(a, b, c, vp))
             # invariants of an ellipse: orthogonal semi-axes, the major one is not shorter
             sma, smi = saelgv(v1, v2)
-            if isfinite(vnorm(sma)) && vnorm(sma) < 1e150
-                @test abs(sma ⋅ smi) <= 1e-13 * max(vnorm(sma)^2, floatmin())
+            if isfinite(vnorm(sma)) && vnorm(sma) < 1.0e150
+                @test abs(sma ⋅ smi) <= 1.0e-13 * max(vnorm(sma)^2, floatmin())
                 @test vnorm(sma) >= vnorm(smi)
             end
             e = (a > 0 && b > 0 && c > 0) ? inedpl(a, b, c, pe) : nothing
             if e !== nothing
                 for th in (0.3, 2.0, 4.4)
                     x = e.center + cos(th) * e.semimajor + sin(th) * e.semiminor
-                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1e-10
-                    @test abs(x ⋅ pe.normal - pe.constant) <= 1e-12 * m
+                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1.0e-10
+                    @test abs(x ⋅ pe.normal - pe.constant) <= 1.0e-12 * m
                 end
             end
-            if a > 0 && b > 0 && c > 0 && (vp[1] / a)^2 + (vp[2] / b)^2 + (vp[3] / c)^2 > 1.0 + 1e-6
+            if a > 0 && b > 0 && c > 0 && (vp[1] / a)^2 + (vp[2] / b)^2 + (vp[3] / c)^2 > 1.0 + 1.0e-6
                 lb = edlimb(a, b, c, vp)
                 for th in (0.3, 2.0, 4.4)
                     x = lb.center + cos(th) * lb.semimajor + sin(th) * lb.semiminor
-                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1e-9
+                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1.0e-9
                     # the line of sight is tangent to the surface at a limb point
-                    @test abs(x[1] * vp[1] / a^2 + x[2] * vp[2] / b^2 + x[3] * vp[3] / c^2 - 1.0) <= 1e-9
+                    @test abs(x[1] * vp[1] / a^2 + x[2] * vp[2] / b^2 + x[3] * vp[3] / c^2 - 1.0) <= 1.0e-9
                 end
             end
         end
@@ -296,19 +296,21 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
         # Fixed cases of the sign of a zero component of a plane normal. For an ellipse
         # that is a segment the sign decides between the angles pi and -pi, and so the
         # order of the two (nearly equal) points that `inelpl_c` returns.
-        seg = SpiceEllipse(SVector(1.0947977373276123, 1.4981640149990587, 0.30811226308762785),
-            SVector(3.824639804443442, -0.3126761132443059, -0.8082684798345424), SVector(0.0, 0.0, 0.0))
+        seg = SpiceEllipse(
+            SVector(1.0947977373276123, 1.4981640149990587, 0.30811226308762785),
+            SVector(3.824639804443442, -0.3126761132443059, -0.8082684798345424), SVector(0.0, 0.0, 0.0)
+        )
         pneg = nvc2pl([1.0, 0.0, 0.0], -0.047468127177226094)
         rn, rc = inelpl(seg, pneg), CS.inelpl(flat(seg), flat(pneg))
         @test all(signbit, pneg.normal) && rn[1] == rc[1] == 1 && rc[2] != rc[3] &&
-              maximum(abs, rn[2] - rc[2]) < maximum(abs, rn[2] - rc[3]) &&
-              maximum(abs, rn[3] - rc[3]) < maximum(abs, rn[3] - rc[2])
+            maximum(abs, rn[2] - rc[2]) < maximum(abs, rn[2] - rc[3]) &&
+            maximum(abs, rn[3] - rc[3]) < maximum(abs, rn[3] - rc[2])
         # `nvp2pl` and `psv2pl` keep the sign of a zero component of the normal.
         nm, pn = [-1.0, -0.0, -0.0], [-2.0, 0.0, 0.0]
         sp1, sp2, pp = [0.0, -1.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 3.0]
         cn, cp = flat(CS.nvp2pl(nm, pn)), flat(CS.psv2pl(pp, sp1, sp2))
         @test signbit(cn[2]) && signbit(cn[3]) && signbit(cp[1]) &&
-              signbit.(flat(nvp2pl(nm, pn))) == signbit.(cn) && signbit.(flat(psv2pl(pp, sp1, sp2))) == signbit.(cp)
+            signbit.(flat(nvp2pl(nm, pn))) == signbit.(cn) && signbit.(flat(psv2pl(pp, sp1, sp2))) == signbit.(cp)
         @test inelpl(el, nvc2pl([1.0, 0, 0], 1.0))[1] == 2
         @test inelpl(el, nvc2pl([1.0, 0, 0], 2.0))[1] == 1
         @test inelpl(el, nvc2pl([1.0, 0, 0], 3.0))[1] == 0
@@ -325,8 +327,10 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
     @apart @testset "terminator" begin
         oracle_load(Kernels.FULL_SET_FILES)
         ctx = neo_context(Kernels.FULL_SET_FILES)
-        cases = (("EARTH", "IAU_EARTH"), ("MOON", "IAU_MOON"), ("MOON", "MOON_PA_DE440"), ("399", "ITRF93"),
-            ("SUN", "IAU_SUN"), ("EARTH", "IAU_MOON"), ("NOBODY", "IAU_EARTH"), ("EARTH", "NOFRAME"))
+        cases = (
+            ("EARTH", "IAU_EARTH"), ("MOON", "IAU_MOON"), ("MOON", "MOON_PA_DE440"), ("399", "ITRF93"),
+            ("SUN", "IAU_SUN"), ("EARTH", "IAU_MOON"), ("NOBODY", "IAU_EARTH"), ("EARTH", "NOFRAME"),
+        )
         for _ in 1:150
             target, fixref = rand(rng, cases)
             trmtyp = rand(rng, ("UMBRAL", "PENUMBRAL", " umbral", "Penumbral ", "SHADOW"))
@@ -335,20 +339,22 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             abcorr = rand(rng, ("NONE", "LT", "LT+S", "CN", "CN+S", " lt+s", "XLT", "BAD"))
             et = 6.0e8 * (2 * rand(rng) - 1)
             npts = rand(rng, (1, 2, 7, 40, 0, -3))
-            versus!(t, :edterm, () -> edterm(ctx, trmtyp, source, target, et, fixref, abcorr, obs, npts),
-                () -> CS.edterm(trmtyp, source, target, et, fixref, abcorr, obs, npts))
+            versus!(
+                t, :edterm, () -> edterm(ctx, trmtyp, source, target, et, fixref, abcorr, obs, npts),
+                () -> CS.edterm(trmtyp, source, target, et, fixref, abcorr, obs, npts)
+            )
         end
         trgepc, obspos, trm = edterm(ctx, "UMBRAL", "SUN", "MOON", 1.0e8, "IAU_MOON", "LT+S", "EARTH", 12)
-        @test length(trm) == 12 && trm isa Vector{SVector{3,Float64}}
+        @test length(trm) == 12 && trm isa Vector{SVector{3, Float64}}
         rad = bodvrd(ctx, "MOON", "RADII")
         sun, _ = spkpos(ctx, "SUN", trgepc, "IAU_MOON", "LT+S", "MOON")
         rsun = maximum(bodvrd(ctx, "SUN", "RADII"))
         for x in trm
-            @test abs((x[1] / rad[1])^2 + (x[2] / rad[2])^2 + (x[3] / rad[3])^2 - 1.0) <= 1e-12
+            @test abs((x[1] / rad[1])^2 + (x[2] / rad[2])^2 + (x[3] / rad[3])^2 - 1.0) <= 1.0e-12
             # at a point of the umbral terminator the upper limb of the Sun is on the
             # horizon: the center of the Sun is below it by the angular radius
             nrm = surfnm(rad[1], rad[2], rad[3], x)
-            @test asin(nrm ⋅ normalize(sun - x)) ≈ -asin(rsun / vnorm(sun - x)) rtol = 1e-9
+            @test asin(nrm ⋅ normalize(sun - x)) ≈ -asin(rsun / vnorm(sun - x)) rtol = 1.0e-9
         end
         @test trgepc < 1.0e8
         @test throws_kind(() -> edterm(ctx, "SHADOW", "SUN", "MOON", 0.0, "IAU_MOON", "NONE", "EARTH", 3), :notsupported)
@@ -360,7 +366,7 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
     @apart @testset "differences against CSPICE" begin
         # The ports follow the operation order of CSPICE, so most results are equal bit
         # for bit; the others have a sine, a cosine or an arc tangent of the C library.
-        report!(t, "ellipsoid"; tol=0.0, tols=Dict(:ednmpt => 4eps(), :inelpl => 8eps(), :edterm => 4eps()))
+        report!(t, "ellipsoid"; tol = 0.0, tols = Dict(:ednmpt => 4eps(), :inelpl => 8eps(), :edterm => 4eps()))
     end
 
     @apart @testset "inferred types and no allocation for static arguments" begin
@@ -372,20 +378,22 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
         pl = nvc2pl(SVector(1.0, 2.0, 3.0), 0.7)
         q = nvc2pl(SVector(1.0, -2.0, 2.0), 0.2)
         el = cgv2el(SVector(0.1, 0.2, 0.3), SVector(1.0, 1.0, 0.0), SVector(0.0, 0.5, 2.0))
-        V3, V6, P, E = SVector{3,Float64}, SVector{6,Float64}, SpicePlane{Float64}, SpiceEllipse{Float64}
-        calls = Any[(surfnm, (a, b, c, p), V3), (surfpt, (p, u, a, b, c), V3), (edpnt, (p, a, b, c), V3),
-            (ednmpt, (a, b, c, u), V3), (nearpt, (p, a, b, c), Tuple{V3,Float64}),
-            (dnearp, (st, a, b, c), Tuple{V6,SVector{2,Float64}}), (surfpv, (st, sd, a, b, c), V6),
-            (npedln, (a, b, c, p, u), Tuple{V3,Float64}), (nvc2pl, (u, 2.0), P), (nvp2pl, (u, p), P),
-            (psv2pl, (p, u, SVector(1.0, 0.0, 0.0)), P), (pl2nvc, (pl,), Tuple{V3,Float64}),
-            (pl2nvp, (pl,), Tuple{V3,V3}), (pl2psv, (pl,), Tuple{V3,V3,V3}), (vprjp, (p, pl), V3),
-            (vprjpi, (p, pl, q), V3), (inrypl, (p, u, pl), Tuple{Int,V3}), (nplnpt, (p, u, st[SVector(4, 5, 6)]), Tuple{V3,Float64}),
-            (saelgv, (p, u), Tuple{V3,V3}), (cgv2el, (p, u, SVector(1.0, 0.0, 0.0)), E), (el2cgv, (el,), Tuple{V3,V3,V3}),
-            (pjelpl, (el, pl), E), (inelpl, (el, pl), Tuple{Int,V3,V3}), (npelpt, (p, el), Tuple{V3,Float64}),
-            (inedpl, (a, b, c, pl), E), (edlimb, (a, b, c, p), E)]
+        V3, V6, P, E = SVector{3, Float64}, SVector{6, Float64}, SpicePlane{Float64}, SpiceEllipse{Float64}
+        calls = Any[
+            (surfnm, (a, b, c, p), V3), (surfpt, (p, u, a, b, c), V3), (edpnt, (p, a, b, c), V3),
+            (ednmpt, (a, b, c, u), V3), (nearpt, (p, a, b, c), Tuple{V3, Float64}),
+            (dnearp, (st, a, b, c), Tuple{V6, SVector{2, Float64}}), (surfpv, (st, sd, a, b, c), V6),
+            (npedln, (a, b, c, p, u), Tuple{V3, Float64}), (nvc2pl, (u, 2.0), P), (nvp2pl, (u, p), P),
+            (psv2pl, (p, u, SVector(1.0, 0.0, 0.0)), P), (pl2nvc, (pl,), Tuple{V3, Float64}),
+            (pl2nvp, (pl,), Tuple{V3, V3}), (pl2psv, (pl,), Tuple{V3, V3, V3}), (vprjp, (p, pl), V3),
+            (vprjpi, (p, pl, q), V3), (inrypl, (p, u, pl), Tuple{Int, V3}), (nplnpt, (p, u, st[SVector(4, 5, 6)]), Tuple{V3, Float64}),
+            (saelgv, (p, u), Tuple{V3, V3}), (cgv2el, (p, u, SVector(1.0, 0.0, 0.0)), E), (el2cgv, (el,), Tuple{V3, V3, V3}),
+            (pjelpl, (el, pl), E), (inelpl, (el, pl), Tuple{Int, V3, V3}), (npelpt, (p, el), Tuple{V3, Float64}),
+            (inedpl, (a, b, c, pl), E), (edlimb, (a, b, c, p), E),
+        ]
         for (fn, args, T) in calls
             @test fn(args...) isa T
-            @test Base.promote_op(fn, map(typeof, args)...) <: Union{T,Nothing}
+            @test Base.promote_op(fn, map(typeof, args)...) <: Union{T, Nothing}
             @test alloc_of(fn, args...) == 0
         end
     end

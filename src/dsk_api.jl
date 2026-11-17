@@ -41,8 +41,12 @@ Throws `SpiceError(:indexoutofrange)` if `keywrd` is not in `1:6`.
 See also [`dskstl`](@ref).
 """
 function dskgtl(ctx::SpiceContext, keywrd::Integer)
-    (1 <= keywrd <= 6) || throw(SpiceError(:indexoutofrange,
-        "dskgtl: the keyword $keywrd is not in the range 1:6"))
+    (1 <= keywrd <= 6) || throw(
+        SpiceError(
+            :indexoutofrange,
+            "dskgtl: the keyword $keywrd is not in the range 1:6"
+        )
+    )
     return getfield(dsktolerances(ctx), Int(keywrd))::Float64
 end
 dskgtl(keywrd::Integer) = dskgtl(default_context(), keywrd)
@@ -62,16 +66,26 @@ Throws `SpiceError(:indexoutofrange)` if `keywrd` is not in `1:6`, and `:immutab
 if it is 5 or 6.
 """
 function dskstl(ctx::SpiceContext, keywrd::Integer, dpval::Real)
-    (1 <= keywrd <= 6) || throw(SpiceError(:indexoutofrange,
-        "dskstl: the keyword $keywrd is not in the range 1:6"))
-    keywrd > 4 && throw(SpiceError(:immutablevalue,
-        "dskstl: the parameter with the keyword $keywrd cannot be changed"))
+    (1 <= keywrd <= 6) || throw(
+        SpiceError(
+            :indexoutofrange,
+            "dskstl: the keyword $keywrd is not in the range 1:6"
+        )
+    )
+    keywrd > 4 && throw(
+        SpiceError(
+            :immutablevalue,
+            "dskstl: the parameter with the keyword $keywrd cannot be changed"
+        )
+    )
     lock(ctx.lock) do
         t = dsktolerances(ctx)
         v = Float64(dpval)
-        @atomic ctx.dsktols = DSKTolerances(keywrd == 1 ? v : t.xfract,
+        @atomic ctx.dsktols = DSKTolerances(
+            keywrd == 1 ? v : t.xfract,
             keywrd == 2 ? v : t.sgreed, keywrd == 3 ? v : t.sgpadm,
-            keywrd == 4 ? v : t.ptmemm, t.angmrg, t.lonali)
+            keywrd == 4 ? v : t.ptmemm, t.angmrg, t.lonali
+        )
     end
     return nothing
 end
@@ -84,7 +98,7 @@ dskstl(keywrd::Integer, dpval::Real) = dskstl(default_context(), keywrd, dpval)
 @inline _dsk_vec3(v::Vec3{Float64}) = v
 function _dsk_vec3(v)
     length(v) == 3 || throw(SpiceError(:badarg, "a vector of 3 elements is required, got $(length(v))"))
-    return Vec3{Float64}(v[begin], v[begin+1], v[begin+2])
+    return Vec3{Float64}(v[begin], v[begin + 1], v[begin + 2])
 end
 
 "Number of 3-vectors in `a`: the columns of a 3 x n matrix or the elements of a vector of 3-vectors."
@@ -95,8 +109,8 @@ end
 _dsk_count3(a::AbstractVector) = length(a)
 
 @inline _dsk_get3(a::AbstractMatrix, i::Int) = Vec3{Float64}(a[1, i], a[2, i], a[3, i])
-@inline _dsk_get3(a::AbstractVector, i::Int) = _dsk_vec3(a[begin+i-1])
-@inline _dsk_get3(a::AbstractVector{Vec3{Float64}}, i::Int) = a[begin+i-1]
+@inline _dsk_get3(a::AbstractVector, i::Int) = _dsk_vec3(a[begin + i - 1])
+@inline _dsk_get3(a::AbstractVector{Vec3{Float64}}, i::Int) = a[begin + i - 1]
 
 "The list of 3-vectors `a` as one flat `Vector{T}` of length 3n, in the order of the file."
 function _dsk_flat(::Type{T}, a) where {T}
@@ -104,15 +118,15 @@ function _dsk_flat(::Type{T}, a) where {T}
     out = Vector{T}(undef, 3n)
     for i in 1:n                         # invariant: out[1:3(i-1)] holds the elements 1 .. i-1
         if a isa AbstractMatrix
-            out[3i-2] = a[1, i]
-            out[3i-1] = a[2, i]
+            out[3i - 2] = a[1, i]
+            out[3i - 1] = a[2, i]
             out[3i] = a[3, i]
         else
-            e = a[begin+i-1]
+            e = a[begin + i - 1]
             length(e) == 3 || throw(SpiceError(:badarg, "element $i does not have 3 components"))
-            out[3i-2] = e[begin]
-            out[3i-1] = e[begin+1]
-            out[3i] = e[begin+2]
+            out[3i - 2] = e[begin]
+            out[3i - 1] = e[begin + 1]
+            out[3i] = e[begin + 2]
         end
     end
     return out
@@ -140,13 +154,21 @@ function _dsk_file(ks::KernelSet, seg::DSKSegment)
             s.dladsc == seg.dladsc && s.dskdsc == seg.dskdsc && return file
         end
     end
-    throw(SpiceError(:nosuchhandle, "the DSK segment does not belong to a file of this " *
-        "kernel set; its file was unloaded or the set is another one"))
+    throw(
+        SpiceError(
+            :nosuchhandle, "the DSK segment does not belong to a file of this " *
+                "kernel set; its file was unloaded or the set is another one"
+        )
+    )
 end
 
 @inline function _dsk_need02(seg::DSKSegment, who::AbstractString)
-    seg.dskdsc.dtype == 2 || throw(SpiceError(:typenotsupported,
-        "$who: the DSK segment has the data type $(seg.dskdsc.dtype), not 2"))
+    seg.dskdsc.dtype == 2 || throw(
+        SpiceError(
+            :typenotsupported,
+            "$who: the DSK segment has the data type $(seg.dskdsc.dtype), not 2"
+        )
+    )
     return nothing
 end
 
@@ -168,9 +190,11 @@ end
 dskgd(seg::DSKSegment) = seg.dskdsc
 
 "`dskb02` on a header: the items in the order of CSPICE."
-_dsk_b02(hdr::DSK02Header) = (hdr.nv, hdr.np, hdr.nvxtot,
+_dsk_b02(hdr::DSK02Header) = (
+    hdr.nv, hdr.np, hdr.nvxtot,
     [hdr.vtxbds[1] hdr.vtxbds[3] hdr.vtxbds[5]; hdr.vtxbds[2] hdr.vtxbds[4] hdr.vtxbds[6]],
-    hdr.voxsiz, hdr.voxori, collect(hdr.vgrext), hdr.cgscal, hdr.vtxnpl, hdr.voxnpt, hdr.voxnpl)
+    hdr.voxsiz, hdr.voxori, collect(hdr.vgrext), hdr.cgscal, hdr.vtxnpl, hdr.voxnpt, hdr.voxnpl,
+)
 
 """
     dskb02(handle, dladsc) -> (nv, np, nvxtot, vtxbds, voxsiz, voxori, vgrext, cgscal,
@@ -223,18 +247,24 @@ function dskz02(seg::DSKSegment)
 end
 
 "Checks of `start` and `room` that the fetch calls share; returns the element count to fetch."
-function _dsk_fetch_count(who::AbstractString, what::AbstractString, start::Integer,
-        room::Integer, size::Integer)
+function _dsk_fetch_count(
+        who::AbstractString, what::AbstractString, start::Integer,
+        room::Integer, size::Integer
+    )
     room <= 0 && throw(SpiceError(:valueoutofrange, "$who: ROOM was $room; it must be positive"))
-    (1 <= start <= size) || throw(SpiceError(:indexoutofrange,
-        "$who: START was $start; the valid range of the $what is 1:$size"))
+    (1 <= start <= size) || throw(
+        SpiceError(
+            :indexoutofrange,
+            "$who: START was $start; the valid range of the $what is 1:$size"
+        )
+    )
     return min(Int(room), Int(size) - Int(start) + 1)
 end
 
 function _dsk_p02(ints::Vector{Int32}, seg::DSKSegment, start::Integer, room::Integer)
     _dsk_need02(seg, "dskp02")
     n = _dsk_fetch_count("dskp02", "plates", start, room, seg.hdr.np)
-    return [SVector{3,Int}(_dsk_plate(ints, seg, start + i - 1)) for i in 1:n]
+    return [SVector{3, Int}(_dsk_plate(ints, seg, start + i - 1)) for i in 1:n]
 end
 
 function _dsk_v02(dps::Vector{Float64}, seg::DSKSegment, start::Integer, room::Integer)
@@ -257,15 +287,21 @@ end
 
 `dski02`: at most `room` integers of the item `item` (1:14) from element `start`.
 """
-function _dsk_i02(ints::Vector{Int32}, seg::DSKSegment, item::Integer, start::Integer,
-        room::Integer)
+function _dsk_i02(
+        ints::Vector{Int32}, seg::DSKSegment, item::Integer, start::Integer,
+        room::Integer
+    )
     room <= 0 && throw(SpiceError(:valueoutofrange, "dski02: ROOM was $room; it must be positive"))
     hdr = seg.hdr
-    hdr.cgscal < 1 && throw(SpiceError(:valueoutofrange,
-        "dski02: the coarse voxel grid scale is $(hdr.cgscal); it must be at least 1"))
+    hdr.cgscal < 1 && throw(
+        SpiceError(
+            :valueoutofrange,
+            "dski02: the coarse voxel grid scale is $(hdr.cgscal); it must be at least 1"
+        )
+    )
     scalar = item == 1 ? hdr.nv : item == 2 ? hdr.np : item == 3 ? hdr.nvxtot :
-             item == 5 ? hdr.cgscal : item == 6 ? hdr.voxnpt : item == 7 ? hdr.voxnpl :
-             item == 8 ? hdr.vtxnpl : -1
+        item == 5 ? hdr.cgscal : item == 6 ? hdr.voxnpt : item == 7 ? hdr.voxnpl :
+        item == 8 ? hdr.vtxnpl : -1
     ibase = seg.dladsc.ibase
     if item in (1, 2, 3, 5, 6, 7, 8)
         # As CSPICE: the value is returned for START = 1; the size is not defined for
@@ -291,7 +327,7 @@ function _dsk_i02(ints::Vector{Int32}, seg::DSKSegment, item::Integer, start::In
         throw(SpiceError(:notsupported, "dski02: the keyword $item is not recognized"))
     end
     n = _dsk_fetch_count("dski02", "item $item", start, room, size)
-    return Int[ints[off+start+i-1] for i in 1:n]
+    return Int[ints[off + start + i - 1] for i in 1:n]
 end
 
 """
@@ -299,8 +335,10 @@ end
 
 `dskd02`: at most `room` doubles of the item `item` (15:19) from element `start`.
 """
-function _dsk_d02(dps::Vector{Float64}, seg::DSKSegment, item::Integer, start::Integer,
-        room::Integer)
+function _dsk_d02(
+        dps::Vector{Float64}, seg::DSKSegment, item::Integer, start::Integer,
+        room::Integer
+    )
     room <= 0 && throw(SpiceError(:valueoutofrange, "dskd02: ROOM was $room; it must be positive"))
     dbase = seg.dladsc.dbase
     size, off = if item == 19
@@ -317,7 +355,7 @@ function _dsk_d02(dps::Vector{Float64}, seg::DSKSegment, item::Integer, start::I
         throw(SpiceError(:notsupported, "dskd02: the keyword $item is not recognized"))
     end
     n = _dsk_fetch_count("dskd02", "item $item", start, room, size)
-    return Float64[dps[off+start+i-1] for i in 1:n]
+    return Float64[dps[off + start + i - 1] for i in 1:n]
 end
 
 """
@@ -488,15 +526,19 @@ See also [`dskxsi`](@ref), and [`dskw02`](@ref) for an example.
 function dskx02(h::DASHandle, d::DLADescr, vertex, raydir)
     ints, dps, seg = _dsk_open_segment(h, d, "dskx02")
     _dsk_need02(seg, "dskx02")
-    plid, xpt, found = _dsk_x02(ints, dps, seg, _DSK_DEFAULT_TOLS, _dsk_vec3(vertex),
-        _dsk_vec3(raydir))
+    plid, xpt, found = _dsk_x02(
+        ints, dps, seg, _DSK_DEFAULT_TOLS, _dsk_vec3(vertex),
+        _dsk_vec3(raydir)
+    )
     return found ? (plid, xpt) : nothing
 end
 function _dsk_x02_loaded(ks::KernelSet, tols::DSKTolerances, seg::DSKSegment, vertex, raydir)
     file = _dsk_file(ks, seg)
     _dsk_need02(seg, "dskx02")
-    plid, xpt, found = _dsk_x02(file.ints, file.dps, seg, tols, _dsk_vec3(vertex),
-        _dsk_vec3(raydir))
+    plid, xpt, found = _dsk_x02(
+        file.ints, file.dps, seg, tols, _dsk_vec3(vertex),
+        _dsk_vec3(raydir)
+    )
     return found ? (plid, xpt) : nothing
 end
 dskx02(ks::KernelSet, seg::DSKSegment, vertex, raydir) =
@@ -512,12 +554,24 @@ dskx02(seg::DSKSegment, vertex, raydir) = dskx02(default_context(), seg, vertex,
 "The descriptors of all segments of the DSK file `path`, after the checks of `dskobj`."
 function _dsk_file_descrs(path::AbstractString, who::AbstractString)
     arch, kind = getfat(path)
-    arch == "XFR" && throw(SpiceError(:invalidformat,
-        "$who: the file $path has the architecture $arch; it must be a binary DSK file"))
-    arch == "DAS" || throw(SpiceError(:invalidarchtype,
-        "$who: the file $path has the architecture $arch; DAS is required"))
-    kind == "DSK" || throw(SpiceError(:invalidfiletype,
-        "$who: the file $path has the type $kind; DSK is required"))
+    arch == "XFR" && throw(
+        SpiceError(
+            :invalidformat,
+            "$who: the file $path has the architecture $arch; it must be a binary DSK file"
+        )
+    )
+    arch == "DAS" || throw(
+        SpiceError(
+            :invalidarchtype,
+            "$who: the file $path has the architecture $arch; DAS is required"
+        )
+    )
+    kind == "DSK" || throw(
+        SpiceError(
+            :invalidfiletype,
+            "$who: the file $path has the type $kind; DSK is required"
+        )
+    )
     h = dasopr(path)
     try
         return DSKDescr[_dsk_descr(h.dps, d, h.path) for d in _dla_segments(h.ints, h.path)]
@@ -567,8 +621,14 @@ The errors are those of [`dskobj`](@ref).
 
 See also [`dsksrf!`](@ref).
 """
-dsksrf(path::AbstractString, bodyid::Integer) = sort!(unique!(Int[d.surfce
-    for d in _dsk_file_descrs(path, "dsksrf") if d.center == bodyid]))
+dsksrf(path::AbstractString, bodyid::Integer) = sort!(
+    unique!(
+        Int[
+            d.surfce
+                for d in _dsk_file_descrs(path, "dsksrf") if d.center == bodyid
+        ]
+    )
+)
 
 """
     dsksrf!(ids, path, bodyid) -> ids
@@ -592,8 +652,12 @@ dsksrf!(ids::AbstractVector{<:Integer}, path::AbstractString, bodyid::Integer) =
 @inline _dsk_target(::KernelSet, target::Integer) = Int32(target)
 function _dsk_target(ks::KernelSet, target::AbstractString)
     code = bods2c(ks, target)
-    code === nothing && throw(SpiceError(:idcodenotfound, "the target, '$target', is not " *
-        "a recognized name for an ephemeris object"))
+    code === nothing && throw(
+        SpiceError(
+            :idcodenotfound, "the target, '$target', is not " *
+                "a recognized name for an ephemeris object"
+        )
+    )
     return Int32(code)
 end
 
@@ -607,10 +671,14 @@ end
     return nothing
 end
 
-@noinline _dsk_bad_frame(kind::Symbol, fixref, target) = throw(SpiceError(kind,
-    kind === :idcodenotfound ? "the reference frame $fixref is not recognized" :
-    kind === :noframeinfo ? "attributes of the reference frame $fixref could not be determined" :
-    "the reference frame $fixref is not centered at the target body $target"))
+@noinline _dsk_bad_frame(kind::Symbol, fixref, target) = throw(
+    SpiceError(
+        kind,
+        kind === :idcodenotfound ? "the reference frame $fixref is not recognized" :
+            kind === :noframeinfo ? "attributes of the reference frame $fixref could not be determined" :
+            "the reference frame $fixref is not centered at the target body $target"
+    )
+)
 
 """
     _dsk_fixfid(ks, fixref, trgcde, target) -> Int32
@@ -630,8 +698,12 @@ end
 @inline _dsk_frame_code(::KernelSet, fixref::Integer) = Int32(fixref)
 _dsk_frame_code(ks::KernelSet, fixref::AbstractString) = Int32(namfrm(ks, fixref))
 
-@noinline _dsk_bad_pri() = throw(SpiceError(:badpriorityspec, "the PRI flag was set to " *
-    "true; prioritized searches are not supported, as in this version of CSPICE"))
+@noinline _dsk_bad_pri() = throw(
+    SpiceError(
+        :badpriorityspec, "the PRI flag was set to " *
+            "true; prioritized searches are not supported, as in this version of CSPICE"
+    )
+)
 
 """
     dskxsi([ctx | ks,] pri, target, srflst, et, fixref, vertex, raydir)
@@ -680,25 +752,35 @@ Throws `SpiceError`:
 See also [`dskxv`](@ref), [`dskx02`](@ref), [`latsrf`](@ref), and [`dskw02`](@ref) for an
 example.
 """
-function dskxsi(ks::KernelSet, pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID,
-        vertex, raydir)
+function dskxsi(
+        ks::KernelSet, pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID,
+        vertex, raydir
+    )
     return _dsk_xsi(ks, _DSK_DEFAULT_TOLS, pri, target, srflst, et, fixref, vertex, raydir)
 end
-function dskxsi(ctx::SpiceContext, pri::Bool, target::NameOrID, srflst, et::Real,
-        fixref::NameOrID, vertex, raydir)
-    return _dsk_xsi(kernelset(ctx), dsktolerances(ctx), pri, target, srflst, et, fixref,
-        vertex, raydir)
+function dskxsi(
+        ctx::SpiceContext, pri::Bool, target::NameOrID, srflst, et::Real,
+        fixref::NameOrID, vertex, raydir
+    )
+    return _dsk_xsi(
+        kernelset(ctx), dsktolerances(ctx), pri, target, srflst, et, fixref,
+        vertex, raydir
+    )
 end
 dskxsi(pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID, vertex, raydir) =
     dskxsi(default_context(), pri, target, srflst, et, fixref, vertex, raydir)
 
-@inline function _dsk_xsi(ks::KernelSet, tols::DSKTolerances, pri::Bool, target, srflst,
-        et::Real, fixref, vertex, raydir)
+@inline function _dsk_xsi(
+        ks::KernelSet, tols::DSKTolerances, pri::Bool, target, srflst,
+        et::Real, fixref, vertex, raydir
+    )
     pri && _dsk_bad_pri()
     trgcde = _dsk_target(ks, target)
     fixfid = _dsk_fixfid(ks, fixref, trgcde, target)
-    xpt, idx, plid, found = _dsk_bux(ks, tols, trgcde, srflst, Float64(et), fixfid,
-        _dsk_vec3(vertex), _dsk_vec3(raydir))
+    xpt, idx, plid, found = _dsk_bux(
+        ks, tols, trgcde, srflst, Float64(et), fixfid,
+        _dsk_vec3(vertex), _dsk_vec3(raydir)
+    )
     found || return nothing
     return xpt, (@inbounds ks.dsk[trgcde][idx]), plid
 end
@@ -716,25 +798,37 @@ does not allocate.
 Throws `SpiceError(:badarg)` unless `dirarr`, `xptarr` and `fndarr` have one element for
 each ray of `vtxarr`, and the error kinds of [`dskxv`](@ref).
 """
-function dskxv!(xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool},
+function dskxv!(
+        xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool},
         ks::KernelSet, pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID, vtxarr,
-        dirarr)
-    return _dsk_xv!(xptarr, fndarr, ks, _DSK_DEFAULT_TOLS, pri, target, srflst, et, fixref,
-        vtxarr, dirarr)
+        dirarr
+    )
+    return _dsk_xv!(
+        xptarr, fndarr, ks, _DSK_DEFAULT_TOLS, pri, target, srflst, et, fixref,
+        vtxarr, dirarr
+    )
 end
-function dskxv!(xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool},
+function dskxv!(
+        xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool},
         ctx::SpiceContext, pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID,
-        vtxarr, dirarr)
-    return _dsk_xv!(xptarr, fndarr, kernelset(ctx), dsktolerances(ctx), pri, target, srflst,
-        et, fixref, vtxarr, dirarr)
+        vtxarr, dirarr
+    )
+    return _dsk_xv!(
+        xptarr, fndarr, kernelset(ctx), dsktolerances(ctx), pri, target, srflst,
+        et, fixref, vtxarr, dirarr
+    )
 end
-dskxv!(xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool}, pri::Bool,
-    target::NameOrID, srflst, et::Real, fixref::NameOrID, vtxarr, dirarr) =
+dskxv!(
+    xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool}, pri::Bool,
+    target::NameOrID, srflst, et::Real, fixref::NameOrID, vtxarr, dirarr
+) =
     dskxv!(xptarr, fndarr, default_context(), pri, target, srflst, et, fixref, vtxarr, dirarr)
 
-function _dsk_xv!(xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool},
+function _dsk_xv!(
+        xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{Bool},
         ks::KernelSet, tols::DSKTolerances, pri::Bool, target, srflst, et::Real, fixref,
-        vtxarr, dirarr)
+        vtxarr, dirarr
+    )
     pri && _dsk_bad_pri()
     nrays = _dsk_count3(vtxarr)
     nrays < 1 && throw(SpiceError(:invalidcount, "dskxv: the number of rays must be positive"))
@@ -744,10 +838,12 @@ function _dsk_xv!(xptarr::AbstractVector{Vec3{Float64}}, fndarr::AbstractVector{
     fixfid = _dsk_fixfid(ks, fixref, trgcde, target)
     t = Float64(et)
     for i in 1:nrays                     # invariant: the results of the rays 1 .. i-1 are stored
-        xpt, _, _, found = _dsk_bux(ks, tols, trgcde, srflst, t, fixfid, _dsk_get3(vtxarr, i),
-            _dsk_get3(dirarr, i))
-        xptarr[begin+i-1] = xpt
-        fndarr[begin+i-1] = found
+        xpt, _, _, found = _dsk_bux(
+            ks, tols, trgcde, srflst, t, fixfid, _dsk_get3(vtxarr, i),
+            _dsk_get3(dirarr, i)
+        )
+        xptarr[begin + i - 1] = xpt
+        fndarr[begin + i - 1] = found
     end
     return xptarr, fndarr
 end
@@ -769,11 +865,15 @@ Throws `SpiceError(:invalidcount)` if there is no ray, and the error kinds of
 
 See also [`dskxv!`](@ref).
 """
-function dskxv(ks::Union{KernelSet,SpiceContext}, pri::Bool, target::NameOrID, srflst, et::Real,
-        fixref::NameOrID, vtxarr, dirarr)
+function dskxv(
+        ks::Union{KernelSet, SpiceContext}, pri::Bool, target::NameOrID, srflst, et::Real,
+        fixref::NameOrID, vtxarr, dirarr
+    )
     n = _dsk_count3(vtxarr)
-    return dskxv!(Vector{Vec3{Float64}}(undef, n), Vector{Bool}(undef, n), ks, pri, target,
-        srflst, et, fixref, vtxarr, dirarr)
+    return dskxv!(
+        Vector{Vec3{Float64}}(undef, n), Vector{Bool}(undef, n), ks, pri, target,
+        srflst, et, fixref, vtxarr, dirarr
+    )
 end
 dskxv(pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID, vtxarr, dirarr) =
     dskxv(default_context(), pri, target, srflst, et, fixref, vtxarr, dirarr)
@@ -797,9 +897,11 @@ Throws `SpiceError(:badarg)` unless `iverts` holds three vertices.
 """
 function pltexp(iverts, delta::Real)
     _dsk_count3(iverts) == 3 || throw(SpiceError(:badarg, "pltexp: three vertices are required"))
-    a, b, c = _dsk_pltexp(_dsk_get3(iverts, 1), _dsk_get3(iverts, 2), _dsk_get3(iverts, 3),
-        Float64(delta))
-    return SVector{3,Vec3{Float64}}(a, b, c)
+    a, b, c = _dsk_pltexp(
+        _dsk_get3(iverts, 1), _dsk_get3(iverts, 2), _dsk_get3(iverts, 3),
+        Float64(delta)
+    )
+    return SVector{3, Vec3{Float64}}(a, b, c)
 end
 
 """
@@ -829,11 +931,15 @@ pltnp(point, v1, v2, v3) = _dsk_pltnp(_dsk_vec3(point), _dsk_vec3(v1), _dsk_vec3
 "Throws `SpiceError(:indexoutofrange)` unless every vertex number of `plates` is in `1:nv`."
 function _dsk_check_plates(who::AbstractString, plates, np::Int, nv::Int)
     for i in 1:np                        # invariant: the plates 1 .. i-1 are valid
-        p = plates isa AbstractMatrix ? (plates[1, i], plates[2, i], plates[3, i]) : plates[begin+i-1]
+        p = plates isa AbstractMatrix ? (plates[1, i], plates[2, i], plates[3, i]) : plates[begin + i - 1]
         length(p) == 3 || throw(SpiceError(:badarg, "$who: plate $i does not have 3 vertex numbers"))
         for j in 1:3
-            (1 <= p[j] <= nv) || throw(SpiceError(:indexoutofrange, "$who: vertex number " *
-                "$(p[j]) of plate $i is not in the range 1:$nv"))
+            (1 <= p[j] <= nv) || throw(
+                SpiceError(
+                    :indexoutofrange, "$who: vertex number " *
+                        "$(p[j]) of plate $i is not in the range 1:$nv"
+                )
+            )
         end
     end
     return nothing
@@ -841,8 +947,8 @@ end
 
 @inline _dsk_plate3(plates::AbstractMatrix, i::Int) = (Int(plates[1, i]), Int(plates[2, i]), Int(plates[3, i]))
 @inline function _dsk_plate3(plates::AbstractVector, i::Int)
-    p = plates[begin+i-1]
-    return Int(p[begin]), Int(p[begin+1]), Int(p[begin+2])
+    p = plates[begin + i - 1]
+    return Int(p[begin]), Int(p[begin + 1]), Int(p[begin + 2])
 end
 
 """
@@ -863,8 +969,12 @@ function pltar(vrtces, plates)
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
     np == 0 && return 0.0
-    nv < 3 && throw(SpiceError(:toofewvertices,
-        "pltar: at least 3 vertices are needed, but NV = $nv"))
+    nv < 3 && throw(
+        SpiceError(
+            :toofewvertices,
+            "pltar: at least 3 vertices are needed, but NV = $nv"
+        )
+    )
     _dsk_check_plates("pltar", plates, np, nv)
     area = 0.0
     for i in 1:np                        # invariant: area is the sum over the plates 1 .. i-1
@@ -894,8 +1004,12 @@ if there are fewer than 4 plates, and `:indexoutofrange` if a vertex number is n
 function pltvol(vrtces, plates)
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
-    nv < 4 && throw(SpiceError(:toofewvertices,
-        "pltvol: at least 4 vertices are needed, but NV = $nv"))
+    nv < 4 && throw(
+        SpiceError(
+            :toofewvertices,
+            "pltvol: at least 4 vertices are needed, but NV = $nv"
+        )
+    )
     np < 4 && throw(SpiceError(:toofewplates, "pltvol: at least 4 plates are needed, but NP = $np"))
     _dsk_check_plates("pltvol", plates, np, nv)
     vol = 0.0
@@ -905,7 +1019,7 @@ function pltvol(vrtces, plates)
         b = _dsk_get3(vrtces, i2)
         c = _dsk_get3(vrtces, i3)
         det = a[1] * (b[2] * c[3] - c[2] * b[3]) - b[1] * (a[2] * c[3] - c[2] * a[3]) +
-              c[1] * (a[2] * b[3] - b[2] * a[3])
+            c[1] * (a[2] * b[3] - b[2] * a[3])
         vol += det / 6.0
     end
     return vol

@@ -21,8 +21,10 @@ the file of `h` and flush. A gap between
 the end of the file and `offset` is filled with zero bytes. Throws
 `SpiceError(:dafwritefail)` if the system reports an error.
 """
-function _daf_write_at!(h::DAFHandle, bytes::Union{Vector{UInt8},Vector{Float64}},
-        offset::Integer)
+function _daf_write_at!(
+        h::DAFHandle, bytes::Union{Vector{UInt8}, Vector{Float64}},
+        offset::Integer
+    )
     try
         size = filesize(h.io)
         if offset > size
@@ -34,8 +36,12 @@ function _daf_write_at!(h::DAFHandle, bytes::Union{Vector{UInt8},Vector{Float64}
         flush(h.io)
     catch e
         e isa SpiceError && rethrow()
-        throw(SpiceError(:dafwritefail,
-            "write to the DAF $(h.path) failed: $(sprint(showerror, e))"))
+        throw(
+            SpiceError(
+                :dafwritefail,
+                "write to the DAF $(h.path) failed: $(sprint(showerror, e))"
+            )
+        )
     end
     return nothing
 end
@@ -76,10 +82,16 @@ end
 Update the internal file name (if given) and the three pointers of the file record
 and leave all other bytes of the record as they are, as `dafwfr`.
 """
-function _daf_write_filerecord!(h::DAFHandle; ifname::Union{Nothing,AbstractString}=nothing,
-        fward::Integer, bward::Integer, free::Integer)
-    (1 <= free <= typemax(Int32)) || throw(SpiceError(:dafwritefail,
-        "the free address $free of $(h.path) is outside the 32-bit range of a DAF"))
+function _daf_write_filerecord!(
+        h::DAFHandle; ifname::Union{Nothing, AbstractString} = nothing,
+        fward::Integer, bward::Integer, free::Integer
+    )
+    (1 <= free <= typemax(Int32)) || throw(
+        SpiceError(
+            :dafwritefail,
+            "the free address $free of $(h.path) is outside the 32-bit range of a DAF"
+        )
+    )
     raw, _, _, _ = _daf_filerecord(h, "dafwfr")
     if ifname !== nothing
         raw[17:76] = _daf_padded(ifname, 60)
@@ -138,31 +150,53 @@ Throws `SpiceError`:
 
 See also [`spkopn`](@ref), [`ckopn`](@ref), [`dafbna`](@ref), [`dafcls`](@ref).
 """
-function dafonw(path::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer,
-        ifname::AbstractString, resv::Integer)
+function dafonw(
+        path::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer,
+        ifname::AbstractString, resv::Integer
+    )
     isempty(strip(path)) && throw(SpiceError(:blankfilename, "dafonw: the file name is blank"))
     isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "dafonw: the file type is blank"))
     ttype = String(strip(ftype, ' '))
-    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(SpiceError(:illegalcharacter,
-        "dafonw: the file type contains nonprinting characters"))
+    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
+        SpiceError(
+            :illegalcharacter,
+            "dafonw: the file type contains nonprinting characters"
+        )
+    )
     (0 <= nd <= 124) || throw(SpiceError(:dafinvalidparams, "dafonw: ND was $nd, should be in range [0,124]"))
     (2 <= ni <= 250) || throw(SpiceError(:dafinvalidparams, "dafonw: NI was $ni, should be in range [2,250]"))
-    _daf_sumsize(nd, ni) <= 125 || throw(SpiceError(:dafinvalidparams,
-        "dafonw: summary size was $(_daf_sumsize(nd, ni)), should not exceed 125"))
-    resv < 0 && throw(SpiceError(:dafnoresv,
-        "dafonw: an attempt was made to reserve a negative number ($resv) of records"))
+    _daf_sumsize(nd, ni) <= 125 || throw(
+        SpiceError(
+            :dafinvalidparams,
+            "dafonw: summary size was $(_daf_sumsize(nd, ni)), should not exceed 125"
+        )
+    )
+    resv < 0 && throw(
+        SpiceError(
+            :dafnoresv,
+            "dafonw: an attempt was made to reserve a negative number ($resv) of records"
+        )
+    )
     # Exclusive creation: the call fails if the path exists, so no file is ever truncated.
     io = try
-        fd = Base.Filesystem.open(path, Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL |
-            Base.Filesystem.JL_O_RDWR, 0o644)
+        fd = Base.Filesystem.open(
+            path, Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL |
+                Base.Filesystem.JL_O_RDWR, 0o644
+        )
         close(fd)
         open(path, "r+")
     catch e
-        throw(SpiceError(:fileopenfailed,
-            "dafonw: attempt to create the new file $path failed: $(sprint(showerror, e))"))
+        throw(
+            SpiceError(
+                :fileopenfailed,
+                "dafonw: attempt to create the new file $path failed: $(sprint(showerror, e))"
+            )
+        )
     end
-    h = _open_register!(_daf_handle(path, io, true, false, Int(nd), Int(ni)), path, true,
-        "dafonw"; check=false)
+    h = _open_register!(
+        _daf_handle(path, io, true, false, Int(nd), Int(ni)), path, true,
+        "dafonw"; check = false
+    )
     fward = Int(resv) + 2
     free = _daf_rwa(fward + 2)
     filerec = zeros(UInt8, _DAF_RECLEN)
@@ -178,7 +212,7 @@ function dafonw(path::AbstractString, ftype::AbstractString, nd::Integer, ni::In
     # holds the nulls (and, for one reserved record, the end-of-comments mark) of the
     # last comment record that was written. The same bytes are written here.
     crec = resv > 0 ? zeros(UInt8, _DAF_CRECLEN) : fill(UInt8(' '), _DAF_CRECLEN)
-    for recno in 2:resv+1                # invariant: comment records 2 .. recno-1 are written
+    for recno in 2:(resv + 1)                # invariant: comment records 2 .. recno-1 are written
         crec[1] = recno == 2 ? _DAF_EOC : 0x00
         _daf_write_crec!(h, recno, crec)
     end
@@ -206,8 +240,12 @@ other byte order, `:fileopenconflict` if another handle has the file open, and
 """
 function dafopw(path::AbstractString)
     nd, ni, swap = _daf_probe(path, "dafopw")
-    swap && throw(SpiceError(:unsupportedbff,
-        "dafopw: the file $path has a non-native binary file format; it can be read only"))
+    swap && throw(
+        SpiceError(
+            :unsupportedbff,
+            "dafopw: the file $path has a non-native binary file format; it can be read only"
+        )
+    )
     io = try
         open(path, "r+")
     catch e
@@ -266,8 +304,12 @@ julia> dafcls(h)
 function dafbna(h::DAFHandle, sum::AbstractVector{<:Real}, name::AbstractString)
     _daf_check_write(h, "dafbna")
     ss = _daf_sumsize(h.nd, h.ni)
-    length(sum) >= ss || throw(SpiceError(:dafinvalidparams,
-        "dafbna: the summary has $(length(sum)) doubles, the DAF needs $ss"))
+    length(sum) >= ss || throw(
+        SpiceError(
+            :dafinvalidparams,
+            "dafbna: the summary has $(length(sum)) doubles, the DAF needs $ss"
+        )
+    )
     _, _, _, free = _daf_filerecord(h, "dafbna")
     h.asum = Float64[Float64(sum[j]) for j in 1:ss]
     h.aname = _daf_padded(name, 8ss)
@@ -289,13 +331,21 @@ a write error.
 """
 function dafada(h::DAFHandle, data::AbstractVector{<:Real})
     _daf_check_write(h, "dafada")
-    h.adding || throw(SpiceError(:dafnewconflict,
-        "dafada: an attempt was made to add data to an array that has not yet been " *
-        "begun, in file $(h.path)"))
+    h.adding || throw(
+        SpiceError(
+            :dafnewconflict,
+            "dafada: an attempt was made to add data to an array that has not yet been " *
+                "begun, in file $(h.path)"
+        )
+    )
     n = length(data)
     n == 0 && return nothing
-    h.afree + n - 1 <= typemax(Int32) - 2 * _DAF_RECWORDS || throw(SpiceError(:dafwritefail,
-        "dafada: the array would pass the largest address of a DAF in $(h.path)"))
+    h.afree + n - 1 <= typemax(Int32) - 2 * _DAF_RECWORDS || throw(
+        SpiceError(
+            :dafwritefail,
+            "dafada: the array would pass the largest address of a DAF in $(h.path)"
+        )
+    )
     _daf_write_data!(h, h.afree, data isa Vector{Float64} ? data : _vec_of(Float64, data))
     h.afree += n
     return nothing
@@ -316,13 +366,17 @@ the last summary record of the file is damaged.
 """
 function dafena(h::DAFHandle)
     _daf_check_write(h, "dafena")
-    h.adding || throw(SpiceError(:dafnewconflict,
-        "dafena: an attempt was made to end an array that has not yet been begun, " *
-        "in file $(h.path)"))
+    h.adding || throw(
+        SpiceError(
+            :dafnewconflict,
+            "dafena: an attempt was made to end an array that has not yet been begun, " *
+                "in file $(h.path)"
+        )
+    )
     nd, ni = h.nd, h.ni
     ss = _daf_sumsize(nd, ni)
     dc, ic = dafus(h.asum, nd, ni)
-    ic[ni-1] = h.abegin
+    ic[ni - 1] = h.abegin
     ic[ni] = h.afree - 1
     sum = dafps(dc, ic)
     _, fward, bward, _ = _daf_filerecord(h, "dafena")
@@ -330,8 +384,12 @@ function dafena(h::DAFHandle)
     found || throw(SpiceError(:baddaf, "dafena: summary record $bward is not in $(h.path)"))
     namrec, _ = _daf_crec(h, bward + 1)
     narray = Int(sumrec[3])
-    (0 <= narray < 125 ÷ ss) || throw(SpiceError(:baddaf,
-        "dafena: summary record $bward of $(h.path) holds $narray summaries"))
+    (0 <= narray < 125 ÷ ss) || throw(
+        SpiceError(
+            :baddaf,
+            "dafena: summary record $bward of $(h.path) holds $narray summaries"
+        )
+    )
     dloc = narray * ss + 4
     copyto!(sumrec, dloc, sum, 1, ss)
     namsiz = 8ss
@@ -356,7 +414,7 @@ function dafena(h::DAFHandle)
         last = next
         free = _daf_rwa(next + 2)
     end
-    _daf_write_filerecord!(h; fward=fward, bward=last, free=free)
+    _daf_write_filerecord!(h; fward = fward, bward = last, free = free)
     h.adding = false
     if h.searching && h.sthis == bward   # keep a search on this handle consistent
         copyto!(h.sbuf, sumrec)
@@ -392,11 +450,15 @@ function dafws(h::DAFHandle, sum::AbstractVector{<:Real})
     _daf_check_write(h, "dafws")
     _daf_check_current(h, "dafws")
     ss = _daf_sumsize(h.nd, h.ni)
-    length(sum) >= ss || throw(SpiceError(:dafinvalidparams,
-        "dafws: the summary has $(length(sum)) doubles, the DAF needs $ss"))
+    length(sum) >= ss || throw(
+        SpiceError(
+            :dafinvalidparams,
+            "dafws: the summary has $(length(sum)) doubles, the DAF needs $ss"
+        )
+    )
     off = 3 + (h.scurr - 1) * ss
     for j in 1:ss
-        h.sbuf[off+j] = Float64(sum[j])
+        h.sbuf[off + j] = Float64(sum[j])
     end
     _daf_write_drec!(h, h.sthis, copy(h.sbuf))
     return nothing
@@ -418,7 +480,7 @@ function dafrs(h::DAFHandle, sum::AbstractVector{<:Real})
     _daf_check_current(h, "dafrs")
     _, exic = dafus(dafgs(h), h.nd, h.ni)
     newdc, newic = dafus(sum, h.nd, h.ni)
-    newic[h.ni-1] = exic[h.ni-1]
+    newic[h.ni - 1] = exic[h.ni - 1]
     newic[h.ni] = exic[h.ni]
     dafws(h, dafps(newdc, newic))
     return nothing
@@ -453,7 +515,7 @@ function _daf_shift_addresses!(h::DAFHandle, delta::Int)
     dafbfs(h)
     while daffna(h)                      # invariant: every summary before the current one is shifted
         dc, ic = dafus(dafgs(h), h.nd, h.ni)
-        ic[h.ni-1] += delta
+        ic[h.ni - 1] += delta
         ic[h.ni] += delta
         dafws(h, dafps(dc, ic))
     end
@@ -482,7 +544,7 @@ function _daf_add_reserved!(h::DAFHandle, resv::Int)
     endblk = lastrec
     while begblk > 0
         # invariant: every record after `endblk` is at its new place
-        for recno in endblk:-1:begblk+2
+        for recno in endblk:-1:(begblk + 2)
             drec, _ = _daf_drec(h, recno)
             _daf_write_drec!(h, recno + resv, drec)
         end
@@ -500,10 +562,10 @@ function _daf_add_reserved!(h::DAFHandle, resv::Int)
     fward += resv
     bward += resv
     free += incr
-    _daf_write_filerecord!(h; fward=fward, bward=bward, free=free)
+    _daf_write_filerecord!(h; fward = fward, bward = bward, free = free)
     _daf_shift_addresses!(h, incr)
     nulls = zeros(UInt8, _DAF_CRECLEN)
-    for recno in fward-resv:fward-1
+    for recno in (fward - resv):(fward - 1)
         _daf_write_crec!(h, recno, nulls)
     end
     return nothing
@@ -547,18 +609,30 @@ See also [`dafec`](@ref), [`dafdc`](@ref).
 function dafac(h::DAFHandle, lines::AbstractVector{<:AbstractString})
     _daf_check_write(h, "dafac")
     n = length(lines)
-    n <= 0 && throw(SpiceError(:invalidargument, "dafac: the number of comment lines " *
-        "to be added to the binary DAF file $(h.path) was not positive: $n"))
-    h.adding && throw(SpiceError(:dafnewconflict,
-        "dafac: an array is begun and not ended in $(h.path); call dafena first"))
+    n <= 0 && throw(
+        SpiceError(
+            :invalidargument, "dafac: the number of comment lines " *
+                "to be added to the binary DAF file $(h.path) was not positive: $n"
+        )
+    )
+    h.adding && throw(
+        SpiceError(
+            :dafnewconflict,
+            "dafac: an array is begun and not ended in $(h.path); call dafena first"
+        )
+    )
     texts = Vector{Vector{UInt8}}(undef, n)
     nchars = 0
     for (i, line) in enumerate(lines)
         s = String(line)
         cu = codeunits(s)[1:_daf_lastnb(s)]
         bad = findfirst(c -> c > 0x7e || c < 0x20, cu)
-        bad === nothing || throw(SpiceError(:illegalcharacter, "dafac: a nonprinting " *
-            "character was encountered in the comment buffer. Value: $(Int(cu[bad]))"))
+        bad === nothing || throw(
+            SpiceError(
+                :illegalcharacter, "dafac: a nonprinting " *
+                    "character was encountered in the comment buffer. Value: $(Int(cu[bad]))"
+            )
+        )
         texts[i] = cu
         nchars += length(cu)
     end
@@ -626,8 +700,12 @@ call that throws does not change the file.
 """
 function dafdc(h::DAFHandle)
     _daf_check_write(h, "dafdc")
-    h.adding && throw(SpiceError(:dafnewconflict,
-        "dafdc: an array is begun and not ended in $(h.path); call dafena first"))
+    h.adding && throw(
+        SpiceError(
+            :dafnewconflict,
+            "dafdc: an array is begun and not ended in $(h.path); call dafena first"
+        )
+    )
     _, fward, bward, free = _daf_filerecord(h, "dafdc")
     remove = fward - 2
     remove < 1 && return nothing
@@ -644,13 +722,13 @@ function dafdc(h::DAFHandle)
         _daf_write_drec!(h, begblk - remove, drec)
         crec, _ = _daf_crec(h, begblk + 1)
         _daf_write_crec!(h, begblk + 1 - remove, crec)
-        for recno in begblk+2:endblk
+        for recno in (begblk + 2):endblk
             data, there = _daf_drec(h, recno)
             there && _daf_write_drec!(h, recno - remove, data)
         end
         begblk = next
     end
-    _daf_write_filerecord!(h; fward=fward - remove, bward=bward - remove, free=free - decr)
+    _daf_write_filerecord!(h; fward = fward - remove, bward = bward - remove, free = free - decr)
     _daf_shift_addresses!(h, -decr)
     return nothing
 end

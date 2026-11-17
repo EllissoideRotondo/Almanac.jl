@@ -10,8 +10,10 @@ using ForwardDiff
 
 @testset "prepared queries" begin
     earth(et) = [1.5e8 + 1.0e-3 * et, -2.0e7 + 29.0 * et, 3.0e6 - 0.5 * et, 1.0e-3, 29.0, -0.5]
-    probe(et) = [7000.0 + 0.002 * et, -1200.0 + 7.4 * sin(1e-3 * et), 300.0, 0.002,
-        7.4e-3 * cos(1e-3 * et), 0.0]
+    probe(et) = [
+        7000.0 + 0.002 * et, -1200.0 + 7.4 * sin(1.0e-3 * et), 300.0, 0.002,
+        7.4e-3 * cos(1.0e-3 * et), 0.0,
+    ]
     t0, t1 = -86400.0, 86400.0
     ctx = SpiceContext()
     pdpool(ctx, "BODY399_POLE_RA", [10.0, 0.1, 0.0])
@@ -20,7 +22,7 @@ using ForwardDiff
     add_ephemeris!(earth, ctx, 399, 0, "J2000", t0, t1)
     add_ephemeris!(probe, ctx, -1000, "EARTH", "J2000", t0, t1)
     boddef(ctx, "PROBE", -1000)
-    ets = range(t0 + 1000, t1 - 1000; length=5)
+    ets = range(t0 + 1000, t1 - 1000; length = 5)
 
     @testset "the results of spkezr and spkpos, bit for bit" begin
         for corr in ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT", "XLT+S", "XCN", "XCN+S"),
@@ -52,7 +54,7 @@ using ForwardDiff
         local other = SpiceContext()
         add_ephemeris!(et -> probe(et) .+ 1, other, -1000, 399, "J2000", t0, t1)
         @test q(0.0) === before                       # another context: no effect
-        add_ephemeris!(et -> probe(et) .+ 1, ctx, -1000, 399, "J2000", -10.0, 10.0; name="later")
+        add_ephemeris!(et -> probe(et) .+ 1, ctx, -1000, 399, "J2000", -10.0, 10.0; name = "later")
         @test q(0.0) === before                       # a later load: the query keeps its kernels
         @test state_query(ctx, "PROBE", "J2000", "NONE", "EARTH")(0.0)[1][1] == before[1][1] + 1
         unload(ctx, "later")
@@ -63,7 +65,7 @@ using ForwardDiff
         g(et) = spkpos(q, et)[1]
         h(et) = spkpos(ctx, "PROBE", et, "IAU_EARTH", "CN+S", "EARTH")[1]
         @test ForwardDiff.derivative(g, 100.0) == ForwardDiff.derivative(h, 100.0)
-        many = collect(range(t0 + 1000, t1 - 1000; length=2000))
+        many = collect(range(t0 + 1000, t1 - 1000; length = 2000))
         serial = [q(et) for et in many]
         par = similar(serial)
         Threads.@threads for i in eachindex(many)

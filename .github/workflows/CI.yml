@@ -51,3 +51,43 @@ jobs:
       - uses: julia-actions/julia-runtest@v1
         with:
           coverage: false
+  coverage:
+    # Line coverage of src/ in one job, kept as an artifact (lcov.info); the manual
+    # quotes the figure of this job.
+    name: Coverage (Julia 1, ubuntu-latest)
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions:
+      actions: write
+      contents: read
+    env:
+      JULIA_NUM_THREADS: 4
+      ALMANAC_REQUIRE_KERNELS: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+      - name: Cache the test kernels
+        uses: actions/cache@v4
+        with:
+          path: test/data
+          key: kernels-${{ hashFiles('test/kernels.jl') }}
+          restore-keys: kernels-
+          enableCrossOsArchive: true
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: true
+      - uses: julia-actions/julia-processcoverage@v1
+        with:
+          directories: src,ext
+      - name: Line coverage
+        run: |
+          awk -F'[:,]' '/^LH:/ {h += $2} /^LF:/ {f += $2} END {printf "lines hit %d of %d: %.1f %%\n", h, f, 100 * h / f}' lcov.info | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lcov
+          path: lcov.info

@@ -10,8 +10,8 @@
 import AllocCheck
 
 group("allocation proof: numeric kernels (AllocCheck)") do
-    V = SVector{3,Float64}; V4 = SVector{4,Float64}; V6 = SVector{6,Float64}
-    M = SMatrix{3,3,Float64,9}; F = Float64
+    V = SVector{3, Float64}; V4 = SVector{4, Float64}; V6 = SVector{6, Float64}
+    M = SMatrix{3, 3, Float64, 9}; F = Float64
     ctx = neo_context([Kernels.LSK, Kernels.DE440S])
     tab = ephemeris_table(ctx, "EARTH", 0.0, 86400.0 * 30, "J2000", "NONE", "SUN")
     cases = Any[
@@ -28,7 +28,7 @@ group("allocation proof: numeric kernels (AllocCheck)") do
         (nearpt, (V, F, F, F)), (surfpt, (V, V, F, F, F)), (surfnm, (F, F, F, V)),
         (npedln, (F, F, F, V, V)), (dvhat, (V6,)), (dvdot, (V6, V6)), (dvcrss, (V6, V6)),
         (dvsep, (V6, V6)), (ducrss, (V6, V6)),
-        (prop2b, (F, V6, F)), (conics, (SVector{8,Float64}, F)), (oscelt, (V6, F, F)),
+        (prop2b, (F, V6, F)), (conics, (SVector{8, Float64}, F)), (oscelt, (V6, F, F)),
         (stelab, (V, V)), (deltet, (SpiceContext, F, String)), (unitim, (SpiceContext, F, String, String)),
         (table_state, (typeof(tab), F)), (table_position, (typeof(tab), F)),
         (table_jet, (typeof(tab), F, Val{2})),

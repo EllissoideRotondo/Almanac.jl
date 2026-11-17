@@ -23,10 +23,14 @@
 @inline _gf_xfi(R, dR, r, v) = (_m_mtxv(R, r), _m_mtxv(dR, r) + _m_mtxv(R, v))
 
 const _GF_ZERO3 = zero(Vec3{Float64})
-const _GF_ZERO6 = zero(SVector{6,Float64})
+const _GF_ZERO6 = zero(SVector{6, Float64})
 
-@noinline _gf_bad_method(what::String, method) = throw(SpiceError(:notsupported,
-    "$what computation method $method is not supported by this routine."))
+@noinline _gf_bad_method(what::String, method) = throw(
+    SpiceError(
+        :notsupported,
+        "$what computation method $method is not supported by this routine."
+    )
+)
 
 """
     _gf_fixed_frame(ks, ref, targ)
@@ -37,8 +41,12 @@ known (`SpiceError(:noframe)`) and centered on `targ` (`:invalidframe`).
 function _gf_fixed_frame(ks::KernelSet, ref::Int32, targ::Int32)
     center, _, found = _geo_frinfo(ks, ref)
     found || throw(SpiceError(:noframe, "Input reference frame $ref was not recognized."))
-    center == targ || throw(SpiceError(:invalidframe, "Input reference frame $ref is " *
-        "centered on body $center instead of body $targ."))
+    center == targ || throw(
+        SpiceError(
+            :invalidframe, "Input reference frame $ref is " *
+                "centered on body $center instead of body $targ."
+        )
+    )
     return nothing
 end
 
@@ -61,8 +69,10 @@ point and its rate (`zzstelab`) are added to the observer-target state.
 Contract: `corr.uselt`. `found` is false if `point` returns `nothing`. No allocation
 for a `point` that does not allocate.
 """
-function _gf_ltstate(ks::KernelSet, targ::Int32, obs::Int32, ref::Int32, corr::Aberration,
-        et::Float64, spoint::Vec3{Float64}, trgepc::Float64, nitr::Int, point::F) where {F}
+function _gf_ltstate(
+        ks::KernelSet, targ::Int32, obs::Int32, ref::Int32, corr::Aberration,
+        et::Float64, spoint::Vec3{Float64}, trgepc::Float64, nitr::Int, point::F
+    ) where {F}
     xmit = corr.transmit
     robs, vobs = _ssb(ks, obs, et, _GF_J2000)
     rt0, vt0 = _ssb(ks, targ, trgepc, _GF_J2000)
@@ -71,7 +81,7 @@ function _gf_ltstate(ks::KernelSet, targ::Int32, obs::Int32, ref::Int32, corr::A
     if corr.stellar
         # `qderiv` of the velocity of the observer over one second on each side
         acc = 0.5 * _ssb(ks, obs, et + 1.0, _GF_J2000)[2] +
-              (-0.5) * _ssb(ks, obs, et - 1.0, _GF_J2000)[2]
+            (-0.5) * _ssb(ks, obs, et - 1.0, _GF_J2000)[2]
     end
     pr = spoint
     pv = _GF_ZERO3
@@ -123,7 +133,7 @@ struct GFSubObserverVector <: GFVector
     ref::Int32
     method::String
     near::Int8
-    radii::NTuple{3,Float64}
+    radii::NTuple{3, Float64}
 end
 
 _gf_ks(v::GFSubObserverVector) = v.ks
@@ -131,8 +141,10 @@ _gf_vecframe(v::GFSubObserverVector) = v.ref
 _gf_vecexist(::GFSubObserverVector, cnfine::Window, run::_GFRun) = copy(cnfine)
 
 @inline function _gf_vecpos(v::GFSubObserverVector, et::Float64)
-    spoint, _, _ = _geo_subpnt(v.ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref, v.corr,
-        v.obs)
+    spoint, _, _ = _geo_subpnt(
+        v.ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref, v.corr,
+        v.obs
+    )
     return spoint, true
 end
 
@@ -143,21 +155,31 @@ State of the sub-point for the body-fixed state `(or, ov)` of the observer: `dne
 for the nearest point, `surfpv` with the ray toward the center otherwise. Throws
 `SpiceError(:degeneratecase)` where the velocity is not defined.
 """
-@inline function _gf_subpoint_state(near::Bool, or::Vec3{Float64}, ov::Vec3{Float64},
-        radii::NTuple{3,Float64})
+@inline function _gf_subpoint_state(
+        near::Bool, or::Vec3{Float64}, ov::Vec3{Float64},
+        radii::NTuple{3, Float64}
+    )
     a, b, c = radii
     fxo = vcat(or, ov)
     if near
         res = dnearp(fxo, a, b, c)
-        res === nothing && throw(SpiceError(:degeneratecase, "The sub-observer state " *
-            "could could not be computed because the velocity was not well defined. " *
-            "DNEARP returned \"not found.\""))
+        res === nothing && throw(
+            SpiceError(
+                :degeneratecase, "The sub-observer state " *
+                    "could could not be computed because the velocity was not well defined. " *
+                    "DNEARP returned \"not found.\""
+            )
+        )
         return _gf_pv(res[1])
     end
     st = surfpv(fxo, -fxo, a, b, c)
-    st === nothing && throw(SpiceError(:degeneratecase, "The sub-observer state could " *
-        "could not be computed because the velocity was not well defined. SURFPV " *
-        "returned \"not found.\""))
+    st === nothing && throw(
+        SpiceError(
+            :degeneratecase, "The sub-observer state could " *
+                "could not be computed because the velocity was not well defined. SURFPV " *
+                "returned \"not found.\""
+        )
+    )
     return _gf_pv(st)
 end
 
@@ -178,10 +200,14 @@ function _gf_vecstate(v::GFSubObserverVector, et::Float64)
         pr, pv = _gf_subpoint_state(near, -tr, -tv, radii)
         return vcat(pr, pv), true
     end
-    spoint, trgepc, _ = _geo_subpnt(v.ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref,
-        v.corr, v.obs)
-    return _gf_ltstate(v.ks, v.targ, v.obs, v.ref, v.corr, et, spoint, trgepc, 2,
-        (or, ov, R, dR) -> _gf_subpoint_state(near, or, ov, radii))
+    spoint, trgepc, _ = _geo_subpnt(
+        v.ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref,
+        v.corr, v.obs
+    )
+    return _gf_ltstate(
+        v.ks, v.targ, v.obs, v.ref, v.corr, et, spoint, trgepc, 2,
+        (or, ov, R, dR) -> _gf_subpoint_state(near, or, ov, radii)
+    )
 end
 
 # --- surface intercept point -------------------------------------------------------------
@@ -203,7 +229,7 @@ struct GFInterceptVector <: GFVector
     ref::Int32
     method::String
     ok::Bool
-    radii::NTuple{3,Float64}
+    radii::NTuple{3, Float64}
     dref::Int32
     dctr::Int32
     dvec::Vec3{Float64}
@@ -213,8 +239,10 @@ _gf_ks(v::GFInterceptVector) = v.ks
 _gf_vecframe(v::GFInterceptVector) = v.ref
 
 @inline function _gf_vecpos(v::GFInterceptVector, et::Float64)
-    res = _geo_sincpt(v.ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref, v.corr, v.obs,
-        v.dref, v.dvec)
+    res = _geo_sincpt(
+        v.ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref, v.corr, v.obs,
+        v.dref, v.dvec
+    )
     res === nothing && return _GF_ZERO3, false
     return res[1], true
 end
@@ -243,7 +271,7 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
         dr, dv = _gf_xf(R, dR, j2r, j2v)
         st = surfpv(vcat(-tr, -tv), vcat(dr, dv), a, b, c)
         st === nothing && return _GF_ZERO6, false
-        return SVector{6,Float64}(st), true
+        return SVector{6, Float64}(st), true
     end
     if v.obs == v.dctr
         Rd, dRd = frame_jet(ks, v.dref, _GF_J2000, et, Val(1))
@@ -254,20 +282,24 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
         dRd = (s * dltctr + 1.0) * dRd
     end
     j2r, j2v = _gf_xf(Rd, dRd, v.dvec, _GF_ZERO3)
-    res = _geo_sincpt(ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref, corr, v.obs,
-        v.dref, v.dvec)
+    res = _geo_sincpt(
+        ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref, corr, v.obs,
+        v.dref, v.dvec
+    )
     res === nothing && return _GF_ZERO6, false
     spoint, trgepc, _ = res
-    return _gf_ltstate(ks, v.targ, v.obs, v.ref, corr, et, spoint, trgepc, 3,
+    return _gf_ltstate(
+        ks, v.targ, v.obs, v.ref, corr, et, spoint, trgepc, 3,
         let j2r = j2r, j2v = j2v      # assigned in two branches: bind them for the closure
-        function (or, ov, R, dR)
-            local dr, dv, st            # not the variables of the same names above
-            dr, dv = _gf_xf(R, dR, j2r, j2v)
-            st = surfpv(vcat(or, ov), vcat(dr, dv), a, b, c)
-            st === nothing && return nothing
-            return _gf_pv(SVector{6,Float64}(st))
+            function (or, ov, R, dR)
+                local dr, dv, st            # not the variables of the same names above
+                dr, dv = _gf_xf(R, dR, j2r, j2v)
+                st = surfpv(vcat(or, ov), vcat(dr, dv), a, b, c)
+                st === nothing && return nothing
+                return _gf_pv(SVector{6, Float64}(st))
+            end
         end
-        end)
+    )
 end
 
 """
@@ -280,7 +312,7 @@ interval that is shorter than `2 amount` is removed.
 function _gf_wncond(w::Window, amount::Float64)
     d = Float64[]
     for i in 1:wncard(w)                 # invariant: d holds the contracted intervals before i
-        a = w.data[2i-1] + amount
+        a = w.data[2i - 1] + amount
         b = w.data[2i] - amount
         a > b || push!(d, a, b)
     end
@@ -318,36 +350,54 @@ planetographic systems), and for the intercept the ray (`:zerovector`, `:noframe
 `chkctr` is the comparison that CSPICE makes with the vector definition as the caller
 wrote it: it is true for `gfsubc` and `gfsntc`.
 """
-function _gf_surface_coordinate(ks::KernelSet, intercept::Bool, chkctr::Bool,
+function _gf_surface_coordinate(
+        ks::KernelSet, intercept::Bool, chkctr::Bool,
         target::NameOrID, frame::NameOrID, method::AbstractString, abcorr::AbcorrArg,
         obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector, crdsys::AbstractString,
-        coord::AbstractString)
+        coord::AbstractString
+    )
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer")
-    targ == obs && throw(SpiceError(:bodiesnotdistinct,
-        "The observer and target must be distinct objects, but are not: " *
-        "OBSRVR = $obsrvr; TARGET = $target."))
+    targ == obs && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer and target must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr; TARGET = $target."
+        )
+    )
     corr = _geo_abcorr(abcorr)
     sys, idx = _gf_sysidx(crdsys, coord)
     ref = _geo_namfrm(ks, frame isa AbstractString ? strip(frame, ' ') : frame)
     center, _, found = _geo_frinfo(ks, ref)
     found || throw(SpiceError(:noframe, "Frame system did not recognize frame $frame."))
-    (chkctr && center != targ) && throw(SpiceError(:invalidframe, "Vector definition " *
-        "method is $(intercept ? "SURFACE INTERCEPT POINT" : "SUB-OBSERVER POINT"), but " *
-        "input reference frame $frame has center $center. For this vector definition, " *
-        "the frame must be centered on the target body $target."))
-    bodfnd(ks, center, "RADII") || throw(SpiceError(:badframe, "No RADII data in kernel " *
-        "pool for frame '$frame' center body $center. Confirm the proper input frame. " *
-        "Bodies {0,..,9} represent barycenters and so lack physical properties."))
+    (chkctr && center != targ) && throw(
+        SpiceError(
+            :invalidframe, "Vector definition " *
+                "method is $(intercept ? "SURFACE INTERCEPT POINT" : "SUB-OBSERVER POINT"), but " *
+                "input reference frame $frame has center $center. For this vector definition, " *
+                "the frame must be centered on the target body $target."
+        )
+    )
+    bodfnd(ks, center, "RADII") || throw(
+        SpiceError(
+            :badframe, "No RADII data in kernel " *
+                "pool for frame '$frame' center body $center. Confirm the proper input frame. " *
+                "Bodies {0,..,9} represent barycenters and so lack physical properties."
+        )
+    )
     radii = _gf_radii(ks, center)
     re = 0.0
     f = 0.0
     sense = 0
     if sys == _GF_GEODETIC || sys == _GF_PLANETOGRAPHIC
-        radii[1] == radii[2] || throw(SpiceError(:notsupported, "Central body $center " *
-            "of reference frame $frame has radii $(radii[1]) $(radii[2]) $(radii[3]). " *
-            "Unequal equatorial ellipsoid radii are not supported for " *
-            "$(_GF_SYSNMS[sys]) coordinates."))
+        radii[1] == radii[2] || throw(
+            SpiceError(
+                :notsupported, "Central body $center " *
+                    "of reference frame $frame has radii $(radii[1]) $(radii[2]) $(radii[3]). " *
+                    "Unequal equatorial ellipsoid radii are not supported for " *
+                    "$(_GF_SYSNMS[sys]) coordinates."
+            )
+        )
         re = radii[1]
         f = (radii[1] - radii[3]) / radii[1]
         if sys == _GF_PLANETOGRAPHIC
@@ -359,18 +409,24 @@ function _gf_surface_coordinate(ks::KernelSet, intercept::Bool, chkctr::Bool,
     rad = (radii[1], radii[2], radii[3])
     if !intercept
         near = _dsk_eqstr(meth, "Near point: ellipsoid") ? Int8(1) :
-               _dsk_eqstr(meth, "Intercept: ellipsoid") ? Int8(0) : Int8(-1)
+            _dsk_eqstr(meth, "Intercept: ellipsoid") ? Int8(0) : Int8(-1)
         vec = GFSubObserverVector(ks, targ, obs, corr, ref, meth, near, rad)
         return GFCoordinate(vec, sys, idx, re, f, sense, center)
     end
     dv = _geo_pos(dvec)
-    (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(SpiceError(:zerovector,
-        "Ray's direction vector is the zero vector. This variable might be uninitialized."))
+    (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(
+        SpiceError(
+            :zerovector,
+            "Ray's direction vector is the zero vector. This variable might be uninitialized."
+        )
+    )
     dfr = _geo_namfrm(ks, dref isa AbstractString ? strip(dref, ' ') : dref)
     dctr, _, dfound = _geo_frinfo(ks, dfr)
     dfound || throw(SpiceError(:noframe, "Frame system did not recognize frame $dref."))
-    vec = GFInterceptVector(ks, targ, obs, corr, ref, meth, _dsk_eqstr(meth, "Ellipsoid"),
-        rad, dfr, dctr, dv)
+    vec = GFInterceptVector(
+        ks, targ, obs, corr, ref, meth, _dsk_eqstr(meth, "Ellipsoid"),
+        rad, dfr, dctr, dv
+    )
     return GFCoordinate(vec, sys, idx, re, f, sense, center)
 end
 
@@ -430,27 +486,39 @@ gfsubc("MARS", "IAU_MARS", "Near point: ellipsoid", "LT+S", "EARTH", "GEODETIC",
 
 See also [`gfsntc`](@ref), [`gfposc`](@ref), [`subpnt`](@ref).
 """
-function gfsubc(ks::KernelSet, target::NameOrID, fixref::NameOrID, method::AbstractString,
+function gfsubc(
+        ks::KernelSet, target::NameOrID, fixref::NameOrID, method::AbstractString,
         abcorr::AbcorrArg, obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString,
         relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window;
-        tol::Real=_GF_CNVTOL, bail=nothing, report=nothing, threads::Bool=false)
+        tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
-    q = _gf_surface_coordinate(ks, false, true, target, fixref, method, abcorr, obsrvr, 0,
-        _GF_ZERO3, crdsys, coord)
+    q = _gf_surface_coordinate(
+        ks, false, true, target, fixref, method, abcorr, obsrvr, 0,
+        _GF_ZERO3, crdsys, coord
+    )
     return _gf_search(q, relate, refval, adjust, cnfine, run)
 end
-gfsubc(ctx::SpiceContext, target::NameOrID, fixref::NameOrID, method::AbstractString,
+gfsubc(
+    ctx::SpiceContext, target::NameOrID, fixref::NameOrID, method::AbstractString,
     abcorr::AbcorrArg, obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString,
     relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window;
-    tol::Real=gfstol(ctx), kw...) =
-    gfsubc(kernelset(ctx), target, fixref, method, abcorr, obsrvr, crdsys, coord, relate,
-        refval, adjust, step, cnfine; tol, kw...)
-gfsubc(target::NameOrID, fixref::NameOrID, method::AbstractString, abcorr::AbcorrArg,
+    tol::Real = gfstol(ctx), kw...
+) =
+    gfsubc(
+    kernelset(ctx), target, fixref, method, abcorr, obsrvr, crdsys, coord, relate,
+    refval, adjust, step, cnfine; tol, kw...
+)
+gfsubc(
+    target::NameOrID, fixref::NameOrID, method::AbstractString, abcorr::AbcorrArg,
     obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString, relate::AbstractString,
-    refval::Real, adjust::Real, step::Real, cnfine::Window; kw...) =
-    gfsubc(default_context(), target, fixref, method, abcorr, obsrvr, crdsys, coord, relate,
-        refval, adjust, step, cnfine; kw...)
+    refval::Real, adjust::Real, step::Real, cnfine::Window; kw...
+) =
+    gfsubc(
+    default_context(), target, fixref, method, abcorr, obsrvr, crdsys, coord, relate,
+    refval, adjust, step, cnfine; kw...
+)
 
 """
     gfsntc([ctx,] target, fixref, method, abcorr, obsrvr, dref, dvec, crdsys, coord,
@@ -485,26 +553,38 @@ Throws the errors of [`gfsubc`](@ref), with `"Ellipsoid"` as the only method, an
 
 See also [`gfsubc`](@ref), [`gfposc`](@ref), [`sincpt`](@ref).
 """
-function gfsntc(ks::KernelSet, target::NameOrID, fixref::NameOrID, method::AbstractString,
+function gfsntc(
+        ks::KernelSet, target::NameOrID, fixref::NameOrID, method::AbstractString,
         abcorr::AbcorrArg, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector,
         crdsys::AbstractString, coord::AbstractString, relate::AbstractString,
-        refval::Real, adjust::Real, step::Real, cnfine::Window; tol::Real=_GF_CNVTOL,
-        bail=nothing, report=nothing, threads::Bool=false)
+        refval::Real, adjust::Real, step::Real, cnfine::Window; tol::Real = _GF_CNVTOL,
+        bail = nothing, report = nothing, threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
-    q = _gf_surface_coordinate(ks, true, true, target, fixref, method, abcorr, obsrvr,
-        dref, dvec, crdsys, coord)
+    q = _gf_surface_coordinate(
+        ks, true, true, target, fixref, method, abcorr, obsrvr,
+        dref, dvec, crdsys, coord
+    )
     return _gf_search(q, relate, refval, adjust, cnfine, run)
 end
-gfsntc(ctx::SpiceContext, target::NameOrID, fixref::NameOrID, method::AbstractString,
+gfsntc(
+    ctx::SpiceContext, target::NameOrID, fixref::NameOrID, method::AbstractString,
     abcorr::AbcorrArg, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector,
     crdsys::AbstractString, coord::AbstractString, relate::AbstractString, refval::Real,
-    adjust::Real, step::Real, cnfine::Window; tol::Real=gfstol(ctx), kw...) =
-    gfsntc(kernelset(ctx), target, fixref, method, abcorr, obsrvr, dref, dvec, crdsys,
-        coord, relate, refval, adjust, step, cnfine; tol, kw...)
-gfsntc(target::NameOrID, fixref::NameOrID, method::AbstractString, abcorr::AbcorrArg,
+    adjust::Real, step::Real, cnfine::Window; tol::Real = gfstol(ctx), kw...
+) =
+    gfsntc(
+    kernelset(ctx), target, fixref, method, abcorr, obsrvr, dref, dvec, crdsys,
+    coord, relate, refval, adjust, step, cnfine; tol, kw...
+)
+gfsntc(
+    target::NameOrID, fixref::NameOrID, method::AbstractString, abcorr::AbcorrArg,
     obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector, crdsys::AbstractString,
     coord::AbstractString, relate::AbstractString, refval::Real, adjust::Real, step::Real,
-    cnfine::Window; kw...) =
-    gfsntc(default_context(), target, fixref, method, abcorr, obsrvr, dref, dvec, crdsys,
-        coord, relate, refval, adjust, step, cnfine; kw...)
+    cnfine::Window; kw...
+) =
+    gfsntc(
+    default_context(), target, fixref, method, abcorr, obsrvr, dref, dvec, crdsys,
+    coord, relate, refval, adjust, step, cnfine; kw...
+)

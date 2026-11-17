@@ -41,9 +41,9 @@ import ForwardDiff
 const LIBCSPICE = SPICE.libcspice
 const CInt = Cint                  # `SpiceInt`, and `integer`, `logical`, `ftnlen` of f2c
 
-const TYPE_RTOL = 5e-13
-const AD_VEL_RTOL = (1e-10, 1e-8)   # orders 2 and 3 of spkder
-const FD_VEL_RTOL = 1e-5
+const TYPE_RTOL = 5.0e-13
+const AD_VEL_RTOL = (1.0e-10, 1.0e-8)   # orders 2 and 3 of spkder
+const FD_VEL_RTOL = 1.0e-5
 
 const EARTH = 399
 const GM_EARTH = 398600.4418
@@ -105,7 +105,7 @@ function uneven_epochs(rng, n, t0, step)
     out = Vector{Float64}(undef, n)
     out[1] = t0
     for i in 2:n
-        out[i] = out[i-1] + step * (0.7 + 0.6 * rand(rng))
+        out[i] = out[i - 1] + step * (0.7 + 0.6 * rand(rng))
     end
     return out
 end
@@ -113,26 +113,40 @@ end
 # --- segment writers ------------------------------------------------------------------
 
 function write_type5!(h, body, frame, states, epochs)
-    ccall((:spkw05_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
-            Cdouble, CInt, Ref{Cdouble}, Ref{Cdouble}), h, body, EARTH, frame, epochs[1],
-        epochs[end], "type 5", GM_EARTH, length(epochs), states, epochs)
-    cspice_check()
+    ccall(
+        (:spkw05_c, LIBCSPICE), Cvoid, (
+            CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
+            Cdouble, CInt, Ref{Cdouble}, Ref{Cdouble},
+        ), h, body, EARTH, frame, epochs[1],
+        epochs[end], "type 5", GM_EARTH, length(epochs), states, epochs
+    )
+    return cspice_check()
 end
 
 "Types 8 and 12: states at equal steps."
 function write_equal!(h, dtype, body, frame, degree, states, epoch1, step)
     n = size(states, 2)
     last = epoch1 + (n - 1) * step
-    types = (CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring, CInt, CInt, Ref{Cdouble},
-        Cdouble, Cdouble)
+    types = (
+        CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring, CInt, CInt, Ref{Cdouble},
+        Cdouble, Cdouble,
+    )
     if dtype == 8
-        ccall((:spkw08_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
-                Cstring, CInt, CInt, Ref{Cdouble}, Cdouble, Cdouble), h, body, EARTH, frame,
-            epoch1, last, "type 8", degree, n, states, epoch1, step)
+        ccall(
+            (:spkw08_c, LIBCSPICE), Cvoid, (
+                CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
+                Cstring, CInt, CInt, Ref{Cdouble}, Cdouble, Cdouble,
+            ), h, body, EARTH, frame,
+            epoch1, last, "type 8", degree, n, states, epoch1, step
+        )
     else
-        ccall((:spkw12_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
-                Cstring, CInt, CInt, Ref{Cdouble}, Cdouble, Cdouble), h, body, EARTH, frame,
-            epoch1, last, "type 12", degree, n, states, epoch1, step)
+        ccall(
+            (:spkw12_c, LIBCSPICE), Cvoid, (
+                CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
+                Cstring, CInt, CInt, Ref{Cdouble}, Cdouble, Cdouble,
+            ), h, body, EARTH, frame,
+            epoch1, last, "type 12", degree, n, states, epoch1, step
+        )
     end
     cspice_check()
     return last
@@ -142,22 +156,34 @@ end
 function write_unequal!(h, dtype, body, frame, degree, states, epochs)
     n = length(epochs)
     if dtype == 9
-        ccall((:spkw09_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
-                Cstring, CInt, CInt, Ref{Cdouble}, Ref{Cdouble}), h, body, EARTH, frame,
-            epochs[1], epochs[end], "type 9", degree, n, states, epochs)
+        ccall(
+            (:spkw09_c, LIBCSPICE), Cvoid, (
+                CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
+                Cstring, CInt, CInt, Ref{Cdouble}, Ref{Cdouble},
+            ), h, body, EARTH, frame,
+            epochs[1], epochs[end], "type 9", degree, n, states, epochs
+        )
     else
-        ccall((:spkw13_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
-                Cstring, CInt, CInt, Ref{Cdouble}, Ref{Cdouble}), h, body, EARTH, frame,
-            epochs[1], epochs[end], "type 13", degree, n, states, epochs)
+        ccall(
+            (:spkw13_c, LIBCSPICE), Cvoid, (
+                CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
+                Cstring, CInt, CInt, Ref{Cdouble}, Ref{Cdouble},
+            ), h, body, EARTH, frame,
+            epochs[1], epochs[end], "type 13", degree, n, states, epochs
+        )
     end
-    cspice_check()
+    return cspice_check()
 end
 
 function write_type18!(h, subtyp, body, frame, degree, packets, epochs)
-    ccall((:spkw18_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
-            Cstring, CInt, CInt, Ref{Cdouble}, Ref{Cdouble}), h, subtyp, body, EARTH, frame,
-        epochs[1], epochs[end], "type 18", degree, length(epochs), packets, epochs)
-    cspice_check()
+    ccall(
+        (:spkw18_c, LIBCSPICE), Cvoid, (
+            CInt, CInt, CInt, CInt, Cstring, Cdouble, Cdouble,
+            Cstring, CInt, CInt, Ref{Cdouble}, Ref{Cdouble},
+        ), h, subtyp, body, EARTH, frame,
+        epochs[1], epochs[end], "type 18", degree, length(epochs), packets, epochs
+    )
+    return cspice_check()
 end
 
 """
@@ -173,12 +199,16 @@ function write_type19!(h, body, frame, minis, bounds, later::Bool)
     packts = reduce(vcat, [vec(m[3]) for m in minis])
     epochs = reduce(vcat, [m[4] for m in minis])
     seg = "type 19"
-    ccall((:spkw19_, LIBCSPICE), CInt, (Ref{CInt}, Ref{CInt}, Ref{CInt}, Ptr{UInt8},
+    ccall(
+        (:spkw19_, LIBCSPICE), CInt, (
+            Ref{CInt}, Ref{CInt}, Ref{CInt}, Ptr{UInt8},
             Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{CInt}, Ref{CInt}, Ref{CInt}, Ref{CInt},
-            Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Ref{CInt}, CInt, CInt),
+            Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Ref{CInt}, CInt, CInt,
+        ),
         h, body, EARTH, frame, bounds[1], bounds[end], seg, nintvl, npkts, subtps, degres,
-        packts, epochs, bounds, CInt(later), ncodeunits(frame), ncodeunits(seg))
-    cspice_check()
+        packts, epochs, bounds, CInt(later), ncodeunits(frame), ncodeunits(seg)
+    )
+    return cspice_check()
 end
 
 "Types 1 and 21 through the Fortran-interface routines; `dlines` has one line per column."
@@ -187,17 +217,25 @@ function write_mda!(h, dtype, body, frame, first, dlines, epochs)
     n = Ref{CInt}(length(epochs))
     if dtype == 1
         @assert size(dlines, 1) == 71
-        ccall((:spkw01_, LIBCSPICE), CInt, (Ref{CInt}, Ref{CInt}, Ref{CInt}, Ptr{UInt8},
+        ccall(
+            (:spkw01_, LIBCSPICE), CInt, (
+                Ref{CInt}, Ref{CInt}, Ref{CInt}, Ptr{UInt8},
                 Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{CInt}, Ref{Cdouble}, Ref{Cdouble},
-                CInt, CInt), h, body, EARTH, frame, first, epochs[end], seg, n, dlines, epochs,
-            ncodeunits(frame), ncodeunits(seg))
+                CInt, CInt,
+            ), h, body, EARTH, frame, first, epochs[end], seg, n, dlines, epochs,
+            ncodeunits(frame), ncodeunits(seg)
+        )
     else
-        ccall((:spkw21_, LIBCSPICE), CInt, (Ref{CInt}, Ref{CInt}, Ref{CInt}, Ptr{UInt8},
+        ccall(
+            (:spkw21_, LIBCSPICE), CInt, (
+                Ref{CInt}, Ref{CInt}, Ref{CInt}, Ptr{UInt8},
                 Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{CInt}, Ref{CInt}, Ref{Cdouble},
-                Ref{Cdouble}, CInt, CInt), h, body, EARTH, frame, first, epochs[end], seg, n,
-            size(dlines, 1), dlines, epochs, ncodeunits(frame), ncodeunits(seg))
+                Ref{Cdouble}, CInt, CInt,
+            ), h, body, EARTH, frame, first, epochs[end], seg, n,
+            size(dlines, 1), dlines, epochs, ncodeunits(frame), ncodeunits(seg)
+        )
     end
-    cspice_check()
+    return cspice_check()
 end
 
 """
@@ -212,16 +250,16 @@ function difference_lines(rng, m, t0, epochs)
     for (i, tf) in enumerate(epochs)
         span = tf - prev
         dl[1, i] = prev + span * (0.3 + 0.4 * rand(rng))                 # TL
-        dl[2:m+1, i] = span .* (0.5 .+ rand(rng, m))                     # G
+        dl[2:(m + 1), i] = span .* (0.5 .+ rand(rng, m))                     # G
         s = orbit_state(ELLIPSE0, dl[1, i] - t0)
-        dl[m+2:2:m+6, i] = s[1:3]
-        dl[m+3:2:m+7, i] = s[4:6]
-        kq = rand(rng, m-5:m-1, 3)      # KQMAX1 = max(KQ) + 1 is not above m
+        dl[(m + 2):2:(m + 6), i] = s[1:3]
+        dl[(m + 3):2:(m + 7), i] = s[4:6]
+        kq = rand(rng, (m - 5):(m - 1), 3)      # KQMAX1 = max(KQ) + 1 is not above m
         for c in 1:3, j in 1:m
-            dl[m+7+(c-1)*m+j, i] = 1e-3 * randn(rng) / 2.0^j             # DT(j, c)
+            dl[m + 7 + (c - 1) * m + j, i] = 1.0e-3 * randn(rng) / 2.0^j             # DT(j, c)
         end
-        dl[4m+8, i] = maximum(kq) + 1                                    # KQMAX1
-        dl[4m+9:4m+11, i] = kq
+        dl[4m + 8, i] = maximum(kq) + 1                                    # KQMAX1
+        dl[(4m + 9):(4m + 11), i] = kq
         prev = tf
     end
     return dl
@@ -235,38 +273,50 @@ function write_type14!(rng, h, body, frame, degree, bounds)
     ncoef = degree + 1
     recs = Matrix{Float64}(undef, 2 + 6 * ncoef, n)
     for i in 1:n
-        recs[1, i] = (bounds[i] + bounds[i+1]) / 2
-        recs[2, i] = (bounds[i+1] - bounds[i]) / 2
+        recs[1, i] = (bounds[i] + bounds[i + 1]) / 2
+        recs[2, i] = (bounds[i + 1] - bounds[i]) / 2
         recs[3:end, i] = vcat((cheb_coefs(rng, ncoef, c <= 3 ? 7000.0 : 7.0) for c in 1:6)...)
     end
-    ccall((:spk14b_c, LIBCSPICE), Cvoid, (CInt, Cstring, CInt, CInt, Cstring, Cdouble, Cdouble,
-            CInt), h, "type 14", body, EARTH, frame, bounds[1], bounds[end], degree)
+    ccall(
+        (:spk14b_c, LIBCSPICE), Cvoid, (
+            CInt, Cstring, CInt, CInt, Cstring, Cdouble, Cdouble,
+            CInt,
+        ), h, "type 14", body, EARTH, frame, bounds[1], bounds[end], degree
+    )
     cspice_check()
     # Two calls, to cover the addition of records to a segment that is open.
     half = n ÷ 2
-    ccall((:spk14a_c, LIBCSPICE), Cvoid, (CInt, CInt, Ref{Cdouble}, Ref{Cdouble}), h, half,
-        recs[:, 1:half], bounds[1:half])
+    ccall(
+        (:spk14a_c, LIBCSPICE), Cvoid, (CInt, CInt, Ref{Cdouble}, Ref{Cdouble}), h, half,
+        recs[:, 1:half], bounds[1:half]
+    )
     cspice_check()
-    ccall((:spk14a_c, LIBCSPICE), Cvoid, (CInt, CInt, Ref{Cdouble}, Ref{Cdouble}), h, n - half,
-        recs[:, half+1:n], bounds[half+1:n])
+    ccall(
+        (:spk14a_c, LIBCSPICE), Cvoid, (CInt, CInt, Ref{Cdouble}, Ref{Cdouble}), h, n - half,
+        recs[:, (half + 1):n], bounds[(half + 1):n]
+    )
     cspice_check()
     ccall((:spk14e_c, LIBCSPICE), Cvoid, (CInt,), h)
-    cspice_check()
+    return cspice_check()
 end
 
 "Type 20: `n` records of `intlen` days from the Julian date `initjd + initfr`; returns the coverage."
 function write_type20!(rng, h, body, frame, polydg, n, intlen, dscale, tscale, initjd, initfr)
     recs = Matrix{Float64}(undef, 3 * (polydg + 2), n)
     for i in 1:n, c in 1:3
-        rows = (c - 1) * (polydg + 2) .+ (1:polydg+2)
+        rows = (c - 1) * (polydg + 2) .+ (1:(polydg + 2))
         recs[rows, i] = vcat(cheb_coefs(rng, polydg + 1, 0.01), 0.5 * randn(rng))
     end
     first = (initjd - 2451545.0 + initfr) * 86400.0
     last = first + n * intlen * 86400.0
-    ccall((:spkw20_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
-            Cdouble, CInt, CInt, Ref{Cdouble}, Cdouble, Cdouble, Cdouble, Cdouble), h, body,
+    ccall(
+        (:spkw20_c, LIBCSPICE), Cvoid, (
+            CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
+            Cdouble, CInt, CInt, Ref{Cdouble}, Cdouble, Cdouble, Cdouble, Cdouble,
+        ), h, body,
         EARTH, frame, first, last, "type 20", intlen, n, polydg, recs, dscale, tscale, initjd,
-        initfr)
+        initfr
+    )
     cspice_check()
     return first, last
 end
@@ -280,26 +330,38 @@ function write_type3!(rng, h, body, frame, degree, n, t0, intlen)
         recs[:, i] = vcat((cheb_coefs(rng, ncoef, c <= 3 ? 7000.0 : 7.0) for c in 1:6)...)
     end
     last = t0 + n * intlen
-    ccall((:spkw03_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
-            Cdouble, CInt, CInt, Ref{Cdouble}, Cdouble), h, body, EARTH, frame, t0, last, "type 3",
-        intlen, n, degree, recs, t0)
+    ccall(
+        (:spkw03_c, LIBCSPICE), Cvoid, (
+            CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
+            Cdouble, CInt, CInt, Ref{Cdouble}, Cdouble,
+        ), h, body, EARTH, frame, t0, last, "type 3",
+        intlen, n, degree, recs, t0
+    )
     cspice_check()
     return last
 end
 
 function write_type15!(h, body, frame, t0, t1, epoch, tp, pa, p, ecc, j2flg, pv, j2, radius)
-    ccall((:spkw15_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
+    ccall(
+        (:spkw15_c, LIBCSPICE), Cvoid, (
+            CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
             Cdouble, Ref{Cdouble}, Ref{Cdouble}, Cdouble, Cdouble, Cdouble, Ref{Cdouble},
-            Cdouble, Cdouble, Cdouble), h, body, EARTH, frame, t0, t1, "type 15", epoch, tp, pa,
-        p, ecc, Float64(j2flg), pv, GM_EARTH, j2, radius)
-    cspice_check()
+            Cdouble, Cdouble, Cdouble,
+        ), h, body, EARTH, frame, t0, t1, "type 15", epoch, tp, pa,
+        p, ecc, Float64(j2flg), pv, GM_EARTH, j2, radius
+    )
+    return cspice_check()
 end
 
 function write_type17!(h, body, frame, t0, t1, epoch, eqel, rapol, decpol)
-    ccall((:spkw17_c, LIBCSPICE), Cvoid, (CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
-            Cdouble, Ref{Cdouble}, Cdouble, Cdouble), h, body, EARTH, frame, t0, t1, "type 17",
-        epoch, eqel, rapol, decpol)
-    cspice_check()
+    ccall(
+        (:spkw17_c, LIBCSPICE), Cvoid, (
+            CInt, CInt, CInt, Cstring, Cdouble, Cdouble, Cstring,
+            Cdouble, Ref{Cdouble}, Cdouble, Cdouble,
+        ), h, body, EARTH, frame, t0, t1, "type 17",
+        epoch, eqel, rapol, decpol
+    )
+    return cspice_check()
 end
 
 # --- the test kernel ------------------------------------------------------------------
@@ -314,20 +376,22 @@ function write_type_kernel(path::AbstractString, rng::AbstractRNG)
     cases = TypeCase[]
     h = SPICE.spkopn(path, "Almanac test kernel", 0)
     body = -9000
-    add!(label, dtype, t0, t1, epochs, hfd; rtol=TYPE_RTOL) = push!(cases,
-        TypeCase(label, dtype, body, t0, t1, [t for t in epochs if t0 <= t <= t1], hfd, rtol))
+    add!(label, dtype, t0, t1, epochs, hfd; rtol = TYPE_RTOL) = push!(
+        cases,
+        TypeCase(label, dtype, body, t0, t1, [t for t in epochs if t0 <= t <= t1], hfd, rtol)
+    )
     J = "J2000"
 
     # Type 5: more than 100 states, so that the epoch directory is in use.
     ep = uneven_epochs(rng, 230, 1000.0, 60.0)
     body -= 1; write_type5!(h, body, J, state_matrix(ELLIPSE0, ep), ep)
-    add!("type 5, ellipse", 5, ep[1], ep[end], ep, 1e-2)
+    add!("type 5, ellipse", 5, ep[1], ep[end], ep, 1.0e-2)
     ep = uneven_epochs(rng, 40, -5000.0, 3000.0)
     body -= 1; write_type5!(h, body, J, state_matrix(HYPERBOLA0, ep), ep)
     add!("type 5, hyperbola", 5, ep[1], ep[end], ep, 1.0)
     ep = [0.0, 40000.0]
     body -= 1; write_type5!(h, body, J, state_matrix(ELLIPSE0, ep), ep)
-    add!("type 5, two states, many revolutions", 5, ep[1], ep[end], ep, 1e-2)
+    add!("type 5, two states, many revolutions", 5, ep[1], ep[end], ep, 1.0e-2)
 
     # Types 8 and 12: even and odd window sizes.
     for (dtype, degree) in ((8, 7), (8, 4), (8, 1), (12, 7), (12, 5), (12, 1))
@@ -336,28 +400,30 @@ function write_type_kernel(path::AbstractString, rng::AbstractRNG)
         body -= 1
         t1 = write_equal!(h, dtype, body, J, degree, state_matrix(ELLIPSE0, ep), t0, step)
         # Knots, and the middles between knots, where an odd window moves.
-        add!("type $dtype, degree $degree", dtype, t0, t1, vcat(ep, ep[1:end-1] .+ step / 2), 1e-3)
+        add!("type $dtype, degree $degree", dtype, t0, t1, vcat(ep, ep[1:(end - 1)] .+ step / 2), 1.0e-3)
     end
 
     # Types 9 and 13, with the largest degree and one segment in another frame.
-    for (dtype, degree, frame) in ((9, 9, J), (9, 6, J), (9, 27, J), (9, 3, "ECLIPJ2000"),
-            (13, 7, J), (13, 5, J), (13, 27, J), (13, 3, "ECLIPJ2000"))
+    for (dtype, degree, frame) in (
+            (9, 9, J), (9, 6, J), (9, 27, J), (9, 3, "ECLIPJ2000"),
+            (13, 7, J), (13, 5, J), (13, 27, J), (13, 3, "ECLIPJ2000"),
+        )
         ep = uneven_epochs(rng, 230, 500.0, 60.0)
         body -= 1; write_unequal!(h, dtype, body, frame, degree, state_matrix(ELLIPSE0, ep), ep)
-        mids = (ep[1:end-1] .+ ep[2:end]) ./ 2
-        add!("type $dtype, degree $degree, $frame", dtype, ep[1], ep[end], vcat(ep, mids), 1e-3)
+        mids = (ep[1:(end - 1)] .+ ep[2:end]) ./ 2
+        add!("type $dtype, degree $degree, $frame", dtype, ep[1], ep[end], vcat(ep, mids), 1.0e-3)
     end
     # The smallest segment that the writer accepts: as many states as the window.
     ep = uneven_epochs(rng, 4, 0.0, 60.0)
     body -= 1; write_unequal!(h, 9, body, J, 3, state_matrix(ELLIPSE0, ep), ep)
-    add!("type 9, degree 3, 4 states", 9, ep[1], ep[end], ep, 1e-3)
+    add!("type 9, degree 3, 4 states", 9, ep[1], ep[end], ep, 1.0e-3)
 
     # Type 18: both subtypes, a small and the largest window.
     for (subtyp, degree) in ((0, 7), (0, 15), (1, 7), (1, 15))
         ep = uneven_epochs(rng, 230, 500.0, 60.0)
         st = state_matrix(ELLIPSE0, ep)
         body -= 1; write_type18!(h, subtyp, body, J, degree, subtyp == 0 ? packets12(st) : st, ep)
-        add!("type 18, subtype $subtyp, degree $degree", 18, ep[1], ep[end], ep, 1e-3)
+        add!("type 18, subtype $subtyp, degree $degree", 18, ep[1], ep[end], ep, 1.0e-3)
     end
 
     # Type 19: mini-segments of the three subtypes, with packets outside the interval
@@ -368,14 +434,16 @@ function write_type_kernel(path::AbstractString, rng::AbstractRNG)
         bounds = Float64[0.0]
         for (subtyp, degree, npkt) in ((0, 7, 30), (1, 7, 130), (2, 11, 25), (1, 3, 5), (2, 3, 2))
             ep = uneven_epochs(rng, npkt, bounds[end] - (npkt > 6 ? 150.0 : 0.0), 60.0)
-            push!(bounds, npkt > 6 ? ep[end-3] + 10.0 : ep[end])
+            push!(bounds, npkt > 6 ? ep[end - 3] + 10.0 : ep[end])
             st = state_matrix(ELLIPSE0, ep)
             push!(minis, (subtyp, degree, subtyp == 0 ? packets12(st) : st, ep))
         end
         body -= 1; write_type19!(h, body, J, minis, bounds, later)
         knots = vcat(bounds, (m[4] for m in minis)...)
-        add!("type 19, mixed subtypes, select " * (later ? "later" : "earlier"), 19, bounds[1],
-            bounds[end], knots, 1e-3)
+        add!(
+            "type 19, mixed subtypes, select " * (later ? "later" : "earlier"), 19, bounds[1],
+            bounds[end], knots, 1.0e-3
+        )
     end
     minis = Any[]
     bounds = Float64[0.0]
@@ -385,27 +453,29 @@ function write_type_kernel(path::AbstractString, rng::AbstractRNG)
         push!(minis, (isodd(i) ? 1 : 2, 3, state_matrix(ELLIPSE0, ep), ep))
     end
     body -= 1; write_type19!(h, body, J, minis, bounds, true)
-    add!("type 19, 130 intervals", 19, bounds[1], bounds[end], bounds, 1e-3)
+    add!("type 19, 130 intervals", 19, bounds[1], bounds[end], bounds, 1.0e-3)
 
     # Types 1 and 21: more than 100 difference lines.
     for (dtype, m) in ((1, 15), (21, 15), (21, 25))
         t0 = 100.0
         ep = uneven_epochs(rng, 130, t0 + 80.0, 80.0)
         body -= 1; write_mda!(h, dtype, body, J, t0, difference_lines(rng, m, t0, ep), ep)
-        add!("type $dtype, order $m", dtype, t0, ep[end], ep, 1e-3)
+        add!("type $dtype, order $m", dtype, t0, ep[end], ep, 1.0e-3)
     end
 
     # Type 14: records of different lengths, more than 100 of them.
     bounds = uneven_epochs(rng, 131, -3000.0, 900.0)
     body -= 1; write_type14!(rng, h, body, J, 9, bounds)
-    add!("type 14, degree 9", 14, bounds[1], bounds[end], bounds, 1e-2)
+    add!("type 14, degree 9", 14, bounds[1], bounds[end], bounds, 1.0e-2)
     bounds = uneven_epochs(rng, 4, 0.0, 900.0)
     body -= 1; write_type14!(rng, h, body, "ECLIPJ2000", 2, bounds)
-    add!("type 14, degree 2, ECLIPJ2000", 14, bounds[1], bounds[end], bounds, 1e-2)
+    add!("type 14, degree 2, ECLIPJ2000", 14, bounds[1], bounds[end], bounds, 1.0e-2)
 
     # Type 20: scaled units (au and days) and a start that is a fraction of a day.
-    for (polydg, n, intlen, dscale, tscale) in ((8, 40, 0.5, 149597870.7, 86400.0),
-            (1, 3, 2.0, 1.0, 1.0), (12, 7, 1.25, 1000.0, 3600.0))
+    for (polydg, n, intlen, dscale, tscale) in (
+            (8, 40, 0.5, 149597870.7, 86400.0),
+            (1, 3, 2.0, 1.0, 1.0), (12, 7, 1.25, 1000.0, 3600.0),
+        )
         body -= 1
         t0, t1 = write_type20!(rng, h, body, J, polydg, n, intlen, dscale, tscale, 2451545.0, 0.25)
         add!("type 20, degree $polydg", 20, t0, t1, [t0 + k * intlen * 86400.0 for k in 0:n], 1.0)
@@ -416,23 +486,25 @@ function write_type_kernel(path::AbstractString, rng::AbstractRNG)
     tp = [sind(30.0) * sind(50.0), -cosd(30.0) * sind(50.0), cosd(50.0)]     # orbit normal
     pa = normalize(cross([0.0, 0.0, 1.0], tp))                               # in the plane
     pv = [0.0, 0.0, 1.0]
-    for (j2flg, ecc, p) in ((0, 0.2, 9000.0), (1, 0.2, 9000.0), (2, 0.05, 8000.0),
-            (3, 0.2, 9000.0), (0, 0.6, 12000.0), (0, 1.5, 20000.0), (0, 0.0, 7500.0))
+    for (j2flg, ecc, p) in (
+            (0, 0.2, 9000.0), (1, 0.2, 9000.0), (2, 0.05, 8000.0),
+            (3, 0.2, 9000.0), (0, 0.6, 12000.0), (0, 1.5, 20000.0), (0, 0.0, 7500.0),
+        )
         epoch = 1234.5
         t0, t1 = ecc > 1 ? (epoch - 4.0e4, epoch + 6.0e4) : (epoch - 8.0e4, epoch + 1.2e5)
         body -= 1
         write_type15!(h, body, J, t0, t1, epoch, tp, pa, p, ecc, j2flg, pv, 1.0826e-3, 6378.14)
-        add!("type 15, flag $j2flg, ecc $ecc", 15, t0, t1, [epoch], 1e-2)
+        add!("type 15, flag $j2flg, ecc $ecc", 15, t0, t1, [epoch], 1.0e-2)
     end
 
     # Type 17: an ellipse about a pole that is not the frame pole, and a near-circle.
-    for (hh, kk, a) in ((0.12, -0.09, 12000.0), (1e-4, 2e-4, 42164.0), (0.6, 0.55, 30000.0))
+    for (hh, kk, a) in ((0.12, -0.09, 12000.0), (1.0e-4, 2.0e-4, 42164.0), (0.6, 0.55, 30000.0))
         epoch = -777.0
         n = sqrt(GM_EARTH / a^3)
-        eqel = [a, hh, kk, 0.7, 0.2, -0.15, 3.0e-7, n * (1 + 1e-3), -5.0e-7]
+        eqel = [a, hh, kk, 0.7, 0.2, -0.15, 3.0e-7, n * (1 + 1.0e-3), -5.0e-7]
         body -= 1
         write_type17!(h, body, J, epoch - 1.0e5, epoch + 2.0e5, epoch, eqel, deg2rad(20.0), deg2rad(70.0))
-        add!("type 17, h $hh, k $kk", 17, epoch - 1.0e5, epoch + 2.0e5, [epoch], 1e-2)
+        add!("type 17, h $hh, k $kk", 17, epoch - 1.0e5, epoch + 2.0e5, [epoch], 1.0e-2)
     end
 
     # Type 3: position and velocity series apart. It is the last case, so that the cases
@@ -440,7 +512,7 @@ function write_type_kernel(path::AbstractString, rng::AbstractRNG)
     t0 = -2000.0
     body -= 1
     t1 = write_type3!(rng, h, body, J, 9, 12, t0, 900.0)
-    add!("type 3, degree 9", 3, t0, t1, [t0 + k * 900.0 for k in 0:12], 1e-2)
+    add!("type 3, degree 9", 3, t0, t1, [t0 + k * 900.0 for k in 0:12], 1.0e-2)
 
     SPICE.spkcls(h)
     @assert all(c -> c.t0 < c.t1, cases)
@@ -452,8 +524,8 @@ end
 "Epochs of the state comparison of `c`: ends, special epochs, points just inside the ends, random points."
 function case_epochs(rng, c::TypeCase, nrandom::Int)
     span = c.t1 - c.t0
-    special = length(c.epochs) > 400 ? c.epochs[1:(length(c.epochs)÷400+1):end] : c.epochs
-    near = [c.t0 + span * 1e-9, c.t1 - span * 1e-9, c.t0 + span * 1e-3, c.t1 - span * 1e-3]
+    special = length(c.epochs) > 400 ? c.epochs[1:(length(c.epochs) ÷ 400 + 1):end] : c.epochs
+    near = [c.t0 + span * 1.0e-9, c.t1 - span * 1.0e-9, c.t0 + span * 1.0e-3, c.t1 - span * 1.0e-3]
     return vcat(c.t0, c.t1, special, near, random_epochs(rng, nrandom, c.t0, c.t1))
 end
 
@@ -506,7 +578,7 @@ group("9. SPK data types against CSPICE") do
     @test sort(unique(c.dtype for c in cases)) == [1, 3, 5, 8, 9, 12, 13, 14, 15, 17, 18, 19, 20, 21]
 
     @apart @testset "states against CSPICE" begin
-        by_type = Dict{Int,Tuple{Float64,Float64}}()
+        by_type = Dict{Int, Tuple{Float64, Float64}}()
         for c in cases
             wr, wv = state_errors(ctx, c, case_epochs(rng, c, 300))
             measured(@sprintf("  %-44s position %.2e  velocity %.2e", c.label, wr, wv))
@@ -516,8 +588,12 @@ group("9. SPK data types against CSPICE") do
             by_type[c.dtype] = (max(old[1], wr), max(old[2], wv))
         end
         for dtype in sort(collect(keys(by_type)))
-            measured(@sprintf("  type %-2d  max relative difference: position %.2e  velocity %.2e",
-                dtype, by_type[dtype]...))
+            measured(
+                @sprintf(
+                    "  type %-2d  max relative difference: position %.2e  velocity %.2e",
+                    dtype, by_type[dtype]...
+                )
+            )
         end
     end
 
@@ -537,7 +613,7 @@ group("9. SPK data types against CSPICE") do
         lo, hi = max(a.t0, b.t0), min(a.t1, b.t1)
         for et in random_epochs(MersenneTwister(SEED + 90), 20, lo, hi)   # own stream
             @test spkgeo(ctx, a.body, et, "J2000", b.body)[1] ==
-                  SPICE.spkgeo(a.body, et, "J2000", b.body)[1]
+                SPICE.spkgeo(a.body, et, "J2000", b.body)[1]
         end
     end
 
@@ -554,23 +630,27 @@ group("9. SPK data types against CSPICE") do
         bodies = (-8501, -8502, -8503)
         h = SPICE.spkopn(path15, "TYPE 15", 0)
         for (body, j2flg) in zip(bodies, (0, 1, 2))
-            write_type15!(h, body, "J2000", epoch - span, epoch + span, epoch, tp, pa, p, ecc,
-                j2flg, [0.0, 0.0, 1.0], 1.0826e-3, 6378.14)
+            write_type15!(
+                h, body, "J2000", epoch - span, epoch + span, epoch, tp, pa, p, ecc,
+                j2flg, [0.0, 0.0, 1.0], 1.0826e-3, 6378.14
+            )
         end
         SPICE.spkcls(h)
         ctx15 = neo_context([path15])
         SPICE.furnsh(path15)
         try
             worst = 0.0
-            for body in bodies, revs in (3e4, -3e4, 3e5, -3e5), k in 1:5
+            for body in bodies, revs in (3.0e4, -3.0e4, 3.0e5, -3.0e5), k in 1:5
                 et = epoch + revs * period * (1 + k / 1000)
                 ref = SPICE.spkgeo(body, et, "J2000", EARTH)[1]
                 st = spkgeo(ctx15, body, et, "J2000", EARTH)[1]
-                worst = max(worst, type_reldiff(st[SOneTo(3)], ref[1:3]),
-                    type_reldiff(st[SVector(4, 5, 6)], ref[4:6]))
+                worst = max(
+                    worst, type_reldiff(st[SOneTo(3)], ref[1:3]),
+                    type_reldiff(st[SVector(4, 5, 6)], ref[4:6])
+                )
             end
             measured(@sprintf("  type 15 after 3e4 and 3e5 revolutions: largest relative difference %.2e", worst))
-            @test worst <= 1e-14
+            @test worst <= 1.0e-14
         finally
             SPICE.unload(path15)
         end
@@ -584,8 +664,8 @@ group("9. SPK data types against CSPICE") do
                 for N in 0:3
                     @test warm_alloc(alloc_type_der, ctx, c.body, et, Val(N)) == 0 skip = STACK_BUFFERS_ESCAPE
                 end
-                @test (@inferred spkgeo(ctx, c.body, et, 1, EARTH)) isa Tuple{SVector{6,Float64},Float64}
-                @test (@inferred spkder(ctx, c.body, et, 1, EARTH, Val(3))) isa NTuple{4,SVector{3,Float64}}
+                @test (@inferred spkgeo(ctx, c.body, et, 1, EARTH)) isa Tuple{SVector{6, Float64}, Float64}
+                @test (@inferred spkder(ctx, c.body, et, 1, EARTH, Val(3))) isa NTuple{4, SVector{3, Float64}}
             end
         end
     end
@@ -603,13 +683,17 @@ group("9. SPK data types against CSPICE") do
                 # compiler arranges the sums differently, so one rounding is allowed.
                 @test jet[1] ≈ state[SOneTo(3)] rtol = 4eps()
                 @test jet[2] ≈ state[SVector(4, 5, 6)] rtol = 4eps()
-                @test spkder(ctx, c.body, et, 1, EARTH, Val(2))[3] ≈ jet[3] rtol = 1e-12
+                @test spkder(ctx, c.body, et, 1, EARTH, Val(2))[3] ≈ jet[3] rtol = 1.0e-12
                 # The dual path gives the same plain values.
                 dstate = spkgeo(ctx, c.body, ForwardDiff.Dual(et, 1.0), 1, EARTH)[1]
-                @test ForwardDiff.value.(dstate) ≈ state rtol = 1e-14
+                @test ForwardDiff.value.(dstate) ≈ state rtol = 1.0e-14
                 fd = (vel(et + c.h) - vel(et - c.h)) / (2 * c.h)
-                worst .= max.(worst, (type_reldiff(jet[3], acc(et)), type_reldiff(jet[4], jerk(et)),
-                    type_reldiff(jet[3], fd)))
+                worst .= max.(
+                    worst, (
+                        type_reldiff(jet[3], acc(et)), type_reldiff(jet[4], jerk(et)),
+                        type_reldiff(jet[3], fd),
+                    )
+                )
             end
             measured(@sprintf("  %-44s AD order 2 %.1e, 3 %.1e; FD order 2 %.1e", c.label, worst...))
             @test worst[1] <= AD_VEL_RTOL[1]
@@ -628,8 +712,8 @@ group("9. SPK data types against CSPICE") do
             # are the jet of order 2 and the first-order parts the next orders.
             nested = Almanac.spk_eval(data, seg, Almanac.taylor_var(et, Val(1)), Val(2))
             @test all(map(x -> x.v, nested[k]) ≈ jet[k] for k in 1:3)
-            @test map(x -> x.d[1], nested[2]) ≈ jet[3] rtol = 1e-9
-            @test map(x -> x.d[1], nested[3]) ≈ jet[4] rtol = 1e-7
+            @test map(x -> x.d[1], nested[2]) ≈ jet[3] rtol = 1.0e-9
+            @test map(x -> x.d[1], nested[3]) ≈ jet[4] rtol = 1.0e-7
         end
         # Type 15 at the periapsis epoch (true anomaly zero, time interval zero) and type
         # 5 at a state epoch: the derivatives are finite and agree with the differences.
@@ -660,15 +744,15 @@ group("9. SPK data types against CSPICE") do
             tt = tv(t, Val(4))
             radius = 2.0 + 0.5 * tt * tt
             ang = atan(radius * sin(tt), radius * cos(tt))
-            @test collect(der(ang)) ≈ [t, 1.0, 0.0, 0.0, 0.0] atol = 1e-12
+            @test collect(der(ang)) ≈ [t, 1.0, 0.0, 0.0, 0.0] atol = 1.0e-12
         end
         # Orders that a number type carries, and the replacement of the plain value.
-        D1 = ForwardDiff.Dual{Nothing,Float64,1}
+        D1 = ForwardDiff.Dual{Nothing, Float64, 1}
         @test Almanac._ad_order(Float64) == 0
-        @test Almanac._ad_order(Almanac.Taylor{3,Float64}) == 3
+        @test Almanac._ad_order(Almanac.Taylor{3, Float64}) == 3
         @test Almanac._ad_order(D1) == 1
-        @test Almanac._ad_order(ForwardDiff.Dual{Nothing,D1,1}) == 2
-        @test Almanac._ad_order(Almanac.Taylor{2,D1}) == 3
+        @test Almanac._ad_order(ForwardDiff.Dual{Nothing, D1, 1}) == 2
+        @test Almanac._ad_order(Almanac.Taylor{2, D1}) == 3
         @test Almanac._ad_order(Rational{Int}) == 8
         @test Almanac._with_primal(3.0, 1.5) === 1.5
         y = Almanac._with_primal(tv(3.0, Val(2)), 1.5)
@@ -704,8 +788,8 @@ group("9. SPK data types against CSPICE") do
         for dt in (-5.0e4, 300.0, 9.0e5)
             ref = orbit_state(collect(vcat(r0, v0)), dt)
             p, v = Almanac._prop2b(GM_EARTH, r0, v0, dt)
-            @test p ≈ ref[1:3] rtol = 1e-13
-            @test v ≈ ref[4:6] rtol = 1e-13
+            @test p ≈ ref[1:3] rtol = 1.0e-13
+            @test v ≈ ref[4:6] rtol = 1.0e-13
         end
         @test throws_kind(() -> Almanac._prop2b(-1.0, r0, v0, 1.0), :badorbit)
         @test throws_kind(() -> Almanac._prop2b(GM_EARTH, zero(r0), v0, 1.0), :badorbit)
@@ -717,8 +801,10 @@ group("9. SPK data types against CSPICE") do
 
     @apart @testset "errors" begin
         # Type 10 (two-line elements) is not available.
-        seg10 = Almanac.Segment(Int32(-1), Int32(399), Int32(1), Int32(10), 0.0, 1.0, Int32(0),
-            1, 20, 0.0, 0.0, Int32(0), Int32(0))
+        seg10 = Almanac.Segment(
+            Int32(-1), Int32(399), Int32(1), Int32(10), 0.0, 1.0, Int32(0),
+            1, 20, 0.0, 0.0, Int32(0), Int32(0)
+        )
         @test throws_kind(() -> Almanac.spk_eval(zeros(20), seg10, 0.5, Val(1)), :notsupported)        # A count at the end of a segment that does not agree with its length. (For
         # type 3 the count is checked when the file is opened, as for type 2.)
         for c in cases
@@ -739,30 +825,36 @@ group("9. SPK data types against CSPICE") do
         end
         e(seg) = seg.eaddr
         b(seg) = seg.baddr
-        @test refuses("type 8, degree 7", :baddaf, (d, s) -> d[e(s)-2] = 0.0)             # step
-        @test refuses("type 8, degree 7", :baddaf, (d, s) -> d[e(s)-1] = 40.0)            # window
+        @test refuses("type 8, degree 7", :baddaf, (d, s) -> d[e(s) - 2] = 0.0)             # step
+        @test refuses("type 8, degree 7", :baddaf, (d, s) -> d[e(s) - 1] = 40.0)            # window
         @test refuses("type 8, degree 7", :baddaf, (d, s) -> d[e(s)] = NaN)
-        @test refuses("type 9, degree 9, J2000", :baddaf, (d, s) -> d[e(s)-1] = 500.0)
-        @test refuses("type 9, degree 9, J2000", :baddaf,                                 # equal epochs
-            (d, s) -> d[b(s)+6*230:b(s)+7*230-1] .= 0.0)
-        @test refuses("type 13, degree 7, J2000", :baddaf,
-            (d, s) -> d[b(s)+6*230:b(s)+7*230-1] .= 0.0)
-        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s)-1] = 3.0)  # odd window
-        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s)-1] = 10.0)
-        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s)-2] = 2.0)  # subtype
-        @test refuses("type 19, 130 intervals", :baddaf, (d, s) -> d[e(s)-2-131:e(s)-2] .= 1.0)
-        @test refuses("type 1, order 15", :baddaf, (d, s) -> d[b(s):b(s)+71*130-1] .= 0.0)
-        @test refuses("type 21, order 25", :baddaf, (d, s) -> d[e(s)-1] = 26.0)
-        @test refuses("type 14, degree 9", :notsupported, (d, s) -> d[e(s)-12] = 2.0)       # RDRTYP
-        @test refuses("type 14, degree 9", :baddaf, (d, s) -> d[e(s)-2] = 7.0)             # PKTSZ
-        @test refuses("type 20, degree 8", :baddaf, (d, s) -> d[e(s)-5] = 0.0)             # TSCALE
-        @test refuses("type 15, flag 0, ecc 0.2", :baddaf, (d, s) -> d[b(s)+7] = -1.0)     # P
-        @test refuses("type 15, flag 0, ecc 0.2", :baddaf, (d, s) -> d[b(s)+1:b(s)+3] .= 0.0)
-        @test refuses("type 15, flag 0, ecc 0.2", :baddaf,                                # PA along TP
-            (d, s) -> d[b(s)+4:b(s)+6] .= d[b(s)+1:b(s)+3])
-        @test refuses("type 17, h 0.12, k -0.09", :baddaf, (d, s) -> d[b(s)+2] = 0.95)     # H
-        @test refuses("type 17, h 0.12, k -0.09", :baddaf, (d, s) -> d[b(s)+1] = 0.0)      # A
-        @test refuses("type 5, ellipse", :badorbit, (d, s) -> d[e(s)-1] = 0.0)             # GM
+        @test refuses("type 9, degree 9, J2000", :baddaf, (d, s) -> d[e(s) - 1] = 500.0)
+        @test refuses(
+            "type 9, degree 9, J2000", :baddaf,                                 # equal epochs
+            (d, s) -> d[(b(s) + 6 * 230):(b(s) + 7 * 230 - 1)] .= 0.0
+        )
+        @test refuses(
+            "type 13, degree 7, J2000", :baddaf,
+            (d, s) -> d[(b(s) + 6 * 230):(b(s) + 7 * 230 - 1)] .= 0.0
+        )
+        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s) - 1] = 3.0)  # odd window
+        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s) - 1] = 10.0)
+        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s) - 2] = 2.0)  # subtype
+        @test refuses("type 19, 130 intervals", :baddaf, (d, s) -> d[(e(s) - 2 - 131):(e(s) - 2)] .= 1.0)
+        @test refuses("type 1, order 15", :baddaf, (d, s) -> d[b(s):(b(s) + 71 * 130 - 1)] .= 0.0)
+        @test refuses("type 21, order 25", :baddaf, (d, s) -> d[e(s) - 1] = 26.0)
+        @test refuses("type 14, degree 9", :notsupported, (d, s) -> d[e(s) - 12] = 2.0)       # RDRTYP
+        @test refuses("type 14, degree 9", :baddaf, (d, s) -> d[e(s) - 2] = 7.0)             # PKTSZ
+        @test refuses("type 20, degree 8", :baddaf, (d, s) -> d[e(s) - 5] = 0.0)             # TSCALE
+        @test refuses("type 15, flag 0, ecc 0.2", :baddaf, (d, s) -> d[b(s) + 7] = -1.0)     # P
+        @test refuses("type 15, flag 0, ecc 0.2", :baddaf, (d, s) -> d[(b(s) + 1):(b(s) + 3)] .= 0.0)
+        @test refuses(
+            "type 15, flag 0, ecc 0.2", :baddaf,                                # PA along TP
+            (d, s) -> d[(b(s) + 4):(b(s) + 6)] .= d[(b(s) + 1):(b(s) + 3)]
+        )
+        @test refuses("type 17, h 0.12, k -0.09", :baddaf, (d, s) -> d[b(s) + 2] = 0.95)     # H
+        @test refuses("type 17, h 0.12, k -0.09", :baddaf, (d, s) -> d[b(s) + 1] = 0.0)      # A
+        @test refuses("type 5, ellipse", :badorbit, (d, s) -> d[e(s) - 1] = 0.0)             # GM
     end
 end
 

@@ -19,25 +19,29 @@ isdefined(@__MODULE__, :EKLIB) || include("ekfixtures.jl")
 
 group("EK queries: thread safety", Kernels.LSK) do
     if Threads.nthreads() < 2
-        skip_notice("EK queries: thread safety", "Threads.nthreads() == 1; run with " *
-            "`julia --threads=8 --project=test test/runtests.jl`")
+        skip_notice(
+            "EK queries: thread safety", "Threads.nthreads() == 1; run with " *
+                "`julia --threads=8 --project=test test/runtests.jl`"
+        )
         return
     end
-    _, paths = ek_standard_files(SEED + 1; scale=0.15)      # the files of the group `ek_query`
+    _, paths = ek_standard_files(SEED + 1; scale = 0.15)      # the files of the group `ek_query`
     base = [Kernels.LSK, paths[1], paths[2]]
     extra = paths[3]
-    queries = ["SELECT GID, GNAME, WEIGHT FROM GROUPS WHERE GID < 120 ORDER BY GNAME, GID",
+    queries = [
+        "SELECT GID, GNAME, WEIGHT FROM GROUPS WHERE GID < 120 ORDER BY GNAME, GID",
         "SELECT GID FROM GROUPS WHERE GNAME LIKE '*a*' OR WEIGHT > 0.5 OR K IS NULL",
         "SELECT E.ID, G.GID, G.NOTE FROM EVENTS E, GROUPS G WHERE E.GRP = G.GID ORDER BY E.ID DESC, G.GID",
         "SELECT E.ID, L.TAG, G.T0 FROM EVENTS E, LINKS L, GROUPS G WHERE E.ID = L.EID AND L.GID <= G.GID AND G.GID < 40",
         "SELECT A.GID, B.GID FROM GROUPS A, GROUPS B WHERE A.GID = B.K AND A.GID BETWEEN 10 AND 90",
         "SELECT GID, T0 FROM GROUPS WHERE T0 > '2000 JAN 1' ORDER BY T0 DESC",
         "SELECT ID, NAME, IVEC, TAGS FROM EVENTS WHERE ID BETWEEN 20 AND 60 ORDER BY NAME DESC, ID",
-        "SELECT ID, GNAME FROM EVENTS, GROUPS WHERE VAL < WEIGHT AND ID < 12 AND GID < 30"]
+        "SELECT ID, GNAME FROM EVENTS, GROUPS WHERE VAL < WEIGHT AND ID < 12 AND GID < 30",
+    ]
     answer(ctx, q) = begin
         res, err, msg = ekfind(ctx, q)
         err && error("query failed: $msg")
-        (ntab=ekntab(ctx), rows=neo_ek_result(res))
+        (ntab = ekntab(ctx), rows = neo_ek_result(res))
     end
     ctxA = neo_context(base)
     ctxB = neo_context([base..., extra])
@@ -51,10 +55,10 @@ group("EK queries: thread safety", Kernels.LSK) do
     ek_part("parallel queries on one snapshot equal the serial results") do
         reps = 12
         par = Vector{Any}(undef, nq * reps)
-        Threads.@threads for k in 1:nq*reps
-            par[k] = answer(ctxB, queries[(k-1)%nq+1])
+        Threads.@threads for k in 1:(nq * reps)
+            par[k] = answer(ctxB, queries[(k - 1) % nq + 1])
         end
-        @test all(par[k] == ansB[(k-1)%nq+1] for k in 1:nq*reps)
+        @test all(par[k] == ansB[(k - 1) % nq + 1] for k in 1:(nq * reps))
         # One result object read by many tasks at the same time.
         res, _, _ = ekfind(ctxB, queries[3])
         serial = neo_ek_result(res)
@@ -112,9 +116,11 @@ group("EK queries: thread safety", Kernels.LSK) do
         nbad = sum(r.bad for r in results)
         nA = sum(r.sawA for r in results)
         nB = sum(r.sawB for r in results)
-        measured("  EK: $(nreaders) readers on $(Threads.nthreads()) threads, $(cycles[]) load/unload cycles, " *
-                 "$(sum(r.n for r in results)) queries, $(sum(r.held for r in results)) rows read: " *
-                 "without/with the extra segment = $nA/$nB, invalid = $nbad")
+        measured(
+            "  EK: $(nreaders) readers on $(Threads.nthreads()) threads, $(cycles[]) load/unload cycles, " *
+                "$(sum(r.n for r in results)) queries, $(sum(r.held for r in results)) rows read: " *
+                "without/with the extra segment = $nA/$nB, invalid = $nbad"
+        )
         @test nbad == 0
         @test cycles[] >= target_cycles
         @test nA > 0 && nB > 0

@@ -29,8 +29,12 @@ julia> dp2hx(672.0), dp2hx(-11.0), dp2hx(0.1)
 """
 function dp2hx(number::Real)
     x = Float64(number)
-    isinf(x) && throw(SpiceError(:valueoutofrange,
-        "dp2hx: the number $x has no base 16 string; dp2hx_c does not return for it"))
+    isinf(x) && throw(
+        SpiceError(
+            :valueoutofrange,
+            "dp2hx: the number $x has no base 16 string; dp2hx_c does not return for it"
+        )
+    )
     (x < 0.0 || x > 0.0) || return "0^0"
     # Normalize to 1/16 <= |x| < 1 with steps of 16^8, 16^4 and 16, as CSPICE does.
     # Every step is exact, because the factors are powers of 2.
@@ -71,9 +75,9 @@ function dp2hx(number::Real)
         t = a * 16.0
         digit = trunc(Int, t)
         a = t - Float64(digit)
-        print(io, _HX_DIGITS[digit+1])
+        print(io, _HX_DIGITS[digit + 1])
     end
-    print(io, '^', e < 0 ? "-" : "", uppercase(string(abs(e); base=16)))
+    print(io, '^', e < 0 ? "-" : "", uppercase(string(abs(e); base = 16)))
     return String(take!(io))
 end
 

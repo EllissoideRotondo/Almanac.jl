@@ -33,15 +33,26 @@ CSPICE itself is the reference: the tests call each routine and its CSPICE count
 | Derivative | The first derivative with the velocity of CSPICE, and each higher derivative with automatic differentiation of the one below it |
 | Error | The kind of the error, and the text of the message where a program can depend on it |
 | Concurrency | Answers from many threads, while kernels are loaded and unloaded, with the answers of one thread |
-| NAIF's test suite | The calls of tspice, SPICELIB's test suite (400 families), recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against Almanac.jl; a difference from SPICELIB is checked against CSPICE (`test/tspice/`, not in the default run) |
+| NAIF's test suite | The calls of tspice, SPICELIB's test suite (400 families), recorded through [PEPPER](https://github.com/jacobwilliams/pepper) and replayed against Almanac.jl; a difference from SPICELIB is checked against CSPICE ([how to run it](@ref "Run NAIF's test suite"); not in the default run) |
 | Allocation | A static proof (AllocCheck.jl) that 61 numeric routines cannot allocate: vector, matrix, rotation, coordinate and ellipsoid calls, conic elements, `unitim`, `deltet` and the table queries ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_alloccheck.jl)) |
+| Package code | Aqua.jl: no method ambiguity, unbound type parameter, type piracy, stale dependency or dependency without compat bounds; ExplicitImports.jl: every imported name explicit and public, except four that Base keeps internal ([list](https://github.com/Orbitology/Almanac.jl/blob/main/test/test_static.jl)) |
 
 | Measure | Value |
 |---|---|
 | Comparisons in the default run | about 40,000 |
 | Comparisons in the exhaustive run (`ALMANAC_TEST_FULL=1`), with larger samples, longer search spans and larger files | about 100,000 |
-| Line coverage of `src/` | 96.6 % |
+| Line coverage of `src/` | 96.6 % (the coverage job of CI measures it on each push) |
 | Julia versions tested | 1.10 and 1.13 |
+
+## Run NAIF's test suite
+
+```sh
+julia --project=test test/tspice/run.jl
+```
+
+The first run builds PEPPER with gfortran 16 and fpm, which must be on `PATH`, and records the calls of the about 400 tspice families into `~/.cache/almanac-tspice` (about 2 GB, 15 to 40 minutes), with a manifest of the families and of the PEPPER commit. Later runs only replay them, in parallel processes. The recording keeps each distinct call of a routine without state once, and a query once between two changes of the loaded kernels or the settings; `TSPICE_ALL=1` keeps every call.
+
+A run without a list of families is the full check. It stops if a family is missing from the recording, failed to record, or fails to replay. It fails if a mismatch of value, of error kind, or of the script itself is not in the baseline (`test/tspice/baseline_ids.tsv.gz`): each mismatch is identified by family, routine, kind and a hash of its inputs, so a new mismatch fails even when another one went away. It also fails if a routine has more calls skipped or compared with a tolerance than `test/tspice/coverage.tsv` records, or fewer calls compared. The mismatches are in `results/replay.tsv` and `results/ids.tsv`. Each routine of `test/tspice/baseline.tsv` has a class and a note: `documented`, a difference that a docstring or this manual states; `cspice`, Almanac follows CSPICE where SPICELIB differs; `gap`, a call that the replay cannot reproduce, such as a read of a file that the test wrote with routines outside the recording; `unexplained`. `--record` records again, `--update-baseline` makes the full run the new baseline and keeps the classes, and a list of families (`F_SPK08 F_CK06`) restricts the run to them, without the coverage check. `test/tspice/selftest.jl` checks the gate itself: on a copy of the recording it removes a mismatch from the baseline, deletes a log, damages a log and marks a family as failed, and requires the run to fail each time.
 
 ## Known limits of accuracy
 

@@ -45,37 +45,66 @@ for reception (`:notsupported` for transmission); the target has three positive 
 ignored (`:notsupported`). `spoint` has 3 elements (`:badarg`) and is taken as a point
 of the surface without a check.
 """
-function GFIllumination(ks::KernelSet, method::AbstractString, angtyp::AbstractString,
+function GFIllumination(
+        ks::KernelSet, method::AbstractString, angtyp::AbstractString,
         target::NameOrID, illmn::NameOrID, fixref::NameOrID, abcorr::AbcorrArg,
-        obsrvr::NameOrID, spoint::AbstractVector)
+        obsrvr::NameOrID, spoint::AbstractVector
+    )
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer")
     illum = _gf_body(ks, illmn, "illumination source")
-    targ == obs && throw(SpiceError(:bodiesnotdistinct,
-        "The observer and target must be distinct objects, but are not: " *
-        "OBSRVR = $obsrvr; TARGET = $target."))
-    targ == illum && throw(SpiceError(:bodiesnotdistinct,
-        "The target and illumination source must be distinct objects, but are not: " *
-        "TARGET = $target; ILLUM = $illmn."))
+    targ == obs && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer and target must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr; TARGET = $target."
+        )
+    )
+    targ == illum && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The target and illumination source must be distinct objects, but are not: " *
+                "TARGET = $target; ILLUM = $illmn."
+        )
+    )
     corr = _geo_abcorr(abcorr)
-    corr.transmit && throw(SpiceError(:notsupported, "Aberration correction was " *
-        "$(string(corr)); transmission corrections are not allowed by this routine."))
+    corr.transmit && throw(
+        SpiceError(
+            :notsupported, "Aberration correction was " *
+                "$(string(corr)); transmission corrections are not allowed by this routine."
+        )
+    )
     a, b, c = _geo_radii(ks, targ)
     sp = _geo_pos(spoint)
     normal = _m_surfnm(a, b, c, sp)
-    uppercase(lstrip(rstrip(method, ' '), ' ')) == "ELLIPSOID" || throw(SpiceError(
-        :invalidmethod, "The only supported computation method is ELLIPSOID; the input " *
-        "method was $method."))
+    uppercase(lstrip(rstrip(method, ' '), ' ')) == "ELLIPSOID" || throw(
+        SpiceError(
+            :invalidmethod, "The only supported computation method is ELLIPSOID; the input " *
+                "method was $method."
+        )
+    )
     ref = _geo_namfrm(ks, fixref isa AbstractString ? strip(fixref, ' ') : fixref)
     center, _, found = _geo_frinfo(ks, ref)
-    found || throw(SpiceError(:unknownframe, "Reference frame $fixref is not " *
-        "recognized by the SPICE frame subsystem. Possibly a required frame definition " *
-        "kernel has not been loaded."))
-    center == targ || throw(SpiceError(:invalidframe, "Reference frame $fixref is not " *
-        "centered at the target body $target. The ID code of the frame center is $center."))
+    found || throw(
+        SpiceError(
+            :unknownframe, "Reference frame $fixref is not " *
+                "recognized by the SPICE frame subsystem. Possibly a required frame definition " *
+                "kernel has not been loaded."
+        )
+    )
+    center == targ || throw(
+        SpiceError(
+            :invalidframe, "Reference frame $fixref is not " *
+                "centered at the target body $target. The ID code of the frame center is $center."
+        )
+    )
     idx = something(findfirst(n -> _dsk_eqstr(angtyp, n), _GF_ANGNMS), 0)
-    idx == 0 && throw(SpiceError(:notsupported,
-        "Illumination angle type $angtyp is not recognized."))
+    idx == 0 && throw(
+        SpiceError(
+            :notsupported,
+            "Illumination angle type $angtyp is not recognized."
+        )
+    )
     return GFIllumination(ks, targ, illum, obs, corr, ref, sp, normal, idx)
 end
 
@@ -83,8 +112,10 @@ _gf_label(::GFIllumination) = "Illumination angle pass # of #"
 
 "The angle of `illumg` (`zzgfilgq`)."
 @inline function _gf_value(q::GFIllumination, et::Float64)
-    trgepc, srfvec, tipos = _geo_illum_states(q.ks, q.corr, q.targ, q.obs, q.illum, q.ref,
-        q.spoint, et)
+    trgepc, srfvec, tipos = _geo_illum_states(
+        q.ks, q.corr, q.targ, q.obs, q.illum, q.ref,
+        q.spoint, et
+    )
     obspos = -srfvec
     q.idx == 1 && return Float64(vsep(obspos, tipos))
     q.idx == 2 && return Float64(vsep(q.normal, tipos))
@@ -172,24 +203,34 @@ the search samples.
 
 See also [`ilumin`](@ref), [`illumg`](@ref), [`gfpa`](@ref).
 """
-function gfilum(ks::KernelSet, method::AbstractString, angtyp::AbstractString,
+function gfilum(
+        ks::KernelSet, method::AbstractString, angtyp::AbstractString,
         target::NameOrID, illmn::NameOrID, fixref::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, spoint::AbstractVector, relate::AbstractString, refval::Real,
-        adjust::Real, step::Real, cnfine::Window; tol::Real=_GF_CNVTOL, bail=nothing,
-        report=nothing, threads::Bool=false)
+        adjust::Real, step::Real, cnfine::Window; tol::Real = _GF_CNVTOL, bail = nothing,
+        report = nothing, threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
     q = GFIllumination(ks, method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint)
     return _gf_search(q, relate, refval, adjust, cnfine, run)
 end
-gfilum(ctx::SpiceContext, method::AbstractString, angtyp::AbstractString, target::NameOrID,
+gfilum(
+    ctx::SpiceContext, method::AbstractString, angtyp::AbstractString, target::NameOrID,
     illmn::NameOrID, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
     spoint::AbstractVector, relate::AbstractString, refval::Real, adjust::Real, step::Real,
-    cnfine::Window; tol::Real=gfstol(ctx), kw...) =
-    gfilum(kernelset(ctx), method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint,
-        relate, refval, adjust, step, cnfine; tol, kw...)
-gfilum(method::AbstractString, angtyp::AbstractString, target::NameOrID, illmn::NameOrID,
+    cnfine::Window; tol::Real = gfstol(ctx), kw...
+) =
+    gfilum(
+    kernelset(ctx), method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint,
+    relate, refval, adjust, step, cnfine; tol, kw...
+)
+gfilum(
+    method::AbstractString, angtyp::AbstractString, target::NameOrID, illmn::NameOrID,
     fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, spoint::AbstractVector,
-    relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window; kw...) =
-    gfilum(default_context(), method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint,
-        relate, refval, adjust, step, cnfine; kw...)
+    relate::AbstractString, refval::Real, adjust::Real, step::Real, cnfine::Window; kw...
+) =
+    gfilum(
+    default_context(), method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint,
+    relate, refval, adjust, step, cnfine; kw...
+)

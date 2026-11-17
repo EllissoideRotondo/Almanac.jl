@@ -41,9 +41,13 @@ end
     return r + rc, v + vc
 end
 
-@noinline _geo_throw_rate() = throw(SpiceError(:dividebyzero,
-    "the range rate of the target is near the speed of light: the light time " *
-    "derivative cannot be computed"))
+@noinline _geo_throw_rate() = throw(
+    SpiceError(
+        :dividebyzero,
+        "the range rate of the target is near the speed of light: the light time " *
+            "derivative cannot be computed"
+    )
+)
 
 """
     _geo_flt(ks, f, et, iref, corr, robs, vobs) -> (; r, v, lt, dlt)
@@ -62,14 +66,14 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
     v = vt - vobs
     dist = _norm3(r)
     lt = dist / CLIGHT
-    primal(lt) == 0 && return (; r, v, lt, dlt=zero(lt))
-    corr.uselt || return (; r, v, lt, dlt=_dot3(r, v) / (dist * CLIGHT))
+    primal(lt) == 0 && return (; r, v, lt, dlt = zero(lt))
+    corr.uselt || return (; r, v, lt, dlt = _dot3(r, v) / (dist * CLIGHT))
     s = _ltsign(corr)
     numitr = corr.converged ? 5 : 1
     lterr = 1.0
     i = 0
     # invariant: `lt` is the light time after `i` iterations
-    while i < numitr && lterr > 1e-17
+    while i < numitr && lterr > 1.0e-17
         epoch = et + s * lt
         rt, vt = _geo_cvx_ssb(ks, f, epoch, iref)
         r = rt - robs
@@ -82,7 +86,7 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
     a = 1 / (CLIGHT * _norm3(r))
     b = _dot3(r, v)
     c = _dot3(r, vt)
-    primal(s * c * a) > 1 - 1e-10 && _geo_throw_rate()
+    primal(s * c * a) > 1 - 1.0e-10 && _geo_throw_rate()
     dlt = a * b / (1 - s * c * a)
     v = (1 + s * dlt) * vt - vobs
     return (; r, v, lt, dlt)
@@ -95,13 +99,15 @@ end
 `obs` in the inertial frame `iref`, corrected for light time and stellar aberration.
 The acceleration of the observer is the central difference of its velocity over ±1 s.
 """
-@inline function _geo_fat(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration,
-        obs::Int32)
+@inline function _geo_fat(
+        ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration,
+        obs::Int32
+    )
     robs, vobs, accobs = _obs_state(ks, obs, et, iref, corr)
     q = _geo_flt(ks, f, et, iref, corr, robs, vobs)
     corr.stellar || return q
     scorr, dscorr = _zzstelab(corr.transmit, accobs, vobs, q.r, q.v)
-    return (; r=q.r + scorr, v=q.v + dscorr, q.lt, q.dlt)
+    return (; r = q.r + scorr, v = q.v + dscorr, q.lt, q.dlt)
 end
 
 """
@@ -111,8 +117,10 @@ end
 inertial frame `iref`, corrected as `corr` says (`spkaps` with the barycentric state
 of the observer; its acceleration is the central difference of the velocity over ±1 s).
 """
-@inline function _geo_fao(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration,
-        f::_GeoFixed)
+@inline function _geo_fao(
+        ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration,
+        f::_GeoFixed
+    )
     robs, vobs = _geo_cvx_ssb(ks, f, et, iref)
     accobs = zero(vobs)
     if corr.stellar
@@ -203,9 +211,13 @@ const _GEO_AT_OBSERVER = 1
 const _GEO_AT_TARGET = 2
 const _GEO_AT_CENTER = 3
 
-@noinline _geo_bad_refloc(refloc) = throw(SpiceError(:notsupported,
-    "the output frame evaluation locus \"$refloc\" is not recognized; the values are " *
-    "OBSERVER, TARGET and CENTER"))
+@noinline _geo_bad_refloc(refloc) = throw(
+    SpiceError(
+        :notsupported,
+        "the output frame evaluation locus \"$refloc\" is not recognized; the values are " *
+            "OBSERVER, TARGET and CENTER"
+    )
+)
 
 "The locus code of `refloc` (`esrchc`: case and blanks are ignored); `SpiceError(:notsupported)` otherwise."
 @inline function _geo_refloc(refloc::AbstractString)
@@ -220,11 +232,15 @@ end
     _dsk_eqstr(refloc, "OBSERVER") && return _GEO_AT_OBSERVER
     _dsk_eqstr(refloc, "TARGET") && return _GEO_AT_TARGET
     _dsk_eqstr(refloc, "CENTER") && return _GEO_AT_CENTER
-    _geo_bad_refloc(refloc)
+    return _geo_bad_refloc(refloc)
 end
 
-@noinline _geo_unknown_frame(ref) = throw(SpiceError(:unknownframe,
-    "the reference frame $ref is not recognized"))
+@noinline _geo_unknown_frame(ref) = throw(
+    SpiceError(
+        :unknownframe,
+        "the reference frame $ref is not recognized"
+    )
+)
 
 @inline function _geo_known_frame(ks::KernelSet, ref::NameOrID)
     id = _geo_namfrm(ks, ref)
@@ -238,8 +254,10 @@ end
 The computation of `spkcvo` after the checks: the state of the body `trgcde` relative
 to the fixed observer `f` in the frame `orfcde`, evaluated at the locus `evltyp`.
 """
-function _geo_cvo(ks::KernelSet, trgcde::Int32, et, orfcde::Int32, evltyp::Int,
-        corr::Aberration, f::_GeoFixed)
+function _geo_cvo(
+        ks::KernelSet, trgcde::Int32, et, orfcde::Int32, evltyp::Int,
+        corr::Aberration, f::_GeoFixed
+    )
     (!corr.uselt || evltyp == _GEO_AT_CENTER) && return _geo_fzo(ks, trgcde, et, orfcde, corr, f)
     if evltyp == _GEO_AT_OBSERVER
         st, lt = _geo_fzo(ks, trgcde, et, Int32(1), corr, f)
@@ -261,8 +279,10 @@ end
 The computation of `spkcvt` after the checks: the state of the fixed target `f`
 relative to the body `obscde` in the frame `orfcde`, evaluated at the locus `evltyp`.
 """
-function _geo_cvt(ks::KernelSet, f::_GeoFixed, et, orfcde::Int32, evltyp::Int,
-        corr::Aberration, obscde::Int32)
+function _geo_cvt(
+        ks::KernelSet, f::_GeoFixed, et, orfcde::Int32, evltyp::Int,
+        corr::Aberration, obscde::Int32
+    )
     (!corr.uselt || evltyp == _GEO_AT_CENTER) && return _geo_fzt(ks, f, et, orfcde, corr, obscde)
     if evltyp == _GEO_AT_OBSERVER
         st, lt = _geo_fzt(ks, f, et, Int32(1), corr, obscde)
@@ -282,13 +302,13 @@ end
 
 @inline function _geo_state(s::AbstractVector)
     length(s) == 6 || throw(SpiceError(:badarg, "a state vector must have 6 elements"))
-    @inbounds return Vec3{Float64}(s[begin], s[begin+1], s[begin+2]),
-        Vec3{Float64}(s[begin+3], s[begin+4], s[begin+5])
+    @inbounds return Vec3{Float64}(s[begin], s[begin + 1], s[begin + 2]),
+        Vec3{Float64}(s[begin + 3], s[begin + 4], s[begin + 5])
 end
 
 @inline function _geo_pos(p::AbstractVector)
     length(p) == 3 || throw(SpiceError(:badarg, "a position vector must have 3 elements"))
-    @inbounds return Vec3{Float64}(p[begin], p[begin+1], p[begin+2])
+    @inbounds return Vec3{Float64}(p[begin], p[begin + 1], p[begin + 2])
 end
 
 # --- public interface -------------------------------------------------------------------
@@ -330,9 +350,11 @@ Throws `SpiceError`:
 
 See also [`spkcpo`](@ref), [`spkcvt`](@ref), [`azlcpo`](@ref).
 """
-function spkcvo(ks::KernelSet, target::NameOrID, et::Real, outref::NameOrID,
+function spkcvo(
+        ks::KernelSet, target::NameOrID, et::Real, outref::NameOrID,
         refloc::AbstractString, abcorr::AbcorrArg, obssta::AbstractVector, obsepc::Real,
-        obsctr::NameOrID, obsref::NameOrID)
+        obsctr::NameOrID, obsref::NameOrID
+    )
     corr = _geo_abcorr(abcorr)
     ctrcde = _geo_body(ks, obsctr, "observer center")
     trgcde = _geo_body(ks, target, "target")
@@ -359,9 +381,11 @@ and the errors are the same.
 
 See also [`spkcpt`](@ref), [`azlcpo`](@ref).
 """
-function spkcpo(ks::KernelSet, target::NameOrID, et::Real, outref::NameOrID,
+function spkcpo(
+        ks::KernelSet, target::NameOrID, et::Real, outref::NameOrID,
         refloc::AbstractString, abcorr::AbcorrArg, obspos::AbstractVector, obsctr::NameOrID,
-        obsref::NameOrID)
+        obsref::NameOrID
+    )
     corr = _geo_abcorr(abcorr)
     ctrcde = _geo_body(ks, obsctr, "observer center")
     trgcde = _geo_body(ks, target, "target")
@@ -391,9 +415,11 @@ Throws the errors of [`spkcvo`](@ref), with `trgsta` and `trgref` in the place o
 
 See also [`spkcpt`](@ref), [`spkcvo`](@ref).
 """
-function spkcvt(ks::KernelSet, trgsta::AbstractVector, trgepc::Real, trgctr::NameOrID,
+function spkcvt(
+        ks::KernelSet, trgsta::AbstractVector, trgepc::Real, trgctr::NameOrID,
         trgref::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString,
-        abcorr::AbcorrArg, obsrvr::NameOrID)
+        abcorr::AbcorrArg, obsrvr::NameOrID
+    )
     corr = _geo_abcorr(abcorr)
     ctrcde = _geo_body(ks, trgctr, "target center")
     obscde = _geo_body(ks, obsrvr, "observer")
@@ -420,9 +446,11 @@ are the same.
 
 See also [`spkcpo`](@ref), [`spkcvt`](@ref).
 """
-function spkcpt(ks::KernelSet, trgpos::AbstractVector, trgctr::NameOrID, trgref::NameOrID,
+function spkcpt(
+        ks::KernelSet, trgpos::AbstractVector, trgctr::NameOrID, trgref::NameOrID,
         et::Real, outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg,
-        obsrvr::NameOrID)
+        obsrvr::NameOrID
+    )
     corr = _geo_abcorr(abcorr)
     ctrcde = _geo_body(ks, trgctr, "target center")
     obscde = _geo_body(ks, obsrvr, "observer")
@@ -434,28 +462,44 @@ function spkcpt(ks::KernelSet, trgpos::AbstractVector, trgctr::NameOrID, trgref:
 end
 
 # Context and default-context forms.
-spkcvo(ctx::SpiceContext, target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString,
-    abcorr::AbcorrArg, obssta::AbstractVector, obsepc::Real, obsctr::NameOrID, obsref::NameOrID) =
+spkcvo(
+    ctx::SpiceContext, target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString,
+    abcorr::AbcorrArg, obssta::AbstractVector, obsepc::Real, obsctr::NameOrID, obsref::NameOrID
+) =
     spkcvo(kernelset(ctx), target, et, outref, refloc, abcorr, obssta, obsepc, obsctr, obsref)
-spkcvo(target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg,
-    obssta::AbstractVector, obsepc::Real, obsctr::NameOrID, obsref::NameOrID) =
+spkcvo(
+    target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg,
+    obssta::AbstractVector, obsepc::Real, obsctr::NameOrID, obsref::NameOrID
+) =
     spkcvo(default_context(), target, et, outref, refloc, abcorr, obssta, obsepc, obsctr, obsref)
-spkcpo(ctx::SpiceContext, target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString,
-    abcorr::AbcorrArg, obspos::AbstractVector, obsctr::NameOrID, obsref::NameOrID) =
+spkcpo(
+    ctx::SpiceContext, target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString,
+    abcorr::AbcorrArg, obspos::AbstractVector, obsctr::NameOrID, obsref::NameOrID
+) =
     spkcpo(kernelset(ctx), target, et, outref, refloc, abcorr, obspos, obsctr, obsref)
-spkcpo(target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg,
-    obspos::AbstractVector, obsctr::NameOrID, obsref::NameOrID) =
+spkcpo(
+    target::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg,
+    obspos::AbstractVector, obsctr::NameOrID, obsref::NameOrID
+) =
     spkcpo(default_context(), target, et, outref, refloc, abcorr, obspos, obsctr, obsref)
-spkcvt(ctx::SpiceContext, trgsta::AbstractVector, trgepc::Real, trgctr::NameOrID,
+spkcvt(
+    ctx::SpiceContext, trgsta::AbstractVector, trgepc::Real, trgctr::NameOrID,
     trgref::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg,
-    obsrvr::NameOrID) =
+    obsrvr::NameOrID
+) =
     spkcvt(kernelset(ctx), trgsta, trgepc, trgctr, trgref, et, outref, refloc, abcorr, obsrvr)
-spkcvt(trgsta::AbstractVector, trgepc::Real, trgctr::NameOrID, trgref::NameOrID, et::Real,
-    outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg, obsrvr::NameOrID) =
+spkcvt(
+    trgsta::AbstractVector, trgepc::Real, trgctr::NameOrID, trgref::NameOrID, et::Real,
+    outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg, obsrvr::NameOrID
+) =
     spkcvt(default_context(), trgsta, trgepc, trgctr, trgref, et, outref, refloc, abcorr, obsrvr)
-spkcpt(ctx::SpiceContext, trgpos::AbstractVector, trgctr::NameOrID, trgref::NameOrID, et::Real,
-    outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg, obsrvr::NameOrID) =
+spkcpt(
+    ctx::SpiceContext, trgpos::AbstractVector, trgctr::NameOrID, trgref::NameOrID, et::Real,
+    outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg, obsrvr::NameOrID
+) =
     spkcpt(kernelset(ctx), trgpos, trgctr, trgref, et, outref, refloc, abcorr, obsrvr)
-spkcpt(trgpos::AbstractVector, trgctr::NameOrID, trgref::NameOrID, et::Real, outref::NameOrID,
-    refloc::AbstractString, abcorr::AbcorrArg, obsrvr::NameOrID) =
+spkcpt(
+    trgpos::AbstractVector, trgctr::NameOrID, trgref::NameOrID, et::Real, outref::NameOrID,
+    refloc::AbstractString, abcorr::AbcorrArg, obsrvr::NameOrID
+) =
     spkcpt(default_context(), trgpos, trgctr, trgref, et, outref, refloc, abcorr, obsrvr)

@@ -13,7 +13,7 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
 import ForwardDiff
 
 # Measured: 9e-16 rad (angles), 4e-16 (srfvec), 0 (epochs); phaseq 4e-16 rad; trgsep 2.2e-16 rad.
-const ILL_TOL = (angle=1e-10, vec=5e-13, epoch=1e-7)
+const ILL_TOL = (angle = 1.0e-10, vec = 5.0e-13, epoch = 1.0e-7)
 
 ill_alloc_min(ks, et, c, sp) = @allocated ilumin(ks, "ELLIPSOID", 301, et, 10020, c, 399, sp)
 ill_alloc_g(ks, et, c, sp) = @allocated illumg(ks, "ELLIPSOID", 301, 399, et, 10020, c, 10, sp)
@@ -22,7 +22,7 @@ ill_alloc_ph(ks, et, c) = @allocated phaseq(ks, et, 301, 10, 399, c)
 ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "POINT", 10010, 399, c)
 
 @gf_light group("geom_illum: ilumin, illumg, illumf, phaseq, trgsep", Kernels.FULL_SET_FILES...) do
-    ctx = geo_setup(; dsk=true)
+    ctx = geo_setup(; dsk = true)
     ks = Almanac.kernelset(ctx)
     rng = MersenneTwister(SEED + 102)
     reception = GEO_CORRS[1:5]
@@ -135,8 +135,10 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
 
     @testset "trgsep, 300 random cases" begin
         worst = 0.0
-        frames = Dict("SUN" => "IAU_SUN", "MERCURY" => "IAU_MERCURY", "VENUS" => "IAU_VENUS",
-            "EARTH" => "IAU_EARTH", "MOON" => "IAU_MOON")
+        frames = Dict(
+            "SUN" => "IAU_SUN", "MERCURY" => "IAU_MERCURY", "VENUS" => "IAU_VENUS",
+            "EARTH" => "IAU_EARTH", "MOON" => "IAU_MOON"
+        )
         for k in 1:300
             t1, t2, o = shuffle(rng, GEO_BODIES)[1:3]
             s1, s2 = rand(rng, ("POINT", "SPHERE")), rand(rng, ("POINT", "SPHERE"))
@@ -144,8 +146,10 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
             et = geo_epoch(rng)
             a = trgsep(ctx, et, t1, s1, frames[t1], t2, s2, frames[t2], o, cor)
             worst = max(worst, abs(a - g_trgsep(et, t1, s1, frames[t1], t2, s2, frames[t2], o, cor)))
-            k % 10 == 0 && @test trgsep(ctx, et, GEO_IDS[t1], s1, frames[t1], GEO_IDS[t2], s2, frames[t2],
-                GEO_IDS[o], Aberration(cor)) == a
+            k % 10 == 0 && @test trgsep(
+                ctx, et, GEO_IDS[t1], s1, frames[t1], GEO_IDS[t2], s2, frames[t2],
+                GEO_IDS[o], Aberration(cor)
+            ) == a
         end
         measured(@sprintf("  %-64s max=%.3e", "trgsep (rad)", worst))
         @test worst < ILL_TOL.angle
@@ -166,7 +170,8 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
                 ("NEAR POINT/ELLIPSOID", "MOON", "SUN", "IAU_MOON", "LT", "EARTH", sp),
                 ("DSK/UNPRIORITIZED", "EARTH", "SUN", "IAU_EARTH", "LT", "MOON", sp),
                 ("DSK/UNPRIORITIZED/SURFACES = 9", "MOON", "SUN", "IAU_MOON", "LT", "EARTH", sp),
-                ("", "MOON", "SUN", "IAU_MOON", "LT", "EARTH", sp))
+                ("", "MOON", "SUN", "IAU_MOON", "LT", "EARTH", sp),
+            )
             @test same_kind(() -> g_illumg(m, t, src, et, fix, cor, o, p), () -> illumg(ctx, m, t, src, et, fix, cor, o, p))
             @test same_kind(() -> g_illumf(m, t, src, et, fix, cor, o, p), () -> illumf(ctx, m, t, src, et, fix, cor, o, p))
             src == "SUN" && @test same_kind(() -> g_ilumin(m, t, et, fix, cor, o, p), () -> ilumin(ctx, m, t, et, fix, cor, o, p))
@@ -179,10 +184,12 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
             b = g_illumf(m, "MOON", src, et, "IAU_MOON", "LT", "EARTH", sp)
             @test maximum(abs.(collect(a[3:5]) .- collect(b[3:5]))) < ILL_TOL.angle && a[6:7] == b[6:7]
         end
-        for (t, src, o, cor) in (("MOON", "SUN", "EARTH", "FOO"), ("MOON", "SUN", "EARTH", "XLT"),
+        for (t, src, o, cor) in (
+                ("MOON", "SUN", "EARTH", "FOO"), ("MOON", "SUN", "EARTH", "XLT"),
                 ("MOON", "SUN", "EARTH", "XCN+S"), ("NOBODY", "SUN", "EARTH", "LT"),
                 ("MOON", "NOBODY", "EARTH", "LT"), ("MOON", "SUN", "NOBODY", "LT"),
-                ("MOON", "MOON", "EARTH", "LT"), ("MOON", "SUN", "MOON", "LT"), ("MOON", "SUN", "SUN", "LT"))
+                ("MOON", "MOON", "EARTH", "LT"), ("MOON", "SUN", "MOON", "LT"), ("MOON", "SUN", "SUN", "LT"),
+            )
             @test same_kind(() -> g_phaseq(et, t, src, o, cor), () -> phaseq(ctx, et, t, src, o, cor))
         end
         # trgsep reads the shape from its first 6 characters, so that "SPHEREX" is a sphere
@@ -198,13 +205,18 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
                 ("MOON", "POINT", "IAU_MOON", "SUN", "POINT", "IAU_SUN", "EARTH", "FOO"),
                 ("MOON", "POINTX", "IAU_MOON", "SUN", "POINT", "IAU_SUN", "EARTH", "LT"),
                 ("EARTH", "SPHERE", "IAU_EARTH", "SUN", "POINT", "IAU_SUN", "EARTH BARYCENTER", "LT"),
-                ("EARTH BARYCENTER", "SPHERE", "IAU_EARTH", "SUN", "POINT", "IAU_SUN", "MOON", "LT"))
-            @test same_kind(() -> g_trgsep(et, t1, s1, f1, t2, s2, f2, o, cor),
-                () -> trgsep(ctx, et, t1, s1, f1, t2, s2, f2, o, cor))
+                ("EARTH BARYCENTER", "SPHERE", "IAU_EARTH", "SUN", "POINT", "IAU_SUN", "MOON", "LT"),
+            )
+            @test same_kind(
+                () -> g_trgsep(et, t1, s1, f1, t2, s2, f2, o, cor),
+                () -> trgsep(ctx, et, t1, s1, f1, t2, s2, f2, o, cor)
+            )
         end
-        @test abs(trgsep(ctx, et, "MOON", "SPHEREX", "IAU_MOON", "SUN", " point junk", "IAU_SUN", "EARTH", "lt + s") -
-                  g_trgsep(et, "MOON", "SPHEREX", "IAU_MOON", "SUN", " point junk", "IAU_SUN", "EARTH", "lt + s")) <
-              ILL_TOL.angle
+        @test abs(
+            trgsep(ctx, et, "MOON", "SPHEREX", "IAU_MOON", "SUN", " point junk", "IAU_SUN", "EARTH", "lt + s") -
+                g_trgsep(et, "MOON", "SPHEREX", "IAU_MOON", "SUN", " point junk", "IAU_SUN", "EARTH", "lt + s")
+        ) <
+            ILL_TOL.angle
     end
 
     @testset "no allocation and inferred types on ellipsoids" begin
@@ -218,11 +230,11 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
             @test gwarm(ill_alloc_ph, ks, et, c) == 0
             @test gwarm(ill_alloc_sep, ks, et, c) == 0
         end
-        T5 = Tuple{Float64,SVector{3,Float64},Float64,Float64,Float64}
+        T5 = Tuple{Float64, SVector{3, Float64}, Float64, Float64, Float64}
         @test (@inferred ilumin(ks, "ELLIPSOID", 301, et, 10020, "CN+S", 399, sp)) isa T5
         @test (@inferred illumg(ks, "ELLIPSOID", 301, 399, et, 10020, "LT+S", 10, sp)) isa T5
         @test (@inferred illumf(ks, "ELLIPSOID", 301, 10, et, 10020, "LT", 399, sp)) isa
-              Tuple{Float64,SVector{3,Float64},Float64,Float64,Float64,Bool,Bool}
+            Tuple{Float64, SVector{3, Float64}, Float64, Float64, Float64, Bool, Bool}
         @test (@inferred phaseq(ks, et, 301, 10, 399, "LT+S")) isa Float64
         @test (@inferred trgsep(ks, et, 301, "SPHERE", 10020, 10, "SPHERE", 10010, 399, "CN+S")) isa Float64
         @test (@inferred ilumin(ctx, "ELLIPSOID", "MOON", et, "IAU_MOON", "CN+S", "EARTH", sp)) isa T5
@@ -234,22 +246,23 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
         sp = srfrec(ks, 301, 0.3, 0.2)
         spe = srfrec(ks, 399, -1.0, 0.5)
         for et in record_safe_epochs(rng, nsample(6, 24)), cor in ("NONE", "LT", "LT+S", "CN", "CN+S")
-            fs = Pair{String,Function}[
+            fs = Pair{String, Function}[
                 "ilumin angles" => t -> SVector(ilumin(ks, "ELLIPSOID", 301, t, 10020, cor, 399, sp)[3:5]...),
                 "ilumin srfvec" => t -> ilumin(ks, "ELLIPSOID", 399, t, 10013, cor, 301, spe)[2],
                 "illumg angles" => t -> SVector(illumg(ks, "ELLIPSOID", 301, 399, t, 10020, cor, 10, sp)[3:5]...),
                 "phaseq" => t -> SVector(phaseq(ks, t, 301, 10, 399, cor)),
-                "trgsep" => t -> SVector(trgsep(ks, t, 301, "SPHERE", 10020, 10, "SPHERE", 10010, 399, cor))]
+                "trgsep" => t -> SVector(trgsep(ks, t, 301, "SPHERE", 10020, 10, "SPHERE", 10010, 399, cor)),
+            ]
             for (name, f) in fs
                 d = f(ForwardDiff.Dual(et, 1.0))
-                @test isapprox(ForwardDiff.value.(d), f(et); rtol=1e-12)
+                @test isapprox(ForwardDiff.value.(d), f(et); rtol = 1.0e-12)
                 fd = geo_fd(f, et, h)
                 gput!(st, name, norm(ForwardDiff.partials.(d, 1) .- fd) / norm(fd))
             end
         end
         greport("dual epoch against central difference", st)
         for k in keys(st.d)
-            @test st.d[k] < 1e-4
+            @test st.d[k] < 1.0e-4
         end
         @test neo_kind(() -> ilumin(ks, "DSK/UNPRIORITIZED", 301, ForwardDiff.Dual(1.0e8, 1.0), 10020, "LT", 399, sp)) == :notsupported
     end

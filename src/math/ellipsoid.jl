@@ -18,8 +18,8 @@ constructor does not check this.
 
 See also [`pl2nvc`](@ref), [`pl2nvp`](@ref), [`pl2psv`](@ref).
 """
-struct SpicePlane{T<:Real}
-    normal::SVector{3,T}
+struct SpicePlane{T <: Real}
+    normal::SVector{3, T}
     constant::T
 end
 SpicePlane(normal::SVector{3}, constant::Real) =
@@ -38,10 +38,10 @@ does not check this.
 
 See also [`el2cgv`](@ref).
 """
-struct SpiceEllipse{T<:Real}
-    center::SVector{3,T}
-    semimajor::SVector{3,T}
-    semiminor::SVector{3,T}
+struct SpiceEllipse{T <: Real}
+    center::SVector{3, T}
+    semimajor::SVector{3, T}
+    semiminor::SVector{3, T}
 end
 function SpiceEllipse(center::SVector{3}, semimajor::SVector{3}, semiminor::SVector{3})
     T = promote_type(eltype(center), eltype(semimajor), eltype(semiminor))
@@ -52,8 +52,12 @@ end
 
 @inline _m_max(x, y) = primal(y) > primal(x) ? y : x
 
-@noinline _m_badaxis(a, b, c) = throw(SpiceError(:badaxislength,
-    "the ellipsoid semi-axis lengths must be positive; they are $(primal(a)), $(primal(b)), $(primal(c))"))
+@noinline _m_badaxis(a, b, c) = throw(
+    SpiceError(
+        :badaxislength,
+        "the ellipsoid semi-axis lengths must be positive; they are $(primal(a)), $(primal(b)), $(primal(c))"
+    )
+)
 
 @inline _m_axes_ok(a, b, c) = primal(a) > 0.0 && primal(b) > 0.0 && primal(c) > 0.0
 
@@ -167,15 +171,23 @@ See also [`nearpt`](@ref), [`surfpt`](@ref).
 function edpnt(p::AbstractVector, a::Real, b::Real, c::Real)
     v = _m_v3(p)
     a, b, c = _m_f(a), _m_f(b), _m_f(c)
-    _m_axes_ok(a, b, c) || throw(SpiceError(:invalidradii,
-        "the ellipsoid radii must be positive; they are $(primal(a)), $(primal(b)), $(primal(c))"))
+    _m_axes_ok(a, b, c) || throw(
+        SpiceError(
+            :invalidradii,
+            "the ellipsoid radii must be positive; they are $(primal(a)), $(primal(b)), $(primal(c))"
+        )
+    )
     _m_iszero(v) && throw(SpiceError(:zerovector, "the input point is the zero vector"))
     x = v[1] / a
     y = v[2] / b
     z = v[3] / c
     level = x * x + y * y + z * z
-    primal(level) > 0.0 || throw(SpiceError(:pointtoosmall,
-        "the input point is too close to the origin to be scaled to the ellipsoid"))
+    primal(level) > 0.0 || throw(
+        SpiceError(
+            :pointtoosmall,
+            "the input point is too close to the origin to be scaled to the ellipsoid"
+        )
+    )
     sq = sqrt(level)
     return SVector(v[1] / sq, v[2] / sq, v[3] / sq)
 end
@@ -210,15 +222,23 @@ function ednmpt(a::Real, b::Real, c::Real, normal::AbstractVector)
     sa = a / scale
     sb = b / scale
     sc = c / scale
-    _m_axes_ok(sa, sb, sc) || throw(SpiceError(:axisunderflow,
-        "a scaled semi-axis length is not positive"))
+    _m_axes_ok(sa, sb, sc) || throw(
+        SpiceError(
+            :axisunderflow,
+            "a scaled semi-axis length is not positive"
+        )
+    )
     _m_iszero(n) && throw(SpiceError(:zerovector, "the input normal vector is the zero vector"))
     na2 = n[1] * sa * sa
     nb2 = n[2] * sb * sb
     nc2 = n[3] * sc * sc
     arg = na2 * n[1] + nb2 * n[2] + nc2 * n[3]
-    primal(arg) > 0.0 || throw(SpiceError(:degeneratecase,
-        "the reciprocal of the square of the scale factor is not positive"))
+    primal(arg) > 0.0 || throw(
+        SpiceError(
+            :degeneratecase,
+            "the reciprocal of the square of the scale factor is not positive"
+        )
+    )
     lambda = (1.0 / sqrt(arg)) * scale
     return SVector(lambda * na2, lambda * nb2, lambda * nc2)
 end
@@ -244,8 +264,10 @@ end
 end
 
 "Squares of `point[i] / denom`, with the cut of `nearpt_` for an interior point."
-@inline function _m_nearpt_terms(point::NTuple{3,Float64}, axis::NTuple{3,Float64},
-        lambda::Float64, inside::Bool)
+@inline function _m_nearpt_terms(
+        point::NTuple{3, Float64}, axis::NTuple{3, Float64},
+        lambda::Float64, inside::Bool
+    )
     return ntuple(Val(3)) do i
         point[i] == 0.0 && return 0.0
         denom = axis[i] + lambda / axis[i]
@@ -266,7 +288,7 @@ end
 and bisection of the multiplier `lambda`, and the same (at most five) correction steps
 that move the solution along the error of the first one.
 """
-function _m_nearpt(positn::SVector{3,Float64}, a::Float64, b::Float64, c::Float64)
+function _m_nearpt(positn::SVector{3, Float64}, a::Float64, b::Float64, c::Float64)
     (a > 0.0 && b > 0.0 && c > 0.0) || _m_badaxis(a, b, c)
     ax = (a, b, c)
     # `orderd_` for three elements is an insertion sort: ascending and stable.
@@ -283,11 +305,19 @@ function _m_nearpt(positn::SVector{3,Float64}, a::Float64, b::Float64, c::Float6
     orignl = SVector(point)
     pnorm = _m_norm(orignl)
     toobig = sqrt(floatmax(Float64) / 100.0)
-    (axis[2] > toobig || axis[3] > toobig) && throw(SpiceError(:badaxislength,
-        "the ratio of the longest to the shortest semi-axis is too large"))
+    (axis[2] > toobig || axis[3] > toobig) && throw(
+        SpiceError(
+            :badaxislength,
+            "the ratio of the longest to the shortest semi-axis is too large"
+        )
+    )
     for i in 1:3
-        sqrt(axis[i]) * sqrt(abs(point[i])) > toobig && throw(SpiceError(:inputstoolarge,
-            "the product of a semi-axis length and a point component is too large"))
+        sqrt(axis[i]) * sqrt(abs(point[i])) > toobig && throw(
+            SpiceError(
+                :inputstoolarge,
+                "the product of a semi-axis length and a point component is too large"
+            )
+        )
     end
     axisqr = (axis[1] * axis[1], axis[2] * axis[2], axis[3] * axis[3])
     snglpt = 4
@@ -300,8 +330,10 @@ function _m_nearpt(positn::SVector{3,Float64}, a::Float64, b::Float64, c::Float6
     # invariant: bestpt, bestht hold the best solution of the steps before `solutn`
     while solvng
         copy = point
-        point = (_m_nearpt_trim(point[1], axis[1]), _m_nearpt_trim(point[2], axis[2]),
-            _m_nearpt_trim(point[3], axis[3]))
+        point = (
+            _m_nearpt_trim(point[1], axis[1]), _m_nearpt_trim(point[2], axis[2]),
+            _m_nearpt_trim(point[3], axis[3]),
+        )
         inside = false
         d1 = point[1] / axis[1]
         d2 = point[2] / axis[2]
@@ -316,18 +348,28 @@ function _m_nearpt(positn::SVector{3,Float64}, a::Float64, b::Float64, c::Float6
         if q == 0.0
             # on the surface: lambda = 0
         elseif q > 0.0
-            lower = max(max(max(0.0, (abs(point[1]) * 0.5 - axis[1]) * axis[1]),
-                    (abs(point[2]) * 0.5 - axis[2]) * axis[2]), (abs(point[3]) * 0.5 - axis[3]) * axis[3])
-            upper = max(max(abs(axis[1] * point[1]), abs(axis[2] * point[2])),
-                abs(axis[3] * point[3])) * 2.0
+            lower = max(
+                max(
+                    max(0.0, (abs(point[1]) * 0.5 - axis[1]) * axis[1]),
+                    (abs(point[2]) * 0.5 - axis[2]) * axis[2]
+                ), (abs(point[3]) * 0.5 - axis[3]) * axis[3]
+            )
+            upper = max(
+                max(abs(axis[1] * point[1]), abs(axis[2] * point[2])),
+                abs(axis[3] * point[3])
+            ) * 2.0
             lambda = upper
         else
             inside = true
             snglpt = point[1] != 0.0 ? 1 : point[2] != 0.0 ? 2 : point[3] != 0.0 ? 3 : 4
             if snglpt <= 3
-                lambda = max(max(_m_nearpt_low(point[1], axis[1], axisqr[3]),
-                        _m_nearpt_low(point[2], axis[2], axisqr[3])),
-                    _m_nearpt_low(point[3], axis[3], axisqr[3]))
+                lambda = max(
+                    max(
+                        _m_nearpt_low(point[1], axis[1], axisqr[3]),
+                        _m_nearpt_low(point[2], axis[2], axisqr[3])
+                    ),
+                    _m_nearpt_low(point[3], axis[3], axisqr[3])
+                )
                 lower = lambda
                 upper = max(lower, 0.0)
             else
@@ -386,16 +428,18 @@ function _m_nearpt(positn::SVector{3,Float64}, a::Float64, b::Float64, c::Float6
             end
         end
         lambda = lower
-        spoint = SVector(_m_nearpt_foot(point[1], copy[1], axisqr[1], lambda),
+        spoint = SVector(
+            _m_nearpt_foot(point[1], copy[1], axisqr[1], lambda),
             _m_nearpt_foot(point[2], copy[2], axisqr[2], lambda),
-            _m_nearpt_foot(point[3], copy[3], axisqr[3], lambda))
+            _m_nearpt_foot(point[3], copy[3], axisqr[3], lambda)
+        )
         if inside && (snglpt == 2 || snglpt == 3)
             # A point of a principal plane inside the ellipsoid can have its nearest
             # point off that plane.
             extra = false
             epoint = spoint
             if axis[1] != axis[snglpt] && abs(point[2]) <= axis[2] - axisqr[1] / axis[2] &&
-               abs(point[3]) <= axis[3] - axisqr[1] / axis[3]
+                    abs(point[3]) <= axis[3] - axisqr[1] / axis[3]
                 if axis[1] == axis[2]
                     denom3 = 1.0 - axisqr[1] / axisqr[3]
                     if denom3 > 0.0
@@ -437,9 +481,11 @@ function _m_nearpt(positn::SVector{3,Float64}, a::Float64, b::Float64, c::Float6
         else
             height = sign * _m_norm(spoint - orignl)
             normal = _m_surfnm(axis[1], axis[2], axis[3], spoint)
-            err = SVector(orignl[1] - (spoint[1] + height * normal[1]),
+            err = SVector(
+                orignl[1] - (spoint[1] + height * normal[1]),
                 orignl[2] - (spoint[2] + height * normal[2]),
-                orignl[3] - (spoint[3] + height * normal[3]))
+                orignl[3] - (spoint[3] + height * normal[3])
+            )
             newerr = 0.0
             better = true
             if solutn > 2
@@ -478,7 +524,8 @@ function _m_nearpt(positn::SVector{3,Float64}, a::Float64, b::Float64, c::Float6
     npoint = SVector(
         iorder[1] == 1 ? bp[1] : iorder[2] == 1 ? bp[2] : bp[3],
         iorder[1] == 2 ? bp[1] : iorder[2] == 2 ? bp[2] : bp[3],
-        iorder[1] == 3 ? bp[1] : iorder[2] == 3 ? bp[2] : bp[3])
+        iorder[1] == 3 ? bp[1] : iorder[2] == 3 ? bp[2] : bp[3]
+    )
     return npoint, bestht / scale
 end
 
@@ -496,7 +543,7 @@ function _m_nearpt(positn::SVector{3}, a::Real, b::Real, c::Real)
     a0, b0, c0 = primal(a), primal(b), primal(c)
     np0, alt0 = _m_nearpt(p0, a0, b0, c0)
     T = typeof(positn[1] * a * b * c / 1.0)
-    flat = SVector{3,T}(np0[1], np0[2], np0[3]), convert(T, alt0)
+    flat = SVector{3, T}(np0[1], np0[2], np0[3]), convert(T, alt0)
     ax0 = (a0, b0, c0)
     k = abs(p0[1]) >= abs(p0[2]) ? (abs(p0[1]) >= abs(p0[3]) ? 1 : 3) : (abs(p0[2]) >= abs(p0[3]) ? 2 : 3)
     (p0[k] == 0.0 || np0[k] == 0.0) && return flat
@@ -638,8 +685,12 @@ function surfpv(stvrtx::AbstractVector, stdir::AbstractVector, a::Real, b::Real,
     t2 = v[2] / b
     t3 = v[3] / c
     level = t1 * t1 + t2 * t2 + t3 * t3
-    primal(level) == 1.0 && throw(SpiceError(:invalidvertex,
-        "the ray vertex is on the ellipsoid: the surface velocity is not defined"))
+    primal(level) == 1.0 && throw(
+        SpiceError(
+            :invalidvertex,
+            "the ray vertex is on the ellipsoid: the surface velocity is not defined"
+        )
+    )
     udn = _m_dot(u, n)
     primal(udn) == 0.0 && return nothing
     second = _m_dot(vmx, n) * du
@@ -869,11 +920,19 @@ function inrypl(vertex::AbstractVector, dir::AbstractVector, plane::SpicePlane)
     d = _m_v3(dir)
     toobig = floatmax(Float64) / 3.0
     vnrm = _m_norm(vtx)
-    primal(vnrm) >= toobig && throw(SpiceError(:vectortoobig,
-        "the vertex of the ray is too far from the origin"))
+    primal(vnrm) >= toobig && throw(
+        SpiceError(
+            :vectortoobig,
+            "the vertex of the ray is too far from the origin"
+        )
+    )
     normal, constant = plane.normal, plane.constant
-    primal(constant) >= toobig && throw(SpiceError(:vectortoobig,
-        "the plane is too far from the origin"))
+    primal(constant) >= toobig && throw(
+        SpiceError(
+            :vectortoobig,
+            "the plane is too far from the origin"
+        )
+    )
     udir = _m_hat(d)
     _m_iszero(udir) && throw(SpiceError(:zerovector, "the direction of the ray is the zero vector"))
     mscale = _m_max(_m_abs(constant) - zero(vnrm), _m_abs(vnrm) - zero(constant))
@@ -881,7 +940,7 @@ function inrypl(vertex::AbstractVector, dir::AbstractVector, plane::SpicePlane)
         sclvtx = (1.0 / mscale) * vtx
         sclcon = constant / mscale
     else
-        sclvtx = vtx - zero(SVector{3,typeof(mscale)})
+        sclvtx = vtx - zero(SVector{3, typeof(mscale)})
         sclcon = constant - zero(mscale)
     end
     primal(mscale) > 1.0 && (toobig = toobig / primal(mscale))
@@ -905,13 +964,17 @@ Roots of `a x^2 + b x + c` as
 [`rquad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rquad_c.html): `((re1, im1), (re2, im2))`. Requires that `a`
 and `b` are not both zero (`SpiceError(:degeneratecase)`).
 """
-@inline function _m_rquad(a::T, b::T, c::T) where {T<:Real}
-    (primal(a) == 0.0 && primal(b) == 0.0) && throw(SpiceError(:degeneratecase,
-        "both the first and the second degree coefficients are zero"))
+@inline function _m_rquad(a::T, b::T, c::T) where {T <: Real}
+    (primal(a) == 0.0 && primal(b) == 0.0) && throw(
+        SpiceError(
+            :degeneratecase,
+            "both the first and the second degree coefficients are zero"
+        )
+    )
     scale = max(abs(primal(a)), abs(primal(b)), abs(primal(c)))
     zeroed = (primal(a) != 0.0 && primal(a) / scale == 0.0) ||
-             (primal(b) != 0.0 && primal(b) / scale == 0.0) ||
-             (primal(c) != 0.0 && primal(c) / scale == 0.0)
+        (primal(b) != 0.0 && primal(b) / scale == 0.0) ||
+        (primal(c) != 0.0 && primal(c) / scale == 0.0)
     sqr, lin, con = zeroed ? (a, b, c) : (a / scale, b / scale, c / scale)
     z = zero(sqr)
     if primal(sqr) != 0.0
@@ -951,7 +1014,7 @@ Diagonalization of the symmetric matrix `[s11 s12; s12 s22]` as
 diagonal values and the rotation `(c11, c12, c21, c22)` whose columns are the
 eigenvectors.
 """
-@inline function _m_diags2(s11::T, s12::T, s22::T) where {T<:Real}
+@inline function _m_diags2(s11::T, s12::T, s22::T) where {T <: Real}
     o = one(T)
     z = zero(T)
     primal(s12) == 0.0 && return s11, s22, (o, z, z, o)
@@ -1042,7 +1105,7 @@ el2cgv(ellipse::SpiceEllipse) = ellipse.center, ellipse.semimajor, ellipse.semim
 @inline function _m_inedpl(a, b, c, plane::SpicePlane)
     point, span1, span2 = pl2psv(plane)
     T = typeof(point[1] * a * b * c)
-    none = SpiceEllipse(zero(SVector{3,T}), zero(SVector{3,T}), zero(SVector{3,T}))
+    none = SpiceEllipse(zero(SVector{3, T}), zero(SVector{3, T}), zero(SVector{3, T}))
     maxrad = max(abs(primal(a)), abs(primal(b)), abs(primal(c)))
     primal(_m_norm(point)) > maxrad && return false, none
     ds = SVector(1.0 / a, 1.0 / b, 1.0 / c)
@@ -1087,8 +1150,12 @@ See also [`edlimb`](@ref), [`inelpl`](@ref), [`inrypl`](@ref).
 """
 function inedpl(a::Real, b::Real, c::Real, plane::SpicePlane)
     a, b, c = _m_f(a), _m_f(b), _m_f(c)
-    _m_axes_ok(a, b, c) || throw(SpiceError(:degeneratecase,
-        "semi-axes: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"))
+    _m_axes_ok(a, b, c) || throw(
+        SpiceError(
+            :degeneratecase,
+            "semi-axes: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"
+        )
+    )
     found, ellipse = _m_inedpl(a, b, c, plane)
     return found ? ellipse : nothing
 end
@@ -1122,15 +1189,23 @@ See also [`inedpl`](@ref), [`inrypl`](@ref).
 function inelpl(ellips::SpiceEllipse, plane::SpicePlane)
     normal, inpcon = plane.normal, plane.constant
     _m_iszero(normal) && throw(SpiceError(:invalidplane, "the plane has a zero normal vector"))
-    primal(inpcon) < 0.0 && throw(SpiceError(:invalidplane,
-        "the plane has the negative constant $(primal(inpcon))"))
+    primal(inpcon) < 0.0 && throw(
+        SpiceError(
+            :invalidplane,
+            "the plane has the negative constant $(primal(inpcon))"
+        )
+    )
     center, smajor, sminor = ellips.center, ellips.semimajor, ellips.semiminor
     if !_m_iszero(sminor)
         u1, m1 = _m_unorm(smajor)
         u2, _ = _m_unorm(sminor)
         sep = primal(m1) == 0.0 ? 0.0 : primal(_m_usep(u1, u2))
-        abs(sep - Float64(pi) / 2) > 1.0e-9 && throw(SpiceError(:invalidellipse,
-            "the ellipse has semi-axes that are not orthogonal; their separation is $sep rad"))
+        abs(sep - Float64(pi) / 2) > 1.0e-9 && throw(
+            SpiceError(
+                :invalidellipse,
+                "the ellipse has semi-axes that are not orthogonal; their separation is $sep rad"
+            )
+        )
     end
     none = zero(center) - zero(normal)
     if _m_iszero(smajor)
@@ -1162,7 +1237,7 @@ function inelpl(ellips::SpiceEllipse, plane::SpicePlane)
     s1, c1 = sincos(angle1)
     s2, c2 = sincos(angle2)
     return nxpts, 1.0 * center + c1 * smajor + s1 * sminor + none,
-    1.0 * center + c2 * smajor + s2 * sminor + none
+        1.0 * center + c2 * smajor + s2 * sminor + none
 end
 
 @inline function _m_pjelpl(elin::SpiceEllipse, plane::SpicePlane)
@@ -1213,8 +1288,12 @@ See also [`inedpl`](@ref), [`edterm`](@ref).
 function edlimb(a::Real, b::Real, c::Real, viewpt::AbstractVector)
     a, b, c = _m_f(a), _m_f(b), _m_f(c)
     vp = _m_v3(viewpt)
-    _m_axes_ok(a, b, c) || throw(SpiceError(:degeneratecase,
-        "semi-axis lengths: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"))
+    _m_axes_ok(a, b, c) || throw(
+        SpiceError(
+            :degeneratecase,
+            "semi-axis lengths: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"
+        )
+    )
     scale = _m_max(_m_max(a, b), c)
     scla = a / scale
     sclb = b / scale
@@ -1226,14 +1305,22 @@ function edlimb(a::Real, b::Real, c::Real, viewpt::AbstractVector)
         throw(SpiceError(:degeneratecase, "a semi-axis is too small"))
     v = (1.0 / scale) * vp
     level = (v[1] * v[1] / scla2) + (v[2] * v[2] / sclb2) + (v[3] * v[3] / sclc2)
-    primal(level) < 1.0 && throw(SpiceError(:degeneratecase,
-        "the viewing point is inside the ellipsoid"))
+    primal(level) < 1.0 && throw(
+        SpiceError(
+            :degeneratecase,
+            "the viewing point is inside the ellipsoid"
+        )
+    )
     # The limb is in the plane of the points x with (x ⋅ grad at the view point) = 1.
     u, mag = _m_unorm(SVector(v[1] / scla2, v[2] / sclb2, v[3] / sclc2))
     primal(mag) == 0.0 && throw(SpiceError(:zerovector, "the normal of a plane must not be zero"))
     found, limb = _m_inedpl(scla, sclb, sclc, _m_plane(u, 1.0 / mag))
-    found || throw(SpiceError(:degeneratecase,
-        "the ellipsoid shape and the viewing geometry are too extreme; the limb was not found"))
+    found || throw(
+        SpiceError(
+            :degeneratecase,
+            "the ellipsoid shape and the viewing geometry are too extreme; the limb was not found"
+        )
+    )
     return SpiceEllipse(scale * limb.center, scale * limb.semimajor, scale * limb.semiminor)
 end
 
@@ -1270,8 +1357,12 @@ end
     center = ellips.center
     minlen = _m_norm(ellips.semiminor)
     majlen = _m_norm(ellips.semimajor)
-    min(primal(majlen), primal(minlen)) == 0.0 && throw(SpiceError(:degeneratecase,
-        "ellipse semi-axis lengths: $(primal(majlen)) $(primal(minlen))"))
+    min(primal(majlen), primal(minlen)) == 0.0 && throw(
+        SpiceError(
+            :degeneratecase,
+            "ellipse semi-axis lengths: $(primal(majlen)) $(primal(minlen))"
+        )
+    )
     scale = 1.0 / majlen
     smajor = scale * ellips.semimajor
     sminor = scale * ellips.semiminor
@@ -1280,8 +1371,12 @@ end
     r1 = _m_hat(smajor)
     r3 = _m_ucrss(smajor, sminor)
     r2 = _m_ucrss(r3, smajor)
-    _m_iszero(r2) && throw(SpiceError(:dependentvectors,
-        "the semi-axes of the ellipse are linearly dependent"))
+    _m_iszero(r2) && throw(
+        SpiceError(
+            :dependentvectors,
+            "the semi-axes of the ellipse are linearly dependent"
+        )
+    )
     rot = _m_rows(r1, r2, r3)
     t = _m_mxv(rot, tmppnt)
     prjpnt = SVector(t[1], t[2], zero(t[1]))
@@ -1332,8 +1427,12 @@ function npedln(a::Real, b::Real, c::Real, linept::AbstractVector, linedr::Abstr
     lp = _m_v3(linept)
     udir, mag = _m_unorm(_m_v3(linedr))
     primal(mag) == 0.0 && throw(SpiceError(:zerovector, "the line direction is the zero vector"))
-    _m_axes_ok(a, b, c) || throw(SpiceError(:invalidaxislength,
-        "semi-axis lengths: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"))
+    _m_axes_ok(a, b, c) || throw(
+        SpiceError(
+            :invalidaxislength,
+            "semi-axis lengths: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"
+        )
+    )
     scale = _m_max(_m_max(a, b), c)
     scla = a / scale
     sclb = b / scale
@@ -1375,25 +1474,39 @@ the target to the source, the point of the ellipsoid where a plane that is tange
 the spherical source is tangent to the ellipsoid, found by at most eleven corrections
 of the tangent angle.
 """
-function _m_edterm(umbral::Bool, a::Float64, b::Float64, c::Float64, srcrad::Float64,
-        srcpos::SVector{3,Float64}, npts::Int)
-    npts >= 1 || throw(SpiceError(:invalidsize,
-        "the number of terminator points must be positive; it is $npts"))
-    (a > 0.0 && b > 0.0 && c > 0.0) || throw(SpiceError(:invalidaxislength,
-        "semi-axis lengths: a = $a, b = $b, c = $c"))
+function _m_edterm(
+        umbral::Bool, a::Float64, b::Float64, c::Float64, srcrad::Float64,
+        srcpos::SVector{3, Float64}, npts::Int
+    )
+    npts >= 1 || throw(
+        SpiceError(
+            :invalidsize,
+            "the number of terminator points must be positive; it is $npts"
+        )
+    )
+    (a > 0.0 && b > 0.0 && c > 0.0) || throw(
+        SpiceError(
+            :invalidaxislength,
+            "semi-axis lengths: a = $a, b = $b, c = $c"
+        )
+    )
     srcrad > 0.0 || throw(SpiceError(:invalidradius, "the source radius must be positive; it is $srcrad"))
     d = _m_norm(srcpos)
     rmax = max(a, b, c)
     rmin = min(a, b, c)
-    srcrad + rmax >= d && throw(SpiceError(:objectstooclose,
-        "the source is too close to the target: distance $d, radii sum $(srcrad + rmax)"))
+    srcrad + rmax >= d && throw(
+        SpiceError(
+            :objectstooclose,
+            "the source is too close to the target: distance $d, radii sum $(srcrad + rmax)"
+        )
+    )
     z, x, y = _m_frame(-srcpos)
     trans = _m_cols(x, y, z)
     outang = umbral ? asin((srcrad - rmax) / d) : asin((srcrad + rmax) / d)
     inang = umbral ? asin((srcrad - rmin) / d) : asin((srcrad + rmin) / d)
     delta = 2.0 * Float64(pi) / npts
     halfpi = Float64(pi) / 2
-    out = Vector{SVector{3,Float64}}(undef, npts)
+    out = Vector{SVector{3, Float64}}(undef, npts)
     for i in 1:npts
         theta = (i - 1) * delta
         st, ct = sincos(theta)
@@ -1401,7 +1514,7 @@ function _m_edterm(umbral::Bool, a::Float64, b::Float64, c::Float64, srcrad::Flo
         prvdif = 2.0 * Float64(pi)
         prvang = angle + halfpi
         nitr = 0
-        pt = zero(SVector{3,Float64})
+        pt = zero(SVector{3, Float64})
         # invariant: |angle - prvang| decreases; at most 11 passes
         while nitr <= 10 && abs(angle - prvang) < prvdif
             nitr += 1
@@ -1433,12 +1546,24 @@ end
 "Radii of `body` with the checks of `zzgftreb_`."
 function _m_radii(ks::KernelSet, body::Integer)
     v = get(ks.pool, string("BODY", body, "_RADII"), nothing)
-    v === nothing && throw(SpiceError(:kernelvarnotfound,
-        "the variable BODY$(body)_RADII is not in the kernel pool"))
-    v isa Vector{Float64} || throw(SpiceError(:typemismatch,
-        "the variable BODY$(body)_RADII is not numeric"))
-    length(v) == 3 || throw(SpiceError(length(v) > 3 ? :arraytoosmall : :invalidcount,
-        "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"))
+    v === nothing && throw(
+        SpiceError(
+            :kernelvarnotfound,
+            "the variable BODY$(body)_RADII is not in the kernel pool"
+        )
+    )
+    v isa Vector{Float64} || throw(
+        SpiceError(
+            :typemismatch,
+            "the variable BODY$(body)_RADII is not numeric"
+        )
+    )
+    length(v) == 3 || throw(
+        SpiceError(
+            length(v) > 3 ? :arraytoosmall : :invalidcount,
+            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
+        )
+    )
     all(>(0.0), v) || throw(SpiceError(:badaxislength, "a radius of body $body is not positive"))
     return v[1], v[2], v[3]
 end
@@ -1498,16 +1623,22 @@ trgepc, obspos, trmpts = edterm("UMBRAL", "SUN", "MOON", et, "IAU_MOON", "LT+S",
 
 See also [`edlimb`](@ref), [`termpt`](@ref).
 """
-function edterm(ks::KernelSet, trmtyp::AbstractString, source::NameOrID, target::NameOrID,
-        et::Real, fixref::NameOrID, abcorr::AbstractString, obsrvr::NameOrID, npts::Integer)
+function edterm(
+        ks::KernelSet, trmtyp::AbstractString, source::NameOrID, target::NameOrID,
+        et::Real, fixref::NameOrID, abcorr::AbstractString, obsrvr::NameOrID, npts::Integer
+    )
     frcode = fixref isa Integer ? Int(fixref) : namfrm(ks, fixref)
     frcode == 0 && throw(SpiceError(:notranslation, "the frame $fixref has no frame ID code"))
     fd = frame_def(ks, frcode)
     trgid = _m_bodyid(ks, target, :notranslation)
     srcid = _m_bodyid(ks, source, :notranslation)
     obsid = _m_bodyid(ks, obsrvr, :notranslation)
-    fd.center == trgid || throw(SpiceError(:invalidfixref,
-        "the frame $fixref is not centered on the target body $target"))
+    fd.center == trgid || throw(
+        SpiceError(
+            :invalidfixref,
+            "the frame $fixref is not centered on the target body $target"
+        )
+    )
     trgrad = _m_radii(ks, trgid)
     srcrad = _m_radii(ks, srcid)
     r = max(srcrad[1], srcrad[2], srcrad[3])
@@ -1522,14 +1653,22 @@ function edterm(ks::KernelSet, trmtyp::AbstractString, source::NameOrID, target:
     trgepc = corr.uselt ? (corr.transmit ? t0 + lttarg : t0 - lttarg) : t0
     srcpos, _ = spkpos(ks, Int(srcid), trgepc, frcode, abcorr, Int(trgid))
     kind = uppercase(strip(trmtyp))
-    kind in ("UMBRAL", "PENUMBRAL") || throw(SpiceError(:notsupported,
-        "the terminator type $trmtyp is not supported; use UMBRAL or PENUMBRAL"))
+    kind in ("UMBRAL", "PENUMBRAL") || throw(
+        SpiceError(
+            :notsupported,
+            "the terminator type $trmtyp is not supported; use UMBRAL or PENUMBRAL"
+        )
+    )
     trmpts = _m_edterm(kind == "UMBRAL", trgrad[1], trgrad[2], trgrad[3], r, srcpos, Int(npts))
     return trgepc, -trgpos, trmpts
 end
-edterm(ctx::SpiceContext, trmtyp::AbstractString, source::NameOrID, target::NameOrID, et::Real,
-    fixref::NameOrID, abcorr::AbstractString, obsrvr::NameOrID, npts::Integer) =
+edterm(
+    ctx::SpiceContext, trmtyp::AbstractString, source::NameOrID, target::NameOrID, et::Real,
+    fixref::NameOrID, abcorr::AbstractString, obsrvr::NameOrID, npts::Integer
+) =
     edterm(kernelset(ctx), trmtyp, source, target, et, fixref, abcorr, obsrvr, npts)
-edterm(trmtyp::AbstractString, source::NameOrID, target::NameOrID, et::Real, fixref::NameOrID,
-    abcorr::AbstractString, obsrvr::NameOrID, npts::Integer) =
+edterm(
+    trmtyp::AbstractString, source::NameOrID, target::NameOrID, et::Real, fixref::NameOrID,
+    abcorr::AbstractString, obsrvr::NameOrID, npts::Integer
+) =
     edterm(default_context(), trmtyp, source, target, et, fixref, abcorr, obsrvr, npts)

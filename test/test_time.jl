@@ -20,6 +20,28 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 import ForwardDiff
 
+"The error kind of `str2et_c` or `utc2et_c` (`f`) for the string `s`, `:none` without one."
+function cspice_time_kind(f::Symbol, s)
+    et = Ref(0.0)
+    if f === :str2et_c
+        ccall((:str2et_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Float64}), s, et)
+    else
+        ccall((:utc2et_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Float64}), s, et)
+    end
+    return cspice_kind()
+end
+
+"The error kind of `timdef_c` for the arguments (`:none` without an error); a failed call changes no default."
+function cspice_timdef(action, item, value)
+    buf = zeros(UInt8, 64)
+    copyto!(buf, codeunits(value))
+    ccall(
+        (:timdef_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cint, Ptr{UInt8}),
+        action, item, 64, buf
+    )
+    return cspice_kind()
+end
+
 "Value of `f()` from CSPICE, or `nothing` if CSPICE signals an error."
 function oracle_outcome(f)
     try
@@ -49,7 +71,7 @@ Run `oracle(x)` and `neo(x)` for every `x` of `inputs` and count the outcomes: `
 strings) and the largest absolute difference of two numeric values. The first
 disagreements are printed. Postcondition: `both + rejected + mixed == length(inputs)`.
 """
-function compare_outcomes(what::AbstractString, inputs, oracle, neo; atol::Float64=0.0)
+function compare_outcomes(what::AbstractString, inputs, oracle, neo; atol::Float64 = 0.0)
     both = rejected = mixed = unequal = 0
     worst = 0.0
     shown = 0
@@ -61,9 +83,11 @@ function compare_outcomes(what::AbstractString, inputs, oracle, neo; atol::Float
         elseif ref === nothing || got === nothing
             mixed += 1
             shown += 1
-            shown <= 8 && println("    outcome differs for ", repr(x), ": CSPICE ",
+            shown <= 8 && println(
+                "    outcome differs for ", repr(x), ": CSPICE ",
                 ref === nothing ? "rejects" : repr(ref), ", Almanac ",
-                got === nothing ? "rejects" : repr(got))
+                got === nothing ? "rejects" : repr(got)
+            )
         else
             both += 1
             same = if ref isa Real
@@ -75,14 +99,20 @@ function compare_outcomes(what::AbstractString, inputs, oracle, neo; atol::Float
             if !same
                 unequal += 1
                 shown += 1
-                shown <= 8 && println("    value differs for ", repr(x), ": CSPICE ",
-                    repr(ref), ", Almanac ", repr(got))
+                shown <= 8 && println(
+                    "    value differs for ", repr(x), ": CSPICE ",
+                    repr(ref), ", Almanac ", repr(got)
+                )
             end
         end
     end
     @assert both + rejected + mixed == length(inputs)
-    measured(@sprintf("  %-44s n=%-6d accepted=%-6d rejected=%-6d mixed=%d unequal=%d max|d|=%.3e",
-        what, length(inputs), both, rejected, mixed, unequal, worst))
+    measured(
+        @sprintf(
+            "  %-44s n=%-6d accepted=%-6d rejected=%-6d mixed=%d unequal=%d max|d|=%.3e",
+            what, length(inputs), both, rejected, mixed, unequal, worst
+        )
+    )
     return (; both, rejected, mixed, unequal, worst)
 end
 
@@ -91,26 +121,30 @@ end
 # ---------------------------------------------------------------------------------
 
 const TS_MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-const TS_MONTH = ["January", "February", "March", "April", "May", "June", "July", "August",
-    "September", "October", "November", "December"]
+const TS_MONTH = [
+    "January", "February", "March", "April", "May", "June", "July", "August",
+    "September", "October", "November", "December",
+]
 const TS_WKD = ["Sun", "Monday", "Tue", "Wednesday", "Thu", "Friday", "Sat", "Tues", "Thursday"]
-const TS_ZONE = ["PDT", "PST", "MDT", "MST", "CDT", "CST", "EDT", "EST", "UTC+5", "UTC-7:30",
-    "UTC+12:59", "UTC-0:15", "utc+3", "UTC+05:30", "pst"]
+const TS_ZONE = [
+    "PDT", "PST", "MDT", "MST", "CDT", "CST", "EDT", "EST", "UTC+5", "UTC-7:30",
+    "UTC+12:59", "UTC-0:15", "utc+3", "UTC+05:30", "pst",
+]
 const TS_SYSTEM = ["UTC", "TDB", "TDT", "utc", "tdb", "(TDB)", "(UTC)"]
 
 "Days of month `m` of the Gregorian year `y`."
 ts_dim(y, m) = m == 2 ? (((y % 4 == 0) && (y % 100 != 0)) || (y % 400 == 0) ? 29 : 28) :
-               (m in (4, 6, 9, 11) ? 30 : 31)
+    (m in (4, 6, 9, 11) ? 30 : 31)
 
 "Random valid Gregorian date (year, month, day) with the year in `years`."
-function ts_date(rng, years=1000:2999)
+function ts_date(rng, years = 1000:2999)
     y = rand(rng, years)
     m = rand(rng, 1:12)
     return y, m, rand(rng, 1:ts_dim(y, m))
 end
 
 "Day of year of a Gregorian date."
-ts_doy(y, m, d) = sum(ts_dim(y, k) for k in 1:m-1; init=0) + d
+ts_doy(y, m, d) = sum(ts_dim(y, k) for k in 1:(m - 1); init = 0) + d
 
 "Month name in a random spelling: abbreviation, full name, prefix of the full name, any case, optional period."
 function ts_monthname(rng, m)
@@ -133,8 +167,8 @@ function ts_clock(rng)
     h = @sprintf("%02d", rand(rng, 0:23))
     mi = @sprintf("%02d", rand(rng, 0:59))
     r = rand(rng)
-    r < 0.60 && return string(h, ':', mi, ':', ts_seconds(rng))
-    r < 0.80 && return string(h, ':', mi)
+    r < 0.6 && return string(h, ':', mi, ':', ts_seconds(rng))
+    r < 0.8 && return string(h, ':', mi)
     r < 0.88 && return string(h, ':', mi, '.', rand(rng, 0:9))
     return ""
 end
@@ -145,9 +179,9 @@ function ts_iso(rng)
     date = rand(rng) < 0.7 ? @sprintf("%04d-%02d-%02d", y, m, d) : @sprintf("%04d-%03d", y, ts_doy(y, m, d))
     r = rand(rng)
     time = r < 0.6 ? @sprintf("%02d:%02d:", rand(rng, 0:23), rand(rng, 0:59)) * ts_seconds(rng) :
-           r < 0.75 ? @sprintf("%02d:%02d", rand(rng, 0:23), rand(rng, 0:59)) :
-           r < 0.85 ? @sprintf("%02d", rand(rng, 0:23)) :
-           r < 0.92 ? @sprintf("%02d.%d", rand(rng, 0:23), rand(rng, 0:9)) : ""
+        r < 0.75 ? @sprintf("%02d:%02d", rand(rng, 0:23), rand(rng, 0:59)) :
+        r < 0.85 ? @sprintf("%02d", rand(rng, 0:23)) :
+        r < 0.92 ? @sprintf("%02d.%d", rand(rng, 0:23), rand(rng, 0:9)) : ""
     return string(date, 'T', time, rand(rng) < 0.3 ? "Z" : "")
 end
 
@@ -156,9 +190,13 @@ function ts_named(rng)
     y, m, d = ts_date(rng)
     mon = ts_monthname(rng, m)
     sep = rand(rng, (" ", " ", ", ", "-", "/", "  "))
-    date = rand(rng, (string(mon, ' ', d, sep, y), string(d, ' ', mon, ' ', y),
-        string(y, ' ', mon, ' ', d), string(mon, ' ', d, ", ", y), string(d, '-', mon, '-', y),
-        string(y, sep, mon, sep, d), string(y, ' ', d, ' ', mon), string(mon, sep, d, sep, y)))
+    date = rand(
+        rng, (
+            string(mon, ' ', d, sep, y), string(d, ' ', mon, ' ', y),
+            string(y, ' ', mon, ' ', d), string(mon, ' ', d, ", ", y), string(d, '-', mon, '-', y),
+            string(y, sep, mon, sep, d), string(y, ' ', d, ' ', mon), string(mon, sep, d, sep, y),
+        )
+    )
     clock = ts_clock(rng)
     s = clock == "" ? date : (rand(rng) < 0.8 ? string(date, ' ', clock) : string(clock, ' ', date))
     rand(rng) < 0.2 && (s = string(rand(rng, TS_WKD), rand(rng, (" ", ", ", ". ")), s))
@@ -169,10 +207,14 @@ end
 function ts_numeric(rng)
     y, m, d = ts_date(rng, 1969:2068)
     yy = y % 100
-    date = rand(rng, (string(m, '/', d, '/', y), string(m, '-', d, '-', y), string(y, ' ', m, ' ', d),
-        string(m, '/', d, '/', @sprintf("%02d", yy)), string(y, '-', m, '-', d),
-        string(m, ' ', d, ' ', y), string(m, '/', d, "/'", @sprintf("%02d", yy)),
-        string(y, ", ", m, ", ", d), string(y, '/', m, '/', d)))
+    date = rand(
+        rng, (
+            string(m, '/', d, '/', y), string(m, '-', d, '-', y), string(y, ' ', m, ' ', d),
+            string(m, '/', d, '/', @sprintf("%02d", yy)), string(y, '-', m, '-', d),
+            string(m, ' ', d, ' ', y), string(m, '/', d, "/'", @sprintf("%02d", yy)),
+            string(y, ", ", m, ", ", d), string(y, '/', m, '/', d),
+        )
+    )
     clock = ts_clock(rng)
     return clock == "" ? date : string(date, ' ', clock)
 end
@@ -191,8 +233,12 @@ end
 "Julian date string: `JD 2451545.123`, `2451545.5 JD`, `(JD)`, a negative date, an optional system."
 function ts_julian(rng)
     jd = rand(rng) < 0.9 ? 1.0e6 + 3.0e6 * rand(rng) : -5.0e5 * rand(rng)
-    num = rand(rng, (@sprintf("%.5f", jd), @sprintf("%.1f", jd), @sprintf("%.0f", jd),
-        @sprintf("%.9f", jd), @sprintf("%.0f.", jd)))
+    num = rand(
+        rng, (
+            @sprintf("%.5f", jd), @sprintf("%.1f", jd), @sprintf("%.0f", jd),
+            @sprintf("%.9f", jd), @sprintf("%.0f.", jd),
+        )
+    )
     label = rand(rng, ("JD", "jd", "(JD)", "Jd"))
     s = rand(rng) < 0.7 ? string(label, ' ', num) : string(num, ' ', label)
     r = rand(rng)
@@ -206,8 +252,12 @@ function ts_era(rng)
     d = rand(rng, 1:28)
     era = rand(rng, ("B.C.", "A.D.", "BC", "AD", "b.c.", "a.d.", "bc", "ad", "(B.C.)"))
     mon = ts_monthname(rng, m)
-    date = rand(rng, (string(y, ' ', era, ' ', mon, ' ', d), string(mon, ' ', d, ", ", y, ' ', era),
-        string(d, ' ', mon, ' ', y, ' ', era), string(era, ' ', y, ' ', mon, ' ', d)))
+    date = rand(
+        rng, (
+            string(y, ' ', era, ' ', mon, ' ', d), string(mon, ' ', d, ", ", y, ' ', era),
+            string(d, ' ', mon, ' ', y, ' ', era), string(era, ' ', y, ' ', mon, ' ', d),
+        )
+    )
     clock = ts_clock(rng)
     return clock == "" ? date : string(date, ' ', clock)
 end
@@ -217,26 +267,42 @@ function ts_ampm(rng)
     y, m, d = ts_date(rng)
     h = rand(rng) < 0.9 ? rand(rng, 1:12) : rand(rng, (0, 13, 12))
     ap = rand(rng, ("A.M.", "P.M.", "AM", "PM", "am", "pm", "a.m.", "p.m."))
-    clock = rand(rng, (string(h, ':', @sprintf("%02d", rand(rng, 0:59)), ':', ts_seconds(rng)),
-        string(h, ':', @sprintf("%02d", rand(rng, 0:59)))))
+    clock = rand(
+        rng, (
+            string(h, ':', @sprintf("%02d", rand(rng, 0:59)), ':', ts_seconds(rng)),
+            string(h, ':', @sprintf("%02d", rand(rng, 0:59))),
+        )
+    )
     mon = ts_monthname(rng, m)
-    return rand(rng, (string(mon, ' ', d, ", ", y, ' ', clock, ' ', ap),
-        string(clock, ' ', ap, ' ', mon, ' ', d, ' ', y), string(d, ' ', mon, ' ', y, ' ', clock, ap)))
+    return rand(
+        rng, (
+            string(mon, ' ', d, ", ", y, ' ', clock, ' ', ap),
+            string(clock, ' ', ap, ' ', mon, ' ', d, ' ', y), string(d, ' ', mon, ' ', y, ' ', clock, ap),
+        )
+    )
 end
 
 "String with a time zone or a time system (sometimes both, which CSPICE rejects)."
 function ts_zoned(rng)
     y, m, d = ts_date(rng)
     mon = ts_monthname(rng, m)
-    clock = string(@sprintf("%02d", rand(rng, 0:23)), ':', @sprintf("%02d", rand(rng, 0:59)), ':',
-        ts_seconds(rng))
+    clock = string(
+        @sprintf("%02d", rand(rng, 0:23)), ':', @sprintf("%02d", rand(rng, 0:59)), ':',
+        ts_seconds(rng)
+    )
     r = rand(rng)
-    tag = r < 0.55 ? rand(rng, TS_ZONE) : (r < 0.95 ? rand(rng, TS_SYSTEM) :
-                                           string(rand(rng, TS_ZONE), ' ', rand(rng, TS_SYSTEM)))
+    tag = r < 0.55 ? rand(rng, TS_ZONE) : (
+            r < 0.95 ? rand(rng, TS_SYSTEM) :
+            string(rand(rng, TS_ZONE), ' ', rand(rng, TS_SYSTEM))
+        )
     rand(rng) < 0.1 && !startswith(tag, "(") && (tag = string('(', tag, ')'))
-    return rand(rng, (string(mon, ' ', d, ", ", y, ' ', clock, ' ', tag),
-        string(y, ' ', mon, ' ', d, ' ', clock, ' ', tag), string(clock, ' ', tag, ' ', mon, ' ', d, ' ', y),
-        string(y, '-', m, '-', d, ' ', clock, ' ', tag)))
+    return rand(
+        rng, (
+            string(mon, ' ', d, ", ", y, ' ', clock, ' ', tag),
+            string(y, ' ', mon, ' ', d, ' ', clock, ' ', tag), string(clock, ' ', tag, ' ', mon, ' ', d, ' ', y),
+            string(y, '-', m, '-', d, ' ', clock, ' ', tag),
+        )
+    )
 end
 
 "String at second 60 of a minute: at a real leap second, at another date, and in a zone."
@@ -263,14 +329,20 @@ function ts_outofrange(rng)
     k == 5 && (s = rand(rng, (60, 61, 99)))
     k == 6 && return @sprintf("%04d-%03dT%02d:%02d:%02d", y, rand(rng, (0, 366, 367, 400)), h, mi, s)
     k == 7 && return string(y, ' ', TS_MON[clamp(m, 1, 12)], ' ', d, ".5 ", h, ':', mi, ':', s)
-    return rand(rng, (@sprintf("%04d-%02d-%02dT%02d:%02d:%02d", y, m, d, h, mi, s),
-        string(m, '/', d, '/', y, ' ', h, ':', mi, ':', s),
-        string(y, ' ', m, ' ', d, ' ', h, ':', mi, ':', s)))
+    return rand(
+        rng, (
+            @sprintf("%04d-%02d-%02dT%02d:%02d:%02d", y, m, d, h, mi, s),
+            string(m, '/', d, '/', y, ' ', h, ':', mi, ':', s),
+            string(y, ' ', m, ' ', d, ' ', h, ':', mi, ':', s),
+        )
+    )
 end
 
 const TS_ALPHABET = collect(" ,-/:.'()TZJDAPMUCBjtd+0123456789")
-const TS_EXTRA = [" TDB", " PM", " B.C.", " UTC+3", " Monday", " JD", " A.D.", " PDT", " ::", " //",
-    " 12:00", " 1999", " Jan", ",", "-", " (", ")", " '", " T", "Z", " UTC", " 7", ".5"]
+const TS_EXTRA = [
+    " TDB", " PM", " B.C.", " UTC+3", " Monday", " JD", " A.D.", " PDT", " ::", " //",
+    " 12:00", " 1999", " Jan", ",", "-", " (", ")", " '", " T", "Z", " UTC", " 7", ".5",
+]
 
 "A valid string with one random edit: a character removed, doubled, inserted or replaced, two words exchanged, or a word added."
 function ts_mutate(rng, s::String)
@@ -299,7 +371,8 @@ function ts_mutate(rng, s::String)
 end
 
 "Strings that both engines must reject."
-const TS_MALFORMED = ["", " ", "\t", "hello", "Jan", "2000", "12:00:00", "Jan 2000", "2000 Jan",
+const TS_MALFORMED = [
+    "", " ", "\t", "hello", "Jan", "2000", "12:00:00", "Jan 2000", "2000 Jan",
     "2000-01-01T", "2000-01-01T12:00:00 TDB", "2000-1-1T12:00:00.0.0", "T12:00:00",
     "2000-01-01T25:00:00", "2000-02-30", "1999-02-29", "2000-13-01", "2000-00-10",
     "2000 Jan 1 12:00:00 PDT TDB", "2000 Jan 1 12:00:00 PDT EST", "2000 Jan 1 TDB TDT",
@@ -318,10 +391,12 @@ const TS_MALFORMED = ["", " ", "\t", "hello", "Jan", "2000", "12:00:00", "Jan 20
     repeat("1 ", 70), repeat("Wednesday", 40) * " 2000 Jan 1",
     # Fixed cases from the random edits: a Julian date with a calendar component, two
     # days of the month, and a day of the month without a month.
-    "Jan JD 1246975.0", "23 Nov 2070 2:45:4:6.35 P.M.", "2370-251 :: 0:4:51:24"]
+    "Jan JD 1246975.0", "23 Nov 2070 2:45:4:6.35 P.M.", "2370-251 :: 0:4:51:24",
+]
 
 "Examples of the header of `str2et.c` (the forms that it lists as accepted)."
-const TS_STR2ET_EXAMPLES = ["1996-12-18T12:28:28", "1986-01-18T12", "1986-01-18T12:19",
+const TS_STR2ET_EXAMPLES = [
+    "1996-12-18T12:28:28", "1986-01-18T12", "1986-01-18T12:19",
     "1986-01-18T12:19:52.18", "1986-01-18T12:19:52.18Z", "1995-08T18:28:12", "1995-08T18:28:12Z",
     "1995-18T", "0000-01-01T", "Tue Aug  6 11:10:57  1996", "1 DEC 1997 12:28:29.192",
     "2/3/1996 17:18:12.002", "Mon Apr 22 09:32:38 PDT 1996", "Dec 18, 11:59:59.9999 A.M. 1995",
@@ -341,10 +416,12 @@ const TS_STR2ET_EXAMPLES = ["1996-12-18T12:28:28", "1986-01-18T12", "1986-01-18T
     "0099-01-01T00:00:00", "99-01-01T00:00:00", "68-12-31T23:59:59", "69-01-01T00:00:00",
     "Thursday, April 4, 1996 7:23 p.m.", "Thu. April 4, 1996", "THURS apr 4 '96", "4.5 Apr 1996",
     "1996 Apr 4.75", "1996 Apr 4 12.5", "1996 Apr 4 12:30.5", "1996-095.5//", "5/6/7",
-    "1996-12-18T12:28:28.9999999999999999", "2000 Jan 1 00:00:00.00000000000000000000001"]
+    "1996-12-18T12:28:28.9999999999999999", "2000 Jan 1 00:00:00.00000000000000000000001",
+]
 
 "Pictures of the header of `timout.c` and other pictures that use every mark."
-const TS_PICTURES = ["MON DD,YYYY  HR:MN:SC.#### (TDB) ::TDB", "MON DD,YYYY  HR:MN:SC.#### (TT) ::TT",
+const TS_PICTURES = [
+    "MON DD,YYYY  HR:MN:SC.#### (TDB) ::TDB", "MON DD,YYYY  HR:MN:SC.#### (TT) ::TT",
     "MON DD,YYYY  HR:MN:SC.#### (UTC)", "YYYY-MM-DD ::JCAL", "YYYY-MM-DD ::MCAL", "YYYY-MM-DD ::GCAL",
     "YYYY-DOYTHR:MN:SC ::RND", "YYYY-DOY // HR:MN:SC.### ::UTC", "MON DD, YYYY HR:MN:SC ::UTC",
     "Month DD, YYYY", "DD-MON-YYYY HR:MN", "Wkd Mon DD HR:MN:SC PDT YYYY ::UTC-7",
@@ -360,13 +437,16 @@ const TS_PICTURES = ["MON DD,YYYY  HR:MN:SC.#### (TDB) ::TDB", "MON DD,YYYY  HR:
     "Wkd ::UTC+9", "Weekday ::TDB", "wkd, DD ::JCAL", "", " ", "no marks at all", "#", ".#", "###.###",
     "YYYYMMDD", "YYYY#", "SC.", "SC..#", "SC.#.#", "HR:MN:SC.### xyz .## #", "::RND", "::TDB",
     "YYYY-MM-DD ::TRNC", "YYYY ::RND ::TRNC", "Mon DD, YYYY AP:MN:SC ampm ::RND",
-    "DD Month YYYY, AP ampm ::UTC-8", "YYYY MM DD HR MN SC ::TT ::RND", "ERA era ?ERA? ?era? YYYY"]
+    "DD Month YYYY, AP ampm ::UTC-8", "YYYY MM DD HR MN SC ::TT ::RND", "ERA era ?ERA? ?era? YYYY",
+]
 
 "A random picture: marks and literal text in a random order, with optional system, calendar and rounding marks."
 function ts_picture(rng)
-    marks = ["YYYY", "YR", "MON", "Mon", "mon", "MONTH", "Month", "month", "MM", "DOY", "WKD", "Wkd",
+    marks = [
+        "YYYY", "YR", "MON", "Mon", "mon", "MONTH", "Month", "month", "MM", "DOY", "WKD", "Wkd",
         "wkd", "WEEKDAY", "Weekday", "weekday", "DD", "MN", "HR", "SC", "JULIAND", "SP2000", "SP1950",
-        "ERA", "era", "?ERA?", "?era?", "AMPM", "ampm", "AP"]
+        "ERA", "era", "?ERA?", "?era?", "AMPM", "ampm", "AP",
+    ]
     seps = [" ", "-", ":", "/", ", ", "T", " // ", "", " at "]
     io = IOBuffer()
     for _ in 1:rand(rng, 1:6)
@@ -374,8 +454,14 @@ function ts_picture(rng)
         rand(rng) < 0.35 && print(io, ".#", "#"^rand(rng, 0:5))
         print(io, rand(rng, seps))
     end
-    rand(rng) < 0.5 && print(io, ' ', rand(rng, ("::UTC", "::TDB", "::TDT", "::TT", "::UTC+5:30",
-        "::UTC-8", "::UTC+0:45", "::UTC-11:59")))
+    rand(rng) < 0.5 && print(
+        io, ' ', rand(
+            rng, (
+                "::UTC", "::TDB", "::TDT", "::TT", "::UTC+5:30",
+                "::UTC-8", "::UTC+0:45", "::UTC-11:59",
+            )
+        )
+    )
     rand(rng) < 0.4 && print(io, ' ', rand(rng, ("::GCAL", "::JCAL", "::MCAL")))
     rand(rng) < 0.4 && print(io, ' ', rand(rng, ("::RND", "::TRNC")))
     return String(take!(io))
@@ -393,8 +479,10 @@ function oracle_et2utc(et::Float64, format::String, prec::Int)
     # A wrapper of SPICE.jl that does not look at the error state (`tpictr`) can leave
     # an error of an earlier call in it.
     ccall((:reset_c, SPICE.libcspice), Cvoid, ())
-    ccall((:et2utc_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Cint, Cint, Ptr{UInt8}),
-        et, format, prec, length(buf), buf)
+    ccall(
+        (:et2utc_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Cint, Cint, Ptr{UInt8}),
+        et, format, prec, length(buf), buf
+    )
     SPICE.handleerror()
     return GC.@preserve buf unsafe_string(pointer(buf))
 end
@@ -426,8 +514,10 @@ function oracle_tparse(s::AbstractString)
     msg = zeros(UInt8, 128)
     out = Ref{Cdouble}(0.0)
     ccall((:reset_c, SPICE.libcspice), Cvoid, ())
-    ccall((:tparse_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ref{Cdouble}, Ptr{UInt8}),
-        s, length(msg), out, msg)
+    ccall(
+        (:tparse_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ref{Cdouble}, Ptr{UInt8}),
+        s, length(msg), out, msg
+    )
     SPICE.handleerror()
     text = GC.@preserve msg unsafe_string(pointer(msg))
     isempty(text) || throw(SPICE.SpiceError(text))
@@ -446,8 +536,10 @@ function oracle_tpictr(s::AbstractString)
     msg = zeros(UInt8, 128)
     ok = Ref{Cint}(0)
     ccall((:reset_c, SPICE.libcspice), Cvoid, ())
-    ccall((:tpictr_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}),
-        s, length(pic), length(msg), pic, ok, msg)
+    ccall(
+        (:tpictr_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}),
+        s, length(pic), length(msg), pic, ok, msg
+    )
     SPICE.handleerror()
     ok[] != 0 || throw(SPICE.SpiceError(GC.@preserve msg unsafe_string(pointer(msg))))
     return GC.@preserve pic unsafe_string(pointer(pic))
@@ -473,8 +565,10 @@ function oracle_ttrans(from::String, to::String, tvec)
     v = zeros(Float64, 10)
     v[1:length(tvec)] .= tvec
     ccall((:reset_c, SPICE.libcspice), Cvoid, ())
-    ccall((:ttrans_, SPICE.libcspice), Cint, (Cstring, Cstring, Ptr{Float64}, Cint, Cint),
-        from, to, v, sizeof(from), sizeof(to))
+    ccall(
+        (:ttrans_, SPICE.libcspice), Cint, (Cstring, Cstring, Ptr{Float64}, Cint, Cint),
+        from, to, v, sizeof(from), sizeof(to)
+    )
     return oracle_outcome(() -> (SPICE.handleerror(); Tuple(v[1:7])))
 end
 
@@ -508,13 +602,17 @@ function ts_timevector(rng, from::String)
     s = wild ? 200000.0 * (rand(rng) - 0.5) : 60.0 * rand(rng)
     rand(rng) < 0.2 && (s = Float64(rand(rng, (0, 59, 60, 61, 86400))))
     secs = 4.0e10 * (rand(rng) - 0.5) * (wild ? 5.0 : 1.0)
-    from in ("YMD", "YMDF") && return (y, Float64(wild ? rand(rng, -20:40) : rand(rng, 1:12)),
-        Float64(wild ? rand(rng, -40:400) : rand(rng, 1:28)), h, mi, s, 0.0)
+    from in ("YMD", "YMDF") && return (
+        y, Float64(wild ? rand(rng, -20:40) : rand(rng, 1:12)),
+        Float64(wild ? rand(rng, -40:400) : rand(rng, 1:28)), h, mi, s, 0.0,
+    )
     from in ("YD", "YDF") && return (y, Float64(wild ? rand(rng, -400:800) : rand(rng, 1:365)), h, mi, s, 0.0, 0.0)
     from in ("YD.D", "YD.DF") && return (y, 1.0 + 365.0 * rand(rng), 0.0, 0.0, 0.0, 0.0, 0.0)
     from in ("YWD", "YWDF") && return (y, Float64(rand(rng, 1:53)), Float64(rand(rng, 1:7)), h, mi, s, 0.0)
-    from in ("YMWD", "YMWDF") && return (y, Float64(rand(rng, 1:12)), Float64(rand(rng, 1:5)),
-        Float64(rand(rng, 1:7)), h, mi, s)
+    from in ("YMWD", "YMWDF") && return (
+        y, Float64(rand(rng, 1:12)), Float64(rand(rng, 1:5)),
+        Float64(rand(rng, 1:7)), h, mi, s,
+    )
     from == "DAYSEC" && return (Float64(rand(rng, 700000:760000)), s, 0.0, 0.0, 0.0, 0.0, 0.0)
     from == "DP2000" && return (Float64(rand(rng, -20000:20000)), s, 0.0, 0.0, 0.0, 0.0, 0.0)
     from in ("JDUTC", "JDTDB", "JDTDT", "JED") && return (2451545.0 + secs / 86400.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0)
@@ -530,7 +628,7 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
 
     # Leap-second epochs of the kernel: UTC seconds past J2000 of the day start after
     # each leap second, the calendar day that ends with it, and the ET of that instant.
-    at = SPICE.gdpool("DELTET/DELTA_AT"; room=400)[2:2:end]
+    at = SPICE.gdpool("DELTET/DELTA_AT"; room = 400)[2:2:end]
     leap_et = [SPICE.str2et(SPICE.et2utc(t + 100.0, "ISOC", 0)[1:10] * "T00:00:00") for t in at]
     leapdays = map(leap_et[2:end]) do t
         day = SPICE.et2utc(t - 3600.0, "ISOC", 0)
@@ -539,12 +637,14 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
     @test length(leapdays) >= 27
 
     n = nsample(150, 400)     # strings of each family (the timdef checks take 150 of a family)
-    families = ["ISO" => () -> ts_iso(rng), "month name" => () -> ts_named(rng),
+    families = [
+        "ISO" => () -> ts_iso(rng), "month name" => () -> ts_named(rng),
         "numeric month" => () -> ts_numeric(rng), "day of year" => () -> ts_dayofyear(rng),
         "Julian date" => () -> ts_julian(rng), "era" => () -> ts_era(rng), "A.M./P.M." => () -> ts_ampm(rng),
         "zone or system" => () -> ts_zoned(rng), "second 60" => () -> ts_leap(rng, leapdays),
-        "out of range" => () -> ts_outofrange(rng)]
-    corpus = Dict{String,Vector{String}}(name => [gen() for _ in 1:n] for (name, gen) in families)
+        "out of range" => () -> ts_outofrange(rng),
+    ]
+    corpus = Dict{String, Vector{String}}(name => [gen() for _ in 1:n] for (name, gen) in families)
     valid = reduce(vcat, [corpus[name] for (name, _) in families])
     corpus["one random edit"] = [ts_mutate(rng, rand(rng, valid)) for _ in 1:10n]
     corpus["two random edits"] = [ts_mutate(rng, ts_mutate(rng, rand(rng, valid))) for _ in 1:5n]
@@ -568,35 +668,68 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test corpus["out of range"] != [] && accepted > 15n ÷ 2
         println("  strings with a value in CSPICE that depends on the call before: ", length(stale))
         @test all(oracle_stale, stale)
-        @test all(s -> throws_kind(() -> str2et(ctx, s), :badtime), stale)
-        @test all(s -> throws_kind(() -> utc2et(ctx, s), :badtime), stale)
-        @test all(s -> throws_kind(() -> tparse(s), :badtime), filter(s -> !occursin("TDB", s), stale))
+        # a Julian date without a value: the kind of CSPICE for "JD" alone
+        @test all(s -> throws_kind(() -> str2et(ctx, s), :unparsedtime), stale)
+        @test all(s -> throws_kind(() -> utc2et(ctx, s), :invalidtimestring), stale)
+        @test all(s -> throws_kind(() -> tparse(s), :unparsedtime), filter(s -> !occursin("TDB", s), stale))
+        # The error kinds are the short messages of CSPICE, for every string that both reject.
+        cases = filter(!in(Set(stale)), unique(reduce(vcat, [corpus[name] for name in order])))
+        for (f, cf) in ((str2et, :str2et_c), (utc2et, :utc2et_c))
+            got(s) = try
+                f(ctx, s); :none
+            catch e
+                e isa SpiceError ? e.kind : rethrow()
+            end
+            bad = [
+                (s, k, got(s)) for s in cases for k in (cspice_time_kind(cf, s),)
+                    if k !== :none && got(s) !== :none && k !== got(s)
+            ]
+            isempty(bad) || @info "error kinds that differ from CSPICE" f first(bad, 5)
+            @test isempty(bad)
+        end
     end
 
     @apart @testset "str2et, header examples and malformed strings" begin
-        r = compare_outcomes("str2et, examples of str2et.c", TS_STR2ET_EXAMPLES, SPICE.str2et,
-            s -> str2et(ctx, s))
+        r = compare_outcomes(
+            "str2et, examples of str2et.c", TS_STR2ET_EXAMPLES, SPICE.str2et,
+            s -> str2et(ctx, s)
+        )
         @test r.mixed == 0 && r.unequal == 0
         @test r.both >= length(TS_STR2ET_EXAMPLES) - 12
         r = compare_outcomes("str2et, malformed strings", TS_MALFORMED, SPICE.str2et, s -> str2et(ctx, s))
         @test r.mixed == 0 && r.unequal == 0
         @test r.rejected >= length(TS_MALFORMED) - 6
-        kind(s) = try str2et(ctx, s); nothing catch e; e isa SpiceError ? e.kind : rethrow() end
-        @test all(s -> kind(s) in (nothing, :badtime), TS_MALFORMED)
+        kind(s) = try
+            str2et(ctx, s); nothing
+        catch e
+            e isa SpiceError ? e.kind : rethrow()
+        end
+        bad = [(s, kind(s), cspice_time_kind(:str2et_c, s)) for s in TS_MALFORMED]
+        filter!(x -> x[2] !== nothing && x[2] !== x[3], bad)
+        isempty(bad) || @info "malformed strings: kinds that differ from CSPICE" bad
+        @test isempty(bad)
         # A Julian date whose day number is outside the 32-bit integers: the day
         # arithmetic of CSPICE wraps, and the result has the sign of the wrapped number.
         jds = filter(!cast_dependent, ["238409829538 Jd", "238409829538.5 JD", "JD 5373484.5"])
-        r = compare_outcomes("str2et, Julian date above the integer range", jds, SPICE.str2et,
-            s -> str2et(ctx, s))
+        r = compare_outcomes(
+            "str2et, Julian date above the integer range", jds, SPICE.str2et,
+            s -> str2et(ctx, s)
+        )
         @test r.both == length(jds) && r.unequal == 0
         # The message says what is wrong with the string.
-        msg(s) = try str2et(ctx, s); "" catch e; e.msg end
+        msg(s) = try
+            str2et(ctx, s); ""
+        catch e
+            e.msg
+        end
         @test occursin("<", msg("2000 Jan 1 12:00:00 XYZ")) && occursin("unrecognizable", msg("2000 Jann 1"))
         @test occursin("month", lowercase(msg("2000-13-01")))
         @test occursin("seconds", lowercase(msg("2000 Jan 1 23:59:60")))
         @test occursin("blank", msg("  "))
         @test throws_kind(() -> str2et(Almanac.empty_kernelset(), "2000 Jan 1"), :noleapseconds)
-        @test throws_kind(() -> str2et(ctx, "not a time"), :badtime)
+        @test throws_kind(() -> str2et(ctx, "not a time"), :unparsedtime)
+        @test throws_kind(() -> str2et(ctx, "2000 JAN 1 12:00 TDB PST"), :timeconflict)
+        @test throws_kind(() -> str2et(ctx, "2000 JAN 1 12:00 UTC+13"), :timezoneerror)
     end
 
     @apart @testset "utc2et, tparse, tpictr, tparch" begin
@@ -619,18 +752,26 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         cctx = neo_context([Kernels.LSK])
         tparch(cctx, " y e s ")                 # letter case and blanks are ignored
         c_tparch(t) = ccall((:tparch_c, SPICE.libcspice), Cvoid, (Cstring,), t)
-        ranges = ["1996-02-30", "1997-02-29", "1900-02-29", "2000-02-29", "4 BC 02-29",
+        ranges = [
+            "1996-02-30", "1997-02-29", "1900-02-29", "2000-02-29", "4 BC 02-29",
             "1996-13-01", "1996-366//", "1996-367//", "1996-01-01T24:00:00", "1996-01-01T12:60",
-            "1996-12-30T23:59:60.5", "1996-12-31T23:59:60.5", "1996 JAN 1.5 12:00"]
+            "1996-12-30T23:59:60.5", "1996-12-31T23:59:60.5", "1996 JAN 1.5 12:00",
+        ]
         try
             c_tparch("YES")
-            r = compare_outcomes("utc2et, range check on", vcat(sample, ranges), SPICE.utc2et,
-                s -> utc2et(cctx, s))
+            r = compare_outcomes(
+                "utc2et, range check on", vcat(sample, ranges), SPICE.utc2et,
+                s -> utc2et(cctx, s)
+            )
             @test r.mixed == 0 && r.unequal == 0 && r.both > nsample(200, 500)
             r = compare_outcomes("tparse, range check on", ranges, oracle_tparse, s -> tparse(cctx, s))
             @test r.mixed == 0 && r.unequal == 0 && r.rejected >= 8
             # The `@` dates of a text kernel that the context loads afterwards.
-            kdate(f) = try f() catch; :rejected end
+            kdate(f) = try
+                f()
+            catch
+                :rejected
+            end
             for d in ("1996-02-29", "1996-02-30")
                 line = ["TP_DATE = @$d"]
                 want = kdate(() -> (SPICE.lmpool(line); SPICE.gdpool("TP_DATE")))
@@ -649,17 +790,23 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
     wide = random_epochs(rng, nsample(300, 3000), -5000.0 * jyear(), 4500.0 * jyear())
     modern = random_epochs(rng, nsample(400, 2000), -1.3e9, 1.3e9)
     dense = Float64[]
-    for t in leap_et, d in (-2.0, -1.5, -1.0, -0.999999, -0.5, -0.0005, -1e-6, 0.0, 1e-6, 0.0005, 0.5, 1.0, 2.0)
+    for t in leap_et, d in (-2.0, -1.5, -1.0, -0.999999, -0.5, -0.0005, -1.0e-6, 0.0, 1.0e-6, 0.0005, 0.5, 1.0, 2.0)
         push!(dense, t + d, t + d + 0.3 * (rand(rng) - 0.5))
     end
-    epochs = vcat(wide, modern, dense, [0.0, -0.0, 1e-9, -43200.0, 43200.0, 0.5, -0.5])
-    println("  epochs: ", length(wide), " over 9500 years, ", length(modern), " near the present, ",
-        length(dense), " around the ", length(leap_et), " leap-second epochs")
+    epochs = vcat(wide, modern, dense, [0.0, -0.0, 1.0e-9, -43200.0, 43200.0, 0.5, -0.5])
+    println(
+        "  epochs: ", length(wide), " over 9500 years, ", length(modern), " near the present, ",
+        length(dense), " around the ", length(leap_et), " leap-second epochs"
+    )
 
     @apart @testset "et2utc, all formats and precisions" begin
-        cases = [(et, fmt, prec) for et in epochs for (fmt, prec) in
-                 (("C", rand(rng, 0:14)), ("D", rand(rng, 0:14)), ("J", rand(rng, 0:14)),
-            ("ISOC", rand(rng, 0:14)), ("ISOD", rand(rng, 0:14)), (rand(rng, ("c", "isoc", "IsoD", "j")), 3))]
+        cases = [
+            (et, fmt, prec) for et in epochs for (fmt, prec) in
+                (
+                    ("C", rand(rng, 0:14)), ("D", rand(rng, 0:14)), ("J", rand(rng, 0:14)),
+                    ("ISOC", rand(rng, 0:14)), ("ISOD", rand(rng, 0:14)), (rand(rng, ("c", "isoc", "IsoD", "j")), 3),
+                )
+        ]
         r = compare_outcomes("et2utc", cases, c -> oracle_et2utc(c...), c -> et2utc(ctx, c...))
         @test r.mixed == 0 && r.unequal == 0 && r.both > nsample(5000, 20000)
         @test et2utc(ctx, leap_et[end] - 0.5, "C", 3) == "2016 DEC 31 23:59:60.500"
@@ -668,13 +815,13 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             @test oracle_outcome(() -> SPICE.et2utc(0.0, bad, 3)) === nothing
             @test throws_kind(() -> et2utc(ctx, 0.0, bad, 3), :badformat)
         end
-        @test throws_kind(() -> et2utc(ctx, -7.0e10, "ISOC", 0), :badtime)
+        @test throws_kind(() -> et2utc(ctx, -7.0e10, "ISOC", 0), :yearoutofrange)
         # Round trip through a string with nine decimals.
-        @test all(abs(str2et(ctx, et2utc(ctx, et, "C", 9)) - et) < 2e-6 for et in modern[1:200])
+        @test all(abs(str2et(ctx, et2utc(ctx, et, "C", 9)) - et) < 2.0e-6 for et in modern[1:200])
     end
 
     @apart @testset "etcal" begin
-        extreme = [1e12, -1e12, 1e15, -1e15, 1.8e14, -1.9e14, 1e17, -1e17, 59.9996, 86399.9996 - 43200.0]
+        extreme = [1.0e12, -1.0e12, 1.0e15, -1.0e15, 1.8e14, -1.9e14, 1.0e17, -1.0e17, 59.9996, 86399.9996 - 43200.0]
         r = compare_outcomes("etcal", vcat(epochs, extreme), SPICE.etcal, etcal)
         @test r.mixed == 0 && r.unequal == 0
         @test etcal(ctx, 0.0) == "2000 JAN 01 12:00:00.000"
@@ -683,12 +830,16 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
     @apart @testset "timout, pictures of the header and random pictures" begin
         sub = vcat(epochs[1:40:end], dense[1:7:end])
         cases = [(et, pic) for pic in TS_PICTURES for et in sub]
-        r = compare_outcomes("timout, listed pictures", cases, c -> SPICE.timout(c[1], c[2], 256),
-            c -> timout(ctx, c...))
+        r = compare_outcomes(
+            "timout, listed pictures", cases, c -> SPICE.timout(c[1], c[2], 256),
+            c -> timout(ctx, c...)
+        )
         @test r.mixed == 0 && r.unequal == 0 && r.rejected == length(sub)   # the picture ""
         cases = [(rand(rng, epochs), ts_picture(rng)) for _ in 1:nsample(600, 6000)]
-        r = compare_outcomes("timout, random pictures", cases, c -> SPICE.timout(c[1], c[2], 256),
-            c -> timout(ctx, c...))
+        r = compare_outcomes(
+            "timout, random pictures", cases, c -> SPICE.timout(c[1], c[2], 256),
+            c -> timout(ctx, c...)
+        )
         @test r.mixed == 0 && r.unequal == 0 && r.both == length(cases)
         # Examples of the header of `timout.c`, at the epoch that it uses.
         et = SPICE.str2et("24 Mar 2018  16:23:00 UTC")
@@ -727,12 +878,12 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         for t in (0.0, 4.2e8, -9.0e8)
             d = ForwardDiff.derivative(x -> unitim(ks, x, "TDB", "TDT"), t)
             fd = (unitim(ks, t + 5.0e4, "TDB", "TDT") - unitim(ks, t - 5.0e4, "TDB", "TDT")) / 1.0e5
-            @test abs(d - 1.0) < 1e-8 && d != 1.0
-            @test abs(d - fd) < 5e-12
+            @test abs(d - 1.0) < 1.0e-8 && d != 1.0
+            @test abs(d - fd) < 5.0e-12
             @test ForwardDiff.derivative(x -> unitim(ks, x, "TAI", "JDTDT"), t) == 1.0 / 86400.0
             tay = unitim(ks, Almanac.taylor_var(t, Val(2)), "TDT", "TDB")
             @test Almanac.primal(tay) == unitim(ks, t, "TDT", "TDB")
-            @test abs(Almanac.derivatives(tay)[2] - ForwardDiff.derivative(x -> unitim(ks, x, "TDT", "TDB"), t)) < 1e-14
+            @test abs(Almanac.derivatives(tay)[2] - ForwardDiff.derivative(x -> unitim(ks, x, "TDT", "TDB"), t)) < 1.0e-14
             @test ForwardDiff.value(unitim(ks, ForwardDiff.Dual(t, 1.0), "TDB", "TAI")) === unitim(ks, t, "TDB", "TAI")
         end
     end
@@ -748,7 +899,7 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             worst = max(worst, abs((et - utc) - deltet(ctx, et, "ET")), abs((et - utc) - deltet(ctx, utc, "UTC")))
             tai = unitim(ctx, et, "TDB", "TAI")
             leaps = deltet(ctx, et, "ET") - (et - tai)      # TAI - UTC, a whole number
-            whole &= abs(leaps - round(leaps)) < 1e-6 && 10.0 <= round(leaps) + 1.0 <= 38.0
+            whole &= abs(leaps - round(leaps)) < 1.0e-6 && 10.0 <= round(leaps) + 1.0 <= 38.0
         end
         for et in vcat(modern, dense), sys in ("ET", "UTC", "et", "utc")
             wref = max(wref, abs(deltet(ctx, et, sys) - SPICE.deltet(et, uppercase(sys))))
@@ -756,7 +907,7 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         measured(@sprintf("  %-44s max=%.3e", "deltet against ttrans, absolute s", worst))
         measured(@sprintf("  %-44s max=%.3e", "deltet against CSPICE, absolute s", wref))
         @test wref == 0.0
-        @test worst < 1e-6
+        @test worst < 1.0e-6
         @test whole
     end
 
@@ -780,8 +931,12 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
                 shown <= 6 && println("    ttrans ", from, " -> ", to, " of ", tv, ": CSPICE ", ref, ", Almanac ", got)
             end
         end
-        measured(@sprintf("  %-44s n=%-6d bit-equal=%-6d mixed=%d max|d|=%.3e", "ttrans, 441 pairs of representations",
-            ncmp, nbit, nmixed, worst))
+        measured(
+            @sprintf(
+                "  %-44s n=%-6d bit-equal=%-6d mixed=%d max|d|=%.3e", "ttrans, 441 pairs of representations",
+                ncmp, nbit, nmixed, worst
+            )
+        )
         @test nbit == ncmp && nmixed == 0 && ncmp > nsample(1000, 10000)
         @test throws_kind(() -> Almanac.ttrans(ctx, "YMD", "XYZ", (2000.0, 1.0, 1.0)), :badtimetype)
         tv0 = Almanac._tvec(2016.0, 12.0, 31.0, 23.0, 59.0, 60.5)
@@ -800,15 +955,17 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             bad += gr2jul(y, m, d) != oracle_calendar(:gr2jul, y, m, d)
             g = jul2gr(y, m, d)
             bad += gr2jul(g[1], g[2], g[3])[1:3] != jul2gr(gr2jul(g[1], g[2], g[3])[1:3]...)[1:3] &&
-                   jul2gr(gr2jul(g[1], g[2], g[3])[1:3]...)[1:3] != g[1:3]
+                jul2gr(gr2jul(g[1], g[2], g[3])[1:3]...)[1:3] != g[1:3]
         end
         println("  jul2gr and gr2jul: ", 2ndate, " dates compared, different: ", bad)
         @test bad == 0
         @test jul2gr(1582, 10, 5) == (1582, 10, 15, 288)
         @test gr2jul(1582, 10, 15) == (1582, 10, 5, 278)
-        for (mine, ref) in ((j1900, SPICE.j1900), (j1950, SPICE.j1950), (j2000, SPICE.j2000),
-            (j2100, SPICE.j2100), (jyear, SPICE.jyear), (tyear, SPICE.tyear), (spd, SPICE.spd),
-            (b1900, SPICE.b1900), (b1950, SPICE.b1950), (clight, SPICE.clight))
+        for (mine, ref) in (
+                (j1900, SPICE.j1900), (j1950, SPICE.j1950), (j2000, SPICE.j2000),
+                (j2100, SPICE.j2100), (jyear, SPICE.jyear), (tyear, SPICE.tyear), (spd, SPICE.spd),
+                (b1900, SPICE.b1900), (b1950, SPICE.b1950), (clight, SPICE.clight),
+            )
             @test mine() === ref()
         end
         @test halfpi() === SPICE.halfpi() && twopi() === SPICE.twopi()
@@ -820,18 +977,26 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             @test timdef(ctx, "GET", "CALENDAR") == SPICE.timdef("GET", "CALENDAR") == "GREGORIAN"
             @test timdef(ctx, "get", " system") == SPICE.timdef("GET", "SYSTEM") == "UTC"
             @test timdef(ctx, "GET", "ZONE") == SPICE.timdef("GET", "ZONE") == ""
-            strings = vcat(corpus["month name"][1:150], corpus["second 60"][1:150], corpus["era"][1:100],
+            strings = vcat(
+                corpus["month name"][1:150], corpus["second 60"][1:150], corpus["era"][1:100],
                 corpus["zone or system"][1:100], corpus["Julian date"][1:60], corpus["day of year"][1:60],
-                ["1582 Oct 4", "1582 Oct 5", "1582 Oct 10", "1582 Oct 14", "1582 Oct 15", "1582-278//",
+                [
+                    "1582 Oct 4", "1582 Oct 5", "1582 Oct 10", "1582 Oct 14", "1582 Oct 15", "1582-278//",
                     "1582-279//", "1500 Feb 29", "1900 Feb 29", "1579 Feb 29", "1581 Feb 29", "4 B.C. Feb 29",
-                    "5 B.C. Feb 29", "1000 Feb 29 12:00", "2016 Dec 31 15:59:60 ", "2016 Dec 31 23:59:60"])
-            pictures = ["YYYY Mon DD HR:MN:SC.###", "YYYY-DOYTHR:MN:SC ::RND", "Wkd DD/MM/YYYY ERA AP:MN ampm",
-                "JULIAND.#####", "SP2000.###", "YYYY MM DD ::GCAL ::UTC", "YYYY.#### DOY.##"]
+                    "5 B.C. Feb 29", "1000 Feb 29 12:00", "2016 Dec 31 15:59:60 ", "2016 Dec 31 23:59:60",
+                ]
+            )
+            pictures = [
+                "YYYY Mon DD HR:MN:SC.###", "YYYY-DOYTHR:MN:SC ::RND", "Wkd DD/MM/YYYY ERA AP:MN ampm",
+                "JULIAND.#####", "SP2000.###", "YYYY MM DD ::GCAL ::UTC", "YYYY.#### DOY.##",
+            ]
             cases = [(et, pic) for pic in pictures for et in vcat(wide[1:60], dense[1:9:end])]
-            settings = [("SYSTEM", "TDB"), ("SYSTEM", "tdt"), ("SYSTEM", "TT"), ("ZONE", "PST"),
+            settings = [
+                ("SYSTEM", "TDB"), ("SYSTEM", "tdt"), ("SYSTEM", "TT"), ("ZONE", "PST"),
                 ("ZONE", "UTC+5:30"), ("ZONE", "utc-11:59"), ("ZONE", "EDT"), ("SYSTEM", "UTC"),
                 ("CALENDAR", "JULIAN"), ("ZONE", "UTC-3"), ("CALENDAR", "MIXED"), ("SYSTEM", "TDB"),
-                ("SYSTEM", "UTC"), ("CALENDAR", "gregorian"), ("ZONE", "UTC+0")]
+                ("SYSTEM", "UTC"), ("CALENDAR", "gregorian"), ("ZONE", "UTC+0"),
+            ]
             for (item, value) in settings
                 SPICE.timdef("SET", item, value)
                 timdef(ctx, "SET", item, value)
@@ -841,18 +1006,22 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
                 label = string(item, '=', value, ", ", timdef(ctx, "GET", "CALENDAR"))
                 r = compare_outcomes("str2et with " * label, strings, SPICE.str2et, s -> str2et(ctx, s))
                 @test r.mixed == 0 && r.unequal == 0 && r.both > 100
-                r = compare_outcomes("timout with " * label, cases, c -> SPICE.timout(c[1], c[2], 256),
-                    c -> timout(ctx, c...))
+                r = compare_outcomes(
+                    "timout with " * label, cases, c -> SPICE.timout(c[1], c[2], 256),
+                    c -> timout(ctx, c...)
+                )
                 @test r.mixed == 0 && r.unequal == 0 && r.both == length(cases)
             end
-            for (item, value) in (("SYSTEM", "TAI"), ("ZONE", "XYZ"), ("ZONE", "UTC+13"), ("ZONE", "UTC"),
-                ("CALENDAR", "ROMAN"), ("EPOCH", "J2000"), ("SYSTEM", ""))
+            for (item, value) in (
+                    ("SYSTEM", "TAI"), ("ZONE", "XYZ"), ("ZONE", "UTC+13"), ("ZONE", "UTC"),
+                    ("CALENDAR", "ROMAN"), ("EPOCH", "J2000"), ("SYSTEM", ""),
+                )
                 before = (timdef(ctx, "GET", "CALENDAR"), timdef(ctx, "GET", "SYSTEM"), timdef(ctx, "GET", "ZONE"))
-                @test oracle_outcome(() -> SPICE.timdef("SET", item, value)) === nothing
-                @test throws_kind(() -> timdef(ctx, "SET", item, value), :badtimedefault)
+                @test throws_kind(() -> timdef(ctx, "SET", item, value), cspice_timdef("SET", item, value))
                 @test before == (timdef(ctx, "GET", "CALENDAR"), timdef(ctx, "GET", "SYSTEM"), timdef(ctx, "GET", "ZONE"))
             end
-            @test throws_kind(() -> timdef(ctx, "PUT", "ZONE", "PST"), :badtimedefault)
+            @test throws_kind(() -> timdef(ctx, "PUT", "ZONE", "PST"), cspice_timdef("PUT", "ZONE", "PST"))
+            @test throws_kind(() -> timdef(ctx, "GET", "YEAR"), cspice_timdef("GET", "YEAR", ""))
             # The defaults belong to one context: another context keeps its own.
             other = neo_context([Kernels.LSK])
             timdef(ctx, "SET", "SYSTEM", "TDB")
@@ -877,11 +1046,17 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
                 end
                 # The `@` dates of a text kernel loaded afterwards take the same interval,
                 # and the reader accepts and rejects the strings that `tparse_` does.
-                kdates = ["60-JAN-1", "JAN-1-60", "99-JAN-1", "JAN-1-05", "1-JAN-49",
+                kdates = [
+                    "60-JAN-1", "JAN-1-60", "99-JAN-1", "JAN-1-05", "1-JAN-49",
                     "15-MAR-87", "31-DEC-50/12:00", "1949-01-02", "01-02-1949", "1-2-49",
                     "1-2-999", "49-1-2", "1-2-0049", "13-2-1949", "1949-13-2", "1949-2-30",
-                    "1-2-49 12:00", "JD2451545.5", "2000-JAN-1T12:00:00"]
-                kdate(f) = try f() catch; :rejected end
+                    "1-2-49 12:00", "JD2451545.5", "2000-JAN-1T12:00:00",
+                ]
+                kdate(f) = try
+                    f()
+                catch
+                    :rejected
+                end
                 for bound in (1969, 1950, 2000), s in kdates
                     SPICE.tsetyr(bound)
                     tsetyr(yctx, bound)
@@ -947,15 +1122,17 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             stop = Threads.Atomic{Bool}(false)
             wrong = Threads.Atomic{Int}(0)
             count = Threads.Atomic{Int}(0)
-            readers = [Threads.@spawn begin
-                while !stop[]
-                    v = str2et(c2, s)
-                    p = timout(c2, 0.0, "HR:MN:SC")
-                    (v == a || v == b) && (p == pa || p == pb) || Threads.atomic_add!(wrong, 1)
-                    Threads.atomic_add!(count, 1)
-                    yield()    # the root task stays on thread 1 and must get it back
-                end
-            end for _ in 1:max(2, Threads.nthreads() - 1)]
+            readers = [
+                Threads.@spawn begin
+                    while !stop[]
+                        v = str2et(c2, s)
+                        p = timout(c2, 0.0, "HR:MN:SC")
+                        (v == a || v == b) && (p == pa || p == pb) || Threads.atomic_add!(wrong, 1)
+                        Threads.atomic_add!(count, 1)
+                        yield()    # the root task stays on thread 1 and must get it back
+                    end
+                end for _ in 1:max(2, Threads.nthreads() - 1)
+            ]
             changes = 0
             # Loop invariant: `changes` defaults were stored, each one complete.
             while changes < nsample(300, 3000) || (count[] < nsample(200, 2000) && changes < 3_000_000)

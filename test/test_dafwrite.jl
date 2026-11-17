@@ -40,34 +40,52 @@ function c_spkw0203(sym::Symbol, h, a)
     ninrec, n = size(a.cdata)
     per = sym === :spkw02_c ? 3 : 6
     if sym === :spkw02_c
-        ccall((:spkw02_c, LIBCSPICE), Cvoid, (Cint, Cint, Cint, Cstring, Cdouble, Cdouble,
-            Cstring, Cdouble, Cint, Cint, Ptr{Cdouble}, Cdouble), h, a.body, a.center,
-            a.frame, a.first, a.last, a.segid, a.intlen, n, ninrec ÷ per - 1, a.cdata, a.btime)
+        ccall(
+            (:spkw02_c, LIBCSPICE), Cvoid, (
+                Cint, Cint, Cint, Cstring, Cdouble, Cdouble,
+                Cstring, Cdouble, Cint, Cint, Ptr{Cdouble}, Cdouble,
+            ), h, a.body, a.center,
+            a.frame, a.first, a.last, a.segid, a.intlen, n, ninrec ÷ per - 1, a.cdata, a.btime
+        )
     else
-        ccall((:spkw03_c, LIBCSPICE), Cvoid, (Cint, Cint, Cint, Cstring, Cdouble, Cdouble,
-            Cstring, Cdouble, Cint, Cint, Ptr{Cdouble}, Cdouble), h, a.body, a.center,
-            a.frame, a.first, a.last, a.segid, a.intlen, n, ninrec ÷ per - 1, a.cdata, a.btime)
+        ccall(
+            (:spkw03_c, LIBCSPICE), Cvoid, (
+                Cint, Cint, Cint, Cstring, Cdouble, Cdouble,
+                Cstring, Cdouble, Cint, Cint, Ptr{Cdouble}, Cdouble,
+            ), h, a.body, a.center,
+            a.frame, a.first, a.last, a.segid, a.intlen, n, ninrec ÷ per - 1, a.cdata, a.btime
+        )
     end
     SPICE.handleerror()
 end
 
 function c_spkw01(h, a)
-    ccall((:spkw01_, LIBCSPICE), Cint, (Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8},
-        Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Cint, Cint),
+    ccall(
+        (:spkw01_, LIBCSPICE), Cint, (
+            Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8},
+            Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ptr{Cdouble}, Ptr{Cdouble}, Cint, Cint,
+        ),
         h, a.body, a.center, a.frame, a.first, a.last, a.segid, length(a.epochs), a.dlines,
-        a.epochs, sizeof(a.frame), sizeof(a.segid))
+        a.epochs, sizeof(a.frame), sizeof(a.segid)
+    )
     SPICE.handleerror()
 end
 
 "Type 14 through the three calls of CSPICE; the records go in two additions when `a.cut > 0`."
 function c_spk14(h, a)
-    ccall((:spk14b_c, LIBCSPICE), Cvoid, (Cint, Cstring, Cint, Cint, Cstring, Cdouble, Cdouble,
-        Cint), h, a.segid, a.body, a.center, a.frame, a.first, a.last, a.degree)
+    ccall(
+        (:spk14b_c, LIBCSPICE), Cvoid, (
+            Cint, Cstring, Cint, Cint, Cstring, Cdouble, Cdouble,
+            Cint,
+        ), h, a.segid, a.body, a.center, a.frame, a.first, a.last, a.degree
+    )
     SPICE.handleerror()
     n = length(a.epochs)
-    for r in (a.cut > 0 ? (1:a.cut, a.cut+1:n) : (1:n,))
-        ccall((:spk14a_c, LIBCSPICE), Cvoid, (Cint, Cint, Ptr{Cdouble}, Ptr{Cdouble}), h,
-            length(r), a.coeffs[:, r], a.epochs[r])
+    for r in (a.cut > 0 ? (1:a.cut, (a.cut + 1):n) : (1:n,))
+        ccall(
+            (:spk14a_c, LIBCSPICE), Cvoid, (Cint, Cint, Ptr{Cdouble}, Ptr{Cdouble}), h,
+            length(r), a.coeffs[:, r], a.epochs[r]
+        )
         SPICE.handleerror()
     end
     ccall((:spk14e_c, LIBCSPICE), Cvoid, (Cint,), h)
@@ -80,63 +98,87 @@ function n_spk14(h, a)
     n = length(a.epochs)
     if a.cut > 0
         spk14a(w, a.cut, a.coeffs[:, 1:a.cut], a.epochs[1:a.cut])
-        spk14a(w, vec(a.coeffs[:, a.cut+1:n]), a.epochs[a.cut+1:n])
+        spk14a(w, vec(a.coeffs[:, (a.cut + 1):n]), a.epochs[(a.cut + 1):n])
     else
         spk14a(w, n, a.coeffs, a.epochs)
     end
-    spk14e(w)
+    return spk14e(w)
 end
 
 function c_spkw21(h, a)
-    ccall((:spkw21_, LIBCSPICE), Cint, (Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8},
-        Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble},
-        Ptr{Cdouble}, Cint, Cint), h, a.body, a.center, a.frame, a.first, a.last, a.segid,
-        length(a.epochs), size(a.dlines, 1), a.dlines, a.epochs, sizeof(a.frame), sizeof(a.segid))
+    ccall(
+        (:spkw21_, LIBCSPICE), Cint, (
+            Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8},
+            Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble},
+            Ptr{Cdouble}, Cint, Cint,
+        ), h, a.body, a.center, a.frame, a.first, a.last, a.segid,
+        length(a.epochs), size(a.dlines, 1), a.dlines, a.epochs, sizeof(a.frame), sizeof(a.segid)
+    )
     SPICE.handleerror()
 end
 
 function c_spkw19(h, a)
-    ccall((:spkw19_, LIBCSPICE), Cint, (Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8},
-        Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
-        Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ref{Cint}, Cint, Cint), h, a.body, a.center,
+    ccall(
+        (:spkw19_, LIBCSPICE), Cint, (
+            Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8},
+            Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+            Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ref{Cint}, Cint, Cint,
+        ), h, a.body, a.center,
         a.frame, a.first, a.last, a.segid, length(a.npkts), Cint.(a.npkts), Cint.(a.subtps),
         Cint.(a.degres), a.packts, a.epochs, a.ivlbds, Cint(a.sellst), sizeof(a.frame),
-        sizeof(a.segid))
+        sizeof(a.segid)
+    )
     SPICE.handleerror()
 end
 
 function c_ckw06(h, a)
-    ccall((:ckw06_, LIBCSPICE), Cint, (Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Ref{Cint},
-        Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
-        Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ref{Cint}, Cint, Cint), h,
+    ccall(
+        (:ckw06_, LIBCSPICE), Cint, (
+            Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Ref{Cint},
+            Ref{Cdouble}, Ref{Cdouble}, Ptr{UInt8}, Ref{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{Cint},
+            Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ref{Cint}, Cint, Cint,
+        ), h,
         a.inst, a.ref, Cint(a.avflag), a.first, a.last, a.segid, length(a.npkts),
         Cint.(a.npkts), Cint.(a.subtps), Cint.(a.degres), a.packts, a.rates, a.sclkdp,
-        a.ivlbds, Cint(a.sellst), sizeof(a.ref), sizeof(a.segid))
+        a.ivlbds, Cint(a.sellst), sizeof(a.ref), sizeof(a.segid)
+    )
     SPICE.handleerror()
 end
 
 function c_ckw01(h, a)
     avflag = a.avvs !== nothing
-    ccall((:ckw01_c, LIBCSPICE), Cvoid, (Cint, Cdouble, Cdouble, Cint, Cstring, Cint, Cstring,
-        Cint, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}), h, a.begtim, a.endtim, a.inst, a.ref,
-        avflag, a.segid, length(a.sclkdp), a.sclkdp, a.quats, avflag ? a.avvs : zeros(3, 1))
+    ccall(
+        (:ckw01_c, LIBCSPICE), Cvoid, (
+            Cint, Cdouble, Cdouble, Cint, Cstring, Cint, Cstring,
+            Cint, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble},
+        ), h, a.begtim, a.endtim, a.inst, a.ref,
+        avflag, a.segid, length(a.sclkdp), a.sclkdp, a.quats, avflag ? a.avvs : zeros(3, 1)
+    )
     SPICE.handleerror()
 end
 
 function c_ckw02(h, a)
-    ccall((:ckw02_c, LIBCSPICE), Cvoid, (Cint, Cdouble, Cdouble, Cint, Cstring, Cstring, Cint,
-        Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}), h, a.begtim,
+    ccall(
+        (:ckw02_c, LIBCSPICE), Cvoid, (
+            Cint, Cdouble, Cdouble, Cint, Cstring, Cstring, Cint,
+            Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble},
+        ), h, a.begtim,
         a.endtim, a.inst, a.ref, a.segid, length(a.start), a.start, a.stop, a.quats, a.avvs,
-        a.rates)
+        a.rates
+    )
     SPICE.handleerror()
 end
 
 function c_ckw03(h, a)
     avflag = a.avvs !== nothing
-    ccall((:ckw03_c, LIBCSPICE), Cvoid, (Cint, Cdouble, Cdouble, Cint, Cstring, Cint, Cstring,
-        Cint, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Cint, Ptr{Cdouble}), h, a.begtim,
+    ccall(
+        (:ckw03_c, LIBCSPICE), Cvoid, (
+            Cint, Cdouble, Cdouble, Cint, Cstring, Cint, Cstring,
+            Cint, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble}, Cint, Ptr{Cdouble},
+        ), h, a.begtim,
         a.endtim, a.inst, a.ref, avflag, a.segid, length(a.sclkdp), a.sclkdp, a.quats,
-        avflag ? a.avvs : zeros(3, 1), length(a.starts), a.starts)
+        avflag ? a.avvs : zeros(3, 1), length(a.starts), a.starts
+    )
     SPICE.handleerror()
 end
 
@@ -154,12 +196,18 @@ writes zero, the value of a fresh process. A `dafps_c` with 6 zero integers sets
 buffer to that state.
 """
 function c_pckw02(h, a)
-    ccall((:dafps_c, LIBCSPICE), Cvoid, (Cint, Cint, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}),
-        2, 6, zeros(2), zeros(Cint, 6), zeros(5))
+    ccall(
+        (:dafps_c, LIBCSPICE), Cvoid, (Cint, Cint, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}),
+        2, 6, zeros(2), zeros(Cint, 6), zeros(5)
+    )
     ninrec, n = size(a.cdata)
-    ccall((:pckw02_c, LIBCSPICE), Cvoid, (Cint, Cint, Cstring, Cdouble, Cdouble, Cstring,
-        Cdouble, Cint, Cint, Ptr{Cdouble}, Cdouble), h, a.clssid, a.frame, a.first, a.last,
-        a.segid, a.intlen, n, ninrec ÷ 3 - 1, a.cdata, a.btime)
+    ccall(
+        (:pckw02_c, LIBCSPICE), Cvoid, (
+            Cint, Cint, Cstring, Cdouble, Cdouble, Cstring,
+            Cdouble, Cint, Cint, Ptr{Cdouble}, Cdouble,
+        ), h, a.clssid, a.frame, a.first, a.last,
+        a.segid, a.intlen, n, ninrec ÷ 3 - 1, a.cdata, a.btime
+    )
     SPICE.handleerror()
 end
 
@@ -173,22 +221,32 @@ length 0 on Apple arm64, which packs stack arguments by their size. The summary
 buffer is set as for [`c_pckw02`](@ref).
 """
 function c_pckw20(h, a)
-    ccall((:dafps_c, LIBCSPICE), Cvoid, (Cint, Cint, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}),
-        2, 6, zeros(2), zeros(Cint, 6), zeros(5))
+    ccall(
+        (:dafps_c, LIBCSPICE), Cvoid, (Cint, Cint, Ptr{Cdouble}, Ptr{Cint}, Ptr{Cdouble}),
+        2, 6, zeros(2), zeros(Cint, 6), zeros(5)
+    )
     ninrec, n = size(a.cdata)
-    ccall((:pckw20_, LIBCSPICE), Cvoid, (Ref{Cint}, Ref{Cint}, Cstring, Ref{Cdouble},
-        Ref{Cdouble}, Cstring, Ref{Cdouble}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble}, Ref{Cdouble},
-        Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Cint, Cint), h, a.clssid, a.frame,
+    ccall(
+        (:pckw20_, LIBCSPICE), Cvoid, (
+            Ref{Cint}, Ref{Cint}, Cstring, Ref{Cdouble},
+            Ref{Cdouble}, Cstring, Ref{Cdouble}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble}, Ref{Cdouble},
+            Ref{Cdouble}, Ref{Cdouble}, Ref{Cdouble}, Cint, Cint,
+        ), h, a.clssid, a.frame,
         a.first, a.last, a.segid, a.intlen, n, ninrec ÷ 3 - 2, Matrix{Float64}(a.cdata),
-        a.ascale, a.tscale, a.initjd, a.initfr, ncodeunits(a.frame), ncodeunits(a.segid))
+        a.ascale, a.tscale, a.initjd, a.initfr, ncodeunits(a.frame), ncodeunits(a.segid)
+    )
     SPICE.handleerror()
 end
 
 function c_ckw05(h, a)
-    ccall((:ckw05_c, LIBCSPICE), Cvoid, (Cint, Cint, Cint, Cdouble, Cdouble, Cint, Cstring,
-        Cint, Cstring, Cint, Ptr{Cdouble}, Ptr{Cdouble}, Cdouble, Cint, Ptr{Cdouble}), h,
+    ccall(
+        (:ckw05_c, LIBCSPICE), Cvoid, (
+            Cint, Cint, Cint, Cdouble, Cdouble, Cint, Cstring,
+            Cint, Cstring, Cint, Ptr{Cdouble}, Ptr{Cdouble}, Cdouble, Cint, Ptr{Cdouble},
+        ), h,
         a.subtyp, a.degree, a.begtim, a.endtim, a.inst, a.ref, a.avflag, a.segid,
-        length(a.sclkdp), a.sclkdp, a.packts, a.rate, a.nints, a.starts)
+        length(a.sclkdp), a.sclkdp, a.packts, a.rate, a.nints, a.starts
+    )
     SPICE.handleerror()
 end
 
@@ -201,7 +259,7 @@ function neo_dump(path::AbstractString)
     h = dafopr(path)
     try
         nd, ni, ifname, fward, bward, free = dafrfr(h)
-        sums = Tuple{Vector{Float64},Vector{Int}}[]
+        sums = Tuple{Vector{Float64}, Vector{Int}}[]
         names = String[]
         data = Vector{Float64}[]
         dafbfs(h)
@@ -209,9 +267,9 @@ function neo_dump(path::AbstractString)
             dc, ic = dafus(dafgs(h), nd, ni)
             push!(sums, (dc, ic))
             push!(names, dafgn(h))
-            push!(data, ic[ni] >= ic[ni-1] ? dafgda(h, ic[ni-1], ic[ni]) : Float64[])
+            push!(data, ic[ni] >= ic[ni - 1] ? dafgda(h, ic[ni - 1], ic[ni]) : Float64[])
         end
-        return (; sums, names, data, comments=dafec(h), record=(nd, ni, ifname, fward, bward, free))
+        return (; sums, names, data, comments = dafec(h), record = (nd, ni, ifname, fward, bward, free))
     finally
         dafcls(h)
     end
@@ -222,7 +280,7 @@ function c_dump(path::AbstractString)
     h = SPICE.dafopr(path)
     try
         nd, ni, ifname, fward, bward, free = SPICE.dafrfr(h)
-        sums = Tuple{Vector{Float64},Vector{Int}}[]
+        sums = Tuple{Vector{Float64}, Vector{Int}}[]
         names = String[]
         data = Vector{Float64}[]
         SPICE.dafbfs(h)
@@ -230,10 +288,12 @@ function c_dump(path::AbstractString)
             dc, ic = SPICE.dafus(SPICE.dafgs(nd + (ni + 1) ÷ 2), nd, ni)
             push!(sums, (dc, ic))
             push!(names, SPICE.dafgn())
-            push!(data, ic[ni] >= ic[ni-1] ? SPICE.dafgda(h, ic[ni-1], ic[ni]) : Float64[])
+            push!(data, ic[ni] >= ic[ni - 1] ? SPICE.dafgda(h, ic[ni - 1], ic[ni]) : Float64[])
         end
-        return (; sums, names, data, comments=String.(SPICE.dafec(h)),
-            record=(nd, ni, ifname, fward, bward, free))
+        return (;
+            sums, names, data, comments = String.(SPICE.dafec(h)),
+            record = (nd, ni, ifname, fward, bward, free),
+        )
     finally
         SPICE.dafcls(h)
     end
@@ -241,7 +301,7 @@ end
 
 "Number of doubles of `a` and `b` that differ as bit patterns (a length difference counts)."
 function bit_mismatches(a::Vector{Vector{Float64}}, b::Vector{Vector{Float64}})
-    bad = abs(sum(length, a; init=0) - sum(length, b; init=0))
+    bad = abs(sum(length, a; init = 0) - sum(length, b; init = 0))
     for (x, y) in zip(a, b)
         n = min(length(x), length(y))
         bad += count(i -> reinterpret(UInt64, x[i]) != reinterpret(UInt64, y[i]), 1:n)
@@ -266,13 +326,15 @@ byte for byte.
 function compare_files(pc::AbstractString, pn::AbstractString)
     ref = c_dump(pc)
     others = (c_dump(pn), neo_dump(pc), neo_dump(pn))
-    return (nseg=length(ref.sums), words=sum(length, ref.data; init=0),
-        badwords=sum(o -> bit_mismatches(ref.data, o.data), others),
-        sums=all(o -> same_sums(ref.sums, o.sums), others),
-        names=all(o -> o.names == ref.names, others),
-        comments=all(o -> o.comments == ref.comments, others),
-        record=all(o -> o.record == ref.record, others),
-        bytes=read(pc) == read(pn))
+    return (
+        nseg = length(ref.sums), words = sum(length, ref.data; init = 0),
+        badwords = sum(o -> bit_mismatches(ref.data, o.data), others),
+        sums = all(o -> same_sums(ref.sums, o.sums), others),
+        names = all(o -> o.names == ref.names, others),
+        comments = all(o -> o.comments == ref.comments, others),
+        record = all(o -> o.record == ref.record, others),
+        bytes = read(pc) == read(pn),
+    )
 end
 
 "True if all structural parts of a `compare_files` result agree."
@@ -283,7 +345,7 @@ files_agree(r) = r.badwords == 0 && r.sums && r.names && r.comments && r.record
 # ---------------------------------------------------------------------------------------
 
 "`n` strictly increasing epochs from `t0` with random steps in [`lo`, `hi`]."
-function inc_epochs(rng::AbstractRNG, n::Integer; t0::Float64=1000.0 * rand(rng), lo=1.0, hi=90.0)
+function inc_epochs(rng::AbstractRNG, n::Integer; t0::Float64 = 1000.0 * rand(rng), lo = 1.0, hi = 90.0)
     out = Vector{Float64}(undef, n)
     t = t0
     for i in 1:n
@@ -314,7 +376,7 @@ end
 "Descriptor bounds for the epochs `ep`: the ends, or points inside the first and last step."
 function rand_bounds(rng::AbstractRNG, ep::Vector{Float64})
     (length(ep) < 2 || rand(rng) < 0.5) && return ep[1], ep[end]
-    return ep[1] + 0.25 * (ep[2] - ep[1]), ep[end] - 0.25 * (ep[end] - ep[end-1])
+    return ep[1] + 0.25 * (ep[2] - ep[1]), ep[end] - 0.25 * (ep[end] - ep[end - 1])
 end
 
 const SIZES = (2, 3, 7, 40, 99, 100, 101, 199, 200, 201, 257)
@@ -324,11 +386,11 @@ rand_n(rng::AbstractRNG, lo::Integer) = max(lo, rand(rng, SIZES))
 function rand_dline(rng::AbstractRNG, tl::Float64, maxdim::Integer)
     line = zeros(4 * maxdim + 11)
     line[1] = tl
-    line[2:maxdim+1] .= 10.0 .+ rand(rng, maxdim)                   # step sizes G
-    line[maxdim+2:maxdim+7] = [7000.0, 1.0, -3000.0, 6.0, 2000.0, 3.0] .* (1 .+ 0.1 .* randn(rng, 6))
-    line[maxdim+8:4*maxdim+7] .= 1.0e-6 .* randn(rng, 3 * maxdim)   # differences DT
-    line[4*maxdim+8] = 4.0                                          # KQMAX1
-    line[4*maxdim+9:4*maxdim+11] .= 3.0                             # KQ
+    line[2:(maxdim + 1)] .= 10.0 .+ rand(rng, maxdim)                   # step sizes G
+    line[(maxdim + 2):(maxdim + 7)] = [7000.0, 1.0, -3000.0, 6.0, 2000.0, 3.0] .* (1 .+ 0.1 .* randn(rng, 6))
+    line[(maxdim + 8):(4 * maxdim + 7)] .= 1.0e-6 .* randn(rng, 3 * maxdim)   # differences DT
+    line[4 * maxdim + 8] = 4.0                                          # KQMAX1
+    line[(4 * maxdim + 9):(4 * maxdim + 11)] .= 3.0                             # KQ
     return line
 end
 
@@ -373,24 +435,24 @@ struct WriterCase
 end
 
 "The frame and identifier checks that all SPK writers share."
-function bad_ids(a; long::Symbol=:segidtoolong, fname::Symbol=:frame, empty_both::Bool=true)
+function bad_ids(a; long::Symbol = :segidtoolong, fname::Symbol = :frame, empty_both::Bool = true)
     out = Any[
         ("unknown frame", merge(a, NamedTuple{(fname,)}(("NO_SUCH_FRAME",))), :invalidrefframe, true),
-        ("identifier of 41 characters", merge(a, (segid="A"^41,)), long, true),
-        ("nonprintable identifier", merge(a, (segid="BAD\tID",)), :nonprintablechars, true),
+        ("identifier of 41 characters", merge(a, (segid = "A"^41,)), long, true),
+        ("nonprintable identifier", merge(a, (segid = "BAD\tID",)), :nonprintablechars, true),
         ("empty frame", merge(a, NamedTuple{(fname,)}(("",))), :emptystring, empty_both),
-        ("empty identifier", merge(a, (segid="",)), :emptystring, empty_both),
+        ("empty identifier", merge(a, (segid = "",)), :emptystring, empty_both),
     ]
     return out
 end
 
 "The checks of `spkpds`."
 bad_pds(a) = Any[
-    ("body is the barycenter", merge(a, (body=0,)), :barycenterephem, true),
-    ("body equal to center", merge(a, (center=a.body,)), :bodyandcentersame, true),
+    ("body is the barycenter", merge(a, (body = 0,)), :barycenterephem, true),
+    ("body equal to center", merge(a, (center = a.body,)), :bodyandcentersame, true),
 ]
 
-spk_ids(k) = (body=-1000 - k, center=399, frame="J2000")
+spk_ids(k) = (body = -1000 - k, center = 399, frame = "J2000")
 
 # --- discrete states ---------------------------------------------------------------------
 
@@ -399,7 +461,7 @@ function gen_w13(rng, k)
     degree = rand(rng, [d for d in 1:2:27 if (d + 1) ÷ 2 <= n])
     epochs = inc_epochs(rng, n)
     first, last = rand_bounds(rng, epochs)
-    return (; spk_ids(k)..., first, last, segid=rand_segid(rng, "T13"), degree, states=rand_states(rng, n), epochs)
+    return (; spk_ids(k)..., first, last, segid = rand_segid(rng, "T13"), degree, states = rand_states(rng, n), epochs)
 end
 function gen_w14(rng, k)
     n = rand_n(rng, 1)
@@ -407,41 +469,52 @@ function gen_w14(rng, k)
     bounds = inc_epochs(rng, n + 1)
     coeffs = randn(rng, 2 + 6 * (degree + 1), n)
     for i in 1:n
-        coeffs[1, i] = (bounds[i] + bounds[i+1]) / 2
-        coeffs[2, i] = (bounds[i+1] - bounds[i]) / 2
+        coeffs[1, i] = (bounds[i] + bounds[i + 1]) / 2
+        coeffs[2, i] = (bounds[i + 1] - bounds[i]) / 2
     end
-    return (; spk_ids(k)..., first=bounds[1], last=bounds[end], segid=rand_segid(rng, "T14"), degree,
-        coeffs, epochs=bounds[1:n], cut=n > 1 ? rand(rng, 0:n-1) : 0)
+    return (;
+        spk_ids(k)..., first = bounds[1], last = bounds[end], segid = rand_segid(rng, "T14"), degree,
+        coeffs, epochs = bounds[1:n], cut = n > 1 ? rand(rng, 0:(n - 1)) : 0,
+    )
 end
 function bad_w14(a)
-    out = Any[bad_ids(a)..., bad_pds(a)...,
-        ("negative degree", merge(a, (degree=-1,)), :invalidargument, true)]
+    out = Any[
+        bad_ids(a)..., bad_pds(a)...,
+        ("negative degree", merge(a, (degree = -1,)), :invalidargument, true),
+    ]
     if length(a.epochs) >= 3
         dup = copy(a.epochs)
         dup[3] = dup[2]
         # Not sent to CSPICE (SPICE(UNORDEREDREFS) in `sgwfpk_`): a rejected `spk14a_c`
         # leaves the segment that `spk14b_c` began in the file, and it cannot be removed.
-        push!(out, ("repeated epoch", merge(a, (epochs=dup, cut=0)), :unorderedrefs, false))
-        push!(out, ("second addition not after the first", merge(a, (epochs=dup, cut=2)), :unorderedrefs, false))
-        push!(out, ("epochs shorter than records", merge(a, (epochs=a.epochs[1:end-1], cut=0)), :badarg, false))
+        push!(out, ("repeated epoch", merge(a, (epochs = dup, cut = 0)), :unorderedrefs, false))
+        push!(out, ("second addition not after the first", merge(a, (epochs = dup, cut = 2)), :unorderedrefs, false))
+        push!(out, ("epochs shorter than records", merge(a, (epochs = a.epochs[1:(end - 1)], cut = 0)), :badarg, false))
     end
     return out
 end
 function bad_w13(a)
     dup = copy(a.epochs)
     dup[3] = dup[2]
-    return Any[bad_ids(a)..., bad_pds(a)...,
-        ("degree 0", merge(a, (degree=0,)), :invaliddegree, true),
-        ("degree 29", merge(a, (degree=29,)), :invaliddegree, true),
-        ("even degree", merge(a, (degree=4,)), :invaliddegree, true),
-        ("too few states", merge(a, (degree=5, states=a.states[:, 1:2], epochs=a.epochs[1:2],
-            last=a.epochs[2])), :toofewstates, true),
-        ("first equal to last", merge(a, (last=a.first,)), :baddescrtimes, true),
-        ("repeated epoch", merge(a, (epochs=dup,)), :timesoutoforder, true),
-        ("first before the first epoch", merge(a, (first=a.epochs[1] - 1.0,)), :baddescrtimes, true),
-        ("last after the last epoch", merge(a, (last=a.epochs[end] + 1.0,)), :baddescrtimes, true),
-        ("epochs shorter than states", merge(a, (epochs=a.epochs[1:end-1],)), :badarg, false),
-        ("states with 5 rows", merge(a, (states=a.states[1:5, :],)), :badarg, false),
+    return Any[
+        bad_ids(a)..., bad_pds(a)...,
+        ("degree 0", merge(a, (degree = 0,)), :invaliddegree, true),
+        ("degree 29", merge(a, (degree = 29,)), :invaliddegree, true),
+        ("even degree", merge(a, (degree = 4,)), :invaliddegree, true),
+        (
+            "too few states", merge(
+                a, (
+                    degree = 5, states = a.states[:, 1:2], epochs = a.epochs[1:2],
+                    last = a.epochs[2],
+                )
+            ), :toofewstates, true,
+        ),
+        ("first equal to last", merge(a, (last = a.first,)), :baddescrtimes, true),
+        ("repeated epoch", merge(a, (epochs = dup,)), :timesoutoforder, true),
+        ("first before the first epoch", merge(a, (first = a.epochs[1] - 1.0,)), :baddescrtimes, true),
+        ("last after the last epoch", merge(a, (last = a.epochs[end] + 1.0,)), :baddescrtimes, true),
+        ("epochs shorter than states", merge(a, (epochs = a.epochs[1:(end - 1)],)), :badarg, false),
+        ("states with 5 rows", merge(a, (states = a.states[1:5, :],)), :badarg, false),
     ]
 end
 
@@ -450,20 +523,27 @@ function gen_w09(rng, k)
     degree = rand(rng, 1:min(27, n - 1))
     epochs = inc_epochs(rng, n)
     first, last = rand_bounds(rng, epochs)
-    return (; spk_ids(k)..., first, last, segid=rand_segid(rng, "T09"), degree, states=rand_states(rng, n), epochs)
+    return (; spk_ids(k)..., first, last, segid = rand_segid(rng, "T09"), degree, states = rand_states(rng, n), epochs)
 end
 function bad_w09(a)
     dup = copy(a.epochs)
     dup[3] = dup[2]
-    return Any[bad_ids(a)...,
-        ("degree 0", merge(a, (degree=0,)), :invaliddegree, true),
-        ("degree 28", merge(a, (degree=28,)), :invaliddegree, true),
-        ("too few states", merge(a, (degree=3, states=a.states[:, 1:3], epochs=a.epochs[1:3],
-            last=a.epochs[3])), :toofewstates, true),
-        ("first equal to last", merge(a, (last=a.first,)), :baddescrtimes, true),
-        ("repeated epoch", merge(a, (epochs=dup,)), :timesoutoforder, true),
-        ("first before the first epoch", merge(a, (first=a.epochs[1] - 1.0,)), :baddescrtimes, true),
-        ("last after the last epoch", merge(a, (last=a.epochs[end] + 1.0,)), :baddescrtimes, true),
+    return Any[
+        bad_ids(a)...,
+        ("degree 0", merge(a, (degree = 0,)), :invaliddegree, true),
+        ("degree 28", merge(a, (degree = 28,)), :invaliddegree, true),
+        (
+            "too few states", merge(
+                a, (
+                    degree = 3, states = a.states[:, 1:3], epochs = a.epochs[1:3],
+                    last = a.epochs[3],
+                )
+            ), :toofewstates, true,
+        ),
+        ("first equal to last", merge(a, (last = a.first,)), :baddescrtimes, true),
+        ("repeated epoch", merge(a, (epochs = dup,)), :timesoutoforder, true),
+        ("first before the first epoch", merge(a, (first = a.epochs[1] - 1.0,)), :baddescrtimes, true),
+        ("last after the last epoch", merge(a, (last = a.epochs[end] + 1.0,)), :baddescrtimes, true),
     ]
 end
 
@@ -471,17 +551,20 @@ function gen_w05(rng, k)
     n = rand_n(rng, 1)
     epochs = inc_epochs(rng, n)
     first, last = n == 1 ? (epochs[1] - 10.0, epochs[1] + 10.0) : rand_bounds(rng, epochs)
-    return (; spk_ids(k)..., first, last, segid=rand_segid(rng, "T05"), gm=398600.4418 * (1 + rand(rng)),
-        states=rand_states(rng, n), epochs)
+    return (;
+        spk_ids(k)..., first, last, segid = rand_segid(rng, "T05"), gm = 398600.4418 * (1 + rand(rng)),
+        states = rand_states(rng, n), epochs,
+    )
 end
 function bad_w05(a)
     dup = copy(a.epochs)
     dup[3] = dup[2]
-    return Any[bad_ids(a)...,
-        ("zero GM", merge(a, (gm=0.0,)), :nonpositivemass, true),
-        ("repeated epoch", merge(a, (epochs=dup,)), :unorderedtimes, true),
-        ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true),
-        ("no state", merge(a, (states=zeros(6, 0), epochs=Float64[])), :numstatesnotpos, false),
+    return Any[
+        bad_ids(a)...,
+        ("zero GM", merge(a, (gm = 0.0,)), :nonpositivemass, true),
+        ("repeated epoch", merge(a, (epochs = dup,)), :unorderedtimes, true),
+        ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true),
+        ("no state", merge(a, (states = zeros(6, 0), epochs = Float64[])), :numstatesnotpos, false),
     ]
 end
 
@@ -492,26 +575,45 @@ function gen_w0812(rng, k, hermite::Bool)
     step = 10.0 + 50.0 * rand(rng)
     last = epoch1 + (n - 1) * step
     rand(rng) < 0.5 && (last -= 0.3 * step)
-    return (; spk_ids(k)..., first=epoch1, last, segid=rand_segid(rng, hermite ? "T12" : "T08"),
-        degree, states=rand_states(rng, n), epoch1, step)
+    return (;
+        spk_ids(k)..., first = epoch1, last, segid = rand_segid(rng, hermite ? "T12" : "T08"),
+        degree, states = rand_states(rng, n), epoch1, step,
+    )
 end
 function bad_w0812(a, hermite::Bool)
-    out = Any[bad_ids(a)...,
-        ("degree 0", merge(a, (degree=0,)), :invaliddegree, true),
-        ("degree 28", merge(a, (degree=28,)), :invaliddegree, true),
-        ("first equal to last", merge(a, (last=a.first,)), :baddescrtimes, true),
-        ("zero step", merge(a, (step=0.0,)), :invalidstepsize, true),
-        ("first before the data", merge(a, (first=a.epoch1 - 1.0,)), :coveragegap, true),
-        ("last after the data", merge(a, (last=a.last + 2 * a.step,)), :coveragegap, true),
+    out = Any[
+        bad_ids(a)...,
+        ("degree 0", merge(a, (degree = 0,)), :invaliddegree, true),
+        ("degree 28", merge(a, (degree = 28,)), :invaliddegree, true),
+        ("first equal to last", merge(a, (last = a.first,)), :baddescrtimes, true),
+        ("zero step", merge(a, (step = 0.0,)), :invalidstepsize, true),
+        ("first before the data", merge(a, (first = a.epoch1 - 1.0,)), :coveragegap, true),
+        ("last after the data", merge(a, (last = a.last + 2 * a.step,)), :coveragegap, true),
     ]
     if hermite
-        push!(out, ("even degree", merge(a, (degree=4,)), :invaliddegree, true))
-        push!(out, ("too few states", merge(a, (degree=7, states=a.states[:, 1:3],
-            last=a.epoch1 + 2 * a.step)), :toofewstates, true))
+        push!(out, ("even degree", merge(a, (degree = 4,)), :invaliddegree, true))
+        push!(
+            out, (
+                "too few states", merge(
+                    a, (
+                        degree = 7, states = a.states[:, 1:3],
+                        last = a.epoch1 + 2 * a.step,
+                    )
+                ), :toofewstates, true,
+            )
+        )
         append!(out, bad_pds(a))
     else
-        push!(out, ("too few states", merge(a, (degree=3, states=a.states[:, 1:3],
-            last=a.epoch1 + 2 * a.step)), :toofewstates, true))
+        push!(
+            out, (
+                "too few states", merge(
+                    a, (
+                        degree = 3, states = a.states[:, 1:3],
+                        last = a.epoch1 + 2 * a.step,
+                    )
+                ), :toofewstates, true,
+            )
+        )
     end
     return out
 end
@@ -523,26 +625,35 @@ function gen_w18(rng, k)
     epochs = inc_epochs(rng, n)
     first, last = rand_bounds(rng, epochs)
     states = rand_states(rng, n)
-    packts = subtyp == 0 ? vcat(states, states[4:6, :] .* (1 .+ 1e-3 .* randn(rng, 3, n)),
-        1e-3 .* randn(rng, 3, n)) : states
-    return (; subtyp, spk_ids(k)..., first, last, segid=rand_segid(rng, "T18"), degree, packts, epochs)
+    packts = subtyp == 0 ? vcat(
+            states, states[4:6, :] .* (1 .+ 1.0e-3 .* randn(rng, 3, n)),
+            1.0e-3 .* randn(rng, 3, n)
+        ) : states
+    return (; subtyp, spk_ids(k)..., first, last, segid = rand_segid(rng, "T18"), degree, packts, epochs)
 end
 function bad_w18(a)
     dup = copy(a.epochs)
     dup[3] = dup[2]
     packsz = size(a.packts, 1)
-    return Any[bad_ids(a)...,
-        ("subtype 2", merge(a, (subtyp=2,)), :invalidvalue, false),
-        ("degree 0", merge(a, (degree=0,)), :invaliddegree, true),
-        ("degree 17", merge(a, (degree=17,)), :invaliddegree, true),
-        ("odd window size", merge(a, (degree=a.subtyp == 0 ? 5 : 4,)), :invaliddegree, true),
-        ("one packet", merge(a, (packts=a.packts[:, 1:1], epochs=a.epochs[1:1],
-            first=a.epochs[1], last=a.epochs[1])), :toofewstates, true),
-        ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true),
-        ("repeated epoch", merge(a, (epochs=dup,)), :timesoutoforder, true),
-        ("first before the first epoch", merge(a, (first=a.epochs[1] - 1.0,)), :baddescrtimes, true),
-        ("last after the last epoch", merge(a, (last=a.epochs[end] + 1.0,)), :baddescrtimes, true),
-        ("packets of the other size", merge(a, (packts=a.packts[1:packsz-1, :],)), :badarg, false),
+    return Any[
+        bad_ids(a)...,
+        ("subtype 2", merge(a, (subtyp = 2,)), :invalidvalue, false),
+        ("degree 0", merge(a, (degree = 0,)), :invaliddegree, true),
+        ("degree 17", merge(a, (degree = 17,)), :invaliddegree, true),
+        ("odd window size", merge(a, (degree = a.subtyp == 0 ? 5 : 4,)), :invaliddegree, true),
+        (
+            "one packet", merge(
+                a, (
+                    packts = a.packts[:, 1:1], epochs = a.epochs[1:1],
+                    first = a.epochs[1], last = a.epochs[1],
+                )
+            ), :toofewstates, true,
+        ),
+        ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true),
+        ("repeated epoch", merge(a, (epochs = dup,)), :timesoutoforder, true),
+        ("first before the first epoch", merge(a, (first = a.epochs[1] - 1.0,)), :baddescrtimes, true),
+        ("last after the last epoch", merge(a, (last = a.epochs[end] + 1.0,)), :baddescrtimes, true),
+        ("packets of the other size", merge(a, (packts = a.packts[1:(packsz - 1), :],)), :badarg, false),
     ]
 end
 
@@ -555,17 +666,18 @@ function gen_w0203(rng, k, per::Int)
     btime = 1.0e5 * randn(rng)
     cdata = randn(rng, per * (polydg + 1), n) .* 1.0e4
     first, last = rand(rng) < 0.5 ? (btime, btime + n * intlen) : (btime + 0.1 * intlen, btime + (n - 0.1) * intlen)
-    return (; spk_ids(k)..., first, last, segid=rand_segid(rng, per == 3 ? "T02" : "T03"), intlen, cdata, btime)
+    return (; spk_ids(k)..., first, last, segid = rand_segid(rng, per == 3 ? "T02" : "T03"), intlen, cdata, btime)
 end
 function bad_w0203(a, per::Int)
-    return Any[bad_ids(a; long=:idstringtoolong)...,
-        ("no record", merge(a, (cdata=zeros(size(a.cdata, 1), 0),)), :numcoeffsnotpos, true),
-        ("degree 28", merge(a, (cdata=zeros(per * 29, size(a.cdata, 2)),)), :invaliddegree, true),
-        ("zero interval length", merge(a, (intlen=0.0,)), :intlennotpos, true),
-        ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true),
-        ("first before the data", merge(a, (first=a.btime - 10.0,)), :coveragegap, true),
-        ("last after the data", merge(a, (last=a.btime + size(a.cdata, 2) * a.intlen + 10.0,)), :coveragegap, true),
-        ("record size not a multiple", merge(a, (cdata=zeros(per + 1, size(a.cdata, 2)),)), :badarg, false),
+    return Any[
+        bad_ids(a; long = :idstringtoolong)...,
+        ("no record", merge(a, (cdata = zeros(size(a.cdata, 1), 0),)), :numcoeffsnotpos, true),
+        ("degree 28", merge(a, (cdata = zeros(per * 29, size(a.cdata, 2)),)), :invaliddegree, true),
+        ("zero interval length", merge(a, (intlen = 0.0,)), :intlennotpos, true),
+        ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true),
+        ("first before the data", merge(a, (first = a.btime - 10.0,)), :coveragegap, true),
+        ("last after the data", merge(a, (last = a.btime + size(a.cdata, 2) * a.intlen + 10.0,)), :coveragegap, true),
+        ("record size not a multiple", merge(a, (cdata = zeros(per + 1, size(a.cdata, 2)),)), :badarg, false),
     ]
 end
 
@@ -578,19 +690,22 @@ function gen_w20(rng, k)
     btime = 86400.0 * (initjd - 2451545.0 + initfr)
     ltime = btime + n * intlen * 86400.0
     cdata = randn(rng, 3 * (polydg + 2), n)
-    return (; spk_ids(k)..., first=btime, last=ltime, segid=rand_segid(rng, "T20"), intlen, cdata,
-        dscale=rand(rng, (1.0, 149597870.7)), tscale=rand(rng, (1.0, 86400.0)), initjd, initfr)
+    return (;
+        spk_ids(k)..., first = btime, last = ltime, segid = rand_segid(rng, "T20"), intlen, cdata,
+        dscale = rand(rng, (1.0, 149597870.7)), tscale = rand(rng, (1.0, 86400.0)), initjd, initfr,
+    )
 end
 function bad_w20(a)
-    return Any[bad_ids(a; long=:idstringtoolong)...,
-        ("degree 51", merge(a, (cdata=zeros(3 * 53, size(a.cdata, 2)),)), :invaliddegree, true),
-        ("zero interval length", merge(a, (intlen=0.0,)), :intlennotpos, true),
-        ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true),
-        ("zero distance scale", merge(a, (dscale=0.0,)), :nonpositivescale, true),
-        ("negative time scale", merge(a, (tscale=-1.0,)), :nonpositivescale, true),
-        ("first before the data", merge(a, (first=a.first - 100.0,)), :coveragegap, true),
-        ("last after the data", merge(a, (last=a.last + 100.0,)), :coveragegap, true),
-        ("no record", merge(a, (cdata=zeros(size(a.cdata, 1), 0),)), :invalidcount, false),
+    return Any[
+        bad_ids(a; long = :idstringtoolong)...,
+        ("degree 51", merge(a, (cdata = zeros(3 * 53, size(a.cdata, 2)),)), :invaliddegree, true),
+        ("zero interval length", merge(a, (intlen = 0.0,)), :intlennotpos, true),
+        ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true),
+        ("zero distance scale", merge(a, (dscale = 0.0,)), :nonpositivescale, true),
+        ("negative time scale", merge(a, (tscale = -1.0,)), :nonpositivescale, true),
+        ("first before the data", merge(a, (first = a.first - 100.0,)), :coveragegap, true),
+        ("last after the data", merge(a, (last = a.last + 100.0,)), :coveragegap, true),
+        ("no record", merge(a, (cdata = zeros(size(a.cdata, 1), 0),)), :invalidcount, false),
     ]
 end
 
@@ -600,41 +715,51 @@ function gen_w15(rng, k)
     tp = normalize(randn(rng, 3))
     pa = normalize(cross(tp, randn(rng, 3)))
     scale = 10.0^rand(rng, -3:3)                    # the writer stores unit vectors
-    return (; spk_ids(k)..., first=-1.0e5 * rand(rng), last=1.0e5 * rand(rng) + 1.0,
-        segid=rand_segid(rng, "T15"), epoch=100.0 * randn(rng), tp=scale .* tp, pa=pa ./ scale,
-        p=7000.0 + 3000.0 * rand(rng), ecc=0.5 * rand(rng), j2flg=Float64(rand(rng, 0:3)),
-        pv=randn(rng, 3), gm=398600.4418, j2=1.08263e-3, radius=6378.137)
+    return (;
+        spk_ids(k)..., first = -1.0e5 * rand(rng), last = 1.0e5 * rand(rng) + 1.0,
+        segid = rand_segid(rng, "T15"), epoch = 100.0 * randn(rng), tp = scale .* tp, pa = pa ./ scale,
+        p = 7000.0 + 3000.0 * rand(rng), ecc = 0.5 * rand(rng), j2flg = Float64(rand(rng, 0:3)),
+        pv = randn(rng, 3), gm = 398600.4418, j2 = 1.08263e-3, radius = 6378.137,
+    )
 end
-bad_w15(a) = Any[bad_ids(a)..., bad_pds(a)...,
-    ("zero semi-latus rectum", merge(a, (p=0.0,)), :badlatusrectum, true),
-    ("negative eccentricity", merge(a, (ecc=-0.1,)), :badeccentricity, true),
-    ("zero GM", merge(a, (gm=0.0,)), :nonpositivemass, true),
-    ("zero trajectory pole", merge(a, (tp=zeros(3),)), :badvector, true),
-    ("zero periapsis vector", merge(a, (pa=zeros(3),)), :badvector, true),
-    ("zero central pole", merge(a, (pv=zeros(3),)), :badvector, true),
-    ("negative radius", merge(a, (radius=-1.0,)), :badradius, true),
+bad_w15(a) = Any[
+    bad_ids(a)..., bad_pds(a)...,
+    ("zero semi-latus rectum", merge(a, (p = 0.0,)), :badlatusrectum, true),
+    ("negative eccentricity", merge(a, (ecc = -0.1,)), :badeccentricity, true),
+    ("zero GM", merge(a, (gm = 0.0,)), :nonpositivemass, true),
+    ("zero trajectory pole", merge(a, (tp = zeros(3),)), :badvector, true),
+    ("zero periapsis vector", merge(a, (pa = zeros(3),)), :badvector, true),
+    ("zero central pole", merge(a, (pv = zeros(3),)), :badvector, true),
+    ("negative radius", merge(a, (radius = -1.0,)), :badradius, true),
     # `spkw15` compares the dot product of the unit vectors with 1e-5 (spkw15.c, line 463).
     # The generator scales `tp` and `pa` by reciprocal factors, so the variant is built from
     # the unit vectors: with the scaled vectors and the factor 1e-3 the dot product is 1e-5,
     # which is on the limit and both engines accept it.
-    ("pole not orthogonal to periapsis", merge(a, (pa=normalize(a.tp) .+ 0.1 .* normalize(a.pa),)),
-        :badinitstate, true),
-    ("first equal to last", merge(a, (last=a.first,)), :baddescrtimes, true),
-    ("pole with two components", merge(a, (tp=[1.0, 0.0],)), :badarg, false),
+    (
+        "pole not orthogonal to periapsis", merge(a, (pa = normalize(a.tp) .+ 0.1 .* normalize(a.pa),)),
+        :badinitstate, true,
+    ),
+    ("first equal to last", merge(a, (last = a.first,)), :baddescrtimes, true),
+    ("pole with two components", merge(a, (tp = [1.0, 0.0],)), :badarg, false),
 ]
 
 function gen_w17(rng, k)
-    eqel = [8000.0 + 4000.0 * rand(rng), 0.2 * randn(rng), 0.2 * randn(rng), 2pi * rand(rng),
-        0.1 * randn(rng), 0.1 * randn(rng), 1e-7 * randn(rng), 1e-3 * (1 + rand(rng)), 1e-7 * randn(rng)]
-    return (; spk_ids(k)..., first=-1.0e5 * rand(rng), last=1.0e5 * rand(rng) + 1.0,
-        segid=rand_segid(rng, "T17"), epoch=100.0 * randn(rng), eqel, rapol=2pi * rand(rng),
-        decpol=pi / 2 * rand(rng))
+    eqel = [
+        8000.0 + 4000.0 * rand(rng), 0.2 * randn(rng), 0.2 * randn(rng), 2pi * rand(rng),
+        0.1 * randn(rng), 0.1 * randn(rng), 1.0e-7 * randn(rng), 1.0e-3 * (1 + rand(rng)), 1.0e-7 * randn(rng),
+    ]
+    return (;
+        spk_ids(k)..., first = -1.0e5 * rand(rng), last = 1.0e5 * rand(rng) + 1.0,
+        segid = rand_segid(rng, "T17"), epoch = 100.0 * randn(rng), eqel, rapol = 2pi * rand(rng),
+        decpol = pi / 2 * rand(rng),
+    )
 end
-bad_w17(a) = Any[bad_ids(a)..., bad_pds(a)...,
-    ("zero semimajor axis", merge(a, (eqel=[0.0; a.eqel[2:end]],)), :badsemiaxis, true),
-    ("eccentricity above 0.9", merge(a, (eqel=[a.eqel[1]; 0.8; 0.8; a.eqel[4:end]],)), :badeccentricity, true),
-    ("first equal to last", merge(a, (last=a.first,)), :baddescrtimes, true),
-    ("eight elements", merge(a, (eqel=a.eqel[1:8],)), :badarg, false),
+bad_w17(a) = Any[
+    bad_ids(a)..., bad_pds(a)...,
+    ("zero semimajor axis", merge(a, (eqel = [0.0; a.eqel[2:end]],)), :badsemiaxis, true),
+    ("eccentricity above 0.9", merge(a, (eqel = [a.eqel[1]; 0.8; 0.8; a.eqel[4:end]],)), :badeccentricity, true),
+    ("first equal to last", merge(a, (last = a.first,)), :baddescrtimes, true),
+    ("eight elements", merge(a, (eqel = a.eqel[1:8],)), :badarg, false),
 ]
 
 # --- difference lines --------------------------------------------------------------------
@@ -642,38 +767,43 @@ bad_w17(a) = Any[bad_ids(a)..., bad_pds(a)...,
 function gen_w0121(rng, k, extended::Bool)
     n = rand_n(rng, 1)
     maxdim = extended ? rand(rng, (15, 18, 25)) : 15
-    epochs = inc_epochs(rng, n; t0=1000.0 * rand(rng) + 50.0)
+    epochs = inc_epochs(rng, n; t0 = 1000.0 * rand(rng) + 50.0)
     dlines = reduce(hcat, [rand_dline(rng, t, maxdim) for t in epochs])
     last = rand(rng) < 0.5 ? epochs[end] : epochs[end] - 0.5
-    return (; spk_ids(k)..., first=epochs[1] - 40.0, last, segid=rand_segid(rng, extended ? "T21" : "T01"),
-        dlines, epochs)
+    return (;
+        spk_ids(k)..., first = epochs[1] - 40.0, last, segid = rand_segid(rng, extended ? "T21" : "T01"),
+        dlines, epochs,
+    )
 end
 function bad_w0121(a, extended::Bool)
     dup = copy(a.epochs)
     length(dup) >= 3 && (dup[3] = dup[2])
-    out = Any[bad_ids(a; empty_both=false)..., bad_pds(a)...,
-        ("last after the last epoch", merge(a, (last=a.epochs[end] + 1.0,)),
-            extended ? :coveragegap : :baddescrtimes, true),
-        ("no line", merge(a, (dlines=zeros(size(a.dlines, 1), 0), epochs=Float64[])), :invalidcount, false),
+    out = Any[
+        bad_ids(a; empty_both = false)..., bad_pds(a)...,
+        (
+            "last after the last epoch", merge(a, (last = a.epochs[end] + 1.0,)),
+            extended ? :coveragegap : :baddescrtimes, true,
+        ),
+        ("no line", merge(a, (dlines = zeros(size(a.dlines, 1), 0), epochs = Float64[])), :invalidcount, false),
     ]
-    length(dup) >= 3 && push!(out, ("repeated epoch", merge(a, (epochs=dup,)), :timesoutoforder, true))
+    length(dup) >= 3 && push!(out, ("repeated epoch", merge(a, (epochs = dup,)), :timesoutoforder, true))
     if extended
         zstep = copy(a.dlines)
         zstep[3, 1] = 0.0
-        push!(out, ("zero step", merge(a, (dlines=zstep,)), :zerostep, true))
-        push!(out, ("line of 115 doubles", merge(a, (dlines=zeros(115, size(a.dlines, 2)),)), :difflinetoolarge, true))
-        push!(out, ("line of 67 doubles", merge(a, (dlines=zeros(67, size(a.dlines, 2)),)), :difflinetoosmall, true))
-        push!(out, ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true))
+        push!(out, ("zero step", merge(a, (dlines = zstep,)), :zerostep, true))
+        push!(out, ("line of 115 doubles", merge(a, (dlines = zeros(115, size(a.dlines, 2)),)), :difflinetoolarge, true))
+        push!(out, ("line of 67 doubles", merge(a, (dlines = zeros(67, size(a.dlines, 2)),)), :difflinetoosmall, true))
+        push!(out, ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true))
     else
-        push!(out, ("first equal to last", merge(a, (first=a.last,)), :baddescrtimes, true))
-        push!(out, ("line of 70 doubles", merge(a, (dlines=a.dlines[1:70, :],)), :badarg, false))
+        push!(out, ("first equal to last", merge(a, (first = a.last,)), :baddescrtimes, true))
+        push!(out, ("line of 70 doubles", merge(a, (dlines = a.dlines[1:70, :],)), :badarg, false))
     end
     return out
 end
 
 # --- mini-segments -----------------------------------------------------------------------
 
-function gen_w19(rng, k; nintvl::Integer=rand(rng, 1:4))
+function gen_w19(rng, k; nintvl::Integer = rand(rng, 1:4))
     npkts = Int[]
     subtps = Int[]
     degres = Int[]
@@ -684,49 +814,52 @@ function gen_w19(rng, k; nintvl::Integer=rand(rng, 1:4))
         n = nintvl > 10 ? rand(rng, 2:4) : rand(rng, (2, 5, 100, 101, 230))
         sub = rand(rng, 0:2)
         deg = sub == 1 ? rand(rng, 1:2:27) : rand(rng, (3, 7, 11, 15, 19, 23, 27))
-        ep = inc_epochs(rng, n; t0=ivlbds[end] - (rand(rng) < 0.5 ? 0.0 : 5.0))
+        ep = inc_epochs(rng, n; t0 = ivlbds[end] - (rand(rng) < 0.5 ? 0.0 : 5.0))
         # The first epoch can be 5 s before the start of the interval and a step can be as
         # short as 1 s, so a short mini-segment (2 packets) can end before its interval
         # starts. `spkw19` requires strictly increasing interval bounds
         # (SPICE(BOUNDSOUTOFORDER)), thus such epochs are drawn again; 0.5 s is the largest
         # distance of the stop bound from the last epoch.
         while ep[end] - 0.5 <= ivlbds[end]
-            ep = inc_epochs(rng, n; t0=ivlbds[end] - (rand(rng) < 0.5 ? 0.0 : 5.0))
+            ep = inc_epochs(rng, n; t0 = ivlbds[end] - (rand(rng) < 0.5 ? 0.0 : 5.0))
         end
         push!(npkts, n)
         push!(subtps, sub)
         push!(degres, deg)
-        append!(packts, randn(rng, (12, 6, 6)[sub+1] * n) .* 1.0e3)
+        append!(packts, randn(rng, (12, 6, 6)[sub + 1] * n) .* 1.0e3)
         append!(epochs, ep)
         push!(ivlbds, rand(rng) < 0.5 ? ep[end] : ep[end] - 0.5)
     end
     @assert all(>(0.0), diff(ivlbds)) "the interval bounds of a type 19 segment increase strictly"
-    return (; spk_ids(k)..., first=ivlbds[1], last=ivlbds[end], segid=rand_segid(rng, "T19"), npkts,
-        subtps, degres, packts, epochs, ivlbds, sellst=rand(rng, Bool))
+    return (;
+        spk_ids(k)..., first = ivlbds[1], last = ivlbds[end], segid = rand_segid(rng, "T19"), npkts,
+        subtps, degres, packts, epochs, ivlbds, sellst = rand(rng, Bool),
+    )
 end
 function bad_w19(a)
     swapped = copy(a.ivlbds)
     swapped[2] = swapped[1]
     dup = copy(a.epochs)
     dup[2] = dup[1]
-    one = merge(a, (npkts=[1; a.npkts[2:end]],))
-    return Any[bad_ids(a; empty_both=false)...,
-        ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true),
-        ("bounds out of order", merge(a, (ivlbds=swapped,)), :boundsoutoforder, true),
-        ("first before the bounds", merge(a, (first=a.ivlbds[1] - 1.0,)), :coveragegap, true),
-        ("last after the bounds", merge(a, (last=a.ivlbds[end] + 1.0,)), :coveragegap, true),
+    one = merge(a, (npkts = [1; a.npkts[2:end]],))
+    return Any[
+        bad_ids(a; empty_both = false)...,
+        ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true),
+        ("bounds out of order", merge(a, (ivlbds = swapped,)), :boundsoutoforder, true),
+        ("first before the bounds", merge(a, (first = a.ivlbds[1] - 1.0,)), :coveragegap, true),
+        ("last after the bounds", merge(a, (last = a.ivlbds[end] + 1.0,)), :coveragegap, true),
         ("one packet", one, :toofewpackets, true),
-        ("subtype 3", merge(a, (subtps=[3; a.subtps[2:end]],)), :invalidsubtype, true),
-        ("degree 29", merge(a, (subtps=[1; a.subtps[2:end]], degres=[29; a.degres[2:end]])), :invaliddegree, true),
-        ("odd window size", merge(a, (subtps=[1; a.subtps[2:end]], degres=[2; a.degres[2:end]])), :badwindowsize, true),
-        ("repeated epoch", merge(a, (epochs=dup,)), :timesoutoforder, true),
-        ("no interval", merge(a, (npkts=Int[], subtps=Int[], degres=Int[])), :invalidcount, false),
+        ("subtype 3", merge(a, (subtps = [3; a.subtps[2:end]],)), :invalidsubtype, true),
+        ("degree 29", merge(a, (subtps = [1; a.subtps[2:end]], degres = [29; a.degres[2:end]])), :invaliddegree, true),
+        ("odd window size", merge(a, (subtps = [1; a.subtps[2:end]], degres = [2; a.degres[2:end]])), :badwindowsize, true),
+        ("repeated epoch", merge(a, (epochs = dup,)), :timesoutoforder, true),
+        ("no interval", merge(a, (npkts = Int[], subtps = Int[], degres = Int[])), :invalidcount, false),
     ]
 end
 
 # --- CK ----------------------------------------------------------------------------------
 
-ck_ids(k) = (inst=-77000 - k, ref="J2000")
+ck_ids(k) = (inst = -77000 - k, ref = "J2000")
 "Encoded clock times: whole ticks, strictly increasing, from a non-negative start."
 ck_times(rng, n) = cumsum(Float64[rand(rng, 0:5000); rand(rng, 1:4000, n - 1)])
 
@@ -734,8 +867,10 @@ function gen_ckw01(rng, k)
     nrec = rand_n(rng, 1)
     sclkdp = ck_times(rng, nrec)
     begtim, endtim = rand(rng) < 0.5 ? (sclkdp[1], sclkdp[end]) : (max(sclkdp[1] - 3, 0.0), sclkdp[end] + 7)
-    return (; begtim, endtim, ck_ids(k)..., segid=rand_segid(rng, "C01"), sclkdp, quats=rand_quats(rng, nrec),
-        avvs=rand(rng, Bool) ? 1e-3 .* randn(rng, 3, nrec) : nothing)
+    return (;
+        begtim, endtim, ck_ids(k)..., segid = rand_segid(rng, "C01"), sclkdp, quats = rand_quats(rng, nrec),
+        avvs = rand(rng, Bool) ? 1.0e-3 .* randn(rng, 3, nrec) : nothing,
+    )
 end
 function bad_ck_common(a, tname::Symbol)
     t = getproperty(a, tname)
@@ -743,10 +878,11 @@ function bad_ck_common(a, tname::Symbol)
     length(dup) >= 3 && (dup[3] = dup[2])
     zq = copy(a.quats)
     zq[:, end] .= 0.0
-    out = Any[bad_ids(a; fname=:ref)...,
-        ("begin after the first time", merge(a, (begtim=t[1] + 0.5,)), :invaliddescrtime, true),
-        ("zero quaternion", merge(a, (quats=zq,)), :zeroquaternion, true),
-        ("quaternions with 3 rows", merge(a, (quats=a.quats[1:3, :],)), :badarg, false),
+    out = Any[
+        bad_ids(a; fname = :ref)...,
+        ("begin after the first time", merge(a, (begtim = t[1] + 0.5,)), :invaliddescrtime, true),
+        ("zero quaternion", merge(a, (quats = zq,)), :zeroquaternion, true),
+        ("quaternions with 3 rows", merge(a, (quats = a.quats[1:3, :],)), :badarg, false),
     ]
     length(dup) >= 3 && push!(out, ("repeated time", merge(a, NamedTuple{(tname,)}((dup,))), :timesoutoforder, true))
     return out
@@ -754,16 +890,25 @@ end
 function bad_ckw01(a)
     neg = copy(a.sclkdp)
     neg[1] = -1.0
-    return Any[bad_ck_common(a, :sclkdp)...,
-        ("end before the last time", merge(a, (endtim=a.sclkdp[end] - 0.5,)), :invaliddescrtime, true),
-        ("negative first time", merge(a, (sclkdp=neg, begtim=-2.0)), :invalidsclktime, true),
-        ("no record", merge(a, (sclkdp=Float64[], quats=zeros(4, 0), avvs=nothing)), :invalidnumrec, true),
-        ("two angular velocities for more records", merge(a, (sclkdp=a.sclkdp[1:min(end, 3)],
-            quats=a.quats[:, 1:min(end, 3)], endtim=a.endtim, avvs=zeros(3, 2))),
-            length(a.sclkdp) == 2 ? :none : :badarg, false),
+    return Any[
+        bad_ck_common(a, :sclkdp)...,
+        ("end before the last time", merge(a, (endtim = a.sclkdp[end] - 0.5,)), :invaliddescrtime, true),
+        ("negative first time", merge(a, (sclkdp = neg, begtim = -2.0)), :invalidsclktime, true),
+        ("no record", merge(a, (sclkdp = Float64[], quats = zeros(4, 0), avvs = nothing)), :invalidnumrec, true),
+        (
+            "two angular velocities for more records", merge(
+                a, (
+                    sclkdp = a.sclkdp[1:min(end, 3)],
+                    quats = a.quats[:, 1:min(end, 3)], endtim = a.endtim, avvs = zeros(3, 2),
+                )
+            ),
+            length(a.sclkdp) == 2 ? :none : :badarg, false,
+        ),
         # Regression: one angular velocity for several records counted as `nothing`.
-        ("one angular velocity for more records", merge(a, (avvs=zeros(3, 1),)),
-            length(a.sclkdp) == 1 ? :none : :badarg, false),
+        (
+            "one angular velocity for more records", merge(a, (avvs = zeros(3, 1),)),
+            length(a.sclkdp) == 1 ? :none : :badarg, false,
+        ),
     ]
 end
 
@@ -772,31 +917,40 @@ function gen_ckw02(rng, k)
     edges = ck_times(rng, 2nrec)
     start = edges[1:2:end]
     stop = edges[2:2:end]
-    for i in 1:nrec-1                               # some intervals touch the next one
-        rand(rng) < 0.3 && (stop[i] = start[i+1])
+    for i in 1:(nrec - 1)                               # some intervals touch the next one
+        rand(rng) < 0.3 && (stop[i] = start[i + 1])
     end
-    return (; begtim=start[1], endtim=stop[end], ck_ids(k)..., segid=rand_segid(rng, "C02"), start, stop,
-        quats=rand_quats(rng, nrec), avvs=1e-3 .* randn(rng, 3, nrec), rates=fill(1 / 256, nrec) .* (1 .+ 1e-6 .* randn(rng, nrec)))
+    return (;
+        begtim = start[1], endtim = stop[end], ck_ids(k)..., segid = rand_segid(rng, "C02"), start, stop,
+        quats = rand_quats(rng, nrec), avvs = 1.0e-3 .* randn(rng, 3, nrec), rates = fill(1 / 256, nrec) .* (1 .+ 1.0e-6 .* randn(rng, nrec)),
+    )
 end
 function bad_ckw02(a)
     neg = copy(a.start)
     neg[1] = -1.0
     deg = copy(a.stop)
     deg[1] = a.start[1]
-    out = Any[bad_ck_common(a, :start)[[1, 2, 3, 4, 5, 6, 7, 8]]...,
-        ("end before the last stop", merge(a, (endtim=a.stop[end] - 0.5,)), :invaliddescrtime, true),
-        ("negative first start", merge(a, (start=neg, begtim=-2.0)), :invalidsclktime, true),
-        ("degenerate interval", merge(a, (stop=deg,)), :degenerateinterval, true),
-        ("no record", merge(a, (start=Float64[], stop=Float64[], rates=Float64[], quats=zeros(4, 0),
-            avvs=zeros(3, 0))), :invalidnumrec, true),
+    out = Any[
+        bad_ck_common(a, :start)[[1, 2, 3, 4, 5, 6, 7, 8]]...,
+        ("end before the last stop", merge(a, (endtim = a.stop[end] - 0.5,)), :invaliddescrtime, true),
+        ("negative first start", merge(a, (start = neg, begtim = -2.0)), :invalidsclktime, true),
+        ("degenerate interval", merge(a, (stop = deg,)), :degenerateinterval, true),
+        (
+            "no record", merge(
+                a, (
+                    start = Float64[], stop = Float64[], rates = Float64[], quats = zeros(4, 0),
+                    avvs = zeros(3, 0),
+                )
+            ), :invalidnumrec, true,
+        ),
     ]
     if length(a.start) >= 3
         late = copy(a.stop)
         late[1] = a.start[2] + 0.5
-        push!(out, ("stop after the next start", merge(a, (stop=late,)), :badstoptime, true))
+        push!(out, ("stop after the next start", merge(a, (stop = late,)), :badstoptime, true))
         back = copy(a.start)
         back[3] = back[2]
-        push!(out, ("repeated start", merge(a, (start=back,)), :timesoutoforder, true))
+        push!(out, ("repeated start", merge(a, (start = back,)), :timesoutoforder, true))
     end
     return out
 end
@@ -806,25 +960,30 @@ function gen_ckw03(rng, k)
     sclkdp = ck_times(rng, nrec)
     pick = sort!(unique!([1; rand(rng, 1:nrec, rand(rng, (0, 1, 3, 120, 230)))]))
     begtim, endtim = rand(rng) < 0.5 ? (sclkdp[1], sclkdp[end]) : (max(sclkdp[1] - 3, 0.0), sclkdp[end] + 7)
-    return (; begtim, endtim, ck_ids(k)..., segid=rand_segid(rng, "C03"), sclkdp, quats=rand_quats(rng, nrec),
-        starts=sclkdp[pick], avvs=rand(rng, Bool) ? 1e-3 .* randn(rng, 3, nrec) : nothing)
+    return (;
+        begtim, endtim, ck_ids(k)..., segid = rand_segid(rng, "C03"), sclkdp, quats = rand_quats(rng, nrec),
+        starts = sclkdp[pick], avvs = rand(rng, Bool) ? 1.0e-3 .* randn(rng, 3, nrec) : nothing,
+    )
 end
 function bad_ckw03(a)
     neg = copy(a.sclkdp)
     neg[1] = -1.0
-    out = Any[bad_ck_common(a, :sclkdp)...,
-        ("end before the last time", merge(a, (endtim=a.sclkdp[end] - 0.5,)), :invaliddescrtime, true),
-        ("negative first time", merge(a, (sclkdp=neg, begtim=-2.0, starts=[-1.0; a.starts[2:end]])), :invalidsclktime, true),
-        ("no record", merge(a, (sclkdp=Float64[], quats=zeros(4, 0), avvs=nothing)), :invalidnumrec, true),
-        ("no interval", merge(a, (starts=Float64[],)), :invalidnumint, true),
-        ("first start is not the first time", merge(a, (starts=[a.sclkdp[1] + 0.5],)), :timesdontmatch, true),
+    out = Any[
+        bad_ck_common(a, :sclkdp)...,
+        ("end before the last time", merge(a, (endtim = a.sclkdp[end] - 0.5,)), :invaliddescrtime, true),
+        ("negative first time", merge(a, (sclkdp = neg, begtim = -2.0, starts = [-1.0; a.starts[2:end]])), :invalidsclktime, true),
+        ("no record", merge(a, (sclkdp = Float64[], quats = zeros(4, 0), avvs = nothing)), :invalidnumrec, true),
+        ("no interval", merge(a, (starts = Float64[],)), :invalidnumint, true),
+        ("first start is not the first time", merge(a, (starts = [a.sclkdp[1] + 0.5],)), :timesdontmatch, true),
         # Regression: one angular velocity for several records counted as `nothing`.
-        ("one angular velocity for more records", merge(a, (avvs=zeros(3, 1),)),
-            length(a.sclkdp) == 1 ? :none : :badarg, false),
+        (
+            "one angular velocity for more records", merge(a, (avvs = zeros(3, 1),)),
+            length(a.sclkdp) == 1 ? :none : :badarg, false,
+        ),
     ]
     if length(a.sclkdp) >= 3
-        push!(out, ("start that is not a time", merge(a, (starts=[a.sclkdp[1], a.sclkdp[2] + 0.5],)), :invalidstarttime, true))
-        push!(out, ("repeated start", merge(a, (starts=[a.sclkdp[1], a.sclkdp[2], a.sclkdp[2]],)), :timesoutoforder, true))
+        push!(out, ("start that is not a time", merge(a, (starts = [a.sclkdp[1], a.sclkdp[2] + 0.5],)), :invalidstarttime, true))
+        push!(out, ("repeated start", merge(a, (starts = [a.sclkdp[1], a.sclkdp[2], a.sclkdp[2]],)), :timesoutoforder, true))
     end
     return out
 end
@@ -835,45 +994,48 @@ function gen_ckw05(rng, k)
     n = rand_n(rng, 1)
     sclkdp = ck_times(rng, n)
     q = rand_quats(rng, n)
-    packts = subtyp == 0 ? vcat(q, 1e-4 .* randn(rng, 4, n)) :
-             subtyp == 1 ? q :
-             subtyp == 2 ? vcat(q, 1e-4 .* randn(rng, 4, n), 1e-3 .* randn(rng, 3, n), 1e-6 .* randn(rng, 3, n)) :
-             vcat(q, 1e-3 .* randn(rng, 3, n))
+    packts = subtyp == 0 ? vcat(q, 1.0e-4 .* randn(rng, 4, n)) :
+        subtyp == 1 ? q :
+        subtyp == 2 ? vcat(q, 1.0e-4 .* randn(rng, 4, n), 1.0e-3 .* randn(rng, 3, n), 1.0e-6 .* randn(rng, 3, n)) :
+        vcat(q, 1.0e-3 .* randn(rng, 3, n))
     pick = sort!(unique!([1; rand(rng, 1:n, rand(rng, (0, 1, 3, 120)))]))
-    return (; subtyp, degree, begtim=sclkdp[1], endtim=sclkdp[end], ck_ids(k)..., avflag=rand(rng, Bool),
-        segid=rand_segid(rng, "C05"), sclkdp, packts, rate=1 / 256, nints=length(pick), starts=sclkdp[pick])
+    return (;
+        subtyp, degree, begtim = sclkdp[1], endtim = sclkdp[end], ck_ids(k)..., avflag = rand(rng, Bool),
+        segid = rand_segid(rng, "C05"), sclkdp, packts, rate = 1 / 256, nints = length(pick), starts = sclkdp[pick],
+    )
 end
 function bad_ckw05(a)
     neg = copy(a.sclkdp)
     neg[1] = -1.0
     zq = copy(a.packts)
     zq[1:4, end] .= 0.0
-    out = Any[bad_ids(a; fname=:ref)...,
-        ("no interval", merge(a, (nints=0,)), :invalidnumints, true),
-        ("negative first time", merge(a, (sclkdp=neg, starts=[-1.0; a.starts[2:end]], begtim=-1.0)), :invalidsclktime, true),
-        ("start that is not a time", merge(a, (starts=[a.sclkdp[1] + 0.5], nints=1)), :invalidstarttime, true),
-        ("subtype 4", merge(a, (subtyp=4,)), :notsupported, true),
-        ("zero quaternion", merge(a, (packts=zq,)), :zeroquaternion, true),
-        ("degree 0", merge(a, (degree=0,)), :invaliddegree, true),
-        ("degree 25", merge(a, (degree=25,)), :invaliddegree, true),
-        ("odd window size", merge(a, (degree=isodd(a.subtyp) ? 2 : 5,)), :invaliddegree, true),
-        ("end before begin", merge(a, (endtim=a.begtim - 1.0,)), :baddescrtimes, true),
-        ("all times before begin", merge(a, (begtim=a.sclkdp[end] + 1.0, endtim=a.sclkdp[end] + 2.0)), :emptysegment, true),
-        ("no time in the bounds", merge(a, (begtim=a.sclkdp[1] + 0.25, endtim=a.sclkdp[1] + 0.5)), :emptysegment, true),
-        ("zero rate", merge(a, (rate=0.0,)), :invalidvalue, true),
-        ("nints above the starts", merge(a, (nints=length(a.starts) + 1,)), :badarg, false),
-        ("no packet", merge(a, (sclkdp=Float64[], packts=zeros(size(a.packts, 1), 0))), :toofewpackets, false),
+    out = Any[
+        bad_ids(a; fname = :ref)...,
+        ("no interval", merge(a, (nints = 0,)), :invalidnumints, true),
+        ("negative first time", merge(a, (sclkdp = neg, starts = [-1.0; a.starts[2:end]], begtim = -1.0)), :invalidsclktime, true),
+        ("start that is not a time", merge(a, (starts = [a.sclkdp[1] + 0.5], nints = 1)), :invalidstarttime, true),
+        ("subtype 4", merge(a, (subtyp = 4,)), :notsupported, true),
+        ("zero quaternion", merge(a, (packts = zq,)), :zeroquaternion, true),
+        ("degree 0", merge(a, (degree = 0,)), :invaliddegree, true),
+        ("degree 25", merge(a, (degree = 25,)), :invaliddegree, true),
+        ("odd window size", merge(a, (degree = isodd(a.subtyp) ? 2 : 5,)), :invaliddegree, true),
+        ("end before begin", merge(a, (endtim = a.begtim - 1.0,)), :baddescrtimes, true),
+        ("all times before begin", merge(a, (begtim = a.sclkdp[end] + 1.0, endtim = a.sclkdp[end] + 2.0)), :emptysegment, true),
+        ("no time in the bounds", merge(a, (begtim = a.sclkdp[1] + 0.25, endtim = a.sclkdp[1] + 0.5)), :emptysegment, true),
+        ("zero rate", merge(a, (rate = 0.0,)), :invalidvalue, true),
+        ("nints above the starts", merge(a, (nints = length(a.starts) + 1,)), :badarg, false),
+        ("no packet", merge(a, (sclkdp = Float64[], packts = zeros(size(a.packts, 1), 0))), :toofewpackets, false),
     ]
     if length(a.sclkdp) >= 3
         dup = copy(a.sclkdp)
         dup[3] = dup[2]
-        push!(out, ("repeated time", merge(a, (sclkdp=dup,)), :timesoutoforder, true))
-        push!(out, ("repeated start", merge(a, (starts=a.sclkdp[[1, 2, 2]], nints=3)), :timesoutoforder, true))
+        push!(out, ("repeated time", merge(a, (sclkdp = dup,)), :timesoutoforder, true))
+        push!(out, ("repeated start", merge(a, (starts = a.sclkdp[[1, 2, 2]], nints = 3)), :timesoutoforder, true))
     end
     return out
 end
 
-function gen_ckw06(rng, k; nmini::Integer=rand(rng, 1:4))
+function gen_ckw06(rng, k; nmini::Integer = rand(rng, 1:4))
     npkts = Int[]
     subtps = Int[]
     degres = Int[]
@@ -887,10 +1049,10 @@ function gen_ckw06(rng, k; nmini::Integer=rand(rng, 1:4))
         deg = isodd(sub) ? rand(rng, 1:2:23) : rand(rng, (3, 7, 11, 15, 19, 23))
         t = ivlbds[end] - rand(rng, (0.0, 4.0)) .+ cumsum(Float64[0; rand(rng, 1:400, n - 1)])
         q = rand_quats(rng, n)
-        pk = sub == 0 ? vcat(q, 1e-4 .* randn(rng, 4, n)) :
-             sub == 1 ? q :
-             sub == 2 ? vcat(q, 1e-4 .* randn(rng, 4, n), 1e-3 .* randn(rng, 3, n), 1e-6 .* randn(rng, 3, n)) :
-             vcat(q, 1e-3 .* randn(rng, 3, n))
+        pk = sub == 0 ? vcat(q, 1.0e-4 .* randn(rng, 4, n)) :
+            sub == 1 ? q :
+            sub == 2 ? vcat(q, 1.0e-4 .* randn(rng, 4, n), 1.0e-3 .* randn(rng, 3, n), 1.0e-6 .* randn(rng, 3, n)) :
+            vcat(q, 1.0e-3 .* randn(rng, 3, n))
         push!(npkts, n)
         push!(subtps, sub)
         push!(degres, deg)
@@ -899,9 +1061,11 @@ function gen_ckw06(rng, k; nmini::Integer=rand(rng, 1:4))
         append!(sclkdp, t)
         push!(ivlbds, t[end])
     end
-    return (; ck_ids(k)..., avflag=rand(rng, Bool), first=ivlbds[1], last=ivlbds[end],
-        segid=rand_segid(rng, "C06"), npkts, subtps, degres, packts, rates, sclkdp, ivlbds,
-        sellst=rand(rng, Bool))
+    return (;
+        ck_ids(k)..., avflag = rand(rng, Bool), first = ivlbds[1], last = ivlbds[end],
+        segid = rand_segid(rng, "C06"), npkts, subtps, degres, packts, rates, sclkdp, ivlbds,
+        sellst = rand(rng, Bool),
+    )
 end
 function bad_ckw06(a)
     swapped = copy(a.ivlbds)
@@ -912,21 +1076,22 @@ function bad_ckw06(a)
     zq[1:4] .= 0.0
     late = copy(a.sclkdp)
     late[1] = a.ivlbds[1] + 0.5
-    out = Any[bad_ids(a; fname=:ref, empty_both=false)...,
-        ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true),
-        ("bounds out of order", merge(a, (ivlbds=swapped,)), :boundsoutoforder, true),
-        ("first before the bounds", merge(a, (first=a.ivlbds[1] - 1.0,)), :coveragegap, true),
-        ("last after the bounds", merge(a, (last=a.ivlbds[end] + 1.0,)), :coveragegap, true),
-        ("one packet", merge(a, (npkts=[1; a.npkts[2:end]],)), :toofewpackets, true),
-        ("subtype 4", merge(a, (subtps=[4; a.subtps[2:end]],)), :invalidsubtype, true),
-        ("zero rate", merge(a, (rates=[0.0; a.rates[2:end]],)), :invalidsclkrate, true),
-        ("degree 25", merge(a, (subtps=[a.subtps[1] | 1; a.subtps[2:end]], degres=[25; a.degres[2:end]])), :invaliddegree, true),
-        ("odd window size", merge(a, (degres=[isodd(a.subtps[1]) ? 2 : 5; a.degres[2:end]],)), :badwindowsize, true),
-        ("repeated time", merge(a, (sclkdp=dup,)), :timesoutoforder, true),
-        ("no mini-segment", merge(a, (npkts=Int[], subtps=Int[], degres=Int[], rates=Float64[])), :invalidcount, false),
+    out = Any[
+        bad_ids(a; fname = :ref, empty_both = false)...,
+        ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true),
+        ("bounds out of order", merge(a, (ivlbds = swapped,)), :boundsoutoforder, true),
+        ("first before the bounds", merge(a, (first = a.ivlbds[1] - 1.0,)), :coveragegap, true),
+        ("last after the bounds", merge(a, (last = a.ivlbds[end] + 1.0,)), :coveragegap, true),
+        ("one packet", merge(a, (npkts = [1; a.npkts[2:end]],)), :toofewpackets, true),
+        ("subtype 4", merge(a, (subtps = [4; a.subtps[2:end]],)), :invalidsubtype, true),
+        ("zero rate", merge(a, (rates = [0.0; a.rates[2:end]],)), :invalidsclkrate, true),
+        ("degree 25", merge(a, (subtps = [a.subtps[1] | 1; a.subtps[2:end]], degres = [25; a.degres[2:end]])), :invaliddegree, true),
+        ("odd window size", merge(a, (degres = [isodd(a.subtps[1]) ? 2 : 5; a.degres[2:end]],)), :badwindowsize, true),
+        ("repeated time", merge(a, (sclkdp = dup,)), :timesoutoforder, true),
+        ("no mini-segment", merge(a, (npkts = Int[], subtps = Int[], degres = Int[], rates = Float64[])), :invalidcount, false),
     ]
     if a.sclkdp[1] == a.ivlbds[1] && a.sclkdp[2] > late[1]
-        push!(out, ("first time after the interval start", merge(a, (sclkdp=late,)), :boundsdisagree, true))
+        push!(out, ("first time after the interval start", merge(a, (sclkdp = late,)), :boundsdisagree, true))
     end
     return out
 end
@@ -943,19 +1108,22 @@ function gen_pckw02(rng, k)
     btime = 1.0e7 * randn(rng)
     cdata = randn(rng, 3 * (polydg + 1), n)         # angles in rad
     first, last = rand(rng) < 0.5 ? (btime, btime + n * intlen) : (btime + 0.1 * intlen, btime + (n - 0.1) * intlen)
-    return (clssid=rand(rng, sort!(collect(keys(PCK_FRAMES)))),
-        frame=rand(rng, ("J2000", "ECLIPJ2000", "B1950", "GALACTIC")), first, last,
-        segid=rand_segid(rng, "P02"), intlen, cdata, btime)
+    return (
+        clssid = rand(rng, sort!(collect(keys(PCK_FRAMES)))),
+        frame = rand(rng, ("J2000", "ECLIPJ2000", "B1950", "GALACTIC")), first, last,
+        segid = rand_segid(rng, "P02"), intlen, cdata, btime,
+    )
 end
 function bad_pckw02(a)
-    return Any[bad_ids(a; long=:idstringtoolong)...,
-        ("frame that is not inertial", merge(a, (frame="IAU_EARTH",)), :invalidrefframe, true),
-        ("no record", merge(a, (cdata=zeros(size(a.cdata, 1), 0),)), :numcoeffsnotpos, true),
-        ("zero interval length", merge(a, (intlen=0.0,)), :intlennotpos, true),
-        ("first after last", merge(a, (first=a.last + 1.0,)), :baddescrtimes, true),
-        ("first before the data", merge(a, (first=a.btime - 1.0e-3,)), :baddescrtimes, true),
-        ("last after the data", merge(a, (last=a.btime + size(a.cdata, 2) * a.intlen + 1.0e-3,)), :baddescrtimes, true),
-        ("record size not a multiple of 3", merge(a, (cdata=zeros(4, size(a.cdata, 2)),)), :badarg, false),
+    return Any[
+        bad_ids(a; long = :idstringtoolong)...,
+        ("frame that is not inertial", merge(a, (frame = "IAU_EARTH",)), :invalidrefframe, true),
+        ("no record", merge(a, (cdata = zeros(size(a.cdata, 1), 0),)), :numcoeffsnotpos, true),
+        ("zero interval length", merge(a, (intlen = 0.0,)), :intlennotpos, true),
+        ("first after last", merge(a, (first = a.last + 1.0,)), :baddescrtimes, true),
+        ("first before the data", merge(a, (first = a.btime - 1.0e-3,)), :baddescrtimes, true),
+        ("last after the data", merge(a, (last = a.btime + size(a.cdata, 2) * a.intlen + 1.0e-3,)), :baddescrtimes, true),
+        ("record size not a multiple of 3", merge(a, (cdata = zeros(4, size(a.cdata, 2)),)), :badarg, false),
     ]
 end
 
@@ -968,108 +1136,156 @@ function gen_pckw20(rng, k)
     btime = 86400.0 * (initjd - 2451545.0 + initfr)
     ltime = btime + n * intlen * 86400.0
     cdata = 1.0e-3 .* randn(rng, 3 * (polydg + 2), n)  # rates and angles in units of ascale
-    return (clssid=rand(rng, sort!(collect(keys(PCK_FRAMES)))),
-        frame=rand(rng, ("J2000", "ECLIPJ2000", "B1950", "GALACTIC")), first=btime,
-        last=ltime, segid=rand_segid(rng, "P20"), intlen, cdata,
-        ascale=rand(rng, (1.0, 0.01)), tscale=rand(rng, (1.0, 86400.0)), initjd, initfr)
+    return (
+        clssid = rand(rng, sort!(collect(keys(PCK_FRAMES)))),
+        frame = rand(rng, ("J2000", "ECLIPJ2000", "B1950", "GALACTIC")), first = btime,
+        last = ltime, segid = rand_segid(rng, "P20"), intlen, cdata,
+        ascale = rand(rng, (1.0, 0.01)), tscale = rand(rng, (1.0, 86400.0)), initjd, initfr,
+    )
 end
 function bad_pckw20(a)
     # CSPICE N0067 has `pckw20_` and no `pckw20_c`, so the checks of the C wrapper (an
     # empty string) are not compared with CSPICE: `both` is false for them.
-    return Any[bad_ids(a; long=:idstringtoolong, empty_both=false)...,
-        ("degree 51", merge(a, (cdata=zeros(3 * 53, size(a.cdata, 2)),)), :invaliddegree, true),
-        ("zero interval length", merge(a, (intlen=0.0,)), :intlennotpos, true),
-        ("first equal to last", merge(a, (first=a.last,)), :baddescrtimes, true),
-        ("zero angle scale", merge(a, (ascale=0.0,)), :nonpositivescale, true),
-        ("negative time scale", merge(a, (tscale=-1.0,)), :nonpositivescale, true),
-        ("first before the data", merge(a, (first=a.first - 100.0,)), :coveragegap, true),
-        ("last after the data", merge(a, (last=a.last + 100.0,)), :coveragegap, true),
-        ("no record", merge(a, (cdata=zeros(size(a.cdata, 1), 0),)), :invalidcount, false),
+    return Any[
+        bad_ids(a; long = :idstringtoolong, empty_both = false)...,
+        ("degree 51", merge(a, (cdata = zeros(3 * 53, size(a.cdata, 2)),)), :invaliddegree, true),
+        ("zero interval length", merge(a, (intlen = 0.0,)), :intlennotpos, true),
+        ("first equal to last", merge(a, (first = a.last,)), :baddescrtimes, true),
+        ("zero angle scale", merge(a, (ascale = 0.0,)), :nonpositivescale, true),
+        ("negative time scale", merge(a, (tscale = -1.0,)), :nonpositivescale, true),
+        ("first before the data", merge(a, (first = a.first - 100.0,)), :coveragegap, true),
+        ("last after the data", merge(a, (last = a.last + 100.0,)), :coveragegap, true),
+        ("no record", merge(a, (cdata = zeros(size(a.cdata, 1), 0),)), :invalidcount, false),
     ]
 end
 
+const PCKW20_RNG = MersenneTwister(SEED + 920)
 const WRITER_CASES = WriterCase[
-    WriterCase("spkw13", :spk, gen_w13,
+    WriterCase(
+        "spkw13", :spk, gen_w13,
         (h, a) -> spkw13(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, a.states, a.epochs),
         (h, a) -> SPICE.spkw13(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, cols(a.states), a.epochs),
-        bad_w13),
-    WriterCase("spkw09", :spk, gen_w09,
+        bad_w13
+    ),
+    WriterCase(
+        "spkw09", :spk, gen_w09,
         (h, a) -> spkw09(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, a.states, a.epochs),
         (h, a) -> SPICE.spkw09(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, cols(a.states), a.epochs),
-        bad_w09),
-    WriterCase("spkw05", :spk, gen_w05,
+        bad_w09
+    ),
+    WriterCase(
+        "spkw05", :spk, gen_w05,
         (h, a) -> spkw05(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.gm, a.states, a.epochs),
         (h, a) -> SPICE.spkw05(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.gm, cols(a.states), a.epochs),
-        bad_w05),
-    WriterCase("spkw08", :spk, (rng, k) -> gen_w0812(rng, k, false),
+        bad_w05
+    ),
+    WriterCase(
+        "spkw08", :spk, (rng, k) -> gen_w0812(rng, k, false),
         (h, a) -> spkw08(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, a.states, a.epoch1, a.step),
         (h, a) -> SPICE.spkw08(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, cols(a.states), a.epoch1, a.step),
-        a -> bad_w0812(a, false)),
-    WriterCase("spkw12", :spk, (rng, k) -> gen_w0812(rng, k, true),
+        a -> bad_w0812(a, false)
+    ),
+    WriterCase(
+        "spkw12", :spk, (rng, k) -> gen_w0812(rng, k, true),
         (h, a) -> spkw12(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, a.states, a.epoch1, a.step),
         (h, a) -> SPICE.spkw12(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, cols(a.states), a.epoch1, a.step),
-        a -> bad_w0812(a, true)),
-    WriterCase("spkw18", :spk, gen_w18,
+        a -> bad_w0812(a, true)
+    ),
+    WriterCase(
+        "spkw18", :spk, gen_w18,
         (h, a) -> spkw18(h, a.subtyp, a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, a.packts, a.epochs),
-        (h, a) -> SPICE.spkw18(h, (:S18TP0, :S18TP1)[a.subtyp+1], a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, cols(a.packts), a.epochs),
-        bad_w18),
-    WriterCase("spkw02", :spk, (rng, k) -> gen_w0203(rng, k, 3),
+        (h, a) -> SPICE.spkw18(h, (:S18TP0, :S18TP1)[a.subtyp + 1], a.body, a.center, a.frame, a.first, a.last, a.segid, a.degree, cols(a.packts), a.epochs),
+        bad_w18
+    ),
+    WriterCase(
+        "spkw02", :spk, (rng, k) -> gen_w0203(rng, k, 3),
         (h, a) -> spkw02(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.btime),
-        (h, a) -> c_spkw0203(:spkw02_c, h, a), a -> bad_w0203(a, 3)),
-    WriterCase("spkw03", :spk, (rng, k) -> gen_w0203(rng, k, 6),
+        (h, a) -> c_spkw0203(:spkw02_c, h, a), a -> bad_w0203(a, 3)
+    ),
+    WriterCase(
+        "spkw03", :spk, (rng, k) -> gen_w0203(rng, k, 6),
         (h, a) -> spkw03(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.btime),
-        (h, a) -> c_spkw0203(:spkw03_c, h, a), a -> bad_w0203(a, 6)),
-    WriterCase("spkw20", :spk, gen_w20,
+        (h, a) -> c_spkw0203(:spkw03_c, h, a), a -> bad_w0203(a, 6)
+    ),
+    WriterCase(
+        "spkw20", :spk, gen_w20,
         (h, a) -> spkw20(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.dscale, a.tscale, a.initjd, a.initfr),
         (h, a) -> SPICE.spkw20(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.intlen, cols(a.cdata), a.dscale, a.tscale, a.initjd, a.initfr),
-        bad_w20),
-    WriterCase("spkw15", :spk, gen_w15,
+        bad_w20
+    ),
+    WriterCase(
+        "spkw15", :spk, gen_w15,
         (h, a) -> spkw15(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.epoch, a.tp, a.pa, a.p, a.ecc, a.j2flg, a.pv, a.gm, a.j2, a.radius),
         (h, a) -> SPICE.spkw15(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.epoch, a.tp, a.pa, a.p, a.ecc, a.j2flg, a.pv, a.gm, a.j2, a.radius),
-        bad_w15),
-    WriterCase("spkw17", :spk, gen_w17,
+        bad_w15
+    ),
+    WriterCase(
+        "spkw17", :spk, gen_w17,
         (h, a) -> spkw17(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.epoch, a.eqel, a.rapol, a.decpol),
         (h, a) -> SPICE.spkw17(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.epoch, a.eqel, a.rapol, a.decpol),
-        bad_w17),
-    WriterCase("spkw01", :spk, (rng, k) -> gen_w0121(rng, k, false),
+        bad_w17
+    ),
+    WriterCase(
+        "spkw01", :spk, (rng, k) -> gen_w0121(rng, k, false),
         (h, a) -> spkw01(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.dlines, a.epochs),
-        c_spkw01, a -> bad_w0121(a, false)),
-    WriterCase("spkw21", :spk, (rng, k) -> gen_w0121(rng, k, true),
+        c_spkw01, a -> bad_w0121(a, false)
+    ),
+    WriterCase(
+        "spkw21", :spk, (rng, k) -> gen_w0121(rng, k, true),
         (h, a) -> spkw21(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.dlines, a.epochs),
-        c_spkw21, a -> bad_w0121(a, true)),
+        c_spkw21, a -> bad_w0121(a, true)
+    ),
     WriterCase("spk14", :spk, gen_w14, n_spk14, c_spk14, bad_w14),
-    WriterCase("spkw19", :spk, gen_w19,
+    WriterCase(
+        "spkw19", :spk, gen_w19,
         (h, a) -> spkw19(h, a.body, a.center, a.frame, a.first, a.last, a.segid, a.npkts, a.subtps, a.degres, a.packts, a.epochs, a.ivlbds, a.sellst),
-        c_spkw19, bad_w19),
-    WriterCase("ckw01", :ck, gen_ckw01,
+        c_spkw19, bad_w19
+    ),
+    WriterCase(
+        "ckw01", :ck, gen_ckw01,
         (h, a) -> ckw01(h, a.begtim, a.endtim, a.inst, a.ref, a.segid, a.sclkdp, a.quats, a.avvs),
-        c_ckw01, bad_ckw01),
-    WriterCase("ckw02", :ck, gen_ckw02,
+        c_ckw01, bad_ckw01
+    ),
+    WriterCase(
+        "ckw02", :ck, gen_ckw02,
         (h, a) -> ckw02(h, a.begtim, a.endtim, a.inst, a.ref, a.segid, a.start, a.stop, a.quats, a.avvs, a.rates),
-        c_ckw02, bad_ckw02),
-    WriterCase("ckw03", :ck, gen_ckw03,
+        c_ckw02, bad_ckw02
+    ),
+    WriterCase(
+        "ckw03", :ck, gen_ckw03,
         (h, a) -> ckw03(h, a.begtim, a.endtim, a.inst, a.ref, a.segid, a.sclkdp, a.quats, a.avvs, a.starts),
-        c_ckw03, bad_ckw03),
-    WriterCase("ckw05", :ck, gen_ckw05,
+        c_ckw03, bad_ckw03
+    ),
+    WriterCase(
+        "ckw05", :ck, gen_ckw05,
         (h, a) -> ckw05(h, a.subtyp, a.degree, a.begtim, a.endtim, a.inst, a.ref, a.avflag, a.segid, a.sclkdp, a.packts, a.rate, a.nints, a.starts),
-        c_ckw05, bad_ckw05),
-    WriterCase("ckw06", :ck, gen_ckw06,
+        c_ckw05, bad_ckw05
+    ),
+    WriterCase(
+        "ckw06", :ck, gen_ckw06,
         (h, a) -> ckw06(h, a.inst, a.ref, a.avflag, a.first, a.last, a.segid, a.npkts, a.subtps, a.degres, a.packts, a.rates, a.sclkdp, a.ivlbds, a.sellst),
-        c_ckw06, bad_ckw06),
-    WriterCase("pckw02", :pck, gen_pckw02,
+        c_ckw06, bad_ckw06
+    ),
+    WriterCase(
+        "pckw02", :pck, gen_pckw02,
         (h, a) -> pckw02(h, a.clssid, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.btime),
-        c_pckw02, bad_pckw02),
-    WriterCase("pckw20", :pck, gen_pckw20,
+        c_pckw02, bad_pckw02
+    ),
+    # pckw20 came after the other cases: it draws from a stream of its own, so that the
+    # cases after it in the shared stream keep their data
+    WriterCase(
+        "pckw20", :pck, (rng, k) -> gen_pckw20(PCKW20_RNG, k),
         (h, a) -> pckw20(h, a.clssid, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.ascale, a.tscale, a.initjd, a.initfr),
-        c_pckw20, bad_pckw20),
+        c_pckw20, bad_pckw20
+    ),
 ]
 
 "The writer case with the name `name`."
 writer_case(name::AbstractString) = WRITER_CASES[findfirst(c -> c.name == name, WRITER_CASES)]
 
-neo_open(kind::Symbol, path, ifname, ncomch=0) = kind === :spk ? spkopn(path, ifname, ncomch) :
+neo_open(kind::Symbol, path, ifname, ncomch = 0) = kind === :spk ? spkopn(path, ifname, ncomch) :
     kind === :ck ? ckopn(path, ifname, ncomch) : pckopn(path, ifname, ncomch)
-c_open(kind::Symbol, path, ifname, ncomch=0) = kind === :spk ? SPICE.spkopn(path, ifname, ncomch) :
+c_open(kind::Symbol, path, ifname, ncomch = 0) = kind === :spk ? SPICE.spkopn(path, ifname, ncomch) :
     kind === :ck ? SPICE.ckopn(path, ifname, ncomch) : SPICE.pckopn(path, ifname, ncomch)
 neo_close(kind::Symbol, h) = kind === :spk ? spkcls(h) : kind === :ck ? ckcls(h) : pckcls(h)
 c_close(kind::Symbol, h) = kind === :spk ? SPICE.spkcls(h) : kind === :ck ? SPICE.ckcls(h) : SPICE.pckcls(h)
@@ -1078,8 +1294,10 @@ kind_ext(kind::Symbol) = kind === :spk ? ".bsp" : kind === :ck ? ".bc" : ".bpc"
 kind_type(kind::Symbol) = kind === :spk ? "SPK" : kind === :ck ? "CK" : "PCK"
 
 "Write the segments `segs` of the case `c` with both engines; returns the paths `(pc, pn)`."
-function write_both(c::WriterCase, dir::AbstractString, tag::AbstractString, segs; ncomch::Integer=0,
-        comments=nothing)
+function write_both(
+        c::WriterCase, dir::AbstractString, tag::AbstractString, segs; ncomch::Integer = 0,
+        comments = nothing
+    )
     ext = kind_ext(c.kind)
     pc = joinpath(dir, "c_" * tag * ext)
     pn = joinpath(dir, "n_" * tag * ext)
@@ -1123,8 +1341,10 @@ function c_read_ck(path::AbstractString, sclk::AbstractString, segs, ticks)
     SPICE.furnsh(sclk)
     SPICE.furnsh(path)
     try
-        return [(c_value(() -> SPICE.ckgpav(a.inst, t, 0.0, "J2000")), c_value(() -> SPICE.ckgp(a.inst, t, 0.0, "J2000")))
-                for (a, ts) in zip(segs, ticks) for t in ts]
+        return [
+            (c_value(() -> SPICE.ckgpav(a.inst, t, 0.0, "J2000")), c_value(() -> SPICE.ckgp(a.inst, t, 0.0, "J2000")))
+                for (a, ts) in zip(segs, ticks) for t in ts
+        ]
     finally
         SPICE.unload(path)
         SPICE.unload(sclk)
@@ -1154,34 +1374,38 @@ end
 "Hand-written type 1 SCLK kernel for the spacecraft -77: 256 ticks in a second, one partition, TDB."
 function write_sclk(dir::AbstractString)
     path = joinpath(dir, "almanac_test.tsc")
-    write(path, """
-    KPL/SCLK
+    write(
+        path, """
+        KPL/SCLK
 
-    Spacecraft clock of the test spacecraft -77 (written by test_dafwrite.jl).
+        Spacecraft clock of the test spacecraft -77 (written by test_dafwrite.jl).
 
-    \\begindata
+        \\begindata
 
-       SCLK_KERNEL_ID            = ( @2026-10-11/00:00:00 )
-       SCLK_DATA_TYPE_77         = ( 1 )
-       SCLK01_TIME_SYSTEM_77     = ( 1 )
-       SCLK01_N_FIELDS_77        = ( 2 )
-       SCLK01_MODULI_77          = ( 4294967296 256 )
-       SCLK01_OFFSETS_77         = ( 0 0 )
-       SCLK01_OUTPUT_DELIM_77    = ( 1 )
-       SCLK_PARTITION_START_77   = ( 0.0000000000000E+00 )
-       SCLK_PARTITION_END_77     = ( 1.0995116277750E+12 )
-       SCLK01_COEFFICIENTS_77    = ( 0.0000000000000E+00  0.0000000000000E+00  1.0000000000000E+00 )
+           SCLK_KERNEL_ID            = ( @2026-10-11/00:00:00 )
+           SCLK_DATA_TYPE_77         = ( 1 )
+           SCLK01_TIME_SYSTEM_77     = ( 1 )
+           SCLK01_N_FIELDS_77        = ( 2 )
+           SCLK01_MODULI_77          = ( 4294967296 256 )
+           SCLK01_OFFSETS_77         = ( 0 0 )
+           SCLK01_OUTPUT_DELIM_77    = ( 1 )
+           SCLK_PARTITION_START_77   = ( 0.0000000000000E+00 )
+           SCLK_PARTITION_END_77     = ( 1.0995116277750E+12 )
+           SCLK01_COEFFICIENTS_77    = ( 0.0000000000000E+00  0.0000000000000E+00  1.0000000000000E+00 )
 
-    \\begintext
-    """)
+        \\begintext
+        """
+    )
     return path
 end
 
 "Random comment lines: printable ASCII, some empty, some with leading or trailing blanks."
-function rand_comments(rng::AbstractRNG, n::Integer; maxlen::Integer=120)
+function rand_comments(rng::AbstractRNG, n::Integer; maxlen::Integer = 120)
     chars = Char.(32:126)
-    return String[rand(rng) < 0.15 ? "" : (" "^rand(rng, 0:3)) * randstring(rng, chars, rand(rng, 0:maxlen)) *
-                  (" "^rand(rng, 0:2)) for _ in 1:n]
+    return String[
+        rand(rng) < 0.15 ? "" : (" "^rand(rng, 0:3)) * randstring(rng, chars, rand(rng, 0:maxlen)) *
+            (" "^rand(rng, 0:2)) for _ in 1:n
+    ]
 end
 
 "What `dafec` gives for the lines `lines` that `dafac` stored: trailing blanks removed."
@@ -1200,21 +1424,21 @@ function write_other_endian(src::AbstractString, dst::AbstractString)
     out[89:96] = codeunits(ENDIAN_BOM == 0x04030201 ? "BIG-IEEE" : "LTL-IEEE")
     nd, ni, fward = Int.(reinterpret(Int32, raw[[9:12; 13:16; 77:80]]))
     ss = nd + (ni + 1) ÷ 2
-    chars = Set{Int}(2:fward-1)
+    chars = Set{Int}(2:(fward - 1))
     rec = fward
     while rec != 0
         base = (rec - 1) * 1024
-        ctl = reinterpret(Float64, raw[base+1:base+24])
+        ctl = reinterpret(Float64, raw[(base + 1):(base + 24)])
         foreach(w -> rev!(base + 8w, 8), 0:2)
-        for s in 0:Int(ctl[3])-1
+        for s in 0:(Int(ctl[3]) - 1)
             off = base + 24 + 8 * ss * s
-            foreach(j -> rev!(off + 8j, 8), 0:nd-1)
-            foreach(j -> rev!(off + 8nd + 4j, 4), 0:ni-1)
+            foreach(j -> rev!(off + 8j, 8), 0:(nd - 1))
+            foreach(j -> rev!(off + 8nd + 4j, 4), 0:(ni - 1))
         end
         push!(chars, rec, rec + 1)
         rec = Int(ctl[1])
     end
-    for r in 2:length(raw)÷1024
+    for r in 2:(length(raw) ÷ 1024)
         r in chars && continue
         foreach(w -> rev!((r - 1) * 1024 + 8w, 8), 0:127)
     end
@@ -1236,8 +1460,12 @@ group("9. DAF access, SPK and CK writers") do
         # Files of each writer. Three files of one to three segments reach each layout
         # branch of each writer in the default run (measured with line coverage).
         ntrial = nsample(3, 6)
-        measured(@sprintf("  %-8s %5s %9s %9s %5s %5s %6s %8s", "writer", "segs", "doubles", "bit diff",
-            "descr", "names", "bytes", "readback"))
+        measured(
+            @sprintf(
+                "  %-8s %5s %9s %9s %5s %5s %6s %8s", "writer", "segs", "doubles", "bit diff",
+                "descr", "names", "bytes", "readback"
+            )
+        )
         for c in WRITER_CASES
             nseg = 0
             words = 0
@@ -1282,9 +1510,13 @@ group("9. DAF access, SPK and CK writers") do
                 @test readok
                 @test nread > 0
             end
-            measured(@sprintf("  %-8s %5d %9d %9d %5s %5s %6s %8s", c.name, nseg, words, badwords,
-                descr ? "same" : "DIFF", names ? "same" : "DIFF", bytes ? "same" : "DIFF",
-                readok ? "same/$nread" : "DIFF"))
+            measured(
+                @sprintf(
+                    "  %-8s %5d %9d %9d %5s %5s %6s %8s", c.name, nseg, words, badwords,
+                    descr ? "same" : "DIFF", names ? "same" : "DIFF", bytes ? "same" : "DIFF",
+                    readok ? "same/$nread" : "DIFF"
+                )
+            )
         end
     end
 
@@ -1292,40 +1524,48 @@ group("9. DAF access, SPK and CK writers") do
         c = writer_case("spkw13")
         a = c.gen(rng, 1)
         paths = String[]
-        for (i, states) in enumerate((a.states, cols(a.states), vec(a.states), [Tuple(col) for col in cols(a.states)],
-            [SVector{6}(col) for col in cols(a.states)], view(a.states, :, :)))
+        for (i, states) in enumerate(
+                (
+                    a.states, cols(a.states), vec(a.states), [Tuple(col) for col in cols(a.states)],
+                    [SVector{6}(col) for col in cols(a.states)], view(a.states, :, :),
+                )
+            )
             p = joinpath(dir, "forms_$i.bsp")
             h = spkopn(p, "FORMS")
-            c.neo(h, merge(a, (states=states, epochs=i == 2 ? view(a.epochs, :) : a.epochs, frame=i == 3 ? 1 : "J2000")))
+            c.neo(h, merge(a, (states = states, epochs = i == 2 ? view(a.epochs, :) : a.epochs, frame = i == 3 ? 1 : "J2000")))
             spkcls(h)
             push!(paths, p)
         end
         @test all(p -> read(p) == read(paths[1]), paths)
         # A frame that only the kernel pool of an explicit context defines.
         fk = joinpath(dir, "writer_frame.tf")
-        write(fk, """
-        KPL/FK
-        \\begindata
-           FRAME_WRITER_TEST_FRAME   = 1977001
-           FRAME_1977001_NAME        = 'WRITER_TEST_FRAME'
-           FRAME_1977001_CLASS       = 4
-           FRAME_1977001_CLASS_ID    = 1977001
-           FRAME_1977001_CENTER      = 399
-           TKFRAME_1977001_SPEC      = 'MATRIX'
-           TKFRAME_1977001_RELATIVE  = 'J2000'
-           TKFRAME_1977001_MATRIX    = ( 1 0 0 0 1 0 0 0 1 )
-        \\begintext
-        """)
+        write(
+            fk, """
+            KPL/FK
+            \\begindata
+               FRAME_WRITER_TEST_FRAME   = 1977001
+               FRAME_1977001_NAME        = 'WRITER_TEST_FRAME'
+               FRAME_1977001_CLASS       = 4
+               FRAME_1977001_CLASS_ID    = 1977001
+               FRAME_1977001_CENTER      = 399
+               TKFRAME_1977001_SPEC      = 'MATRIX'
+               TKFRAME_1977001_RELATIVE  = 'J2000'
+               TKFRAME_1977001_MATRIX    = ( 1 0 0 0 1 0 0 0 1 )
+            \\begintext
+            """
+        )
         ctx = neo_context([fk])
         p = joinpath(dir, "frame_ctx.bsp")
         h = spkopn(p, "FRAME")
-        b = merge(a, (frame="WRITER_TEST_FRAME",))
+        b = merge(a, (frame = "WRITER_TEST_FRAME",))
         @test throws_kind(() -> c.neo(h, b), :invalidrefframe)      # not in the default context
         # The writers without a context are compared with CSPICE above; these calls give the
         # context first, as a `SpiceContext` and as a `KernelSet`.
         spkw13(ctx, h, b.body, b.center, b.frame, b.first, b.last, b.segid, b.degree, b.states, b.epochs)
-        spkw13(Almanac.kernelset(ctx), h, b.body, b.center, b.frame, b.first, b.last, b.segid,
-            b.degree, b.states, b.epochs)
+        spkw13(
+            Almanac.kernelset(ctx), h, b.body, b.center, b.frame, b.first, b.last, b.segid,
+            b.degree, b.states, b.epochs
+        )
         spkcls(h)
         d = neo_dump(p)
         @test [s[2][3] for s in d.sums] == [1977001, 1977001]
@@ -1350,7 +1590,7 @@ group("9. DAF access, SPK and CK writers") do
         # Only the writers that call `spkpds` in CSPICE reject the barycenter as body and
         # a body equal to its center (`bad_pds`); `spkw02` is one of those that accept them.
         c2 = writer_case("spkw02")
-        pc2, pn2 = write_both(c2, dir, "body_is_center", [merge(c2.gen(rng, 1), (body=0, center=0))])
+        pc2, pn2 = write_both(c2, dir, "body_is_center", [merge(c2.gen(rng, 1), (body = 0, center = 0))])
         @test read(pc2) == read(pn2)
     end
 
@@ -1362,8 +1602,8 @@ group("9. DAF access, SPK and CK writers") do
                 # writers of types 8 and 12 have no epoch vector, thus the count of their
                 # records is the count of the columns of `states`.
                 while !all(v -> !(v isa AbstractVector{Float64}) || length(v) >= 3, values(a)) ||
-                    (hasproperty(a, :states) && size(a.states, 2) < 3) ||
-                    (hasproperty(a, :starts) && length(a.starts) < 2)
+                        (hasproperty(a, :states) && size(a.states, 2) < 3) ||
+                        (hasproperty(a, :starts) && length(a.starts) < 2)
                     a = c.gen(rng, 1)
                 end
                 ext = kind_ext(c.kind)
@@ -1426,8 +1666,8 @@ group("9. DAF access, SPK and CK writers") do
         st = spkgeo(ctx, a.body, mid, a.frame, a.center)[1]
         nc = a.degree + 1
         # At the midpoint the series is the sum of its even coefficients with changing sign.
-        expect(k) = sum(a.coeffs[2+(k-1)*nc+j+1, i] * (iseven(j ÷ 2) ? 1.0 : -1.0) for j in 0:2:a.degree)
-        @test all(isapprox(st[k], expect(k); rtol=1e-12, atol=1e-12) for k in 1:6)
+        expect(k) = sum(a.coeffs[2 + (k - 1) * nc + j + 1, i] * (iseven(j ÷ 2) ? 1.0 : -1.0) for j in 0:2:a.degree)
+        @test all(isapprox(st[k], expect(k); rtol = 1.0e-12, atol = 1.0e-12) for k in 1:6)
         @test rad > 0
     end
 
@@ -1440,8 +1680,14 @@ group("9. DAF access, SPK and CK writers") do
         plan = FULL ? ((c13, (24, 25, 26, 50, 51, 77)), (c03, (25, 26, 60))) : ((c13, (25, 26, 51)), (c03, (26,)))
         for (c, counts) in plan
             for nseg in counts
-                segs = [merge(c.gen(rng, k), c.kind === :spk ? (states=rand_states(rng, 4), epochs=[0.0, 1.0, 2.0, 3.0],
-                    first=0.0, last=3.0, degree=3) : (;)) for k in 1:nseg]
+                segs = [
+                    merge(
+                        c.gen(rng, k), c.kind === :spk ? (
+                                states = rand_states(rng, 4), epochs = [0.0, 1.0, 2.0, 3.0],
+                                first = 0.0, last = 3.0, degree = 3,
+                            ) : (;)
+                    ) for k in 1:nseg
+                ]
                 c.kind === :ck && (segs = [a for a in segs if length(a.sclkdp) <= 101])
                 pc, pn = write_both(c, dir, "many_$(c.name)_$nseg", segs)
                 r = compare_files(pc, pn)
@@ -1486,19 +1732,21 @@ group("9. DAF access, SPK and CK writers") do
 
     @apart @testset "comments: dafac and dafec in both directions" begin
         c = writer_case("spkw13")
-        seg(k) = merge(c.gen(rng, k), (states=rand_states(rng, 30), epochs=collect(0.0:29.0), first=0.0, last=29.0, degree=3))
+        seg(k) = merge(c.gen(rng, k), (states = rand_states(rng, 30), epochs = collect(0.0:29.0), first = 0.0, last = 29.0, degree = 3))
         nbytes = 0
         nfiles = 0
         # (reserved characters, comments before the segments, lines of 1000 characters).
         # In the last case the first line and its end mark fill one comment record exactly.
         # A comment record holds 1000 characters: no record, one full record, one character
         # in the second record, and several records. The exhaustive run adds more sizes.
-        cases = [(0, true, false), (1000, true, false), (1001, true, false), (2500, true, false),
-            (0, false, false), (0, false, true)]
+        cases = [
+            (0, true, false), (1000, true, false), (1001, true, false), (2500, true, false),
+            (0, false, false), (0, false, true),
+        ]
         FULL && append!(cases, [(1, true, false), (999, true, false), (6000, true, false), (3000, true, false)])
         for (i, (ncomch, early, longlines)) in enumerate(cases)
             before = early ? rand_comments(rng, rand(rng, 1:30)) : String[]
-            after = longlines ? ["x"^999, "y"^1000, "", "z"^1000, "w"] : rand_comments(rng, rand(rng, 1:60); maxlen=400)
+            after = longlines ? ["x"^999, "y"^1000, "", "z"^1000, "w"] : rand_comments(rng, rand(rng, 1:60); maxlen = 400)
             last = ["one more line", ""]
             segs = [seg(k) for k in 1:rand(rng, (1, 3, 30))]
             pc = joinpath(dir, "com_c_$i.bsp")
@@ -1538,14 +1786,14 @@ group("9. DAF access, SPK and CK writers") do
             r2 = compare_files(pc, pn)
             @test files_agree(r2)
             @test length(r2.nseg == length(segs) ? neo_dump(pc).comments : String[]) ==
-                  length(before) + length(after) + length(last) + 2
+                length(before) + length(after) + length(last) + 2
             ets = [[0.0, 14.5, 29.0] for _ in segs]
             @test isequal(c_read_spk(pc, segs, ets), c_read_spk(pn, segs, ets))
         end
         measured(@sprintf("  %-58s files=%d byte-identical=%d", "comments: files with a grown comment area", nfiles, nbytes))
         # Delete the comment area with both engines.
         segs = [seg(k) for k in 1:27]
-        pc, pn = write_both(c, dir, "dafdc", segs; ncomch=2300, comments=rand_comments(rng, 20))
+        pc, pn = write_both(c, dir, "dafdc", segs; ncomch = 2300, comments = rand_comments(rng, 20))
         hc = SPICE.dafopw(pc)
         SPICE.dafdc(hc)
         SPICE.dafcls(hc)
@@ -1564,7 +1812,13 @@ group("9. DAF access, SPK and CK writers") do
         @test throws_kind(() -> dafac(h, String[]), :invalidargument)
         @test throws_kind(() -> dafac(h, ["tab\there"]), :illegalcharacter)
         @test throws_kind(() -> dafac(h, ["ok", "é"]), :illegalcharacter)
-        @test_throws SPICE.SpiceError (hc = SPICE.dafopw(pc); try SPICE.dafac(hc, ["tab\there"]) finally SPICE.dafcls(hc) end)
+        @test_throws SPICE.SpiceError (
+            hc = SPICE.dafopw(pc); try
+                SPICE.dafac(hc, ["tab\there"])
+            finally
+                SPICE.dafcls(hc)
+            end
+        )
         @test dafec(h) == String[]
         dafbna(h, dafps([0.0, 1.0], [-5, 399, 1, 9, 0, 0]), "OPEN ARRAY")
         @test throws_kind(() -> dafac(h, ["while an array is open"]), :dafnewconflict)
@@ -1581,7 +1835,7 @@ group("9. DAF access, SPK and CK writers") do
         # differs from the SPK file in the identification word only, the binary PCK file
         # also in the summary size.
         plan = FULL ? [(k, n) for k in (:spk, :ck, :pck) for n in (0, 1, 1000, 1001, 5000)] :
-               [(:spk, 0), (:spk, 1000), (:spk, 1001), (:ck, 0), (:pck, 1001)]
+            [(:spk, 0), (:spk, 1000), (:spk, 1001), (:ck, 0), (:pck, 1001)]
         for (kind, ncomch) in plan
             ext = kind_ext(kind)
             pc = joinpath(dir, "empty_c_$(kind)_$ncomch$ext")
@@ -1611,28 +1865,52 @@ group("9. DAF access, SPK and CK writers") do
         # Regression: an empty path gave :blankfilename where the C wrappers of CSPICE give
         # :emptystring, and spkopa gave :filenotfound for a blank path.
         ckind(f) = (f(); cspice_kind())
-        nkind(f) = try f(); :none catch e; e isa Almanac.SpiceError ? e.kind : rethrow() end
+        nkind(f) = try
+            f(); :none
+        catch e
+            e isa Almanac.SpiceError ? e.kind : rethrow()
+        end
         hc, ctx = Ref{Cint}(0), SpiceContext()
         openers = (
             (p -> dafopr(p), p -> ccall((:dafopr_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), p, hc)),
             (p -> dafopw(p), p -> ccall((:dafopw_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), p, hc)),
             (p -> dasopr(p), p -> ccall((:dasopr_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), p, hc)),
             (p -> dasopw(p), p -> ccall((:dasopw_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), p, hc)),
-            (p -> dskopn(p, "X", 0), p -> ccall((:dskopn_c, SPICE.libcspice), Cvoid,
-                (Cstring, Cstring, Cint, Ref{Cint}), p, "X", 0, hc)),
-            (p -> dlaopn(p, "DSK", "X", 0), p -> ccall((:dlaopn_c, SPICE.libcspice), Cvoid,
-                (Cstring, Cstring, Cstring, Cint, Ref{Cint}), p, "DSK", "X", 0, hc)),
+            (
+                p -> dskopn(p, "X", 0), p -> ccall(
+                    (:dskopn_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cstring, Cint, Ref{Cint}), p, "X", 0, hc
+                ),
+            ),
+            (
+                p -> dlaopn(p, "DSK", "X", 0), p -> ccall(
+                    (:dlaopn_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cstring, Cstring, Cint, Ref{Cint}), p, "DSK", "X", 0, hc
+                ),
+            ),
             (p -> spkopa(p), p -> ccall((:spkopa_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), p, hc)),
             (p -> ekopr(p), p -> ccall((:ekopr_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), p, hc)),
             (p -> eklef(ctx, p), p -> ccall((:eklef_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), p, hc)),
             (p -> furnsh(ctx, p), p -> ccall((:furnsh_c, SPICE.libcspice), Cvoid, (Cstring,), p)),
             (p -> ldpool(ctx, p), p -> ccall((:ldpool_c, SPICE.libcspice), Cvoid, (Cstring,), p)),
             (p -> unload(ctx, p), p -> ccall((:unload_c, SPICE.libcspice), Cvoid, (Cstring,), p)),
-            (p -> kinfo(ctx, p), p -> ccall((:kinfo_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Cint,
-                Ptr{UInt8}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}), p, 8, 8, zeros(UInt8, 8),
-                zeros(UInt8, 8), hc, hc)),
-            (p -> getfat(p), p -> ccall((:getfat_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Cint,
-                Ptr{UInt8}, Ptr{UInt8}), p, 8, 8, zeros(UInt8, 8), zeros(UInt8, 8))),
+            (
+                p -> kinfo(ctx, p), p -> ccall(
+                    (:kinfo_c, SPICE.libcspice), Cvoid, (
+                        Cstring, Cint, Cint,
+                        Ptr{UInt8}, Ptr{UInt8}, Ref{Cint}, Ref{Cint},
+                    ), p, 8, 8, zeros(UInt8, 8),
+                    zeros(UInt8, 8), hc, hc
+                ),
+            ),
+            (
+                p -> getfat(p), p -> ccall(
+                    (:getfat_c, SPICE.libcspice), Cvoid, (
+                        Cstring, Cint, Cint,
+                        Ptr{UInt8}, Ptr{UInt8},
+                    ), p, 8, 8, zeros(UInt8, 8), zeros(UInt8, 8)
+                ),
+            ),
         )
         for (neo, c) in openers, p in ("", "  ")
             @test nkind(() -> neo(p)) === ckind(() -> c(p))
@@ -1687,7 +1965,7 @@ group("9. DAF access, SPK and CK writers") do
         c = writer_case("spkw09")
         segs = [c.gen(rng, k) for k in 1:31]
         comments = rand_comments(rng, 12)
-        pc, pn = write_both(c, dir, "lowlevel", segs; ncomch=1500, comments)
+        pc, pn = write_both(c, dir, "lowlevel", segs; ncomch = 1500, comments)
         h = dafopr(pn)
         hc = SPICE.dafopr(pc)
         @test dafrfr(h) == SPICE.dafrfr(hc)
@@ -1747,12 +2025,12 @@ group("9. DAF access, SPK and CK writers") do
         # gives zeros for the whole record), and a range past the end is an error.
         last = ic[5] + 10 + (iszero((ic[5] + 10) % 128) ? 1 : 0)
         cutfile = tempname()
-        write(cutfile, read(h.path)[1:8*last])
+        write(cutfile, read(h.path)[1:(8 * last)])
         hx = dafopr(cutfile)
         @test reinterpret(UInt64, dafgda(hx, ic[5], last)) == reinterpret(UInt64, dafgda(h, ic[5], last))
         @test throws_kind(() -> dafgda(hx, last, last + 1), :filereadfailed)
         dafcls(hx)
-        rm(cutfile; force=true)
+        rm(cutfile; force = true)
         @test_throws SPICE.SpiceError SPICE.dafgda(hc, 0, 5)
         @test_throws SPICE.SpiceError ccall((:dafgda_c, LIBCSPICE), Cvoid, (Cint, Cint, Cint, Ptr{Cdouble}), hc, 9, 8, zeros(4)) === SPICE.handleerror()
         fward = dafrfr(h)[4]
@@ -1810,8 +2088,8 @@ group("9. DAF access, SPK and CK writers") do
         arrays = [randn(rng, n) for n in (1, 127, 128, 129, 1000, 0, 5)]
         for round in 1:4, (j, v) in enumerate(arrays)
             dafbna(hg, dafps([j, round, 0.5], [j, round, 7, 0, 0]), "ARRAY $j OF ROUND $round")
-            dafada(hg, v[1:length(v)÷2])                           # the array grows in two steps
-            dafada(hg, view(v, length(v)÷2+1:length(v)))
+            dafada(hg, v[1:(length(v) ÷ 2)])                           # the array grows in two steps
+            dafada(hg, view(v, (length(v) ÷ 2 + 1):length(v)))
             dafada(hg, Float64[])
             dafena(hg)
         end
@@ -1870,7 +2148,7 @@ group("9. DAF access, SPK and CK writers") do
             @test spkgeo(neo_context([pz]), body, et, "J2000", center) == want
             SPICE.furnsh(pz)
             try
-                @test SPICE.spkgeo(body, et, "J2000", center)[1] ≈ want[1] rtol = 1e-15
+                @test SPICE.spkgeo(body, et, "J2000", center)[1] ≈ want[1] rtol = 1.0e-15
             finally
                 SPICE.unload(pz)
             end
@@ -1887,7 +2165,7 @@ group("9. DAF access, SPK and CK writers") do
 
     @apart @testset "getfat, spkobj, spkcov, tkvrsn" begin
         c = writer_case("spkw13")
-        segs = [merge(c.gen(rng, k), (body=rand(rng, (-41, -42, -43, 501, 2000001)),)) for k in 1:70]
+        segs = [merge(c.gen(rng, k), (body = rand(rng, (-41, -42, -43, 501, 2000001)),)) for k in 1:70]
         pc, pn = write_both(c, dir, "coverage", segs)
         ids = spkobj(pn)
         @test ids == spk_bodies(pn) == spk_bodies(pc) == sort!(unique!([a.body for a in segs]))
@@ -1900,7 +2178,7 @@ group("9. DAF access, SPK and CK writers") do
             @test card(w) == SPICE.card(cw)
         end
         # The mutating forms take the union with the old content.
-        pc2, pn2 = write_both(c, dir, "coverage2", [merge(c.gen(rng, k), (body=-41,)) for k in 1:3])
+        pc2, pn2 = write_both(c, dir, "coverage2", [merge(c.gen(rng, k), (body = -41,)) for k in 1:3])
         w = spkcov(pn, -41)
         @test spkcov!(w, pn2, -41) === w
         cw = SPICE.SpiceDoubleCell(400)
@@ -1924,8 +2202,10 @@ group("9. DAF access, SPK and CK writers") do
         write(mk, "KPL/MK\n\\begindata\nKERNELS_TO_LOAD = ( '$sclk' )\n\\begintext\n")
         oneline = joinpath(dir, "oneline.txt")
         write(oneline, "\n")
-        files = [pn, ckfile, sclk, text, mk, oneline, Kernels.DE440S, Kernels.DE430, Kernels.LSK,
-            Kernels.PCK11, Kernels.MOON_BPC, Kernels.MOON_TF]
+        files = [
+            pn, ckfile, sclk, text, mk, oneline, Kernels.DE440S, Kernels.DE430, Kernels.LSK,
+            Kernels.PCK11, Kernels.MOON_BPC, Kernels.MOON_TF,
+        ]
         seen = 0
         for f in files
             isfile(f) || continue
@@ -1950,10 +2230,14 @@ group("9. DAF access, SPK and CK writers") do
     @apart @testset "furnsh of a written file; kinfo, kdata, ktotal" begin
         c2 = writer_case("spkw02")
         c3 = writer_case("spkw03")
-        seg2 = merge(gen_w0203(rng, 1, 3), (body=-501, center=399))
+        seg2 = merge(gen_w0203(rng, 1, 3), (body = -501, center = 399))
         # The type 3 segment has the time span of the type 2 segment.
-        seg3 = merge(gen_w0203(rng, 2, 6), (body=-502, center=-501, btime=seg2.btime, intlen=seg2.intlen,
-            first=seg2.first, last=seg2.last, cdata=randn(rng, 24, size(seg2.cdata, 2)) .* 1.0e4))
+        seg3 = merge(
+            gen_w0203(rng, 2, 6), (
+                body = -502, center = -501, btime = seg2.btime, intlen = seg2.intlen,
+                first = seg2.first, last = seg2.last, cdata = randn(rng, 24, size(seg2.cdata, 2)) .* 1.0e4,
+            )
+        )
         spk1 = joinpath(dir, "loaded_1.bsp")
         h = spkopn(spk1, "LOADED 1", 500)
         dafac(h, ["type 2 and type 3 segments for furnsh"])
@@ -1962,7 +2246,7 @@ group("9. DAF access, SPK and CK writers") do
         spkcls(h)
         spk2 = joinpath(dir, "loaded_2.bsp")
         h = spkopn(spk2, "LOADED 2")
-        c2.neo(h, merge(seg2, (body=-503,)))
+        c2.neo(h, merge(seg2, (body = -503,)))
         spkcls(h)
         tk1 = joinpath(dir, "vars_1.tpc")
         write(tk1, "KPL/PCK\n\\begindata\nBODY-501_TEST = ( 1.0 2.0 )\n\\begintext\n")
@@ -1985,15 +2269,17 @@ group("9. DAF access, SPK and CK writers") do
                 worst = max(worst, maximum(abs.(s .- cs) ./ max.(abs.(cs), 1.0)))
             end
         end
-        @test worst < 1e-11
+        @test worst < 1.0e-11
         measured(@sprintf("  %-58s max rel=%.3e", "furnsh of a Almanac file: spkgeo vs CSPICE", worst))
         # Load-list information.
-        kinds = ("ALL", "all", "SPK", "spk", "CK", "PCK", "EK", "TEXT", "META", "SPK TEXT", "text  meta ",
-            "SPK PCK CK EK TEXT META", "FOO", "SPK FOO", " ")
+        kinds = (
+            "ALL", "all", "SPK", "spk", "CK", "PCK", "EK", "TEXT", "META", "SPK TEXT", "text  meta ",
+            "SPK PCK CK EK TEXT META", "FOO", "SPK FOO", " ",
+        )
         for kind in kinds
             n = ktotal(ctx, kind)
             @test n == SPICE.ktotal(kind)
-            for which in 0:n+1
+            for which in 0:(n + 1)
                 got = kdata(ctx, which, kind)
                 want = which == 0 ? nothing : SPICE.kdata(which, kind)
                 @test (got === nothing) == (want === nothing)
@@ -2025,8 +2311,8 @@ group("9. DAF access, SPK and CK writers") do
         unload(ctx2, spk1)
         snapshot = neo_context([spk1])
         h = spkopa(spk1)
-        dafac(h, rand_comments(rng, 40; maxlen=300))               # the data move down
-        c2.neo(h, merge(seg2, (body=-504,)))
+        dafac(h, rand_comments(rng, 40; maxlen = 300))               # the data move down
+        c2.neo(h, merge(seg2, (body = -504,)))
         spkcls(h)
         furnsh(ctx2, spk1)
         after = [spkgeo(ctx2, -501, et, "J2000", 399) for et in random_epochs(MersenneTwister(1), 10, seg2.first, seg2.last)]
@@ -2062,8 +2348,10 @@ group("9. DAF access, SPK and CK writers") do
         # Type 20 was found missing by the replay of NAIF's tspice (F_PCK20).
         c = writer_case("pckw$(lpad(type, 2, '0'))")
         # One segment for each body-fixed frame, each with another base frame.
-        segs = [merge(c.gen(rng, k), (clssid=id, frame=base)) for (k, (id, base)) in
-                enumerate(zip(sort!(collect(keys(PCK_FRAMES))), ("ECLIPJ2000", "J2000", "B1950")))]
+        segs = [
+            merge(c.gen(type == 2 ? rng : PCKW20_RNG, k), (clssid = id, frame = base)) for (k, (id, base)) in
+                enumerate(zip(sort!(collect(keys(PCK_FRAMES))), ("ECLIPJ2000", "J2000", "B1950")))
+        ]
         pc, pn = write_both(c, dir, "pck_readback_$type", segs)
         @test read(pc) == read(pn)
         ctx = neo_context([pn])
@@ -2084,8 +2372,8 @@ group("9. DAF access, SPK and CK writers") do
         measured(@sprintf("  %-58s rot=%.3e xform rel=%.3e", "Almanac reads its binary PCK: pxform, sxform", drot, dxf))
         # Measured: 1.1e-16 (rotation) and 1.1e-16 relative (state transformation), a
         # last-bit difference of one element.
-        @test drot <= 1e-15
-        @test dxf <= 1e-15
+        @test drot <= 1.0e-15
+        @test dxf <= 1.0e-15
         # Type 2: the base frame by ID, and by a name with blanks and in lower case, as
         # `irfnum_` compares names; a frame ID outside the inertial frames is rejected.
         # (Type 20 looks the frame up with `namfrm`, as any frame: "writers: every input
@@ -2096,21 +2384,21 @@ group("9. DAF access, SPK and CK writers") do
             for (i, frame) in enumerate((17, " eclip J2000 ", "ECLIPJ2000"))
                 p = joinpath(dir, "pck_frame_$i.bpc")
                 h = pckopn(p, "IFNAME pck_readback")
-                c.neo(h, merge(a, (frame=frame,)))
+                c.neo(h, merge(a, (frame = frame,)))
                 pckcls(h)
                 push!(paths, p)
             end
             @test allequal(read.(paths))
             h = pckopn(joinpath(dir, "pck_frame_bad.bpc"), "BAD")
-            @test throws_kind(() -> c.neo(h, merge(a, (frame=22,))), :invalidrefframe)
-            @test throws_kind(() -> c.neo(h, merge(a, (frame=0,))), :invalidrefframe)
+            @test throws_kind(() -> c.neo(h, merge(a, (frame = 22,))), :invalidrefframe)
+            @test throws_kind(() -> c.neo(h, merge(a, (frame = 0,))), :invalidrefframe)
             dafcls(h)
         end
     end
 
     @apart @testset "handles on different tasks" begin
         c = writer_case("spkw13")
-        jobs = [(seed=SEED + 900 + i, nseg=rand(rng, (3, 26, 40))) for i in 1:nsample(6, 16)]
+        jobs = [(seed = SEED + 900 + i, nseg = rand(rng, (3, 26, 40))) for i in 1:nsample(6, 16)]
         function job(tag, j)
             local r = MersenneTwister(j.seed)   # `local`: the test set has a variable `r` too
             p = joinpath(dir, "task_$(tag)_$(j.seed).bsp")
@@ -2119,7 +2407,7 @@ group("9. DAF access, SPK and CK writers") do
             for k in 1:j.nseg
                 c.neo(h, c.gen(r, k))
             end
-            dafac(h, rand_comments(r, 30; maxlen=200))
+            dafac(h, rand_comments(r, 30; maxlen = 200))
             spkcls(h)
             hr = dafopr(p)
             n = 0
@@ -2175,7 +2463,7 @@ group("9. DAF access, SPK and CK writers") do
                 # and CSPICE from the C library, which differ in the last bit for some
                 # arguments (type 5: 2.2e-16 relative; type 15: 4.1e-16, two ulps, on the
                 # stream of Julia 1.10 with the default seed).
-                rtol = c.name == "spkw17" ? 1e-14 : c.name in ("spkw05", "spkw15") ? 1e-15 : 0.0
+                rtol = c.name == "spkw17" ? 1.0e-14 : c.name in ("spkw05", "spkw15") ? 1.0e-15 : 0.0
                 for et in (a.first, a.last, x)
                     rc = SPICE.spkpvn(hc, dc, et)
                     rn = spkpvn(ctxs, hn, dn, et)
@@ -2234,8 +2522,12 @@ group("9. DAF access, SPK and CK writers") do
         b = c14.gen(rng, 1)
         coeffs21 = randn(rng, 2 + 6 * 22, size(b.coeffs, 2))
         coeffs21[1:2, :] = b.coeffs[1:2, :]
-        files14 = map((("j2000", b), ("degree21", merge(b, (degree=21, coeffs=coeffs21))),
-                ("iau_earth", merge(b, (frame="IAU_EARTH",))))) do (tag, s)
+        files14 = map(
+            (
+                ("j2000", b), ("degree21", merge(b, (degree = 21, coeffs = coeffs21))),
+                ("iau_earth", merge(b, (frame = "IAU_EARTH",))),
+            )
+        ) do (tag, s)
             p = joinpath(dir, "check14_$tag.bsp")
             h = spkopn(p, "CHECK", 0)
             c14.neo(h, s)
@@ -2255,7 +2547,7 @@ group("9. DAF access, SPK and CK writers") do
             (files14[3], "S", b.first, b.last, identity, :invalidrefframe),
         ]
         for (i, (p, ident, t0, t1, f, kind)) in enumerate(cases)
-            _, kc, _, kn = spksub_both(p, dir, "check_$i", ident, t0, t1; descr=f)
+            _, kc, _, kn = spksub_both(p, dir, "check_$i", ident, t0, t1; descr = f)
             @test kn === kind
             @test kc === kind
         end
@@ -2271,8 +2563,12 @@ group("9. DAF access, SPK and CK writers") do
         x = dafus(dafgs(src), 2, 6)
         newh = spkopn(joinpath(dir, "after_failure.bsp"), "CHECK", 0)
         try
-            @test throws_kind(() -> spksub(src, dafps(x[1], [x[2][1:5]; 10^8]), "S",
-                a.first, a.last, newh), :filereadfailed)
+            @test throws_kind(
+                () -> spksub(
+                    src, dafps(x[1], [x[2][1:5]; 10^8]), "S",
+                    a.first, a.last, newh
+                ), :filereadfailed
+            )
             dafac(newh, ["a comment after the failed call"])
             @test dafec(newh) == ["a comment after the failed call"]
         finally
@@ -2300,8 +2596,10 @@ group("9. DAF access, SPK and CK writers") do
         rm(bsp)
         ck = joinpath(dir, "released.bc")
         h = ckopn(ck, "released", 0)
-        ckw01(h, 0.0, 10.0, -9000, "J2000", "released", [0.0, 10.0],
-            [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]], nothing)
+        ckw01(
+            h, 0.0, 10.0, -9000, "J2000", "released", [0.0, 10.0],
+            [[1.0, 0.0, 0.0, 0.0], [1.0, 0.0, 0.0, 0.0]], nothing
+        )
         ckcls(h)
         # `ckobj` and `ckcov` read the file through a memory map, which they release.
         @test ckobj(ck) == [-9000]
@@ -2326,7 +2624,7 @@ group("9. DAF access, SPK and CK writers") do
         @test dafus(SVector{5}(sum), 2, 6) == dafus(sum, 2, 6)
         st = [7000.0, 0, 0, 0, 7.5, 0, 7000.0, 75, 0, 0, 7.5, 0]
         files = map((st, SVector{12}(st))) do states
-            p = tempname() * ".bsp"
+            p = joinpath(mktempdir(), "static.bsp")    # removed at exit: Windows keeps it open
             h = spkopn(p, "static")
             spkw05(h, -9, 399, "J2000", 0.0, 10.0, "s", 3.986e5, states[1:6], [0.0])
             spkw08(h, -8, 399, "J2000", 0.0, 10.0, "s", 1, states, 0.0, 10.0)

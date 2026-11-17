@@ -82,8 +82,12 @@ function oracle_hx2dp(s::AbstractString)
     num = Ref{Cdouble}(NaN)
     err = Ref{Cint}(0)
     msg = zeros(UInt8, 256)
-    ccall((:hx2dp_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ref{Cdouble}, Ref{Cint},
-        Ptr{UInt8}), s, length(msg), num, err, msg)
+    ccall(
+        (:hx2dp_c, SPICE.libcspice), Cvoid, (
+            Cstring, Cint, Ref{Cdouble}, Ref{Cint},
+            Ptr{UInt8},
+        ), s, length(msg), num, err, msg
+    )
     try
         CS.check()
     catch e
@@ -187,8 +191,8 @@ group("12. math: vectors and matrices") do
         @test frame(z3) == (e1, SVector(0.0, 1.0, 0.0), SVector(0.0, 0.0, 1.0)) == SPICE.frame(zeros(3))
         @test throws_kind(() -> frame([1.0, 2.0]), :badarg)
         @test vrel(z3, z3) == 0.0 && vrel(e1, e1) == 0.0
-        @test vnorm(SVector(1e300, 1e300, 1e300)) == CS.vnorm([1e300, 1e300, 1e300]) < Inf
-        @test vnorm(SVector(1e-300, 1e-300, 0.0)) > 0.0
+        @test vnorm(SVector(1.0e300, 1.0e300, 1.0e300)) == CS.vnorm([1.0e300, 1.0e300, 1.0e300]) < Inf
+        @test vnorm(SVector(1.0e-300, 1.0e-300, 0.0)) > 0.0
         @test throws_kind(() -> vadd([1.0, 2.0], [1.0, 2.0, 3.0]), :badarg)
         @test vadd([1, 2, 3], [1, 1, 1]) === SVector(2.0, 3.0, 4.0)
     end
@@ -211,7 +215,7 @@ group("12. math: vectors and matrices") do
             versus!(t, :det, () -> Almanac.det(m1), () -> CS.det(m1))
             versus!(t, :trace, () -> trace(m1), () -> CS.trace(m1))
             # singular matrices: a repeated row, and a tiny determinant
-            ms = rand(rng) < 0.2 ? vcat(m1[1:2, :], m1[1:1, :]) : rand(rng) < 0.1 ? 1e-6 * m1 / maximum(abs, m1) : m1
+            ms = rand(rng) < 0.2 ? vcat(m1[1:2, :], m1[1:1, :]) : rand(rng) < 0.1 ? 1.0e-6 * m1 / maximum(abs, m1) : m1
             versus!(t, :invert, () -> invert(ms), () -> CS.invert(ms))
             # orthogonal columns of any length, sometimes a zero column
             q = Matrix(rrot(rng)) * Diagonal([rmag(rng), rmag(rng), rand(rng) < 0.1 ? 0.0 : rmag(rng)])
@@ -246,7 +250,7 @@ group("12. math: vectors and matrices") do
         versus!(t, :ident, () -> ident(), () -> CS.ident())
         @test invert(zeros(3, 3)) == zeros(3, 3)
         @test throws_kind(() -> invort(zeros(3, 3)), :zerolengthcolumn)
-        @test throws_kind(() -> invort(Diagonal([1.0, 1e-320, 1.0])), :columntoosmall)
+        @test throws_kind(() -> invort(Diagonal([1.0, 1.0e-320, 1.0])), :columntoosmall)
         @test throws_kind(() -> isrot(ident(), -1.0, 0.0), :valueoutofrange)
         @test isrot(ident(), 0.0, 0.0) && !isrot(2.0 * ident(), 0.5, 0.5)
         @test throws_kind(() -> twovec([1.0, 0, 0], 1, [2.0, 0, 0], 2), :dependentvectors)
@@ -254,8 +258,8 @@ group("12. math: vectors and matrices") do
         @test throws_kind(() -> twovec([1.0, 0, 0], 0, [0.0, 1, 0], 1), :badindex)
         @test rotate(0.0, 3) == ident() && rotate(0.3, 4) == rotate(0.3, 1)
         # the inverse of a state transformation
-        x = eul2xf([0.4, -1.1, 2.0, 1e-3, -2e-4, 5e-5], 3, 1, 3)
-        @test invstm(x) * x ≈ I atol = 1e-15
+        x = eul2xf([0.4, -1.1, 2.0, 1.0e-3, -2.0e-4, 5.0e-5], 3, 1, 3)
+        @test invstm(x) * x ≈ I atol = 1.0e-15
     end
 
     @apart @testset "derivatives of vector functions of a state" begin
@@ -291,28 +295,30 @@ group("12. math: vectors and matrices") do
         # case); the two orders differ by rounding (second and third case), and a
         # position of 1e-300 makes that difference as large as the result (fourth case).
         sden1 = [-6.354774078047717e-7, 8.943378680402032e-6, 1.6011695882103261e-6, 0.0, 0.0, 0.0]
-        sden2 = [1e300, 1e300, 1e300, -2.572684309046176e-10, -4.428686661044401e-10, -2.7522373404770423e-10]
+        sden2 = [1.0e300, 1.0e300, 1.0e300, -2.572684309046176e-10, -4.428686661044401e-10, -2.7522373404770423e-10]
         sa = [-2.9, 8.2, -11.9, 2.1, -12.4, -6.1]
         sb = [-11.6, -0.3, 8.3, 7.8, 12.3, -15.7]
         sc = [10.3, 1.3, -6.5, 8.4, -21.3, 10.2]
         sd = [13.7, 4.7, -6.6, -7.4, 11.8, -4.1]
-        sbig = [2.353009784756466e-6, 8.590299545730118e-6, -4.739435602996215e-6, 3.9803597213088137e8,
-            2.7987192714291748e7, -3.951825994570644e8]
-        stiny = [1e-300, 0.0, 0.0, 1.0, 0.0, 0.0]
+        sbig = [
+            2.353009784756466e-6, 8.590299545730118e-6, -4.739435602996215e-6, 3.9803597213088137e8,
+            2.7987192714291748e7, -3.951825994570644e8,
+        ]
+        stiny = [1.0e-300, 0.0, 0.0, 1.0, 0.0, 0.0]
         @test all(isfinite, ducrss(sden1, sden2))
         @test all(p -> !ducrss_overflows(p...) && ducrss(p...) == CS.ducrss(p...), ((sden1, sden2), (sa, sb), (sbig, stiny)))
         @test dvsep(sc, sd) == CS.dvsep(sc, sd)
         # Fixed case of the guard: the scaled velocity of the first state is infinite.
-        sover = [1e-300, 0.0, 0.0, 6.340909641677687e7, -6.894680105462036e7, 7.179757811367899e8]
-        sunit = [0.0, 0.0, -1.0, 1e-300, 0.0, 0.0]
+        sover = [1.0e-300, 0.0, 0.0, 6.340909641677687e7, -6.894680105462036e7, 7.179757811367899e8]
+        sunit = [0.0, 0.0, -1.0, 1.0e-300, 0.0, 0.0]
         @test ducrss_overflows(sover, sunit) && twovxf_overflows(sover, 2, sunit, 1) &&
-              ducrss(sover, sunit)[1:3] == CS.ducrss(sover, sunit)[1:3] &&
-              all(isnan, ducrss(sover, sunit)[4:6]) && all(iszero, CS.ducrss(sover, sunit)[4:6])
+            ducrss(sover, sunit)[1:3] == CS.ducrss(sover, sunit)[1:3] &&
+            all(isnan, ducrss(sover, sunit)[4:6]) && all(iszero, CS.ducrss(sover, sunit)[4:6])
         # Fixed case of the guard: the derivative of the unit position is infinite.
-        sinf = [1e-300, 0.0, 0.0, 0.0, 1e300, 0.0]
+        sinf = [1.0e-300, 0.0, 0.0, 0.0, 1.0e300, 0.0]
         sfin = [0.0, 1.0, 0.0, 0.0, 0.0, 0.0]
         @test dvsep_overflows(sinf, sfin) && dvsep_overflows(sfin, sinf) &&
-              !dvsep_overflows([1.0, 0, 0, 0, 1, 0], [2.0, 0, 0, 0, 0, 1])
+            !dvsep_overflows([1.0, 0, 0, 0, 1, 0], [2.0, 0, 0, 0, 0, 1])
         @test all(p -> throws_kind(() -> dvsep(p...), :numericoverflow), ((sinf, sfin), (sfin, sinf)))
         @test dvhat([0.0, 0, 0, 1, 2, 3]) == [0.0, 0, 0, 1, 2, 3]
         @test dvnorm([0.0, 0, 0, 1, 2, 3]) == 0.0
@@ -369,26 +375,40 @@ group("12. math: vectors and matrices") do
         # The accuracy defect of `vsepg_c`: for two directions 1e-9 rad apart it loses
         # half of the digits, and Almanac does not.
         u = [1.0, 0.0, 0.0, 0.0]
-        w = [cos(1e-9), sin(1e-9), 0.0, 0.0]
-        @test abs(vsepg(u, w) - 1e-9) < 1e-24
+        w = [cos(1.0e-9), sin(1.0e-9), 0.0, 0.0]
+        @test abs(vsepg(u, w) - 1.0e-9) < 1.0e-24
         # Over the random sample: `vsepg_c` is within 1e-7 rad where it gives a number,
         # and it gives NaN for some parallel pairs (the arcsine of a number above 1).
-        @test vsepg_abs < 1e-7
-        @test isnan(CS.vsepg([-2.790652279880394, -2.349350602390059, 0.1097765487434136,
-            0.1663627783663699, 0.6147273839026778], 3.0 .* [-2.790652279880394, -2.349350602390059,
-            0.1097765487434136, 0.1663627783663699, 0.6147273839026778]))
-        measured(@sprintf("  vsepg against vsepg_c (CSPICE defect): largest difference %.3e rad, NaN from CSPICE in %d of %d",
-            vsepg_abs, vsepg_nan, n))
-        @test abs(CS.vsepg(u, w) - 1e-9) > 1e-12
+        @test vsepg_abs < 1.0e-7
+        @test isnan(
+            CS.vsepg(
+                [
+                    -2.790652279880394, -2.349350602390059, 0.1097765487434136,
+                    0.1663627783663699, 0.6147273839026778,
+                ], 3.0 .* [
+                    -2.790652279880394, -2.349350602390059,
+                    0.1097765487434136, 0.1663627783663699, 0.6147273839026778,
+                ]
+            )
+        )
+        measured(
+            @sprintf(
+                "  vsepg against vsepg_c (CSPICE defect): largest difference %.3e rad, NaN from CSPICE in %d of %d",
+                vsepg_abs, vsepg_nan, n
+            )
+        )
+        @test abs(CS.vsepg(u, w) - 1.0e-9) > 1.0e-12
         # static arguments give static results
-        @test vaddg(SVector(1.0, 2.0), SVector(1.0, 2.0)) isa SVector{2,Float64}
-        @test mxmg(SMatrix{2,2}(1.0, 2, 3, 4), SMatrix{2,2}(1.0, 2, 3, 4)) isa SMatrix{2,2,Float64}
+        @test vaddg(SVector(1.0, 2.0), SVector(1.0, 2.0)) isa SVector{2, Float64}
+        @test mxmg(SMatrix{2, 2}(1.0, 2, 3, 4), SMatrix{2, 2}(1.0, 2, 3, 4)) isa SMatrix{2, 2, Float64}
         # a static and a plain argument together give a `Vector` equal to the static result
         sa, sb = SVector(0.3, -2.5, 7.0), SVector(1.1, 4.0, -0.7)
-        sm = SMatrix{3,3}(1.0, 2, 3, 4, 5, 6, 7, 8, 10)
-        for (f, mixed, static) in ((vaddg, (sa, collect(sb)), (sa, sb)),
-            (vlcomg, (0.7, collect(sa), 3.0, sb), (0.7, sa, 3.0, sb)),
-            (vprojg, (collect(sa), sb), (sa, sb)), (mxvg, (sm, collect(sa)), (sm, sa)))
+        sm = SMatrix{3, 3}(1.0, 2, 3, 4, 5, 6, 7, 8, 10)
+        for (f, mixed, static) in (
+                (vaddg, (sa, collect(sb)), (sa, sb)),
+                (vlcomg, (0.7, collect(sa), 3.0, sb), (0.7, sa, 3.0, sb)),
+                (vprojg, (collect(sa), sb), (sa, sb)), (mxvg, (sm, collect(sa)), (sm, sa)),
+            )
             r = f(mixed...)
             @test r isa Vector{Float64} && r == f(static...)
         end
@@ -398,51 +418,61 @@ group("12. math: vectors and matrices") do
         # 0 where the arithmetic is the one of the CSPICE function; a few units of
         # rounding where a library function (sine, arcsine) enters.
         e = 4 * eps()
-        report!(t, "vectors"; tol=0.0, tols=Dict(:vsep => e, :vrotv => e, :rotate => e, :rotmat => e,
-            :rotvec => e, :vsepg => e))
+        report!(
+            t, "vectors"; tol = 0.0, tols = Dict(
+                :vsep => e, :vrotv => e, :rotate => e, :rotmat => e,
+                :rotvec => e, :vsepg => e
+            )
+        )
     end
 
     @apart @testset "number types: ForwardDiff and Taylor" begin
         a = SVector(1.2, -0.7, 2.1)
         b = SVector(0.3, 1.9, -0.4)
         # gradient of the norm is the unit vector; of the separation, by differences
-        @test ForwardDiff.gradient(vnorm, a) ≈ vhat(a) rtol = 1e-14
-        @test ForwardDiff.jacobian(vhat, a) ≈ (I - vhat(a) * vhat(a)') / vnorm(a) rtol = 1e-13
+        @test ForwardDiff.gradient(vnorm, a) ≈ vhat(a) rtol = 1.0e-14
+        @test ForwardDiff.jacobian(vhat, a) ≈ (I - vhat(a) * vhat(a)') / vnorm(a) rtol = 1.0e-13
         g = ForwardDiff.gradient(x -> vsep(x, b), a)
-        h = 1e-6
-        fd = [(vsep(a + h * SVector(Float64(i == 1), Float64(i == 2), Float64(i == 3)), b) -
-               vsep(a - h * SVector(Float64(i == 1), Float64(i == 2), Float64(i == 3)), b)) / 2h for i in 1:3]
-        @test g ≈ fd rtol = 1e-8
-        @test ForwardDiff.derivative(th -> vrotv(a, b, th), 0.4) ≈ vcrss(vhat(b), vrotv(a, b, 0.4)) rtol = 1e-13
+        h = 1.0e-6
+        fd = [
+            (
+                vsep(a + h * SVector(Float64(i == 1), Float64(i == 2), Float64(i == 3)), b) -
+                    vsep(a - h * SVector(Float64(i == 1), Float64(i == 2), Float64(i == 3)), b)
+            ) / 2h for i in 1:3
+        ]
+        @test g ≈ fd rtol = 1.0e-8
+        @test ForwardDiff.derivative(th -> vrotv(a, b, th), 0.4) ≈ vcrss(vhat(b), vrotv(a, b, 0.4)) rtol = 1.0e-13
         @test ForwardDiff.derivative(th -> rotate(th, 3), 0.4) ≈
-              [-sin(0.4) cos(0.4) 0; -cos(0.4) -sin(0.4) 0; 0 0 0] rtol = 1e-14
+            [-sin(0.4) cos(0.4) 0; -cos(0.4) -sin(0.4) 0; 0 0 0] rtol = 1.0e-14
         # the unit state of `dvhat` is the derivative of `vhat` along the velocity
         s = SVector(1.2, -0.7, 2.1, 0.3, 0.5, -0.9)
         dv = ForwardDiff.derivative(τ -> vhat(SVector(s[1], s[2], s[3]) + τ * SVector(s[4], s[5], s[6])), 0.0)
-        @test dvhat(s)[SVector(4, 5, 6)] ≈ dv rtol = 1e-14
+        @test dvhat(s)[SVector(4, 5, 6)] ≈ dv rtol = 1.0e-14
         s2 = SVector(-0.4, 0.8, 0.1, 0.2, -0.3, 0.6)
         pos(x, τ) = SVector(x[1], x[2], x[3]) + τ * SVector(x[4], x[5], x[6])
-        @test dvsep(s, s2) ≈ ForwardDiff.derivative(τ -> vsep(pos(s, τ), pos(s2, τ)), 0.0) rtol = 1e-13
-        @test dvnorm(s) ≈ ForwardDiff.derivative(τ -> vnorm(pos(s, τ)), 0.0) rtol = 1e-14
-        @test dvdot(s, s2) ≈ ForwardDiff.derivative(τ -> vdot(pos(s, τ), pos(s2, τ)), 0.0) rtol = 1e-14
+        @test dvsep(s, s2) ≈ ForwardDiff.derivative(τ -> vsep(pos(s, τ), pos(s2, τ)), 0.0) rtol = 1.0e-13
+        @test dvnorm(s) ≈ ForwardDiff.derivative(τ -> vnorm(pos(s, τ)), 0.0) rtol = 1.0e-14
+        @test dvdot(s, s2) ≈ ForwardDiff.derivative(τ -> vdot(pos(s, τ), pos(s2, τ)), 0.0) rtol = 1.0e-14
         @test ducrss(s, s2)[SVector(4, 5, 6)] ≈
-              ForwardDiff.derivative(τ -> ucrss(pos(s, τ), pos(s2, τ)), 0.0) rtol = 1e-13
+            ForwardDiff.derivative(τ -> ucrss(pos(s, τ), pos(s2, τ)), 0.0) rtol = 1.0e-13
         # a Taylor time series passes through the smooth calls: r(t) = a + b t
         tt = Almanac.taylor_var(0.0, Val(2))
         r = SVector(a[1] + b[1] * tt, a[2] + b[2] * tt, a[3] + b[3] * tt)
         nrm = vnorm(r)
-        @test nrm isa Almanac.Taylor{2,Float64}
+        @test nrm isa Almanac.Taylor{2, Float64}
         @test Almanac.derivatives(nrm)[1] == vnorm(a)
-        @test Almanac.derivatives(nrm)[2] ≈ vdot(a, b) / vnorm(a) rtol = 1e-14
-        @test Almanac.derivatives(vhat(r)[1])[2] ≈ dvhat(vcat(a, b))[4] rtol = 1e-14
+        @test Almanac.derivatives(nrm)[2] ≈ vdot(a, b) / vnorm(a) rtol = 1.0e-14
+        @test Almanac.derivatives(vhat(r)[1])[2] ≈ dvhat(vcat(a, b))[4] rtol = 1.0e-14
         @test Almanac.derivatives(rotate(tt, 1)[2, 3])[2] == 1.0
         @test Almanac.derivatives(mxv(rotate(0.3 * tt, 3), r)[1])[1] == a[1]
         @test Almanac.derivatives(vcrss(r, b)[1])[1] == vcrss(a, b)[1]
     end
 
     @apart @testset "base 16 strings of doubles: dp2hx and hx2dp" begin
-        specials = [0.0, -0.0, 1.0, -1.0, 672.0, -11.0, 0.1, 16.0^-3, nextfloat(0.0),
-            -nextfloat(0.0), floatmin(), prevfloat(floatmin()), floatmax(), -floatmax(), NaN]
+        specials = [
+            0.0, -0.0, 1.0, -1.0, 672.0, -11.0, 0.1, 16.0^-3, nextfloat(0.0),
+            -nextfloat(0.0), floatmin(), prevfloat(floatmin()), floatmax(), -floatmax(), NaN,
+        ]
         nbad = 0
         for x in vcat(specials, [rmag(rng) * randn(rng) for _ in 1:n])
             h = dp2hx(x)
@@ -455,11 +485,13 @@ group("12. math: vectors and matrices") do
         @test throws_kind(() -> dp2hx(Inf), :valueoutofrange)   # dp2hx_c does not return
         # The error messages of CSPICE, each limit of the exponent and of the mantissa, and
         # a random sample around the form.
-        strings = ["2A^3", "-B^1", "", " ", "   1^1  ", "1^ 2", "1^", "1", "^1", "-^0", "- 1^1",
+        strings = [
+            "2A^3", "-B^1", "", " ", "   1^1  ", "1^ 2", "1^", "1", "^1", "-^0", "- 1^1",
             "1 ^1", "+1^1", "1^-", "1^G", "G^1", "1\t^1", "0123456789ABCDEF0123456789ABCDE^0",
             "0123456789ABCDEF0123456789ABCDEF^0", "1^7FFFFFFF", "1^80000000", "1^-80000001",
             "-1^7FFFFFFF", "FFFFFFFFFFFFF8^100", "FFFFFFFFFFFFF8^101", "-FFFFFFFFFFFFF8^100",
-            "-FFFFFFFFFFFFF8^101", "4^-10C", "8^-10E", "abc^-1f", "-8^-80000000"]
+            "-FFFFFFFFFFFFF8^101", "4^-10C", "8^-10E", "abc^-1f", "-8^-80000000",
+        ]
         nbad = 0
         for str in vcat(strings, [random_hex(rng) for _ in 1:4n])
             got, want = neo_hx2dp(str), oracle_hx2dp(str)
@@ -478,30 +510,32 @@ group("12. math: vectors and matrices") do
         m = rrot(rng)
         s = SVector(1.2, -0.7, 2.1, 0.3, 0.5, -0.9)
         s2 = SVector(-0.4, 0.8, 0.1, 0.2, -0.3, 0.6)
-        m6 = SMatrix{6,6}(randn(rng, 6, 6))
-        V3, M3, V6, M6 = SVector{3,Float64}, SMatrix{3,3,Float64,9}, SVector{6,Float64}, SMatrix{6,6,Float64,36}
-        calls = Any[(vadd, (a, b), V3), (vsub, (a, b), V3), (vscl, (2.0, a), V3), (vminus, (a,), V3),
+        m6 = SMatrix{6, 6}(randn(rng, 6, 6))
+        V3, M3, V6, M6 = SVector{3, Float64}, SMatrix{3, 3, Float64, 9}, SVector{6, Float64}, SMatrix{6, 6, Float64, 36}
+        calls = Any[
+            (vadd, (a, b), V3), (vsub, (a, b), V3), (vscl, (2.0, a), V3), (vminus, (a,), V3),
             (vdot, (a, b), Float64), (vcrss, (a, b), V3), (vnorm, (a,), Float64), (vhat, (a,), V3),
-            (unorm, (a,), Tuple{V3,Float64}), (vdist, (a, b), Float64), (vsep, (a, b), Float64),
+            (unorm, (a,), Tuple{V3, Float64}), (vdist, (a, b), Float64), (vsep, (a, b), Float64),
             (vrel, (a, b), Float64), (vproj, (a, b), V3), (vperp, (a, b), V3),
             (vlcom, (1.0, a, 2.0, b), V3), (vlcom3, (1.0, a, 2.0, b, 3.0, a), V3),
             (vrotv, (a, b, 0.3), V3), (vzero, (a,), Bool), (vequ, (a,), V3),
-            (vpack, (1.0, 2.0, 3.0), V3), (vupack, (a,), NTuple{3,Float64}), (ucrss, (a, b), V3),
+            (vpack, (1.0, 2.0, 3.0), V3), (vupack, (a,), NTuple{3, Float64}), (ucrss, (a, b), V3),
             (vtmv, (a, m, b), Float64), (mxv, (m, a), V3), (mtxv, (m, a), V3), (mxm, (m, m), M3),
             (mtxm, (m, m), M3), (mxmt, (m, m), M3), (xpose, (m,), M3), (xpose6, (m6,), M6), (invstm, (m6,), M6),
             (Almanac.det, (m,), Float64), (trace, (m,), Float64), (invert, (m,), M3),
-            (invort, (m,), M3), (isrot, (m, 1e-10, 1e-10), Bool), (ident, (), M3),
+            (invort, (m,), M3), (isrot, (m, 1.0e-10, 1.0e-10), Bool), (ident, (), M3),
             (rotate, (0.3, 2), M3), (rotmat, (m, 0.3, 2), M3), (rotvec, (a, 0.3, 2), V3),
-            (twovec, (a, 1, b, 2), M3), (twovxf, (s, 1, s2, 2), M6), (frame, (a,), NTuple{3,V3}),
+            (twovec, (a, 1, b, 2), M3), (twovxf, (s, 1, s2, 2), M6), (frame, (a,), NTuple{3, V3}),
             (dvhat, (s,), V6),
             (dvdot, (s, s2), Float64), (dvcrss, (s, s2), V6), (ducrss, (s, s2), V6),
             (dvnorm, (s,), Float64), (dvsep, (s, s2), Float64),
             (vaddg, (a, b), V3), (vsubg, (a, b), V3), (vsclg, (2.0, a), V3), (vminug, (a,), V3),
             (vequg, (a,), V3), (vdotg, (a, b), Float64), (vnormg, (a,), Float64), (vhatg, (a,), V3),
-            (unormg, (a,), Tuple{V3,Float64}), (vdistg, (a, b), Float64), (vsepg, (a, b), Float64),
+            (unormg, (a,), Tuple{V3, Float64}), (vdistg, (a, b), Float64), (vsepg, (a, b), Float64),
             (vrelg, (a, b), Float64), (vprojg, (a, b), V3), (vlcomg, (1.0, a, 2.0, b), V3),
             (vzerog, (a,), Bool), (vtmvg, (a, m, b), Float64), (mxvg, (m, a), V3), (mtxvg, (m, a), V3),
-            (mxmg, (m, m), M3), (mtxmg, (m, m), M3), (mxmtg, (m, m), M3), (xposeg, (m,), M3)]
+            (mxmg, (m, m), M3), (mtxmg, (m, m), M3), (mxmtg, (m, m), M3), (xposeg, (m,), M3),
+        ]
         for (f, args, T) in calls
             @test (@inferred f(args...)) isa T
             @test alloc_of(f, args...) == 0

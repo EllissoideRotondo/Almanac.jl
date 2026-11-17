@@ -14,19 +14,21 @@ function write_metakernel(tmp::AbstractString, dir::AbstractString, files)
     @assert length(dir) <= 80 "PATH_VALUES entry longer than the CSPICE limit"
     path = joinpath(tmp, "almanac_test.tm")
     list = join(("'\$K/" * basename(f) * "'" for f in files), ",\n                        ")
-    write(path, """
-    KPL/MK
+    write(
+        path, """
+        KPL/MK
 
-    Meta-kernel written by test_management.jl.
+        Meta-kernel written by test_management.jl.
 
-    \\begindata
+        \\begindata
 
-       PATH_VALUES     = ( '$dir' )
-       PATH_SYMBOLS    = ( 'K' )
-       KERNELS_TO_LOAD = ( $list )
+           PATH_VALUES     = ( '$dir' )
+           PATH_SYMBOLS    = ( 'K' )
+           KERNELS_TO_LOAD = ( $list )
 
-    \\begintext
-    """)
+        \\begintext
+        """
+    )
     return path
 end
 
@@ -80,11 +82,11 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         # Built-in names and frames need no kernel.
         @test bodn2c(ctx, "EARTH") == 399
         @test namfrm(ctx, "ECLIPJ2000") == 17
-        @test pxform(ctx, "J2000", "ECLIPJ2000", 0.0) isa SMatrix{3,3,Float64,9}
+        @test pxform(ctx, "J2000", "ECLIPJ2000", 0.0) isa SMatrix{3, 3, Float64, 9}
         # The context can be used again.
         furnsh(ctx, Kernels.DE440S)
         @test ktotal(ctx) == 1
-        @test query(ctx, epochs[1])[1] isa SVector{6,Float64}
+        @test query(ctx, epochs[1])[1] isa SVector{6, Float64}
     end
 
     @apart @testset "loading order decides precedence" begin
@@ -92,8 +94,10 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             oracle_load(order)
             ctx = neo_context(order)
             label = join(basename.(order), " then ")
-            d = compare_states(ctx, [(301, 10), (399, 10), (301, 399), (5, 0), (4, 399)],
-                epochs, "J2000")
+            d = compare_states(
+                ctx, [(301, 10), (399, 10), (301, 399), (5, 0), (4, 399)],
+                epochs, "J2000"
+            )
             assert_states("precedence, $label", d, TOL_J2000)
         end
         first430 = neo_context([Kernels.DE430, Kernels.DE440S])     # de440s wins
@@ -110,27 +114,31 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         @test late > DE440S_COVERAGE[2]
         @test query(first430, late) == query(only430, late)
         oracle_load([Kernels.DE430, Kernels.DE440S])
-        @test isapprox(query(first430, late)[1], cquery(late)[1]; rtol=1e-13)
+        @test isapprox(query(first430, late)[1], cquery(late)[1]; rtol = 1.0e-13)
         # Text kernels: the later assignment of a variable wins.
         a = neo_context([Kernels.PCK10, Kernels.PCK11])
         b = neo_context([Kernels.PCK11, Kernels.PCK10])
         oracle_load([Kernels.PCK10, Kernels.PCK11])
         for body in ("NEPTUNE", "MERCURY", "MARS", "JUPITER")
             @test bodvrd(a, body, "PM") == SPICE.bodvrd(body, "PM")
-            @test isapprox(pxform(a, "J2000", "IAU_" * body, 1e8),
-                SPICE.pxform("J2000", "IAU_" * body, 1e8); atol=1e-10)
+            @test isapprox(
+                pxform(a, "J2000", "IAU_" * body, 1.0e8),
+                SPICE.pxform("J2000", "IAU_" * body, 1.0e8); atol = 1.0e-10
+            )
         end
         oracle_load([Kernels.PCK11, Kernels.PCK10])
         for body in ("NEPTUNE", "MERCURY", "JUPITER")
             @test bodvrd(b, body, "PM") == SPICE.bodvrd(body, "PM")
-            @test isapprox(pxform(b, "J2000", "IAU_" * body, 1e8),
-                SPICE.pxform("J2000", "IAU_" * body, 1e8); atol=1e-10)
+            @test isapprox(
+                pxform(b, "J2000", "IAU_" * body, 1.0e8),
+                SPICE.pxform("J2000", "IAU_" * body, 1.0e8); atol = 1.0e-10
+            )
         end
         @test bodvrd(a, "NEPTUNE", "PM") != bodvrd(b, "NEPTUNE", "PM")
-        @test maximum(abs.(pxform(a, "J2000", "IAU_NEPTUNE", 1e8) - pxform(b, "J2000", "IAU_NEPTUNE", 1e8))) > 1e-3
+        @test maximum(abs.(pxform(a, "J2000", "IAU_NEPTUNE", 1.0e8) - pxform(b, "J2000", "IAU_NEPTUNE", 1.0e8))) > 1.0e-3
         # The mixed Mars constants are an error in CSPICE and in Almanac.
-        @test_throws SPICE.SpiceError SPICE.pxform("J2000", "IAU_MARS", 1e8)
-        @test throws_kind(() -> pxform(b, "J2000", "IAU_MARS", 1e8), :insufficientangles)
+        @test_throws SPICE.SpiceError SPICE.pxform("J2000", "IAU_MARS", 1.0e8)
+        @test throws_kind(() -> pxform(b, "J2000", "IAU_MARS", 1.0e8), :insufficientangles)
     end
 
     @apart @testset "meta-kernel in a temporary directory" begin
@@ -154,22 +162,26 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             @test throws_kind(() -> gcpool(ctx, "PATH_VALUES"), :kernelvarnotfound)
             for et in epochs[1:5]
                 @test spkezr(ctx, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH") ==
-                      spkezr(direct, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH")
+                    spkezr(direct, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH")
                 cs, _ = SPICE.spkezr("MOON", et, "MOON_PA_DE440", "NONE", "EARTH")
-                @test isapprox(spkezr(ctx, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH")[1],
-                    cs; rtol=1e-9)
+                @test isapprox(
+                    spkezr(ctx, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH")[1],
+                    cs; rtol = 1.0e-9
+                )
             end
-            @test utc2et(ctx, "2020-01-01T00:00:00") ≈ SPICE.utc2et("2020-01-01T00:00:00") atol = 1e-6
+            @test utc2et(ctx, "2020-01-01T00:00:00") ≈ SPICE.utc2et("2020-01-01T00:00:00") atol = 1.0e-6
             @test bodvrd(ctx, "EARTH", "RADII") == SPICE.bodvrd("EARTH", "RADII")
             # Unloading the meta-kernel unloads everything that it loaded.
             unload(ctx, mk)
             SPICE.unload(mk)
             @test ktotal(ctx) == SPICE.ktotal("ALL") == 1
             @test throws_kind(() -> gdpool(ctx, "BODY399_RADII"), :kernelvarnotfound)
-            @test spkezr(ctx, 301, epochs[1], "J2000", "NONE", 399)[1] isa SVector{6,Float64}
+            @test spkezr(ctx, 301, epochs[1], "J2000", "NONE", 399)[1] isa SVector{6, Float64}
             @test_throws Almanac.SpiceError pxform(ctx, "J2000", "MOON_PA_DE440", epochs[1])
             # A missing file gives an error and leaves the context unchanged.
             @test throws_kind(() -> furnsh(ctx, joinpath(tmp, "absent.bsp")), :nosuchfile)
+            # a name longer than the system allows is a missing file, not an IOError
+            @test throws_kind(() -> furnsh(ctx, "B"^300), :nosuchfile)
             @test ktotal(ctx) == 1
             # A meta-kernel that lists a meta-kernel is an error, as in CSPICE.
             outer = joinpath(tmp, "outer.tm")
@@ -184,8 +196,8 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         ctx = neo_context(Kernels.full_set())
         lo, hi = -4.734072e9, 4.735368e9
         # Out of coverage: on both sides, and after the end in every form of the call.
-        @test throws_kind(() -> spkezr(ctx, 301, lo - 1e6, "J2000", "NONE", 399), :spkinsuffdata)
-        et = hi + 1e6
+        @test throws_kind(() -> spkezr(ctx, 301, lo - 1.0e6, "J2000", "NONE", 399), :spkinsuffdata)
+        et = hi + 1.0e6
         @test throws_kind(() -> spkezr(ctx, 301, et, "J2000", "NONE", 399), :spkinsuffdata)
         @test throws_kind(() -> spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH"), :spkinsuffdata)
         @test throws_kind(() -> spkpos(ctx, 10, et, "J2000", "NONE", 0), :spkinsuffdata)
@@ -195,9 +207,9 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         oracle_load(Kernels.full_set())
         for et in (lo, hi)
             cs, _ = SPICE.spkezr("301", et, "J2000", "NONE", "399")
-            @test isapprox(spkezr(ctx, 301, et, "J2000", "NONE", 399)[1], cs; rtol=1e-12)
+            @test isapprox(spkezr(ctx, 301, et, "J2000", "NONE", 399)[1], cs; rtol = 1.0e-12)
         end
-        @test_throws SPICE.SpiceError SPICE.spkezr("301", hi + 1e6, "J2000", "NONE", "399")
+        @test_throws SPICE.SpiceError SPICE.spkezr("301", hi + 1.0e6, "J2000", "NONE", "399")
         # Unknown body, by name; a body with no ephemeris data, by ID.
         @test throws_kind(() -> spkezr(ctx, "NO_SUCH_BODY", 0.0, "J2000", "NONE", "EARTH"), :idcodenotfound)
         @test throws_kind(() -> spkezr(ctx, "EARTH", 0.0, "J2000", "NONE", "NO_SUCH_BODY"), :idcodenotfound)
@@ -226,18 +238,26 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             @test_throws Almanac.SpiceError pxform(old, "J2000", "MOON_PA_DE421", 0.0)
         end
         # The error is printable and names the kind.
-        err = try spkezr(ctx, 301, 1e11, "J2000", "NONE", 399) catch e; e end
+        err = try
+            spkezr(ctx, 301, 1.0e11, "J2000", "NONE", 399)
+        catch e
+            e
+        end
         @test err isa Almanac.SpiceError
         @test occursin("spkinsuffdata", sprint(showerror, err))
         @test !isempty(err.msg)
         # Missing SPK data carry the query and the body without data. `loaded` tells an
         # epoch outside the data (the kind `:nocoverage` of earlier versions) from a body
         # that is in no file (`:nopath`).
-        caught(f) = try f(); nothing catch e; e end
+        caught(f) = try
+            f(); nothing
+        catch e
+            e
+        end
         data(e) = (e.kind, e.target, e.observer, e.et, e.body, e.loaded)
-        err = caught(() -> spkezr(ctx, 301, 1e11, "J2000", "NONE", 399))
+        err = caught(() -> spkezr(ctx, 301, 1.0e11, "J2000", "NONE", 399))
         @test err isa SpkInsufficientDataError
-        @test data(err) == (:spkinsuffdata, 301, 399, 1e11, 399, true)
+        @test data(err) == (:spkinsuffdata, 301, 399, 1.0e11, 399, true)
         err = caught(() -> spkpos(ctx, "JUPITER", 0.0, "J2000", "NONE", "EARTH"))
         @test err isa SpkInsufficientDataError
         @test data(err) == (:spkinsuffdata, 599, 399, 0.0, 599, false)
@@ -255,22 +275,28 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         # Body 1000 + k is centered on 1000 + k + 1, the last one on the barycenter. The
         # offsets differ, so that a segment taken twice or left out changes the answer.
         n, T = 30, 1000.0
-        epochs = collect(range(-T - 100, T + 100; length=9))
+        epochs = collect(range(-T - 100, T + 100; length = 9))
         dir = mktempdir()
         spk = joinpath(dir, "chain.bsp")
         h = SPICE.spkopn(spk, "chain", 0)
         for k in 1:n
             states = [[2.0^k, 0, 0, 0, k, 0] for _ in epochs]
-            SPICE.spkw08(h, 1000 + k, k == n ? 0 : 1000 + k + 1, "J2000", -T, T, "c$k", 1,
-                states, epochs[1], epochs[2] - epochs[1])
+            SPICE.spkw08(
+                h, 1000 + k, k == n ? 0 : 1000 + k + 1, "J2000", -T, T, "c$k", 1,
+                states, epochs[1], epochs[2] - epochs[1]
+            )
         end
         SPICE.spkcls(h)
         oracle_load([spk])
         ctx = neo_context([spk])
-        bodies = [0; 1001:1000+n]
-        worst = maximum(maximum(abs, spkgeo(ctx, t, 1.0, "J2000", o)[1] .-
-                                     SPICE.spkgeo(t, 1.0, "J2000", o)[1])
-                        for t in bodies, o in bodies)
+        bodies = [0; 1001:(1000 + n)]
+        worst = maximum(
+            maximum(
+                abs, spkgeo(ctx, t, 1.0, "J2000", o)[1] .-
+                    SPICE.spkgeo(t, 1.0, "J2000", o)[1]
+            )
+                for t in bodies, o in bodies
+        )
         @test worst == 0
         # A cycle: CSPICE does not return.
         cyc = joinpath(dir, "cycle.bsp")
@@ -298,38 +324,74 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             ccall((:reset_c, SPICE.libcspice), Cvoid, ())
             return Symbol(lowercase(replace(unsafe_string(pointer(buf)), "SPICE(" => "", ")" => "")))
         end
-        nkind(f) = try f(); :none catch e; e isa Almanac.SpiceError ? e.kind : rethrow() end
+        nkind(f) = try
+            f(); :none
+        catch e
+            e isa Almanac.SpiceError ? e.kind : rethrow()
+        end
         oracle_load(Kernels.full_set())
         ctx = neo_context(Kernels.full_set())
         SPICE.pcpool("BODY399_MGMT_TEXT", ["a"]); pcpool(ctx, "BODY399_MGMT_TEXT", ["a"])
         none = joinpath(mktempdir(), "none.bc")
         st, lt, n = zeros(6), Ref(0.0), Ref{Cint}(0)
         ids = SPICE.SpiceIntCell(10); cover = SPICE.SpiceDoubleCell(10)
-        ezr(targ, corr) = ccall((:spkezr_c, SPICE.libcspice), Cvoid, (Cstring, Cdouble, Cstring, Cstring,
-            Cstring, Ptr{Cdouble}, Ptr{Cdouble}), targ, 0.0, "J2000", corr, "EARTH", st, lt)
-        pos(targ, corr) = ccall((:spkpos_c, SPICE.libcspice), Cvoid, (Cstring, Cdouble, Cstring, Cstring,
-            Cstring, Ptr{Cdouble}, Ptr{Cdouble}), targ, 0.0, "J2000", corr, "EARTH", st, lt)
-        value(body, item) = ccall((:bodvrd_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cint, Ptr{Cint},
-            Ptr{Cdouble}), body, item, 6, n, st)
+        ezr(targ, corr) = ccall(
+            (:spkezr_c, SPICE.libcspice), Cvoid, (
+                Cstring, Cdouble, Cstring, Cstring,
+                Cstring, Ptr{Cdouble}, Ptr{Cdouble},
+            ), targ, 0.0, "J2000", corr, "EARTH", st, lt
+        )
+        pos(targ, corr) = ccall(
+            (:spkpos_c, SPICE.libcspice), Cvoid, (
+                Cstring, Cdouble, Cstring, Cstring,
+                Cstring, Ptr{Cdouble}, Ptr{Cdouble},
+            ), targ, 0.0, "J2000", corr, "EARTH", st, lt
+        )
+        value(body, item) = ccall(
+            (:bodvrd_c, SPICE.libcspice), Cvoid, (
+                Cstring, Cstring, Cint, Ptr{Cint},
+                Ptr{Cdouble},
+            ), body, item, 6, n, st
+        )
         cases = (
             (:nosuchfile, () -> furnsh(ctx, none), () -> ccall((:furnsh_c, SPICE.libcspice), Cvoid, (Cstring,), none)),
             (:blankfilename, () -> furnsh(ctx, " "), () -> ccall((:furnsh_c, SPICE.libcspice), Cvoid, (Cstring,), " ")),
             (:fileopenfailed, () -> ldpool(ctx, none), () -> ccall((:ldpool_c, SPICE.libcspice), Cvoid, (Cstring,), none)),
-            (:filenotfound, () -> eklef(ctx, none),
-                () -> ccall((:eklef_c, SPICE.libcspice), Cvoid, (Cstring, Ptr{Cint}), none, n)),
-            (:filenotfound, () -> ckobj(none),
-                () -> ccall((:ckobj_c, SPICE.libcspice), Cvoid, (Cstring, Ref{SPICE.Cell{SPICE.SpiceInt}}), none, ids.cell)),
-            (:invalidarchtype, () -> ckobj(Kernels.LSK), () -> ccall((:ckobj_c, SPICE.libcspice), Cvoid,
-                (Cstring, Ref{SPICE.Cell{SPICE.SpiceInt}}), Kernels.LSK, ids.cell)),
-            (:idcodenotfound, () -> spkezr(ctx, "NO_SUCH_BODY", 0.0, "J2000", "NONE", "EARTH"),
-                () -> ezr("NO_SUCH_BODY", "NONE")),
-            (:invalidoption, () -> spkezr(ctx, "MOON", 0.0, "J2000", "RL+S", "EARTH"),
-                () -> ezr("MOON", "RL+S")),
-            (:spkinvalidoption, () -> spkpos(ctx, "MOON", 0.0, "J2000", "RL+S", "EARTH"),
-                () -> pos("MOON", "RL+S")),
-            (:spkinvalidoption, () -> spkapo(ctx, 301, 0.0, "J2000", zeros(6), "RL+S"),
-                () -> ccall((:spkapo_c, SPICE.libcspice), Cvoid, (Cint, Cdouble, Cstring, Ptr{Cdouble}, Cstring,
-                    Ptr{Cdouble}, Ptr{Cdouble}), 301, 0.0, "J2000", zeros(6), "RL+S", st, lt)),
+            (
+                :filenotfound, () -> eklef(ctx, none),
+                () -> ccall((:eklef_c, SPICE.libcspice), Cvoid, (Cstring, Ptr{Cint}), none, n),
+            ),
+            (
+                :filenotfound, () -> ckobj(none),
+                () -> ccall((:ckobj_c, SPICE.libcspice), Cvoid, (Cstring, Ref{SPICE.Cell{SPICE.SpiceInt}}), none, ids.cell),
+            ),
+            (
+                :invalidarchtype, () -> ckobj(Kernels.LSK), () -> ccall(
+                    (:ckobj_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Ref{SPICE.Cell{SPICE.SpiceInt}}), Kernels.LSK, ids.cell
+                ),
+            ),
+            (
+                :idcodenotfound, () -> spkezr(ctx, "NO_SUCH_BODY", 0.0, "J2000", "NONE", "EARTH"),
+                () -> ezr("NO_SUCH_BODY", "NONE"),
+            ),
+            (
+                :invalidoption, () -> spkezr(ctx, "MOON", 0.0, "J2000", "RL+S", "EARTH"),
+                () -> ezr("MOON", "RL+S"),
+            ),
+            (
+                :spkinvalidoption, () -> spkpos(ctx, "MOON", 0.0, "J2000", "RL+S", "EARTH"),
+                () -> pos("MOON", "RL+S"),
+            ),
+            (
+                :spkinvalidoption, () -> spkapo(ctx, 301, 0.0, "J2000", zeros(6), "RL+S"),
+                () -> ccall(
+                    (:spkapo_c, SPICE.libcspice), Cvoid, (
+                        Cint, Cdouble, Cstring, Ptr{Cdouble}, Cstring,
+                        Ptr{Cdouble}, Ptr{Cdouble},
+                    ), 301, 0.0, "J2000", zeros(6), "RL+S", st, lt
+                ),
+            ),
             (:notranslation, () -> bodvrd(ctx, "NO_SUCH_BODY", "RADII"), () -> value("NO_SUCH_BODY", "RADII")),
             (:kernelvarnotfound, () -> bodvrd(ctx, "EARTH", "NO_SUCH_ITEM"), () -> value("EARTH", "NO_SUCH_ITEM")),
             (:typemismatch, () -> bodvrd(ctx, "EARTH", "MGMT_TEXT"), () -> value("EARTH", "MGMT_TEXT")),
@@ -342,8 +404,12 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         # `:nopath` and `:nolsk` of this package. With SPK files loaded CSPICE has one
         # message for an epoch outside the data and for a body in no file; with no SPK
         # file it has another; without leap seconds the message depends on the call.
-        geo(targ, et) = ccall((:spkgeo_c, SPICE.libcspice), Cvoid, (Cint, Cdouble, Cstring, Cint,
-            Ptr{Cdouble}, Ptr{Cdouble}), targ, et, "J2000", 399, st, lt)
+        geo(targ, et) = ccall(
+            (:spkgeo_c, SPICE.libcspice), Cvoid, (
+                Cint, Cdouble, Cstring, Cint,
+                Ptr{Cdouble}, Ptr{Cdouble},
+            ), targ, et, "J2000", 399, st, lt
+        )
         @test nkind(() -> spkgeo(ctx, 301, 1.0e11, "J2000", 399)) === ckind(() -> geo(301, 1.0e11)) === :spkinsuffdata
         @test nkind(() -> spkgeo(ctx, 599, 0.0, "J2000", 399)) === ckind(() -> geo(599, 0.0)) === :spkinsuffdata
         SPICE.kclear()
@@ -351,16 +417,34 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         buf = zeros(UInt8, 40)
         bare_cases = (
             (:noloadedfiles, () -> spkgeo(bare, 301, 0.0, "J2000", 399), () -> geo(301, 0.0)),
-            (:noleapseconds, () -> str2et(bare, "2000 JAN 1"),
-                () -> ccall((:str2et_c, SPICE.libcspice), Cvoid, (Cstring, Ptr{Cdouble}), "2000 JAN 1", lt)),
-            (:missingtimeinfo, () -> et2utc(bare, 0.0, "C", 3), () -> ccall((:et2utc_c, SPICE.libcspice), Cvoid,
-                (Cdouble, Cstring, Cint, Cint, Ptr{UInt8}), 0.0, "C", 3, 40, buf)),
-            (:missingtimeinfo, () -> timout(bare, 0.0, "YYYY"), () -> ccall((:timout_c, SPICE.libcspice), Cvoid,
-                (Cdouble, Cstring, Cint, Ptr{UInt8}), 0.0, "YYYY", 40, buf)),
-            (:missingtimeinfo, () -> unitim(bare, 0.0, "TDB", "TAI"), () -> ccall((:unitim_c, SPICE.libcspice),
-                Cdouble, (Cdouble, Cstring, Cstring), 0.0, "TDB", "TAI")),
-            (:kernelvarnotfound, () -> deltet(bare, 0.0, "ET"), () -> ccall((:deltet_c, SPICE.libcspice), Cvoid,
-                (Cdouble, Cstring, Ptr{Cdouble}), 0.0, "ET", lt)),
+            (
+                :noleapseconds, () -> str2et(bare, "2000 JAN 1"),
+                () -> ccall((:str2et_c, SPICE.libcspice), Cvoid, (Cstring, Ptr{Cdouble}), "2000 JAN 1", lt),
+            ),
+            (
+                :missingtimeinfo, () -> et2utc(bare, 0.0, "C", 3), () -> ccall(
+                    (:et2utc_c, SPICE.libcspice), Cvoid,
+                    (Cdouble, Cstring, Cint, Cint, Ptr{UInt8}), 0.0, "C", 3, 40, buf
+                ),
+            ),
+            (
+                :missingtimeinfo, () -> timout(bare, 0.0, "YYYY"), () -> ccall(
+                    (:timout_c, SPICE.libcspice), Cvoid,
+                    (Cdouble, Cstring, Cint, Ptr{UInt8}), 0.0, "YYYY", 40, buf
+                ),
+            ),
+            (
+                :missingtimeinfo, () -> unitim(bare, 0.0, "TDB", "TAI"), () -> ccall(
+                    (:unitim_c, SPICE.libcspice),
+                    Cdouble, (Cdouble, Cstring, Cstring), 0.0, "TDB", "TAI"
+                ),
+            ),
+            (
+                :kernelvarnotfound, () -> deltet(bare, 0.0, "ET"), () -> ccall(
+                    (:deltet_c, SPICE.libcspice), Cvoid,
+                    (Cdouble, Cstring, Ptr{Cdouble}), 0.0, "ET", lt
+                ),
+            ),
         )
         for (kind, neo, c) in bare_cases
             @test nkind(neo) === ckind(c) === kind
@@ -377,7 +461,7 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         # constructor refuses a kind that is not registered, so the suite fails where
         # such a kind is thrown.
         name(f) = f isa Symbol ? f : f isa Expr && f.head === :. && f.args[end] isa QuoteNode ?
-                                     f.args[end].value : nothing
+            f.args[end].value : nothing
         islower(s) = all(c -> islowercase(c) || isdigit(c), string(s))
         function symbols!(out, x)
             x isa QuoteNode && x.value isa Symbol && islower(x.value) && push!(out, x.value)
@@ -387,12 +471,18 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         mentions(x, s) = x === s || (x isa Expr && any(a -> mentions(a, s), x.args))
         positional(x) = filter(a -> !(a isa Expr && a.head === :parameters), x.args[2:end])
         argname(a) = a isa Symbol ? a : a isa Expr && a.head in (:(::), :kw) && !isempty(a.args) ?
-                                        argname(a.args[1]) : nothing
+            argname(a.args[1]) : nothing
         # the positions of the arguments of a call of `x.args[1]` that hold a kind
         errtypes = (:SpiceError, :SpiceKindError, :SpkInsufficientDataError)
         kindargs(x, helpers) = name(x.args[1]) in errtypes ? (1,) : get(helpers, name(x.args[1]), ())
-        hands_on(x, arg, helpers) = x isa Expr && ((x.head === :call && any(p -> p <= length(positional(x)) &&
-            mentions(positional(x)[p], arg), kindargs(x, helpers))) || any(a -> hands_on(a, arg, helpers), x.args))
+        hands_on(x, arg, helpers) = x isa Expr && (
+            (
+                x.head === :call && any(
+                    p -> p <= length(positional(x)) &&
+                        mentions(positional(x)[p], arg), kindargs(x, helpers)
+                )
+            ) || any(a -> hands_on(a, arg, helpers), x.args)
+        )
         function helpers!(helpers, x)             # true if a helper or a position was added
             x isa Expr || return false
             added = false
@@ -434,9 +524,11 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             foreach(a -> kinds!(out, other, a, helpers), x.args)
             return out
         end
-        trees = [Meta.parseall(read(joinpath(root, f), String)) for (root, _, files) in
-                 walkdir(joinpath(pkgdir(Almanac), "src")) for f in files if endswith(f, ".jl")]
-        helpers = Dict{Any,Tuple}()
+        trees = [
+            Meta.parseall(read(joinpath(root, f), String)) for (root, _, files) in
+                walkdir(joinpath(pkgdir(Almanac), "src")) for f in files if endswith(f, ".jl")
+        ]
+        helpers = Dict{Any, Tuple}()
         while any(t -> helpers!(helpers, t), trees)   # until no function hands a kind on to a new one
         end
         thrown, other = Set{Symbol}(), Any[]

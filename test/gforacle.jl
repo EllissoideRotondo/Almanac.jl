@@ -12,215 +12,277 @@
 
 module GFO
 
-import SPICE
-import Libdl
-using SPICE: SpiceDoubleCell, SpiceDouble, SpiceInt, SpiceBoolean, Cell
+    import SPICE
+    import Libdl
+    using SPICE: SpiceDoubleCell, SpiceDouble, SpiceInt, SpiceBoolean, Cell
 
-struct CError <: Exception
-    kind::Symbol
-end
-
-const HANDLE = Libdl.dlopen(SPICE.libcspice)
-
-"Throw `CError` if CSPICE has signalled an error, and reset the error state."
-function check()
-    ccall(Libdl.dlsym(HANDLE, :failed_c), Cint, ()) == 0 && return nothing
-    buf = zeros(UInt8, 64)
-    ccall(Libdl.dlsym(HANDLE, :getmsg_c), Cvoid, (Cstring, Cint, Ptr{UInt8}), "SHORT", 64, buf)
-    ccall(Libdl.dlsym(HANDLE, :reset_c), Cvoid, ())
-    msg = unsafe_string(pointer(buf))
-    m = match(r"SPICE\((.*)\)", msg)
-    throw(CError(Symbol(lowercase(m === nothing ? msg : m.captures[1]))))
-end
-
-"Number of intervals of the workspace and of the result cell."
-const NINTVLS = 20000
-
-"SPICE cell that holds the end points `w` (a valid window)."
-function cell(w::AbstractVector{<:Real}, room::Integer=max(length(w), 2))
-    c = SpiceDoubleCell(room)
-    for i in 1:2:length(w)
-        SPICE.wninsd!(c, w[i], w[i+1])
+    struct CError <: Exception
+        kind::Symbol
     end
-    return c
-end
 
-"Run `f(cnfine_cell, result_cell)`, check the error state, return the end points of the result."
-function search(f, cnfine::AbstractVector{<:Real})
-    cn = cell(cnfine)
-    res = SpiceDoubleCell(2 * NINTVLS)
-    cd, rd = cn.data, res.data
-    GC.@preserve cd rd f(cn.cell, res.cell)
-    check()
-    return collect(Float64, res)
-end
+    const HANDLE = Libdl.dlopen(SPICE.libcspice)
 
-gfdist(target, abcorr, obsrvr, relate, refval, adjust, step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfdist_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
-            Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-        target, abcorr, obsrvr, relate, refval, adjust, step, NINTVLS, cn, res)
-end
+    "Throw `CError` if CSPICE has signalled an error, and reset the error state."
+    function check()
+        ccall(Libdl.dlsym(HANDLE, :failed_c), Cint, ()) == 0 && return nothing
+        buf = zeros(UInt8, 64)
+        ccall(Libdl.dlsym(HANDLE, :getmsg_c), Cvoid, (Cstring, Cint, Ptr{UInt8}), "SHORT", 64, buf)
+        ccall(Libdl.dlsym(HANDLE, :reset_c), Cvoid, ())
+        msg = unsafe_string(pointer(buf))
+        m = match(r"SPICE\((.*)\)", msg)
+        throw(CError(Symbol(lowercase(m === nothing ? msg : m.captures[1]))))
+    end
 
-gfrr(target, abcorr, obsrvr, relate, refval, adjust, step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfrr_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
-            Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-        target, abcorr, obsrvr, relate, refval, adjust, step, NINTVLS, cn, res)
-end
+    "Number of intervals of the workspace and of the result cell."
+    const NINTVLS = 20000
 
-gfpa(target, illmn, abcorr, obsrvr, relate, refval, adjust, step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfpa_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble,
-            SpiceInt, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-        target, illmn, abcorr, obsrvr, relate, refval, adjust, step, NINTVLS, cn, res)
-end
+    "SPICE cell that holds the end points `w` (a valid window)."
+    function cell(w::AbstractVector{<:Real}, room::Integer = max(length(w), 2))
+        c = SpiceDoubleCell(room)
+        for i in 1:2:length(w)
+            SPICE.wninsd!(c, w[i], w[i + 1])
+        end
+        return c
+    end
 
-gfsep(targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr, relate, refval, adjust,
-    step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfsep_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring,
-            SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt, Ref{Cell{SpiceDouble}},
-            Ref{Cell{SpiceDouble}}),
+    "Run `f(cnfine_cell, result_cell)`, check the error state, return the end points of the result."
+    function search(f, cnfine::AbstractVector{<:Real})
+        cn = cell(cnfine)
+        res = SpiceDoubleCell(2 * NINTVLS)
+        cd, rd = cn.data, res.data
+        GC.@preserve cd rd f(cn.cell, res.cell)
+        check()
+        return collect(Float64, res)
+    end
+
+    gfdist(target, abcorr, obsrvr, relate, refval, adjust, step, cnfine) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfdist_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
+                Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            target, abcorr, obsrvr, relate, refval, adjust, step, NINTVLS, cn, res
+        )
+    end
+
+    gfrr(target, abcorr, obsrvr, relate, refval, adjust, step, cnfine) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfrr_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
+                Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            target, abcorr, obsrvr, relate, refval, adjust, step, NINTVLS, cn, res
+        )
+    end
+
+    gfpa(target, illmn, abcorr, obsrvr, relate, refval, adjust, step, cnfine) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfpa_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble,
+                SpiceInt, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            target, illmn, abcorr, obsrvr, relate, refval, adjust, step, NINTVLS, cn, res
+        )
+    end
+
+    gfsep(
         targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr, relate, refval, adjust,
-        step, NINTVLS, cn, res)
-end
+        step, cnfine
+    ) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfsep_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring,
+                SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt, Ref{Cell{SpiceDouble}},
+                Ref{Cell{SpiceDouble}},
+            ),
+            targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr, relate, refval, adjust,
+            step, NINTVLS, cn, res
+        )
+    end
 
-gfposc(target, frame, abcorr, obsrvr, crdsys, coord, relate, refval, adjust, step, cnfine) =
-    search(cnfine) do cn, res
-        ccall(Libdl.dlsym(HANDLE, :gfposc_c), Cvoid,
-            (Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble,
+    gfposc(target, frame, abcorr, obsrvr, crdsys, coord, relate, refval, adjust, step, cnfine) =
+        search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfposc_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble,
                 SpiceDouble, SpiceDouble, SpiceInt, Ref{Cell{SpiceDouble}},
-                Ref{Cell{SpiceDouble}}),
+                Ref{Cell{SpiceDouble}},
+            ),
             target, frame, abcorr, obsrvr, crdsys, coord, relate, refval, adjust, step,
-            NINTVLS, cn, res)
+            NINTVLS, cn, res
+        )
     end
 
-gfsubc(target, fixref, method, abcorr, obsrvr, crdsys, coord, relate, refval, adjust, step,
-    cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfsubc_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble,
-            SpiceDouble, SpiceDouble, SpiceInt, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
+    gfsubc(
         target, fixref, method, abcorr, obsrvr, crdsys, coord, relate, refval, adjust, step,
-        NINTVLS, cn, res)
-end
-
-gfsntc(target, fixref, method, abcorr, obsrvr, dref, dvec, crdsys, coord, relate, refval,
-    adjust, step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfsntc_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Ptr{SpiceDouble}, Cstring,
-            Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
-            Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-        target, fixref, method, abcorr, obsrvr, dref, collect(Float64, dvec), crdsys, coord,
-        relate, refval, adjust, step, NINTVLS, cn, res)
-end
-
-gfilum(method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint, relate, refval, adjust,
-    step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfilum_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Ptr{SpiceDouble},
-            Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt, Ref{Cell{SpiceDouble}},
-            Ref{Cell{SpiceDouble}}),
-        method, angtyp, target, illmn, fixref, abcorr, obsrvr, collect(Float64, spoint),
-        relate, refval, adjust, step, NINTVLS, cn, res)
-end
-
-gfoclt(occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, obsrvr, step, cnfine) =
-    search(cnfine) do cn, res
-        ccall(Libdl.dlsym(HANDLE, :gfoclt_c), Cvoid,
-            (Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring,
-                SpiceDouble, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-            occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, obsrvr, step, cn, res)
+        cnfine
+    ) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfsubc_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble,
+                SpiceDouble, SpiceDouble, SpiceInt, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            target, fixref, method, abcorr, obsrvr, crdsys, coord, relate, refval, adjust, step,
+            NINTVLS, cn, res
+        )
     end
 
-gftfov(inst, target, tshape, tframe, abcorr, obsrvr, step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gftfov_c), Cvoid,
-        (Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble,
-            Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-        inst, target, tshape, tframe, abcorr, obsrvr, step, cn, res)
-end
-
-gfrfov(inst, raydir, rframe, abcorr, obsrvr, step, cnfine) = search(cnfine) do cn, res
-    ccall(Libdl.dlsym(HANDLE, :gfrfov_c), Cvoid,
-        (Cstring, Ptr{SpiceDouble}, Cstring, Cstring, Cstring, SpiceDouble,
-            Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-        inst, collect(Float64, raydir), rframe, abcorr, obsrvr, step, cn, res)
-end
-
-# The user functions of the two calls below. A C callback cannot be a closure on every
-# platform, so the Julia functions are kept in global references for the time of a call.
-const UDFUNS = Ref{Any}(nothing)
-const UDQDEC = Ref{Any}(nothing)
-const UDFUNB = Ref{Any}(nothing)
-
-function c_udfuns(et::SpiceDouble, value::Ptr{SpiceDouble})
-    unsafe_store!(value, Float64(UDFUNS[](et)))
-    return nothing
-end
-function c_udqdec(::Ptr{Cvoid}, et::SpiceDouble, value::Ptr{SpiceBoolean})
-    unsafe_store!(value, SpiceBoolean(UDQDEC[](et) ? 1 : 0))
-    return nothing
-end
-function c_udfunb(::Ptr{Cvoid}, et::SpiceDouble, value::Ptr{SpiceBoolean})
-    unsafe_store!(value, SpiceBoolean(UDFUNB[](et) ? 1 : 0))
-    return nothing
-end
-
-"`gfuds_c` with the Julia functions `udfuns(et)` and `udqdec(et)`."
-function gfuds(udfuns, udqdec, relate, refval, adjust, step, cnfine)
-    UDFUNS[] = udfuns
-    UDQDEC[] = udqdec
-    pf = @cfunction(c_udfuns, Cvoid, (SpiceDouble, Ptr{SpiceDouble}))
-    pd = @cfunction(c_udqdec, Cvoid, (Ptr{Cvoid}, SpiceDouble, Ptr{SpiceBoolean}))
-    return search(cnfine) do cn, res
-        ccall(Libdl.dlsym(HANDLE, :gfuds_c), Cvoid,
-            (Ptr{Cvoid}, Ptr{Cvoid}, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
-                Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-            pf, pd, relate, refval, adjust, step, NINTVLS, cn, res)
+    gfsntc(
+        target, fixref, method, abcorr, obsrvr, dref, dvec, crdsys, coord, relate, refval,
+        adjust, step, cnfine
+    ) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfsntc_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Ptr{SpiceDouble}, Cstring,
+                Cstring, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
+                Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            target, fixref, method, abcorr, obsrvr, dref, collect(Float64, dvec), crdsys, coord,
+            relate, refval, adjust, step, NINTVLS, cn, res
+        )
     end
-end
 
-"`gfudb_c` with the Julia function `udfunb(et)`."
-function gfudb(udfunb, step, cnfine)
-    UDFUNS[] = et -> 0.0
-    UDFUNB[] = udfunb
-    pf = @cfunction(c_udfuns, Cvoid, (SpiceDouble, Ptr{SpiceDouble}))
-    pb = @cfunction(c_udfunb, Cvoid, (Ptr{Cvoid}, SpiceDouble, Ptr{SpiceBoolean}))
-    return search(cnfine) do cn, res
-        ccall(Libdl.dlsym(HANDLE, :gfudb_c), Cvoid,
-            (Ptr{Cvoid}, Ptr{Cvoid}, SpiceDouble, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
-            pf, pb, step, cn, res)
+    gfilum(
+        method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint, relate, refval, adjust,
+        step, cnfine
+    ) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfilum_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Ptr{SpiceDouble},
+                Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt, Ref{Cell{SpiceDouble}},
+                Ref{Cell{SpiceDouble}},
+            ),
+            method, angtyp, target, illmn, fixref, abcorr, obsrvr, collect(Float64, spoint),
+            relate, refval, adjust, step, NINTVLS, cn, res
+        )
     end
-end
 
-"`gfstol_c`."
-function gfstol(value)
-    ccall(Libdl.dlsym(HANDLE, :gfstol_c), Cvoid, (SpiceDouble,), value)
-    check()
-    return nothing
-end
-
-"`uddf_c` with the Julia function `udfuns(et)`."
-function uddf(udfuns, x, dx)
-    UDFUNS[] = udfuns
-    pf = @cfunction(c_udfuns, Cvoid, (SpiceDouble, Ptr{SpiceDouble}))
-    out = Ref{SpiceDouble}(0.0)
-    ccall(Libdl.dlsym(HANDLE, :uddf_c), Cvoid, (Ptr{Cvoid}, SpiceDouble, SpiceDouble,
-        Ref{SpiceDouble}), pf, x, dx, out)
-    check()
-    return out[]
-end
-
-"Short CSPICE error of `f()`, or `:none`."
-function kind(f)
-    try
-        f()
-    catch e
-        e isa CError || rethrow()
-        return e.kind
+    gfoclt(occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, obsrvr, step, cnfine) =
+        search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfoclt_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, Cstring,
+                SpiceDouble, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            occtyp, front, fshape, fframe, back, bshape, bframe, abcorr, obsrvr, step, cn, res
+        )
     end
-    return :none
-end
+
+    gftfov(inst, target, tshape, tframe, abcorr, obsrvr, step, cnfine) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gftfov_c), Cvoid,
+            (
+                Cstring, Cstring, Cstring, Cstring, Cstring, Cstring, SpiceDouble,
+                Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            inst, target, tshape, tframe, abcorr, obsrvr, step, cn, res
+        )
+    end
+
+    gfrfov(inst, raydir, rframe, abcorr, obsrvr, step, cnfine) = search(cnfine) do cn, res
+        ccall(
+            Libdl.dlsym(HANDLE, :gfrfov_c), Cvoid,
+            (
+                Cstring, Ptr{SpiceDouble}, Cstring, Cstring, Cstring, SpiceDouble,
+                Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+            ),
+            inst, collect(Float64, raydir), rframe, abcorr, obsrvr, step, cn, res
+        )
+    end
+
+    # The user functions of the two calls below. A C callback cannot be a closure on every
+    # platform, so the Julia functions are kept in global references for the time of a call.
+    const UDFUNS = Ref{Any}(nothing)
+    const UDQDEC = Ref{Any}(nothing)
+    const UDFUNB = Ref{Any}(nothing)
+
+    function c_udfuns(et::SpiceDouble, value::Ptr{SpiceDouble})
+        unsafe_store!(value, Float64(UDFUNS[](et)))
+        return nothing
+    end
+    function c_udqdec(::Ptr{Cvoid}, et::SpiceDouble, value::Ptr{SpiceBoolean})
+        unsafe_store!(value, SpiceBoolean(UDQDEC[](et) ? 1 : 0))
+        return nothing
+    end
+    function c_udfunb(::Ptr{Cvoid}, et::SpiceDouble, value::Ptr{SpiceBoolean})
+        unsafe_store!(value, SpiceBoolean(UDFUNB[](et) ? 1 : 0))
+        return nothing
+    end
+
+    "`gfuds_c` with the Julia functions `udfuns(et)` and `udqdec(et)`."
+    function gfuds(udfuns, udqdec, relate, refval, adjust, step, cnfine)
+        UDFUNS[] = udfuns
+        UDQDEC[] = udqdec
+        pf = @cfunction(c_udfuns, Cvoid, (SpiceDouble, Ptr{SpiceDouble}))
+        pd = @cfunction(c_udqdec, Cvoid, (Ptr{Cvoid}, SpiceDouble, Ptr{SpiceBoolean}))
+        return search(cnfine) do cn, res
+            ccall(
+                Libdl.dlsym(HANDLE, :gfuds_c), Cvoid,
+                (
+                    Ptr{Cvoid}, Ptr{Cvoid}, Cstring, SpiceDouble, SpiceDouble, SpiceDouble, SpiceInt,
+                    Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}},
+                ),
+                pf, pd, relate, refval, adjust, step, NINTVLS, cn, res
+            )
+        end
+    end
+
+    "`gfudb_c` with the Julia function `udfunb(et)`."
+    function gfudb(udfunb, step, cnfine)
+        UDFUNS[] = et -> 0.0
+        UDFUNB[] = udfunb
+        pf = @cfunction(c_udfuns, Cvoid, (SpiceDouble, Ptr{SpiceDouble}))
+        pb = @cfunction(c_udfunb, Cvoid, (Ptr{Cvoid}, SpiceDouble, Ptr{SpiceBoolean}))
+        return search(cnfine) do cn, res
+            ccall(
+                Libdl.dlsym(HANDLE, :gfudb_c), Cvoid,
+                (Ptr{Cvoid}, Ptr{Cvoid}, SpiceDouble, Ref{Cell{SpiceDouble}}, Ref{Cell{SpiceDouble}}),
+                pf, pb, step, cn, res
+            )
+        end
+    end
+
+    "`gfstol_c`."
+    function gfstol(value)
+        ccall(Libdl.dlsym(HANDLE, :gfstol_c), Cvoid, (SpiceDouble,), value)
+        check()
+        return nothing
+    end
+
+    "`uddf_c` with the Julia function `udfuns(et)`."
+    function uddf(udfuns, x, dx)
+        UDFUNS[] = udfuns
+        pf = @cfunction(c_udfuns, Cvoid, (SpiceDouble, Ptr{SpiceDouble}))
+        out = Ref{SpiceDouble}(0.0)
+        ccall(
+            Libdl.dlsym(HANDLE, :uddf_c), Cvoid, (
+                Ptr{Cvoid}, SpiceDouble, SpiceDouble,
+                Ref{SpiceDouble},
+            ), pf, x, dx, out
+        )
+        check()
+        return out[]
+    end
+
+    "Short CSPICE error of `f()`, or `:none`."
+    function kind(f)
+        try
+            f()
+        catch e
+            e isa CError || rethrow()
+            return e.kind
+        end
+        return :none
+    end
 
 end # module GFO
 
@@ -238,8 +300,8 @@ other modules and are compiled as usual; allocation and inference checks are the
 not changed.
 """
 module GFLight
-Base.Experimental.@compiler_options compile=min optimize=0 infer=false
-using Test, Random, LinearAlgebra, Printf, StaticArrays, Almanac
+    Base.Experimental.@compiler_options compile = min optimize = 0 infer = false
+    using Test, Random, LinearAlgebra, Printf, StaticArrays, Almanac
 end
 
 """
@@ -251,7 +313,7 @@ defined in `GFLight`.
 """
 function gf_light_eval(ex)
     host = parentmodule(GFLight)
-    for n in names(host; all=true, imported=true)
+    for n in names(host; all = true, imported = true)
         (startswith(String(n), '#') || n in (:Base, :Core, :eval, :include, :GFLight, nameof(host))) && continue
         (isdefined(host, n) && !isdefined(GFLight, n)) || continue
         Core.eval(GFLight, Expr(:import, Expr(:(:), Expr(:., fullname(host)...), Expr(:., n))))
@@ -283,9 +345,9 @@ end
 gf_npick(n::Integer, stride::Integer) = FULL ? Int(n) : n ÷ stride
 
 "Largest end-point difference in seconds between Almanac and CSPICE, by label."
-const GF_MAXDIFF = Dict{String,Float64}()
+const GF_MAXDIFF = Dict{String, Float64}()
 "Number of searches compared, by label."
-const GF_COUNT = Dict{String,Int}()
+const GF_COUNT = Dict{String, Int}()
 
 """
     gf_noise(value, et) -> Float64
@@ -326,8 +388,10 @@ quantity has the extreme value to rounding is a correct answer. Records the
 largest difference under `label`. Postcondition: `GF_COUNT[label]` is one more than
 before.
 """
-function gf_compare(label::AbstractString, neo::Window, ref::Vector{Float64};
-        atol::Float64=2.0e-6, value=nothing, vtol::Float64=0.0, wide::Float64=1.0)
+function gf_compare(
+        label::AbstractString, neo::Window, ref::Vector{Float64};
+        atol::Float64 = 2.0e-6, value = nothing, vtol::Float64 = 0.0, wide::Float64 = 1.0
+    )
     GF_COUNT[label] = get(GF_COUNT, label, 0) + 1
     if length(neo) != length(ref)
         @info "window sizes differ" label neo = length(neo) cspice = length(ref)
@@ -357,8 +421,12 @@ end
 function gf_report(prefix::AbstractString)
     for k in sort!(collect(keys(GF_COUNT)))
         startswith(k, prefix) || continue
-        measured(@sprintf("  %-46s searches=%-5d largest end-point difference %.3e s", k,
-            GF_COUNT[k], get(GF_MAXDIFF, k, 0.0)))
+        measured(
+            @sprintf(
+                "  %-46s searches=%-5d largest end-point difference %.3e s", k,
+                GF_COUNT[k], get(GF_MAXDIFF, k, 0.0)
+            )
+        )
     end
     return nothing
 end
@@ -377,7 +445,7 @@ function gf_random_window(rng::AbstractRNG, n::Integer, a::Real, b::Real)
     @assert n >= 1 && b > a
     x = sort!([a + (b - a) * rand(rng) for _ in 1:2n])
     for i in 1:2:2n
-        rand(rng) < 0.1 && (x[i+1] = x[i])
+        rand(rng) < 0.1 && (x[i + 1] = x[i])
     end
     w = Window(x)
     @assert wncard(w) >= 1
@@ -388,22 +456,30 @@ end
 const GF_RELATIONS = ("<", "=", ">", "LOCMIN", "LOCMAX", "ABSMIN", "ABSMAX")
 
 "The seven relations and the two absolute extrema with a positive adjust value (flag true)."
-const GF_VARIANTS = ((("<", false), ("=", false), (">", false), ("LOCMIN", false),
-    ("LOCMAX", false), ("ABSMIN", false), ("ABSMAX", false), ("ABSMIN", true), ("ABSMAX", true)))
+const GF_VARIANTS = (
+    (
+        ("<", false), ("=", false), (">", false), ("LOCMIN", false),
+        ("LOCMAX", false), ("ABSMIN", false), ("ABSMAX", false), ("ABSMIN", true), ("ABSMAX", true),
+    )
+)
 
 "The coordinate systems of `gfposc` and their coordinates."
-const GF_SYSTEMS = (("RECTANGULAR", ("X", "Y", "Z")),
+const GF_SYSTEMS = (
+    ("RECTANGULAR", ("X", "Y", "Z")),
     ("LATITUDINAL", ("RADIUS", "LONGITUDE", "LATITUDE")),
     ("RA/DEC", ("RANGE", "RIGHT ASCENSION", "DECLINATION")),
     ("SPHERICAL", ("RADIUS", "COLATITUDE", "LONGITUDE")),
     ("CYLINDRICAL", ("RADIUS", "LONGITUDE", "Z")),
     ("GEODETIC", ("LONGITUDE", "LATITUDE", "ALTITUDE")),
-    ("PLANETOGRAPHIC", ("LONGITUDE", "LATITUDE", "ALTITUDE")))
+    ("PLANETOGRAPHIC", ("LONGITUDE", "LATITUDE", "ALTITUDE")),
+)
 
 "The angular coordinates with a branch cut."
-const GF_ANGULAR = (("LATITUDINAL", "LONGITUDE"), ("RA/DEC", "RIGHT ASCENSION"),
+const GF_ANGULAR = (
+    ("LATITUDINAL", "LONGITUDE"), ("RA/DEC", "RIGHT ASCENSION"),
     ("SPHERICAL", "LONGITUDE"), ("CYLINDRICAL", "LONGITUDE"), ("GEODETIC", "LONGITUDE"),
-    ("PLANETOGRAPHIC", "LONGITUDE"))
+    ("PLANETOGRAPHIC", "LONGITUDE"),
+)
 
 "The nine aberration corrections of `spkezr`."
 const GF_ABCORRS = ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT", "XLT+S", "XCN", "XCN+S")
@@ -417,7 +493,7 @@ quantity on the window, so that the search has roots; for an absolute extremum w
 `withadjust` a tenth to a third of the range of the quantity.
 """
 function gf_reference(rng::AbstractRNG, q, cn::Window, rel::AbstractString, withadjust::Bool)
-    ts = range(cn[1], cn[end]; length=60)
+    ts = range(cn[1], cn[end]; length = 60)
     vals = [Almanac._gf_value(q, Float64(t)) for t in ts]
     lo, hi = quantile_of(vals, 0.25), quantile_of(vals, 0.75)
     refval = rel in ("<", "=", ">") ? lo + (hi - lo) * rand(rng) : 0.0

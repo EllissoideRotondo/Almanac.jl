@@ -34,7 +34,7 @@ not used.
 
 See also [`gfevnt`](@ref), [`gfocce`](@ref), [`gffove`](@ref).
 """
-@inline function gfrefn(t1::Real, t2::Real, s1::Bool=false, s2::Bool=true)
+@inline function gfrefn(t1::Real, t2::Real, s1::Bool = false, s2::Bool = true)
     a = Float64(t1)
     b = Float64(t2)
     return _gf_brcktd(a * 0.5 + b * 0.5, a, b)
@@ -56,7 +56,7 @@ one task for each interval that is searched.
 
 Invariant: `tol > 0`, and a constant `step` is positive.
 """
-struct _GFRun{S,R,B,P}
+struct _GFRun{S, R, B, P}
     step::S
     refine::R
     bail::B
@@ -72,13 +72,23 @@ Check the step and the tolerance as `gfsstp` and `zzgfsolv` do and build the con
 Throws `SpiceError(:invalidstep)` for a constant step that is not positive and
 `SpiceError(:invalidtolerance)` for a tolerance that is not positive.
 """
-function _gf_run(step, tol::Real; refine=gfrefn, bail=nothing, report=nothing,
-        threads::Bool=false)
+function _gf_run(
+        step, tol::Real; refine = gfrefn, bail = nothing, report = nothing,
+        threads::Bool = false
+    )
     st = step isa Real ? Float64(step) : step
-    st isa Float64 && !(st > 0.0) && throw(SpiceError(:invalidstep,
-        "Step has value $st; step size must be positive."))
-    tol > 0 || throw(SpiceError(:invalidtolerance,
-        "Tolerance must be positive but was $tol."))
+    st isa Float64 && !(st > 0.0) && throw(
+        SpiceError(
+            :invalidstep,
+            "Step has value $st; step size must be positive."
+        )
+    )
+    tol > 0 || throw(
+        SpiceError(
+            :invalidtolerance,
+            "Tolerance must be positive but was $tol."
+        )
+    )
     return _GFRun(st, refine, bail, report, Float64(tol), threads)
 end
 
@@ -88,8 +98,12 @@ _gf_withtol(run::_GFRun, tol::Float64) =
 @inline _gf_step(run::_GFRun{Float64}, et::Float64) = run.step
 @inline function _gf_step(run::_GFRun, et::Float64)
     st = Float64(run.step(et))::Float64
-    st > 0.0 || throw(SpiceError(:invalidstep,
-        "Step has value $st at epoch $et; step size must be positive."))
+    st > 0.0 || throw(
+        SpiceError(
+            :invalidstep,
+            "Step has value $st at epoch $et; step size must be positive."
+        )
+    )
     return st
 end
 
@@ -108,6 +122,25 @@ end
 @inline _gf_repf(run::_GFRun) = (run.report === nothing || run.report(:final); nothing)
 
 """
+    _gf_advance(t, step, finish) -> Float64
+
+The next sample `min(t + step, finish)` after `t < finish`. Throws
+`SpiceError(:invalidstep)` if it is not after `t`: a step below the spacing of the
+floating-point numbers at `t`. CSPICE samples `t` again for ever.
+"""
+@inline function _gf_advance(t::Float64, step::Float64, finish::Float64)
+    nxt = min(t + step, finish)
+    nxt > t || _gf_nostep(t, step)
+    return nxt
+end
+@noinline _gf_nostep(t, step) = throw(
+    SpiceError(
+        :invalidstep, "the step $step s does " *
+            "not advance the time $t s: it is below the spacing of the floating-point numbers there"
+    )
+)
+
+"""
     _gf_solve!(result, cond, run, cstep, step, start, finish) -> result
 
 The search of `zzgfsolvx`: insert into `result` the intervals of [`start`, `finish`] on
@@ -123,11 +156,17 @@ Postcondition: `result` is a valid window that holds its old value and the new
 intervals, which lie in [`start`, `finish`]. Throws `SpiceError(:noconverg)` after
 $(_GF_MXLOOP) refinement steps of one transition.
 """
-function _gf_solve!(result::Window, cond::F, run::_GFRun, cstep::Bool, step::Float64,
-        start::Float64, finish::Float64) where {F}
+function _gf_solve!(
+        result::Window, cond::F, run::_GFRun, cstep::Bool, step::Float64,
+        start::Float64, finish::Float64
+    ) where {F}
     tol = run.tol
-    start > finish && throw(SpiceError(:badtimecase,
-        "Bad time interval result, START > FINISH."))
+    start > finish && throw(
+        SpiceError(
+            :badtimecase,
+            "Bad time interval result, START > FINISH."
+        )
+    )
     _gf_repu(run, start, finish, start)
     curtim = start
     curste = cond(curtim)::Bool
@@ -140,7 +179,7 @@ function _gf_solve!(result::Window, cond::F, run::_GFRun, cstep::Bool, step::Flo
     # `svdtim`, and `begtim` is the start of the open interval if `instat`
     while svdtim < finish
         cstep || (timest = _gf_step(run, curtim))
-        curtim = min(curtim + timest, finish)
+        curtim = _gf_advance(curtim, timest, finish)
         curste = cond(curtim)::Bool
         # invariant: the state is `savst` at every sample from the last transition to
         # `svdtim`; `curtim` is the sample after `svdtim`
@@ -150,7 +189,7 @@ function _gf_solve!(result::Window, cond::F, run::_GFRun, cstep::Bool, step::Flo
             svdtim = curtim
             savst = curste
             cstep || (timest = _gf_step(run, curtim))
-            nxt = min(curtim + timest, finish)
+            nxt = curtim < finish ? _gf_advance(curtim, timest, finish) : finish
             # CSPICE evaluates the state at `finish` a second time here; the state is a
             # function of the epoch, so the value in hand is used.
             nxt == curtim || (curste = cond(nxt)::Bool)
@@ -172,9 +211,13 @@ function _gf_solve!(result::Window, cond::F, run::_GFRun, cstep::Bool, step::Flo
             # the bracket became shorter in every step
             while diff > tol && diff < prvdif
                 nloop += 1
-                nloop >= _GF_MXLOOP && throw(SpiceError(:noconverg,
-                    "Loop run exceeds maximum loop count. Unable to converge to TOL " *
-                    "value $tol within MXLOOP value $(_GF_MXLOOP) iterations."))
+                nloop >= _GF_MXLOOP && throw(
+                    SpiceError(
+                        :noconverg,
+                        "Loop run exceeds maximum loop count. Unable to converge to TOL " *
+                            "value $tol within MXLOOP value $(_GF_MXLOOP) iterations."
+                    )
+                )
                 _gf_bail(run)
                 t = _gf_brcktd(Float64(run.refine(t1, t2, l1, l2))::Float64, t1, t2)
                 if t == t1
@@ -225,20 +268,20 @@ function _gf_scan!(result::Window, cond::F, w::Window, run::_GFRun, cstep::Bool)
     if run.threads && n > 1 && Threads.nthreads() > 1
         parts = Vector{Window}(undef, n)
         Threads.@threads for i in 1:n
-            a = w.data[2i-1]
+            a = w.data[2i - 1]
             b = w.data[2i]
             parts[i] = _gf_solve!(Window(), cond, run, cstep, b - a, a, b)
         end
         for p in parts                   # invariant: result holds the parts before p
             d = p.data
             for k in 1:2:length(d)
-                wninsd!(result, d[k], d[k+1])
+                wninsd!(result, d[k], d[k + 1])
             end
         end
         return result
     end
     for i in 1:n                         # invariant: intervals 1 .. i-1 of w are searched
-        a = w.data[2i-1]
+        a = w.data[2i - 1]
         b = w.data[2i]
         _gf_solve!(result, cond, run, cstep, b - a, a, b)
     end
@@ -259,14 +302,14 @@ function _gf_wnexpd(w::Window, left::Float64, right::Float64)
     card == 0 && return Window()
     for i in 1:2:card                    # invariant: intervals before i are expanded
         d[i] -= left
-        d[i+1] += right
+        d[i + 1] += right
     end
     i = 2
     j = 2
     while j < card                       # invariant: d[1:i-1] is final but for its last end
-        if d[j] < d[j+1]
+        if d[j] < d[j + 1]
             d[i] = d[j]
-            d[i+1] = d[j+1]
+            d[i + 1] = d[j + 1]
             i += 2
         end
         j += 2
@@ -280,7 +323,7 @@ end
 function _gf_wnextd(w::Window, side::Int)
     d = Float64[]
     for i in 1:wncard(w)                 # invariant: d holds the ends of intervals before i
-        x = w.data[2i-2+side]
+        x = w.data[2i - 2 + side]
         push!(d, x, x)
     end
     return _window_of(d)
@@ -299,15 +342,15 @@ function _gf_wsts(w1::Window, w2::Window)
     p1 = 1
     p2 = 1
     while p1 < na && p2 < nb             # invariant: intervals before p1 and p2 are sifted
-        if a[p1+1] < b[p2]
+        if a[p1 + 1] < b[p2]
             p1 += 2
-        elseif b[p2+1] < a[p1]
+        elseif b[p2 + 1] < a[p1]
             p2 += 2
         else
-            (a[p1] > b[p2] && a[p1+1] < b[p2+1]) && push!(out, a[p1], a[p1+1])
-            if a[p1+1] < b[p2+1]
+            (a[p1] > b[p2] && a[p1 + 1] < b[p2 + 1]) && push!(out, a[p1], a[p1 + 1])
+            if a[p1 + 1] < b[p2 + 1]
                 p1 += 2
-            elseif b[p2+1] < a[p1+1]
+            elseif b[p2 + 1] < a[p1 + 1]
                 p2 += 2
             else
                 p1 += 2
@@ -338,8 +381,12 @@ function _gf_relcode(relate::AbstractString)
     s == "ABSMIN" && return _GF_ABSMIN
     s == "LOCMAX" && return _GF_LOCMAX
     s == "ABSMAX" && return _GF_ABSMAX
-    throw(SpiceError(:notrecognized, "The comparison operator, $relate is not " *
-        "recognized.  Supported quantities are: <, =, >, LOCMIN, ABSMIN, LOCMAX, ABSMAX."))
+    throw(
+        SpiceError(
+            :notrecognized, "The comparison operator, $relate is not " *
+                "recognized.  Supported quantities are: <, =, >, LOCMIN, ABSMIN, LOCMAX, ABSMAX."
+        )
+    )
 end
 
 """
@@ -350,10 +397,19 @@ is negative, `SpiceError(:invalidvalue)` if it is not zero and the relation is n
 absolute extremum.
 """
 function _gf_checkadjust(rel::Int, adjust::Real)
-    adjust < 0 && throw(SpiceError(:valueoutofrange,
-        "ADJUST was $adjust; must be non-negative."))
-    (rel == _GF_ABSMIN || rel == _GF_ABSMAX || adjust == 0) || throw(SpiceError(:invalidvalue,
-        "ADJUST should have value zero for all comparison operators except ABSMAX and ABSMIN"))
+    # NaN and Inf are refused too: CSPICE takes them and finds no event
+    (isfinite(adjust) && adjust >= 0) || throw(
+        SpiceError(
+            :valueoutofrange,
+            "ADJUST was $adjust; must be non-negative and finite."
+        )
+    )
+    (rel == _GF_ABSMIN || rel == _GF_ABSMAX || adjust == 0) || throw(
+        SpiceError(
+            :invalidvalue,
+            "ADJUST should have value zero for all comparison operators except ABSMAX and ABSMIN"
+        )
+    )
     return nothing
 end
 
@@ -389,11 +445,19 @@ extremum; the errors are those of `_gf_relcode` and `_gf_checkadjust`. An empty
 window that is a subset of `cnfine`. `prefix` holds the progress messages of the two
 passes.
 """
-function _gf_relx(value::V, decreasing::D, relate::AbstractString, refval::Real,
+function _gf_relx(
+        value::V, decreasing::D, relate::AbstractString, refval::Real,
         adjust::Real, cnfine::Window, run::_GFRun,
-        prefix::NTuple{2,String}=("", ""), suffix::String="") where {V,D}
+        prefix::NTuple{2, String} = ("", ""), suffix::String = ""
+    ) where {V, D}
     rel = _gf_relcode(relate)
     _gf_checkadjust(rel, adjust)
+    isnan(refval) && throw(
+        SpiceError(
+            :invalidvalue,
+            "the reference value is NaN; CSPICE takes it and finds no event"
+        )
+    )
     card(cnfine) == 0 && return Window()
     # CSPICE compares the relation as it was given with "=", so an equality relation
     # with a leading blank gets no expansion; this is kept.
@@ -425,7 +489,7 @@ function _gf_relx(value::V, decreasing::D, relate::AbstractString, refval::Real,
             # invariant: `extrem` is the most extreme value at the candidate epochs
             # seen so far, and `result` holds the last epoch that reached it
             for i in 1:wncard(w)
-                t = w.data[2i-2+want]
+                t = w.data[2i - 2 + want]
                 v = Float64(value(t))::Float64
                 if need
                     need = false
@@ -481,7 +545,7 @@ Return the numerical derivative of the scalar function `udfunc` at `x`, as
 The result is the central difference `(udfunc(x + dx) - udfunc(x - dx)) / (2 dx)`.
 Unlike CSPICE, `udfunc` takes the abscissa alone.
 
-Throws `SpiceError(:dividebyzero)` if `dx == 0`.
+Throws `SpiceError(:dividebyzero)` if `dx == 0`, before `udfunc` is called.
 
 # Examples
 ```jldoctest
@@ -493,10 +557,15 @@ See also [`uddc`](@ref), [`gfuds`](@ref).
 """
 function uddf(udfunc::F, x::Real, dx::Real) where {F}
     h = Float64(dx)
+    # checked before `udfunc` is called; CSPICE calls it twice first
+    h == 0.0 && throw(
+        SpiceError(
+            :dividebyzero,
+            "Delta abscissa value is zero; a non-zero value is required."
+        )
+    )
     f0 = Float64(udfunc(Float64(x) - h))
     f2 = Float64(udfunc(Float64(x) + h))
-    h == 0.0 && throw(SpiceError(:dividebyzero,
-        "Delta abscissa value is zero; a non-zero value is required."))
     return (0.5 / h) * f2 + (-0.5 / h) * f0
 end
 

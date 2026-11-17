@@ -25,25 +25,47 @@ isdefined(@__MODULE__, :DSKLIB) || include("dskfixtures.jl")
 
 function c_dasonw(path, ftype, ifname, ncomr)
     h = Ref{Cint}(0)
-    ccall((:dasonw_, DSKLIB), Cint, (Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ref{Cint}, Ref{Cint},
-            Cint, Cint, Cint), path, ftype, ifname, ncomr, h, sizeof(path), sizeof(ftype),
-        sizeof(ifname))
+    ccall(
+        (:dasonw_, DSKLIB), Cint, (
+            Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ref{Cint}, Ref{Cint},
+            Cint, Cint, Cint,
+        ), path, ftype, ifname, ncomr, h, sizeof(path), sizeof(ftype),
+        sizeof(ifname)
+    )
     c_check()
     return h[]
 end
-c_dasadi(h, data::Vector{Cint}) = (ccall((:dasadi_, DSKLIB), Cint, (Ref{Cint}, Ref{Cint},
-        Ptr{Cint}), h, length(data), data); c_check())
-c_dasadd(h, data::Vector{Float64}) = (ccall((:dasadd_, DSKLIB), Cint, (Ref{Cint}, Ref{Cint},
-        Ptr{Float64}), h, length(data), data); c_check())
-c_dasadc(h, data::String) = (ccall((:dasadc_, DSKLIB), Cint, (Ref{Cint}, Ref{Cint}, Ref{Cint},
-        Ref{Cint}, Ptr{UInt8}, Cint), h, sizeof(data), 1, sizeof(data), data, sizeof(data)); c_check())
+c_dasadi(h, data::Vector{Cint}) = (
+    ccall(
+        (:dasadi_, DSKLIB), Cint, (
+            Ref{Cint}, Ref{Cint},
+            Ptr{Cint},
+        ), h, length(data), data
+    ); c_check()
+)
+c_dasadd(h, data::Vector{Float64}) = (
+    ccall(
+        (:dasadd_, DSKLIB), Cint, (
+            Ref{Cint}, Ref{Cint},
+            Ptr{Float64},
+        ), h, length(data), data
+    ); c_check()
+)
+c_dasadc(h, data::String) = (
+    ccall(
+        (:dasadc_, DSKLIB), Cint, (
+            Ref{Cint}, Ref{Cint}, Ref{Cint},
+            Ref{Cint}, Ptr{UInt8}, Cint,
+        ), h, sizeof(data), 1, sizeof(data), data, sizeof(data)
+    ); c_check()
+)
 
 "Close the CSPICE write handle `h` without segregation of the file."
 function c_close_unsegregated(h)
     ccall((:daswbr_, DSKLIB), Cint, (Ref{Cint},), h)
     c_check()
     ccall((:dasllc_, DSKLIB), Cint, (Ref{Cint},), h)
-    c_check()
+    return c_check()
 end
 
 """
@@ -55,9 +77,9 @@ in the test, without Almanac.
 function byteswapped_das(src, dst)
     raw = read(src)
     out = copy(raw)
-    i32(off) = reinterpret(Int32, raw[off+1:off+4])[1]
-    swap!(off, n, w) = for k in 0:n-1
-        out[off+k*w+1:off+k*w+w] = reverse(raw[off+k*w+1:off+k*w+w])
+    i32(off) = reinterpret(Int32, raw[(off + 1):(off + 4)])[1]
+    swap!(off, n, w) = for k in 0:(n - 1)
+        out[(off + k * w + 1):(off + k * w + w)] = reverse(raw[(off + k * w + 1):(off + k * w + w)])
     end
     swap!(68, 4, 4)
     native = String(raw[85:92])
@@ -75,7 +97,7 @@ function byteswapped_das(src, dst)
         while typ in 1:3 && pos <= 256 && i32(base + 4 * (pos - 1)) != 0
             count = i32(base + 4 * (pos - 1))
             cur = count > 0 ? next[prvtyp] : prev[prvtyp]
-            for r in datarec:datarec+abs(count)-1
+            for r in datarec:(datarec + abs(count) - 1)
                 cur == 2 && swap!((r - 1) * 1024, 128, 8)
                 cur == 3 && swap!((r - 1) * 1024, 256, 4)
             end
@@ -95,13 +117,19 @@ group("11. DAS files and DLA segment lists") do
     full = (-pi, pi, -pi / 2, pi / 2)
     ev, ep = ellipsoid_shape(3.0, 2.5, 2.0, 24, 12)
     cuv, cup = cube_shape(1.0)
-    specs = [DskSpec(499, 1, 2, "IAU_MARS", 1, Float64[], full, -1e9, 1e9, 5.0, 4, ev, ep),
-        DskSpec(499, 2, 2, "IAU_MARS", 3, Float64[], (-1.0, 1.0, -1.0, 1.0), 0.0, 1e3, 1.0, 1, cuv, cup),
-        DskSpec(401, 7, 1, "IAU_PHOBOS", 1, Float64[], full, -5.0, 5.0, 4.0, 3, ev, ep)]
-    comments = ["First comment line", "", "  indented line with trailing blanks   ",
-        "x"^300, "last line"]
-    cfile = c_write_dsk(joinpath(dir, "c.bds"), specs; ifname="internal name", ncomch=5000,
-        comments)
+    specs = [
+        DskSpec(499, 1, 2, "IAU_MARS", 1, Float64[], full, -1.0e9, 1.0e9, 5.0, 4, ev, ep),
+        DskSpec(499, 2, 2, "IAU_MARS", 3, Float64[], (-1.0, 1.0, -1.0, 1.0), 0.0, 1.0e3, 1.0, 1, cuv, cup),
+        DskSpec(401, 7, 1, "IAU_PHOBOS", 1, Float64[], full, -5.0, 5.0, 4.0, 3, ev, ep),
+    ]
+    comments = [
+        "First comment line", "", "  indented line with trailing blanks   ",
+        "x"^300, "last line",
+    ]
+    cfile = c_write_dsk(
+        joinpath(dir, "c.bds"), specs; ifname = "internal name", ncomch = 5000,
+        comments
+    )
 
     @apart @testset "(a) a file that CSPICE wrote" begin
         h = dasopr(cfile)
@@ -145,8 +173,8 @@ group("11. DAS files and DLA segment lists") do
             b = randn(rng, rand(rng, 0:400)); append!(dps, b); dasadd(h, b)
             c = randstring(rng, rand(rng, 0:900)); chars *= c; dasadc(h, c)
         end
-        push!(dps, NaN, -0.0, Inf, floatmin(Float64), 5e-324)
-        dasadd(h, dps[end-4:end])
+        push!(dps, NaN, -0.0, Inf, floatmin(Float64), 5.0e-324)
+        dasadd(h, dps[(end - 4):end])
         dasac(h, comments)
         @test daslla(h) == (sizeof(chars), length(dps), length(ints))
         @test dasrdi(h, 1, length(ints)) == ints
@@ -231,7 +259,7 @@ group("11. DAS files and DLA segment lists") do
         dasac(h, many)
         dascls(h)
         ch = c_dasopr(path)
-        @test SPICE.dasec(ch; bufsiz=500) == many
+        @test SPICE.dasec(ch; bufsiz = 500) == many
         @test c_das_data(path)[1] == ints1
         c_dascls(ch)
         h = dasopr(path)
@@ -280,8 +308,10 @@ group("11. DAS files and DLA segment lists") do
     end
 
     @apart @testset "(e) the other byte order" begin
-        for (name, src) in (("segregated DSK", cfile), ("not segregated", unseg),
-                ("generic", joinpath(dir, "generic.das")))
+        for (name, src) in (
+                ("segregated DSK", cfile), ("not segregated", unseg),
+                ("generic", joinpath(dir, "generic.das")),
+            )
             swapped = byteswapped_das(src, joinpath(dir, "swapped_" * basename(src)))
             @test read(swapped) != read(src)
             ci, cd, cc = c_das_data(src)
@@ -294,7 +324,7 @@ group("11. DAS files and DLA segment lists") do
             ch = c_dasopr(swapped)
             @test dasrfr(h) == SPICE.dasrfr(ch)
             @test dashfs(h) == c_dashfs(ch)
-            @test dasec(h) == SPICE.dasec(ch; bufsiz=500)
+            @test dasec(h) == SPICE.dasec(ch; bufsiz = 500)
             c_dascls(ch)
             dascls(h)
         end
@@ -309,7 +339,7 @@ group("11. DAS files and DLA segment lists") do
             v = V3(randn(rng, 3)) * 8
             d = V3(randn(rng, 3)) * 2 - v
             @test dskxsi(ctx, false, 499, (), 0.0, "IAU_MARS", v, d) ==
-                  dskxsi(ref, false, 499, (), 0.0, "IAU_MARS", v, d)
+                dskxsi(ref, false, 499, (), 0.0, "IAU_MARS", v, d)
         end
     end
 
@@ -373,7 +403,7 @@ group("11. DAS files and DLA segment lists") do
         @test neo_kind(() -> dasopr(damaged)) === :ftpxfererror === c_open_kind(damaged)
         # A directory that points outside the file.
         cut = joinpath(dir, "cut.bds")
-        write(cut, read(cfile)[1:end-4096])
+        write(cut, read(cfile)[1:(end - 4096)])
         @test neo_kind(() -> dasopr(cut)) === :baddasdirectory
         # A first directory record past the end of the file.
         one = joinpath(dir, "one.bds")
@@ -442,18 +472,36 @@ group("11. DAS files and DLA segment lists") do
         ch = c_dasopw(joinpath(dir, "upd_c.das"))
         h = dasopw(joinpath(dir, "upd_a.das"))
         lastc, lastd, lasti = daslla(h)
-        c_udi(f, l) = c_kind(() -> ccall((:dasudi_, DSKLIB), Cint, (Ref{Cint}, Ref{Cint},
-            Ref{Cint}, Ptr{Cint}), ch, f, l, zeros(Cint, 4)))
-        c_udd(f, l) = c_kind(() -> ccall((:dasudd_, DSKLIB), Cint, (Ref{Cint}, Ref{Cint},
-            Ref{Cint}, Ptr{Float64}), ch, f, l, zeros(4)))
+        c_udi(f, l) = c_kind(
+            () -> ccall(
+                (:dasudi_, DSKLIB), Cint, (
+                    Ref{Cint}, Ref{Cint},
+                    Ref{Cint}, Ptr{Cint},
+                ), ch, f, l, zeros(Cint, 4)
+            )
+        )
+        c_udd(f, l) = c_kind(
+            () -> ccall(
+                (:dasudd_, DSKLIB), Cint, (
+                    Ref{Cint}, Ref{Cint},
+                    Ref{Cint}, Ptr{Float64},
+                ), ch, f, l, zeros(4)
+            )
+        )
         for (f, l) in ((0, 1), (lasti, lasti + 1), (lasti + 2, lasti + 1), (lasti, lasti - 1))
             @test neo_kind(() -> dasudi(h, f, l, zeros(Int, 4))) === c_udi(f, l)
         end
         for (f, l) in ((0, 1), (lastd, lastd + 1), (lastd + 2, lastd + 1), (lastd, lastd - 1))
             @test neo_kind(() -> dasudd(h, f, l, zeros(4))) === c_udd(f, l)
         end
-        c_udc(f, l, data) = c_kind(() -> ccall((:dasudc_c, DSKLIB), Cvoid, (Cint, Cint, Cint,
-            Cint, Cint, Cint, Ptr{UInt8}), ch, f, l, 0, sizeof(data) - 1, sizeof(data), data))
+        c_udc(f, l, data) = c_kind(
+            () -> ccall(
+                (:dasudc_c, DSKLIB), Cvoid, (
+                    Cint, Cint, Cint,
+                    Cint, Cint, Cint, Ptr{UInt8},
+                ), ch, f, l, 0, sizeof(data) - 1, sizeof(data), data
+            )
+        )
         for (f, l) in ((0, 1), (lastc, lastc + 1), (lastc + 2, lastc + 1), (lastc, lastc - 1))
             @test neo_kind(() -> dasudc(h, f, l, "abcd")) === c_udc(f, l, "abcd")
         end

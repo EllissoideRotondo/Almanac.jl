@@ -36,8 +36,8 @@ import ForwardDiff
 import DifferentiationInterface as DI
 using ADTypes: AutoForwardDiff
 
-const AD_BACKEND_RTOL = 1e-13
-const AD_BACKEND_RTOL2 = 1e-11
+const AD_BACKEND_RTOL = 1.0e-13
+const AD_BACKEND_RTOL2 = 1.0e-11
 
 "Relative difference `|a - b| / |b|`; for `b == 0` the absolute difference."
 ad_reldiff(a, b) = (nb = norm(b); nb == 0 ? norm(a - b) : norm(a - b) / nb)
@@ -45,8 +45,8 @@ ad_reldiff(a, b) = (nb = norm(b); nb == 0 ? norm(a - b) : norm(a - b) / nb)
 # Fixed weights that fold a vector or a matrix result into one number, so that every
 # component reaches the derivative.
 const W3 = SVector(0.3, -0.5, 0.8)
-const W6 = SVector(0.3, -0.5, 0.8, 1e3, -2e3, 4e3)
-const W33 = SMatrix{3,3}(0.1, -0.2, 0.3, 0.4, -0.5, 0.6, -0.7, 0.8, 0.9)
+const W6 = SVector(0.3, -0.5, 0.8, 1.0e3, -2.0e3, 4.0e3)
+const W33 = SMatrix{3, 3}(0.1, -0.2, 0.3, 0.4, -0.5, 0.6, -0.7, 0.8, 0.9)
 
 """
     ad_cases(ctx, tab, rtab, dvec) -> (default, full)
@@ -61,8 +61,10 @@ function ad_cases(ctx, tab, rtab, dvec)
     default = [
         "spkpos NONE J2000" => t -> dot(W3, spkpos(ctx, "MOON", t, "J2000", "NONE", "EARTH")[1]),
         "spkpos LT+S IAU_EARTH" => t -> dot(W3, spkpos(ctx, "MOON", t, "IAU_EARTH", "LT+S", "EARTH")[1]),
-        "spkezr CN+S state, lt" => t -> (s = spkezr(ctx, "MARS BARYCENTER", t, "ECLIPJ2000", "CN+S", "EARTH");
-            dot(W6, s[1]) + 1e6 * s[2]),
+        "spkezr CN+S state, lt" => t -> (
+            s = spkezr(ctx, "MARS BARYCENTER", t, "ECLIPJ2000", "CN+S", "EARTH");
+            dot(W6, s[1]) + 1.0e6 * s[2]
+        ),
         "spkder LT order 2" => t -> dot(W3, spkder(ctx, "MOON", t, "J2000", "LT", "EARTH", Val(2))[3]),
         "spkder NONE order 2" => t -> dot(W3, spkder(ctx, "MOON", t, "J2000", "EARTH", Val(2))[3]),
         "pxform MOON_PA" => t -> sum(W33 .* pxform(ctx, "J2000", "MOON_PA", t)),
@@ -77,10 +79,18 @@ function ad_cases(ctx, tab, rtab, dvec)
         "pxfrm2" => t -> sum(W33 .* pxfrm2(ctx, "IAU_EARTH", "J2000", t, t - 2.0)),
         "pxder order 2" => t -> sum(W33 .* pxder(ctx, "J2000", "IAU_EARTH", t, Val(2))[3]),
         "sincpt" => t -> dot(W3, sincpt(ctx, "ELLIPSOID", "EARTH", t, "IAU_EARTH", "CN+S", "MOON", "J2000", dvec)[1]),
-        "spkcpo" => t -> dot(W6, spkcpo(ctx, "MOON", t, "J2000", "OBSERVER", "LT+S",
-            SVector(1000.0, 2000.0, 3000.0), "EARTH", "IAU_EARTH")[1]),
-        "ilumin" => t -> sum(ilumin(ctx, "ELLIPSOID", "EARTH", t, "IAU_EARTH", "LT+S", "MOON",
-            SVector(6378.0, 0.0, 0.0))[3:5]),
+        "spkcpo" => t -> dot(
+            W6, spkcpo(
+                ctx, "MOON", t, "J2000", "OBSERVER", "LT+S",
+                SVector(1000.0, 2000.0, 3000.0), "EARTH", "IAU_EARTH"
+            )[1]
+        ),
+        "ilumin" => t -> sum(
+            ilumin(
+                ctx, "ELLIPSOID", "EARTH", t, "IAU_EARTH", "LT+S", "MOON",
+                SVector(6378.0, 0.0, 0.0)
+            )[3:5]
+        ),
         "phaseq" => t -> phaseq(ctx, t, "MOON", "SUN", "EARTH", "LT+S"),
         "deltet" => t -> deltet(ctx, t, "ET"),
         "table_rotation" => t -> sum(W33 .* table_rotation(rtab, t)),
@@ -103,10 +113,10 @@ end
 function ad_setup()
     rng = MersenneTwister(SEED + 61)
     ctx = neo_context(Kernels.full_set())
-    epochs = record_safe_epochs(rng, nsample(1, 4); span=3e8)
+    epochs = record_safe_epochs(rng, nsample(1, 4); span = 3.0e8)
     t0, t1 = extrema(epochs)
-    tab = ephemeris_table(ctx, "MOON", t0 - 1e5, t1 + 1e5, "J2000", "NONE", "EARTH")
-    rtab = rotation_table(ctx, "J2000", "IAU_EARTH", t0 - 1e5, t1 + 1e5)
+    tab = ephemeris_table(ctx, "MOON", t0 - 1.0e5, t1 + 1.0e5, "J2000", "NONE", "EARTH")
+    rtab = rotation_table(ctx, "J2000", "IAU_EARTH", t0 - 1.0e5, t1 + 1.0e5)
     # A ray from the Moon to the centre of the Earth, which meets the Earth at every epoch.
     dvec = spkpos(ctx, "EARTH", epochs[1], "J2000", "NONE", "MOON")[1]
     return ctx, epochs, ad_cases(ctx, tab, rtab, dvec)...
@@ -123,8 +133,10 @@ leaves out), and, as the flags say, the
 gradient over four epochs, a pushforward of two tangents, and the second derivative with
 ForwardDiff over the backend.
 """
-function ad_check(bname, backend, ctx, epochs, default, full; gradient::Bool,
-        batched::Bool, nested::Bool, combine::Bool=true, skip=())
+function ad_check(
+        bname, backend, ctx, epochs, default, full; gradient::Bool,
+        batched::Bool, nested::Bool, combine::Bool = true, skip = ()
+    )
     pos(t) = spkpos(ctx, "MOON", t, "IAU_EARTH", "LT+S", "EARTH")[1]
     range_km(t) = norm(pos(t))
     @testset "$bname" begin
@@ -140,10 +152,14 @@ function ad_check(bname, backend, ctx, epochs, default, full; gradient::Bool,
                 @test err <= AD_BACKEND_RTOL || (@info "derivative" bname cname t d ref; false)
                 # Within 2 eps, not bit for bit: with tracked numbers the closure's own
                 # arithmetic (`dot`, `sum`) runs without fused multiply-adds.
-                @test isapprox(Almanac.primal(y), f(t); rtol=2eps())
+                @test isapprox(Almanac.primal(y), f(t); rtol = 2eps())
             end
-            measured(@sprintf("  %-18s %2d function(s), max relative difference to ForwardDiff %.2e",
-                bname, length(cases), worst))
+            measured(
+                @sprintf(
+                    "  %-18s %2d function(s), max relative difference to ForwardDiff %.2e",
+                    bname, length(cases), worst
+                )
+            )
         end
         if batched
             @testset "batched forward" begin

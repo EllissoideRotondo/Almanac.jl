@@ -14,10 +14,11 @@
     catch
         gcpool(ctx, n)
     end
-    pool(ctx) = Dict{String,Any}(n => value(ctx, n) for n in gnpool(ctx, "*"))
+    pool(ctx) = Dict{String, Any}(n => value(ctx, n) for n in gnpool(ctx, "*"))
 
     @testset "the same pool as the text kernel" begin
-        tk = put("a.tpc", """
+        tk = put(
+            "a.tpc", """
             KPL/PCK
             \\begindata
             BODY399_RADII   = ( 6378.1366 6378.1366 6356.7519 )
@@ -28,8 +29,10 @@
             WORDS           = ( 'ab' 'it''s' )
             ONE             = 7
             \\begintext
-            """)
-        js = put("a.json", """
+            """
+        )
+        js = put(
+            "a.json", """
             \ufeff// a JSON kernel
             {
                 "BODY399_RADII": [6378.1366, 6378.1366, 6356.7519],
@@ -40,7 +43,8 @@
                 "WORDS": ["ab", "it's"],
                 "ONE": 7,
             }
-            """)
+            """
+        )
         a, b = SpiceContext(), SpiceContext()
         furnsh(a, tk)
         furnsh(b, js)
@@ -62,8 +66,10 @@
 
     @testset "escapes and numbers" begin
         bs = '\\'
-        p = put("c.json", "{\"S\": \"a$(bs)\"b$(bs)$(bs)c$(bs)/d$(bs)u00e9$(bs)ud83d$(bs)ude00\", " *
-                          "\"N\": [-0.5e-3, 1E2, 0, 12.25]}")
+        p = put(
+            "c.json", "{\"S\": \"a$(bs)\"b$(bs)$(bs)c$(bs)/d$(bs)u00e9$(bs)ud83d$(bs)ude00\", " *
+                "\"N\": [-0.5e-3, 1E2, 0, 12.25]}"
+        )
         ctx = SpiceContext()
         furnsh(ctx, p)
         @test gcpool(ctx, "S") == ["a\"b\\c/dé😀"]
@@ -73,10 +79,12 @@
     @testset "a JSON meta-kernel" begin
         put("m1.json", """{"A": 1}""")
         put("m2.tpc", "\\begindata\nB = 2\n\\begintext\n")
-        m = put("meta.json", """
+        m = put(
+            "meta.json", """
             {"PATH_VALUES": ["$(escape_string(dir))"], "PATH_SYMBOLS": ["K"],
              "KERNELS_TO_LOAD": ["\$K/m1.json", "\$K/m2.tpc"]}
-            """)
+            """
+        )
         ctx = SpiceContext()
         furnsh(ctx, m)
         @test gdpool(ctx, "A") == [1.0] && gdpool(ctx, "B") == [2.0]

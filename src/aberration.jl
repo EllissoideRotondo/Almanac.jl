@@ -66,11 +66,15 @@ end
 
 Aberration(c::Aberration) = c
 
-function Aberration(; uselt::Bool=false, converged::Bool=false, stellar::Bool=false,
-        transmit::Bool=false)
+function Aberration(;
+        uselt::Bool = false, converged::Bool = false, stellar::Bool = false,
+        transmit::Bool = false
+    )
     lt = uselt | converged | stellar | transmit
-    return _aberration((lt ? _AB_LT : 0x00) | (converged ? _AB_CN : 0x00) |
-                       (stellar ? _AB_S : 0x00) | (transmit ? _AB_X : 0x00))
+    return _aberration(
+        (lt ? _AB_LT : 0x00) | (converged ? _AB_CN : 0x00) |
+            (stellar ? _AB_S : 0x00) | (transmit ? _AB_X : 0x00)
+    )
 end
 
 @inline function Base.getproperty(c::Aberration, s::Symbol)
@@ -82,7 +86,7 @@ end
     s === :geometric && return f == 0x00
     return getfield(c, s)
 end
-Base.propertynames(::Aberration, private::Bool=false) = private ?
+Base.propertynames(::Aberration, private::Bool = false) = private ?
     (:uselt, :converged, :stellar, :transmit, :geometric, :flags) :
     (:uselt, :converged, :stellar, :transmit, :geometric)
 
@@ -105,9 +109,13 @@ function _abcode(s::AbstractString)
     return code
 end
 
-@noinline _throw_abcorr(s, why) = throw(SpiceError(:invalidoption,
-    "aberration correction \"$s\" $why; the valid values are NONE, LT, LT+S, CN, CN+S, " *
-    "XLT, XLT+S, XCN, XCN+S"))
+@noinline _throw_abcorr(s, why) = throw(
+    SpiceError(
+        :invalidoption,
+        "aberration correction \"$s\" $why; the valid values are NONE, LT, LT+S, CN, CN+S, " *
+            "XLT, XLT+S, XCN, XCN+S"
+    )
+)
 
 """
     _spk_abcorr(abcorr) -> Aberration
@@ -145,11 +153,15 @@ end
     code == _abcode("XLT+S") && return _aberration(_AB_X | _AB_LT | _AB_S)
     code == _abcode("XCN") && return _aberration(_AB_X | _AB_LT | _AB_CN)
     code == _abcode("XCN+S") && return _aberration(_AB_X | _AB_LT | _AB_CN | _AB_S)
-    (code == _abcode("RL") || code == _abcode("RL+S") || code == _abcode("XRL") ||
-     code == _abcode("XRL+S")) &&
+    (
+        code == _abcode("RL") || code == _abcode("RL+S") || code == _abcode("XRL") ||
+            code == _abcode("XRL+S")
+    ) &&
         _throw_abcorr(s, "calls for relativistic corrections, which are not supported")
-    (code == _abcode("S") || code == _abcode("XS")) && _throw_abcorr(s,
-        "calls for stellar aberration without light time, which is not supported")
+    (code == _abcode("S") || code == _abcode("XS")) && _throw_abcorr(
+        s,
+        "calls for stellar aberration without light time, which is not supported"
+    )
     _throw_abcorr(s, "is not recognized")
 end
 
@@ -167,7 +179,7 @@ end
     return _parse_abcorr(s)
 end
 
-const AbcorrArg = Union{AbstractString,Aberration}
+const AbcorrArg = Union{AbstractString, Aberration}
 
 # --- small vector helpers -----------------------------------------------------------
 #
@@ -212,17 +224,25 @@ end
 @inline _is_inertial(ks::KernelSet, ref::Int32) =
     ref == Int32(1) || frame_def(ks, ref).class == Int32(1)
 
-@noinline _throw_not_inertial(ks, ref) = throw(SpiceError(:badarg,
-    "the frame with ID $ref is not an inertial frame; this call needs one"))
+@noinline _throw_not_inertial(ks, ref) = throw(
+    SpiceError(
+        :badframe,
+        "the frame with ID $ref is not an inertial frame; this call needs one"
+    )
+)
 
 @inline function _need_inertial(ks::KernelSet, ref::Int32)
     _is_inertial(ks, ref) || _throw_not_inertial(ks, ref)
     return ref
 end
 
-@noinline _throw_range_rate() = throw(SpiceError(:badarg,
-    "the range rate of the target is near the speed of light: the light time " *
-    "derivative cannot be computed"))
+@noinline _throw_range_rate() = throw(
+    SpiceError(
+        :badarg,
+        "the range rate of the target is near the speed of light: the light time " *
+            "derivative cannot be computed"
+    )
+)
 
 # --- light time ---------------------------------------------------------------------
 
@@ -247,8 +267,8 @@ function _ltc(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, rob
     dist = _norm3(r)
     lt = dist / CLIGHT
     z = zero(lt)
-    primal(lt) == 0 && return (; r, v, lt, dlt=z, ltprev=z, k=z)
-    corr.uselt || return (; r, v, lt, dlt=_dot3(r, v) / (dist * CLIGHT), ltprev=z, k=z)
+    primal(lt) == 0 && return (; r, v, lt, dlt = z, ltprev = z, k = z)
+    corr.uselt || return (; r, v, lt, dlt = _dot3(r, v) / (dist * CLIGHT), ltprev = z, k = z)
     s = _ltsign(corr)
     numitr = corr.converged ? 5 : 1
     ltprev = lt
@@ -256,7 +276,7 @@ function _ltc(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, rob
     i = 0
     # invariant: `lt` is the light time after `i` iterations, and for i >= 1 `r`, `vt`
     # are at the epoch `et + s * ltprev`
-    while i < numitr && lterr > 1e-17
+    while i < numitr && lterr > 1.0e-17
         epoch = et + s * lt
         rt, vt = _ssb(ks, targ, epoch, iref)
         r = rt - robs
@@ -269,7 +289,7 @@ function _ltc(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, rob
     a = 1 / (CLIGHT * _norm3(r))
     b = _dot3(r, v)
     k = s * _dot3(r, vt) * a
-    primal(k) > 1 - 1e-10 && _throw_range_rate()
+    primal(k) > 1 - 1.0e-10 && _throw_range_rate()
     dlt = a * b / (1 - k)
     v = (1 + s * dlt) * vt - vobs
     return (; r, v, lt, dlt, ltprev, k)
@@ -302,15 +322,19 @@ end
 
 # --- stellar aberration -------------------------------------------------------------
 
-@noinline _throw_vobs() = throw(SpiceError(:badarg,
-    "the speed of the observer is not below the speed of light"))
+@noinline _throw_vobs() = throw(
+    SpiceError(
+        :valueoutofrange,
+        "the speed of the observer is not below the speed of light"
+    )
+)
 
 """
     _stelab(pobj, vobs) -> Vec3
 
 The computation of `stelab`: `pobj` rotated by the angle `asin(|u × vobs/c|)` about
 `u × vobs/c`, with `u` the unit vector along `pobj`. Requires `|vobs| < c`
-(`SpiceError(:badarg)` otherwise). Postcondition: the norm of `pobj` is kept.
+(`SpiceError(:valueoutofrange)` otherwise). Postcondition: the norm of `pobj` is kept.
 """
 @inline function _stelab(pobj, vobs)
     u = _vhat(pobj)
@@ -340,9 +364,13 @@ end
     return (ptgmag * s) * vphat + (ptgmag * (c - 1)) * rhat, vp, vphat, s, c, ptgmag
 end
 
-@noinline _throw_stelab_cos() = throw(SpiceError(:badarg,
-    "the cosine of the stellar aberration angle is zero: the observer velocity is not " *
-    "realistic"))
+@noinline _throw_stelab_cos() = throw(
+    SpiceError(
+        :badarg,
+        "the cosine of the stellar aberration angle is zero: the observer velocity is not " *
+            "realistic"
+    )
+)
 
 """
     _zzstelab(transmit, accobs, vobs, r, v) -> (scorr, dscorr)
@@ -361,9 +389,9 @@ function _zzstelab(transmit::Bool, accobs, vobs, r, v)
     dptmag = _dot3(v, rhat)
     scorr, vp, vphat, s, c, ptgmag = _stel_offset(r, rhat, lcvobs)
     primal(c) == 0 && _throw_stelab_cos()
-    if primal(s) >= 1e-6
+    if primal(s) >= 1.0e-6
         dvp = lcacc + (-_dot3(lcvobs, drhat) - _dot3(lcacc, rhat)) * rhat +
-              (-_dot3(lcvobs, rhat)) * drhat
+            (-_dot3(lcvobs, rhat)) * drhat
         _, dvphat = _dvhat(vp, dvp)
         dphi = 1 / (c * CLIGHT) * _dot3(dvp, vphat)
         term1 = s * dvphat + (c * dphi) * vphat
@@ -385,12 +413,14 @@ The computation of `spkaps`: `_ltc`, and for the `+S` forms the stellar aberrati
 offset of `_zzstelab` and its derivative added to the state. `lt`, `dlt`, `ltprev`
 and `k` are those of `_ltc`.
 """
-@inline function _aps(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, robs,
-        vobs, accobs)
+@inline function _aps(
+        ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, robs,
+        vobs, accobs
+    )
     q = _ltc(ks, targ, et, iref, corr, robs, vobs)
     corr.stellar || return q
     scorr, dscorr = _zzstelab(corr.transmit, accobs, vobs, q.r, q.v)
-    return (; r=q.r + scorr, v=q.v + dscorr, q.lt, q.dlt, q.ltprev, q.k)
+    return (; r = q.r + scorr, v = q.v + dscorr, q.lt, q.dlt, q.ltprev, q.k)
 end
 
 """
@@ -422,8 +452,10 @@ computed in J2000 and rotated with the frame evaluated at `et + ltsign * ltc`, w
 center is the observer, the target light time if it is the target); the derivative
 block of the transformation is multiplied by `1 + ltsign * d ltc/dt`. No allocation.
 """
-function abcorr_state(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
-        obs::Int32)
+function abcorr_state(
+        ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
+        obs::Int32
+    )
     inertial = _is_inertial(ks, ref)
     iref = inertial ? ref : Int32(1)
     robs, vobs, accobs = _obs_state(ks, obs, et, iref, corr)
@@ -456,8 +488,10 @@ Contract: as `abcorr_state`, with the light-time and stellar-aberration rules of
 `spkapo` (`_apo`). The position can therefore differ from the position part of
 `abcorr_state` at rounding level, as in CSPICE. No allocation.
 """
-function abcorr_position(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
-        obs::Int32)
+function abcorr_position(
+        ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
+        obs::Int32
+    )
     inertial = _is_inertial(ks, ref)
     iref = inertial ? ref : Int32(1)
     # Both branches return a pair of the same type. With `spk_jet` of order 1 in one
@@ -468,7 +502,7 @@ function abcorr_position(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberr
     inertial && return r, lt
     center = frame_def(ks, ref).center
     ltc = center == obs ? zero(lt) : center == targ ? lt :
-          _apo(ks, center, et, iref, corr, robs, vobs)[2]
+        _apo(ks, center, et, iref, corr, robs, vobs)[2]
     R = frame_rotation(ks, Int32(1), ref, et + _ltsign(corr) * ltc)
     return _m_mxv(R, r), lt
 end
@@ -476,9 +510,16 @@ end
 # --- derivatives of any order -------------------------------------------------------
 
 "Taylor series of order N of each component from the jet `jet`, starting at element `first`."
-@inline function _series(jet::NTuple{M,Vec3{T}}, first::Int, ::Val{N}) where {M,T,N}
-    return Vec3{Taylor{N,T}}(ntuple(i -> Taylor{N,T}(ntuple(
-        j -> jet[j+first-1][i] / factorial(j - 1), Val(N + 1))), Val(3)))
+@inline function _series(jet::Tuple{Vec3{T}, Vararg{Vec3{T}}}, first::Int, ::Val{N}) where {T, N}
+    return Vec3{Taylor{N, T}}(
+        ntuple(
+            i -> Taylor{N, T}(
+                ntuple(
+                    j -> jet[j + first - 1][i] / factorial(j - 1), Val(N + 1)
+                )
+            ), Val(3)
+        )
+    )
 end
 
 """
@@ -495,8 +536,10 @@ evaluates the body at that light time. For the `CN` forms coefficient 0 of `ℓ`
 light time `ltprev` at which `_ltc` evaluated the body, and the coefficients of order
 1 to N satisfy the light-time equation `ℓ = |p| / c` order by order.
 """
-function _lt_series(ks::KernelSet, body::Int32, et, t::Taylor{N,T}, iref::Int32,
-        corr::Aberration, robs, vobs, ro) where {N,T}
+function _lt_series(
+        ks::KernelSet, body::Int32, et, t::Taylor{N, T}, iref::Int32,
+        corr::Aberration, robs, vobs, ro
+    ) where {N, T}
     s = _ltsign(corr)
     geo = _ssbpos(ks, body, t, iref) - ro
     # Coincident bodies: the geometric series, as `spkltc` returns the geometric state.
@@ -507,7 +550,7 @@ function _lt_series(ks::KernelSet, body::Int32, et, t::Taylor{N,T}, iref::Int32,
     q = _ltc(ks, body, et, iref, corr, robs, vobs)
     g = inv(1 - q.k)
     l0 = convert(T, q.ltprev)
-    L = Taylor{N,T}(l0)
+    L = Taylor{N, T}(l0)
     # Newton steps on the series. Coefficient n of the map F(ℓ) = |p(ℓ)| / c is
     # `k * ℓ_n` plus a function of the lower coefficients, so one step with the factor
     # 1 / (1 - k) makes one more coefficient final.
@@ -536,8 +579,10 @@ Position of `targ` relative to `obs` in frame `ref` with the correction `corr`, 
 its time derivatives to order N. See `spkder` for what is differentiated. No
 allocation.
 """
-function abcorr_jet(ks::KernelSet, targ::Int32, et::T, ref::Int32, corr::Aberration,
-        obs::Int32, ::Val{N}) where {T<:Real,N}
+function abcorr_jet(
+        ks::KernelSet, targ::Int32, et::T, ref::Int32, corr::Aberration,
+        obs::Int32, ::Val{N}
+    ) where {T <: Real, N}
     corr.geometric && return spk_jet(ks, targ, et, ref, obs, Val(N))
     # A body relative to itself: the zero state of `spkltc`, in every frame.
     targ == obs && return ntuple(_ -> zero(Vec3{T}), Val(N + 1))
@@ -568,12 +613,14 @@ end
 
 # --- public interface ---------------------------------------------------------------
 
-function spkezr(ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
-        obs::NameOrID)
+function spkezr(
+        ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
+        obs::NameOrID
+    )
     t, o = body_code(ks, targ), body_code(ks, obs)
     # As in CSPICE, a geometric state of a body relative to itself is zero before `ref`
     # and `et` are checked.
-    corr.geometric && t == o && return zero(SVector{6,typeof(float(et))}), zero(float(et))
+    corr.geometric && t == o && return zero(SVector{6, typeof(float(et))}), zero(float(et))
     e, f = check_epoch(et), frame_id(ks, ref)
     if corr.geometric
         r, v = spk_jet(ks, t, e, f, o, Val(1))
@@ -581,13 +628,17 @@ function spkezr(ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, corr::Ab
     end
     return abcorr_state(ks, t, e, f, corr, o)
 end
-spkezr(ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
-    obs::NameOrID) = spkezr(kernelset(ctx), targ, et, ref, corr, obs)
+spkezr(
+    ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
+    obs::NameOrID
+) = spkezr(kernelset(ctx), targ, et, ref, corr, obs)
 spkezr(targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration, obs::NameOrID) =
     spkezr(default_context(), targ, et, ref, corr, obs)
 
-function spkpos(ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
-        obs::NameOrID)
+function spkpos(
+        ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
+        obs::NameOrID
+    )
     t, o = body_code(ks, targ), body_code(ks, obs)
     corr.geometric && t == o && return zero(Vec3{typeof(float(et))}), zero(float(et))
     e, f = check_epoch(et), frame_id(ks, ref)
@@ -597,8 +648,10 @@ function spkpos(ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, corr::Ab
     end
     return abcorr_position(ks, t, e, f, corr, o)
 end
-spkpos(ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
-    obs::NameOrID) = spkpos(kernelset(ctx), targ, et, ref, corr, obs)
+spkpos(
+    ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration,
+    obs::NameOrID
+) = spkpos(kernelset(ctx), targ, et, ref, corr, obs)
 spkpos(targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration, obs::NameOrID) =
     spkpos(default_context(), targ, et, ref, corr, obs)
 
@@ -615,10 +668,14 @@ bodies, as in CSPICE; the other arguments, the result and the errors are those o
 
 See also [`spkezp`](@ref), [`spkgeo`](@ref).
 """
-spkez(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    obs::Integer) = spkezr(ks, targ, et, ref, abcorr, obs)
-spkez(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    obs::Integer) = spkezr(kernelset(ctx), targ, et, ref, abcorr, obs)
+spkez(
+    ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    obs::Integer
+) = spkezr(ks, targ, et, ref, abcorr, obs)
+spkez(
+    ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    obs::Integer
+) = spkezr(kernelset(ctx), targ, et, ref, abcorr, obs)
 spkez(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::Integer) =
     spkez(default_context(), targ, et, ref, abcorr, obs)
 
@@ -635,10 +692,14 @@ bodies, as in CSPICE; the other arguments, the result and the errors are those o
 
 See also [`spkez`](@ref), [`spkgps`](@ref).
 """
-spkezp(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    obs::Integer) = spkpos(ks, targ, et, ref, abcorr, obs)
-spkezp(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    obs::Integer) = spkpos(kernelset(ctx), targ, et, ref, abcorr, obs)
+spkezp(
+    ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    obs::Integer
+) = spkpos(ks, targ, et, ref, abcorr, obs)
+spkezp(
+    ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    obs::Integer
+) = spkpos(kernelset(ctx), targ, et, ref, abcorr, obs)
 spkezp(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::Integer) =
     spkezp(default_context(), targ, et, ref, abcorr, obs)
 
@@ -682,14 +743,20 @@ r, v, a, j = spkder("MOON", et, "J2000", "LT+S", "EARTH", Val(3))
 
 See also [`pxder`](@ref), [`spkezr`](@ref).
 """
-function spkder(ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-        obs::NameOrID, ::Val{N}) where {N}
+function spkder(
+        ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+        obs::NameOrID, ::Val{N}
+    ) where {N}
     N isa Int && N >= 0 || throw(SpiceError(:badarg, "spkder: the order must be an integer >= 0"))
-    return abcorr_jet(ks, body_code(ks, targ), check_epoch(et), frame_id(ks, ref),
-        Aberration(abcorr), body_code(ks, obs), Val(N))
+    return abcorr_jet(
+        ks, body_code(ks, targ), check_epoch(et), frame_id(ks, ref),
+        Aberration(abcorr), body_code(ks, obs), Val(N)
+    )
 end
-spkder(ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    obs::NameOrID, v::Val) = spkder(kernelset(ctx), targ, et, ref, abcorr, obs, v)
+spkder(
+    ctx::SpiceContext, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    obs::NameOrID, v::Val
+) = spkder(kernelset(ctx), targ, et, ref, abcorr, obs, v)
 spkder(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::NameOrID, v::Val) =
     spkder(default_context(), targ, et, ref, abcorr, obs, v)
 
@@ -742,22 +809,31 @@ state, corrected for light time, with the light time and its rate, as
 derivative of `lt` (no unit). The `LT` forms make one iteration. The `CN` forms make
 at most five and stop when the light time changes by less than `1e-17 * max(1, |epoch|)`.
 
-Throws `SpiceError(:badarg)` if `ref` is not inertial, `stobs` does not have 6
-elements, `et` is not finite, or the range rate of the target
-is above `(1 - 1e-10)` times the speed of light. Throws `SpiceError(:invalidoption)` if
-`abcorr` is not valid, and the SPK errors of [`spkgeo`](@ref).
+Throws `SpiceError`:
+- `:invalidoption` if `abcorr` is not valid (checked first, as in CSPICE);
+- `:badframe` if `ref` is not inertial;
+- `:badarg` if `stobs` does not have 6 elements, `et` is not finite, or the range rate
+  of the target is above `(1 - 1e-10)` times the speed of light;
+- the SPK errors of [`spkgeo`](@ref).
 
 See also [`spkaps`](@ref), [`spkacs`](@ref).
 """
-function spkltc(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-        stobs::AbstractVector)
+function spkltc(
+        ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+        stobs::AbstractVector
+    )
+    corr = Aberration(abcorr)
     robs, vobs = _split_state(stobs)
-    q = _ltc(ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
-        Aberration(abcorr), robs, vobs)
+    q = _ltc(
+        ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
+        corr, robs, vobs
+    )
     return vcat(q.r, q.v), q.lt, q.dlt
 end
-spkltc(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    stobs::AbstractVector) = spkltc(kernelset(ctx), targ, et, ref, abcorr, stobs)
+spkltc(
+    ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    stobs::AbstractVector
+) = spkltc(kernelset(ctx), targ, et, ref, abcorr, stobs)
 spkltc(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, stobs::AbstractVector) =
     spkltc(default_context(), targ, et, ref, abcorr, stobs)
 
@@ -782,18 +858,27 @@ Throws `SpiceError(:badarg)` if `accobs` does not have 3 elements, and the error
 
 See also [`spkacs`](@ref).
 """
-function spkaps(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-        stobs::AbstractVector, accobs::AbstractVector)
+function spkaps(
+        ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+        stobs::AbstractVector, accobs::AbstractVector
+    )
+    corr = Aberration(abcorr)
     robs, vobs = _split_state(stobs)
-    q = _aps(ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
-        Aberration(abcorr), robs, vobs, _vec3(accobs))
+    q = _aps(
+        ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
+        corr, robs, vobs, _vec3(accobs)
+    )
     return vcat(q.r, q.v), q.lt, q.dlt
 end
-spkaps(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    stobs::AbstractVector, accobs::AbstractVector) =
+spkaps(
+    ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    stobs::AbstractVector, accobs::AbstractVector
+) =
     spkaps(kernelset(ctx), targ, et, ref, abcorr, stobs, accobs)
-spkaps(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, stobs::AbstractVector,
-    accobs::AbstractVector) = spkaps(default_context(), targ, et, ref, abcorr, stobs, accobs)
+spkaps(
+    targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, stobs::AbstractVector,
+    accobs::AbstractVector
+) = spkaps(default_context(), targ, et, ref, abcorr, stobs, accobs)
 
 """
     spkacs([ctx,] targ::Integer, et, ref, abcorr, obs::Integer) -> (state, lt, dlt)
@@ -810,8 +895,10 @@ in CSPICE. `et` is in seconds past J2000 TDB. The state and `lt` are those of
 
 Throws the errors of [`spkltc`](@ref).
 """
-function spkacs(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-        obs::Integer)
+function spkacs(
+        ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+        obs::Integer
+    )
     corr = Aberration(abcorr)
     e = check_epoch(et)
     iref = _need_inertial(ks, frame_id(ks, ref))
@@ -819,8 +906,10 @@ function spkacs(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::A
     q = _aps(ks, Int32(targ), e, iref, corr, robs, vobs, accobs)
     return vcat(q.r, q.v), q.lt, q.dlt
 end
-spkacs(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
-    obs::Integer) = spkacs(kernelset(ctx), targ, et, ref, abcorr, obs)
+spkacs(
+    ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
+    obs::Integer
+) = spkacs(kernelset(ctx), targ, et, ref, abcorr, obs)
 spkacs(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::Integer) =
     spkacs(default_context(), targ, et, ref, abcorr, obs)
 
@@ -837,21 +926,31 @@ is an `SVector{3}` in km
 and `lt` is in seconds. The `LT` forms make one light-time iteration and the `CN`
 forms exactly three, as in CSPICE. Note the argument order: `sobs` is before `abcorr`.
 
-Throws `SpiceError(:badarg)` if `ref` is not inertial, `sobs` does not have 6
-elements, `et` is not finite, or (for `+S`) the speed of the
-observer is not below the speed of light. Throws `SpiceError(:spkinvalidoption)` if
-`abcorr` is not valid, and the SPK errors of [`spkgeo`](@ref).
+Throws `SpiceError`:
+- `:spkinvalidoption` if `abcorr` is not valid (checked first, as in CSPICE);
+- `:badframe` if `ref` is not inertial;
+- `:badarg` if `sobs` does not have 6 elements or `et` is not finite;
+- `:valueoutofrange` if (for `+S`) the speed of the observer is not below the speed of
+  light;
+- the SPK errors of [`spkgeo`](@ref).
 
 See also [`spkpos`](@ref), [`spkltc`](@ref).
 """
-function spkapo(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector,
-        abcorr::AbcorrArg)
+function spkapo(
+        ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector,
+        abcorr::AbcorrArg
+    )
+    corr = _spk_abcorr(abcorr)
     robs, vobs = _split_state(sobs)
-    return _apo(ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
-        _spk_abcorr(abcorr), robs, vobs)
+    return _apo(
+        ks, Int32(targ), check_epoch(et), _need_inertial(ks, frame_id(ks, ref)),
+        corr, robs, vobs
+    )
 end
-spkapo(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector,
-    abcorr::AbcorrArg) = spkapo(kernelset(ctx), targ, et, ref, sobs, abcorr)
+spkapo(
+    ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector,
+    abcorr::AbcorrArg
+) = spkapo(kernelset(ctx), targ, et, ref, sobs, abcorr)
 spkapo(targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector, abcorr::AbcorrArg) =
     spkapo(default_context(), targ, et, ref, sobs, abcorr)
 
@@ -868,12 +967,13 @@ are in seconds past J2000 TDB; `elapsd = |ettarg - etobs|` is in seconds. `obs` 
 `targ` are NAIF ID codes. The call makes three iterations after the geometric start,
 as CSPICE does.
 
-Throws `SpiceError(:badarg)` if `dir` is not `"->"` or `"<-"` (blanks are not
-ignored) or `etobs` is not finite, and the SPK errors of [`spkgeo`](@ref).
+Throws `SpiceError(:baddirection)` if `dir` is not `"->"` or `"<-"` (blanks are not
+ignored), `SpiceError(:badarg)` if `etobs` is not finite, and the SPK errors of
+[`spkgeo`](@ref).
 """
 function ltime(ks::KernelSet, etobs::Real, obs::Integer, dir::AbstractString, targ::Integer)
     s = dir == "->" ? 1 : dir == "<-" ? -1 :
-        throw(SpiceError(:badarg, "ltime: the direction must be \"->\" or \"<-\", not \"$dir\""))
+        throw(SpiceError(:baddirection, "ltime: the direction must be \"->\" or \"<-\", not \"$dir\""))
     et = check_epoch(etobs)
     robs = _ssbpos(ks, Int32(obs), et, Int32(1))
     elapsd = _norm3(_ssbpos(ks, Int32(targ), et, Int32(1)) - robs) / CLIGHT
@@ -901,8 +1001,8 @@ velocity of the observer relative to the solar system barycenter, in the same
 inertial frame (3 elements each; km and km/s). The result is `pobj` rotated toward
 `vobs`; its norm is the norm of `pobj`.
 
-Throws `SpiceError(:badarg)` if a vector does not have 3 elements or the speed
-`|vobs|` is not below the speed of light.
+Throws `SpiceError(:badarg)` if a vector does not have 3 elements, and
+`SpiceError(:valueoutofrange)` if the speed `|vobs|` is not below the speed of light.
 
 # Examples
 ```jldoctest

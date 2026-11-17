@@ -30,7 +30,7 @@ components in the rotated frame.
 function _rotate(angle::Float64, axis::Integer)
     s, c = sincos(angle)
     i1, i2, i3 = _axis_indices(axis)
-    m = zeros(MMatrix{3,3,Float64,9})
+    m = zeros(MMatrix{3, 3, Float64, 9})
     m[i1, i1] = 1.0
     m[i2, i2] = c
     m[i3, i2] = -s
@@ -45,10 +45,16 @@ end
 `[a3]_axis3 * [a2]_axis2 * [a1]_axis1`, as `eul2m_` of CSPICE. Throws
 `SpiceError(:badaxisnumbers)` unless every axis is in 1:3.
 """
-function _eul2m(a3::Float64, a2::Float64, a1::Float64, axis3::Integer, axis2::Integer,
-    axis1::Integer)
-    all(a -> 1 <= a <= 3, (axis3, axis2, axis1)) || throw(SpiceError(:badaxisnumbers,
-        "Euler axis numbers are $axis3, $axis2, $axis1; each must be 1, 2 or 3"))
+function _eul2m(
+        a3::Float64, a2::Float64, a1::Float64, axis3::Integer, axis2::Integer,
+        axis1::Integer
+    )
+    all(a -> 1 <= a <= 3, (axis3, axis2, axis1)) || throw(
+        SpiceError(
+            :badaxisnumbers,
+            "Euler axis numbers are $axis3, $axis2, $axis1; each must be 1, 2 or 3"
+        )
+    )
     return _m_mxm(_m_mxm(_rotate(a3, axis3), _rotate(a2, axis2)), _rotate(a1, axis1))
 end
 
@@ -59,7 +65,7 @@ end
 the arithmetic of `rotate_` and `rotmat_` (the products with the constant 0 and 1
 elements are left out, which does not change a result). Generic over the angle type.
 """
-@inline function _eul313(w::T, delta::T, phi::T) where {T<:Real}
+@inline function _eul313(w::T, delta::T, phi::T) where {T <: Real}
     sp, cp = sincos(phi)
     sd, cd = sincos(delta)
     sw, cw = sincos(w)
@@ -71,7 +77,8 @@ elements are left out, which does not change a result). Generic over the angle t
     return Mat3{T}(
         cw * cp + sw * m21, cw * m21 - sw * cp, m31,
         cw * sp + sw * m22, cw * m22 - sw * sp, m32,
-        sw * sd, cw * sd, cd)
+        sw * sd, cw * sd, cd
+    )
 end
 
 """
@@ -123,7 +130,7 @@ stored vector; its layout is `phase_degree + 1` coefficients per angle, with
 `phase_degree` from `BODY<sys>_MAX_PHASE_DEGREE` (default 1).
 """
 function build_bodyrot(pool::AbstractDict)
-    out = Dict{Int32,BodyRot}()
+    out = Dict{Int32, BodyRot}()
     for (name, value) in pool
         value isa Vector{Float64} || continue
         m = match(r"^BODY(-?\d+)_PM$", name)
@@ -134,16 +141,22 @@ function build_bodyrot(pool::AbstractDict)
         dec = _pool_numbers(pool, "BODY$(id)_POLE_DEC")
         (ra === nothing || dec === nothing) && continue
         sys = _bodbry(id)
-        epoch = _pool_first(pool,
-            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _J2000_JED)
-        ref = _pool_first(pool,
-            ("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME"), 1.0)
-        out[id] = BodyRot(ra, dec, value,
+        epoch = _pool_first(
+            pool,
+            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _J2000_JED
+        )
+        ref = _pool_first(
+            pool,
+            ("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME"), 1.0
+        )
+        out[id] = BodyRot(
+            ra, dec, value,
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_RA"),
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_DEC"),
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_PM"),
             _pool_numbers_or_empty(pool, "BODY$(sys)_NUT_PREC_ANGLES"),
-            round(Int32, ref), epoch, _phase_degree(pool, sys))
+            round(Int32, ref), epoch, _phase_degree(pool, sys)
+        )
     end
     return out
 end
@@ -157,7 +170,7 @@ is absent. The value is not checked here; `_phase_ncoef` checks it at evaluation
 function _phase_degree(pool::AbstractDict, sys::Integer)
     v = _pool_numbers(pool, "BODY$(sys)_MAX_PHASE_DEGREE")
     (v === nothing || isempty(v)) && return Int32(1)
-    return round(Int32, clamp(v[1], -1e9, 1e9), RoundNearestTiesAway)
+    return round(Int32, clamp(v[1], -1.0e9, 1.0e9), RoundNearestTiesAway)
 end
 
 """
@@ -168,13 +181,17 @@ Throws `SpiceError(:degreeoutofrange)` unless the degree is in 1:3.
 """
 @inline function _phase_ncoef(br::BodyRot, body::Integer)
     deg = Int(br.phase_degree)
-    1 <= deg <= 3 || throw(SpiceError(:degreeoutofrange, "maximum phase angle degree " *
-        "for body $(_bodbry(body)) must be in the range 1:3 but was $deg"))
+    1 <= deg <= 3 || throw(
+        SpiceError(
+            :degreeoutofrange, "maximum phase angle degree " *
+                "for body $(_bodbry(body)) must be in the range 1:3 but was $deg"
+        )
+    )
     return deg + 1
 end
 
 "Value at `x` of the polynomial with coefficients `c` (lowest order first) by Horner's rule."
-@inline function _horner(c::Vector{Float64}, x::T) where {T<:Real}
+@inline function _horner(c::Vector{Float64}, x::T) where {T <: Real}
     n = length(c)
     n == 0 && return zero(T)
     acc = zero(T) + @inbounds c[n]
@@ -193,7 +210,7 @@ polynomials, trigonometric terms, `eul2m(W, pi/2 - DEC, pi/2 + RA, 3, 1, 3)`, th
 rotation from J2000 to the reference frame of the constants. Throws
 `SpiceError(:insufficientangles)` if an amplitude vector is longer than the angle list.
 """
-function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T<:Real}
+function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
     epoch = et - _SEC_PER_DAY * (br.jed_epoch - _J2000_JED)
     td = epoch / _SEC_PER_DAY
     tc = epoch / _SEC_PER_CENTURY
@@ -207,21 +224,25 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T<:Real}
     if nterm > 0
         nco = _phase_ncoef(br, body)
         nphase = length(th) ÷ nco
-        nterm <= nphase || throw(SpiceError(:insufficientangles,
-            "insufficient number of nutation/precession angles for body $body: " *
-            "number of angles is $nphase, number required is $nterm"))
+        nterm <= nphase || throw(
+            SpiceError(
+                :insufficientangles,
+                "insufficient number of nutation/precession angles for body $body: " *
+                    "number of angles is $nphase, number required is $nterm"
+            )
+        )
         sa = zero(T)
         sd = zero(T)
         sw = zero(T)
         @inbounds for i in 1:nterm    # invariant: sa, sd, sw hold the sums of terms 1:i-1
             k = nco * (i - 1)
             if nco == 2
-                theta = (th[k+1] + tc * th[k+2]) * _RPD
+                theta = (th[k + 1] + tc * th[k + 2]) * _RPD
             else
-                theta = zero(T) + th[k+1]
+                theta = zero(T) + th[k + 1]
                 p = tc
                 for j in 2:nco
-                    theta += p * th[k+j]
+                    theta += p * th[k + j]
                     p = tc * p
                 end
                 theta *= _RPD
@@ -252,7 +273,7 @@ Matrix from J2000 to the body frame of the binary PCK segment `seg` at `et`, as
 reduced by whole turns), then the rotation
 from J2000 to the reference frame of the segment. Requires `seg.t0 <= primal(et) <= seg.t1`.
 """
-@inline function _binary_pck_rotation(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+@inline function _binary_pck_rotation(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     ang = pck_eval(data, seg, et, Val(0))[1]
     # `pcke02_` reduces W with `d_mod`; the same arithmetic keeps the value of CSPICE.
     tipm = _eul313(_reduce_twopi(ang[3]), ang[2], ang[1])
@@ -271,8 +292,12 @@ does; return otherwise.
     haskey(ks.pool, "BODY$(body)_PM") || return nothing
     for item in ("POLE_RA", "POLE_DEC")
         name = "BODY$(body)_$item"
-        _pool_numbers(ks.pool, name) === nothing && throw(SpiceError(:kernelvarnotfound,
-            "the variable $name could not be found in the kernel pool"))
+        _pool_numbers(ks.pool, name) === nothing && throw(
+            SpiceError(
+                :kernelvarnotfound,
+                "the variable $name could not be found in the kernel pool"
+            )
+        )
     end
     return nothing
 end
@@ -285,7 +310,7 @@ segment if one covers `primal(et)`, otherwise from the text-PCK constants, as
 `tisbod_` does. Throws `SpiceError(:framedatanotfound)` if neither exists, and
 `SpiceError(:kernelvarnotfound)` if `BODY<id>_PM` exists without a pole angle.
 """
-function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T<:Real}
+function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T <: Real}
     segs = get(ks.pck, classid, nothing)
     if segs !== nothing
         i = find_segment(segs, primal(et))
@@ -296,10 +321,14 @@ function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T<:Real}
     end
     br = get(ks.bodyrot, classid, nothing)
     br === nothing && _missing_pole(ks, classid)
-    br === nothing && throw(SpiceError(:framedatanotfound,
-        "PCK data required to compute the orientation of the body-fixed frame with " *
-        "class ID $classid at ET $(primal(et)) were not found (no binary PCK segment " *
-        "covers the epoch and no text PCK constants are loaded)"))
+    br === nothing && throw(
+        SpiceError(
+            :framedatanotfound,
+            "PCK data required to compute the orientation of the body-fixed frame with " *
+                "class ID $classid at ET $(primal(et)) were not found (no binary PCK segment " *
+                "covers the epoch and no text PCK constants are loaded)"
+        )
+    )
     return _text_pck_rotation(br, classid, et)::Mat3{T}
 end
 
@@ -342,15 +371,18 @@ function _q2m(q::AbstractVector{Float64})
     return Mat3{Float64}(
         1.0 - 2.0 * (q2s + q3s), 2.0 * (q12 + q03), 2.0 * (q13 - q02),
         2.0 * (q12 - q03), 1.0 - 2.0 * (q1s + q3s), 2.0 * (q23 + q01),
-        2.0 * (q13 + q02), 2.0 * (q23 - q01), 1.0 - 2.0 * (q1s + q2s))
+        2.0 * (q13 + q02), 2.0 * (q23 - q01), 1.0 - 2.0 * (q1s + q2s)
+    )
 end
 
 "Factor that converts an angle in `units` (a `convrt_` angle unit name) to radians."
 function _angle_factor(units::AbstractString)
     u = uppercase(strip(units))
-    table = ("RADIANS" => 1.0, "DEGREES" => pi / 180, "ARCMINUTES" => pi / 10800,
+    table = (
+        "RADIANS" => 1.0, "DEGREES" => pi / 180, "ARCMINUTES" => pi / 10800,
         "ARCSECONDS" => pi / 648000, "HOURANGLE" => pi / 12, "MINUTEANGLE" => pi / 720,
-        "SECONDANGLE" => pi / 43200)
+        "SECONDANGLE" => pi / 43200,
+    )
     for (name, f) in table
         u == name && return f
     end
@@ -364,13 +396,19 @@ Name of the TK frame variable `suffix` that `tkfram_` reads: the form keyed by f
 name if it is in `pool`, the form keyed by ID otherwise (present or not). Throws
 `SpiceError(:competingframespec)` if both forms are present.
 """
-function _tk_key(pool::AbstractDict, idkey::AbstractString, namekey::AbstractString,
-    suffix::AbstractString)
+function _tk_key(
+        pool::AbstractDict, idkey::AbstractString, namekey::AbstractString,
+        suffix::AbstractString
+    )
     a = idkey * suffix
     b = namekey * suffix
     namekey == idkey && return a
-    haskey(pool, a) && haskey(pool, b) && throw(SpiceError(:competingframespec,
-        "frame definition keywords '$a' and '$b' are both present in the pool"))
+    haskey(pool, a) && haskey(pool, b) && throw(
+        SpiceError(
+            :competingframespec,
+            "frame definition keywords '$a' and '$b' are both present in the pool"
+        )
+    )
     return haskey(pool, b) ? b : a
 end
 
@@ -397,8 +435,10 @@ Constant matrix of one TK frame (from the frame to its relative frame) for the
 specification `spec` (`MATRIX`, `ANGLES` or `QUATERNION`), as `tkfram_` of CSPICE builds
 it. Throws the `SpiceError` of `tkfram_` for a missing or malformed variable.
 """
-function _tk_matrix(pool::AbstractDict, idkey::AbstractString, namekey::AbstractString,
-    spec::AbstractString)
+function _tk_matrix(
+        pool::AbstractDict, idkey::AbstractString, namekey::AbstractString,
+        spec::AbstractString
+    )
     kind = uppercase(strip(spec))
     if kind == "MATRIX"
         key = _tk_key(pool, idkey, namekey, "_MATRIX")
@@ -427,8 +467,12 @@ function _tk_matrix(pool::AbstractDict, idkey::AbstractString, namekey::Abstract
         _badkpv(pool, "TKFRAM", key, "=", 4, 1, 'N')
         return _q2m(pool[key])
     end
-    throw(SpiceError(:unknownframespec, "the frame specification \"$(idkey)_SPEC = '$spec'\" " *
-        "is not MATRIX, ANGLES or QUATERNION"))
+    throw(
+        SpiceError(
+            :unknownframespec, "the frame specification \"$(idkey)_SPEC = '$spec'\" " *
+                "is not MATRIX, ANGLES or QUATERNION"
+        )
+    )
 end
 
 "Name of the frame with ID `id`, the built-in table first, as `frmnam_`; `nothing` if none."
@@ -451,11 +495,19 @@ the name of the frame with the ID `frcode`, as in CSPICE. Throws the `SpiceError
 the kinds of `_tk_matrix`.
 """
 function _tk_parse(pool::AbstractDict, frames::AbstractDict, frcode::Integer)
-    frcode == 0 && throw(SpiceError(:zeroframeid,
-        "frame identification codes are required to be non-zero"))
+    frcode == 0 && throw(
+        SpiceError(
+            :zeroframeid,
+            "frame identification codes are required to be non-zero"
+        )
+    )
     name = _tk_frame_name(frames, frcode)
-    name === nothing && throw(SpiceError(:incompleteframe,
-        "the Text Kernel (TK) frame with ID code $frcode does not have a recognized name"))
+    name === nothing && throw(
+        SpiceError(
+            :incompleteframe,
+            "the Text Kernel (TK) frame with ID code $frcode does not have a recognized name"
+        )
+    )
     idkey = "TKFRAME_$(frcode)"
     namekey = "TKFRAME_" * name
     kspec = _tk_key(pool, idkey, namekey, "_SPEC")
@@ -464,11 +516,19 @@ function _tk_parse(pool::AbstractDict, frames::AbstractDict, frcode::Integer)
     _badkpv(pool, "TKFRAM", krel, "=", 1, 1, 'C')
     rel = pool[krel][1]
     relid = _tk_relative_id(pool, frames, rel)
-    (relid === nothing || relid == 0) && throw(SpiceError(:badframespec, "the frame to " *
-        "which frame $frcode is relatively defined is not recognized; the kernel pool " *
-        "specification of the relative frame is '$rel'"))
-    relid == frcode && throw(SpiceError(:badframespec2, "bad fixed offset frame " *
-        "specification: the frame '$rel' (frame ID $frcode) is defined relative to itself"))
+    (relid === nothing || relid == 0) && throw(
+        SpiceError(
+            :badframespec, "the frame to " *
+                "which frame $frcode is relatively defined is not recognized; the kernel pool " *
+                "specification of the relative frame is '$rel'"
+        )
+    )
+    relid == frcode && throw(
+        SpiceError(
+            :badframespec2, "bad fixed offset frame " *
+                "specification: the frame '$rel' (frame ID $frcode) is defined relative to itself"
+        )
+    )
     return TKFrame(relid, _tk_matrix(pool, idkey, namekey, pool[kspec][1]))
 end
 
@@ -481,7 +541,7 @@ malformed is left out, so that loading a kernel never fails; a query of the fram
 (`tkfram`, `frame_rotation`) then parses it again and throws the error of CSPICE.
 """
 function build_tk(pool::AbstractDict, frames::AbstractDict)
-    out = Dict{Int32,TKFrame}()
+    out = Dict{Int32, TKFrame}()
     builtin = (fd for fd in values(BUILTIN_FRAMES) if !haskey(frames, fd.id))
     for fd in Iterators.flatten((values(frames), builtin))
         fd.class == 4 || continue
@@ -504,8 +564,12 @@ Throw the error of the class 4 frame `fd` that `build_tk` left out: the error of
 """
 @noinline function _tk_missing(ks::KernelSet, fd::FrameDef)
     _tk_parse(ks.pool, ks.frames, fd.classid)
-    throw(SpiceError(:framedatanotfound,
-        "no valid TKFRAME_* definition is loaded for the fixed-offset frame $(fd.id)"))
+    throw(
+        SpiceError(
+            :framedatanotfound,
+            "no valid TKFRAME_* definition is loaded for the fixed-offset frame $(fd.id)"
+        )
+    )
 end
 
 # --- frame chains -----------------------------------------------------------------------
@@ -519,7 +583,7 @@ linked to J2000 directly and throws `SpiceError(:noframeconnect)` without a CK s
 for `et`. A class 5 (dynamic) frame is linked to its base frame and a class 6 (switch)
 frame to J2000. A class 4 frame without data throws the error of `_tk_missing`.
 """
-function _frame_step(ks::KernelSet, id::Int32, et::T) where {T<:Real}
+function _frame_step(ks::KernelSet, id::Int32, et::T) where {T <: Real}
     fd = frame_def(ks, id)
     class = fd.class
     if class == 1
@@ -542,8 +606,12 @@ function _frame_step(ks::KernelSet, id::Int32, et::T) where {T<:Real}
         p = frame_provider(ks, fd)
         p === nothing || return p.relative, provider_rotation(p, et)
     end
-    throw(SpiceError(:notsupported,
-        "frame $id has class $class; only classes 1 to 6 are supported"))
+    throw(
+        SpiceError(
+            :notsupported,
+            "frame $id has class $class; only classes 1 to 6 are supported"
+        )
+    )
 end
 
 """
@@ -568,12 +636,20 @@ function _frame_parent(ks::KernelSet, id::Int32)
         p = frame_provider(ks, fd)
         p === nothing || return p.relative
     end
-    throw(SpiceError(:notsupported,
-        "frame $id has class $class; only classes 1 to 6 are supported"))
+    throw(
+        SpiceError(
+            :notsupported,
+            "frame $id has class $class; only classes 1 to 6 are supported"
+        )
+    )
 end
 
-@noinline _chain_too_long(id) = throw(SpiceError(:framechain,
-    "the chain of frame $id does not reach J2000 in $MAX_FRAME_CHAIN steps"))
+@noinline _chain_too_long(id) = throw(
+    SpiceError(
+        :framechain,
+        "the chain of frame $id does not reach J2000 in $MAX_FRAME_CHAIN steps"
+    )
+)
 
 """
     _rotation_up(ks, id, stop, et::T) -> Mat3{T}
@@ -581,7 +657,7 @@ end
 Matrix from frame `id` to its ancestor `stop` at `et`. Requires `stop` to be `id`
 itself or a frame on the chain from `id` to J2000.
 """
-function _rotation_up(ks::KernelSet, id::Int32, stop::Int32, et::T) where {T<:Real}
+function _rotation_up(ks::KernelSet, id::Int32, stop::Int32, et::T) where {T <: Real}
     rot = one(Mat3{T})
     cur = id
     n = 0
@@ -606,7 +682,7 @@ A class 3 (CK) frame is evaluated as `ckfrot_` does, see `_ck_frame_step`; with 
 (dynamic) and class 6 (switch) frames are evaluated as `zzdynrot_` and `zzswfxfm_` do,
 see `dynframes.jl` and `switchframes.jl`.
 """
-function frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::T) where {T<:Real}
+function frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
     from == to && return one(Mat3{T})
     # The chain of `to`, without evaluation: to, parent(to), ..., J2000.
     chain = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
@@ -638,7 +714,7 @@ frame_rotation(ks::KernelSet, from::Integer, to::Integer, et::Real) =
     frame_rotation(ks, Int32(from), Int32(to), et)
 
 "True if `id` is one of the first `len` entries of `chain`."
-@inline function _in_chain(chain::NTuple{M,Int32}, len::Int, id::Int32) where {M}
+@inline function _in_chain(chain::NTuple{M, Int32}, len::Int, id::Int32) where {M}
     for k in 1:len
         @inbounds chain[k] == id && return true
     end

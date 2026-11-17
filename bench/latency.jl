@@ -67,7 +67,7 @@ function run_child(script::AbstractString)
     project = dirname(@__FILE__)
     cmd = `$(Base.julia_cmd()) --startup-file=no --project=$project $script $(Kernels.DE440S)`
     out = read(cmd, String)
-    result = Dict{String,Float64}()
+    result = Dict{String, Float64}()
     for line in split(out, '\n')
         parts = split(line)
         length(parts) == 3 && parts[1] == "LATENCY" || continue
@@ -80,14 +80,14 @@ end
 function main()
     gone = Kernels.missing_kernels(Kernels.DE440S)
     if !isempty(gone)
-        printstyled("SKIP  missing kernels: ", join(gone, ", "), "\n"; color=:yellow, bold=true)
+        printstyled("SKIP  missing kernels: ", join(gone, ", "), "\n"; color = :yellow, bold = true)
         return
     end
     script, io = mktemp()
     write(io, CHILD); close(io)
     println("warm-up process (not counted) ...")
     run_child(script)
-    runs = Dict{String,Float64}[]
+    runs = Dict{String, Float64}[]
     for r in 1:REPS
         push!(runs, run_child(script))
         println("repetition ", r, ": ", join((@sprintf("%s=%.3f", k, runs[end][k]) for (k, _) in LABELS), " "))
@@ -95,8 +95,10 @@ function main()
     io = IOBuffer()
     println(io, "# Latency: time to first result in a fresh process\n")
     println(io, "- date: ", Dates.format(now(), "yyyy-mm-dd HH:MM:SS"))
-    println(io, "- Julia ", VERSION, ", ", REPS, " repetitions, one process each; ",
-        "packages precompiled before the first repetition\n")
+    println(
+        io, "- Julia ", VERSION, ", ", REPS, " repetitions, one process each; ",
+        "packages precompiled before the first repetition\n"
+    )
     println(io, "| Step | median s | min s | max s |")
     println(io, "|---|---:|---:|---:|")
     for (key, label) in LABELS
@@ -110,7 +112,7 @@ function main()
     mkpath(dir)
     write(joinpath(dir, "latency.md"), text)
     println("results written to ", joinpath(dir, "latency.md"))
-    rm(script; force=true)
+    rm(script; force = true)
     return nothing
 end
 

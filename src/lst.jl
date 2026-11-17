@@ -28,14 +28,22 @@ function _lst_sense(ks::KernelSet, body::Integer)
         s = uppercase(replace(v[1], ' ' => ""))
         s == "EAST" && return 1
         s == "WEST" && return -1
-        throw(SpiceError(:invalidoption,
-            "kernel variable $key may have the values EAST or WEST; the value was $(v[1])"))
+        throw(
+            SpiceError(
+                :invalidoption,
+                "kernel variable $key may have the values EAST or WEST; the value was $(v[1])"
+            )
+        )
     end
     body == 399 && return 1
     pm = get(ks.pool, "BODY$(body)_PM", nothing)
-    (pm isa Vector{Float64} && length(pm) >= 2) || throw(SpiceError(:missingdata,
-        "the prime meridian rate of kernel variable BODY$(body)_PM is required but not " *
-        "available for body $body"))
+    (pm isa Vector{Float64} && length(pm) >= 2) || throw(
+        SpiceError(
+            :missingdata,
+            "the prime meridian rate of kernel variable BODY$(body)_PM is required but not " *
+                "available for body $body"
+        )
+    )
     (body == 301 || body == 10) && return 1
     return pm[2] < 0.0 ? 1 : -1
 end
@@ -97,23 +105,35 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     elseif system == "PLANETOCENTRIC"
         mylong = Float64(lon)
     else
-        throw(SpiceError(:unknownsystem, "the coordinate system '$type' is not a " *
-            "recognized system of longitude; the recognized systems are " *
-            "'PLANETOCENTRIC' and 'PLANETOGRAPHIC'"))
+        throw(
+            SpiceError(
+                :unknownsystem, "the coordinate system '$type' is not a " *
+                    "recognized system of longitude; the recognized systems are " *
+                    "'PLANETOCENTRIC' and 'PLANETOGRAPHIC'"
+            )
+        )
     end
     body == 10 && return 12, 0, 0, "12:00:00", "12:00:00 P.M."
     fix = cidfrm(ks, body)
-    fix === nothing && throw(SpiceError(:cantfindframe, "the body-fixed frame " *
-        "associated with body $body could not be determined"))
+    fix === nothing && throw(
+        SpiceError(
+            :cantfindframe, "the body-fixed frame " *
+                "associated with body $body could not be determined"
+        )
+    )
     state, _ = spkezr(ks, 10, et, fix[1], Aberration("LT+S"), body)
     slong = (state[1] == 0.0 && state[2] == 0.0) ? 0.0 : atan(state[2], state[1])
     _, angle = _lst_rmaind(mylong - slong, _TWOPI)
     angle > pi && (angle -= _TWOPI)
     pm = get(ks.pool, "BODY$(body)_PM", nothing)
-    (pm isa Vector{Float64} && length(pm) >= 2) || throw(SpiceError(:cantgetrotationtype,
-        "the rotation type for the body $body could not be determined because the " *
-        "BODY$(body)_PM keyword was not found in the pool or was not of the expected " *
-        "type or dimension"))
+    (pm isa Vector{Float64} && length(pm) >= 2) || throw(
+        SpiceError(
+            :cantgetrotationtype,
+            "the rotation type for the body $body could not be determined because the " *
+                "BODY$(body)_PM keyword was not found in the pool or was not of the expected " *
+                "type or dimension"
+        )
+    )
     pm[2] < 0.0 && (angle = -angle)
     secnds = clamp(angle * 86400.0 / _TWOPI, -43200.0, 43200.0)
     hours, rest = _lst_rmaind(secnds, 3600.0)
@@ -164,8 +184,12 @@ function lspcn(ks::KernelSet, body::NameOrID, et::Real, abcorr::AbcorrArg)
     r, v = spk_jet(ks, id, check_epoch(et), _J2000_FRAME, Int32(10), Val(1))
     z = _dyn_ucross(r, v)
     x = _dyn_ucross(npole, z)
-    primal(_dot3(x, x)) == 0 && throw(SpiceError(:dependentvectors,
-        "lspcn: the pole of body $id is parallel to its orbital angular momentum"))
+    primal(_dot3(x, x)) == 0 && throw(
+        SpiceError(
+            :dependentvectors,
+            "lspcn: the pole of body $id is parallel to its orbital angular momentum"
+        )
+    )
     y = _dyn_ucross(z, x)
     s, _ = spkezr(ks, 10, et, 1, Aberration(abcorr), id)
     p = Vec3{Float64}(s[1], s[2], s[3])
