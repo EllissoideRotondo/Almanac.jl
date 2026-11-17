@@ -440,6 +440,38 @@ group(
             y = outcome(() -> element(o, n))
             @test y isa Symbol || !isnan(y)
         end
+        # The same states with a ForwardDiff.Dual state (every component carries a derivative):
+        # ForwardDiff's norm of a zero vector is 0/0, so a value of NaN would escape at an
+        # exactly circular orbit (ecc), a zero radius or velocity, and a rectilinear orbit
+        # (hmag); each is a :degeneratecase error. Only the values are checked: the partials
+        # of :ta and what is built on it are NaN at an exact apsis (acos at +-1, as in ANISE).
+        dual(v, seed) = SVector{6}(
+            ntuple(i -> ForwardDiff.Dual(Float64(v[i]), i == seed ? 1.0 : 0.0), 6)
+        )
+        sqmu = sqrt(gm / 7000)
+        dual_states = (
+            (7000.0, 0, 0, 0, 0, sqmu), (7000.0, 0, 0, 0, sqmu, 0),    # exactly circular
+            (7000.0, 0, 0, 0, 8.0, 0), (7000.0, 0, 0, 0, -8.0, 0),
+            (7000.0, 0, 0, 0, 0, sqrt(2gm / 7000)), (0.0, 0, 0, 0, 8.0, 0),
+            (7000.0, 0, 0, 0, 0, 0), (7000.0, 0, 0, 5.0, 0, 0),
+            (7000.0, 0, 0, 0, 0, 1.0e-10),
+        )
+        for s in dual_states, seed in 1:6, n in elements()
+            od = Orbit(dual(s, seed), 0.0, 399, 1, gm, VALLADO_RADII)
+            y = outcome(() -> element(od, n))
+            y isa Symbol || @test !any(v -> isnan(ForwardDiff.value(v)), y)
+        end
+        odc = Orbit(dual(dual_states[1], 1), 0.0, 399, 1, gm, VALLADO_RADII)
+        for n in (:ecc, :ta, :ma, :semi_minor_axis, :equinoctial_h)
+            @test throws_kind(() -> element(odc, n), :degeneratecase)
+        end
+        for kind in (:ric, :vnc, :rcn, :tnw), s in dual_states
+            od = Orbit(dual(s, 4), 0.0, 399, 1, gm, VALLADO_RADII)
+            y = outcome(() -> local_frame(od, kind))
+            y isa Symbol || @test !any(v -> isnan(ForwardDiff.value(v)), y)
+            y = outcome(() -> relative_state(od, od, kind))
+            y isa Symbol || @test !any(v -> isnan(ForwardDiff.value(v)), y)
+        end
         @test keplerian(pro) == (
             sma = pro.sma, ecc = pro.ecc, inc = pro.inc, raan = pro.raan,
             aop = pro.aop, ta = pro.ta,

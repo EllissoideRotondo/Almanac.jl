@@ -43,6 +43,12 @@ on a circular orbit, no angular momentum for a zero position or velocity) it thr
 `SpiceError(:degeneratecase)`. Returned instead of throwing: the
 [fallback values](@ref "Fallback values").
 
+A state of `ForwardDiff.Dual` numbers whose value is exactly a zero radius, a zero
+velocity, a rectilinear orbit (`:hmag`) or an exactly circular orbit (`:ecc` and what is
+built on it) throws too, where a `Float64` state gives 0, because the derivative of a norm
+is undefined there. The derivative of `:ta` is NaN at an exact apsis (the arc cosine at
++-1, as in ANISE), and so is that of the calls built on it; the value is not.
+
 Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref) (the vectors
 `position`, `velocity`, `hvec` and `evec` are properties only), or if the quantity needs
 the radii of the center (altitudes, `:latitude`, `:height`, Brouwer elements) and
@@ -137,6 +143,18 @@ _degenerate(name::Symbol, what::AbstractString) =
 
 _hvec(o::Orbit) = cross(o.position, o.velocity)
 
+# The Euclidean norm. For a number with derivatives, ForwardDiff's norm of a vector whose value
+# is exactly zero is NaN (0/0, a derivative that does not exist); it is a `:degeneratecase`
+# error, so that no NaN escapes. Where the norm is finite (all derivatives zero too) it is
+# kept, and for Float64 it is `norm`, which is 0.0 there.
+@inline _norm_for(::Symbol, v::AbstractVector{Float64}) = norm(v)
+@inline function _norm_for(name::Symbol, v::AbstractVector)
+    n = norm(v)
+    isnan(primal(n)) && all(x -> iszero(primal(x)), v) &&
+        _degenerate(name, "the norm of a zero vector has no derivative")
+    return n
+end
+
 # ANISE's thresholds: `ECC_EPSILON` and `INC_EPSILON_DEG` (compared as radians) of
 # src/astro/orbit.rs; `f64::EPSILON` guards the zero radius and velocity of `hvec`/`evec`.
 const ECC_EPSILON = 1.0e-11
@@ -144,16 +162,16 @@ const INC_EPSILON = deg2rad(1.0e-6)
 
 # hvec and evec as ANISE's `hvec()` and `evec()`: an error for a zero radius or velocity.
 function _hvec_for(name::Symbol, o::Orbit)
-    primal(_el_rmag(o)) > eps(Float64) || _degenerate(name, "the radius is zero")
-    primal(_el_vmag(o)) > eps(Float64) || _degenerate(name, "the velocity is zero")
+    primal(_el_rmag(o, name)) > eps(Float64) || _degenerate(name, "the radius is zero")
+    primal(_el_vmag(o, name)) > eps(Float64) || _degenerate(name, "the velocity is zero")
     return _hvec(o)
 end
 
 function _evec_for(name::Symbol, o::Orbit)
     r, v = o.position, o.velocity
-    rm = norm(r)
+    rm = _norm_for(name, r)
     primal(rm) > eps(Float64) || _degenerate(name, "the radius is zero")
-    return ((norm(v)^2 - getfield(o, :gm) / rm) * r - dot(r, v) * v) / getfield(o, :gm)
+    return ((_norm_for(name, v)^2 - getfield(o, :gm) / rm) * r - dot(r, v) * v) / getfield(o, :gm)
 end
 
 # The node vector `ẑ × h` and its two uses.
@@ -165,15 +183,15 @@ _el_z(o::Orbit) = getfield(o, :state)[3]
 _el_vx(o::Orbit) = getfield(o, :state)[4]
 _el_vy(o::Orbit) = getfield(o, :state)[5]
 _el_vz(o::Orbit) = getfield(o, :state)[6]
-_el_rmag(o::Orbit) = norm(o.position)
-_el_vmag(o::Orbit) = norm(o.velocity)
+_el_rmag(o::Orbit, name::Symbol = :rmag) = _norm_for(name, o.position)
+_el_vmag(o::Orbit, name::Symbol = :vmag) = _norm_for(name, o.velocity)
 # ANISE: energy_km2_s2 errors for a zero radius; hmag, hx, hy, hz go through `hvec()`,
 # which errors for a zero radius or velocity.
 function _el_energy(o::Orbit)
-    primal(_el_rmag(o)) > eps(Float64) || _degenerate(:energy, "the radius is zero")
-    return _el_vmag(o)^2 / 2 - getfield(o, :gm) / _el_rmag(o)
+    primal(_el_rmag(o, :energy)) > eps(Float64) || _degenerate(:energy, "the radius is zero")
+    return _el_vmag(o, :energy)^2 / 2 - getfield(o, :gm) / _el_rmag(o, :energy)
 end
-_el_hmag(o::Orbit) = norm(_hvec_for(:hmag, o))
+_el_hmag(o::Orbit) = _norm_for(:hmag, _hvec_for(:hmag, o))
 _el_hx(o::Orbit) = _hvec_for(:hx, o)[1]
 _el_hy(o::Orbit) = _hvec_for(:hy, o)[2]
 _el_hz(o::Orbit) = _hvec_for(:hz, o)[3]
@@ -181,7 +199,7 @@ _el_light_time(o::Orbit) = _el_rmag(o) / clight()
 
 # Keplerian elements: ANISE src/astro/orbit.rs (and orbit_hyperbolic.rs for :ha), angles in rad.
 
-_el_ecc(o::Orbit) = norm(_evec_for(:ecc, o))
+_el_ecc(o::Orbit) = _norm_for(:ecc, _evec_for(:ecc, o))
 _el_sma(o::Orbit) = -getfield(o, :gm) / (2 * _el_energy(o))
 
 function _el_inc(o::Orbit)
@@ -224,7 +242,7 @@ end
 
 # The eccentricity, and the circular-orbit error of the anomalies built on the true one.
 function _el_ecc_for(name::Symbol, o::Orbit)
-    ecc = norm(_evec_for(name, o))
+    ecc = _norm_for(name, _evec_for(name, o))
     primal(ecc) < ECC_EPSILON && _degenerate(
         name, "the orbit is circular (ecc = $(ecc) < 1e-11), " *
             "the line of apsides is undefined"

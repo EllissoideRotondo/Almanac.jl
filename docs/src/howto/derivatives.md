@@ -40,7 +40,7 @@ With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in:
 - `spkder`, `pxder` and the table queries;
 - surface calls: `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq`, `azlcpo`;
 - time conversions: `unitim`, `deltet`;
-- [orbits](@ref "Orbits and relative motion"): `orbit`, and an `Orbit` with a dual epoch or state through `element`, `keplerian`, `keplerian_orbit` (dual elements), `with_element`, `with_apsides`, `two_body`, `local_frame`, `local_frame_state`, `relative_state`, `vinf_periapsis` and `vinf_turn_angle`. Where the value throws, as the anomalies at `ecc < 1e-11`, the derivative throws too.
+- [orbits](@ref "Orbits and relative motion"): `orbit`, and an `Orbit` with a dual epoch or state through `element`, `keplerian`, `keplerian_orbit` (dual elements), `with_element`, `with_apsides`, `two_body`, `local_frame`, `local_frame_state`, `relative_state`, `vinf_periapsis` and `vinf_turn_angle`. Where the value throws, as the anomalies at `ecc < 1e-11`, the derivative throws too. A dual state of exactly zero radius, velocity or eccentricity vector throws `SpiceError(:degeneratecase)` where a `Float64` state gives 0. The derivative of `:ta` (and of the calls built on it) is NaN at an exact apsis, where the arc cosine has an infinite slope; the value is not.
 
 Other calls (`limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg`, `et2lst`, ...) throw `SpiceError(:badarg)` for a `Dual`. Event searches take `Float64` windows.
 
