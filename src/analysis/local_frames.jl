@@ -5,9 +5,12 @@
 
 const _LOCAL_FRAME_KINDS = (:ric, :vnc, :rcn, :tnw)
 
-# The 3 by 3 matrix of the columns `a`, `b`, `c`.
-@inline _lf_cols(a::SVector{3,T}, b::SVector{3,T}, c::SVector{3,T}) where {T} =
-    SMatrix{3,3,T,9}(a[1], a[2], a[3], b[1], b[2], b[3], c[1], c[2], c[3])
+# The 3 by 3 matrix of the columns `a`, `b`, `c`. The element types can differ: the tracked
+# numbers of ReverseDiff have a type for each origin.
+@inline function _lf_cols(a::SVector{3}, b::SVector{3}, c::SVector{3})
+    T = promote_type(eltype(a), eltype(b), eltype(c))
+    return SMatrix{3,3,T,9}(a[1], a[2], a[3], b[1], b[2], b[3], c[1], c[2], c[3])
+end
 
 # The matrix of the local axes and its time derivative along the two-body motion. The
 # angular momentum is constant there, so only the unit vectors of the radius and of the

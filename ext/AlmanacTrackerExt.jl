@@ -2,7 +2,7 @@ module AlmanacTrackerExt
 
 using Almanac
 using Almanac: KernelSet, Aberration
-using Tracker: Tracker, TrackedReal
+using Tracker: Tracker, TrackedReal, TrackedVector
 
 # A `TrackedReal` epoch does not run the evaluators on tracked numbers. Each derivative
 # point takes the jet at the plain epoch and assembles the tracked result from it (see
@@ -25,5 +25,11 @@ Almanac.abcorr_position(ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
     corr::Aberration, obs::Int32) = Almanac._ad_abcorr_position(ks, targ, et, ref, corr, obs)
 Almanac.abcorr_state(ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
     corr::Aberration, obs::Int32) = Almanac._ad_abcorr_state(ks, targ, et, ref, corr, obs)
+
+# An array of Tracker has the element type of its data (Float64) and returns tracked
+# numbers, so an `Orbit` takes its elements one by one.
+Almanac.Orbit(state::TrackedVector, et::Real, center::Integer, frame::Integer, gm::Real,
+    radii::AbstractVector{<:Real}=Almanac._NO_RADII) =
+    Almanac.Orbit([state[i] for i in eachindex(state)], et, center, frame, gm, radii)
 
 end # module

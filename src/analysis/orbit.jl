@@ -99,12 +99,30 @@ orbit(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString, obs::Name
 
 const _ORBIT_VECTORS = (:position, :velocity, :hvec, :evec)
 
-function Base.getproperty(o::Orbit, s::Symbol)
-    hasfield(Orbit, s) && return getfield(o, s)
-    s === :position && return SVector(getfield(o, :state)[1], getfield(o, :state)[2],
-        getfield(o, :state)[3])
-    s === :velocity && return SVector(getfield(o, :state)[4], getfield(o, :state)[5],
-        getfield(o, :state)[6])
+# The field names as a tuple of symbols: `hasfield(Orbit, s)` with a name known only at run
+# time calls into the runtime (a `ccall`), which Mooncake cannot differentiate.
+const _ORBIT_FIELDS = fieldnames(Orbit)
+
+# Inlined, so that a field or a vector named in the code compiles to its own branch: the AD
+# systems that differentiate the compiled code (Mooncake, Enzyme) would otherwise compile
+# every branch of `element` for each `o.position`.
+@inline function Base.getproperty(o::Orbit, s::Symbol)
+    s in _ORBIT_FIELDS && return getfield(o, s)
+    s === :position && return _orbit_position(o)
+    s === :velocity && return _orbit_velocity(o)
+    return _orbit_property(o, s)
+end
+
+@inline _orbit_position(o::Orbit) =
+    SVector(getfield(o, :state)[1], getfield(o, :state)[2], getfield(o, :state)[3])
+@inline _orbit_velocity(o::Orbit) =
+    SVector(getfield(o, :state)[4], getfield(o, :state)[5], getfield(o, :state)[6])
+
+# The properties that are not fields: the vectors and the elements. (A function of its own,
+# so that the rule of ChainRulesCore for `getproperty` can call it.)
+function _orbit_property(o::Orbit, s::Symbol)
+    s === :position && return _orbit_position(o)
+    s === :velocity && return _orbit_velocity(o)
     s === :hvec && return _hvec(o)
     s === :evec && return _evec_for(:evec, o)
     s in elements() && return element(o, s)

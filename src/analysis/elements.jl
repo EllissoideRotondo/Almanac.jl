@@ -38,9 +38,10 @@ body-fixed frame of the center, and the B-plane ones need an inertial frame; no 
 checked, and in another frame the numbers are those of the wrong quantity. Where a
 quantity is undefined for the orbit (a circular orbit has no true anomaly; a zero
 position or velocity has no angular momentum), `element` throws
-`SpiceError(:degeneratecase)`. It never returns NaN. Two quantities are not finite or
-not meaningful on a parabola: `:sma` is `±Inf` there, and `:period` is 0 for an orbit
-that is not elliptic, so that `:ta_dot` is then `Inf`.
+`SpiceError(:degeneratecase)`. It never returns NaN. Three quantities are not finite or
+not meaningful for some orbits: `:sma` is `±Inf` on a parabola, and for every orbit that
+is not elliptic (a parabola or a hyperbola) `:period` is 0 and `:ta_dot`, `2π/period`,
+is `Inf`.
 
 Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref); also for the vectors
 `position`, `velocity`, `hvec` and `evec`, which are properties only, so that a name
@@ -222,7 +223,10 @@ function _el_ecc_for(name::Symbol, o::Orbit)
     return ecc
 end
 
-_wrap(x) = mod(x, 2 * oftype(x, π))
+_wrap(x::Float64) = mod(x, 2 * oftype(x, π))
+# A number with derivatives: the value of the plain wrap, and the derivatives of `x` (those of
+# `mod`, which Tracker cannot take: its rule calls `isinteger` on a tracked number).
+_wrap(x::Real) = _wrap(primal(x)) + (x - primal(x))
 
 # ANISE returns NaN where a parabola or a zero velocity makes a quotient 0/0 or Inf*0;
 # Almanac throws instead, so that no NaN escapes from `element`.

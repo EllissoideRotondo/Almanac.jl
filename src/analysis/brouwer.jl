@@ -33,6 +33,16 @@ _carry(x0::Float64, step::Float64) = x0
 _carry(x0, step) = x0 + (step - primal(step))
 
 function _ma_to_ta(rm::T, ecc::T) where {T}
+    return _ea_to_ta(_ma_to_ea(rm, ecc), ecc)
+end
+
+"""
+    _ma_to_ea(rm, ecc) -> anomaly
+
+The eccentric anomaly in [0, 2pi) of the mean anomaly `rm` (ecc <= 1), or the hyperbolic
+anomaly (ecc > 1): the Newton iteration of `_ma_to_ta`, with the derivative carried.
+"""
+function _ma_to_ea(rm::T, ecc::T) where {T}
     fail(what) = _conv_fail("the mean to true anomaly conversion $what")
     rp, ep = primal(rm), primal(ecc)
     if ep <= 1
@@ -50,20 +60,7 @@ function _ma_to_ta(rm::T, ecc::T) where {T}
         r0 = rp - (e2 - ep * sin(e2))
         e2 = _carry(e2, (rm - (e2 - ecc * sin(e2)) - r0) / (1 - ecc * cos(e2)))
         e2 = _carry(e2, (rm - (e2 - ecc * sin(e2)) - r0) / (1 - ecc * cos(e2)))
-        e = primal(e2) < 0 ? e2 + 2 * T(π) : e2
-        ta = if abs(primal(e) - π) >= 1e-8
-            normalized = 1 - ecc
-            abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
-            ratio = (1 + ecc) / normalized
-            primal(ratio) < 0 && fail("has a negative eccentricity ratio")
-            2 * atan(sqrt(ratio) * tan(e / 2))
-        else
-            # nu = E at E = pi, where the true anomaly is nu = pi + c (E - pi) with
-            # c = sqrt((1 - e) / (1 + e)): the primal value stays E, the derivative is that of nu
-            c = sqrt((1 - ecc) / (1 + ecc))
-            e + (c - 1) * (e - primal(e)) + (c - primal(c)) * (primal(e) - π)
-        end
-        return primal(ta) < 0 ? ta + 2 * T(π) : ta
+        return primal(e2) < 0 ? e2 + 2 * T(π) : e2
     end
     f2 = 0.0
     iter = 0
@@ -78,13 +75,62 @@ function _ma_to_ta(rm::T, ecc::T) where {T}
     end
     r0 = rp - (ep * sinh(f2) - f2)
     f2 = _carry(f2, (rm - (ecc * sinh(f2) - f2) - r0) / (ecc * cosh(f2) - 1))
-    f2 = _carry(f2, (rm - (ecc * sinh(f2) - f2) - r0) / (ecc * cosh(f2) - 1))
+    return _carry(f2, (rm - (ecc * sinh(f2) - f2) - r0) / (ecc * cosh(f2) - 1))
+end
+
+"The true anomaly of the eccentric (ecc <= 1) or hyperbolic anomaly `e`, as ANISE takes it."
+function _ea_to_ta(e::S, ecc::U) where {S,U}
+    T = promote_type(S, U)
+    fail(what) = _conv_fail("the mean to true anomaly conversion $what")
+    if primal(ecc) <= 1
+        ta = if abs(primal(e) - π) >= 1e-8
+            normalized = 1 - ecc
+            abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
+            ratio = (1 + ecc) / normalized
+            primal(ratio) < 0 && fail("has a negative eccentricity ratio")
+            2 * atan(sqrt(ratio) * tan(e / 2))
+        else
+            # nu = E at E = pi, where the true anomaly is nu = pi + c (E - pi) with
+            # c = sqrt((1 - e) / (1 + e)): the primal value stays E, the derivative is that of nu
+            c = sqrt((1 - ecc) / (1 + ecc))
+            e + (c - 1) * (e - primal(e)) + (c - primal(c)) * (primal(e) - π)
+        end
+        return primal(ta) < 0 ? ta + 2 * T(π) : ta
+    end
     normalized = ecc - 1
     abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
     ratio = (ecc + 1) / normalized
     primal(ratio) < 0 && fail("has a negative eccentricity ratio")
-    ta = 2 * atan(sqrt(ratio) * tanh(f2 / 2))
+    ta = 2 * atan(sqrt(ratio) * tanh(e / 2))
     return primal(ta) < 0 ? ta + 2 * T(π) : ta
+end
+
+# `_ma_to_ta` is a derivative point (src/ad.jl): Enzyme, Mooncake and the users of
+# ChainRulesCore see Float64 numbers, for which `primal` is the identity, so `_carry` drops
+# the step and the branch at E = pi keeps dE/dM. They would differentiate the Newton loop
+# (a derivative one step behind the solution) and take dE for dnu at E = pi (wrong by a
+# factor up to 6 at ecc = 0.95). Their rules take the derivatives below, those of the
+# implicit function M = E - e sin E (M = e sinh F - F) at the converged anomaly, with
+# nu(E, e) of the conic: q = 1 - e cos E (e cosh F - 1), s = sqrt(|1 - e^2|),
+#   dnu/dM = s / q^2,   dnu/de = sin E (2 - e^2 - e cos E) / (s q^2)
+#                       (hyperbola: -sinh F (e^2 - 2 + e cosh F) / (s q^2)).
+# They hold at E = pi as well, where ANISE returns E for nu. The tracked numbers of
+# ReverseDiff and Tracker strip with `primal`, so `_carry` gives them the same derivative
+# without a rule. With a `Dual` (ForwardDiff over a backend) the anomaly carries its exact
+# derivatives, and so do the partials.
+function _ad_rule(::typeof(_ma_to_ta), rm::Real, ecc::Real)
+    m, e = promote(rm, ecc)
+    a = _ma_to_ea(m, e)
+    ta = _ea_to_ta(a, e)
+    if primal(e) <= 1
+        sa, ca = sincos(a)
+        q = 1 - e * ca
+        s = sqrt(1 - e^2)
+        return ta, (s / q^2, sa * (2 - e^2 - e * ca) / (s * q^2))
+    end
+    q = e * cosh(a) - 1
+    s = sqrt(e^2 - 1)
+    return ta, (s / q^2, -sinh(a) * (e^2 - 2 + e * cosh(a)) / (s * q^2))
 end
 
 # ANISE `try_keplerian` (src/astro/orbit.rs): GMAT's KeplerianToCartesian, with its errors
@@ -269,7 +315,7 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
     aeqmean = _kep_to_aeq(osc...)
     kep2 = _brouwer_mean_to_osc(osc..., re, J2_EARTH)
     aeq2 = _kep_to_aeq(kep2...)
-    aeqmean2 = aeqmean .+ (aeq .- aeq2)
+    aeqmean2 = _shift(aeqmean, aeq, aeq2)
 
     emag = T(0.9)
     emag_old = T(1.0)
@@ -282,7 +328,7 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
         aeq2 = _kep_to_aeq(kep2...)
         primal(emag_old) > primal(emag) || break      # not improving
         emag_old = emag
-        aeqmean2 = aeqmean2 .+ (aeq .- aeq2)
+        aeqmean2 = _shift(aeqmean2, aeq, aeq2)
         ii > 100 && break
         ii += 1
     end
@@ -299,6 +345,10 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
     end
     return (sma, ecc, inc, _wrap(raan), _wrap(aop), _wrap(ma))
 end
+
+# `a .+ (b .- c)` of three tuples, by `map`: Zygote cannot take the cotangent of a broadcast
+# over tuples.
+_shift(a::Tuple, b::Tuple, c::Tuple) = map((x, y, z) -> x + (y - z), a, b, c)
 
 _el_brouwer_sma(o::Orbit) = _brouwer_mean(:brouwer_sma, o)[1]
 _el_brouwer_ecc(o::Orbit) = _brouwer_mean(:brouwer_ecc, o)[2]

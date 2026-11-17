@@ -1,10 +1,12 @@
 module AlmanacChainRulesCoreExt
 
 using Almanac
-using Almanac: KernelSet, Aberration, spk_jet, frame_rotation, frame_jet, abcorr_jet,
-    abcorr_position, abcorr_state, _ad_rule, _AD_CONSTANT, _ad_typeof
+using Almanac: KernelSet, Aberration, Orbit, element, elements, _orbit_property, _ORBIT_FIELDS,
+    spk_jet, frame_rotation, frame_jet, abcorr_jet,
+    abcorr_position, abcorr_state, _ma_to_ta, _ad_rule, _AD_CONSTANT, _ad_typeof
 using ChainRulesCore
-using ChainRulesCore: AbstractZero, AbstractThunk, NoTangent, Tangent, unthunk, backing
+using ChainRulesCore: AbstractZero, AbstractThunk, NoTangent, Tangent, unthunk, backing,
+    RuleConfig, HasReverseMode, rrule_via_ad
 using LinearAlgebra: dot
 using StaticArrays: StaticArray
 
@@ -59,6 +61,41 @@ for (f, sig, iet) in POINTS
             return y, pullback
         end
     end
+end
+
+# The Kepler solver of the Orbit layer: two arguments, the mean anomaly and the
+# eccentricity, with the partials of the implicit function (see `src/analysis/brouwer.jl`).
+function ChainRulesCore.frule((_, Δm, Δe), ::typeof(_ma_to_ta), m::Real, e::Real)
+    y, (dm, de) = _ad_rule(_ma_to_ta, m, e)
+    return y, dm * Δm + de * Δe
+end
+function ChainRulesCore.rrule(::typeof(_ma_to_ta), m::Real, e::Real)
+    y, (dm, de) = _ad_rule(_ma_to_ta, m, e)
+    function pullback(ȳ)
+        g = unthunk(ȳ)
+        return (NoTangent(), g * dm, g * de)
+    end
+    return y, pullback
+end
+
+# `element(o, name)` and the properties of an `Orbit` take the name at run time, so Zygote
+# would compile the pullback of every branch of `element` for the first property it
+# meets (`o.state` as well), which takes about 35 s. These rules differentiate only the
+# branch of the name, with the AD system of the caller.
+function ChainRulesCore.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(element),
+        o::Orbit, name::Symbol)
+    name in elements() || element(o, name)    # throws SpiceError(:badarg)
+    y, pb = rrule_via_ad(config, getfield(Almanac, Symbol(:_el_, name)), o)
+    return y, ȳ -> (NoTangent(), pb(ȳ)[2], NoTangent())
+end
+function ChainRulesCore.rrule(config::RuleConfig{>:HasReverseMode}, ::typeof(getproperty),
+        o::O, s::Symbol) where {O<:Orbit}
+    if s in _ORBIT_FIELDS
+        field_pb(ȳ) = (NoTangent(), Tangent{O}(; NamedTuple{(s,)}((unthunk(ȳ),))...), NoTangent())
+        return getfield(o, s), field_pb
+    end
+    y, pb = rrule_via_ad(config, _orbit_property, o, s)
+    return y, ȳ -> (NoTangent(), pb(ȳ)[2], NoTangent())
 end
 
 # Lookups, the snapshot of a context and the parsing of strings have no derivative.
