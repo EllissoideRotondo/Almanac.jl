@@ -19,6 +19,14 @@ tables that run on a GPU.
 
 **Note:** This project is *not* affiliated with NASA, NAIF or JPL in any way.
 
+**AI assistance:** Much of the code, the tests and the documentation of Almanac.jl was
+written with AI coding assistants (Claude, by Anthropic), under the direction of the
+maintainer. Its correctness rests on the comparisons with CSPICE and with NAIF's test suite
+described [below](#features) and in the
+[manual](https://orbitology.github.io/Almanac.jl/dev/explanation/coverage/). For results
+that matter to your work, check them against CSPICE, and please report any difference in
+the [issues](https://github.com/Orbitology/Almanac.jl/issues).
+
 ## Installation
 
 Almanac.jl requires Julia 1.10 or later. It is not yet registered, so add it from its

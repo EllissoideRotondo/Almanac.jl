@@ -15,8 +15,8 @@ const RESULTS_DIR = joinpath(@__DIR__, "results")
 function require_kernels(paths...)
     gone = Kernels.missing_kernels(paths...)
     isempty(gone) && return nothing
-    printstyled("SKIP  missing kernels: ", join(gone, ", "), "\n"; color=:yellow, bold=true)
-    exit(0)
+    printstyled("SKIP  missing kernels: ", join(gone, ", "), "\n"; color = :yellow, bold = true)
+    return exit(0)
 end
 
 """
@@ -55,22 +55,30 @@ function bench_row(group::AbstractString, name::AbstractString, f, args...; n::I
     @assert n > 0
     f(args...)                                   # compile, and fail early if it throws
     b = @benchmark $f($(args)...) seconds = BENCH_SECONDS
-    row = Row(group, name, minimum(b).time / n, median(b).time / n, allocs(b) / n,
-        memory(b) / n)
-    @printf("  %-34s %-44s min %9.1f ns  median %9.1f ns  allocs %5.2f\n", group, name,
-        row.min_ns, row.median_ns, row.allocs)
+    row = Row(
+        group, name, minimum(b).time / n, median(b).time / n, allocs(b) / n,
+        memory(b) / n
+    )
+    @printf(
+        "  %-34s %-44s min %9.1f ns  median %9.1f ns  allocs %5.2f\n", group, name,
+        row.min_ns, row.median_ns, row.allocs
+    )
     return row
 end
 
 "Markdown table of `rows`, with the ratio of each minimum to the minimum of row `base`."
-function markdown_table(rows::Vector{Row}; base::Union{Nothing,Row}=nothing)
+function markdown_table(rows::Vector{Row}; base::Union{Nothing, Row} = nothing)
     io = IOBuffer()
-    println(io, "| Case | Engine and call | min ns/query | median ns/query | allocs/query | bytes/query |",
-        base === nothing ? "" : " ratio to $(base.name) |")
+    println(
+        io, "| Case | Engine and call | min ns/query | median ns/query | allocs/query | bytes/query |",
+        base === nothing ? "" : " ratio to $(base.name) |"
+    )
     println(io, "|---|---|---:|---:|---:|---:|", base === nothing ? "" : "---:|")
     for r in rows
-        @printf(io, "| %s | %s | %.1f | %.1f | %.2f | %.0f |", r.group, r.name, r.min_ns,
-            r.median_ns, r.allocs, r.bytes)
+        @printf(
+            io, "| %s | %s | %.1f | %.1f | %.2f | %.0f |", r.group, r.name, r.min_ns,
+            r.median_ns, r.allocs, r.bytes
+        )
         base === nothing || @printf(io, " %.2f |", r.min_ns / base.min_ns)
         println(io)
     end
@@ -89,7 +97,7 @@ function run_header(title::AbstractString)
 
     - date: $(Dates.format(now(), "yyyy-mm-dd HH:MM:SS"))
     - Julia $(VERSION), $(Threads.nthreads()) thread(s), $(Sys.CPU_THREADS) logical CPUs
-    - CPU $(strip(split(cpu, ":"; limit=2)[2]))
+    - CPU $(strip(split(cpu, ":"; limit = 2)[2]))
     - BenchmarkTools, $(BENCH_SECONDS) s of samples per row; time per query is the time
       of one loop over the epochs divided by the number of epochs
 

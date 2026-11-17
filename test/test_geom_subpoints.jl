@@ -16,17 +16,23 @@
 isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
 import ForwardDiff
 
-const SUB_METHODS = ["NEAR POINT/ELLIPSOID", "INTERCEPT/ELLIPSOID", "Near point: ellipsoid",
-    "Intercept: ellipsoid", "ELLIPSOID/NEAR POINT", "nadir / ellipsoid", " intercept/ ELLIPSOID "]
-const SUB_DSK_METHODS = ["NADIR/DSK/UNPRIORITIZED", "INTERCEPT/DSK/UNPRIORITIZED",
+const SUB_METHODS = [
+    "NEAR POINT/ELLIPSOID", "INTERCEPT/ELLIPSOID", "Near point: ellipsoid",
+    "Intercept: ellipsoid", "ELLIPSOID/NEAR POINT", "nadir / ellipsoid", " intercept/ ELLIPSOID ",
+]
+const SUB_DSK_METHODS = [
+    "NADIR/DSK/UNPRIORITIZED", "INTERCEPT/DSK/UNPRIORITIZED",
     "NADIR/DSK/UNPRIORITIZED/SURFACES = 1", "INTERCEPT/DSK/UNPRIORITIZED/SURFACES = 2",
-    "dsk/unprioritized/nadir/surfaces = 2, 1", "INTERCEPT / DSK / UNPRIORITIZED / SURFACES = 1"]
-const INT_DSK_METHODS = ["DSK/UNPRIORITIZED", "DSK/UNPRIORITIZED/SURFACES = 1",
-    "DSK/UNPRIORITIZED/SURFACES = 2", "dsk / unprioritized / surfaces = 2, 1"]
+    "dsk/unprioritized/nadir/surfaces = 2, 1", "INTERCEPT / DSK / UNPRIORITIZED / SURFACES = 1",
+]
+const INT_DSK_METHODS = [
+    "DSK/UNPRIORITIZED", "DSK/UNPRIORITIZED/SURFACES = 1",
+    "DSK/UNPRIORITIZED/SURFACES = 2", "dsk / unprioritized / surfaces = 2, 1",
+]
 
 # Measured: 5e-16 (sub-points), 3e-15 (vectors), 0 (epochs) on ellipsoids; 7e-11 for
 # intercepts of rays and 2e-11 for the near-point methods on DSK data (see the header).
-const SUB_TOL = (point=5e-14, vec=5e-13, epoch=1e-7, graze=5e-9, dsk=1e-9)
+const SUB_TOL = (point = 5.0e-14, vec = 5.0e-13, epoch = 1.0e-7, graze = 5.0e-9, dsk = 1.0e-9)
 
 sub_alloc_pnt(ks, m, et, c) = @allocated subpnt(ks, m, 301, et, 10020, c, 399)
 sub_alloc_slr(ks, m, et, c) = @allocated subslr(ks, m, 301, et, 10020, c, 399)
@@ -34,7 +40,7 @@ sub_alloc_int(ks, et, c, dv) = @allocated sincpt(ks, "ELLIPSOID", 301, et, 10020
 sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
 
 @gf_light group("geom_subpoints: subpnt, subslr, sincpt, srfrec", Kernels.FULL_SET_FILES...) do
-    ctx = geo_setup(; dsk=true)
+    ctx = geo_setup(; dsk = true)
     ks = Almanac.kernelset(ctx)
     rng = MersenneTwister(SEED + 101)
 
@@ -115,7 +121,7 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
         @test gget(st, "sincpt srfvec") < SUB_TOL.vec
         @test gget(st, "sincpt trgepc (s)") < SUB_TOL.epoch
         @test !haskey(st.d, "found flag differs: distance from the limb (rad)") ||
-              gget(st, "found flag differs: distance from the limb (rad)") < 1e-12
+            gget(st, "found flag differs: distance from the limb (rad)") < 1.0e-12
     end
 
     @testset "DSK shapes: Moon, 250 random cases" begin
@@ -176,10 +182,10 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
             worst = max(worst, grel(srfrec(ctx, body, lon, lat), g_srfrec(body, lon, lat)))
         end
         measured(@sprintf("  %-64s max=%.3e", "srfrec", worst))
-        @test worst < 1e-15
+        @test worst < 1.0e-15
         @test srfrec(ctx, "EARTH", 0.3, 0.2) == srfrec(ctx, 399, 0.3, 0.2)
         @test neo_kind(() -> srfrec(ctx, "NOBODY", 0.0, 0.0)) == :idcodenotfound
-        @test same_kind(() -> g_srfrec(3, 0.0, 0.0), () -> srfrec(ctx, 3, 0.0, 0.0); expect=:kernelvarnotfound)
+        @test same_kind(() -> g_srfrec(3, 0.0, 0.0), () -> srfrec(ctx, 3, 0.0, 0.0); expect = :kernelvarnotfound)
     end
 
     @testset "error conditions, kinds of CSPICE" begin
@@ -203,21 +209,28 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
                 ("NADIR/DSK/UNPRIORITIZED/SURFACES = NOSURFACE", "MOON", "IAU_MOON", "LT", "EARTH"),
                 ("NADIR/DSK/UNPRIORITIZED/SURFACES = 9", "MOON", "IAU_MOON", "LT", "EARTH"),
                 ("NADIR/DSK/UNPRIORITIZED", "EARTH", "IAU_EARTH", "LT", "MOON"),
-                ("", "MOON", "IAU_MOON", "LT", "EARTH"))
+                ("", "MOON", "IAU_MOON", "LT", "EARTH"),
+            )
             @test same_kind(() -> g_subpnt(m, t, et, fix, cor, o), () -> subpnt(ctx, m, t, et, fix, cor, o))
             # `subslr` accepts an observer that is the target.
             t == o || @test same_kind(() -> g_subslr(m, t, et, fix, cor, o), () -> subslr(ctx, m, t, et, fix, cor, o))
         end
-        @test grel(subslr(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "MOON")[1],
-            g_subslr("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "MOON")[1]) < SUB_TOL.point
+        @test grel(
+            subslr(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "MOON")[1],
+            g_subslr("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "MOON")[1]
+        ) < SUB_TOL.point
         # No ephemeris data for Mars: CSPICE gives SPKINSUFFDATA, Almanac the kind of its SPK layer.
         @test c_kind(() -> g_subpnt("NEAR POINT/ELLIPSOID", "MARS", et, "IAU_MARS", "LT", "EARTH")) == :spkinsuffdata
         @test neo_kind(() -> subpnt(ctx, "NEAR POINT/ELLIPSOID", "MARS", et, "IAU_MARS", "LT", "EARTH")) == :spkinsuffdata
         @test neo_kind(() -> sincpt(ctx, "ELLIPSOID", "MARS", et, "IAU_MARS", "LT", "EARTH", "J2000", e3)) == :spkinsuffdata
-        @test same_kind(() -> g_subslr("NEAR POINT/ELLIPSOID", "SUN", et, "IAU_SUN", "LT", "EARTH"),
-            () -> subslr(ctx, "NEAR POINT/ELLIPSOID", "SUN", et, "IAU_SUN", "LT", "EARTH"); expect=:invalidtarget)
-        @test same_kind(() -> g_subslr("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "XLT", "EARTH"),
-            () -> subslr(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "XLT", "EARTH"); expect=:notsupported)
+        @test same_kind(
+            () -> g_subslr("NEAR POINT/ELLIPSOID", "SUN", et, "IAU_SUN", "LT", "EARTH"),
+            () -> subslr(ctx, "NEAR POINT/ELLIPSOID", "SUN", et, "IAU_SUN", "LT", "EARTH"); expect = :invalidtarget
+        )
+        @test same_kind(
+            () -> g_subslr("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "XLT", "EARTH"),
+            () -> subslr(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "XLT", "EARTH"); expect = :notsupported
+        )
         for (m, t, fix, cor, o, dref, dv) in (
                 ("ELLIPSOID", "MOON", "IAU_MOON", "FOO", "EARTH", "J2000", e3),
                 ("ELLIPSOID", "NOBODY", "IAU_MOON", "LT", "EARTH", "J2000", e3),
@@ -232,27 +245,38 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
                 ("SPHERE", "MOON", "IAU_MOON", "LT", "EARTH", "J2000", e3),
                 ("DSK/UNPRIORITIZED", "EARTH", "IAU_EARTH", "LT", "MOON", "J2000", e3),
                 ("DSK/UNPRIORITIZED/SURFACES = 9", "MOON", "IAU_MOON", "LT", "EARTH", "J2000", e3),
-                ("", "MOON", "IAU_MOON", "LT", "EARTH", "J2000", e3))
-            @test same_kind(() -> g_sincpt(m, t, et, fix, cor, o, dref, dv),
-                () -> sincpt(ctx, m, t, et, fix, cor, o, dref, dv))
+                ("", "MOON", "IAU_MOON", "LT", "EARTH", "J2000", e3),
+            )
+            @test same_kind(
+                () -> g_sincpt(m, t, et, fix, cor, o, dref, dv),
+                () -> sincpt(ctx, m, t, et, fix, cor, o, dref, dv)
+            )
         end
         @test neo_kind(() -> sincpt(ctx, "ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH", "J2000", [1.0, 0.0])) == :badarg
         # Radii that are not valid.
         radii = gdpool(ctx, "BODY301_RADII")
         for bad in ([1737.4, 1737.4], [1737.4, 1737.4, 1737.4, 1.0], [1737.4, -1.0, 1737.4], [0.0, 1737.4, 1737.4])
             both_pdpool(ctx, "BODY301_RADII", bad)
-            @test same_kind(() -> g_subpnt("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH"),
-                () -> subpnt(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH"))
-            @test same_kind(() -> g_sincpt("ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH", "J2000", e3),
-                () -> sincpt(ctx, "ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH", "J2000", e3))
+            @test same_kind(
+                () -> g_subpnt("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH"),
+                () -> subpnt(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH")
+            )
+            @test same_kind(
+                () -> g_sincpt("ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH", "J2000", e3),
+                () -> sincpt(ctx, "ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH", "J2000", e3)
+            )
         end
         both_dvpool(ctx, "BODY301_RADII")
-        @test same_kind(() -> g_subslr("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH"),
-            () -> subslr(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH"); expect=:kernelvarnotfound)
+        @test same_kind(
+            () -> g_subslr("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH"),
+            () -> subslr(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH"); expect = :kernelvarnotfound
+        )
         both_pdpool(ctx, "BODY301_RADII", radii)
         ks = Almanac.kernelset(ctx)
-        @test grel(subpnt(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH")[1],
-            g_subpnt("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH")[1]) < SUB_TOL.point
+        @test grel(
+            subpnt(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH")[1],
+            g_subpnt("NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "LT", "EARTH")[1]
+        ) < SUB_TOL.point
     end
 
     @testset "DSK method without any DSK file loaded" begin
@@ -265,39 +289,51 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
         nodsk = neo_context(files)
         et, m, p = 1.0e8, "DSK/UNPRIORITIZED", [1737.0, 0.0, 0.0]
         ray = ("MOON", et, "IAU_MOON", "NONE", "EARTH", "J2000", [-1.0, 0.0, 0.0])
-        cut = (et, "IAU_MOON", "NONE", "CENTER", "EARTH", [0.0, 0.0, 1.0], 0.5, 2, 1e-4, 1e-7, 10)
+        cut = (et, "IAU_MOON", "NONE", "CENTER", "EARTH", [0.0, 0.0, 1.0], 0.5, 2, 1.0e-4, 1.0e-7, 10)
         occ = ("MOON", m, "IAU_MOON", "SUN", "POINT", " ", "NONE", "EARTH")
-        gfo(c...) = try GFO.gfoclt(c...) catch e; e isa GFO.CError ? error("CSPICE error: $(e.kind)") : rethrow() end
+        gfo(c...) = try
+            GFO.gfoclt(c...)
+        catch e
+            e isa GFO.CError ? error("CSPICE error: $(e.kind)") : rethrow()
+        end
         calls = (
             (() -> g_subpnt("INTERCEPT/" * m, ray[1:5]...), () -> subpnt(nodsk, "INTERCEPT/" * m, ray[1:5]...)),
             (() -> g_subslr("NADIR/" * m, ray[1:5]...), () -> subslr(nodsk, "NADIR/" * m, ray[1:5]...)),
             (() -> g_sincpt(m, ray...), () -> sincpt(nodsk, m, ray...)),
-            (() -> g_illumg(m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p),
-                () -> illumg(nodsk, m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p)),
-            (() -> g_illumf(m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p),
-                () -> illumf(nodsk, m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p)),
+            (
+                () -> g_illumg(m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p),
+                () -> illumg(nodsk, m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p),
+            ),
+            (
+                () -> g_illumf(m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p),
+                () -> illumf(nodsk, m, "MOON", "SUN", et, "IAU_MOON", "NONE", "EARTH", p),
+            ),
             (() -> g_occult(occ..., et), () -> occult(nodsk, occ..., et)),
             (() -> g_limbpt("TANGENT/" * m, "MOON", cut...), () -> limbpt(nodsk, "TANGENT/" * m, "MOON", cut...)),
-            (() -> g_termpt("UMBRAL/TANGENT/" * m, "SUN", "MOON", cut...),
-                () -> termpt(nodsk, "UMBRAL/TANGENT/" * m, "SUN", "MOON", cut...)),
+            (
+                () -> g_termpt("UMBRAL/TANGENT/" * m, "SUN", "MOON", cut...),
+                () -> termpt(nodsk, "UMBRAL/TANGENT/" * m, "SUN", "MOON", cut...),
+            ),
             (() -> c_latsrf(m, "MOON", et, "IAU_MOON", [[0.1, 0.2]]), () -> latsrf(nodsk, m, "MOON", et, "IAU_MOON", [[0.1, 0.2]])),
             (() -> c_srfnrm(m, "MOON", et, "IAU_MOON", [p]), () -> srfnrm(nodsk, m, "MOON", et, "IAU_MOON", [p])),
-            (() -> gfo("ANY", occ..., 300.0, [et, et + 3600.0]),
-                () -> gfoclt(nodsk, "ANY", occ..., 300.0, Window([et, et + 3600.0]))),
+            (
+                () -> gfo("ANY", occ..., 300.0, [et, et + 3600.0]),
+                () -> gfoclt(nodsk, "ANY", occ..., 300.0, Window([et, et + 3600.0])),
+            ),
         )
         try
             for (c, n) in calls
-                @test same_kind(c, n; expect=:noloadeddskfiles)
+                @test same_kind(c, n; expect = :noloadeddskfiles)
             end
         finally
-            oracle_load(geo_kernels(; dsk=true))
+            oracle_load(geo_kernels(; dsk = true))
         end
     end
 
     @testset "no allocation and inferred types on ellipsoids" begin
         ks = Almanac.kernelset(ctx)
         et = 2.5e8
-        dv = SVector{3,Float64}(spkpos(ctx, 301, et, 1, "LT+S", 399)[1])
+        dv = SVector{3, Float64}(spkpos(ctx, 301, et, 1, "LT+S", 399)[1])
         for c in ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT+S", "XCN")
             @test gwarm(sub_alloc_pnt, ks, "NEAR POINT/ELLIPSOID", et, c) == 0
             @test gwarm(sub_alloc_pnt, ks, "INTERCEPT/ELLIPSOID", et, c) == 0
@@ -307,13 +343,13 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
             @test gwarm(sub_alloc_slr, ks, "INTERCEPT/ELLIPSOID", et, c) == 0
         end
         @test gwarm(sub_alloc_rec, ks) == 0
-        T3 = Tuple{SVector{3,Float64},Float64,SVector{3,Float64}}
+        T3 = Tuple{SVector{3, Float64}, Float64, SVector{3, Float64}}
         @test (@inferred subpnt(ks, "NEAR POINT/ELLIPSOID", 301, et, 10020, "CN+S", 399)) isa T3
         @test (@inferred subslr(ks, "INTERCEPT/ELLIPSOID", 301, et, 10020, "LT+S", 399)) isa T3
         @test (@inferred subpnt(ctx, "NEAR POINT/ELLIPSOID", "MOON", et, "IAU_MOON", "CN+S", "EARTH")) isa T3
         @test (@inferred Nothing sincpt(ks, "ELLIPSOID", 301, et, 10020, "CN+S", 399, 1, dv)) isa T3
         @test (@inferred Nothing sincpt(ks, "ELLIPSOID", 301, et, 10020, "CN+S", 399, 1, -dv)) === nothing
-        @test (@inferred srfrec(ks, 301, 0.1, 0.2)) isa SVector{3,Float64}
+        @test (@inferred srfrec(ks, 301, 0.1, 0.2)) isa SVector{3, Float64}
     end
 
     @testset "epoch as a dual number: derivative against the central difference" begin
@@ -322,28 +358,31 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
         h = 20.0
         for et in record_safe_epochs(rng, nsample(6, 24))
             for cor in ("NONE", "LT", "LT+S", "CN+S", "XCN+S")
-                dv = SVector{3,Float64}(spkpos(ctx, 301, et, 1, cor, 399)[1]) + SVector(300.0, -200.0, 100.0)
-                fs = Pair{String,Function}[
+                dv = SVector{3, Float64}(spkpos(ctx, 301, et, 1, cor, 399)[1]) + SVector(300.0, -200.0, 100.0)
+                fs = Pair{String, Function}[
                     "subpnt near" => t -> vcat(subpnt(ks, "NEAR POINT/ELLIPSOID", 301, t, 10020, cor, 399)[[1, 3]]...),
                     "subpnt intercept" => t -> vcat(subpnt(ks, "INTERCEPT/ELLIPSOID", 399, t, 10013, cor, 301)[[1, 3]]...),
-                    "sincpt" => t -> vcat(sincpt(ks, "ELLIPSOID", 301, t, 10020, cor, 399, 1, dv)[[1, 3]]...)]
-                startswith(cor, "X") || push!(fs,
+                    "sincpt" => t -> vcat(sincpt(ks, "ELLIPSOID", 301, t, 10020, cor, 399, 1, dv)[[1, 3]]...),
+                ]
+                startswith(cor, "X") || push!(
+                    fs,
                     "subslr near" => t -> vcat(subslr(ks, "NEAR POINT/ELLIPSOID", 301, t, 10020, cor, 399)[[1, 3]]...),
-                    "subslr intercept" => t -> vcat(subslr(ks, "INTERCEPT/ELLIPSOID", 399, t, 10013, cor, 10)[[1, 3]]...))
+                    "subslr intercept" => t -> vcat(subslr(ks, "INTERCEPT/ELLIPSOID", 399, t, 10013, cor, 10)[[1, 3]]...)
+                )
                 for (name, f) in fs
                     d = f(ForwardDiff.Dual(et, 1.0))
-                    @test isapprox(ForwardDiff.value.(d), f(et); rtol=1e-12)
+                    @test isapprox(ForwardDiff.value.(d), f(et); rtol = 1.0e-12)
                     fd = geo_fd(f, et, h)
                     gput!(st, name, norm(ForwardDiff.partials.(d, 1) .- fd) / norm(fd))
                 end
                 # The epoch at the point follows the light time.
                 te = subpnt(ks, "NEAR POINT/ELLIPSOID", 301, ForwardDiff.Dual(et, 1.0), 10020, cor, 399)[2]
-                @test abs(ForwardDiff.partials(te, 1) - 1.0) < 1e-5
+                @test abs(ForwardDiff.partials(te, 1) - 1.0) < 1.0e-5
             end
         end
         greport("dual epoch against central difference", st)
         for k in keys(st.d)
-            @test st.d[k] < 1e-4
+            @test st.d[k] < 1.0e-4
         end
         # DSK shapes take a plain epoch.
         @test neo_kind(() -> subpnt(ks, "NADIR/DSK/UNPRIORITIZED", 301, ForwardDiff.Dual(1.0e8, 1.0), 10020, "LT", 399)) == :notsupported

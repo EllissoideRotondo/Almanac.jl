@@ -10,10 +10,13 @@ radians) and its arithmetic, down to the last bit where a test compares bits.
 julia --startup-file=no --threads=8 test/parallel.jl [group ...]                 # tests, several processes
 julia --startup-file=no --threads=8 --project=test test/runtests.jl [group ...]  # tests, one process
 julia --project=docs docs/make.jl                                               # manual and doctests
+julia --project=@runic -m Runic --inplace .                                     # format (CI checks it)
 ```
 
 Run the tests with `--threads=8`; the groups `threads`, `gf_threads` and `ek_threads`
-skip with one thread.
+skip with one thread. The code is formatted with [Runic](https://github.com/fredrikekre/Runic.jl)
+(`julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'` once); CI fails on a file that
+Runic would change.
 
 ## Skills
 

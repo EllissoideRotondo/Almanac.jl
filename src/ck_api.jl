@@ -51,14 +51,20 @@ a CK frame.
 
 "Throw `SpiceError(:valueoutofrange)` unless the tolerance `tol` is a number `>= 0`."
 @inline function _ck_check_tol(tol::Real)
-    tol >= 0 || throw(SpiceError(:valueoutofrange,
-        "the tolerance must be non-negative but was $tol"))
+    tol >= 0 || throw(
+        SpiceError(
+            :valueoutofrange,
+            "the tolerance must be non-negative but was $tol"
+        )
+    )
     return Float64(tol)
 end
 
 "ET at which `ckgp` changes frames: 0 for two inertial frames, else the ET of `clkout`."
-@inline function _ck_change_epoch(ks::KernelSet, inst::Int32, refreq::Int32, refseg::Int32,
-        clkout::Float64)
+@inline function _ck_change_epoch(
+        ks::KernelSet, inst::Int32, refreq::Int32, refseg::Int32,
+        clkout::Float64
+    )
     (frame_def(ks, refreq).class == 1 && frame_def(ks, refseg).class == 1) && return 0.0
     return sct2e(ks, _ck_sclkid(ks, inst), clkout)
 end
@@ -253,8 +259,12 @@ julia> ckmeta(-77000, "SCLK"), ckmeta(5, "SPK")
 """
 function ckmeta(ks::KernelSet, ckid::Integer, meta::AbstractString)
     item = uppercase(strip(meta))
-    k = item == "SCLK" ? 1 : item == "SPK" ? 2 : throw(SpiceError(:unknownckmeta,
-        "the CK meta data item \"$meta\" is not SCLK or SPK"))
+    k = item == "SCLK" ? 1 : item == "SPK" ? 2 : throw(
+            SpiceError(
+                :unknownckmeta,
+                "the CK meta data item \"$meta\" is not SCLK or SPK"
+            )
+        )
     id = Int32(ckid)
     m = get(ks.ckmeta, id, nothing)
     return Int(m === nothing ? _ckmeta_default(id) : m[k])
@@ -273,8 +283,12 @@ function _ck_open(f, path::AbstractString, who::AbstractString)
     _require_binary_kernel(who, path, "CK")
     daf = open_daf(path)
     try
-        daf.kind === :CK || throw(SpiceError(:invalidfiletype,
-            "the file $path is a binary $(daf.kind) kernel; a CK file is needed"))
+        daf.kind === :CK || throw(
+            SpiceError(
+                :invalidfiletype,
+                "the file $path is a binary $(daf.kind) kernel; a CK file is needed"
+            )
+        )
         return f(daf)
     finally
         _unmap!(daf.data)
@@ -323,7 +337,7 @@ pointing instances of type 1, the stored intervals of types 2 and 4, the
 interpolation intervals of types 3 and 5 from their start to the last instance in
 them, and the mini-segment intervals of type 6 up to their last packet.
 """
-function _ck_intervals!(out::Vector{NTuple{2,Float64}}, data::Vector{Float64}, seg::CKSegment)
+function _ck_intervals!(out::Vector{NTuple{2, Float64}}, data::Vector{Float64}, seg::CKSegment)
     beg, en = seg.baddr, seg.eaddr
     dtype = seg.dtype
     if dtype == 1
@@ -331,23 +345,27 @@ function _ck_intervals!(out::Vector{NTuple{2,Float64}}, data::Vector{Float64}, s
         psiz = seg.avflag ? 7 : 4
         tbase = beg + nrec * psiz - 1
         for i in 1:nrec
-            push!(out, (data[tbase+i], data[tbase+i]))
+            push!(out, (data[tbase + i], data[tbase + i]))
         end
     elseif dtype == 2
         nrec = round(Int, ((en - beg + 1) * 100.0 + 1.0) / 1001.0, RoundNearestTiesAway)
         for i in 1:nrec
-            push!(out, (data[beg+8*nrec+i-1], data[beg+9*nrec+i-1]))
+            push!(out, (data[beg + 8 * nrec + i - 1], data[beg + 9 * nrec + i - 1]))
         end
     elseif dtype == 3 || dtype == 5
         if dtype == 3
-            invls, nrec = round(Int, data[en-1]), round(Int, data[en])
+            invls, nrec = round(Int, data[en - 1]), round(Int, data[en])
             rsize = seg.avflag ? 7 : 4
         else
-            subtyp = round(Int, data[en-3])
-            0 <= subtyp <= 3 || throw(SpiceError(:notsupported,
-                "unexpected subtype $subtyp of a CK type 5 segment"))
-            invls, nrec = round(Int, data[en-1]), round(Int, data[en])
-            rsize = _CK5_PACKSZ[subtyp+1]
+            subtyp = round(Int, data[en - 3])
+            0 <= subtyp <= 3 || throw(
+                SpiceError(
+                    :notsupported,
+                    "unexpected subtype $subtyp of a CK type 5 segment"
+                )
+            )
+            invls, nrec = round(Int, data[en - 1]), round(Int, data[en])
+            rsize = _CK5_PACKSZ[subtyp + 1]
         end
         ndir = (nrec - 1) ÷ 100
         tickat = beg + rsize * nrec
@@ -392,19 +410,19 @@ function _ck_intervals!(out::Vector{NTuple{2,Float64}}, data::Vector{Float64}, s
         _, _, pdrbas, pdrtyp, pktbas, npkt, pktsz, pktoff = _ck_meta04(data, seg)
         for k in 1:npkt
             a = pdrtyp == 0 ? pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff :
-                pktbas + trunc(Int, data[pdrbas+k])
-            push!(out, (data[a] - data[a+1], data[a] + data[a+1]))
+                pktbas + trunc(Int, data[pdrbas + k])
+            push!(out, (data[a] - data[a + 1], data[a] + data[a + 1]))
         end
     elseif dtype == 6
         n = round(Int, data[en])
         ptrbas = en - 2 - (n + 1)
         ivlbas = ptrbas - n ÷ 100 - (n + 1)
         for i in 1:n
-            minie = beg - 1 + round(Int, data[ptrbas+i+1]) - 1
+            minie = beg - 1 + round(Int, data[ptrbas + i + 1]) - 1
             npkt = round(Int, data[minie])
-            lstepc = data[minie-4-(npkt-1)÷100]
-            first = max(data[ivlbas+i], seg.t0)
-            finish = min(lstepc, data[ivlbas+i+1], seg.t1)
+            lstepc = data[minie - 4 - (npkt - 1) ÷ 100]
+            first = max(data[ivlbas + i], seg.t0)
+            finish = min(lstepc, data[ivlbas + i + 1], seg.t1)
             first <= finish && push!(out, (first, finish))
         end
     else
@@ -425,16 +443,26 @@ window comes first, as in [`spkcov!`](@ref) and [`pckcov!`](@ref); CSPICE and SP
 have it last. See [`ckcov`](@ref) for the arguments, the intervals and the errors. A
 call that throws for an argument or for the file leaves `cover` unchanged.
 """
-function ckcov!(cover::Window, ks::KernelSet, ck::AbstractString, idcode::Integer,
-        needav::Bool, level::AbstractString, tol::Real, timsys::AbstractString)
+function ckcov!(
+        cover::Window, ks::KernelSet, ck::AbstractString, idcode::Integer,
+        needav::Bool, level::AbstractString, tol::Real, timsys::AbstractString
+    )
     tolf = _ck_check_tol(tol)
     lev = uppercase(strip(level))
-    lev in ("SEGMENT", "INTERVAL") || throw(SpiceError(:invalidoption,
-        "allowed values of the level are SEGMENT and INTERVAL; the value was '$level'"))
+    lev in ("SEGMENT", "INTERVAL") || throw(
+        SpiceError(
+            :invalidoption,
+            "allowed values of the level are SEGMENT and INTERVAL; the value was '$level'"
+        )
+    )
     sys = uppercase(strip(timsys))
-    sys in ("SCLK", "TDB") || throw(SpiceError(:notsupported,
-        "the time system was '$timsys'; allowed values are SCLK and TDB"))
-    raw = NTuple{2,Float64}[]
+    sys in ("SCLK", "TDB") || throw(
+        SpiceError(
+            :notsupported,
+            "the time system was '$timsys'; allowed values are SCLK and TDB"
+        )
+    )
+    raw = NTuple{2, Float64}[]
     _ck_open(ck, "ckcov") do daf
         for seg in daf.cksegments
             (seg.inst == idcode && (seg.avflag || !needav)) || continue
@@ -501,8 +529,10 @@ end
 
 See also [`ckcov!`](@ref), [`spkcov`](@ref), [`pckcov`](@ref).
 """
-ckcov(ks::KernelSet, ck::AbstractString, idcode::Integer, needav::Bool,
-    level::AbstractString, tol::Real, timsys::AbstractString) =
+ckcov(
+    ks::KernelSet, ck::AbstractString, idcode::Integer, needav::Bool,
+    level::AbstractString, tol::Real, timsys::AbstractString
+) =
     ckcov!(Window(), ks, ck, idcode, needav, level, tol, timsys)
 
 # --- forms on a context and on the default context ---------------------------------------
@@ -518,16 +548,24 @@ ckgpav(inst::Integer, sclkdp::Real, tol::Real, ref::NameOrID) =
 ckmeta(ctx::SpiceContext, ckid::Integer, meta::AbstractString) =
     ckmeta(kernelset(ctx), ckid, meta)
 ckmeta(ckid::Integer, meta::AbstractString) = ckmeta(default_context(), ckid, meta)
-ckcov(ctx::SpiceContext, ck::AbstractString, idcode::Integer, needav::Bool,
-    level::AbstractString, tol::Real, timsys::AbstractString) =
+ckcov(
+    ctx::SpiceContext, ck::AbstractString, idcode::Integer, needav::Bool,
+    level::AbstractString, tol::Real, timsys::AbstractString
+) =
     ckcov(kernelset(ctx), ck, idcode, needav, level, tol, timsys)
-ckcov(ck::AbstractString, idcode::Integer, needav::Bool, level::AbstractString, tol::Real,
-    timsys::AbstractString) = ckcov(default_context(), ck, idcode, needav, level, tol, timsys)
-ckcov!(cover::Window, ctx::SpiceContext, ck::AbstractString, idcode::Integer, needav::Bool,
-    level::AbstractString, tol::Real, timsys::AbstractString) =
+ckcov(
+    ck::AbstractString, idcode::Integer, needav::Bool, level::AbstractString, tol::Real,
+    timsys::AbstractString
+) = ckcov(default_context(), ck, idcode, needav, level, tol, timsys)
+ckcov!(
+    cover::Window, ctx::SpiceContext, ck::AbstractString, idcode::Integer, needav::Bool,
+    level::AbstractString, tol::Real, timsys::AbstractString
+) =
     ckcov!(cover, kernelset(ctx), ck, idcode, needav, level, tol, timsys)
-ckcov!(cover::Window, ck::AbstractString, idcode::Integer, needav::Bool,
-    level::AbstractString, tol::Real, timsys::AbstractString) =
+ckcov!(
+    cover::Window, ck::AbstractString, idcode::Integer, needav::Bool,
+    level::AbstractString, tol::Real, timsys::AbstractString
+) =
     ckcov!(cover, default_context(), ck, idcode, needav, level, tol, timsys)
 ckfrot(ctx::SpiceContext, inst::Integer, et::Real) = ckfrot(kernelset(ctx), inst, et)
 ckfrot(inst::Integer, et::Real) = ckfrot(default_context(), inst, et)

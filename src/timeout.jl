@@ -6,33 +6,37 @@
 # Numbers to strings
 # ---------------------------------------------------------------------------------
 
-const _POW10 = (1.0, 10.0, 100.0, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13,
-    1e14, 1e15, 1e16, 1e17)
-const _IPOW10 = (1.0, 0.1, 0.01, 0.001, 1e-4, 1e-5, 1e-6, 1e-7, 1e-8, 1e-9, 1e-10, 1e-11,
-    1e-12, 1e-13, 1e-14, 1e-15, 1e-16, 1e-17)
+const _POW10 = (
+    1.0, 10.0, 100.0, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e9, 1.0e10, 1.0e11, 1.0e12, 1.0e13,
+    1.0e14, 1.0e15, 1.0e16, 1.0e17,
+)
+const _IPOW10 = (
+    1.0, 0.1, 0.01, 0.001, 1.0e-4, 1.0e-5, 1.0e-6, 1.0e-7, 1.0e-8, 1.0e-9, 1.0e-10, 1.0e-11,
+    1.0e-12, 1.0e-13, 1.0e-14, 1.0e-15, 1.0e-16, 1.0e-17,
+)
 
 "Contract: `x >= 0`, `1 <= maxsig <= 14`; returns the first `maxsig` significant decimal digits of `x` (in a tuple of 14, the rest 0) and its decimal exponent, generated with the arithmetic of CSPICE `dpstr`. Zero gives digits 0 and exponent 0."
-function _dpstr_digits(x::Float64, maxsig::Int=14)
+function _dpstr_digits(x::Float64, maxsig::Int = 14)
     x == 0.0 && return ntuple(_ -> 0, Val(14)), 0
-    buf = zero(MVector{14,Int})
+    buf = zero(MVector{14, Int})
     copy = x
     exp10 = log10(copy)
     if exp10 < 0.0
         expont = trunc(Int, exp10) - 1
         k = -expont
         while k > 16
-            copy *= 1e16
+            copy *= 1.0e16
             k -= 16
         end
-        k != 0 && (copy *= _POW10[k+1])
+        k != 0 && (copy *= _POW10[k + 1])
     else
         expont = trunc(Int, exp10)
         k = expont
         while k > 16
-            copy *= 1e-16
+            copy *= 1.0e-16
             k -= 16
         end
-        k != 0 && (copy *= _IPOW10[k+1])
+        k != 0 && (copy *= _IPOW10[k + 1])
     end
     copy = (round(copy * _POW10[maxsig], RoundNearestTiesAway) + 0.125) * _IPOW10[maxsig]
     if copy >= 10.0
@@ -78,14 +82,16 @@ the characters of slots `from..to` of the virtual digit string of CSPICE `zzvsbs
 decimals), rounded at slot `to` if `rnd`, with `fill` in the integer slots to the left
 of the number, and whether the rounding carried out of slot `from`.
 """
-function _vsbstr(digits::NTuple{14,Int}, expont::Int, from::Int, to::Int, fill::Char=' ',
-        rnd::Bool=true)
+function _vsbstr(
+        digits::NTuple{14, Int}, expont::Int, from::Int, to::Int, fill::Char = ' ',
+        rnd::Bool = true
+    )
     index(slot) = slot < 0 ? expont + slot + 1 : expont + slot
     incr = false
     if rnd
         slot = to + 1 == 0 ? 1 : to + 1
         i = index(slot)
-        incr = 0 <= i < 14 && digits[i+1] >= 5
+        incr = 0 <= i < 14 && digits[i + 1] >= 5
     end
     out = Vector{Char}(undef, to - from + 1)
     # Loop invariant: slots `slot+1..to` are written and `incr` is the carry into `slot`.
@@ -102,14 +108,14 @@ function _vsbstr(digits::NTuple{14,Int}, expont::Int, from::Int, to::Int, fill::
                     slot < -1 ? fill : '0'
                 end
             elseif i < 14
-                v = digits[i+1] + (incr ? 1 : 0)
+                v = digits[i + 1] + (incr ? 1 : 0)
                 v == 10 ? '0' : (incr = false; Char('0' + v))
             else
                 incr = false
                 '0'
             end
         end
-        out[slot-from+1] = c
+        out[slot - from + 1] = c
     end
     return String(out), incr
 end
@@ -187,11 +193,11 @@ function _dpfmt(x::Float64, pictur::AbstractString)::String
     # Exponent form, right justified in the width of the picture.
     expform = let sign = sign, sgnlen = sgnlen
         () -> begin
-        sigdig = lastch - sgnlen - (min(1, div(expont, 1000)) + 4 + min(1, div(expont, 100))) - 1
-        sigdig < 1 && return stars
-        e = _dpstr(x, sigdig)
-        e = lstrip(string(sign, SubString(e, 2)), ' ')
-        ncodeunits(e) >= lastch ? String(first(e, lastch)) : lpad(e, lastch)
+            sigdig = lastch - sgnlen - (min(1, div(expont, 1000)) + 4 + min(1, div(expont, 100))) - 1
+            sigdig < 1 && return stars
+            e = _dpstr(x, sigdig)
+            e = lstrip(string(sign, SubString(e, 2)), ' ')
+            ncodeunits(e) >= lastch ? String(first(e, lastch)) : lpad(e, lastch)
         end
     end
     (expont >= intlen && y != 0.0) && return expform()
@@ -202,7 +208,7 @@ function _dpfmt(x::Float64, pictur::AbstractString)::String
     if shift
         frstch = something(findfirst(c -> c != ' ' && c != '-', str), 0)
         if frstch > 2
-            str[frstch-1] = str[1]
+            str[frstch - 1] = str[1]
             str[1] = ' '
         end
     end
@@ -218,16 +224,18 @@ _pad(n::Integer, width::Int) = lpad(string(n), width, '0')
 
 # Marks of a `timout` picture. The number of a mark is its slot in the `ID` array of
 # `timout.c`; slot 1 is text that is not a mark.
-const _TO_MARKS = ("YYYY" => 2, "YR" => 3, "MON" => 4, "Mon" => 5, "mon" => 6, "MONTH" => 7,
+const _TO_MARKS = (
+    "YYYY" => 2, "YR" => 3, "MON" => 4, "Mon" => 5, "mon" => 6, "MONTH" => 7,
     "Month" => 8, "month" => 9, "MM" => 10, "DOY" => 11, "WKD" => 12, "Wkd" => 13, "wkd" => 14,
     "WEEKDAY" => 15, "Weekday" => 16, "weekday" => 17, "DD" => 18, "MN" => 19, "HR" => 20,
     "SC" => 21, ".#" => 22, "#" => 23, "JULIAND" => 24, "::UTC" => 25, "::TDB" => 26,
     "::TDT" => 27, "::TT" => 28, "SP2000" => 29, "SP1950" => 30, "::RND" => 31, "::TRNC" => 32,
     "ERA" => 33, "era" => 34, "?ERA?" => 35, "?era?" => 36, "AMPM" => 37, "ampm" => 38,
-    "::UTC+" => 39, "::UTC-" => 40, "::JCAL" => 41, "::GCAL" => 42, "::MCAL" => 43, "AP" => 46)
+    "::UTC+" => 39, "::UTC-" => 40, "::JCAL" => 41, "::GCAL" => 42, "::MCAL" => 43, "AP" => 46,
+)
 
 "The marks in descending ASCII order: the order in which `scan` tries the marks that start with one character, so that the longest of `::UTC+`, `::UTC` or `MONTH`, `MON` wins."
-const _TO_SCAN = sort!(collect(_TO_MARKS); by=first, rev=true)
+const _TO_SCAN = sort!(collect(_TO_MARKS); by = first, rev = true)
 
 const _ID_TEXT = 1
 const _ID_HASH = 23
@@ -315,8 +323,10 @@ function _to_keep(v::Vector{Int}, keep::Vector{Bool})
     return out
 end
 
-const _WEEKDAY_NAMES = ("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
-    "Saturday")
+const _WEEKDAY_NAMES = (
+    "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday",
+    "Saturday",
+)
 
 """
     _to_scan(mystr) -> (ident, beg, fin)
@@ -418,11 +428,17 @@ timout(et, "JULIAND.##### ::TDB ::RND")           # Julian date in TDB, rounded
 
 See also [`et2utc`](@ref), [`etcal`](@ref), [`str2et`](@ref).
 """
-function timout(ks::KernelSet, et::Real, pictur::AbstractString,
-        defs::TimeDefaults=TimeDefaults())::String
+function timout(
+        ks::KernelSet, et::Real, pictur::AbstractString,
+        defs::TimeDefaults = TimeDefaults()
+    )::String
     l = _lsk(ks, :missingtimeinfo)
-    isempty(pictur) && throw(SpiceError(:badformat, "timout: the picture is an empty " *
-        "string (a blank picture gives a blank string)"))
+    isempty(pictur) && throw(
+        SpiceError(
+            :badformat, "timout: the picture is an empty " *
+                "string (a blank picture gives a blank string)"
+        )
+    )
     # The picture, left justified, with one blank after it: the blank closes the last
     # numeric component.
     mystr = Vector{UInt8}(codeunits(first(strip(pictur, ' '), 255)))
@@ -457,12 +473,12 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
                     # The digits of the offset belong to the mark, not to the text.
                     dozone = true
                     timtyp = _ID_UTCP
-                    if i < ntokns && last == fin[i+1]
-                        ident[i+1] = ident[i]
+                    if i < ntokns && last == fin[i + 1]
+                        ident[i + 1] = ident[i]
                         i += 1
                     else
                         fin[i] = last
-                        i < ntokns && (beg[i+1] = last + 1)
+                        i < ntokns && (beg[i + 1] = last + 1)
                     end
                 end
             end
@@ -472,7 +488,7 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
 
     # Calendar: the default, or the first calendar mark of the picture.
     caltyp = defs.calendar == "GREGORIAN" ? _ID_GCAL :
-             (defs.calendar == "JULIAN" ? _ID_JCAL : _ID_MCAL)
+        (defs.calendar == "JULIAN" ? _ID_JCAL : _ID_MCAL)
     k = findfirst(id -> _to_class(id) == _TC_CAL, ident)
     k === nothing || (caltyp = ident[k])
 
@@ -481,8 +497,12 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
     vanish = false
 
     # Remove the marks that write nothing.
-    keep = [!(_to_class(id) == _TC_SYSTEM || _to_class(id) == _TC_CAL || id == _ID_RND ||
-              id == 32) for id in ident]
+    keep = [
+        !(
+            _to_class(id) == _TC_SYSTEM || _to_class(id) == _TC_CAL || id == _ID_RND ||
+                id == 32
+        ) for id in ident
+    ]
     ident, beg, fin = _to_keep(ident, keep), _to_keep(beg, keep), _to_keep(fin, keep)
     ntokns = length(ident)
     # The closures take the variables that change as arguments: a captured variable
@@ -496,7 +516,7 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
         while i <= ntokns
             type = class(ident, i)
             if type == _TC_TEXT || type == _TC_POINT || type == _TC_PLACE || type == _TC_AMPM ||
-               type == _TC_ERA || type == _TC_MONTH || type == _TC_WKDAY
+                    type == _TC_ERA || type == _TC_MONTH || type == _TC_WKDAY
                 i += 1
             else
                 factor = 1.0
@@ -571,7 +591,7 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
                 value -= 1.0
                 frac += 1.0
             end
-            intmed = (trunc(frac * _POW10[trncat+1]) - 0.125) / _POW10[trncat+1]
+            intmed = (trunc(frac * _POW10[trncat + 1]) - 0.125) / _POW10[trncat + 1]
             value = trunc(value) + clamp(intmed, 0.0, 1.0)
             put(appnd, _dpfmt(value, fmt))
             appnd += width
@@ -616,8 +636,10 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
                 if type == _TC_WKDAY
                     tv = _ttrans(l, bastyp, ywfmt, _tvec(myet))
                     if timtyp == _ID_UTCP
-                        tv = _ttrans(l, _TT_YMWDF, _TT_YMWDF,
-                            (tv[1], tv[2], tv[3], tv[4], tv[5] + hoff, tv[6] + moff, 0.0))
+                        tv = _ttrans(
+                            l, _TT_YMWDF, _TT_YMWDF,
+                            (tv[1], tv[2], tv[3], tv[4], tv[5] + hoff, tv[6] + moff, 0.0)
+                        )
                     end
                     values[_TC_WKDAY] = tv[4]
                     have[_TC_WKDAY] = true
@@ -632,8 +654,10 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
                     tv = _ttrans(l, bastyp, ymdfmt, _tvec(myet))
                     values[_TC_SC] = tv[6]
                     if timtyp == _ID_UTCP
-                        tv = _ttrans(l, _TT_YMDF, _TT_YMDF,
-                            (tv[1], tv[2], tv[3], tv[4] + hoff, tv[5] + moff, 0.0, tv[7]))
+                        tv = _ttrans(
+                            l, _TT_YMDF, _TT_YMDF,
+                            (tv[1], tv[2], tv[3], tv[4] + hoff, tv[5] + moff, 0.0, tv[7])
+                        )
                     end
                     values[_TC_HR] = tv[4]
                     values[_TC_MN] = tv[5]
@@ -645,11 +669,13 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
                     elseif caltyp == _ID_JCAL
                         go2jul = true
                     else
-                        go2jul = gyear < 1582 || (gyear == 1582 &&
-                                  (gmonth < 10 || (gmonth == 10 && gday < 15)))
+                        go2jul = gyear < 1582 || (
+                            gyear == 1582 &&
+                                (gmonth < 10 || (gmonth == 10 && gday < 15))
+                        )
                     end
                     cy, cm, cd, cdoy = go2jul ? (jyear, jmonth, jday, jdoy) :
-                                       (gyear, gmonth, gday, gdoy)
+                        (gyear, gmonth, gday, gdoy)
                     values[_TC_YEAR] = Float64(cy)
                     values[_TC_MM] = Float64(cm)
                     values[_TC_DD] = Float64(cd)
@@ -665,15 +691,17 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
                         vanish = values[_TC_YEAR] >= 1000.0
                     end
                     values[_TC_YR] = _rmaind(values[_TC_YEAR], 100.0)[2]
-                    for t in (_TC_YEAR, _TC_YR, _TC_DOY, _TC_MM, _TC_MONTH, _TC_DD, _TC_HR,
-                        _TC_MN, _TC_SC, _TC_AP, _TC_ERA)
+                    for t in (
+                            _TC_YEAR, _TC_YR, _TC_DOY, _TC_MM, _TC_MONTH, _TC_DD, _TC_HR,
+                            _TC_MN, _TC_SC, _TC_AP, _TC_ERA,
+                        )
                         have[t] = true
                     end
                 end
             end
             if type == _TC_MONTH || type == _TC_WKDAY
                 name = type == _TC_MONTH ? _MONTH_NAMES[clamp(_nint(values[_TC_MM]), 1, 12)] :
-                       _WEEKDAY_NAMES[clamp(_nint(values[_TC_WKDAY]), 1, 7)]
+                    _WEEKDAY_NAMES[clamp(_nint(values[_TC_WKDAY]), 1, 7)]
                 style = (ident[i] - (type == _TC_MONTH ? 4 : 12))   # 0..5, as the marks are listed
                 style < 3 && (name = first(name, 3))
                 name = style % 3 == 0 ? uppercase(name) : (style % 3 == 2 ? lowercase(name) : name)
@@ -730,8 +758,10 @@ function timout(ks::KernelSet, et::Real, pictur::AbstractString,
                     timfmt = 2
                     incr = 0.0
                     intyp = type != _TC_JD ? bastyp :
-                            ((timtyp == _ID_TDT || timtyp == _ID_TT) ? _TT_JDTDT :
-                             (timtyp == _ID_TDB ? _TT_JDTDB : _TT_JDUTC))
+                        (
+                            (timtyp == _ID_TDT || timtyp == _ID_TT) ? _TT_JDTDT :
+                            (timtyp == _ID_TDB ? _TT_JDTDB : _TT_JDUTC)
+                        )
                 end
                 if timfmt == 1
                     comps = (_TC_SIGNED_YEAR, _TC_MM, _TC_DD, _TC_HR, _TC_MN, _TC_SC)
@@ -795,7 +825,7 @@ date, as in CSPICE. The fraction is rounded. The seconds are 60 inside a leap se
 before 1000 has `A.D.` or `B.C.` in the formats `C` and `D`.
 
 Throws `SpiceError(:badformat)` if `format` is not one of the five,
-`SpiceError(:badtime)` if the year is before 1 A.D. in an ISO format, and
+`SpiceError(:yearoutofrange)` if the year is before 1 A.D. in an ISO format, and
 `SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded.
 
 # Examples
@@ -808,8 +838,12 @@ See also [`timout`](@ref), [`str2et`](@ref).
 """
 function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer)::String
     fmt = uppercase(rstrip(first(format, 4), ' '))
-    fmt in ("C", "D", "J", "ISOC", "ISOD") || throw(SpiceError(:badformat,
-        "the format '$format' is not one of 'C', 'D', 'J', 'ISOC', 'ISOD'"))
+    fmt in ("C", "D", "J", "ISOC", "ISOD") || throw(
+        SpiceError(
+            :badformat,
+            "the format '$format' is not one of 'C', 'D', 'J', 'ISOC', 'ISOD'"
+        )
+    )
     l = _lsk(ks, :missingtimeinfo)
     p = Int(clamp(prec, 0, 14))
     x = primal(et)
@@ -819,7 +853,7 @@ function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer):
     end
     tai = _unitim(l, x, _US_TDB, _US_TAI)
     whole = floor(tai)
-    scale = _POW10[p+1]
+    scale = _POW10[p + 1]
     frac = _dnint(scale * (tai - whole))
     if frac == scale
         whole += 1.0
@@ -847,8 +881,12 @@ function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer):
     elseif year > 0
         calendar_style ? string(year, " A.D.") : string(year)
     else
-        calendar_style || throw(SpiceError(:badtime,
-            "the year $(1 - year) B.C. cannot be written in an ISO format"))
+        calendar_style || throw(
+            SpiceError(
+                :yearoutofrange,
+                "the year $(1 - year) B.C. cannot be written in an ISO format"
+            )
+        )
         string(1 - year, " B.C.")
     end
     if fmt == "C"
@@ -919,18 +957,20 @@ function etcal(et::Real)::String
     elseif year < 1000
         era = "A.D."
     end
-    tsecs = trunc(Int, secs * 1e3)
+    tsecs = trunc(Int, secs * 1.0e3)
     hours = div(tsecs, 3600000)
     tsecs -= hours * 3600000
     mins = div(tsecs, 60000)
     tsecs -= mins * 60000
-    secs = Float64(tsecs) / 1e3
-    secs + 5e-4 < 60.0 && (secs += 5e-4)
-    secs = trunc(Int, secs * 1e3) / 1e3
+    secs = Float64(tsecs) / 1.0e3
+    secs + 5.0e-4 < 60.0 && (secs += 5.0e-4)
+    secs = trunc(Int, secs * 1.0e3) / 1.0e3
     sstr = lstrip(_dpstrf(secs, 6), ' ')
     (ncodeunits(sstr) >= 2 && sstr[2] == '.') && (sstr = "0" * sstr)
     sstr = first(sstr, 6)
-    parts = (messge, string(year), era, _MONTH_ABBR[month], _pad(day, 2),
-        string(_pad(hours, 2), ':', _pad(mins, 2), ':', sstr))
+    parts = (
+        messge, string(year), era, _MONTH_ABBR[month], _pad(day, 2),
+        string(_pad(hours, 2), ':', _pad(mins, 2), ':', sstr),
+    )
     return join(Iterators.filter(!isempty, parts), ' ')
 end

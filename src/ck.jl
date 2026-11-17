@@ -19,10 +19,10 @@
 "Index in `1:n` of the element of `data[base+1:base+n]` (ascending) closest to `x`; of two equally close the later one, as `lstcld_`. Requires `n >= 1`."
 @inline function _lstcld(data::Vector{Float64}, base::Int, n::Int, x::Float64)
     @inbounds begin
-        x <= data[base+1] && return 1
-        data[base+n] <= x && return n
+        x <= data[base + 1] && return 1
+        data[base + n] <= x && return n
         i = _lstltd(data, base, n, x)          # data[i] < x <= data[i+1], 1 <= i < n
-        return x - data[base+i] < data[base+i+1] - x ? i : i + 1
+        return x - data[base + i] < data[base + i + 1] - x ? i : i + 1
     end
 end
 
@@ -43,7 +43,7 @@ Rotation matrix of the SPICE quaternion `(q0, q1, q2, q3)` (scalar first), as `q
 the products are divided by the squared length when that is not exactly 1 (for a number
 type other than `Float64` always, so that the derivatives of the length cancel).
 """
-@inline function _ck_q2m(q0::T, q1::T, q2::T, q3::T) where {T<:Real}
+@inline function _ck_q2m(q0::T, q1::T, q2::T, q3::T) where {T <: Real}
     q01, q02, q03 = q0 * q1, q0 * q2, q0 * q3
     q12, q13, q23 = q1 * q2, q1 * q3, q2 * q3
     q1s, q2s, q3s = q1 * q1, q2 * q2, q3 * q3
@@ -58,12 +58,13 @@ type other than `Float64` always, so that the derivatives of the length cancel).
     return Mat3{T}(
         1.0 - 2.0 * (q2s + q3s), 2.0 * (q12 + q03), 2.0 * (q13 - q02),
         2.0 * (q12 - q03), 1.0 - 2.0 * (q1s + q3s), 2.0 * (q23 + q01),
-        2.0 * (q13 + q02), 2.0 * (q23 - q01), 1.0 - 2.0 * (q1s + q2s))
+        2.0 * (q13 + q02), 2.0 * (q23 - q01), 1.0 - 2.0 * (q1s + q2s)
+    )
 end
 
 "Matrix of the quaternion stored at `data[a:a+3]`."
 @inline _ck_q2m(data::Vector{Float64}, a::Int) =
-    @inbounds _ck_q2m(data[a], data[a+1], data[a+2], data[a+3])
+    @inbounds _ck_q2m(data[a], data[a + 1], data[a + 2], data[a + 3])
 
 """
     _ck_m2q(r) -> NTuple{4,Float64}
@@ -124,7 +125,7 @@ end
 Matrix that rotates vectors by `angle` radians about `axis`, as `axisar_` (each column
 is `vrotv_` of a unit vector); the identity for a zero axis. Generic over the angle type.
 """
-@inline function _ck_axisar(axis::Vec3{Float64}, angle::T) where {T<:Real}
+@inline function _ck_axisar(axis::Vec3{Float64}, angle::T) where {T <: Real}
     n = _ck_vnorm(axis)
     n == 0.0 && return one(Mat3{T})
     x = axis / n
@@ -136,15 +137,17 @@ is `vrotv_` of a unit vector); the identity for a zero axis. Generic over the an
         v2 = cross(x, v1)
         c * v1 + s * v2 + p
     end
-    return hcat(col(Vec3{Float64}(1.0, 0.0, 0.0)), col(Vec3{Float64}(0.0, 1.0, 0.0)),
-        col(Vec3{Float64}(0.0, 0.0, 1.0)))
+    return hcat(
+        col(Vec3{Float64}(1.0, 0.0, 0.0)), col(Vec3{Float64}(0.0, 1.0, 0.0)),
+        col(Vec3{Float64}(0.0, 0.0, 1.0))
+    )
 end
 
 @inline _ck_none(::Type{T}) where {T} = (false, zero(Mat3{T}), zero(Vec3{T}), 0.0)
 
 "Angular velocity stored at `data[a:a+2]` as `Vec3{T}`, or zero if `has` is false."
 @inline _ck_av(::Type{T}, data::Vector{Float64}, a::Int, has::Bool) where {T} =
-    has ? @inbounds(Vec3{T}(data[a], data[a+1], data[a+2])) : zero(Vec3{T})
+    has ? @inbounds(Vec3{T}(data[a], data[a + 1], data[a + 2])) : zero(Vec3{T})
 
 @noinline _ck_bad(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
 
@@ -157,8 +160,10 @@ Type 1 segment, as `ckr01_` and `cke01_`: the pointing instance closest to `sclk
 the hundred instances of its directory group, if it is within `tol` ticks. The result is
 constant in `sclk`.
 """
-function _ck_eval01(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+function _ck_eval01(
+        data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     p = primal(sclk)
     beg = seg.baddr
     psiz = seg.avflag ? 7 : 4
@@ -171,7 +176,7 @@ function _ck_eval01(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64
     skip = (group - 1) * 100
     n = min(100, nrec - skip)
     i = skip + _lstcld(data, tbase + skip, n, p)
-    @inbounds t = data[tbase+i]
+    @inbounds t = data[tbase + i]
     abs(p - t) > tol && return _ck_none(T)
     a = beg + psiz * (i - 1)
     return true, Mat3{T}(_ck_q2m(data, a)), _ck_av(T, data, a + 4, seg.avflag), t
@@ -187,8 +192,10 @@ about the constant angular velocity by the angle `|av| * rate * (clkout - start)
 Inside an interval `clkout` is `sclk` and the rotation carries its number type; within
 `tol` of an interval the nearer end of the nearer interval is used.
 """
-function _ck_eval02(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+function _ck_eval02(
+        data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     p = primal(sclk)
     beg = seg.baddr
     nrec = round(Int, ((seg.eaddr - beg + 1) * 100.0 + 1.0) / 1001.0, RoundNearestTiesAway)
@@ -203,38 +210,38 @@ function _ck_eval02(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64
     index = 0
     clkout = sclk
     @inbounds if i == 0
-        p + tol >= data[sb+1] || return _ck_none(T)
-        start = data[sb+1]
+        p + tol >= data[sb + 1] || return _ck_none(T)
+        start = data[sb + 1]
         clkout = convert(T, start)
         index = 1
     else
-        stopi = data[beg+nrec*9+skip+i-1]
+        stopi = data[beg + nrec * 9 + skip + i - 1]
         if p <= stopi
-            start = data[sb+i]
+            start = data[sb + i]
             index = i
         elseif i == n
             p - tol <= stopi || return _ck_none(T)
-            start = data[sb+i]
+            start = data[sb + i]
             clkout = convert(T, stopi)
             index = i
         else
             diff1 = p - stopi
-            diff2 = data[sb+i+1] - p
+            diff2 = data[sb + i + 1] - p
             min(diff1, diff2) <= tol || return _ck_none(T)
             if diff2 <= diff1
-                start = data[sb+i+1]
+                start = data[sb + i + 1]
                 clkout = convert(T, start)
                 index = i + 1
             else
-                start = data[sb+i]
+                start = data[sb + i]
                 clkout = convert(T, stopi)
                 index = i
             end
         end
     end
     a = beg + 8 * (skip + index - 1)            # quaternion, angular velocity, rate
-    @inbounds av = Vec3{Float64}(data[a+4], data[a+5], data[a+6])
-    @inbounds rate = data[a+7]
+    @inbounds av = Vec3{Float64}(data[a + 4], data[a + 5], data[a + 6])
+    @inbounds rate = data[a + 7]
     angle = ((clkout - start) * rate) * _ck_vnorm(av)
     rot = _ck_axisar(av, angle)
     cmat = Mat3{T}(_m_mxmt(_ck_q2m(data, a), rot))
@@ -244,11 +251,13 @@ end
 # --- type 3: linear interpolation between pointing instances ----------------------------
 
 "Pointing instance `i` of the type 3 segment as a constant result (`t1 == t2` in `cke03_`)."
-@inline function _ck_single03(::Type{T}, data::Vector{Float64}, seg::CKSegment, psiz::Int,
-        tbase::Int, i::Int) where {T}
+@inline function _ck_single03(
+        ::Type{T}, data::Vector{Float64}, seg::CKSegment, psiz::Int,
+        tbase::Int, i::Int
+    ) where {T}
     a = seg.baddr + psiz * (i - 1)
     return true, Mat3{T}(_ck_q2m(data, a)), _ck_av(T, data, a + 4, seg.avflag),
-        @inbounds(data[tbase+i])
+        @inbounds(data[tbase + i])
 end
 
 """
@@ -261,12 +270,14 @@ is the linear combination of the two stored vectors. `frac` carries the number t
 `sclk`. Outside the interpolation intervals the nearer instance is used if it is within
 `tol` ticks, as a constant.
 """
-function _ck_eval03(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+function _ck_eval03(
+        data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     p = primal(sclk)
     beg, en = seg.baddr, seg.eaddr
     psiz = seg.avflag ? 7 : 4
-    numint = round(Int, data[en-1])
+    numint = round(Int, data[en - 1])
     numrec = round(Int, data[en])
     (numrec >= 1 && numint >= 1 && beg + (psiz + 1) * numrec + numint + 1 <= en) ||
         _ck_bad(:baddaf, "CK type 3 segment with wrong record or interval counts")
@@ -279,23 +290,23 @@ function _ck_eval03(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64
     l = 0
     @inbounds if i == 0
         if group == 1
-            data[tbase+1] - p <= tol || return _ck_none(T)
+            data[tbase + 1] - p <= tol || return _ck_none(T)
             return _ck_single03(T, data, seg, psiz, tbase, 1)
         end
         l = skip
     elseif i == n
-        p - data[tbase+skip+n] <= tol || return _ck_none(T)
+        p - data[tbase + skip + n] <= tol || return _ck_none(T)
         return _ck_single03(T, data, seg, psiz, tbase, skip + n)
     else
         l = skip + i
     end
     r = l + 1
-    @inbounds lsclk, rsclk = data[tbase+l], data[tbase+r]
+    @inbounds lsclk, rsclk = data[tbase + l], data[tbase + r]
     # The first interval start after `p`; the two instances are joined only if the
     # right one is before it.
     sb = tbase + numrec + nrdir                 # starts are data[sb+1:sb+numint]
     j = _lstled(data, sb, numint, p)
-    nstart = j < numint ? @inbounds(data[sb+j+1]) : floatmax(Float64)
+    nstart = j < numint ? @inbounds(data[sb + j + 1]) : floatmax(Float64)
     if !(rsclk < nstart)
         ldiff = p - lsclk
         rdiff = rsclk - p
@@ -312,8 +323,8 @@ function _ck_eval03(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64
     cmat = Mat3{T}(_m_mxmt(cmat1, delta))
     av = zero(Vec3{T})
     if seg.avflag
-        @inbounds av1 = Vec3{Float64}(data[a1+4], data[a1+5], data[a1+6])
-        @inbounds av2 = Vec3{Float64}(data[a2+4], data[a2+5], data[a2+6])
+        @inbounds av1 = Vec3{Float64}(data[a1 + 4], data[a1 + 5], data[a1 + 6])
+        @inbounds av2 = Vec3{Float64}(data[a2 + 4], data[a2 + 5], data[a2 + 6])
         av = Vec3{T}((1.0 - frac) * av1 + frac * av2)
     end
     return true, cmat, av, p
@@ -322,8 +333,10 @@ end
 # --- type 4: Chebyshev polynomials over intervals of variable length ---------------------
 
 "Value at `x` of the Chebyshev expansion with the `ncf >= 1` coefficients `data[cb+1:cb+ncf]` on the interval `mid ± rad`, as `chbval_`."
-@inline function _ck_chbval(data::Vector{Float64}, cb::Int, ncf::Int, mid::Float64,
-        rad::Float64, x::T) where {T<:Real}
+@inline function _ck_chbval(
+        data::Vector{Float64}, cb::Int, ncf::Int, mid::Float64,
+        rad::Float64, x::T
+    ) where {T <: Real}
     s = (x - mid) / rad
     s2 = 2.0 * s
     w0 = zero(T)
@@ -331,9 +344,9 @@ end
     for j in ncf:-1:2       # invariant: w0, w1 are the Clenshaw sums of coefficients j+1:ncf
         w2 = w1
         w1 = w0
-        w0 = @inbounds(data[cb+j]) + (s2 * w1 - w2)
+        w0 = @inbounds(data[cb + j]) + (s2 * w1 - w2)
     end
-    return s * w0 - w1 + @inbounds(data[cb+1])
+    return s * w0 - w1 + @inbounds(data[cb + 1])
 end
 
 """
@@ -351,10 +364,12 @@ request), which is the type that the CK type 4 writer uses.
     ametas = metasz == 15 ? 16 : metasz
     b = en - ametas                             # item k is data[b+k]
     b >= seg.baddr || _ck_bad(:baddaf, "generic segment shorter than its meta data")
-    item(k) = round(Int, @inbounds data[b+k])
+    item(k) = round(Int, @inbounds data[b + k])
     begm1 = seg.baddr - 1
-    item(5) == 3 || _ck_bad(:notsupported,
-        "CK type 4 segment with a reference directory type other than 3")
+    item(5) == 3 || _ck_bad(
+        :notsupported,
+        "CK type 4 segment with a reference directory type other than 3"
+    )
     return item(6) + begm1, item(7), item(8) + begm1, item(10), item(11) + begm1,
         item(12), item(15), (ametas >= 16 ? item(16) : 0)
 end
@@ -367,33 +382,35 @@ components (and the three angular velocity components) over the interval that ho
 `sclk`; the quaternion is normalized. In a gap the nearer end of the nearer interval is
 used if it is within `tol` ticks.
 """
-function _ck_eval04(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+function _ck_eval04(
+        data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     p = primal(sclk)
     refbas, nref, pdrbas, pdrtyp, pktbas, npkt, pktsz, pktoff = _ck_meta04(data, seg)
     (npkt >= 1 && nref >= 1) || _ck_bad(:baddaf, "CK type 4 segment without records")
     # Address of the first value (the interval midpoint) of packet k, as `sgfpkt_`.
     packet(k) = pdrtyp == 0 ? pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff :
-                pktbas + trunc(Int, @inbounds data[pdrbas+k])
+        pktbas + trunc(Int, @inbounds data[pdrbas + k])
     idx = _lstled(data, refbas, nref, p)
     clkout = sclk
     a = 0
     @inbounds if idx == 0
         a = packet(1)
-        left = data[a] - data[a+1]
+        left = data[a] - data[a + 1]
         p >= left - tol || return _ck_none(T)
         clkout = convert(T, left)
     elseif idx >= npkt
         a = packet(npkt)
-        right = data[a] + data[a+1]
+        right = data[a] + data[a + 1]
         p <= right + tol || return _ck_none(T)
         p >= right && (clkout = convert(T, right))
     else
         a = packet(idx)
-        rbnd1 = data[a] + data[a+1]
+        rbnd1 = data[a] + data[a + 1]
         if p > rbnd1
             a2 = packet(idx + 1)
-            lbnd2 = data[a2] - data[a2+1]
+            lbnd2 = data[a2] - data[a2 + 1]
             if p - rbnd1 <= lbnd2 - p
                 p <= rbnd1 + tol || return _ck_none(T)
                 clkout = convert(T, rbnd1)
@@ -404,7 +421,7 @@ function _ck_eval04(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64
             end
         end
     end
-    @inbounds mid, rad, packed = data[a], data[a+1], data[a+2]
+    @inbounds mid, rad, packed = data[a], data[a + 1], data[a + 2]
     # The seven coefficient counts are packed in one double, base 128 (`zzck4d2i_`).
     x = 128.0^6
     ncf = ntuple(_ -> 0, Val(7))
@@ -421,7 +438,7 @@ function _ck_eval04(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64
     q3 = _ck_chbval(data, cb, ncf[4], mid, rad, clkout); cb += ncf[4]
     mag = sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3)
     cmat = primal(mag) > 0.0 ? _ck_q2m(q0 / mag, q1 / mag, q2 / mag, q3 / mag) :
-           one(Mat3{T})
+        one(Mat3{T})
     av = zero(Vec3{T})
     if seg.avflag && needav
         a1 = _ck_chbval(data, cb, ncf[5], mid, rad, clkout); cb += ncf[5]
@@ -452,13 +469,15 @@ Value and derivative at `x` of the polynomial through the `n` points with abscis
 scheme as `lgrind_` (`_neville_d!`). `w` and `dw` are work vectors of length `>= n`.
 Requires `1 <= n` and distinct abscissae.
 """
-@inline function _ck_lagrange!(w::MVector{_CK5_MAXN,T}, dw::MVector{_CK5_MAXN,T},
+@inline function _ck_lagrange!(
+        w::MVector{_CK5_MAXN, T}, dw::MVector{_CK5_MAXN, T},
         data::Vector{Float64}, xb::Int, yb::Int, stride::Int, n::Int,
-        sg::MVector{_CK5_MAXN,Float64}, x::T) where {T<:Real}
+        sg::MVector{_CK5_MAXN, Float64}, x::T
+    ) where {T <: Real}
     @inbounds for j in 1:n
-        w[j] = convert(T, sg[j] * data[yb+(j-1)*stride])
+        w[j] = convert(T, sg[j] * data[yb + (j - 1) * stride])
     end
-    return _neville_d!(w, dw, n, i -> @inbounds(data[xb+i]), x, _ck_noequal)
+    return _neville_d!(w, dw, n, i -> @inbounds(data[xb + i]), x, _ck_noequal)
 end
 
 """
@@ -469,21 +488,31 @@ Value and derivative at `x` of the Hermite polynomial that has the values
 abscissae `data[xb+j]`, `j = 1:n`, as `hrmint_` (`_hermite_table!`). `w` and `dw` are
 work vectors of length `>= 2n`. Requires `1 <= n <= 12` and distinct abscissae.
 """
-@inline function _ck_hermite!(w::MVector{_CK5_MAXN,T}, dw::MVector{_CK5_MAXN,T},
+@inline function _ck_hermite!(
+        w::MVector{_CK5_MAXN, T}, dw::MVector{_CK5_MAXN, T},
         data::Vector{Float64}, xb::Int, yb::Int, doff::Int, stride::Int, n::Int,
-        rate::Float64, x::T) where {T<:Real}
+        rate::Float64, x::T
+    ) where {T <: Real}
     @inbounds for j in 1:n
-        w[2j-1] = convert(T, data[yb+(j-1)*stride])
-        w[2j] = convert(T, data[yb+doff+(j-1)*stride] * rate)
+        w[2j - 1] = convert(T, data[yb + (j - 1) * stride])
+        w[2j] = convert(T, data[yb + doff + (j - 1) * stride] * rate)
     end
-    return _hermite_table!(w, dw, n, i -> @inbounds(data[xb+i]), x, _ck_noequal)
+    return _hermite_table!(w, dw, n, i -> @inbounds(data[xb + i]), x, _ck_noequal)
 end
 
-@noinline _ck_badsign() = throw(SpiceError(:badquatsign,
-    "quaternion sign error: a quaternion of a Hermite CK record is farther from its " *
-    "predecessor than its negative"))
-@noinline _ck_zeroquat() = throw(SpiceError(:dividebyzero,
-    "the interpolated quaternion of a CK segment has magnitude zero"))
+@noinline _ck_badsign() = throw(
+    SpiceError(
+        :badquatsign,
+        "quaternion sign error: a quaternion of a Hermite CK record is farther from its " *
+            "predecessor than its negative"
+    )
+)
+@noinline _ck_zeroquat() = throw(
+    SpiceError(
+        :dividebyzero,
+        "the interpolated quaternion of a CK segment has magnitude zero"
+    )
+)
 
 """
     _ck_qav(q, mags, ds, rate) -> Vec3
@@ -492,7 +521,7 @@ Angular velocity (radians per second) from the unit quaternion `q = s / mags`, w
 `s` is the interpolated quaternion and `ds` its derivative with respect to ticks, as
 `cke05_` computes it with `qdq2av_`; `rate` is the nominal seconds per tick.
 """
-@inline function _ck_qav(q::NTuple{4,T}, mags::T, ds::NTuple{4,T}, rate::Float64) where {T<:Real}
+@inline function _ck_qav(q::NTuple{4, T}, mags::T, ds::NTuple{4, T}, rate::Float64) where {T <: Real}
     qds = (q[1] * ds[1] + q[2] * ds[2] + q[3] * ds[3] + q[4] * ds[4]) / mags
     dq = ntuple(i -> ds[i] / mags - qds * q[i], Val(4))
     # qtemp = conj(q) * dq; the angular velocity is -2 times its vector part.
@@ -513,13 +542,15 @@ angular velocity), as `cke05_`. Element `k` of packet `j` is
 in the number type of `t` and the quaternion is normalized. `av` is zero unless
 `needav`. Requires `1 <= n <= 24` (12 for the Hermite subtypes).
 """
-@inline function _ck_eval05(data::Vector{Float64}, pb::Int, xb::Int, n::Int, subtyp::Int,
-        rate::Float64, t::T, needav::Bool) where {T<:Real}
-    packsz = _CK5_PACKSZ[subtyp+1]
+@inline function _ck_eval05(
+        data::Vector{Float64}, pb::Int, xb::Int, n::Int, subtyp::Int,
+        rate::Float64, t::T, needav::Bool
+    ) where {T <: Real}
+    packsz = _CK5_PACKSZ[subtyp + 1]
     lagrange = subtyp == 1 || subtyp == 3
-    w = MVector{_CK5_MAXN,T}(undef)
-    dw = MVector{_CK5_MAXN,T}(undef)
-    sg = MVector{_CK5_MAXN,Float64}(undef)
+    w = MVector{_CK5_MAXN, T}(undef)
+    dw = MVector{_CK5_MAXN, T}(undef)
+    sg = MVector{_CK5_MAXN, Float64}(undef)
     # Signs that make each quaternion the closer of ±q to its predecessor. The
     # Lagrange subtypes apply them; the Hermite subtypes require all to be +1.
     @inbounds sg[1] = 1.0
@@ -529,9 +560,9 @@ in the number type of `t` and the quaternion is normalized. `av` is zero unless
         dneg = 0.0
         dpos = 0.0
         for k in 1:4
-            prev = sg[j-1] * data[a+k]
-            dneg += (prev + data[b+k])^2
-            dpos += (prev - data[b+k])^2
+            prev = sg[j - 1] * data[a + k]
+            dneg += (prev + data[b + k])^2
+            dpos += (prev - data[b + k])^2
         end
         flip = dneg < dpos
         flip && !lagrange && _ck_badsign()
@@ -578,10 +609,12 @@ end
 Throw `SpiceError` unless `subtyp` is in 0:3 and `wndsiz` is a valid window size for it.
 A bad subtype is `kind`: `:notsupported` in `ckr05_`, `:invalidsubtype` in `ckr06_`.
 """
-@inline function _ck_check05(subtyp::Int, wndsiz::Int, kind::Symbol=:notsupported)
+@inline function _ck_check05(subtyp::Int, wndsiz::Int, kind::Symbol = :notsupported)
     0 <= subtyp <= 3 || _ck_bad(kind, "unexpected subtype of a CK type 5 or 6 segment")
-    (2 <= wndsiz <= _CK5_MAXWND[subtyp+1] && iseven(wndsiz)) || _ck_bad(:invalidvalue,
-        "window size of a CK type 5 or 6 segment is odd or outside the allowed range")
+    (2 <= wndsiz <= _CK5_MAXWND[subtyp + 1] && iseven(wndsiz)) || _ck_bad(
+        :invalidvalue,
+        "window size of a CK type 5 or 6 segment is odd or outside the allowed range"
+    )
     return nothing
 end
 
@@ -593,39 +626,41 @@ the interpolation interval that holds it, interpolated by `_ck_eval05`. A reques
 outside the packets or in a gap between two interpolation intervals gives the nearer
 packet if it is within `tol` ticks, as a constant.
 """
-function _ck_eval05seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+function _ck_eval05seg(
+        data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     p = primal(sclk)
     (p + tol < seg.t0 || p - tol > seg.t1) && return _ck_none(T)
     t = clamp(p, seg.t0, seg.t1)
     beg, en = seg.baddr, seg.eaddr
-    @inbounds rate = data[en-4]
-    @inbounds subtyp, wndsiz = round(Int, data[en-3]), round(Int, data[en-2])
-    @inbounds nints, n = round(Int, data[en-1]), round(Int, data[en])
+    @inbounds rate = data[en - 4]
+    @inbounds subtyp, wndsiz = round(Int, data[en - 3]), round(Int, data[en - 2])
+    @inbounds nints, n = round(Int, data[en - 1]), round(Int, data[en])
     _ck_check05(subtyp, wndsiz)
-    packsz = _CK5_PACKSZ[subtyp+1]
+    packsz = _CK5_PACKSZ[subtyp + 1]
     eb = beg + n * packsz - 1                   # epochs are data[eb+1:eb+n]
     nidir = (nints - 1) ÷ 100
     sbase = en - 5 - nidir - nints              # interval starts are data[sbase+1:sbase+nints]
     (n >= 1 && nints >= 1 && sbase >= eb + n) ||
         _ck_bad(:baddaf, "CK type 5 segment with wrong packet or interval counts")
     @inbounds begin
-        if t < data[eb+1]
-            p + tol < data[eb+1] && return _ck_none(T)
-            t = data[eb+1]
-        elseif t > data[eb+n]
-            p - tol > data[eb+n] && return _ck_none(T)
-            t = data[eb+n]
+        if t < data[eb + 1]
+            p + tol < data[eb + 1] && return _ck_none(T)
+            t = data[eb + 1]
+        elseif t > data[eb + n]
+            p - tol > data[eb + n] && return _ck_none(T)
+            t = data[eb + n]
         end
         i = _lstltd(data, eb, n, t)
         low = i == 0 ? 1 : i
         high = i == 0 ? min(2, n) : low + 1
-        lepoch, hepoch = data[eb+low], data[eb+high]
+        lepoch, hepoch = data[eb + low], data[eb + high]
         i = _lstled(data, sbase, nints, t)
         i == 0 && return _ck_none(T)
-        start = data[sbase+i]
-        nstart = i < nints ? data[sbase+i+1] : floatmax(Float64)
-        nnstrt = i + 1 < nints ? data[sbase+i+2] : floatmax(Float64)
+        start = data[sbase + i]
+        nstart = i < nints ? data[sbase + i + 1] : floatmax(Float64)
+        nnstrt = i + 1 < nints ? data[sbase + i + 2] : floatmax(Float64)
         if hepoch == nstart
             # `low` ends an interpolation interval and `high` starts the next one.
             if abs(t - lepoch) <= abs(hepoch - t)
@@ -649,8 +684,10 @@ function _ck_eval05seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Floa
         first += i
     end
     tt = t == p ? sclk : convert(T, t)
-    cmat, av = _ck_eval05(data, beg - 1 + (first - 1) * packsz, eb + first - 1, j - i,
-        subtyp, rate, tt, needav && seg.avflag)
+    cmat, av = _ck_eval05(
+        data, beg - 1 + (first - 1) * packsz, eb + first - 1, j - i,
+        subtyp, rate, tt, needav && seg.avflag
+    )
     return true, cmat, av, t
 end
 
@@ -666,13 +703,15 @@ is nearer, is used if it is within `tol` ticks.
 Deviation from CSPICE: when `ckr06_` moves to the next mini-segment it rounds the clock
 rate of that mini-segment to a whole number; the stored rate is used here.
 """
-function _ck_eval06seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+function _ck_eval06seg(
+        data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     p = primal(sclk)
     (p + tol < seg.t0 || p - tol > seg.t1) && return _ck_none(T)
     t = clamp(p, seg.t0, seg.t1)
     beg, en = seg.baddr, seg.eaddr
-    @inbounds ivlsel = round(Int, data[en-1]) == 1
+    @inbounds ivlsel = round(Int, data[en - 1]) == 1
     @inbounds n = round(Int, data[en])
     ndir = n ÷ 100
     ptrbas = en - 2 - (n + 1)                   # pointers are data[ptrbas+1:ptrbas+n+1]
@@ -680,22 +719,22 @@ function _ck_eval06seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Floa
     (n >= 1 && ivbas >= beg) ||
         _ck_bad(:baddaf, "CK type 6 segment with a wrong mini-segment count")
     miniix = ivlsel ? min(_lstled(data, ivbas, n + 1, t) + 1, n + 1) - 1 :
-             max(_lstltd(data, ivbas, n + 1, t), 1)
+        max(_lstltd(data, ivbas, n + 1, t), 1)
     1 <= miniix <= n || return _ck_none(T)
     while true
         # At most two passes: the second one is for the next mini-segment.
-        @inbounds minib = round(Int, data[ptrbas+miniix]) + beg - 1
-        @inbounds minie = round(Int, data[ptrbas+miniix+1]) + beg - 2
+        @inbounds minib = round(Int, data[ptrbas + miniix]) + beg - 1
+        @inbounds minie = round(Int, data[ptrbas + miniix + 1]) + beg - 2
         (beg <= minib && minib + 4 <= minie <= ivbas) ||
             _ck_bad(:baddaf, "CK type 6 segment with a wrong mini-segment pointer")
-        @inbounds rate = data[minie-3]
-        @inbounds subtyp, wndsiz = round(Int, data[minie-2]), round(Int, data[minie-1])
+        @inbounds rate = data[minie - 3]
+        @inbounds subtyp, wndsiz = round(Int, data[minie - 2]), round(Int, data[minie - 1])
         @inbounds npkt = round(Int, data[minie])
         npkdir = (npkt - 1) ÷ 100
-        @inbounds lstepc = data[minie-4-npkdir]
+        @inbounds lstepc = data[minie - 4 - npkdir]
         if t > lstepc
             tol == 0.0 && return _ck_none(T)
-            @inbounds b1 = data[ivbas+miniix+1]
+            @inbounds b1 = data[ivbas + miniix + 1]
             (t - lstepc > tol && b1 - t > tol) && return _ck_none(T)
             if miniix == n
                 t - lstepc <= tol || return _ck_none(T)
@@ -709,7 +748,7 @@ function _ck_eval06seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Floa
             end
         end
         _ck_check05(subtyp, wndsiz, :invalidsubtype)
-        packsz = _CK5_PACKSZ[subtyp+1]
+        packsz = _CK5_PACKSZ[subtyp + 1]
         eb = minib - 1 + npkt * packsz          # epochs are data[eb+1:eb+npkt]
         (npkt >= 1 && eb + npkt <= minie) ||
             _ck_bad(:baddaf, "CK type 6 mini-segment with a wrong packet count")
@@ -720,10 +759,13 @@ function _ck_eval06seg(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Floa
         rsize = min(wndsiz ÷ 2, npkt - high + 1)
         first = low - lsize + 1
         tt = t == p ? sclk : convert(T, t)
-        cmat, av = _ck_eval05(data, minib - 1 + (first - 1) * packsz, eb + first - 1,
-            lsize + rsize, subtyp, rate, tt, needav && seg.avflag)
+        cmat, av = _ck_eval05(
+            data, minib - 1 + (first - 1) * packsz, eb + first - 1,
+            lsize + rsize, subtyp, rate, tt, needav && seg.avflag
+        )
         return true, cmat, av, t
     end
+    return
 end
 
 # --- one segment, and the segment search -------------------------------------------------
@@ -741,8 +783,10 @@ result. `found` is false if the segment has no pointing within `tol` of `sclk`.
 interpolates, and constants where it takes a stored instance. Does not allocate.
 Throws `SpiceError(:ckunknowndatatype)` for a data type outside 1:6.
 """
-@inline function _ck_eval(data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+@inline function _ck_eval(
+        data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     dtype = seg.dtype
     dtype == 3 && return _ck_eval03(data, seg, sclk, tol, needav)
     dtype == 5 && return _ck_eval05seg(data, seg, sclk, tol, needav)
@@ -750,7 +794,7 @@ Throws `SpiceError(:ckunknowndatatype)` for a data type outside 1:6.
     dtype == 2 && return _ck_eval02(data, seg, sclk, tol, needav)
     dtype == 1 && return _ck_eval01(data, seg, sclk, tol, needav)
     dtype == 4 && return _ck_eval04(data, seg, sclk, tol, needav)
-    _ck_bad(:ckunknowndatatype, "CK data type $dtype is not supported")
+    return _ck_bad(:ckunknowndatatype, "CK data type $dtype is not supported")
 end
 
 """
@@ -762,8 +806,10 @@ segment is tried if its coverage meets `[sclk - tol, sclk + tol]` and, if `needa
 has angular velocity. `ref` is the reference frame of that segment (0 if not found).
 Requires `tol >= 0`. Does not allocate.
 """
-function _ck_search(ks::KernelSet, inst::Int32, sclk::T, tol::Float64,
-        needav::Bool) where {T<:Real}
+function _ck_search(
+        ks::KernelSet, inst::Int32, sclk::T, tol::Float64,
+        needav::Bool
+    ) where {T <: Real}
     segs = get(ks.ck, inst, nothing)
     if segs !== nothing
         p = primal(sclk)
@@ -791,14 +837,16 @@ or `CK_<id>_SPK` with one value in the pool; the one of the two that is absent h
 the default of `ckmeta_`.
 """
 function build_ckmeta(pool::AbstractDict)
-    out = Dict{Int32,NTuple{2,Int32}}()
+    out = Dict{Int32, NTuple{2, Int32}}()
     for (name, value) in pool
         m = match(r"^CK_(-?\d+)_(SCLK|SPK)$", name)
         m === nothing && continue
         id = tryparse(Int32, m.captures[1])
         id === nothing && continue
-        (value isa Vector{Float64} && length(value) == 1 && isfinite(value[1]) &&
-         abs(value[1]) <= typemax(Int32)) || continue
+        (
+            value isa Vector{Float64} && length(value) == 1 && isfinite(value[1]) &&
+                abs(value[1]) <= typemax(Int32)
+        ) || continue
         old = get(out, id, (_ckmeta_default(id), _ckmeta_default(id)))
         v = round(Int32, value[1])
         out[id] = m.captures[2] == "SCLK" ? (v, old[2]) : (old[1], v)
@@ -819,14 +867,20 @@ struct _CKExact end
 "Mode of a CK frame evaluation: rotation and CSPICE angular velocity at a `Float64` epoch."
 struct _CKState end
 
-@noinline _ck_noconnect(fd::FrameDef, et, why::String) = throw(SpiceError(:noframeconnect,
-    "the CK frame $(fd.id) (CK ID $(fd.classid)) has no orientation at ET $(primal(et)): $why"))
+@noinline _ck_noconnect(fd::FrameDef, et, why::String) = throw(
+    SpiceError(
+        :noframeconnect,
+        "the CK frame $(fd.id) (CK ID $(fd.classid)) has no orientation at ET $(primal(et)): $why"
+    )
+)
 
 "Clock data of the CK frame `fd`; throws `SpiceError(:noframeconnect)` if no SCLK kernel is loaded for it."
 @inline function _ck_frame_clock(ks::KernelSet, fd::FrameDef, et)
     clock = get(ks.sclk, _ck_sclkid(ks, fd.classid), nothing)
-    clock === nothing && _ck_noconnect(fd, et,
-        "no type 1 SCLK data are loaded for the clock $(_ck_sclkid(ks, fd.classid))")
+    clock === nothing && _ck_noconnect(
+        fd, et,
+        "no type 1 SCLK data are loaded for the clock $(_ck_sclkid(ks, fd.classid))"
+    )
     return clock
 end
 
@@ -847,7 +901,7 @@ segment (`rav2xf_`, `invstm_`).
 
 Throws `SpiceError(:noframeconnect)` if no segment gives a pointing. Does not allocate.
 """
-@inline function _ck_frame_step(::_CKExact, ks::KernelSet, fd::FrameDef, et::T) where {T<:Real}
+@inline function _ck_frame_step(::_CKExact, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
     ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
     found, cmat, _, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, false)
     found || _ck_noconnect(fd, et, "no CK segment covers this epoch")
@@ -870,7 +924,7 @@ end
 @inline _ck_epoch(::_CKExact, et) = et
 @inline _ck_epoch(::_CKState, et::Float64) = taylor_var(et, Val(1))
 @inline _ck_numtype(::_CKExact, ::Type{T}) where {T} = T
-@inline _ck_numtype(::_CKState, ::Type{Float64}) = Taylor{1,Float64}
+@inline _ck_numtype(::_CKState, ::Type{Float64}) = Taylor{1, Float64}
 
 """
     _ck_chain_to(mode, ks, id, stop, et) -> Mat3
@@ -883,7 +937,7 @@ velocity for the CK links and the time derivative for the others). Requires `sto
 be `id`, or a frame that the chain of `id` reaches before its first CK frame, or J2000.
 At most `MAX_FRAME_CHAIN` links. Does not allocate.
 """
-function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where {T<:Real}
+function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where {T <: Real}
     rot = one(Mat3{_ck_numtype(mode, T)})
     cur = id
     n = 0
@@ -933,7 +987,7 @@ velocity of its segment, and needs a segment that has one. The two chains are fo
 to their first common frame, as in `frame_rotation`.
 """
 function _ck_state_rotation(ks::KernelSet, from::Int32, to::Int32, et::Float64)
-    from == to && return one(Mat3{Taylor{1,Float64}})
+    from == to && return one(Mat3{Taylor{1, Float64}})
     chain = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
     cur = to
     len = 1
@@ -954,5 +1008,5 @@ function _ck_state_rotation(ks::KernelSet, from::Int32, to::Int32, et::Float64)
     up = _ck_chain_to(_CKState(), ks, from, node, et)
     node == to && return up
     down = _ck_chain_to(_CKState(), ks, to, node, et)
-    return Mat3{Taylor{1,Float64}}(_m_mtxm(down, up))
+    return Mat3{Taylor{1, Float64}}(_m_mtxm(down, up))
 end

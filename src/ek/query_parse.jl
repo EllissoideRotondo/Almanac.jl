@@ -63,9 +63,11 @@ const _EKQ_TKSTAR = 10
 const _EKQ_TKEOQ = 11       # end of query (the parser makes it)
 
 "Keywords of the query language in code order (`ekkeyw.inc`): the code is the position."
-const _EKQ_KEYWORDS = ("ALL", "AND", "ASC", "AVG", "BETWEEN", "BY", "COUNT", "DESC",
+const _EKQ_KEYWORDS = (
+    "ALL", "AND", "ASC", "AVG", "BETWEEN", "BY", "COUNT", "DESC",
     "DISTINCT", "EQ", "FROM", "GE", "GROUP", "GT", "HAVING", "IS", "LE", "LIKE", "LT",
-    "MAX", "MIN", "NE", "NOT", "NULL", "OR", "ORDER", "SELECT", "SUM", "WHERE")
+    "MAX", "MIN", "NE", "NOT", "NULL", "OR", "ORDER", "SELECT", "SUM", "WHERE",
+)
 const _EKQ_KWAND = 2
 const _EKQ_KWASC = 3
 const _EKQ_KWBETW = 5
@@ -88,9 +90,11 @@ const _EKQ_KWSEL = 27
 const _EKQ_KWWHER = 29
 
 "Special character strings of the scanner with their token codes and keyword codes."
-const _EKQ_SPECIAL = (("!=", 1, 22), ("^=", 1, 22), ("<>", 1, 22), ("<=", 1, 17),
+const _EKQ_SPECIAL = (
+    ("!=", 1, 22), ("^=", 1, 22), ("<>", 1, 22), ("<=", 1, 17),
     (">=", 1, 12), ("<", 1, 19), (">", 1, 14), ("=", 1, 10), ("(", 6, 0), (")", 7, 0),
-    (",", 8, 0), (".", 9, 0), ("*", 10, 0))
+    (",", 8, 0), (".", 9, 0), ("*", 10, 0),
+)
 
 # Operator codes of `ekopcd.inc`.
 const _EKQ_EQ = 1
@@ -200,7 +204,7 @@ struct _EKQuery
     tabcat::Vector{Int}
     conjsizes::Vector{Int}
     constraints::Vector{_EKQConstraint}
-    orderby::Vector{Tuple{_EKQCol,Int}}
+    orderby::Vector{Tuple{_EKQCol, Int}}
     select::Vector{_EKQCol}
 end
 
@@ -215,13 +219,13 @@ Contract: returns `msg` with its first `#` replaced by `value`, as `repmc_` and
 `repmi_`: a string loses its leading and trailing blanks and a blank string becomes
 one blank. `msg` without `#` is returned as it is.
 """
-function _ek_qrep(msg::String, value::Union{AbstractString,Integer})::String
+function _ek_qrep(msg::String, value::Union{AbstractString, Integer})::String
     r = findfirst(==(UInt8('#')), codeunits(msg))
     r === nothing && return msg
     v = value isa Integer ? string(value) : String(strip(value, ' '))
     isempty(v) && (v = " ")
     c = codeunits(msg)
-    return string(String(c[1:r-1]), v, String(c[r+1:end]))
+    return string(String(c[1:(r - 1)]), v, String(c[(r + 1):end]))
 end
 
 _ek_qlex(qb::AbstractVector{UInt8}, b::Int, e::Int) = String(qb[b:min(e, length(qb))])
@@ -272,8 +276,10 @@ function _ek_qini()
     i[15] = _EKQ_CSIZE
     i[16] = 1
     sizehint!(i, 256)
-    return _EKQEnc(i, fill(UInt8(' '), _EKQ_CSIZE), zeros(Float64, _EKQ_MAXNUM),
-        zeros(Float64, _EKQ_MAXNUM))
+    return _EKQEnc(
+        i, fill(UInt8(' '), _EKQ_CSIZE), zeros(Float64, _EKQ_MAXNUM),
+        zeros(Float64, _EKQ_MAXNUM)
+    )
 end
 
 # The functions of f2c index the cell from its control area: C element `k` is the cell
@@ -281,17 +287,19 @@ end
 # past the cardinality reads as 0 (CSPICE reads memory that it never set there, which
 # can only happen after its read of one token past a WHERE clause that ends with NOT,
 # zzeknrml.c line 1426; see `tokat` in `_ek_qnrml!`).
-@inline _ek_qget(q::_EKQEnc, k::Int) = k - 5 <= length(q.i) ? Int(@inbounds q.i[k-5]) : 0
-@inline _ek_qput!(q::_EKQEnc, k::Int, v::Integer) = (@inbounds q.i[k-5] = Int32(v); nothing)
+@inline _ek_qget(q::_EKQEnc, k::Int) = k - 5 <= length(q.i) ? Int(@inbounds q.i[k - 5]) : 0
+@inline _ek_qput!(q::_EKQEnc, k::Int, v::Integer) = (@inbounds q.i[k - 5] = Int32(v); nothing)
 
 @inline function _ek_qappnd!(q::_EKQEnc, x::Integer)
-    length(q.i) < _EKQ_ISIZE || _ek_qsignal(:celltoosmall,
-        "The cell cannot accommodate the addition of the element $x")
+    length(q.i) < _EKQ_ISIZE || _ek_qsignal(
+        :celltoosmall,
+        "The cell cannot accommodate the addition of the element $x"
+    )
     push!(q.i, Int32(x))
     return nothing
 end
 
-@inline function _ek_qappnd!(q::_EKQEnc, d::NTuple{6,Int})
+@inline function _ek_qappnd!(q::_EKQEnc, d::NTuple{6, Int})
     for x in d
         _ek_qappnd!(q, x)
     end
@@ -313,8 +321,10 @@ function _ek_qinqc!(q::_EKQEnc, value::AbstractVector{UInt8}, lxb::Int, lxe::Int
     n < 1 && _ek_qsignal(:invalidcount, "Length of string value was $n; must be > 0.")
     free = Int(q.i[16])
     room = Int(q.i[15]) - free + 1
-    n > room && _ek_qsignal(:buffertoosmall, "Out of room in character portion of " *
-        "encoded query; only $room elements were available; $n are needed.")
+    n > room && _ek_qsignal(
+        :buffertoosmall, "Out of room in character portion of " *
+            "encoded query; only $room elements were available; $n are needed."
+    )
     copyto!(q.c, free, value, firstindex(value), n)
     q.i[16] = free + n
     return (1, lxb, lxe, free, free + n - 1, 0)
@@ -328,12 +338,16 @@ returns its descriptor (`zzekinqn_`); `exact` is the correctly rounded value of 
 text. Throws `SpiceError(:buffertoosmall)` if the
 buffer is full.
 """
-function _ek_qinqn!(q::_EKQEnc, value::Float64, type::Int, lxb::Int, lxe::Int,
-        exact::Float64=value)
+function _ek_qinqn!(
+        q::_EKQEnc, value::Float64, type::Int, lxb::Int, lxe::Int,
+        exact::Float64 = value
+    )
     free = Int(q.i[14])
     size = Int(q.i[13])
-    size - free + 1 <= 0 && _ek_qsignal(:buffertoosmall, "Out of room in numeric " *
-        "portion of encoded query; only $size elements were available.")
+    size - free + 1 <= 0 && _ek_qsignal(
+        :buffertoosmall, "Out of room in numeric " *
+            "portion of encoded query; only $size elements were available."
+    )
     q.d[free] = value
     q.dx[free] = exact
     q.i[14] = free + 1
@@ -414,7 +428,7 @@ function _ek_qlx4dec(s::Vector{UInt8}, first::Int)
         return n == 0 ? (first - 1, 0) : (last, n + 1)
     end
     last, n = _ek_qlx4sgn(s, first)
-    if n > 0 && last < l && s[last+1] == UInt8('.')
+    if n > 0 && last < l && s[last + 1] == UInt8('.')
         last, _ = _ek_qlx4uns(s, last + 2)
         n = last + 1 - first
     end
@@ -427,7 +441,7 @@ function _ek_qlx4num(s::Vector{UInt8}, first::Int)
     (first < 1 || first > l) && return first - 1, 0
     last, n = _ek_qlx4dec(s, first)
     if n > 0 && last < l
-        c = s[last+1]
+        c = s[last + 1]
         if c == UInt8('e') || c == UInt8('E') || c == UInt8('D') || c == UInt8('d')
             temp, m = _ek_qlx4sgn(s, last + 2)
             if m > 0
@@ -452,7 +466,7 @@ function _ek_qlxqstr(s::Vector{UInt8}, qchar::UInt8, first::Int)
     (first < 1 || first > l - 1 || qchar == UInt8(' ') || s[first] != qchar) &&
         return first - 1, 0
     loc = 0
-    for k in first+1:l
+    for k in (first + 1):l
         if s[k] == qchar
             loc = k - first
             break
@@ -499,8 +513,8 @@ function _ek_qparsqs(s::AbstractVector{UInt8}, qchar::UInt8, outlen::Int)
             opos += 1
         elseif ipos == last - 1
             return value, "Quote character is unmatched or else string ends without " *
-                          "final quote; take your pick"
-        elseif s[ipos+1] != qchar
+                "final quote; take your pick"
+        elseif s[ipos + 1] != qchar
             return value, "Interior quote character is not doubled"
         else
             push!(value, chr)
@@ -551,9 +565,9 @@ function _ek_qnparsd(s::AbstractVector{UInt8})
         if _ek_qisdigit(c)
             v = Float64(c - UInt8('0'))
             if mode == 1
-                intval < 1e15 ? (intval = intval * 10.0 + v) : (ecount += 1.0)
+                intval < 1.0e15 ? (intval = intval * 10.0 + v) : (ecount += 1.0)
             elseif mode == 2
-                if zeroi && decval < 1e15
+                if zeroi && decval < 1.0e15
                     decval = decval * 10.0 + v
                     ecount -= 1.0
                 end
@@ -573,7 +587,7 @@ function _ek_qnparsd(s::AbstractVector{UInt8})
         end
     end
     return 0.0, "The number represented by the input string is too large to be " *
-                "stored as a double precision number.", ptr
+        "stored as a double precision number.", ptr
 end
 
 """
@@ -618,8 +632,12 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         tq[cptr] == UInt8(' ') && break
         chr = tq[cptr]
         if ntoken == maxntk
-            return nothing, _ek_qrep(_ek_qrep("Maximum allowed number of tokens is #; " *
-                "at least # tokens are present in QUERY.", maxntk), maxntk + 1)
+            return nothing, _ek_qrep(
+                    _ek_qrep(
+                        "Maximum allowed number of tokens is #; " *
+                        "at least # tokens are present in QUERY.", maxntk
+                    ), maxntk + 1
+                )
         end
         kind = 8
         if chr == UInt8('\'') || chr == UInt8('"')
@@ -640,10 +658,10 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
             room = buflen - chcard
             if nchars > room
                 msg = "Insufficient space to store quoted string at location #; # " *
-                      "chars needed; only # are available."
+                    "chars needed; only # are available."
                 return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), nchars), room)
             end
-            value, perr = _ek_qparsqs(view(tq, cptr:cptr+nchars-1), chr, room)
+            value, perr = _ek_qparsqs(view(tq, cptr:(cptr + nchars - 1)), chr, room)
             if !isempty(perr)
                 msg = "Error occurred while parsing quoted string token at location #:"
                 return nothing, string(_ek_qrep(msg, cptr), "  ", perr)
@@ -658,7 +676,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
                 return nothing, _ek_qrep("Invalid numeric token at location #.", cptr)
             if maxnum - length(numvls) < 1
                 msg = "Insufficient space to store value of number at location #; # " *
-                      "elements are available in the NUMVLS array; # are required."
+                    "elements are available in the NUMVLS array; # are required."
                 return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), maxnum), maxnum + 1)
             end
             lexeme = view(tq, cptr:last)
@@ -675,14 +693,14 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
             token!(isint ? _EKQ_TKINT : _EKQ_TKDP, length(numvls), cptr, last)
         elseif kind == 7                                # identifier or keyword
             last = cptr
-            while last < l && _ek_qisidtail(tq[last+1])
+            while last < l && _ek_qisidtail(tq[last + 1])
                 last += 1
             end
             nchars = last - cptr + 1
             room = buflen - chcard
             if nchars > room
                 msg = "Insufficient space to store identifier string at location #; # " *
-                      "chars needed; only # are available."
+                    "chars needed; only # are available."
                 return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), nchars), room)
             end
             name = map(_ek_qupper, view(tq, cptr:last))
@@ -701,8 +719,10 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
                 # A candidate of n characters equals a special string with blank padding.
                 c = codeunits(str)
                 same = tq[cptr] == c[1] &&
-                       (n == 1 ? length(c) == 1 :
-                        tq[cptr+1] == (length(c) == 2 ? c[2] : UInt8(' ')))
+                    (
+                    n == 1 ? length(c) == 1 :
+                        tq[cptr + 1] == (length(c) == 2 ? c[2] : UInt8(' '))
+                )
                 if same
                     token!(tok, val, cptr, cptr - 1 + length(c))
                     found = true
@@ -720,8 +740,10 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
             end
         end
     end
-    return _EKQTokens(length(tokens), tokens, values, lxbegs, lxends, numvls, numexact, chrbuf,
-        chbegs, chends), ""
+    return _EKQTokens(
+            length(tokens), tokens, values, lxbegs, lxends, numvls, numexact, chrbuf,
+            chbegs, chends
+        ), ""
 end
 
 "Contract: returns `(loc, found)` of the first token with the code `tokid` (and the keyword code `kwcode` for a keyword), as `zzektloc_`; `loc == n + 1` if there is none."
@@ -760,15 +782,19 @@ mutable struct _EKQPool
 end
 
 function _ek_qlnkini(size::Int)
-    fwd = Int32.(2:size+1)
+    fwd = Int32.(2:(size + 1))
     fwd[size] = 0
     return _EKQPool(fwd, zeros(Int32, size), size, 1)
 end
 
-@noinline _ek_qlnkbad(node, p::_EKQPool) = _ek_qsignal(:invalidnode,
-    "NODE was $node; valid range is 1 to $(length(p.fwd)).")
-@noinline _ek_qlnkunalloc(node) = _ek_qsignal(:unallocatednode,
-    "Node $node of the linked list pool is not allocated.")
+@noinline _ek_qlnkbad(node, p::_EKQPool) = _ek_qsignal(
+    :invalidnode,
+    "NODE was $node; valid range is 1 to $(length(p.fwd))."
+)
+@noinline _ek_qlnkunalloc(node) = _ek_qsignal(
+    :unallocatednode,
+    "Node $node of the linked list pool is not allocated."
+)
 
 @inline function _ek_qlnkchk(node::Int, p::_EKQPool)
     (node < 1 || node > length(p.fwd)) && _ek_qlnkbad(node, p)
@@ -777,8 +803,10 @@ end
 end
 
 function _ek_qlnkan!(p::_EKQPool)
-    p.nfree == 0 && _ek_qsignal(:nofreenodes,
-        "There are no free nodes left for allocating in the supplied linked list pool.")
+    p.nfree == 0 && _ek_qsignal(
+        :nofreenodes,
+        "There are no free nodes left for allocating in the supplied linked list pool."
+    )
     new = p.free
     p.free = p.fwd[new]
     p.nfree -= 1
@@ -856,8 +884,10 @@ function _ek_qlnkfsl!(head::Int, tail::Int, p::_EKQPool)
         count += 1
         node = Int(p.fwd[node])
     end
-    node != tail && _ek_qsignal(:invalidsublist,
-        "Node $tail cannot be found by forward traversal, starting at node $head.")
+    node != tail && _ek_qsignal(
+        :invalidsublist,
+        "Node $tail cannot be found by forward traversal, starting at node $head."
+    )
     prev = Int(p.bck[head])
     next = Int(p.fwd[tail])
     if prev > 0
@@ -930,9 +960,11 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
     popcnd = zeros(Int, _EKQ_MAXTOK)
     tokat(k) = k <= ntoken ? tokens[k] : 0      # CSPICE reads past the last token here
     valat(k) = k <= ntoken ? values[k] : 0
-    setdsc!(node, d, code) = (for m in 1:6
+    setdsc!(node, d, code) = (
+        for m in 1:6
             dsc[m, node] = d[m]
-        end; dsc[7, node] = code; nothing)
+        end; dsc[7, node] = code; nothing
+    )
 
     # Meta-tokens of the WHERE clause.
     nmeta = 0
@@ -951,8 +983,10 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
         elseif t == _EKQ_TKINT || t == _EKQ_TKDP
             mtcode[node] = _EKQ_MVALUE
             mtexpr[node] = _ek_qlnkan!(dspool)
-            d = _ek_qinqn!(q, tk.numvls[values[i]], t == _EKQ_TKINT ? 3 : 2,
-                tk.lxbegs[i], tk.lxends[i], tk.numexact[values[i]])
+            d = _ek_qinqn!(
+                q, tk.numvls[values[i]], t == _EKQ_TKINT ? 3 : 2,
+                tk.lxbegs[i], tk.lxends[i], tk.numexact[values[i]]
+            )
             setdsc!(mtexpr[node], d, _EKQ_MVALUE)
         elseif t == _EKQ_TKQSTR || t == _EKQ_TKID
             code = t == _EKQ_TKQSTR ? _EKQ_MVALUE : _EKQ_MIDENT
@@ -996,7 +1030,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
                 mtcode[node] = _EKQ_MBETW
             elseif v == _EKQ_KWIS
                 # IS is EQ and IS NOT is NE; a NULL on the right makes them ISNULL, NOTNUL.
-                if i < whrend && tokens[i+1] == _EKQ_TKKEY && values[i+1] == _EKQ_KWNOT
+                if i < whrend && tokens[i + 1] == _EKQ_TKKEY && values[i + 1] == _EKQ_KWNOT
                     mtcode[node] = _EKQ_NE
                     i += 1
                 else
@@ -1006,12 +1040,16 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
                 mtcode[node] = _EKQ_MVALUE
                 mtexpr[node] = 0
             else
-                return _ek_qlexmsg("Unexpected keyword # found at location #.", qb,
-                    tk.lxbegs[i], tk.lxends[i], false)
+                return _ek_qlexmsg(
+                    "Unexpected keyword # found at location #.", qb,
+                    tk.lxbegs[i], tk.lxends[i], false
+                )
             end
         else
-            return _ek_qlexmsg("Unexpected token # found at location #.", qb,
-                tk.lxbegs[i], tk.lxends[i], false)
+            return _ek_qlexmsg(
+                "Unexpected token # found at location #.", qb,
+                tk.lxbegs[i], tk.lxends[i], false
+            )
         end
         i += 1
         nmeta += 1
@@ -1025,7 +1063,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
             prev = _ek_qlnkprv(node, mtpool)
             next = _ek_qlnknxt(node, mtpool)
             if prev > 0 && next > 0 && mtcode[prev] == _EKQ_MLPAR &&
-               mtcode[next] == _EKQ_MRPAR
+                    mtcode[next] == _EKQ_MRPAR
                 _ek_qlnkfsl!(prev, prev, mtpool)
                 _ek_qlnkfsl!(next, next, mtpool)
                 metahd = _ek_qlnkhl(node, mtpool)
@@ -1056,7 +1094,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
             third = second > 0 ? _ek_qlnknxt(second, mtpool) : 0
             fourth = third > 0 ? _ek_qlnknxt(third, mtpool) : 0
             first <= 0 && return "WHERE clause ran out of tokens unexpectedly.  This " *
-                                 "may be due to an extra left parenthesis."
+                "may be due to an extra left parenthesis."
             c1 = mtcode[first]
             c2 = second > 0 ? mtcode[second] : 0
             c3 = third > 0 ? mtcode[third] : 0
@@ -1137,7 +1175,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
                             k = mtexpr[third]
                             if m == 2 || m == 4
                                 skip = dsc[7, k] == _EKQ_MIDENT ? 1 : 0
-                                for _ in 1:skip+1
+                                for _ in 1:(skip + 1)
                                     k = _ek_qlnknxt(k, dspool)
                                 end
                             end
@@ -1159,7 +1197,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
                         for m in 1:2
                             djpool.nfree < 1 && return full_dj
                             dj[m] = _ek_qlnkan!(djpool)
-                            djptrs[dj[m]] = cj[2*m-1]
+                            djptrs[dj[m]] = cj[2 * m - 1]
                         end
                         _ek_qlnkila!(dj[1], dj[2], djpool)
                         mtcode[first] = _EKQ_MEXPR
@@ -1232,7 +1270,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
                                     cjn = _ek_qlnknxt(cjn, cjpool)
                                 end
                                 side == 1 ? (head1 = _ek_qlnkhl(tl, cjpool)) :
-                                (head2 = _ek_qlnkhl(tl, cjpool))
+                                    (head2 = _ek_qlnkhl(tl, cjpool))
                             end
                             _ek_qlnkilb!(head1, head2, cjpool)
                             djptrs[newdj] = head1
@@ -1377,7 +1415,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
             if popcnd[level] == 2
                 # Remove the parentheses around the expression.
                 prev = _ek_qlnkprv(first, mtpool)
-                mstart[level-1] == prev && (mstart[level-1] = first)
+                mstart[level - 1] == prev && (mstart[level - 1] = first)
                 metahd == prev && (metahd = first)
                 _ek_qlnkfsl!(prev, prev, mtpool)
                 _ek_qlnkfsl!(second, second, mtpool)
@@ -1397,8 +1435,10 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
         nconj += 1
         djnode = _ek_qlnknxt(djnode, djpool)
     end
-    nconj > _EKQ_MAXCNJ && _ek_qsignal(:toomanyconjunctions,
-        "The normalized WHERE clause has $nconj conjunctions; the maximum is $_EKQ_MAXCNJ.")
+    nconj > _EKQ_MAXCNJ && _ek_qsignal(
+        :toomanyconjunctions,
+        "The normalized WHERE clause has $nconj conjunctions; the maximum is $_EKQ_MAXCNJ."
+    )
     sizes = Int[]
     nrels = 0
     djnode = mtexpr[first]
@@ -1419,8 +1459,8 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
             _ek_qappnd!(q, desc(_ek_qlnknxt(tabptr, dspool)))
             if rhsptr == 0
                 op = op == _EKQ_EQ ? _EKQ_ISNULL : op == _EKQ_NE ? _EKQ_NOTNUL :
-                     return "NULL values can only be used with the operators \"IS " *
-                            "NULL\", \"NOT NULL\", or equivalents."
+                    return "NULL values can only be used with the operators \"IS " *
+                    "NULL\", \"NOT NULL\", or equivalents."
                 _ek_qappnd!(q, op)
                 for _ in 1:12
                     _ek_qappnd!(q, 0)
@@ -1482,8 +1522,9 @@ function _ek_qpars!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
     function setlast!(d)
         n = length(q.i)
         for m in 1:6
-            q.i[n-6+m] = d[m]
+            q.i[n - 6 + m] = d[m]
         end
+        return
     end
     endsfrom(v) = v == _EKQ_KWWHER || v == _EKQ_KWSEL || v == _EKQ_KWORDR
     endssel(v) = v == _EKQ_KWWHER || v == _EKQ_KWFROM || v == _EKQ_KWORDR
@@ -1691,16 +1732,22 @@ function _ek_qpars!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
         return nothing
     end
     errtyp == "SELECT_NOT_FOUND" && return "Every query must contain a SELECT clause. " *
-                                           "The SELECT keyword was not found."
+        "The SELECT keyword was not found."
     errtyp == "BY_EXPECTED" &&
         return "The BY keyword was not found following the ORDER keyword."
     errtyp == "MORE_TOKENS_EXP" && return "More tokens were expected in query."
-    errtyp == "TOO_MANY_TABLES" && return _ek_qrep("Number of tables in \"FROM\" " *
-        "clause exceeds allowed maximum of #.", _EKQ_MAXTAB)
-    errtyp == "TOO_MANY_ORD_COLS" && return _ek_qrep("Number of order-by columns " *
-        "exceeds allowed maximum of #.", _EKQ_MAXORD)
-    errtyp == "TOO_MANY_SEL_COLS" && return _ek_qrep("Number of SELECT columns " *
-        "exceeds allowed maximum of #.", _EKQ_MAXSEL)
+    errtyp == "TOO_MANY_TABLES" && return _ek_qrep(
+        "Number of tables in \"FROM\" " *
+            "clause exceeds allowed maximum of #.", _EKQ_MAXTAB
+    )
+    errtyp == "TOO_MANY_ORD_COLS" && return _ek_qrep(
+        "Number of order-by columns " *
+            "exceeds allowed maximum of #.", _EKQ_MAXORD
+    )
+    errtyp == "TOO_MANY_SEL_COLS" && return _ek_qrep(
+        "Number of SELECT columns " *
+            "exceeds allowed maximum of #.", _EKQ_MAXSEL
+    )
     template = if errtyp == "BAD_KEYWORD"
         "Invalid keyword at location #. Actual token was: #"
     elseif errtyp == "TABLE_OR_COLUMN_EXP"
@@ -1745,12 +1792,16 @@ indices. Writes the table index and the column index into the pair and returns
 the table names first and then in the aliases; a column without a qualifier must be
 in exactly one table of the FROM clause.
 """
-function _ek_qcchk!(q::_EKQEnc, tables::Vector{EKTable}, tabcat::Vector{Int},
-    table::Vector{String}, alias::Vector{String}, base::Int)
+function _ek_qcchk!(
+        q::_EKQEnc, tables::Vector{EKTable}, tabcat::Vector{Int},
+        table::Vector{String}, alias::Vector{String}, base::Int
+    )
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
     cb, ce = _ek_qget(q, base + 15), _ek_qget(q, base + 16)
-    (cb <= 0 || ce <= 0) && _ek_qsignal(:bug, "Invalid string bounds $cb:$ce for " *
-        "column.  Column name descriptor base is $base.")
+    (cb <= 0 || ce <= 0) && _ek_qsignal(
+        :bug, "Invalid string bounds $cb:$ce for " *
+            "column.  Column name descriptor base is $base."
+    )
     column = _ek_qstr(q, cb, ce)
     tabidx = colidx = 0
     if tb == 0
@@ -1762,18 +1813,26 @@ function _ek_qcchk!(q::_EKQEnc, tables::Vector{EKTable}, tabcat::Vector{Int},
                 tabidx = i
             end
         end
-        nmatch == 0 && return _ek_qrep("Column <#> is not present in any table in " *
-            "FROM clause.", column)
-        nmatch > 1 && return _ek_qrep("Column name <#> is ambiguous; a qualifying " *
-            "table name or alias is required.", column)
+        nmatch == 0 && return _ek_qrep(
+            "Column <#> is not present in any table in " *
+                "FROM clause.", column
+        )
+        nmatch > 1 && return _ek_qrep(
+            "Column name <#> is ambiguous; a qualifying " *
+                "table name or alias is required.", column
+        )
     else
         qual = _ek_qstr(q, tb, te)
         tabidx = something(findfirst(==(qual), table), findfirst(==(qual), alias), 0)
         tabidx == 0 &&
             return _ek_qrep("Table name <#> is not present in FROM clause.", qual)
         colidx = something(findfirst(==(column), tables[tabcat[tabidx]].cnames), 0)
-        colidx == 0 && return _ek_qrep(_ek_qrep("Column <#> does not exist in table " *
-            "<#>.", column), qual)
+        colidx == 0 && return _ek_qrep(
+            _ek_qrep(
+                "Column <#> does not exist in table " *
+                    "<#>.", column
+            ), qual
+        )
     end
     _ek_qput!(q, base + 11, tabidx)
     _ek_qput!(q, base + 17, colidx)
@@ -1802,24 +1861,30 @@ function _ek_qnres!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTabl
     end
     none = Int[]
     lexeme(base) = _ek_qlex(qb, _ek_qget(q, base + 7), _ek_qget(q, base + 8))
-    for i in 1:ntab-1, j in i+1:ntab
+    for i in 1:(ntab - 1), j in (i + 1):ntab
         if alias[i] == alias[j] && alias[i] != ""
-            return none, _ek_qrep("Non-distinct alias <#> was found.",
-                lexeme(((j - 1) * 2 + 1) * 6 + 19))
+            return none, _ek_qrep(
+                    "Non-distinct alias <#> was found.",
+                    lexeme(((j - 1) * 2 + 1) * 6 + 19)
+                )
         end
     end
     for i in 1:ntab
         j = alias[i] == "" ? nothing : findfirst(==(alias[i]), table)
         if j !== nothing && j != i
-            return none, _ek_qrep("Alias <#> conflicts with table name.",
-                lexeme(((i - 1) * 2 + 1) * 6 + 19))
+            return none, _ek_qrep(
+                    "Alias <#> conflicts with table name.",
+                    lexeme(((i - 1) * 2 + 1) * 6 + 19)
+                )
         end
     end
     tabcat = Int[]
     for i in 1:ntab
         j = findfirst(t -> t.name == table[i], tables)
-        j === nothing && return none, _ek_qrep("Table <#> is not currently loaded.",
-            lexeme((i - 1) * 12 + 19))
+        j === nothing && return none, _ek_qrep(
+                "Table <#> is not currently loaded.",
+                lexeme((i - 1) * 12 + 19)
+            )
         push!(tabcat, j)
     end
     for i in 1:ntab
@@ -1865,8 +1930,12 @@ is a body name. Reads the body names of `ks` only.
 function _ek_scn2id(ks::KernelSet, clknam::AbstractString)
     name = uppercase(String(first(clknam, 32)))
     r = findlast("SCLK", name)
-    r === nothing || (name = string(SubString(name, 1, prevind(name, first(r))), "    ",
-        SubString(name, last(r) + 1)))
+    r === nothing || (
+        name = string(
+            SubString(name, 1, prevind(name, first(r))), "    ",
+            SubString(name, last(r) + 1)
+        )
+    )
     name = strip(name, ' ')
     isempty(name) && return nothing
     return bodn2c(ks, name)
@@ -1909,9 +1978,15 @@ function _ek_qscps01(clock::SclkType1, clkstr::AbstractString)
     cmptks = _sclk_cmptks(clock)
     items = _ek_qsclkfields(clkstr)
     n = length(items)
-    n > clock.nfield && return 0.0, _ek_qrep(_ek_qrep(_ek_qrep("Input clock string # " *
-        "has # fields; maximum for this spacecraft clock is #.", clkstr), n),
-        Int(clock.nfield))
+    n > clock.nfield && return 0.0, _ek_qrep(
+            _ek_qrep(
+                _ek_qrep(
+                    "Input clock string # " *
+                    "has # fields; maximum for this spacecraft clock is #.", clkstr
+                ), n
+            ),
+            Int(clock.nfield)
+        )
     ticks = 0.0
     for (i, item) in enumerate(items)       # invariant: ticks = sum over the fields 1:i-1
         value = clock.offsets[i]
@@ -1921,13 +1996,23 @@ function _ek_qscps01(clock::SclkType1, clkstr::AbstractString)
                 value = _nparsd(strip(item, ' '))
             catch err
                 err isa SpiceError || rethrow()
-                return 0.0, _ek_qrep(_ek_qrep("Could not parse SCLK component # from " *
-                    "# as a number.", item), clkstr)
+                return 0.0, _ek_qrep(
+                        _ek_qrep(
+                            "Could not parse SCLK component # from " *
+                            "# as a number.", item
+                        ), clkstr
+                    )
             end
         end
         value -= clock.offsets[i]
-        _dnint(value) < 0 && return 0.0, _ek_qrep(_ek_qrep(_ek_qrep("Component number " *
-            "#, # in the SCLK string  # is invalid.", i), item), clkstr)
+        _dnint(value) < 0 && return 0.0, _ek_qrep(
+                _ek_qrep(
+                    _ek_qrep(
+                        "Component number " *
+                        "#, # in the SCLK string  # is invalid.", i
+                    ), item
+                ), clkstr
+            )
         ticks += value * cmptks[i]
     end
     return ticks, ""
@@ -1948,7 +2033,7 @@ function _ek_qscpars(ks::KernelSet, sc::Int, sclkch::AbstractString)
     pos = something(findfirst('/', sclkch), 0)
     badpart = "Unable to parse the partition number from SCLK string #."
     pos == 1 && return 0.0, _ek_qrep(badpart, sclkch)
-    fields = sclkch[pos+1:end]
+    fields = sclkch[(pos + 1):end]
     ticks, pserr = _ek_qscps01(clock, fields)
     isempty(pserr) || return 0.0, pserr
     part = 1
@@ -1961,20 +2046,32 @@ function _ek_qscpars(ks::KernelSet, sc::Int, sclkch::AbstractString)
         end
         abs(x) < 2.0^31 || return 0.0, _ek_qrep(badpart, sclkch)
         part = Int(_dnint(x))
-        (part <= 0 || part > nparts) && return 0.0, _ek_qrep(_ek_qrep(_ek_qrep(
-            "Partition number # taken from SCLK string # is not in acceptable range " *
-            "1 to #.", part), sclkch), nparts)
-        (ticks < pstart[part] || ticks > pstop[part]) && return 0.0, _ek_qrep(_ek_qrep(
-            "SCLK count from # does not fall in the boundaries of partition number #.",
-            fields), part)
+        (part <= 0 || part > nparts) && return 0.0, _ek_qrep(
+                _ek_qrep(
+                    _ek_qrep(
+                        "Partition number # taken from SCLK string # is not in acceptable range " *
+                        "1 to #.", part
+                    ), sclkch
+                ), nparts
+            )
+        (ticks < pstart[part] || ticks > pstop[part]) && return 0.0, _ek_qrep(
+                _ek_qrep(
+                    "SCLK count from # does not fall in the boundaries of partition number #.",
+                    fields
+                ), part
+            )
     else
         while part <= nparts && (ticks < pstart[part] || ticks > pstop[part])
             part += 1                # invariant: partitions 1:part-1 do not hold `ticks`
         end
-        part > nparts && return 0.0, _ek_qrep(_ek_qrep("SCLK count # does not fall in " *
-            "the boundaries of any of the partitions for spacecraft #.", fields), sc)
+        part > nparts && return 0.0, _ek_qrep(
+                _ek_qrep(
+                    "SCLK count # does not fall in " *
+                    "the boundaries of any of the partitions for spacecraft #.", fields
+                ), sc
+            )
     end
-    return part > 1 ? ticks - pstart[part] + ptotls[part-1] : ticks - pstart[part], ""
+    return part > 1 ? ticks - pstart[part] + ptotls[part - 1] : ticks - pstart[part], ""
 end
 
 """
@@ -1998,21 +2095,29 @@ function _ek_qtcnv(ks::KernelSet, td::TimeDefaults, timstr::AbstractVector{UInt8
     (!isempty(loc) && loc[end] == UInt8(' ')) && pop!(loc)
     locstr = String(loc)
     orig = String(copy(timstr))
-    unexpected() = string("Unexpected SPICELIB error encountered while attempting to ",
-        "parse the string <", rstrip(orig, ' '), ">")
+    unexpected() = string(
+        "Unexpected SPICELIB error encountered while attempting to ",
+        "parse the string <", rstrip(orig, ' '), ">"
+    )
     r = findlast("SCLK", locstr)
     if r !== nothing
         pos = first(r)
-        clkid = _ek_scn2id(ks, locstr[1:pos+3])
+        clkid = _ek_scn2id(ks, locstr[1:(pos + 3)])
         if clkid === nothing
-            pos > 1 && return 0.0, _ek_qrep("Time conversion failed; SCLK type <#> " *
-                "was not recognized.", String(timstr[1:pos-1]))
+            pos > 1 && return 0.0, _ek_qrep(
+                    "Time conversion failed; SCLK type <#> " *
+                    "was not recognized.", String(timstr[1:(pos - 1)])
+                )
             return 0.0, "Time conversion failed; SCLK name was not supplied."
         end
         try
-            sclkdp, msg = _ek_qscpars(ks, clkid, locstr[pos+4:end])
-            isempty(msg) || return 0.0, string(_ek_qrep("The string <#> didn't parse " *
-                "as a spacecraft clock string.", orig), "   ", msg)
+            sclkdp, msg = _ek_qscpars(ks, clkid, locstr[(pos + 4):end])
+            isempty(msg) || return 0.0, string(
+                    _ek_qrep(
+                        "The string <#> didn't parse " *
+                        "as a spacecraft clock string.", orig
+                    ), "   ", msg
+                )
             return Float64(sct2e(ks, clkid, sclkdp)), ""
         catch err
             err isa SpiceError || rethrow()
@@ -2039,16 +2144,20 @@ Returns `nothing`, or the error message of the conversion. As in CSPICE the time
 string is cut to 32 characters, and a numeric value is converted as a blank string,
 which is an error.
 """
-function _ek_qtres!(q::_EKQEnc, tables::Vector{EKTable}, tabcat::Vector{Int},
-    ks::KernelSet, td::TimeDefaults)
+function _ek_qtres!(
+        q::_EKQEnc, tables::Vector{EKTable}, tabcat::Vector{Int},
+        ks::KernelSet, td::TimeDefaults
+    )
     q.i[5] == -1 &&
         _ek_qsignal(:namesnotresolved, "Names are not resolved in encoded query.")
     ntab, ncns = Int(q.i[8]), Int(q.i[9])
     for i in 1:ncns
         base = ntab * 12 + 19 + (i - 1) * 26
         opcode = _ek_qget(q, base + 19)
-        (_ek_qget(q, base + 6) == _EKQ_EQVAL && opcode != _EKQ_ISNULL &&
-         opcode != _EKQ_NOTNUL) || continue
+        (
+            _ek_qget(q, base + 6) == _EKQ_EQVAL && opcode != _EKQ_ISNULL &&
+                opcode != _EKQ_NOTNUL
+        ) || continue
         attr = tables[tabcat[_ek_qget(q, base + 12)]].attrs[_ek_qget(q, base + 18)]
         attr.dtype === :TIME || continue
         lxb = _ek_qget(q, base + 21)
@@ -2086,8 +2195,10 @@ left column name to the end of the right side of the most recent constraint that
 one; before such a constraint that end is not defined in CSPICE, and this port prints
 the column name alone.
 """
-function _ek_qsemc!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTable},
-    tabcat::Vector{Int})
+function _ek_qsemc!(
+        q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTable},
+        tabcat::Vector{Int}
+    )
     q.i[5] == -1 &&
         _ek_qsignal(:unresolvednames, "Encoded query has not had names resolved.")
     q.i[6] == -1 &&
@@ -2095,8 +2206,12 @@ function _ek_qsemc!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTabl
     ntab, ncns, ncnj, nord = (Int(q.i[k]) for k in (8, 9, 10, 11))
     attr(tabidx, colidx) = tables[tabcat[tabidx]].attrs[colidx]
     lxe1 = 0            # LXE(2) of ZZEKSEMC: 0 while CSPICE has not set it
-    nonscalar(what, lxb, lxe, size) = _ek_qrep(_ek_qrep("Non-scalar column <#> having " *
-        "size # found in $what.", _ek_qlex(qb, lxb, lxe)), size)
+    nonscalar(what, lxb, lxe, size) = _ek_qrep(
+        _ek_qrep(
+            "Non-scalar column <#> having " *
+                "size # found in $what.", _ek_qlex(qb, lxb, lxe)
+        ), size
+    )
     mismatch = "Data type mismatch: column <#> has data type #; # <#> has data type #."
     for i in 1:ncns
         base = ntab * 12 + 19 + (i - 1) * 26
@@ -2104,13 +2219,19 @@ function _ek_qsemc!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTabl
         lxb0, lxe0 = _ek_qget(q, base + 14), _ek_qget(q, base + 15)
         lhs = attr(_ek_qget(q, base + 12), _ek_qget(q, base + 18))
         lhstyp = _ek_dtype_code(lhs.dtype)
-        lhs.size != 1 && return nonscalar("query constraint", lxb0,
-            lxe1 == 0 ? lxe0 : lxe1, lhs.size)
+        lhs.size != 1 && return nonscalar(
+            "query constraint", lxb0,
+            lxe1 == 0 ? lxe0 : lxe1, lhs.size
+        )
         opcode = _ek_qget(q, base + 19)
         if (opcode == _EKQ_LIKE || opcode == _EKQ_UNLIKE) && lhstyp != _EK_CHR
-            return _ek_qrep(_ek_qrep("LIKE and NOT LIKE operators may be used only " *
-                "with character columns.  Column <#> has type #.",
-                _ek_qlex(qb, lxb0, lxe0)), _EKQ_TYPSTR[lhstyp])
+            return _ek_qrep(
+                _ek_qrep(
+                    "LIKE and NOT LIKE operators may be used only " *
+                        "with character columns.  Column <#> has type #.",
+                    _ek_qlex(qb, lxb0, lxe0)
+                ), _EKQ_TYPSTR[lhstyp]
+            )
         end
         rhstyp = 0
         what = "column"
@@ -2125,8 +2246,10 @@ function _ek_qsemc!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTabl
             lxb1, lxe1 = _ek_qget(q, base + 21), _ek_qget(q, base + 22)
             what = "value"
         end
-        if rhstyp != lhstyp && (lhstyp == _EK_TIME || lhstyp == _EK_CHR ||
-                                rhstyp == _EK_TIME || rhstyp == _EK_CHR)
+        if rhstyp != lhstyp && (
+                lhstyp == _EK_TIME || lhstyp == _EK_CHR ||
+                    rhstyp == _EK_TIME || rhstyp == _EK_CHR
+            )
             msg = _ek_qrep(mismatch, _ek_qlex(qb, lxb0, lxe0))
             msg = _ek_qrep(msg, _EKQ_TYPSTR[lhstyp])
             msg = _ek_qrep(msg, what)
@@ -2155,13 +2278,19 @@ end
 Contract: as `_ek_encode_query`, but returns the encoded query in the layout of CSPICE
 (`zzekencd_`) with the catalog indices of its tables; `q` is `nothing` on error.
 """
-function _ek_qencode(tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,
-    query::AbstractString)
+function _ek_qencode(
+        tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,
+        query::AbstractString
+    )
     qb = codeunits(String(query))
     l = something(findlast(!=(UInt8(' ')), qb), 0)
     none = Int[]
-    l > _EKQ_MAXQRY && return nothing, none, true, _ek_qrep(_ek_qrep("Query has # " *
-        "characters; the maximum allowed is #.", l), _EKQ_MAXQRY)
+    l > _EKQ_MAXQRY && return nothing, none, true, _ek_qrep(
+            _ek_qrep(
+                "Query has # " *
+                "characters; the maximum allowed is #.", l
+            ), _EKQ_MAXQRY
+        )
     tk, msg = _ek_qscan(qb, _EKQ_MAXTOK, _EKQ_MAXNUM, _EKQ_CSIZE)
     tk === nothing && return nothing, none, true, msg
     q = _ek_qini()
@@ -2186,9 +2315,11 @@ end
 function _ek_qcol(q::_EKQEnc, base::Int)
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
     cb, ce = _ek_qget(q, base + 15), _ek_qget(q, base + 16)
-    return _EKQCol(tb > 0 ? _ek_qstr(q, tb, te) : "", _ek_qget(q, base + 11),
+    return _EKQCol(
+        tb > 0 ? _ek_qstr(q, tb, te) : "", _ek_qget(q, base + 11),
         _ek_qstr(q, cb, ce), _ek_qget(q, base + 17),
-        _ek_qget(q, tb > 0 ? base + 7 : base + 13), _ek_qget(q, base + 14))
+        _ek_qget(q, tb > 0 ? base + 7 : base + 13), _ek_qget(q, base + 14)
+    )
 end
 
 "The unused right side of a constraint that compares a column with a value."
@@ -2212,8 +2343,12 @@ function _ek_qdecode(q::_EKQEnc, tabcat::Vector{Int})
         opcode = _ek_qget(q, base + 19)
         lhs = _ek_qcol(q, base + 1)
         if cnstyp == _EKQ_EQCOL
-            push!(constraints, _EKQConstraint(cnstyp, lhs, opcode, _ek_qcol(q, base + 14),
-                0, "", 0.0, 0))
+            push!(
+                constraints, _EKQConstraint(
+                    cnstyp, lhs, opcode, _ek_qcol(q, base + 14),
+                    0, "", 0.0, 0
+                )
+            )
         elseif opcode == _EKQ_ISNULL || opcode == _EKQ_NOTNUL
             push!(constraints, _EKQConstraint(cnstyp, lhs, opcode, _EKQ_NOCOL, 0, "", 0.0, 0))
         else
@@ -2222,19 +2357,27 @@ function _ek_qdecode(q::_EKQEnc, tabcat::Vector{Int})
             cval = dtype == _EK_CHR ? _ek_qstr(q, p, _ek_qget(q, base + 24)) : ""
             dval = dtype == _EK_CHR ? 0.0 : q.d[p]
             ival = dtype == _EK_INT ? _ek_qnint(dval) : 0
-            push!(constraints,
-                _EKQConstraint(cnstyp, lhs, opcode, _EKQ_NOCOL, dtype, cval, dval, ival,
-                    dtype == _EK_CHR ? 0.0 : q.dx[p]))
+            push!(
+                constraints,
+                _EKQConstraint(
+                    cnstyp, lhs, opcode, _EKQ_NOCOL, dtype, cval, dval, ival,
+                    dtype == _EK_CHR ? 0.0 : q.dx[p]
+                )
+            )
         end
     end
-    conjsizes = [Int(q.i[cbase+ncns*26+n]) for n in 1:ncnj]
+    conjsizes = [Int(q.i[cbase + ncns * 26 + n]) for n in 1:ncnj]
     obase = cbase + ncnj + ncns * 26
-    orderby = [(_ek_qcol(q, obase + (n - 1) * 13), _ek_qget(q, obase + (n - 1) * 13 + 18))
-               for n in 1:nord]
+    orderby = [
+        (_ek_qcol(q, obase + (n - 1) * 13), _ek_qget(q, obase + (n - 1) * 13 + 18))
+            for n in 1:nord
+    ]
     sbase = obase + nord * 13
     select = [_ek_qcol(q, sbase + (n - 1) * 12) for n in 1:nsel]
-    return _EKQuery(first.(names), last.(names), copy(tabcat), conjsizes, constraints,
-        orderby, select)
+    return _EKQuery(
+        first.(names), last.(names), copy(tabcat), conjsizes, constraints,
+        orderby, select
+    )
 end
 
 """
@@ -2270,8 +2413,10 @@ Differences from CSPICE:
   reports the missing FROM clause, as `ekfind_` does for a blank string.
 - A message is not cut to the length of an output buffer.
 """
-function _ek_encode_query(tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,
-    query::AbstractString)::Tuple{Union{Nothing,_EKQuery},Bool,String}
+function _ek_encode_query(
+        tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,
+        query::AbstractString
+    )::Tuple{Union{Nothing, _EKQuery}, Bool, String}
     q, tabcat, error, errmsg = _ek_qencode(tables, ks, td, query)
     error && return nothing, true, errmsg
     return _ek_qdecode(q, tabcat), false, ""
@@ -2291,16 +2436,22 @@ its table (`tabs`: the table name, never the alias) and of its column (`cols`). 
 query that is not valid, `failed` is true, `errmsg` holds the message, `n` is 0 and the
 vectors are empty.
 """
-function _ek_psel(tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,
-    query::AbstractString)
+function _ek_psel(
+        tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,
+        query::AbstractString
+    )
     q, failed, errmsg = _ek_encode_query(tables, ks, td, query)
-    failed && return (n=0, xbegs=Int[], xends=Int[], xtypes=Symbol[], xclass=Symbol[],
-        tabs=String[], cols=String[], failed=true, errmsg=errmsg)
+    failed && return (
+        n = 0, xbegs = Int[], xends = Int[], xtypes = Symbol[], xclass = Symbol[],
+        tabs = String[], cols = String[], failed = true, errmsg = errmsg,
+    )
     sel = q.select
-    return (n=length(sel), xbegs=[c.lxbeg for c in sel], xends=[c.lxend for c in sel],
-        xtypes=[tables[q.tabcat[c.tabidx]].attrs[c.colidx].dtype for c in sel],
-        xclass=fill(:COL, length(sel)), tabs=[q.tables[c.tabidx] for c in sel],
-        cols=[c.name for c in sel], failed=false, errmsg="")
+    return (
+        n = length(sel), xbegs = [c.lxbeg for c in sel], xends = [c.lxend for c in sel],
+        xtypes = [tables[q.tabcat[c.tabidx]].attrs[c.colidx].dtype for c in sel],
+        xclass = fill(:COL, length(sel)), tabs = [q.tables[c.tabidx] for c in sel],
+        cols = [c.name for c in sel], failed = false, errmsg = "",
+    )
 end
 
 """
@@ -2326,24 +2477,40 @@ function _ek_qpcol(tables::Vector{EKTable}, q::_EKQuery, qcol::AbstractString)
     elseif tk.n == 3
         tk.tokens[1] == _EKQ_TKID ||
             return fail("Invalid table name; name should consist of an identifier.")
-        tk.tokens[2] == _EKQ_TKDOT || return fail("Invalid qualified column name; " *
-            "table name should be followed by a period.")
+        tk.tokens[2] == _EKQ_TKDOT || return fail(
+            "Invalid qualified column name; " *
+                "table name should be followed by a period."
+        )
         tk.tokens[3] == _EKQ_TKID || return fail(badcol)
         tmptab = String(first(String(_ek_qtext(tk, 1)), _EKQ_TNAMSZ))
         column = String(_ek_qtext(tk, 3))
     else
-        return fail("Invalid tokens present in qualified column name. Valid syntax " *
-                    "is <column> or <table>.<column>")
+        return fail(
+            "Invalid tokens present in qualified column name. Valid syntax " *
+                "is <column> or <table>.<column>"
+        )
     end
     tabidx = colidx = 0
     if tk.n == 3
-        tabidx = something(findfirst(==(tmptab), q.tables),
-            findfirst(==(tmptab), q.aliases), 0)
-        tabidx == 0 && return fail(_ek_qrep("Table name <#> does not match table or " *
-            "alias from query.", tmptab))
+        tabidx = something(
+            findfirst(==(tmptab), q.tables),
+            findfirst(==(tmptab), q.aliases), 0
+        )
+        tabidx == 0 && return fail(
+            _ek_qrep(
+                "Table name <#> does not match table or " *
+                    "alias from query.", tmptab
+            )
+        )
         colidx = something(findfirst(==(column), tables[q.tabcat[tabidx]].cnames), 0)
-        colidx == 0 && return fail(_ek_qrep(_ek_qrep("Column name <#> does not appear " *
-            "in the qualifying table <#>.", column), tmptab))
+        colidx == 0 && return fail(
+            _ek_qrep(
+                _ek_qrep(
+                    "Column name <#> does not appear " *
+                        "in the qualifying table <#>.", column
+                ), tmptab
+            )
+        )
     else
         nmatch = 0
         for i in eachindex(q.tables), (j, name) in enumerate(tables[q.tabcat[i]].cnames)
@@ -2353,10 +2520,18 @@ function _ek_qpcol(tables::Vector{EKTable}, q::_EKQuery, qcol::AbstractString)
                 tabidx = i
             end
         end
-        nmatch == 0 && return fail(_ek_qrep("Column name <#> does not appear in any " *
-            "table in FROM clause of query.", column))
-        nmatch > 1 && return fail(_ek_qrep("Column name <#> is ambiguous without a " *
-            "qualifying table name.", column))
+        nmatch == 0 && return fail(
+            _ek_qrep(
+                "Column name <#> does not appear in any " *
+                    "table in FROM clause of query.", column
+            )
+        )
+        nmatch > 1 && return fail(
+            _ek_qrep(
+                "Column name <#> is ambiguous without a " *
+                    "qualifying table name.", column
+            )
+        )
     end
     return (tabidx, q.tables[tabidx], q.aliases[tabidx], colidx, column, false, "")
 end

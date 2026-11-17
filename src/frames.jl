@@ -54,7 +54,7 @@ function _rotmat(m::Matrix{Float64}, angle::Float64, axis::Int)
     s, c = sin(angle), cos(angle)
     idx = (3, 1, 2, 3, 1)
     t = mod(axis, 3)
-    i1, i2, i3 = idx[t+1], idx[t+2], idx[t+3]
+    i1, i2, i3 = idx[t + 1], idx[t + 2], idx[t + 3]
     out = Matrix{Float64}(undef, 3, 3)
     for i in 1:3
         out[i1, i] = m[i1, i]
@@ -71,17 +71,19 @@ function _build_inertial_rotations()
     trans = Matrix{Float64}[]
     for (i, (_, base, def)) in enumerate(INERTIAL_FRAME_DEFS)
         m = Matrix{Float64}([1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
-        words = split(def, ' '; keepempty=false)
+        words = split(def, ' '; keepempty = false)
         # Loop invariant: `m` is the product of the rotations of pairs j/2 .. end.
         for j in length(words):-2:2
             axis = parse(Int, rstrip(words[j], ','))
-            angle = _nparsd(words[j-1])
+            angle = _nparsd(words[j - 1])
             m = _rotmat(m, angle * arcsec / dpr, axis)
         end
         b = findfirst(k -> INERTIAL_FRAME_DEFS[k][1] == base, 1:i)
         b === nothing && error("base frame of inertial frame $i is not defined before it")
-        push!(trans, b == i ? _mxm(m, Matrix{Float64}([1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])) :
-                     _mxm(m, trans[b]))
+        push!(
+            trans, b == i ? _mxm(m, Matrix{Float64}([1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])) :
+                _mxm(m, trans[b])
+        )
     end
     return [Mat3{Float64}(t) for t in trans]
 end
@@ -96,8 +98,12 @@ J2000 (frame 1) to the built-in inertial frame `id`, equal to what CSPICE
 `irfrot(1, id)` returns. Throws `SpiceError(:unknownframe)` for another ID.
 """
 function inertial_rotation(id::Integer)::Mat3{Float64}
-    1 <= id <= N_INERTIAL_FRAMES || throw(SpiceError(:unknownframe,
-        "$id is not the ID of a built-in inertial frame"))
+    1 <= id <= N_INERTIAL_FRAMES || throw(
+        SpiceError(
+            :unknownframe,
+            "$id is not the ID of a built-in inertial frame"
+        )
+    )
     return @inbounds INERTIAL_ROTATIONS[id]
 end
 
@@ -240,8 +246,8 @@ const BUILTIN_NONINERTIAL_FRAMES = FrameDef[
 
 "Contract: returns the (ID => definition, normalized name => ID) dictionaries of all built-in frames, inertial first; a later table entry overrides an earlier one."
 function _builtin_frame_dicts()
-    frames = Dict{Int32,FrameDef}()
-    name2id = Dict{String,Int32}()
+    frames = Dict{Int32, FrameDef}()
+    name2id = Dict{String, Int32}()
     for (i, (name, _, _)) in enumerate(INERTIAL_FRAME_DEFS)
         frames[Int32(i)] = FrameDef(i, name, 1, i, 0)
         name2id[normalize_name(name)] = i
@@ -260,10 +266,12 @@ const (BUILTIN_FRAMES, BUILTIN_FRAMENAME2ID) = _builtin_frame_dicts()
 # ---------------------------------------------------------------------------------
 
 "Contract: returns the single integer value of pool variable `key`, or `nothing` if the variable is missing, is not numeric, or has more than one element."
-function _pool_int(pool::AbstractDict{String,PoolValue}, key::AbstractString)
+function _pool_int(pool::AbstractDict{String, PoolValue}, key::AbstractString)
     v = get(pool, key, nothing)
-    (v isa Vector{Float64} && length(v) == 1 && isfinite(v[1]) &&
-     abs(v[1]) <= typemax(Int32)) || return nothing
+    (
+        v isa Vector{Float64} && length(v) == 1 && isfinite(v[1]) &&
+            abs(v[1]) <= typemax(Int32)
+    ) || return nothing
     return round(Int32, v[1])
 end
 
@@ -274,8 +282,10 @@ Contract: value of the frame definition variable `FRAME_<id>_<item>`, or of
 `FRAME_<name>_<item>` if the first is absent (the two forms of `zzdynbid`). A string
 value is translated as a body name. `nothing` if neither form gives one integer.
 """
-function _frame_item(pool::AbstractDict{String,PoolValue}, name2code, id::Int32,
-    name::AbstractString, item::AbstractString)
+function _frame_item(
+        pool::AbstractDict{String, PoolValue}, name2code, id::Int32,
+        name::AbstractString, item::AbstractString
+    )
     for key in ("FRAME_$(id)_$(item)", "FRAME_$(name)_$(item)")
         length(key) <= _TK_MAXNAME || continue
         v = get(pool, key, nothing)
@@ -297,9 +307,9 @@ name. Returns `frames::Dict{Int32,FrameDef}` and `framename2id::Dict{String,Int3
 keyed by normalized name, the latter from the `FRAME_<NAME> = id` variables and from
 the frame names. An incomplete definition is left out, so the frame is unknown.
 """
-function build_frames(pool::AbstractDict{String,PoolValue})
-    frames = Dict{Int32,FrameDef}()
-    framename2id = Dict{String,Int32}()
+function build_frames(pool::AbstractDict{String, PoolValue})
+    frames = Dict{Int32, FrameDef}()
+    framename2id = Dict{String, Int32}()
     name2code, _ = build_names(pool)
     for (key, val) in pool
         (startswith(key, "FRAME_") && endswith(key, "_NAME") && length(key) > 11) || continue
@@ -323,8 +333,10 @@ function build_frames(pool::AbstractDict{String,PoolValue})
         id = _pool_int(pool, key)
         (id === nothing || !haskey(frames, id)) && continue
         suffix = SubString(key, 7)
-        (endswith(suffix, "_CLASS") || endswith(suffix, "_CLASS_ID") ||
-         endswith(suffix, "_CENTER")) && continue
+        (
+            endswith(suffix, "_CLASS") || endswith(suffix, "_CLASS_ID") ||
+                endswith(suffix, "_CENTER")
+        ) && continue
         framename2id[normalize_name(suffix)] = id
     end
     return frames, framename2id
@@ -377,7 +389,7 @@ frame_id(::KernelSet, id::Integer) = Int32(id)
 Contract: name of the frame `id`: a built-in frame first, then a pool-defined frame,
 or `nothing` if the ID has no name. Reads `ks.frames` only.
 """
-function frame_name(ks::KernelSet, id::Integer)::Union{String,Nothing}
+function frame_name(ks::KernelSet, id::Integer)::Union{String, Nothing}
     typemin(Int32) <= id <= typemax(Int32) || return nothing
     i = Int32(id)
     f = get(BUILTIN_FRAMES, i, nothing)

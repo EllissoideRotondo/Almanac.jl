@@ -36,8 +36,10 @@ function ek_compare_file(path, segs::Vector{EKSegSpec})
             @test [a.nullok for a in sn.cdescrs] == sc.nullok == [c.nullok for c in seg.cols]
             for (c, col) in enumerate(seg.cols), (r, row) in enumerate(seg.rows)
                 got, ref = if col.dtype === :CHR
-                    ekrcec(hn, segno, r, col.name), c_ekrcec(hc, segno, r, col.name;
-                        maxn=col.size == -1 ? 720 : col.size, maxlen=col.strlen == -1 ? 2600 : col.strlen + 1)
+                    ekrcec(hn, segno, r, col.name), c_ekrcec(
+                            hc, segno, r, col.name;
+                            maxn = col.size == -1 ? 720 : col.size, maxlen = col.strlen == -1 ? 2600 : col.strlen + 1
+                        )
                 elseif col.dtype === :INT
                     ekrcei(hn, segno, r, col.name), c_ekrcei(hc, segno, r, col.name)
                 else
@@ -59,7 +61,7 @@ group("EK files: segments, summaries and column entries through a handle") do
     dir = mktempdir()
     # The default run reads the small files that the groups `ek_query` and `ek_threads`
     # load (written once); the exhaustive run reads the whole standard model.
-    model, paths = FULL ? ek_standard_files(SEED) : ek_standard_files(SEED + 1; scale=0.15)
+    model, paths = FULL ? ek_standard_files(SEED) : ek_standard_files(SEED + 1; scale = 0.15)
     total = 0
     for ((_, segs), path) in zip(model, paths)
         total += ek_compare_file(path, segs)
@@ -81,7 +83,7 @@ group("EK files: segments, summaries and column entries through a handle") do
         @test nk(() -> ekrcei(hn, 9, 1, "ID")) == :invalidindex
         @test nk(() -> ekrcei(hn, 1, 1, "NAME")) == ck(() -> c_ekrcei(hc, 1, 1, "NAME")) == :wrongdatatype
         @test nk(() -> ekrced(hn, 1, 1, "ID")) == ck(() -> c_ekrced(hc, 1, 1, "ID")) == :wrongdatatype
-        @test nk(() -> ekrcec(hn, 1, 1, "VAL")) == ck(() -> c_ekrcec(hc, 1, 1, "VAL"; maxn=4, maxlen=40)) == :wrongdatatype
+        @test nk(() -> ekrcec(hn, 1, 1, "VAL")) == ck(() -> c_ekrcec(hc, 1, 1, "VAL"; maxn = 4, maxlen = 40)) == :wrongdatatype
         @test nk(() -> ekrcei(hn, 1, 1, "NOSUCH")) == ck(() -> c_ekrcei(hc, 1, 1, "NOSUCH")) == :bug
         @test nk(() -> ekrcei(hn, 1, 0, "ID")) == ck(() -> c_ekrcei(hc, 1, 0, "ID")) == :indexoutofrange
         @test nk(() -> ekrcei(hn, 1, 10^6, "ID")) == ck(() -> c_ekrcei(hc, 1, 10^6, "ID"))

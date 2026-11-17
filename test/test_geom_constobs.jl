@@ -11,7 +11,7 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
 import ForwardDiff
 
 # Measured: 8e-14 (position), 4e-14 (velocity), 5e-14 (light time).
-const CO_TOL = (pos=5e-12, vel=5e-10, lt=5e-12)
+const CO_TOL = (pos = 5.0e-12, vel = 5.0e-10, lt = 5.0e-12)
 const CO_LOCI = ["OBSERVER", "TARGET", "CENTER"]
 
 "A point near the surface of `body` in a body-fixed frame of it, and a slow velocity."
@@ -57,8 +57,10 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
             b = g_spkcpt(pos, ctr, cref, et, outref, loc, cor, other)
             cmp!("spkcpt", a, b)
             if k % 10 == 0
-                c = spkcpo(ctx, GEO_IDS[other], et, namfrm(ctx, outref), lowercase(loc), Aberration(cor),
-                    SVector{3}(pos), GEO_IDS[ctr], namfrm(ctx, cref))
+                c = spkcpo(
+                    ctx, GEO_IDS[other], et, namfrm(ctx, outref), lowercase(loc), Aberration(cor),
+                    SVector{3}(pos), GEO_IDS[ctr], namfrm(ctx, cref)
+                )
                 @test c == spkcpo(ctx, other, et, outref, loc, cor, pos, ctr, cref)
             end
             # A constant velocity, in a body-fixed frame or in an inertial frame.
@@ -92,15 +94,24 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
                 ("MOON", "NOFRAME", "OBSERVER", "LT", "EARTH", "IAU_EARTH"),
                 ("MOON", "J2000", "OBSERVER", "LT", "EARTH", "NOFRAME"),
                 ("MOON", "J2000", "SOMEWHERE", "LT", "EARTH", "IAU_EARTH"),
-                ("MOON", "J2000", "", "LT", "EARTH", "IAU_EARTH"))
-            @test same_kind(() -> g_spkcpo(t, et, outref, loc, cor, p, ctr, cref),
-                () -> spkcpo(ctx, t, et, outref, loc, cor, p, ctr, cref))
-            @test same_kind(() -> g_spkcpt(p, ctr, cref, et, outref, loc, cor, t),
-                () -> spkcpt(ctx, p, ctr, cref, et, outref, loc, cor, t))
-            @test same_kind(() -> g_spkcvo(t, et, outref, loc, cor, s, et, ctr, cref),
-                () -> spkcvo(ctx, t, et, outref, loc, cor, s, et, ctr, cref))
-            @test same_kind(() -> g_spkcvt(s, et, ctr, cref, et, outref, loc, cor, t),
-                () -> spkcvt(ctx, s, et, ctr, cref, et, outref, loc, cor, t))
+                ("MOON", "J2000", "", "LT", "EARTH", "IAU_EARTH"),
+            )
+            @test same_kind(
+                () -> g_spkcpo(t, et, outref, loc, cor, p, ctr, cref),
+                () -> spkcpo(ctx, t, et, outref, loc, cor, p, ctr, cref)
+            )
+            @test same_kind(
+                () -> g_spkcpt(p, ctr, cref, et, outref, loc, cor, t),
+                () -> spkcpt(ctx, p, ctr, cref, et, outref, loc, cor, t)
+            )
+            @test same_kind(
+                () -> g_spkcvo(t, et, outref, loc, cor, s, et, ctr, cref),
+                () -> spkcvo(ctx, t, et, outref, loc, cor, s, et, ctr, cref)
+            )
+            @test same_kind(
+                () -> g_spkcvt(s, et, ctr, cref, et, outref, loc, cor, t),
+                () -> spkcvt(ctx, s, et, ctr, cref, et, outref, loc, cor, t)
+            )
         end
         @test neo_kind(() -> spkcpo(ctx, "MOON", et, "J2000", "OBSERVER", "LT", [1.0, 2.0], "EARTH", "IAU_EARTH")) == :badarg
         # Inputs that CSPICE accepts: a target that is the center of the observer, and a
@@ -123,7 +134,7 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
             @test gwarm(co_alloc_cvo, ks, et, c, s) == 0
             @test gwarm(co_alloc_cvt, ks, et, c, s) == 0
         end
-        T = Tuple{SVector{6,Float64},Float64}
+        T = Tuple{SVector{6, Float64}, Float64}
         @test (@inferred spkcpo(ks, 301, et, 10013, "OBSERVER", "CN+S", p, 399, 10013)) isa T
         @test (@inferred spkcpt(ks, p, 399, 10013, et, 1, "TARGET", "LT+S", 301)) isa T
         @test (@inferred spkcvo(ks, 301, et, 10020, "CENTER", "XCN", s, 0.0, 399, 10013)) isa T
@@ -137,15 +148,16 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
         p = SVector(6378.0 * cos(0.5), 0.0, 6378.0 * sin(0.5))
         s = SVector(p..., 0.0, 0.01, 0.0)
         for et in record_safe_epochs(rng, nsample(6, 24)), cor in GEO_CORRS, loc in CO_LOCI
-            fs = Pair{String,Function}[
+            fs = Pair{String, Function}[
                 "spkcpo" => t -> spkcpo(ks, 301, t, 10013, loc, cor, p, 399, 10013)[1],
                 "spkcpt" => t -> spkcpt(ks, p, 399, 10013, t, 1, loc, cor, 301)[1],
                 "spkcvo" => t -> spkcvo(ks, 301, t, 10020, loc, cor, s, et - 300.0, 399, 10013)[1],
-                "spkcvt" => t -> spkcvt(ks, s, et - 300.0, 399, 1, t, 10013, loc, cor, 301)[1]]
+                "spkcvt" => t -> spkcvt(ks, s, et - 300.0, 399, 1, t, 10013, loc, cor, 301)[1],
+            ]
             for (name, f) in fs
                 d = f(ForwardDiff.Dual(et, 1.0))
                 v = f(et)
-                @test isapprox(ForwardDiff.value.(d), v; rtol=1e-12)
+                @test isapprox(ForwardDiff.value.(d), v; rtol = 1.0e-12)
                 dp = ForwardDiff.partials.(d, 1)[SOneTo(3)]
                 fd = geo_fd(t -> f(t)[SOneTo(3)], et, h)
                 gput!(st, "$name, d(position)/dt against central difference", norm(dp .- fd) / norm(fd))
@@ -156,8 +168,8 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
         end
         greport("dual epoch", st)
         for name in ("spkcpo", "spkcpt", "spkcvo", "spkcvt")
-            @test gget(st, "$name, d(position)/dt against central difference") < 1e-4
-            @test gget(st, "$name, d(position)/dt against the returned velocity") < 1e-3
+            @test gget(st, "$name, d(position)/dt against central difference") < 1.0e-4
+            @test gget(st, "$name, d(position)/dt against the returned velocity") < 1.0e-3
         end
     end
 end

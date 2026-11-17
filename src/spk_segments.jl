@@ -45,7 +45,7 @@ function _daf_entry(ks::KernelSet, k::Integer)
         n += 1
         n == k && return entry
     end
-    @assert false "the segment belongs to a file of the kernel set"
+    return @assert false "the segment belongs to a file of the kernel set"
 end
 
 """
@@ -58,23 +58,27 @@ file record and of the name records are swapped back first.
 function _daf_array_name(daf::DAF, k::Int)
     d = daf.data
     swap = String(reinterpret(UInt8, [d[12]])) != _DAF_NATIVE_BFF
-    rawrec(r) = collect(reinterpret(UInt8,
-        [swap ? bswap(d[a]) : d[a] for a in _daf_rwa(r):_daf_rwa(r)+_DAF_RECWORDS-1]))
+    rawrec(r) = collect(
+        reinterpret(
+            UInt8,
+            [swap ? bswap(d[a]) : d[a] for a in _daf_rwa(r):(_daf_rwa(r) + _DAF_RECWORDS - 1)]
+        )
+    )
     little = swap ? !_DAF_NATIVE_LITTLE : _DAF_NATIVE_LITTLE
     rec = Int(_daf_i32(rawrec(1), 76, little))
     namsiz = 8 * _daf_sumsize(2, 6)
     count = 0
     while rec != 0                       # invariant: `count` arrays are in the records before `rec`
         base = _daf_rwa(rec) - 1
-        nsum = Int(d[base+3])
+        nsum = Int(d[base + 3])
         if k <= count + nsum
             off = (k - count - 1) * namsiz
-            return String(rstrip(String(rawrec(rec + 1)[off+1:off+namsiz]), [' ', '\0']))
+            return String(rstrip(String(rawrec(rec + 1)[(off + 1):(off + namsiz)]), [' ', '\0']))
         end
         count += nsum
-        rec = Int(d[base+1])
+        rec = Int(d[base + 1])
     end
-    @assert false "array $k is in the summary records of $(daf.path)"
+    return @assert false "array $k is in the summary records of $(daf.path)"
 end
 
 """
@@ -131,23 +135,33 @@ function spksfs(ks::KernelSet, body::Integer, et::Real)
     i = segs === nothing ? 0 : find_segment(segs, primal(et))
     if i == 0
         any(e -> e.content isa DAF && e.content.kind === :SPK, ks.loaded) ||
-            throw(SpiceError(:noloadedfiles, "spksfs: at least one SPK file needs to be " *
-                "loaded before a segment search"))
+            throw(
+            SpiceError(
+                :noloadedfiles, "spksfs: at least one SPK file needs to be " *
+                    "loaded before a segment search"
+            )
+        )
         return nothing
     end
     seg = segs[i]
     if seg.dtype == PROVIDER_DTYPE          # a body of add_ephemeris!: its name is the file
         p = ks.loaded[seg.baddr].content::EphemerisProvider
-        return p.name, dafps(Float64[seg.t0, seg.t1],
-            Int[seg.target, seg.center, seg.frame, seg.dtype, 1, 1]), p.name
+        return p.name, dafps(
+                Float64[seg.t0, seg.t1],
+                Int[seg.target, seg.center, seg.frame, seg.dtype, 1, 1]
+            ), p.name
     end
     entry = _daf_entry(ks, seg.file)
     daf = entry.content::DAF
     # Of two segments with the same data, the later one has the priority.
-    k = findlast(s -> s.baddr == seg.baddr && s.eaddr == seg.eaddr && s.target == seg.target,
-        daf.segments)
-    descr = dafps(Float64[seg.t0, seg.t1],
-        Int[seg.target, seg.center, seg.frame, seg.dtype, seg.baddr, seg.eaddr])
+    k = findlast(
+        s -> s.baddr == seg.baddr && s.eaddr == seg.eaddr && s.target == seg.target,
+        daf.segments
+    )
+    descr = dafps(
+        Float64[seg.t0, seg.t1],
+        Int[seg.target, seg.center, seg.frame, seg.dtype, seg.baddr, seg.eaddr]
+    )
     return entry.path, descr, _daf_array_name(daf, k)
 end
 spksfs(ctx::SpiceContext, body::Integer, et::Real) = spksfs(kernelset(ctx), body, et)
@@ -171,18 +185,24 @@ function _spk_descr_segment(data::Vector{Float64}, descr, path::AbstractString, 
     dtype = Int32(ic[4])
     init, intlen, rsize, nrec = (dtype == 2 || dtype == 3 || dtype == 20) ?
         _daf_directory(data, path, :SPK, dtype, b, e) : (0.0, 0.0, Int32(0), Int32(0))
-    return Segment(Int32(ic[1]), Int32(ic[2]), Int32(ic[3]), dtype, dc[1], dc[2], Int32(0),
-        b, e, init, intlen, rsize, nrec)
+    return Segment(
+        Int32(ic[1]), Int32(ic[2]), Int32(ic[3]), dtype, dc[1], dc[2], Int32(0),
+        b, e, init, intlen, rsize, nrec
+    )
 end
 
 function _spkpvn(ks::KernelSet, data::Vector{Float64}, seg::Segment, et::Real)
     e = check_epoch(et)
     # The readers of CSPICE for the types 8, 9, 12, 13, 14, 18 and 19 make this check; for
     # the others CSPICE extrapolates, reads outside the segment or stops the process.
-    seg.t0 <= primal(e) <= seg.t1 || throw(SpiceError(:timeoutofbounds, "spkpvn: request " *
-        "time $(primal(e)) is outside of descriptor bounds $(seg.t0) : $(seg.t1)"))
+    seg.t0 <= primal(e) <= seg.t1 || throw(
+        SpiceError(
+            :timeoutofbounds, "spkpvn: request " *
+                "time $(primal(e)) is outside of descriptor bounds $(seg.t0) : $(seg.t1)"
+        )
+    )
     p, v = seg.dtype == Int32(10) ? _t10_jet(_lsk(ks), data, seg, e, Val(1)) :
-           spk_eval(data, seg, e, Val(1))
+        spk_eval(data, seg, e, Val(1))
     return Int(seg.frame), vcat(p, v), Int(seg.center)
 end
 
@@ -192,8 +212,12 @@ function _spk_loaded(ks::KernelSet, file::AbstractString)
         c = entry.content
         entry.path == file && c isa DAF && c.kind === :SPK && return c
     end
-    throw(SpiceError(:nosuchhandle, "spkpvn: no SPK file with the path $file is loaded " *
-        "in this kernel set"))
+    throw(
+        SpiceError(
+            :nosuchhandle, "spkpvn: no SPK file with the path $file is loaded " *
+                "in this kernel set"
+        )
+    )
 end
 
 """
@@ -239,8 +263,12 @@ function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Rea
     if i !== nothing                        # a body of add_ephemeris!
         p = ks.loaded[i].content::EphemerisProvider
         e = check_epoch(et)
-        p.t0 <= primal(e) <= p.t1 || throw(SpiceError(:timeoutofbounds, "spkpvn: request " *
-            "time $(primal(e)) is outside of descriptor bounds $(p.t0) : $(p.t1)"))
+        p.t0 <= primal(e) <= p.t1 || throw(
+            SpiceError(
+                :timeoutofbounds, "spkpvn: request " *
+                    "time $(primal(e)) is outside of descriptor bounds $(p.t0) : $(p.t1)"
+            )
+        )
         r, v = provider_jet(p, e, Val(1))
         return Int(p.frame), vcat(r, v), Int(p.center)
     end
@@ -248,15 +276,25 @@ function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Rea
     _, ic = dafus(descr, 2, 6)
     b, e = ic[5], ic[6]
     b <= 0 && throw(SpiceError(:dafnegaddr, "spkpvn: negative value for the first address: $b"))
-    b > e && throw(SpiceError(:dafbeggtend,
-        "spkpvn: beginning address ($b) greater than ending address ($e)"))
-    e <= length(daf.data) || throw(SpiceError(:filereadfailed,
-        "spkpvn: the addresses $b:$e are not inside the file $file"))
+    b > e && throw(
+        SpiceError(
+            :dafbeggtend,
+            "spkpvn: beginning address ($b) greater than ending address ($e)"
+        )
+    )
+    e <= length(daf.data) || throw(
+        SpiceError(
+            :filereadfailed,
+            "spkpvn: the addresses $b:$e are not inside the file $file"
+        )
+    )
     return _spkpvn(ks, daf.data, _spk_descr_segment(daf.data, descr, daf.path, 0), et)
 end
-spkpvn(ctx::SpiceContext, src::Union{DAFHandle,AbstractString}, descr::AbstractVector{<:Real},
-    et::Real) = spkpvn(kernelset(ctx), src, descr, et)
-spkpvn(src::Union{DAFHandle,AbstractString}, descr::AbstractVector{<:Real}, et::Real) =
+spkpvn(
+    ctx::SpiceContext, src::Union{DAFHandle, AbstractString}, descr::AbstractVector{<:Real},
+    et::Real
+) = spkpvn(kernelset(ctx), src, descr, et)
+spkpvn(src::Union{DAFHandle, AbstractString}, descr::AbstractVector{<:Real}, et::Real) =
     spkpvn(default_context(), src, descr, et)
 
 # ---------------------------------------------------------------------------------------
@@ -319,7 +357,7 @@ function _spks01(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     for i in first:last
         push!(out, _rd(r, offe + i))
     end
-    for i in first+99:100:last
+    for i in (first + 99):100:last
         push!(out, _rd(r, offe + i))
     end
     t21 && push!(out, Float64(maxdim))
@@ -368,7 +406,7 @@ function _spks05(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     for i in r1:r2
         push!(out, _rd(r, offe + i))
     end
-    for i in r1+99:100:r2
+    for i in (r1 + 99):100:r2
         push!(out, _rd(r, offe + i))
     end
     push!(out, gm, Float64(r2 - r1 + 1))
@@ -387,7 +425,7 @@ function _spks08(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     r1 = min(r1, nrec - degree)
     ratio = (t1 - start) / step
     r2 = ratio == trunc(ratio) ? min(_cint(ratio), nrec - 1) + 1 :
-         min(_cint(ratio) + 1, nrec - 1) + 1
+        min(_cint(ratio) + 1, nrec - 1) + 1
     r2 = min(nrec, r2 + degree ÷ 2)
     r2 = max(r2, degree + 1)
     out = Float64[]
@@ -439,7 +477,7 @@ function _spks09(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     for i in r1:r2
         push!(out, _rd(r, offe + i))
     end
-    for i in r1+99:100:r2-1
+    for i in (r1 + 99):100:(r2 - 1)
         push!(out, _rd(r, offe + i))
     end
     push!(out, Float64(degree), Float64(r2 - r1 + 1))
@@ -452,8 +490,12 @@ function _spks18(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     subtyp = _nint(st)
     winsiz = _nint(ws)
     nrec = _nint(nr)
-    packsz = subtyp == 0 ? 12 : subtyp == 1 ? 6 : throw(SpiceError(:invalidvalue,
-        "spksub: unexpected SPK type 18 subtype $subtyp found in type 18 record"))
+    packsz = subtyp == 0 ? 12 : subtyp == 1 ? 6 : throw(
+            SpiceError(
+                :invalidvalue,
+                "spksub: unexpected SPK type 18 subtype $subtyp found in type 18 record"
+            )
+        )
     offe = eaddr - (nrec - 1) ÷ 100 - nrec - 3
     r1, r2 = _spks_window(r, offe, nrec, t0, t1, (winsiz - 1) ÷ 2)
     out = Float64[]
@@ -464,7 +506,7 @@ function _spks18(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     for i in r1:r2
         push!(out, _rd(r, offe + i))
     end
-    for i in r1+99:100:r2-1
+    for i in (r1 + 99):100:(r2 - 1)
         push!(out, _rd(r, offe + i))
     end
     push!(out, Float64(subtyp), Float64(winsiz), Float64(r2 - r1 + 1))
@@ -539,9 +581,13 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     minib = baddr - 1 + _nint(p1)
     minie = baddr - 1 + _nint(p2) - 1
     subtyp, wndsiz, npkt = _nint.(_rd(r, minie - 2, minie))
-    0 <= subtyp < 3 || throw(SpiceError(:notsupported, "spksub: unexpected SPK type 19 " *
-        "subtype $subtyp found in type 19 segment within mini-segment $begidx"))
-    pktsiz = _SPK19_PKTSZS[subtyp+1]
+    0 <= subtyp < 3 || throw(
+        SpiceError(
+            :notsupported, "spksub: unexpected SPK type 19 " *
+                "subtype $subtyp found in type 19 segment within mini-segment $begidx"
+        )
+    )
+    pktsiz = _SPK19_PKTSZS[subtyp + 1]
     minbep = minib - 1 + npkt * pktsiz
     # The first packet of the first mini-segment.
     nread = min(100, npkt)
@@ -565,10 +611,14 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
         nread < 2 && _spks19_error("NREAD is $nread; end time of interval $begidx is $ivlend")
         l, bufbas, nread, buf = _spks19_last(r, minbep, npkt, minbep + bepidx - 1, nread, t1)
         eepidx = bufbas - minbep + l + 1
-        (eepidx < 2 || eepidx > npkt) && _spks19_error("last epoch is $(buf[nread]); " *
-            "end time of interval $begidx is $ivlend")
-        l == 0 && _spks19_error("the epochs of interval $begidx from $(buf[1]) are after " *
-            "the end $t1 (CSPICE stops with a subscript error)")
+        (eepidx < 2 || eepidx > npkt) && _spks19_error(
+            "last epoch is $(buf[nread]); " *
+                "end time of interval $begidx is $ivlend"
+        )
+        l == 0 && _spks19_error(
+            "the epochs of interval $begidx from $(buf[1]) are after " *
+                "the end $t1 (CSPICE stops with a subscript error)"
+        )
         eepidx = min(npkt, eepidx + (buf[l] == t1 ? wndsiz ÷ 2 - 2 : wndsiz ÷ 2 - 1))
     end
     ivlbeg = _rd(r, ivlbas + begidx)
@@ -618,16 +668,24 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
             minib = baddr - 1 + _nint(q1)
             minie = baddr - 1 + _nint(q2) - 1
             subtyp, wndsiz, npkt = _nint.(_rd(r, minie - 2, minie))
-            0 <= subtyp < 3 || throw(SpiceError(:notsupported, "spksub: unexpected SPK " *
-                "type 19 subtype $subtyp found in type 19 segment within mini-segment $curivl"))
-            pktsiz = _SPK19_PKTSZS[subtyp+1]
+            0 <= subtyp < 3 || throw(
+                SpiceError(
+                    :notsupported, "spksub: unexpected SPK " *
+                        "type 19 subtype $subtyp found in type 19 segment within mini-segment $curivl"
+                )
+            )
+            pktsiz = _SPK19_PKTSZS[subtyp + 1]
             minbep = minib - 1 + npkt * pktsiz
             l, bufbas, nread, buf = _spks19_last(r, minbep, npkt, minbep, min(100, npkt), t1)
             eepidx = bufbas - minbep + l + 1
-            eepidx < 2 && _spks19_error("no epochs in final input interval exceed END; " *
-                "interval index is $endidx, END is $t1")
-            l == 0 && _spks19_error("the epochs of interval $endidx from $(buf[1]) are " *
-                "after the end $t1 (CSPICE stops with a subscript error)")
+            eepidx < 2 && _spks19_error(
+                "no epochs in final input interval exceed END; " *
+                    "interval index is $endidx, END is $t1"
+            )
+            l == 0 && _spks19_error(
+                "the epochs of interval $endidx from $(buf[1]) are " *
+                    "after the end $t1 (CSPICE stops with a subscript error)"
+            )
             eepidx = max(min(npkt, eepidx + (buf[l] == t1 ? wndsiz ÷ 2 - 2 : wndsiz ÷ 2 - 1)), 2)
             for i in 1:eepidx
                 b = minib - 1 + (i - 1) * pktsiz
@@ -657,7 +715,7 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
         end
         final && push!(out, ivfbeg, ivfend)
     end
-    for i in 1:noivl÷100
+    for i in 1:(noivl ÷ 100)
         push!(out, _rd(r, ivlbas + (begidx - 1) + 100i))
     end
     push!(out, 1.0)
@@ -679,27 +737,35 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
 end
 
 "A `Segment` of type `dtype` over the local copy of `r`, for the layout readers of types 10 and 14."
-_spks_local(r::_SegReader, dtype::Integer) = Segment(Int32(0), Int32(0), Int32(0),
-    Int32(dtype), 0.0, 0.0, Int32(0), 1, length(r.data), 0.0, 0.0, Int32(0), Int32(0))
+_spks_local(r::_SegReader, dtype::Integer) = Segment(
+    Int32(0), Int32(0), Int32(0),
+    Int32(dtype), 0.0, 0.0, Int32(0), 1, length(r.data), 0.0, 0.0, Int32(0), Int32(0)
+)
 
 "Type 10 (`spks10`): the element sets closest to `t0` and `t1` and those between them."
-function _spks10(newh::DAFHandle, r::_SegReader, ndscr::Vector{Float64}, ident::AbstractString,
-        t0::Float64, t1::Float64)
+function _spks10(
+        newh::DAFHandle, r::_SegReader, ndscr::Vector{Float64}, ident::AbstractString,
+        t0::Float64, t1::Float64
+    )
     d = r.data
     lay = _t10_layout(d, _spks_local(r, 10))
-    lay.pksz == 14 || throw(SpiceError(:notsupported, "spksub: a type 10 segment with " *
-        "packets of $(lay.pksz) doubles cannot be subset; spkw10 writes 14"))
-    con = d[lay.con+1:lay.con+8]
+    lay.pksz == 14 || throw(
+        SpiceError(
+            :notsupported, "spksub: a type 10 segment with " *
+                "packets of $(lay.pksz) doubles cannot be subset; spkw10 writes 14"
+        )
+    )
+    con = d[(lay.con + 1):(lay.con + 8)]
     dafbna(newh, ndscr, ident)
     begidx = _t10_closest(d, lay, t0)
-    d[lay.ref+begidx] > t0 && (begidx = max(1, begidx - 1))
+    d[lay.ref + begidx] > t0 && (begidx = max(1, begidx - 1))
     endidx = _t10_closest(d, lay, t1)
-    d[lay.ref+endidx] < t1 && (endidx = min(lay.n, endidx + 1))
-    refs = d[lay.ref+begidx:lay.ref+endidx]
+    d[lay.ref + endidx] < t1 && (endidx = min(lay.n, endidx + 1))
+    refs = d[(lay.ref + begidx):(lay.ref + endidx)]
     packets = Float64[]
     for i in begidx:endidx
         a = lay.pkt + (i - 1) * lay.stride
-        append!(packets, @view d[a+1:a+14])
+        append!(packets, @view d[(a + 1):(a + 14)])
     end
     dafada(newh, _t10_data(con, refs, packets))
     dafena(newh)
@@ -712,10 +778,14 @@ function _spks14(newh::DAFHandle, r::_SegReader, ndscr::Vector{Float64}, ident::
     t0, t1 = dc
     d = r.data
     lay = _spk14_layout(d, _spks_local(r, 14))
-    chbdeg = _cint(d[lay.conbas+1]) - 1
+    chbdeg = _cint(d[lay.conbas + 1]) - 1
     recsiz = (chbdeg + 1) * 6 + 2
-    recsiz > 128 && throw(SpiceError(:spkrectoolarge, "spksub: storage for $recsiz double " *
-        "precision numbers is needed for an SPK data record and only 128 locations were available"))
+    recsiz > 128 && throw(
+        SpiceError(
+            :spkrectoolarge, "spksub: storage for $recsiz double " *
+                "precision numbers is needed for an SPK data record and only 128 locations were available"
+        )
+    )
     begidx = max(1, _lstled(d, lay.refbas, lay.nref, t0))
     endidx = max(1, _lstled(d, lay.refbas, lay.nref, t1))
     # The frame goes through its name in CSPICE (`irfnam`), which only an inertial frame
@@ -727,9 +797,9 @@ function _spks14(newh::DAFHandle, r::_SegReader, ndscr::Vector{Float64}, ident::
         records = Float64[]
         for i in begidx:endidx
             a = lay.pktbas + (i - 1) * lay.stride + lay.pktoff
-            append!(records, @view d[a+1:a+lay.pktsz])
+            append!(records, @view d[(a + 1):(a + lay.pktsz)])
         end
-        spk14a(w, n, records, d[lay.refbas+begidx:lay.refbas+endidx])
+        spk14a(w, n, records, d[(lay.refbas + begidx):(lay.refbas + endidx)])
     end
     spk14e(w)
     return nothing
@@ -808,15 +878,21 @@ julia> spkuds(dafgs(h))
 julia> dafcls(h)
 ```
 """
-function spksub(handle::DAFHandle, descr::AbstractVector{<:Real}, ident::AbstractString,
-        start::Real, stop::Real, newh::DAFHandle)
+function spksub(
+        handle::DAFHandle, descr::AbstractVector{<:Real}, ident::AbstractString,
+        start::Real, stop::Real, newh::DAFHandle
+    )
     _seg_chkfstr("spksub", "ident", ident)
     dc, ic = dafus(descr, 2, 6)
     alpha, omega = dc
     t0, t1 = Float64(start), Float64(stop)
-    (alpha <= t0 && t0 <= t1 && t1 <= omega) || throw(SpiceError(:spknotasubset,
-        "spksub: specified interval [$t0, $t1] is not a subset of segment interval " *
-        "[$alpha, $omega]"))
+    (alpha <= t0 && t0 <= t1 && t1 <= omega) || throw(
+        SpiceError(
+            :spknotasubset,
+            "spksub: specified interval [$t0, $t1] is not a subset of segment interval " *
+                "[$alpha, $omega]"
+        )
+    )
     ndscr = dafps(Float64[t0, t1], ic)
     dtype, baddr, eaddr = ic[4], ic[5], ic[6]
     if dtype == 10 || dtype == 14
@@ -825,8 +901,11 @@ function spksub(handle::DAFHandle, descr::AbstractVector{<:Real}, ident::Abstrac
         dtype == 10 ? _spks10(newh, r, ndscr, ident, t0, t1) : _spks14(newh, r, ndscr, ident)
         return nothing
     end
-    dtype in (1, 2, 3, 5, 8, 9, 12, 13, 15, 17, 18, 19, 20, 21) || throw(SpiceError(
-        :spktypenotsupp, "spksub: SPK data type $dtype is not supported"))
+    dtype in (1, 2, 3, 5, 8, 9, 12, 13, 15, 17, 18, 19, 20, 21) || throw(
+        SpiceError(
+            :spktypenotsupp, "spksub: SPK data type $dtype is not supported"
+        )
+    )
     # The data are read before the array is begun, so that a read error leaves no array
     # begun on `newh`; the checks of the handle come first, as in CSPICE.
     _daf_check_write(newh, "dafbna")

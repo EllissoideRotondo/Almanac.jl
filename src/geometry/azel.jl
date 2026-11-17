@@ -20,7 +20,7 @@ function azlrec(range::Real, az::Real, el::Real, azccw::Bool, elplsz::Bool)
     # As in CSPICE, a zero angle keeps its sign.
     return _m_latrec(r, (azccw || primal(a) == 0.0) ? a : -a, (elplsz || primal(e) == 0.0) ? e : -e)
 end
-azlrec(range::Real, az::Real, el::Real; azccw::Bool=true, elplsz::Bool=true) =
+azlrec(range::Real, az::Real, el::Real; azccw::Bool = true, elplsz::Bool = true) =
     azlrec(range, az, el, azccw, elplsz)
 
 """
@@ -45,7 +45,7 @@ function recazl(rectan::AbstractVector, azccw::Bool, elplsz::Bool)
     (elplsz || primal(el) == 0.0) || (el = -el)
     return range, az, el
 end
-recazl(rectan::AbstractVector; azccw::Bool=true, elplsz::Bool=true) =
+recazl(rectan::AbstractVector; azccw::Bool = true, elplsz::Bool = true) =
     recazl(rectan, azccw, elplsz)
 
 """
@@ -64,15 +64,21 @@ Throws `SpiceError(:pointonzaxis)` if `x` and `y` are both zero.
 See also [`drdazl`](@ref), [`recazl`](@ref).
 """
 function dazldr(x::Real, y::Real, z::Real, azccw::Bool, elplsz::Bool)
-    (primal(x) == 0.0 && primal(y) == 0.0) && throw(SpiceError(:pointonzaxis,
-        "the Jacobian is not defined for a point on the Z axis"))
+    (primal(x) == 0.0 && primal(y) == 0.0) && throw(
+        SpiceError(
+            :pointonzaxis,
+            "the Jacobian is not defined for a point on the Z axis"
+        )
+    )
     j = dlatdr(x, y, z)
     sa = azccw ? 1.0 : -1.0
     se = elplsz ? 1.0 : -1.0
-    return SMatrix{3,3}(j[1, 1], sa * j[2, 1], se * j[3, 1], j[1, 2], sa * j[2, 2],
-        se * j[3, 2], j[1, 3], sa * j[2, 3], se * j[3, 3])
+    return SMatrix{3, 3}(
+        j[1, 1], sa * j[2, 1], se * j[3, 1], j[1, 2], sa * j[2, 2],
+        se * j[3, 2], j[1, 3], sa * j[2, 3], se * j[3, 3]
+    )
 end
-dazldr(x::Real, y::Real, z::Real; azccw::Bool=true, elplsz::Bool=true) =
+dazldr(x::Real, y::Real, z::Real; azccw::Bool = true, elplsz::Bool = true) =
     dazldr(x, y, z, azccw, elplsz)
 
 """
@@ -92,15 +98,21 @@ Throws `SpiceError(:valueoutofrange)` if `range` is negative.
 See also [`dazldr`](@ref), [`azlrec`](@ref).
 """
 function drdazl(range::Real, az::Real, el::Real, azccw::Bool, elplsz::Bool)
-    primal(range) < 0.0 && throw(SpiceError(:valueoutofrange,
-        "the range must not be negative; it is $(primal(range))"))
+    primal(range) < 0.0 && throw(
+        SpiceError(
+            :valueoutofrange,
+            "the range must not be negative; it is $(primal(range))"
+        )
+    )
     sa = azccw ? 1.0 : -1.0
     se = elplsz ? 1.0 : -1.0
     j = drdlat(range, sa * az, se * el)
-    return SMatrix{3,3}(j[1, 1], j[2, 1], j[3, 1], sa * j[1, 2], sa * j[2, 2], sa * j[3, 2],
-        se * j[1, 3], se * j[2, 3], se * j[3, 3])
+    return SMatrix{3, 3}(
+        j[1, 1], j[2, 1], j[3, 1], sa * j[1, 2], sa * j[2, 2], sa * j[3, 2],
+        se * j[1, 3], se * j[2, 3], se * j[3, 3]
+    )
 end
-drdazl(range::Real, az::Real, el::Real; azccw::Bool=true, elplsz::Bool=true) =
+drdazl(range::Real, az::Real, el::Real; azccw::Bool = true, elplsz::Bool = true) =
     drdazl(range, az, el, azccw, elplsz)
 
 """
@@ -149,16 +161,21 @@ az, el = azlsta[2] * dpr(), azlsta[3] * dpr()    # degrees; azimuth clockwise fr
 
 See also [`spkcpo`](@ref), [`recazl`](@ref), [`dazldr`](@ref).
 """
-function azlcpo(ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,
+function azlcpo(
+        ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,
         abcorr::AbcorrArg, azccw::Bool, elplsz::Bool, obspos::AbstractVector, obsctr::NameOrID,
-        obsref::NameOrID)
+        obsref::NameOrID
+    )
     obscde = _geo_body(ks, obsctr, "observer center")
     fxfcde = _geo_namfrm(ks, obsref)
     center, _, found = _geo_frinfo(ks, fxfcde)
     found || _geo_unknown_frame(obsref)
     center == obscde || _geo_bad_center(obsref, obsctr, center)
-    (method == "ELLIPSOID" || _dsk_eqstr(method, "ELLIPSOID")) || throw(SpiceError(
-        :invalidmethod, "the method <$method> is not supported; use ELLIPSOID"))
+    (method == "ELLIPSOID" || _dsk_eqstr(method, "ELLIPSOID")) || throw(
+        SpiceError(
+            :invalidmethod, "the method <$method> is not supported; use ELLIPSOID"
+        )
+    )
     pos = _geo_pos(obspos)
     xftopo = if pos[1] == 0.0 && pos[2] == 0.0
         # On the polar axis the local +X axis is the +X axis of the body-fixed frame.
@@ -179,10 +196,14 @@ function azlcpo(ks::KernelSet, method::AbstractString, target::NameOrID, et::Rea
     rates = _m_mxv(dazldr(lr[1], lr[2], lr[3], azccw, elplsz), lv)
     return SVector(range, az, el, rates[1], rates[2], rates[3]), lt
 end
-azlcpo(ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real,
+azlcpo(
+    ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real,
     abcorr::AbcorrArg, azccw::Bool, elplsz::Bool, obspos::AbstractVector, obsctr::NameOrID,
-    obsref::NameOrID) =
+    obsref::NameOrID
+) =
     azlcpo(kernelset(ctx), method, target, et, abcorr, azccw, elplsz, obspos, obsctr, obsref)
-azlcpo(method::AbstractString, target::NameOrID, et::Real, abcorr::AbcorrArg, azccw::Bool,
-    elplsz::Bool, obspos::AbstractVector, obsctr::NameOrID, obsref::NameOrID) =
+azlcpo(
+    method::AbstractString, target::NameOrID, et::Real, abcorr::AbcorrArg, azccw::Bool,
+    elplsz::Bool, obspos::AbstractVector, obsctr::NameOrID, obsref::NameOrID
+) =
     azlcpo(default_context(), method, target, et, abcorr, azccw, elplsz, obspos, obsctr, obsref)

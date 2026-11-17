@@ -71,13 +71,15 @@ mutable struct DASHandle
     dps::Vector{Float64}
     ints::Vector{Int32}
     free::Int
-    lastrc::NTuple{3,Int}
-    lastwd::NTuple{3,Int}
+    lastrc::NTuple{3, Int}
+    lastwd::NTuple{3, Int}
 end
 
 function Base.show(io::IO, h::DASHandle)
-    print(io, "DASHandle(", repr(h.path), ", ", h.writable ? "write" : "read",
-        h.isopen ? "" : ", closed", ")")
+    return print(
+        io, "DASHandle(", repr(h.path), ", ", h.writable ? "write" : "read",
+        h.isopen ? "" : ", closed", ")"
+    )
 end
 Base.isopen(h::DASHandle) = h.isopen
 Base.close(h::DASHandle) = dascls(h)
@@ -89,8 +91,12 @@ end
 
 @inline function _das_check_write(h::DASHandle, who::AbstractString)
     _das_check_open(h, who)
-    h.writable || throw(SpiceError(:dasinvalidaccess,
-        "$who: the DAS file $(h.path) is not open for write"))
+    h.writable || throw(
+        SpiceError(
+            :dasinvalidaccess,
+            "$who: the DAS file $(h.path) is not open for write"
+        )
+    )
     return nothing
 end
 
@@ -100,8 +106,8 @@ end
 
 "32-bit integer at 0-based byte offset `off` of `raw`; `swap` tells that the file has the other byte order."
 @inline function _das_i32(raw::AbstractVector{UInt8}, off::Int, swap::Bool)
-    v = UInt32(raw[off+1]) | (UInt32(raw[off+2]) << 8) | (UInt32(raw[off+3]) << 16) |
-        (UInt32(raw[off+4]) << 24)
+    v = UInt32(raw[off + 1]) | (UInt32(raw[off + 2]) << 8) | (UInt32(raw[off + 3]) << 16) |
+        (UInt32(raw[off + 4]) << 24)
     v = _DAS_NATIVE_LITTLE ? v : bswap(v)       # `v` is now the stored word, native layout
     return Int(reinterpret(Int32, swap ? bswap(v) : v))
 end
@@ -117,18 +123,34 @@ before the binary-file-format string (bytes 85 to 92 zero) is taken as native.
 """
 function _das_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
-    isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
     raw = open(io -> read(io, _DAS_RECLEN), path, "r")
-    length(raw) == _DAS_RECLEN || throw(SpiceError(:filereadfailed,
-        "$who: $path is too short ($(length(raw)) bytes) to hold a DAS file record"))
+    length(raw) == _DAS_RECLEN || throw(
+        SpiceError(
+            :filereadfailed,
+            "$who: $path is too short ($(length(raw)) bytes) to hold a DAS file record"
+        )
+    )
     arch, _ = idw2at(String(raw[1:8]))
-    arch == "DAF" && throw(SpiceError(:filarchmismatch,
-        "$who: the file $path is a DAF, not a DAS file"))
-    arch == "DAS" || throw(SpiceError(:unknownfilarc,
-        "$who: the file $path is neither a DAF nor a DAS file"))
+    arch == "DAF" && throw(
+        SpiceError(
+            :filarchmismatch,
+            "$who: the file $path is a DAF, not a DAS file"
+        )
+    )
+    arch == "DAS" || throw(
+        SpiceError(
+            :unknownfilarc,
+            "$who: the file $path is neither a DAF nor a DAS file"
+        )
+    )
     if raw[700:705] == _DAF_FTPSTR[1:6] && raw[700:727] != _DAF_FTPSTR
-        throw(SpiceError(:ftpxfererror, "$who: the FTP validation string of $path is " *
-            "damaged; the file was most likely moved in text mode"))
+        throw(
+            SpiceError(
+                :ftpxfererror, "$who: the FTP validation string of $path is " *
+                    "damaged; the file was most likely moved in text mode"
+            )
+        )
     end
     bff = String(raw[85:92])
     little = if bff == "LTL-IEEE"
@@ -136,13 +158,21 @@ function _das_probe(path::AbstractString, who::AbstractString)
     elseif bff == "BIG-IEEE"
         false
     elseif bff in ("VAX-GFLT", "VAX-DFLT")
-        throw(SpiceError(:unsupportedbff,
-            "$who: the binary file format $bff of $path is not supported"))
+        throw(
+            SpiceError(
+                :unsupportedbff,
+                "$who: the binary file format $bff of $path is not supported"
+            )
+        )
     elseif all(iszero, raw[85:92])
         _DAS_NATIVE_LITTLE
     else
-        throw(SpiceError(:unknownbff,
-            "$who: the binary file format $(repr(bff)) of $path is not known"))
+        throw(
+            SpiceError(
+                :unknownbff,
+                "$who: the binary file format $(repr(bff)) of $path is not known"
+            )
+        )
     end
     return raw, little != _DAS_NATIVE_LITTLE
 end
@@ -156,12 +186,14 @@ The first `n` words of one DAS address space whose data records are the `cluster
 clusters are adjacent, the byte order is native and `copy` is false; else it is an
 owned array in native byte order.
 """
-function _das_extent(io::IOStream, raw::Vector{UInt8}, ::Type{T},
-        clusters::Vector{NTuple{2,Int}}, n::Int, swap::Bool, copy::Bool) where {T}
+function _das_extent(
+        io::IOStream, raw::Vector{UInt8}, ::Type{T},
+        clusters::Vector{NTuple{2, Int}}, n::Int, swap::Bool, copy::Bool
+    ) where {T}
     n == 0 && return T[]
     adjacent = true
     for k in 2:length(clusters)          # invariant: clusters 1 .. k-1 are one run of records
-        adjacent &= clusters[k-1][1] + clusters[k-1][2] == clusters[k][1]
+        adjacent &= clusters[k - 1][1] + clusters[k - 1][2] == clusters[k][1]
     end
     if adjacent && !swap && !copy
         return Mmap.mmap(io, Vector{T}, (n,), (clusters[1][1] - 1) * _DAS_RECLEN)
@@ -210,12 +242,16 @@ function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
         try
             (nresvr >= 0 && ncomr >= 0) ||
                 bad("the file record gives $nresvr reserved and $ncomr comment records")
-            nresvr + ncomr + 2 <= nrecords || throw(SpiceError(:dasfilereadfailed,
-                "$who: the first directory record $(nresvr + ncomr + 2) of $path is past " *
-                "the end of the file ($nrecords records)"))
+            nresvr + ncomr + 2 <= nrecords || throw(
+                SpiceError(
+                    :dasfilereadfailed,
+                    "$who: the first directory record $(nresvr + ncomr + 2) of $path is past " *
+                        "the end of the file ($nrecords records)"
+                )
+            )
             (0 <= ncomc <= ncomr * _DAS_RECLEN) ||
                 bad("the comment area of $ncomr records cannot hold $ncomc characters")
-            clusters = (NTuple{2,Int}[], NTuple{2,Int}[], NTuple{2,Int}[])
+            clusters = (NTuple{2, Int}[], NTuple{2, Int}[], NTuple{2, Int}[])
             lastla = [0, 0, 0]
             lastrc = [0, 0, 0]
             lastwd = [0, 0, 0]
@@ -228,8 +264,12 @@ function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
                 # order
                 visited += 1
                 visited <= nrecords || bad("the chain of directory records has a cycle")
-                rec <= nrecords || throw(SpiceError(:dasfilereadfailed,
-                    "$who: directory record $rec of $path is past the end of the file"))
+                rec <= nrecords || throw(
+                    SpiceError(
+                        :dasfilereadfailed,
+                        "$who: directory record $rec of $path is past the end of the file"
+                    )
+                )
                 base = (rec - 1) * _DAS_RECLEN
                 word(k) = _das_i32(raw, base + 4 * (k - 1), swap)
                 lastrec = max(lastrec, rec)
@@ -248,8 +288,10 @@ function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
                         curtyp = count > 0 ? _DAS_NEXT[prvtyp] : _DAS_PREV[prvtyp]
                         count = abs(count)
                         datarec + count - 1 <= nrecords ||
-                            bad("directory record $rec describes records past the end " *
-                                "of the file")
+                            bad(
+                            "directory record $rec describes records past the end " *
+                                "of the file"
+                        )
                         push!(clusters[curtyp], (datarec, count))
                         lastrc[curtyp] = rec
                         lastwd[curtyp] = pos
@@ -264,18 +306,22 @@ function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
                 rec = word(2)
             end
             for t in 1:3
-                room = sum(c -> c[2], clusters[t]; init=0) * _DAS_NW[t]
-                lastla[t] <= room || bad("the last address $(lastla[t]) of type $t is " *
-                    "not inside the $room words of its data records")
+                room = sum(c -> c[2], clusters[t]; init = 0) * _DAS_NW[t]
+                lastla[t] <= room || bad(
+                    "the last address $(lastla[t]) of type $t is " *
+                        "not inside the $room words of its data records"
+                )
             end
             chars = _das_extent(io, raw, UInt8, clusters[1], lastla[1], swap, writable)
             dps = _das_extent(io, raw, Float64, clusters[2], lastla[2], swap, writable)
             ints = _das_extent(io, raw, Int32, clusters[3], lastla[3], swap, writable)
-            resv = raw[_DAS_RECLEN+1:_DAS_RECLEN*(1+nresvr)]
-            comments = raw[_DAS_RECLEN*(1+nresvr)+1:_DAS_RECLEN*(1+nresvr+ncomr)]
-            h = DASHandle(String(path), writable, true, idword, ifname, nresvr, nresvc,
+            resv = raw[(_DAS_RECLEN + 1):(_DAS_RECLEN * (1 + nresvr))]
+            comments = raw[(_DAS_RECLEN * (1 + nresvr) + 1):(_DAS_RECLEN * (1 + nresvr + ncomr))]
+            h = DASHandle(
+                String(path), writable, true, idword, ifname, nresvr, nresvc,
                 ncomr, ncomc, resv, comments, chars, dps, ints, lastrec + 1, Tuple(lastrc),
-                Tuple(lastwd))
+                Tuple(lastwd)
+            )
             writable && _das_layout!(h)
             h
         finally
@@ -285,8 +331,10 @@ function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
 end
 
 "Record counts (chars, doubles, integers) of the segregated file of `h`."
-_das_nrecs(h::DASHandle) = (cld(length(h.chars), _DAS_NW[1]), cld(length(h.dps), _DAS_NW[2]),
-    cld(length(h.ints), _DAS_NW[3]))
+_das_nrecs(h::DASHandle) = (
+    cld(length(h.chars), _DAS_NW[1]), cld(length(h.dps), _DAS_NW[2]),
+    cld(length(h.ints), _DAS_NW[3]),
+)
 
 """
     _das_layout!(h) -> h
@@ -343,8 +391,8 @@ function _das_directory_record(h::DASHandle)
     prvtyp = 0
     for t in 1:3                         # invariant: types before t are described
         last[t] > 0 || continue
-        dir[2t+1] = 1
-        dir[2t+2] = last[t]
+        dir[2t + 1] = 1
+        dir[2t + 2] = last[t]
         if pos == 9
             dir[9] = t
             dir[10] = counts[t]
@@ -385,12 +433,16 @@ function _das_write_image(h::DASHandle)
             _das_write_padded(io, h.dps, 0x00)
             _das_write_padded(io, h.ints, 0x00)
         end
-        mv(tmp, h.path; force=true)
+        mv(tmp, h.path; force = true)
     catch e
-        rm(tmp; force=true)
+        rm(tmp; force = true)
         e isa SpiceError && rethrow()
-        throw(SpiceError(:daswritefail,
-            "cannot write the DAS file $(h.path): $(sprint(showerror, e))"))
+        throw(
+            SpiceError(
+                :daswritefail,
+                "cannot write the DAS file $(h.path): $(sprint(showerror, e))"
+            )
+        )
     end
     return nothing
 end
@@ -442,8 +494,12 @@ has the file open, and `:fileopenfailed` if the file is not writable.
 """
 function dasopw(path::AbstractString)
     h = _das_load(path, "dasopw", true)
-    (uperm(path) & 0x02) != 0 || throw(SpiceError(:fileopenfailed,
-        "dasopw: the file $path cannot be opened for write"))
+    (uperm(path) & 0x02) != 0 || throw(
+        SpiceError(
+            :fileopenfailed,
+            "dasopw: the file $path cannot be opened for write"
+        )
+    )
     return _open_register!(h, path, true, "dasopw")
 end
 
@@ -469,21 +525,37 @@ Throws `SpiceError`:
 
 See also [`dlaopn`](@ref), [`dskopn`](@ref), [`dasops`](@ref).
 """
-function dasonw(path::AbstractString, ftype::AbstractString, ifname::AbstractString,
-        ncomr::Integer)
+function dasonw(
+        path::AbstractString, ftype::AbstractString, ifname::AbstractString,
+        ncomr::Integer
+    )
     isempty(strip(path)) && throw(SpiceError(:blankfilename, "dasonw: the file name is blank"))
     isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "dasonw: the file type is blank"))
     ttype = String(strip(ftype, ' '))
-    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(SpiceError(:illegalcharacter,
-        "dasonw: the file type contains nonprinting characters"))
-    ncomr < 0 && throw(SpiceError(:invalidcount,
-        "dasonw: the number of comment records allocated must be non-negative but was $ncomr"))
-    ispath(path) && throw(SpiceError(:fileopenfailed,
-        "dasonw: the file $path already exists; a new DAS file cannot replace it"))
+    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
+        SpiceError(
+            :illegalcharacter,
+            "dasonw: the file type contains nonprinting characters"
+        )
+    )
+    ncomr < 0 && throw(
+        SpiceError(
+            :invalidcount,
+            "dasonw: the number of comment records allocated must be non-negative but was $ncomr"
+        )
+    )
+    ispath(path) && throw(
+        SpiceError(
+            :fileopenfailed,
+            "dasonw: the file $path already exists; a new DAS file cannot replace it"
+        )
+    )
     idword = rpad("DAS/" * ttype[1:min(4, lastindex(ttype))], 8)
-    h = DASHandle(String(path), true, true, idword, String(rstrip(ifname)), 0, 0, Int(ncomr),
+    h = DASHandle(
+        String(path), true, true, idword, String(rstrip(ifname)), 0, 0, Int(ncomr),
         0, UInt8[], zeros(UInt8, Int(ncomr) * _DAS_RECLEN), UInt8[], Float64[], Int32[],
-        0, (0, 0, 0), (0, 0, 0))
+        0, (0, 0, 0), (0, 0, 0)
+    )
     _das_layout!(h)
     try
         open(path, "w") do io
@@ -492,10 +564,14 @@ function dasonw(path::AbstractString, ftype::AbstractString, ifname::AbstractStr
             write(io, zeros(Int32, 256))
         end
     catch e
-        throw(SpiceError(:fileopenfailed,
-            "dasonw: cannot create $path: $(sprint(showerror, e))"))
+        throw(
+            SpiceError(
+                :fileopenfailed,
+                "dasonw: cannot create $path: $(sprint(showerror, e))"
+            )
+        )
     end
-    return _open_register!(h, path, true, "dasonw"; check=false)
+    return _open_register!(h, path, true, "dasonw"; check = false)
 end
 
 """
@@ -531,8 +607,10 @@ julia> dascls(h)
 ```
 """
 function dasops()
-    h = DASHandle("", true, true, rpad("DAS/SCR", 8), "", 0, 0, 0, 0, UInt8[], UInt8[], UInt8[],
-        Float64[], Int32[], 0, (0, 0, 0), (0, 0, 0))
+    h = DASHandle(
+        "", true, true, rpad("DAS/SCR", 8), "", 0, 0, 0, 0, UInt8[], UInt8[], UInt8[],
+        Float64[], Int32[], 0, (0, 0, 0), (0, 0, 0)
+    )
     _das_layout!(h)
     return h
 end
@@ -667,19 +745,31 @@ end
 # ---------------------------------------------------------------------------------------
 
 "Throws `SpiceError(:dasnosuchaddress)` unless `first:last` lies in `1:n`; requires `first <= last`."
-@inline function _das_check_range(h::DASHandle, who::AbstractString, first::Integer,
-        last::Integer, n::Int)
-    (1 <= first && last <= n) || throw(SpiceError(:dasnosuchaddress,
-        "$who: the address range $first:$last is not inside 1:$n in $(h.path)"))
+@inline function _das_check_range(
+        h::DASHandle, who::AbstractString, first::Integer,
+        last::Integer, n::Int
+    )
+    (1 <= first && last <= n) || throw(
+        SpiceError(
+            :dasnosuchaddress,
+            "$who: the address range $first:$last is not inside 1:$n in $(h.path)"
+        )
+    )
     return nothing
 end
 
 # The update routines of SPICELIB check both addresses before they look at the order,
 # so an empty range outside the address space is an error there.
-@inline function _das_check_update(h::DASHandle, who::AbstractString, first::Integer,
-        last::Integer, n::Int)
-    (1 <= first <= n && 1 <= last <= n) || throw(SpiceError(:invalidaddress,
-        "$who: first was $first and last was $last; the valid range is 1:$n in $(h.path)"))
+@inline function _das_check_update(
+        h::DASHandle, who::AbstractString, first::Integer,
+        last::Integer, n::Int
+    )
+    (1 <= first <= n && 1 <= last <= n) || throw(
+        SpiceError(
+            :invalidaddress,
+            "$who: first was $first and last was $last; the valid range is 1:$n in $(h.path)"
+        )
+    )
     return nothing
 end
 
@@ -752,8 +842,12 @@ end
 "Throws `SpiceError(:valueoutofrange)` unless every element of `data` fits in an `Int32`, the integer of a DAS file."
 function _das_check_int32(who::AbstractString, data)
     for v in data
-        typemin(Int32) <= v <= typemax(Int32) || throw(SpiceError(:valueoutofrange,
-            "$who: the value $v does not fit in the 32-bit integer of a DAS file"))
+        typemin(Int32) <= v <= typemax(Int32) || throw(
+            SpiceError(
+                :valueoutofrange,
+                "$who: the value $v does not fit in the 32-bit integer of a DAS file"
+            )
+        )
     end
     return nothing
 end
@@ -828,7 +922,7 @@ function dasudi(h::DASHandle, first::Integer, last::Integer, data::AbstractVecto
     _das_check_write(h, "dasudi")
     first > last && return nothing
     length(data) >= last - first + 1 || throw(SpiceError(:badarg, "dasudi: data is too short"))
-    _das_check_int32("dasudi", view(data, firstindex(data):firstindex(data)+(last-first)))
+    _das_check_int32("dasudi", view(data, firstindex(data):(firstindex(data) + (last - first))))
     copyto!(h.ints, first, data, firstindex(data), last - first + 1)
     return nothing
 end
@@ -880,16 +974,24 @@ See also [`dasec`](@ref), [`dasdc`](@ref).
 function dasac(h::DASHandle, lines::AbstractVector{<:AbstractString})
     _das_check_write(h, "dasac")
     n = length(lines)
-    n <= 0 && throw(SpiceError(:invalidargument, "dasac: the number of comment lines " *
-        "to be added to the binary DAS file $(h.path) was not positive: $n"))
+    n <= 0 && throw(
+        SpiceError(
+            :invalidargument, "dasac: the number of comment lines " *
+                "to be added to the binary DAS file $(h.path) was not positive: $n"
+        )
+    )
     texts = Vector{Vector{UInt8}}(undef, n)
     nchars = 0
     for (i, line) in enumerate(lines)
         text = Vector{UInt8}(codeunits(rstrip(line, ' ')))
         for (j, c) in enumerate(text)
-            (0x20 <= c <= 0x7e) || throw(SpiceError(:illegalcharacter, "dasac: a " *
-                "nonprinting character was encountered in the comment buffer. Value: " *
-                "$(Int(c)), line: $i, position: $j"))
+            (0x20 <= c <= 0x7e) || throw(
+                SpiceError(
+                    :illegalcharacter, "dasac: a " *
+                        "nonprinting character was encountered in the comment buffer. Value: " *
+                        "$(Int(c)), line: $i, position: $j"
+                )
+            )
         end
         texts[i] = text
         nchars += length(text) + 1
@@ -903,16 +1005,16 @@ function dasac(h::DASHandle, lines::AbstractVector{<:AbstractString})
     pos = h.ncomc                        # characters of the area that are in use
     # A record that the text enters at its first character is blank before the text
     # goes in, as the record buffer of `dasac` is.
-    blank_from(p) = fill!(view(h.comments, p+1:p+_DAS_RECLEN), UInt8(' '))
+    blank_from(p) = fill!(view(h.comments, (p + 1):(p + _DAS_RECLEN)), UInt8(' '))
     pos == 0 && h.ncomr > 0 && blank_from(0)
     for text in texts                    # invariant: `pos` characters are in the area
         for c in text
             pos % _DAS_RECLEN == 0 && pos > 0 && blank_from(pos)
-            h.comments[pos+1] = c
+            h.comments[pos + 1] = c
             pos += 1
         end
         pos % _DAS_RECLEN == 0 && pos > 0 && blank_from(pos)
-        h.comments[pos+1] = 0x00
+        h.comments[pos + 1] = 0x00
         pos += 1
     end
     h.ncomc = pos
@@ -934,13 +1036,17 @@ function dasec(h::DASHandle)
     _das_check_open(h, "dasec")
     lines = String[]
     h.ncomc == 0 && return lines
-    h.comments[h.ncomc] == 0x00 || throw(SpiceError(:baddascommentarea,
-        "dasec: the last comment line of $(h.path) is not terminated; the count of " *
-        "comment characters is $(h.ncomc)"))
+    h.comments[h.ncomc] == 0x00 || throw(
+        SpiceError(
+            :baddascommentarea,
+            "dasec: the last comment line of $(h.path) is not terminated; the count of " *
+                "comment characters is $(h.ncomc)"
+        )
+    )
     start = 1
     for k in 1:h.ncomc                   # invariant: lines hold the text before `start`
         h.comments[k] == 0x00 || continue
-        push!(lines, String(h.comments[start:k-1]))
+        push!(lines, String(h.comments[start:(k - 1)]))
         start = k + 1
     end
     return lines

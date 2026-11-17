@@ -39,20 +39,24 @@ const EKQ_TABLES = [
         ("IARR", "DATATYPE = INTEGER, SIZE = 3", :INT, 3, 0),
         ("DARR", "DATATYPE = DOUBLE PRECISION, SIZE = VARIABLE", :DP, -1, 0),
         ("CARR", "DATATYPE = CHARACTER*(8), SIZE = 2", :CHR, 2, 8),
-        ("NAME", "DATATYPE = CHARACTER*(20)", :CHR, 1, 20)],
+        ("NAME", "DATATYPE = CHARACTER*(20)", :CHR, 1, 20),
+    ],
     "BETA" => [
         ("ICOL", "DATATYPE = INTEGER", :INT, 1, 0),
         ("XCOL", "DATATYPE = DOUBLE PRECISION, INDEXED = TRUE", :DP, 1, 0),
         ("TCOL", "DATATYPE = TIME", :TIME, 1, 0),
         ("NAME", "DATATYPE = CHARACTER*(20)", :CHR, 1, 20),
         ("TARR", "DATATYPE = TIME, SIZE = 2", :TIME, 2, 0),
-        ("BCHR", "DATATYPE = CHARACTER*(5), NULLS_OK = TRUE", :CHR, 1, 5)],
+        ("BCHR", "DATATYPE = CHARACTER*(5), NULLS_OK = TRUE", :CHR, 1, 5),
+    ],
     "GAMMA_LONG_NAME" => [
         ("KEY", "DATATYPE = INTEGER, INDEXED = TRUE", :INT, 1, 0),
         ("VAL", "DATATYPE = DOUBLE PRECISION", :DP, 1, 0),
         ("LABEL", "DATATYPE = CHARACTER*(16)", :CHR, 1, 16),
         ("EPOCH", "DATATYPE = TIME", :TIME, 1, 0),
-        ("ICOL", "DATATYPE = INTEGER", :INT, 1, 0)]]
+        ("ICOL", "DATATYPE = INTEGER", :INT, 1, 0),
+    ],
+]
 
 "`strs` as the fixed-length, null-terminated string array that the CSPICE wrappers take."
 function ekq_cstrings(strs, len::Int)
@@ -71,9 +75,13 @@ function ekq_write_ek(path)
     c_check()
     for (table, cols) in EKQ_TABLES
         segno = Ref{Cint}(0)
-        ccall((:ekbseg_c, DSKLIB), Cvoid, (Cint, Cstring, Cint, Cint, Ptr{UInt8}, Cint,
-                Ptr{UInt8}, Ref{Cint}), h[], table, length(cols), 33,
-            ekq_cstrings(first.(cols), 33), 100, ekq_cstrings(getindex.(cols, 2), 100), segno)
+        ccall(
+            (:ekbseg_c, DSKLIB), Cvoid, (
+                Cint, Cstring, Cint, Cint, Ptr{UInt8}, Cint,
+                Ptr{UInt8}, Ref{Cint},
+            ), h[], table, length(cols), 33,
+            ekq_cstrings(first.(cols), 33), 100, ekq_cstrings(getindex.(cols, 2), 100), segno
+        )
         c_check()
         for r in 1:3
             recno = Ref{Cint}(0)
@@ -83,16 +91,28 @@ function ekq_write_ek(path)
                 n = size == -1 ? r : size
                 if type === :CHR
                     vals = ekq_cstrings(["S$(r)$(k)" for k in 1:n], strlen + 1)
-                    ccall((:ekacec_c, DSKLIB), Cvoid, (Cint, Cint, Cint, Cstring, Cint, Cint,
-                            Ptr{UInt8}, Cint), h[], segno[], recno[], name, n, strlen + 1, vals, 0)
+                    ccall(
+                        (:ekacec_c, DSKLIB), Cvoid, (
+                            Cint, Cint, Cint, Cstring, Cint, Cint,
+                            Ptr{UInt8}, Cint,
+                        ), h[], segno[], recno[], name, n, strlen + 1, vals, 0
+                    )
                 elseif type === :INT
-                    ccall((:ekacei_c, DSKLIB), Cvoid, (Cint, Cint, Cint, Cstring, Cint,
-                            Ptr{Cint}, Cint), h[], segno[], recno[], name, n,
-                        Cint[10r + k for k in 1:n], 0)
+                    ccall(
+                        (:ekacei_c, DSKLIB), Cvoid, (
+                            Cint, Cint, Cint, Cstring, Cint,
+                            Ptr{Cint}, Cint,
+                        ), h[], segno[], recno[], name, n,
+                        Cint[10r + k for k in 1:n], 0
+                    )
                 else
-                    ccall((:ekaced_c, DSKLIB), Cvoid, (Cint, Cint, Cint, Cstring, Cint,
-                            Ptr{Float64}, Cint), h[], segno[], recno[], name, n,
-                        Float64[1000.0r + k / 2 for k in 1:n], 0)
+                    ccall(
+                        (:ekaced_c, DSKLIB), Cvoid, (
+                            Cint, Cint, Cint, Cstring, Cint,
+                            Ptr{Float64}, Cint,
+                        ), h[], segno[], recno[], name, n,
+                        Float64[1000.0r + k / 2 for k in 1:n], 0
+                    )
                 end
                 c_check()
             end
@@ -109,7 +129,7 @@ function ekq_catalogue()
     ccall((:ekntab_c, DSKLIB), Cvoid, (Ref{Cint},), n)
     c_check()
     tables = Almanac.EKTable[]
-    for t in 0:n[]-1
+    for t in 0:(n[] - 1)
         buf = zeros(UInt8, 65)
         ccall((:ektnam_c, DSKLIB), Cvoid, (Cint, Cint, Ptr{UInt8}), t, 65, buf)
         c_check()
@@ -119,17 +139,23 @@ function ekq_catalogue()
         c_check()
         cnames = String[]
         attrs = Almanac.EKColumnAttr[]
-        for c in 0:cc[]-1
+        for c in 0:(cc[] - 1)
             cbuf = zeros(UInt8, 33)
             att = zeros(Cint, 6)        # SpiceEKAttDsc: class, type, strlen, size, indexd, nullok
-            ccall((:ekcii_c, DSKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}),
-                table, c, 33, cbuf, att)
+            ccall(
+                (:ekcii_c, DSKLIB), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}, Ptr{Cint}),
+                table, c, 33, cbuf, att
+            )
             c_check()
             push!(cnames, unsafe_string(pointer(cbuf)))
-            push!(attrs, Almanac.EKColumnAttr(att[1], (:CHR, :DP, :INT, :TIME)[att[2]+1],
-                att[3], att[4], att[5] != 0, att[6] != 0))
+            push!(
+                attrs, Almanac.EKColumnAttr(
+                    att[1], (:CHR, :DP, :INT, :TIME)[att[2] + 1],
+                    att[3], att[4], att[5] != 0, att[6] != 0
+                )
+            )
         end
-        push!(tables, Almanac.EKTable(table, cnames, attrs, NTuple{2,Int32}[]))
+        push!(tables, Almanac.EKTable(table, cnames, attrs, NTuple{2, Int32}[]))
     end
     return tables
 end
@@ -151,13 +177,19 @@ function ekq_c_encd(query::String)
     error = Ref{Cint}(0)
     errmsg = fill(UInt8(' '), EKQ_MSGLEN)
     errptr = Ref{Cint}(0)
-    ccall((:zzekencd_, DSKLIB), Cint, (Ptr{UInt8}, Ptr{Cint}, Ptr{UInt8}, Ptr{Float64},
-            Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Cint, Cint, Cint), query, eqryi, eqryc, eqryd,
-        error, errmsg, errptr, sizeof(query), 2000, EKQ_MSGLEN)
+    ccall(
+        (:zzekencd_, DSKLIB), Cint, (
+            Ptr{UInt8}, Ptr{Cint}, Ptr{UInt8}, Ptr{Float64},
+            Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Cint, Cint, Cint,
+        ), query, eqryi, eqryc, eqryd,
+        error, errmsg, errptr, sizeof(query), 2000, EKQ_MSGLEN
+    )
     kind = c_pending_kind()
     card = clamp(Int(eqryi[6]), 0, 27869)
-    return (error=error[] != 0, errmsg=ekq_fstr(errmsg), kind=kind, i=eqryi[7:6+card],
-        c=eqryc, d=eqryd, raw=eqryi)
+    return (
+        error = error[] != 0, errmsg = ekq_fstr(errmsg), kind = kind, i = eqryi[7:(6 + card)],
+        c = eqryc, d = eqryd, raw = eqryi,
+    )
 end
 
 "`ekfind_c` of CSPICE for `query`: `(error, errmsg, kind)`."
@@ -165,10 +197,12 @@ function ekq_c_find(query::String)
     nmrows = Ref{Cint}(0)
     error = Ref{Cint}(0)
     errmsg = zeros(UInt8, EKQ_MSGLEN)
-    ccall((:ekfind_c, DSKLIB), Cvoid, (Cstring, Cint, Ref{Cint}, Ref{Cint}, Ptr{UInt8}),
-        query, EKQ_MSGLEN, nmrows, error, errmsg)
+    ccall(
+        (:ekfind_c, DSKLIB), Cvoid, (Cstring, Cint, Ref{Cint}, Ref{Cint}, Ptr{UInt8}),
+        query, EKQ_MSGLEN, nmrows, error, errmsg
+    )
     kind = c_pending_kind()
-    return (error=error[] != 0, errmsg=unsafe_string(pointer(errmsg)), kind=kind)
+    return (error = error[] != 0, errmsg = unsafe_string(pointer(errmsg)), kind = kind)
 end
 
 "`ekpsel_c` of CSPICE for `query`, with 1-based positions and symbols as `_ek_psel`."
@@ -182,20 +216,28 @@ function ekq_c_psel(query::String)
     cols = zeros(UInt8, 50 * 33)
     error = Ref{Cint}(0)
     errmsg = zeros(UInt8, EKQ_MSGLEN)
-    ccall((:ekpsel_c, DSKLIB), Cvoid, (Cstring, Cint, Cint, Cint, Ref{Cint}, Ptr{Cint},
-            Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{UInt8}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}),
-        query, EKQ_MSGLEN, 65, 33, n, xbegs, xends, xtypes, xclass, tabs, cols, error, errmsg)
+    ccall(
+        (:ekpsel_c, DSKLIB), Cvoid, (
+            Cstring, Cint, Cint, Cint, Ref{Cint}, Ptr{Cint},
+            Ptr{Cint}, Ptr{Cint}, Ptr{Cint}, Ptr{UInt8}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8},
+        ),
+        query, EKQ_MSGLEN, 65, 33, n, xbegs, xends, xtypes, xclass, tabs, cols, error, errmsg
+    )
     kind = c_pending_kind()
-    (error[] != 0 || kind !== nothing) && return (n=0, xbegs=Int[], xends=Int[],
-        xtypes=Symbol[], xclass=Symbol[], tabs=String[], cols=String[], error=error[] != 0,
-        errmsg=unsafe_string(pointer(errmsg)), kind=kind)
+    (error[] != 0 || kind !== nothing) && return (
+        n = 0, xbegs = Int[], xends = Int[],
+        xtypes = Symbol[], xclass = Symbol[], tabs = String[], cols = String[], error = error[] != 0,
+        errmsg = unsafe_string(pointer(errmsg)), kind = kind,
+    )
     m = Int(n[])
-    return (n=m, xbegs=Int.(xbegs[1:m]) .+ 1, xends=Int.(xends[1:m]) .+ 1,
-        xtypes=[(:CHR, :DP, :INT, :TIME)[xtypes[k]+1] for k in 1:m],
-        xclass=[(:COL, :FUNC, :EXPR)[xclass[k]+1] for k in 1:m],
-        tabs=[unsafe_string(pointer(tabs, (k - 1) * 65 + 1)) for k in 1:m],
-        cols=[unsafe_string(pointer(cols, (k - 1) * 33 + 1)) for k in 1:m], error=false,
-        errmsg="", kind=nothing)
+    return (
+        n = m, xbegs = Int.(xbegs[1:m]) .+ 1, xends = Int.(xends[1:m]) .+ 1,
+        xtypes = [(:CHR, :DP, :INT, :TIME)[xtypes[k] + 1] for k in 1:m],
+        xclass = [(:COL, :FUNC, :EXPR)[xclass[k] + 1] for k in 1:m],
+        tabs = [unsafe_string(pointer(tabs, (k - 1) * 65 + 1)) for k in 1:m],
+        cols = [unsafe_string(pointer(cols, (k - 1) * 33 + 1)) for k in 1:m], error = false,
+        errmsg = "", kind = nothing,
+    )
 end
 
 "Decode the encoded query `e` of `ekq_c_encd` with the accessors of CSPICE, as an `_EKQuery` without catalogue indices."
@@ -207,8 +249,12 @@ function ekq_c_decode(e)
     aliases = String[]
     for n in 1:ntab
         t, a = fs(), fs()
-        ccall((:zzekqtab_, DSKLIB), Cint, (Ptr{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8},
-                Ptr{UInt8}, Cint, Cint, Cint), e.raw, e.c, n, t, a, 2000, 64, 64)
+        ccall(
+            (:zzekqtab_, DSKLIB), Cint, (
+                Ptr{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8},
+                Ptr{UInt8}, Cint, Cint, Cint,
+            ), e.raw, e.c, n, t, a, 2000, 64, 64
+        )
         c_check()
         push!(tables, ekq_fstr(t))
         push!(aliases, ekq_fstr(a))
@@ -225,29 +271,41 @@ function ekq_c_decode(e)
         lt, lc, rt, rc = fs(), fs(), fs(), fs()
         v = [Ref{Cint}(0) for _ in 1:10]    # cnstyp ltidx lcidx opcode rtidx rcidx dtype cbeg cend ival
         dval = Ref{Float64}(0.0)
-        ccall((:zzekqcon_, DSKLIB), Cint, (Ptr{Cint}, Ptr{UInt8}, Ptr{Float64}, Ref{Cint},
+        ccall(
+            (:zzekqcon_, DSKLIB), Cint, (
+                Ptr{Cint}, Ptr{UInt8}, Ptr{Float64}, Ref{Cint},
                 Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Ptr{UInt8},
                 Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Ref{Cint}, Ref{Cint}, Ref{Float64},
-                Ref{Cint}, Cint, Cint, Cint, Cint, Cint), e.raw, e.c, e.d, n, v[1], lt, v[2], lc,
-            v[3], v[4], rt, v[5], rc, v[6], v[7], v[8], v[9], dval, v[10], 2000, 64, 64, 64, 64)
+                Ref{Cint}, Cint, Cint, Cint, Cint, Cint,
+            ), e.raw, e.c, e.d, n, v[1], lt, v[2], lc,
+            v[3], v[4], rt, v[5], rc, v[6], v[7], v[8], v[9], dval, v[10], 2000, 64, 64, 64, 64
+        )
         c_check()
         cnstyp, opcode = Int(v[1][]), Int(v[4][])
         iscol = cnstyp == 1
         isval = !iscol && opcode != 9 && opcode != 10
         dtype = isval ? Int(v[7][]) : 0
-        push!(constraints, Q._EKQConstraint(cnstyp,
-            Q._EKQCol(ekq_fstr(lt), v[2][], ekq_fstr(lc), v[3][], 0, 0), opcode,
-            iscol ? Q._EKQCol(ekq_fstr(rt), v[5][], ekq_fstr(rc), v[6][], 0, 0) : Q._EKQ_NOCOL,
-            dtype, dtype == 1 ? String(e.c[v[8][]:v[9][]]) : "", isval ? dval[] : 0.0,
-            isval ? Int(v[10][]) : 0))
+        push!(
+            constraints, Q._EKQConstraint(
+                cnstyp,
+                Q._EKQCol(ekq_fstr(lt), v[2][], ekq_fstr(lc), v[3][], 0, 0), opcode,
+                iscol ? Q._EKQCol(ekq_fstr(rt), v[5][], ekq_fstr(rc), v[6][], 0, 0) : Q._EKQ_NOCOL,
+                dtype, dtype == 1 ? String(e.c[v[8][]:v[9][]]) : "", isval ? dval[] : 0.0,
+                isval ? Int(v[10][]) : 0
+            )
+        )
     end
-    orderby = Tuple{Q._EKQCol,Int}[]
+    orderby = Tuple{Q._EKQCol, Int}[]
     for n in 1:nord
         t, c = fs(), fs()
         tabidx, colidx, sense = Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0)
-        ccall((:zzekqord_, DSKLIB), Cint, (Ptr{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8},
-                Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Cint, Cint, Cint), e.raw, e.c, n, t,
-            tabidx, c, colidx, sense, 2000, 64, 64)
+        ccall(
+            (:zzekqord_, DSKLIB), Cint, (
+                Ptr{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8},
+                Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Cint, Cint, Cint,
+            ), e.raw, e.c, n, t,
+            tabidx, c, colidx, sense, 2000, 64, 64
+        )
         c_check()
         push!(orderby, (Q._EKQCol(ekq_fstr(t), tabidx[], ekq_fstr(c), colidx[], 0, 0), sense[]))
     end
@@ -255,9 +313,13 @@ function ekq_c_decode(e)
     for n in 1:nsel
         t, c = fs(), fs()
         tabidx, colidx, lxb, lxe = Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0)
-        ccall((:zzekqsel_, DSKLIB), Cint, (Ptr{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint},
-                Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Cint, Cint, Cint), e.raw,
-            e.c, n, lxb, lxe, t, tabidx, c, colidx, 2000, 64, 64)
+        ccall(
+            (:zzekqsel_, DSKLIB), Cint, (
+                Ptr{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint},
+                Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Cint, Cint, Cint,
+            ), e.raw,
+            e.c, n, lxb, lxe, t, tabidx, c, colidx, 2000, 64, 64
+        )
         c_check()
         push!(select, Q._EKQCol(ekq_fstr(t), tabidx[], ekq_fstr(c), colidx[], lxb[], lxe[]))
     end
@@ -266,17 +328,21 @@ end
 
 "True if the column references are equal; the lexeme bounds count only if `lex`."
 ekq_samecol(a, b, lex) = a.table == b.table && a.tabidx == b.tabidx && a.name == b.name &&
-                         a.colidx == b.colidx && (!lex || (a.lxbeg == b.lxbeg && a.lxend == b.lxend))
+    a.colidx == b.colidx && (!lex || (a.lxbeg == b.lxbeg && a.lxend == b.lxend))
 
 "True if the query `q` of Almanac equals the decoded query `c` of CSPICE. `zzekqcon_` gives the double of types 2 and 4 and the integer of type 3."
 function ekq_samequery(q, c)
-    (q.tables == c.tables && q.aliases == c.aliases && q.conjsizes == c.conjsizes &&
-     length(q.constraints) == length(c.constraints) && length(q.orderby) == length(c.orderby) &&
-     length(q.select) == length(c.select)) || return false
+    (
+        q.tables == c.tables && q.aliases == c.aliases && q.conjsizes == c.conjsizes &&
+            length(q.constraints) == length(c.constraints) && length(q.orderby) == length(c.orderby) &&
+            length(q.select) == length(c.select)
+    ) || return false
     for (a, b) in zip(q.constraints, c.constraints)
-        (a.cnstyp == b.cnstyp && a.opcode == b.opcode && a.dtype == b.dtype &&
-         ekq_samecol(a.lhs, b.lhs, false) && ekq_samecol(a.rhs, b.rhs, false) &&
-         a.cval == b.cval && a.ival == b.ival) || return false
+        (
+            a.cnstyp == b.cnstyp && a.opcode == b.opcode && a.dtype == b.dtype &&
+                ekq_samecol(a.lhs, b.lhs, false) && ekq_samecol(a.rhs, b.rhs, false) &&
+                a.cval == b.cval && a.ival == b.ival
+        ) || return false
         (a.dtype == 2 || a.dtype == 4) && (a.dval === b.dval || return false)
     end
     all(ekq_samecol(a[1], b[1], false) && a[2] == b[2] for (a, b) in zip(q.orderby, c.orderby)) ||
@@ -288,10 +354,10 @@ end
 function ekq_n_encd(fx, query)
     try
         q, tabcat, error, errmsg = Almanac._ek_qencode(fx.tables, fx.ks, fx.td, query)
-        return (q=q, tabcat=tabcat, error=error, errmsg=errmsg, kind=nothing)
+        return (q = q, tabcat = tabcat, error = error, errmsg = errmsg, kind = nothing)
     catch e
         e isa Almanac.SpiceError || rethrow()
-        return (q=nothing, tabcat=Int[], error=false, errmsg="", kind=e.kind)
+        return (q = nothing, tabcat = Int[], error = false, errmsg = "", kind = e.kind)
     end
 end
 
@@ -310,7 +376,7 @@ Compare the two engines on `query`. Returns `(status, detail)`: `:valid` or `:in
 if all results are equal (the query is valid or not), `:signal` if both signal the same
 SPICE error, and a status that starts with `diff` otherwise.
 """
-function ekq_compare(fx, query::String; guard_not::Bool=false)
+function ekq_compare(fx, query::String; guard_not::Bool = false)
     n = ekq_n_encd(fx, query)
     n.kind === :toomanyconjunctions && return :unsafe, "CSPICE stops the program"
     sizeof(rstrip(query, ' ')) > 2000 &&
@@ -325,11 +391,11 @@ function ekq_compare(fx, query::String; guard_not::Bool=false)
         return :diff_signal, "Almanac $(n.kind), CSPICE $(c.kind) [$(c.errmsg)]"
     end
     n.error == c.error || return :diff_flag, "Almanac $(n.error) [$(n.errmsg)], CSPICE " *
-                                             "$(c.error) [$(c.errmsg)]"
+        "$(c.error) [$(c.errmsg)]"
     # The semantic check stops at IS NULL. The search of ekfind_c then meets constraints
     # that were not checked (it signals SPICE(BUG) for a non-scalar column), so ekfind_c
     # is called only for a query that is not valid or that was checked to the end.
-    f = (n.error || n.q.i[7] == 1) ? ekq_c_find(query) : (error=false, errmsg="", kind=nothing)
+    f = (n.error || n.q.i[7] == 1) ? ekq_c_find(query) : (error = false, errmsg = "", kind = nothing)
     (f.error == c.error && f.errmsg == c.errmsg && f.kind === nothing) ||
         return :diff_ekfind, "ekfind_c: $(f.error) $(f.kind) [$(f.errmsg)]; zzekencd_: [$(c.errmsg)]"
     p = ekq_c_psel(query)
@@ -341,18 +407,20 @@ function ekq_compare(fx, query::String; guard_not::Bool=false)
         return :invalid, n.errmsg
     end
     n.q.i == c.i || return :diff_cell, "integer cell differs at " *
-                                       "$(findfirst(k -> k > min(length(n.q.i), length(c.i)) || n.q.i[k] != c.i[k], 1:max(length(n.q.i), length(c.i))))"
+        "$(findfirst(k -> k > min(length(n.q.i), length(c.i)) || n.q.i[k] != c.i[k], 1:max(length(n.q.i), length(c.i))))"
     nc, nd = Int(c.i[16]) - 1, Int(c.i[14]) - 1
     n.q.c[1:nc] == c.c[1:nc] || return :diff_chars, "character buffer differs"
     all(n.q.d[k] === c.d[k] for k in 1:nd) || return :diff_doubles, "double buffer differs: " *
-                                                                    "$(n.q.d[1:nd]) $(c.d[1:nd])"
+        "$(n.q.d[1:nd]) $(c.d[1:nd])"
     q = Almanac._ek_qdecode(n.q, n.tabcat)
     ekq_samequery(q, ekq_c_decode(c)) || return :diff_decode, "decoded query differs"
     all(fx.tables[q.tabcat[k]].name == q.tables[k] for k in eachindex(q.tables)) ||
         return :diff_decode, "catalogue indices"
-    sum(q.conjsizes; init=0) == length(q.constraints) || return :diff_decode, "invariant"
-    (!s.failed && !p.error && s.n == p.n && s.xbegs == p.xbegs && s.xends == p.xends &&
-     s.xtypes == p.xtypes && s.xclass == p.xclass && s.tabs == p.tabs && s.cols == p.cols) ||
+    sum(q.conjsizes; init = 0) == length(q.constraints) || return :diff_decode, "invariant"
+    (
+        !s.failed && !p.error && s.n == p.n && s.xbegs == p.xbegs && s.xends == p.xends &&
+            s.xtypes == p.xtypes && s.xclass == p.xclass && s.tabs == p.tabs && s.cols == p.cols
+    ) ||
         return :diff_psel, "Almanac $(s), CSPICE $(p)"
     return :valid, ""
 end
@@ -583,10 +651,14 @@ const EKQ_VALID_CORPUS = let
     push!(q, "SELECT ICOL FROM ALPHA WHERE CCOL = '" * "x"^900 * "' OR VCOL = '" * "y"^900 * "'")
     push!(q, "SELECT ICOL FROM ALPHA WHERE " * join(("ICOL = $k" for k in 1:100), " OR "))
     push!(q, "SELECT ICOL FROM ALPHA WHERE " * join(("ICOL != $k" for k in 1:100), " AND "))
-    push!(q, "SELECT ICOL FROM ALPHA WHERE " *
-             join(("(ICOL = $k OR DCOL = $k OR ICOL > 9$k)" for k in 1:4), " AND "))
-    push!(q, "SELECT ICOL FROM ALPHA WHERE NOT (" *
-             join(("(ICOL = $k AND DCOL = $k)" for k in 1:6), " OR ") * ")")
+    push!(
+        q, "SELECT ICOL FROM ALPHA WHERE " *
+            join(("(ICOL = $k OR DCOL = $k OR ICOL > 9$k)" for k in 1:4), " AND ")
+    )
+    push!(
+        q, "SELECT ICOL FROM ALPHA WHERE NOT (" *
+            join(("(ICOL = $k AND DCOL = $k)" for k in 1:6), " OR ") * ")"
+    )
     q
 end
 "A new copy of the valid queries."
@@ -859,13 +931,19 @@ const EKQ_INVALID_CORPUS = let
     push!(q, "SELECT ICOL FROM ALPHA WHERE " * join(("ICOL = X" for _ in 1:101), " OR ") * " 5 6")
     push!(q, "SELECT ICOL FROM ALPHA WHERE " * "("^250 * "ICOL = X" * ")"^250)
     # distribution of AND over OR: 4^6 conjunctions do not fit
-    push!(q, "SELECT ICOL FROM ALPHA WHERE " *
-             join(("(ICOL = $k OR DCOL = $k OR ICOL > 9$k OR DCOL < $k)" for k in 1:6), " AND "))
+    push!(
+        q, "SELECT ICOL FROM ALPHA WHERE " *
+            join(("(ICOL = $k OR DCOL = $k OR ICOL > 9$k OR DCOL < $k)" for k in 1:6), " AND ")
+    )
     # negation of 13 conjunctions of 2 relations: 2^13 conjunctions do not fit
-    push!(q, "SELECT ICOL FROM ALPHA WHERE NOT (" *
-             join(("(ICOL = $k AND DCOL = $k)" for k in 1:13), " OR ") * ")")
-    push!(q, "SELECT ICOL FROM ALPHA WHERE NOT (" *
-             join(("ICOL BETWEEN $k AND 9$k" for k in 1:12), " OR ") * ")")
+    push!(
+        q, "SELECT ICOL FROM ALPHA WHERE NOT (" *
+            join(("(ICOL = $k AND DCOL = $k)" for k in 1:13), " OR ") * ")"
+    )
+    push!(
+        q, "SELECT ICOL FROM ALPHA WHERE NOT (" *
+            join(("ICOL BETWEEN $k AND 9$k" for k in 1:12), " OR ") * ")"
+    )
     q
 end
 "A new copy of the queries that are not valid."
@@ -873,18 +951,29 @@ ekq_invalid_corpus() = copy(EKQ_INVALID_CORPUS)
 
 "Scalar columns of the tables by type, for the random queries."
 const EKQ_SCALAR = Dict(
-    "ALPHA" => [("ICOL", :INT), ("DCOL", :DP), ("CCOL", :CHR), ("VCOL", :CHR), ("TCOL", :TIME),
-        ("NAME", :CHR)],
+    "ALPHA" => [
+        ("ICOL", :INT), ("DCOL", :DP), ("CCOL", :CHR), ("VCOL", :CHR), ("TCOL", :TIME),
+        ("NAME", :CHR),
+    ],
     "BETA" => [("ICOL", :INT), ("XCOL", :DP), ("TCOL", :TIME), ("NAME", :CHR), ("BCHR", :CHR)],
-    "GAMMA_LONG_NAME" => [("KEY", :INT), ("VAL", :DP), ("LABEL", :CHR), ("EPOCH", :TIME),
-        ("ICOL", :INT)])
-const EKQ_ARRAY = Dict("ALPHA" => ["IARR", "DARR", "CARR"], "BETA" => ["TARR"],
-    "GAMMA_LONG_NAME" => String[])
-const EKQ_FROM = [["ALPHA" => ""], ["ALPHA" => "A"], ["BETA" => ""], ["ALPHA" => "A", "BETA" => "B"],
+    "GAMMA_LONG_NAME" => [
+        ("KEY", :INT), ("VAL", :DP), ("LABEL", :CHR), ("EPOCH", :TIME),
+        ("ICOL", :INT),
+    ]
+)
+const EKQ_ARRAY = Dict(
+    "ALPHA" => ["IARR", "DARR", "CARR"], "BETA" => ["TARR"],
+    "GAMMA_LONG_NAME" => String[]
+)
+const EKQ_FROM = [
+    ["ALPHA" => ""], ["ALPHA" => "A"], ["BETA" => ""], ["ALPHA" => "A", "BETA" => "B"],
     ["ALPHA" => "", "BETA" => ""], ["ALPHA" => "X", "BETA" => "", "GAMMA_LONG_NAME" => "G"],
-    ["ALPHA" => "A1", "ALPHA" => "A2"], ["GAMMA_LONG_NAME" => ""]]
-const EKQ_TIMES = ["'2000 JAN 1'", "'1995 MAR 3 12:30:00'", "\"2010-06-15T01:02:03\"",
-    "'JD 2451545.5'", "'1 FEB 2003 10:00 PM'", "'2020 DEC 31 23:59:59.999 TDB'", "'tomorrow'"]
+    ["ALPHA" => "A1", "ALPHA" => "A2"], ["GAMMA_LONG_NAME" => ""],
+]
+const EKQ_TIMES = [
+    "'2000 JAN 1'", "'1995 MAR 3 12:30:00'", "\"2010-06-15T01:02:03\"",
+    "'JD 2451545.5'", "'1 FEB 2003 10:00 PM'", "'2020 DEC 31 23:59:59.999 TDB'", "'tomorrow'",
+]
 const EKQ_STRINGS = ["'A'", "'S11'", "\"x y\"", "'it''s'", "'*S*'", "'%1'", "' '", "'m#n'"]
 
 "A random query with a WHERE clause of nested AND, OR, NOT, BETWEEN and parentheses; most are valid, some have a type error, a wrong name, an array column or a syntax slip."
@@ -894,8 +983,10 @@ function ekq_random_query(rng)
     function column(type)
         while true
             (table, alias) = rand(rng, from)
-            cands = [c for c in EKQ_SCALAR[table] if type === :ANY || c[2] === type ||
-                     (type === :NUM && c[2] in (:INT, :DP))]
+            cands = [
+                c for c in EKQ_SCALAR[table] if type === :ANY || c[2] === type ||
+                    (type === :NUM && c[2] in (:INT, :DP))
+            ]
             isempty(cands) && continue
             name, t = rand(rng, cands)
             (slip && rand(rng) < 0.15 && !isempty(EKQ_ARRAY[table])) &&
@@ -905,12 +996,13 @@ function ekq_random_query(rng)
             ((unique && rand(rng) < 0.6) || (slip && rand(rng) < 0.1)) && return name, t
             return (rand(rng) < 0.5 ? lowercase(qual) : qual) * "." * name, t
         end
+        return
     end
     number() = rand(rng, ("1", "-7", "+42", "3.5", "-.25", "1e2", "2.5D-1", "100000", "0"))
     function value(t)
         slip && rand(rng) < 0.2 && (t = rand(rng, (:INT, :CHR, :TIME)))
         t === :CHR && return rand(rng, EKQ_STRINGS)
-        t === :TIME && return rand(rng, slip ? EKQ_TIMES : EKQ_TIMES[1:end-1])
+        t === :TIME && return rand(rng, slip ? EKQ_TIMES : EKQ_TIMES[1:(end - 1)])
         return number()
     end
     function operand(t)
@@ -922,7 +1014,7 @@ function ekq_random_query(rng)
         r = rand(rng)
         if r < 0.5
             ops = t === :CHR ? ("=", "!=", "<", ">=", "LIKE", "NOT LIKE", "EQ", "LT") :
-                  ("=", "!=", "<>", "^=", "<", "<=", ">", ">=", "EQ", "NE", "LT", "LE", "GT", "GE")
+                ("=", "!=", "<>", "^=", "<", "<=", ">", ">=", "EQ", "NE", "LT", "LE", "GT", "GE")
             return "$name $(rand(rng, ops)) $(operand(t))"
         elseif r < 0.8
             return "$name $(rand(rng, ("BETWEEN", "NOT BETWEEN"))) $(operand(t)) AND $(operand(t))"
@@ -944,26 +1036,52 @@ function ekq_random_query(rng)
         return "(" * expr(depth - 1) * ")"
     end
     where = expr(rand(rng, 1:3))
-    slip && rand(rng) < 0.2 && (where = replace(where, rand(rng, (" AND " => " ", ")" => "", "(" => "",
-        " = " => " ", "NULL" => "NOT")); count=1))
+    slip && rand(rng) < 0.2 && (
+        where = replace(
+            where, rand(
+                rng, (
+                    " AND " => " ", ")" => "", "(" => "",
+                    " = " => " ", "NULL" => "NOT",
+                )
+            ); count = 1
+        )
+    )
     tabs = join((a == "" ? t : "$t $a" for (t, a) in from), ", ")
     sel = join((column(:ANY)[1] for _ in 1:rand(rng, 1:3)), ", ")
-    order = rand(rng) < 0.3 ? " ORDER BY " * join((column(:ANY)[1] * rand(rng, ("", " ASC", " DESC"))
-                                                   for _ in 1:rand(rng, 1:2)), ", ") : ""
+    order = rand(rng) < 0.3 ? " ORDER BY " * join(
+            (
+                column(:ANY)[1] * rand(rng, ("", " ASC", " DESC"))
+                for _ in 1:rand(rng, 1:2)
+            ), ", "
+        ) : ""
     return "SELECT $sel FROM $tabs WHERE $where$order"
 end
 
-const EKQ_VOCABULARY = vcat(collect(Almanac._EKQ_KEYWORDS), ["ICOL", "DCOL", "CCOL", "TCOL",
-        "IARR", "NAME", "XCOL", "ALPHA", "BETA", "A", "B", "NOSUCH", "alpha", "icol"],
+const EKQ_VOCABULARY = vcat(
+    collect(Almanac._EKQ_KEYWORDS), [
+        "ICOL", "DCOL", "CCOL", "TCOL",
+        "IARR", "NAME", "XCOL", "ALPHA", "BETA", "A", "B", "NOSUCH", "alpha", "icol",
+    ],
     ["1", "2.5", "-3", "1e2", ".5", "'x'", "\"y z\"", "'2000 JAN 1'", "''", "'"],
-    ["(", ")", ",", ".", "*", "=", "!=", "<>", "<", "<=", ">", ">=", "^=", "(", ")", ",", ".",
-        "-", "@", ";"])
+    [
+        "(", ")", ",", ".", "*", "=", "!=", "<>", "<", "<=", ">", ">=", "^=", "(", ")", ",", ".",
+        "-", "@", ";",
+    ]
+)
 
 "A random string of tokens of the query language: a skeleton of clauses filled with random tokens, or a valid query with one token removed, doubled, swapped or replaced."
 function ekq_fuzz_query(rng, valid::Vector{String})
     words(n) = join((rand(rng, EKQ_VOCABULARY) for _ in 1:n), " ")
-    names() = join((rand(rng, ("ICOL", "DCOL", "A.ICOL", "ALPHA.CCOL", "B.XCOL", "TCOL", "NAME",
-            "IARR", "NOSUCH", words(1))) for _ in 1:rand(rng, 1:3)), rand(rng, (", ", ", ", " ")))
+    names() = join(
+        (
+            rand(
+                rng, (
+                    "ICOL", "DCOL", "A.ICOL", "ALPHA.CCOL", "B.XCOL", "TCOL", "NAME",
+                    "IARR", "NOSUCH", words(1),
+                )
+            ) for _ in 1:rand(rng, 1:3)
+        ), rand(rng, (", ", ", ", " "))
+    )
     r = rand(rng)
     if r < 0.15
         return words(rand(rng, 1:12))
@@ -971,13 +1089,19 @@ function ekq_fuzz_query(rng, valid::Vector{String})
         from = rand(rng, ("ALPHA", "ALPHA A", "ALPHA A, BETA B", "ALPHA, BETA", words(rand(rng, 1:3))))
         where = rand(rng) < 0.8 ? " WHERE " * words(rand(rng, 0:9)) : ""
         order = rand(rng) < 0.4 ? " ORDER BY " * (rand(rng) < 0.5 ? names() : words(rand(rng, 0:4))) : ""
-        parts = ["SELECT " * (rand(rng) < 0.7 ? names() : words(rand(rng, 0:3))), " FROM " * from,
-            where, order]
+        parts = [
+            "SELECT " * (rand(rng) < 0.7 ? names() : words(rand(rng, 0:3))), " FROM " * from,
+            where, order,
+        ]
         rand(rng) < 0.2 && shuffle!(rng, parts)
         return strip(join(parts))
     end
-    toks = [m.match for m in eachmatch(r"'[^']*'|\"[^\"]*\"|[A-Za-z][A-Za-z0-9_$]*|[0-9.eE+-]+|\S",
-        rand(rng, valid))]
+    toks = [
+        m.match for m in eachmatch(
+                r"'[^']*'|\"[^\"]*\"|[A-Za-z][A-Za-z0-9_$]*|[0-9.eE+-]+|\S",
+                rand(rng, valid)
+            )
+    ]
     length(toks) > 60 && return words(5)
     k = rand(rng, eachindex(toks))
     r = rand(rng)
@@ -1000,13 +1124,15 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
     dir = mktempdir()
     ekpath = ekq_write_ek(joinpath(dir, "ekq.bes"))
     names = joinpath(dir, "ekq_names.tk")
-    write(names, """
-    KPL/FK
-    \\begindata
-    NAIF_BODY_NAME += ( 'EKQ_CRAFT', 'EKQ_TDT' )
-    NAIF_BODY_CODE += ( $(CKFix.SC_TDB), $(CKFix.SC_TDT) )
-    \\begintext
-    """)
+    write(
+        names, """
+        KPL/FK
+        \\begindata
+        NAIF_BODY_NAME += ( 'EKQ_CRAFT', 'EKQ_TDT' )
+        NAIF_BODY_CODE += ( $(CKFix.SC_TDB), $(CKFix.SC_TDT) )
+        \\begintext
+        """
+    )
     text = [Kernels.LSK, CKFix.sclk_kernel(), names]
     oracle_load(text)
     handle = Ref{Cint}(0)
@@ -1014,11 +1140,11 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
     c_check()
     try
         ctx = neo_context(text)
-        fx = (tables=ekq_catalogue(), ks=Almanac.kernelset(ctx), td=Almanac.TimeDefaults())
+        fx = (tables = ekq_catalogue(), ks = Almanac.kernelset(ctx), td = Almanac.TimeDefaults())
         report(name, list) = for (query, status, detail) in first(list, 12)
             println("  ", name, " ", status, ": ", first(query, 150), "\n      ", detail)
         end
-        function run(queries; guard_not=false)
+        function run(queries; guard_not = false)
             res = [(query, ekq_compare(fx, query; guard_not)...) for query in queries]
             return res, [r for r in res if !(r[2] in (:valid, :invalid, :signal, :unsafe))]
         end
@@ -1038,8 +1164,10 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             report("valid", bad)
             notvalid = [r for r in res if r[2] !== :valid && !cast_dependent(r[1])]
             report("not valid", setdiff(notvalid, bad))
-            measured("EK parser: $(length(valid)) valid queries by hand, $(count(r -> r[2] === :valid, res)) " *
-                     "equal to CSPICE in the encoded query and in ekpsel")
+            measured(
+                "EK parser: $(length(valid)) valid queries by hand, $(count(r -> r[2] === :valid, res)) " *
+                    "equal to CSPICE in the encoded query and in ekpsel"
+            )
             @test length(valid) >= 150
             @test isempty(notvalid)
         end
@@ -1051,8 +1179,10 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             notinvalid = [r for r in res if r[2] !== :invalid]
             report("not invalid", setdiff(notinvalid, bad))
             messages = unique(replace(r[3], r"\d+" => "0") for r in res if r[2] === :invalid)
-            measured("EK parser: $(length(invalid)) invalid queries by hand, $(count(r -> r[2] === :invalid, res)) " *
-                     "with flag and message equal to CSPICE, $(length(messages)) distinct messages")
+            measured(
+                "EK parser: $(length(invalid)) invalid queries by hand, $(count(r -> r[2] === :invalid, res)) " *
+                    "with flag and message equal to CSPICE, $(length(messages)) distinct messages"
+            )
             @test length(invalid) >= 100
             @test isempty(notinvalid)
             @test length(messages) >= 60
@@ -1065,9 +1195,11 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             report("random", bad)
             nvalid = count(r -> r[2] === :valid, res)
             ninvalid = count(r -> r[2] === :invalid, res)
-            measured("EK parser: $(length(queries)) random queries, $nvalid valid and $ninvalid invalid equal to " *
-                     "CSPICE, $(length(bad)) different, $(count(r -> r[2] === :unsafe, res)) not sent to CSPICE " *
-                     "(undefined read)")
+            measured(
+                "EK parser: $(length(queries)) random queries, $nvalid valid and $ninvalid invalid equal to " *
+                    "CSPICE, $(length(bad)) different, $(count(r -> r[2] === :unsafe, res)) not sent to CSPICE " *
+                    "(undefined read)"
+            )
             @test isempty(bad)
             @test nvalid >= nsample(200, 1000)
             @test ninvalid >= nsample(20, 100)
@@ -1077,14 +1209,16 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             rng = MersenneTwister(SEED + 1)
             valid = ekq_valid_corpus()
             queries = unique(String(ekq_fuzz_query(rng, valid)) for _ in 1:nsample(800, 4000))
-            res, bad = run(queries; guard_not=true)
+            res, bad = run(queries; guard_not = true)
             report("fuzz", bad)
             nvalid = count(r -> r[2] === :valid, res)
             ninvalid = count(r -> r[2] === :invalid, res)
             messages = unique(replace(r[3], r"\d+" => "0", r"<[^>]*>" => "<>", r": .*$" => "") for r in res if r[2] === :invalid)
-            measured("EK parser: $(length(queries)) random token strings, $nvalid valid and $ninvalid invalid " *
-                     "equal to CSPICE, $(length(bad)) different, $(count(r -> r[2] === :signal, res)) signal, " *
-                     "$(count(r -> r[2] === :unsafe, res)) not sent to CSPICE, $(length(messages)) message forms")
+            measured(
+                "EK parser: $(length(queries)) random token strings, $nvalid valid and $ninvalid invalid " *
+                    "equal to CSPICE, $(length(bad)) different, $(count(r -> r[2] === :signal, res)) signal, " *
+                    "$(count(r -> r[2] === :unsafe, res)) not sent to CSPICE, $(length(messages)) message forms"
+            )
             get(ENV, "EKQ_MESSAGES", "") == "" || foreach(println, sort(messages))
             @test isempty(bad)
             @test ninvalid >= nsample(400, 2000)
@@ -1096,9 +1230,13 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             queries = vcat(ekq_valid_corpus(), ekq_invalid_corpus())
             enc(query) = Almanac._ek_encode_query(fx.tables, fx.ks, fx.td, query)
             same(a, b) = a[2] == b[2] && a[3] == b[3] && (a[1] === nothing) == (b[1] === nothing) &&
-                         (a[1] === nothing || (a[1].conjsizes == b[1].conjsizes &&
-                           [c.dval for c in a[1].constraints] == [c.dval for c in b[1].constraints] &&
-                           a[1].select == b[1].select))
+                (
+                a[1] === nothing || (
+                    a[1].conjsizes == b[1].conjsizes &&
+                        [c.dval for c in a[1].constraints] == [c.dval for c in b[1].constraints] &&
+                        a[1].select == b[1].select
+                )
+            )
             serial = map(enc, queries)
             parallel = Vector{Any}(undef, 4 * length(queries))
             Threads.@threads for k in eachindex(parallel)
@@ -1109,23 +1247,33 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
 
         ek_part("SPICE errors") do
             # 8 x 8 x 8 conjunctions of 3 relations: the integer cell is too small.
-            big = "SELECT ICOL FROM ALPHA WHERE " * join(("(" * join(("ICOL = $(10k + j)"
-                                                                      for j in 1:8), " OR ") * ")" for k in 1:3), " AND ")
+            big = "SELECT ICOL FROM ALPHA WHERE " * join(
+                (
+                    "(" * join(
+                        (
+                            "ICOL = $(10k + j)"
+                                for j in 1:8
+                        ), " OR "
+                    ) * ")" for k in 1:3
+                ), " AND "
+            )
             @test ekq_compare(fx, big) == (:signal, "celltoosmall")
             # 100 numbers and one time: the double buffer is too small.
             nums = "SELECT ICOL FROM ALPHA WHERE TCOL > '2000 JAN 1' AND (" *
-                   join(("ICOL = $k" for k in 1:100), " OR ") * ")"
+                join(("ICOL = $k" for k in 1:100), " OR ") * ")"
             @test ekq_compare(fx, nums) == (:signal, "buffertoosmall")
             # A qualified order-by column before FROM, WHERE or SELECT: CSPICE writes no
             # sense, the SELECT columns are shifted, and name resolution signals a bug.
-            for query in ("SELECT ICOL FROM ALPHA ORDER BY ALPHA.ICOL WHERE ICOL > 1",
-                "FROM ALPHA ORDER BY ALPHA.ICOL SELECT ICOL")
+            for query in (
+                    "SELECT ICOL FROM ALPHA ORDER BY ALPHA.ICOL WHERE ICOL > 1",
+                    "FROM ALPHA ORDER BY ALPHA.ICOL SELECT ICOL",
+                )
                 @test ekq_compare(fx, query) == (:signal, "bug")
             end
             # More than 1000 conjunctions: CSPICE stops the program (array bound check of
             # f2c), so only Almanac is called.
             huge = "SELECT ICOL FROM ALPHA WHERE (" * join(("ICOL = $k" for k in 1:32), " OR ") *
-                   ") AND (" * join(("DCOL = $k" for k in 1:32), " OR ") * ")"
+                ") AND (" * join(("DCOL = $k" for k in 1:32), " OR ") * ")"
             @test ekq_compare(fx, huge)[1] === :unsafe
         end
 
@@ -1134,50 +1282,61 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             enc(query) = Q._ek_encode_query(fx.tables, fx.ks, fx.td, query)
             # More than 2000 characters: CSPICE reads past its buffer.
             long = "SELECT ICOL FROM ALPHA WHERE CCOL = '" * "x"^2000 * "'"
-            @test enc(long) == (nothing, true,
-                "Query has $(sizeof(long)) characters; the maximum allowed is 2000.")
+            @test enc(long) == (
+                nothing, true,
+                "Query has $(sizeof(long)) characters; the maximum allowed is 2000.",
+            )
             @test enc("SELECT ICOL FROM ALPHA" * " "^3000)[2] == false
             # A string of length zero: ekfind_c signals SPICE(EMPTYSTRING).
-            @test enc("") == (nothing, true,
-                "Every query must contain a FROM clause. The FROM keyword was not found.")
+            @test enc("") == (
+                nothing, true,
+                "Every query must contain a FROM clause. The FROM keyword was not found.",
+            )
             # A non-scalar column on the left of the first constraint, or in ORDER BY
             # without a constraint before it: CSPICE prints the query up to an undefined
             # position (a segmentation fault was seen); Almanac prints the column name.
             # After IS NULL the semantic check of both engines has stopped already.
             for (query, msg) in (
-                "SELECT ICOL FROM ALPHA WHERE IARR = 1" =>
-                    "Non-scalar column <IARR> having size 3 found in query constraint.",
-                "SELECT ICOL FROM ALPHA WHERE ALPHA.DARR > 1.5" =>
-                    "Non-scalar column <DARR> having size -1 found in query constraint.",
-                "SELECT ICOL FROM ALPHA ORDER BY CARR" =>
-                    "Non-scalar column <CARR> having size 2 found in order-by column.",
-                "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL ORDER BY CARR" => "")
+                    "SELECT ICOL FROM ALPHA WHERE IARR = 1" =>
+                        "Non-scalar column <IARR> having size 3 found in query constraint.",
+                    "SELECT ICOL FROM ALPHA WHERE ALPHA.DARR > 1.5" =>
+                        "Non-scalar column <DARR> having size -1 found in query constraint.",
+                    "SELECT ICOL FROM ALPHA ORDER BY CARR" =>
+                        "Non-scalar column <CARR> having size 2 found in order-by column.",
+                    "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL ORDER BY CARR" => "",
+                )
                 r = enc(query)
                 @test msg == "" ? !r[2] : r == (nothing, true, msg)
                 @test ekq_compare(fx, query)[1] === (msg == "" ? :valid : :unsafe)
             end
             # A time that tpartv accepts and str2et rejects, and a missing kernel: CSPICE
             # sets the flag and the message and leaves a SPICE error signalled as well.
-            for query in ("SELECT ICOL FROM ALPHA WHERE TCOL > '2000 JAN 1 12:00:00 TDB PST'",
-                "SELECT ICOL FROM ALPHA WHERE TCOL > '1997 JAN 32 12:29:29'",
-                "SELECT ICOL FROM ALPHA WHERE TCOL > 'MOON SCLK 1/1000:5'")
+            for query in (
+                    "SELECT ICOL FROM ALPHA WHERE TCOL > '2000 JAN 1 12:00:00 TDB PST'",
+                    "SELECT ICOL FROM ALPHA WHERE TCOL > '1997 JAN 32 12:29:29'",
+                    "SELECT ICOL FROM ALPHA WHERE TCOL > 'MOON SCLK 1/1000:5'",
+                )
                 n = enc(query)
                 c = ekq_c_encd(query)
                 @test n[2] && c.error && c.kind !== nothing
                 @test n[3] == c.errmsg
                 @test startswith(n[3], "Unexpected SPICELIB error encountered")
             end
-            none = Q._ek_encode_query(fx.tables, Almanac.empty_kernelset(), fx.td,
-                "SELECT ICOL FROM ALPHA WHERE TCOL > '2000 JAN 1'")
-            @test none == (nothing, true, "Unexpected SPICELIB error encountered while " *
-                                          "attempting to parse the string <2000 JAN 1>")
+            none = Q._ek_encode_query(
+                fx.tables, Almanac.empty_kernelset(), fx.td,
+                "SELECT ICOL FROM ALPHA WHERE TCOL > '2000 JAN 1'"
+            )
+            @test none == (
+                nothing, true, "Unexpected SPICELIB error encountered while " *
+                    "attempting to parse the string <2000 JAN 1>",
+            )
         end
 
         ek_part("decoded query") do
             Q = Almanac
             query = "select a.icol, vcol, b.tarr from ALPHA a, BETA b where a.icol >= 2 and " *
-                    "(ccol like 'S*' or b.xcol not between 1 and a.dcol) and " *
-                    "a.tcol > '2000 JAN 1 12:00:00 TDB' order by b.icol desc, ccol"
+                "(ccol like 'S*' or b.xcol not between 1 and a.dcol) and " *
+                "a.tcol > '2000 JAN 1 12:00:00 TDB' order by b.icol desc, ccol"
             q, error, errmsg = Q._ek_encode_query(fx.tables, fx.ks, fx.td, query)
             @test !error && errmsg == ""
             @test q.tables == ["ALPHA", "BETA"] && q.aliases == ["A", "B"] && q.tabcat == [1, 2]
@@ -1185,7 +1344,8 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             @test [(c.lhs.name, c.opcode) for c in q.constraints] == [
                 ("ICOL", Q._EKQ_GE), ("CCOL", Q._EKQ_LIKE), ("TCOL", Q._EKQ_GT),
                 ("ICOL", Q._EKQ_GE), ("XCOL", Q._EKQ_LT), ("XCOL", Q._EKQ_LT), ("TCOL", Q._EKQ_GT),
-                ("ICOL", Q._EKQ_GE), ("XCOL", Q._EKQ_GT), ("XCOL", Q._EKQ_GT), ("TCOL", Q._EKQ_GT)]
+                ("ICOL", Q._EKQ_GE), ("XCOL", Q._EKQ_GT), ("XCOL", Q._EKQ_GT), ("TCOL", Q._EKQ_GT),
+            ]
             c = q.constraints
             @test c[1].cnstyp == Q._EKQ_EQVAL && c[1].dtype == 3 && c[1].ival == 2 && c[1].dval == 2.0
             at = first(findfirst("a.icol >=", query))
@@ -1194,11 +1354,11 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             @test c[3].dtype == 4 && c[3].dval == 0.0          # J2000 TDB
             @test c[5].dtype == 3 && c[5].ival == 1
             @test c[6].cnstyp == Q._EKQ_EQCOL && c[6].rhs.name == "DCOL" && c[6].rhs.tabidx == 1 &&
-                  c[6].rhs.colidx == 2 && c[6].dtype == 0
+                c[6].rhs.colidx == 2 && c[6].dtype == 0
             @test [(o[1].name, o[1].tabidx, o[2]) for o in q.orderby] ==
-                  [("ICOL", 2, Q._EKQ_DESCEND), ("CCOL", 1, Q._EKQ_ASCEND)]
+                [("ICOL", 2, Q._EKQ_DESCEND), ("CCOL", 1, Q._EKQ_ASCEND)]
             @test [(s.table, s.tabidx, s.name, s.colidx, s.lxbeg, s.lxend) for s in q.select] ==
-                  [("A", 1, "ICOL", 1, 8, 13), ("", 1, "VCOL", 4, 16, 19), ("B", 2, "TARR", 5, 22, 27)]
+                [("A", 1, "ICOL", 1, 8, 13), ("", 1, "VCOL", 4, 16, 19), ("B", 2, "TARR", 5, 22, 27)]
             s = Q._ek_psel(fx.tables, fx.ks, fx.td, "SELECT B.TCOL, DCOL, CARR, B.ICOL FROM ALPHA, BETA B")
             @test s.n == 4 && s.xtypes == [:TIME, :DP, :CHR, :INT] && s.xclass == fill(:COL, 4)
             @test s.tabs == ["BETA", "ALPHA", "ALPHA", "BETA"] && s.xbegs == [8, 16, 22, 28]
@@ -1219,24 +1379,32 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             query = "SELECT A.ICOL FROM ALPHA A, BETA, GAMMA_LONG_NAME G WHERE A.ICOL > 0"
             q = Q._ek_encode_query(fx.tables, fx.ks, fx.td, query)[1]
             e = ekq_c_encd(query)
-            for qcol in ("DCOL", "dcol", " xcol ", "A.ICOL", "a . icol", "ALPHA.NAME", "BETA.ICOL",
-                "G.KEY", "g.epoch", "GAMMA_LONG_NAME.VAL", "ICOL", "NAME", "NOSUCH", "A.NOSUCH",
-                "B.ICOL", "Z.ICOL", "A.", ".ICOL", "A.ICOL.X", "A ICOL", "5", "A.5", "'x'", "A,ICOL",
-                "A.'x'", "1.ICOL", "@", "A.ICOL B", "KEY", "G . VAL", "X"^70 * ".ICOL")
+            for qcol in (
+                    "DCOL", "dcol", " xcol ", "A.ICOL", "a . icol", "ALPHA.NAME", "BETA.ICOL",
+                    "G.KEY", "g.epoch", "GAMMA_LONG_NAME.VAL", "ICOL", "NAME", "NOSUCH", "A.NOSUCH",
+                    "B.ICOL", "Z.ICOL", "A.", ".ICOL", "A.ICOL.X", "A ICOL", "5", "A.5", "'x'", "A,ICOL",
+                    "A.'x'", "1.ICOL", "@", "A.ICOL B", "KEY", "G . VAL", "X"^70 * ".ICOL",
+                )
                 table, alias, column = (fill(UInt8(' '), 64) for _ in 1:3)
                 tabidx, colidx, error = Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0)
                 errmsg = fill(UInt8(' '), EKQ_MSGLEN)
-                ccall((:zzekpcol_, DSKLIB), Cint, (Ptr{UInt8}, Ptr{Cint}, Ptr{UInt8}, Ptr{UInt8},
+                ccall(
+                    (:zzekpcol_, DSKLIB), Cint, (
+                        Ptr{UInt8}, Ptr{Cint}, Ptr{UInt8}, Ptr{UInt8},
                         Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Cint,
-                        Cint, Cint, Cint, Cint, Cint), qcol, e.raw, e.c, table, alias, tabidx,
-                    column, colidx, error, errmsg, sizeof(qcol), 2000, 64, 64, 64, EKQ_MSGLEN)
+                        Cint, Cint, Cint, Cint, Cint,
+                    ), qcol, e.raw, e.c, table, alias, tabidx,
+                    column, colidx, error, errmsg, sizeof(qcol), 2000, 64, 64, 64, EKQ_MSGLEN
+                )
                 c_check()
                 r = Q._ek_qpcol(fx.tables, q, qcol)
                 @test r[6] == (error[] != 0)
                 @test r[7] == ekq_fstr(errmsg)
                 if error[] == 0 && !r[6]
-                    @test r[1:5] == (tabidx[], ekq_fstr(table), ekq_fstr(alias), colidx[],
-                        ekq_fstr(column))
+                    @test r[1:5] == (
+                        tabidx[], ekq_fstr(table), ekq_fstr(alias), colidx[],
+                        ekq_fstr(column),
+                    )
                 end
             end
         end

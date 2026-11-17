@@ -33,15 +33,15 @@ const AB_CORRECTIONS = ("LT", "LT+S", "CN", "CN+S", "XLT", "XLT+S", "XCN", "XCN+
 # velocities 2 s apart. One unit in the last place of a velocity of 30 km/s moves that
 # acceleration by 3e-15 km/s^2, and the derivative of the stellar aberration multiplies
 # it by `|r| / c` (15000 s for Neptune): 5e-11 km/s, or 2e-12 of the velocity.
-const AB_TOL_INERTIAL = (pos=2e-12, vel=5e-11, lt=2e-12)
+const AB_TOL_INERTIAL = (pos = 2.0e-12, vel = 5.0e-11, lt = 2.0e-12)
 # Body-fixed frames: the rounding of the prime-meridian angle far from J2000 (see
 # `TOL_BODYFIXED` of group 1) is on top.
-const AB_TOL_BODYFIXED = (pos=1e-9, vel=1e-9, lt=2e-12)
+const AB_TOL_BODYFIXED = (pos = 1.0e-9, vel = 1.0e-9, lt = 2.0e-12)
 
-const AB_FD_INERTIAL = (h=2000.0, rtol=2e-4)
-const AB_FD_FAST = (h=20.0, rtol=2e-5)
+const AB_FD_INERTIAL = (h = 2000.0, rtol = 2.0e-4)
+const AB_FD_FAST = (h = 20.0, rtol = 2.0e-5)
 "Tolerance of `spkder` against nested ForwardDiff of `spkpos`, orders 0 to 3."
-const AB_AD_RTOL = (1e-13, 1e-11, 1e-10, 1e-9)
+const AB_AD_RTOL = (1.0e-13, 1.0e-11, 1.0e-10, 1.0e-9)
 
 "Relative difference `|a - b| / |b|`; for `b == 0` the absolute difference."
 function ab_reldiff(a, b)
@@ -110,11 +110,13 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
     span = (DE440S_COVERAGE[1] + 86400.0, DE440S_COVERAGE[2] - 86400.0)
 
     @apart @testset "correction strings" begin
-        for (s, uselt, conv, stel, xmit) in (("NONE", false, false, false, false),
+        for (s, uselt, conv, stel, xmit) in (
+                ("NONE", false, false, false, false),
                 ("LT", true, false, false, false), ("LT+S", true, false, true, false),
                 ("CN", true, true, false, false), ("CN+S", true, true, true, false),
                 ("XLT", true, false, false, true), ("XLT+S", true, false, true, true),
-                ("XCN", true, true, false, true), ("XCN+S", true, true, true, true))
+                ("XCN", true, true, false, true), ("XCN+S", true, true, true, true),
+            )
             c = Aberration(s)
             @test (c.uselt, c.converged, c.stellar, c.transmit) == (uselt, conv, stel, xmit)
             @test c.geometric == (s == "NONE")
@@ -126,7 +128,7 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             @test Aberration(spaced) == c
             @test Aberration(SubString(s * "!", 1, length(s))) == c
             @test Aberration(c) === c
-            @test Aberration(; uselt, converged=conv, stellar=stel, transmit=xmit) == c
+            @test Aberration(; uselt, converged = conv, stellar = stel, transmit = xmit) == c
             @test ab_warm(ab_alloc_parse, s) == 0
             @test ab_warm(ab_alloc_parse, spaced) == 0
         end
@@ -134,8 +136,10 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         # `propertynames` lists the documented properties only
         @test propertynames(Aberration("LT")) == (:uselt, :converged, :stellar, :transmit, :geometric)
         # Values that CSPICE recognizes and rejects, and values that it does not know.
-        for bad in ("RL", "RL+S", "XRL", "XRL+S", "S", "XS", "", "   ", "LT+", "LTS", "L",
-                "NONE+S", "XNONE", "LT+S+S", "CN+SS", "λT", "LT\t")
+        for bad in (
+                "RL", "RL+S", "XRL", "XRL+S", "S", "XS", "", "   ", "LT+", "LTS", "L",
+                "NONE+S", "XNONE", "LT+S+S", "CN+SS", "λT", "LT\t",
+            )
             @test throws_kind(() -> Aberration(bad), :invalidoption)
             @test_throws Exception SPICE.spkezr("301", 0.0, "J2000", bad, "399")
         end
@@ -149,20 +153,32 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         @test throws_kind(() -> Aberration("XLT+SX"), :invalidoption)
     end
 
-    pairs = [(301, 399), (399, 301), (10, 399), (399, 10), (5, 301), (4, 0), (3, 199),
-        (0, 301), (301, 10), (299, 5), (8, 399), (10, 0)]
-    frames = Tuple{String,Any}[("J2000", AB_TOL_INERTIAL), ("ECLIPJ2000", AB_TOL_INERTIAL),
+    pairs = [
+        (301, 399), (399, 301), (10, 399), (399, 10), (5, 301), (4, 0), (3, 199),
+        (0, 301), (301, 10), (299, 5), (8, 399), (10, 0),
+    ]
+    frames = Tuple{String, Any}[
+        ("J2000", AB_TOL_INERTIAL), ("ECLIPJ2000", AB_TOL_INERTIAL),
         ("IAU_EARTH", AB_TOL_BODYFIXED), ("IAU_MOON", AB_TOL_BODYFIXED),
-        ("MOON_PA_DE440", AB_TOL_BODYFIXED), ("MOON_ME", AB_TOL_BODYFIXED)]
+        ("MOON_PA_DE440", AB_TOL_BODYFIXED), ("MOON_ME", AB_TOL_BODYFIXED),
+    ]
 
     @apart @testset "states and light time against CSPICE" begin
         epochs = random_epochs(rng, 40, span...)
-        measured(@sprintf("  %-14s %-6s %-9s %-9s %-9s %-9s %-9s", "frame", "abcorr",
-            "ezr pos", "ezr vel", "ezr lt", "pos pos", "pos lt"))
+        measured(
+            @sprintf(
+                "  %-14s %-6s %-9s %-9s %-9s %-9s %-9s", "frame", "abcorr",
+                "ezr pos", "ezr vel", "ezr lt", "pos pos", "pos lt"
+            )
+        )
         for (ref, tol) in frames, ab in ("NONE", AB_CORRECTIONS...)
             d = ab_compare(ctx, pairs, epochs, ref, ab)
-            measured(@sprintf("  %-14s %-6s %.2e  %.2e  %.2e  %.2e  %.2e", ref, ab, d.pos,
-                d.vel, d.lt, d.ppos, d.plt))
+            measured(
+                @sprintf(
+                    "  %-14s %-6s %.2e  %.2e  %.2e  %.2e  %.2e", ref, ab, d.pos,
+                    d.vel, d.lt, d.ppos, d.plt
+                )
+            )
             @test d.pos <= tol.pos
             @test d.vel <= tol.vel
             @test d.lt <= tol.lt
@@ -175,28 +191,28 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         # The forms do not depend on the epoch: one epoch in the default run.
         for et in random_epochs(rng, nsample(1, 5), span...), ab in AB_CORRECTIONS, ref in ("J2000", "IAU_EARTH")
             byid = spkezr(ctx, 301, et, ref, ab, 10)
-            @test byid[1] isa SVector{6,Float64} && byid[2] isa Float64
+            @test byid[1] isa SVector{6, Float64} && byid[2] isa Float64
             @test spkezr(ctx, "MOON", et, ref, ab, "SUN") == byid
             @test spkezr(ctx, 301, et, ref, Aberration(ab), 10) == byid
             @test spkezr(ctx, 301, et, ref, " " * lowercase(ab), 10) == byid
             @test spkezr(Almanac.kernelset(ctx), 301, et, ref, ab, 10) == byid
             pos, lt = spkpos(ctx, 301, et, ref, ab, 10)
-            @test pos isa SVector{3,Float64}
+            @test pos isa SVector{3, Float64}
             @test spkpos(ctx, "MOON", et, ref, Aberration(ab), "SUN") == (pos, lt)
             # spkpos follows `spkapo` and spkezr follows `spkltc`: rounding apart.
-            @test isapprox(pos, byid[1][SOneTo(3)]; rtol=1e-12)
-            @test isapprox(lt, byid[2]; rtol=1e-12)
+            @test isapprox(pos, byid[1][SOneTo(3)]; rtol = 1.0e-12)
+            @test isapprox(lt, byid[2]; rtol = 1.0e-12)
             # The light time is the norm of the position without stellar aberration,
             # and stellar aberration keeps the norm.
-            @test isapprox(lt, norm(pos) / 299792.458; rtol=1e-13)
+            @test isapprox(lt, norm(pos) / 299792.458; rtol = 1.0e-13)
         end
         # A body relative to itself: zero state and zero light time, as CSPICE.
         for ab in AB_CORRECTIONS, ref in ("J2000", "IAU_MOON")
-            state, lt = spkezr(ctx, 399, 1e8, ref, ab, 399)
+            state, lt = spkezr(ctx, 399, 1.0e8, ref, ab, 399)
             @test all(iszero, state) && lt == 0
-            @test all(iszero, SPICE.spkezr("399", 1e8, ref, ab, "399")[1])
-            @test all(iszero, spkpos(ctx, 399, 1e8, ref, ab, 399)[1])
-            @test all(all(iszero, d) for d in spkder(ctx, 399, 1e8, ref, ab, 399, Val(2)))
+            @test all(iszero, SPICE.spkezr("399", 1.0e8, ref, ab, "399")[1])
+            @test all(iszero, spkpos(ctx, 399, 1.0e8, ref, ab, 399)[1])
+            @test all(all(iszero, d) for d in spkder(ctx, 399, 1.0e8, ref, ab, 399, Val(2)))
         end
         # Reception and transmission differ, and the correction has the expected size:
         # the Sun seen from the Earth moves by about 20 arc seconds of aberration.
@@ -204,20 +220,20 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         app = spkpos(ctx, 10, 0.0, "J2000", "LT+S", 399)[1]
         xmt = spkpos(ctx, 10, 0.0, "J2000", "XLT+S", 399)[1]
         @test 15 < acos(clamp(dot(geo, app) / (norm(geo) * norm(app)), -1, 1)) * 206264.8 < 25
-        @test norm(app - xmt) > 1e3
+        @test norm(app - xmt) > 1.0e3
     end
 
     @apart @testset "default context" begin
         kclear()
         foreach(furnsh, set)
         for ab in ("LT+S", "XCN"), ref in ("J2000", "IAU_MOON")
-            @test spkezr("MOON", 1e7, ref, ab, "EARTH") == spkezr(ctx, "MOON", 1e7, ref, ab, "EARTH")
-            @test spkpos(301, 1e7, ref, Aberration(ab), 399) == spkpos(ctx, 301, 1e7, ref, ab, 399)
-            @test spkder(301, 1e7, ref, ab, 399, Val(2)) == spkder(ctx, 301, 1e7, ref, ab, 399, Val(2))
+            @test spkezr("MOON", 1.0e7, ref, ab, "EARTH") == spkezr(ctx, "MOON", 1.0e7, ref, ab, "EARTH")
+            @test spkpos(301, 1.0e7, ref, Aberration(ab), 399) == spkpos(ctx, 301, 1.0e7, ref, ab, 399)
+            @test spkder(301, 1.0e7, ref, ab, 399, Val(2)) == spkder(ctx, 301, 1.0e7, ref, ab, 399, Val(2))
         end
-        @test spkssb(399, 1e7, "J2000") == spkssb(ctx, 399, 1e7, "J2000")
-        @test spkacs(301, 1e7, "J2000", "CN+S", 399) == spkacs(ctx, 301, 1e7, "J2000", "CN+S", 399)
-        @test ltime(1e7, 399, "->", 5) == ltime(ctx, 1e7, 399, "->", 5)
+        @test spkssb(399, 1.0e7, "J2000") == spkssb(ctx, 399, 1.0e7, "J2000")
+        @test spkacs(301, 1.0e7, "J2000", "CN+S", 399) == spkacs(ctx, 301, 1.0e7, "J2000", "CN+S", 399)
+        @test ltime(1.0e7, 399, "->", 5) == ltime(ctx, 1.0e7, 399, "->", 5)
         kclear()
     end
 
@@ -225,35 +241,35 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         # Each epoch runs every correction through every low-level call for two frames and
         # four pairs of bodies (about 1100 assertions): three epochs in the default run.
         epochs = random_epochs(rng, nsample(3, 15), span...)
-        worst = Dict{String,Float64}()
+        worst = Dict{String, Float64}()
         note(name, x) = (worst[name] = max(get(worst, name, 0.0), x); x)
-        tol = 1e-11
+        tol = 1.0e-11
         for et in epochs, ref in ("J2000", "ECLIPJ2000"), (targ, obs) in ((301, 399), (5, 301), (399, 10), (10, 0))
             cssb = SPICE.spkssb(obs, et, ref)
             ssb = spkssb(ctx, obs, et, ref)
-            @test ssb isa SVector{6,Float64}
-            @test note("spkssb", ab_reldiff(ssb, cssb)) <= 1e-13
+            @test ssb isa SVector{6, Float64}
+            @test note("spkssb", ab_reldiff(ssb, cssb)) <= 1.0e-13
             @test ssb == spkgeo(ctx, obs, et, ref, 0)[1]
-            acc = SVector(1e-6, -2e-6, 5e-7)
+            acc = SVector(1.0e-6, -2.0e-6, 5.0e-7)
             for ab in ("NONE", AB_CORRECTIONS...)
                 cs, cl, cd = SPICE.spkltc(targ, et, ref, ab, cssb)
                 s, l, d = spkltc(ctx, targ, et, ref, ab, cssb)
                 @test note("spkltc state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6])) <= tol
                 @test note("spkltc lt", abs(l - cl) / cl) <= tol
-                @test note("spkltc dlt", abs(d - cd) / max(abs(cd), 1e-9)) <= 1e-8
+                @test note("spkltc dlt", abs(d - cd) / max(abs(cd), 1.0e-9)) <= 1.0e-8
                 @test spkltc(ctx, targ, et, ref, Aberration(ab), ssb) == spkltc(ctx, targ, et, ref, ab, ssb)
 
                 cs, cl, cd = SPICE.spkaps(targ, et, ref, ab, cssb, vcat(acc, zeros(3)))   # SPICE.jl wants 6
                 s, l, d = spkaps(ctx, targ, et, ref, ab, cssb, acc)
                 @test note("spkaps state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6])) <= tol
                 @test note("spkaps lt", abs(l - cl) / cl) <= tol
-                @test note("spkaps dlt", abs(d - cd) / max(abs(cd), 1e-9)) <= 1e-8
+                @test note("spkaps dlt", abs(d - cd) / max(abs(cd), 1.0e-9)) <= 1.0e-8
 
                 cs, cl, cd = SPICE.spkacs(targ, et, ref, ab, obs)
                 s, l, d = spkacs(ctx, targ, et, ref, ab, obs)
                 @test note("spkacs state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6])) <= tol
                 @test note("spkacs lt", abs(l - cl) / cl) <= tol
-                @test note("spkacs dlt", abs(d - cd) / max(abs(cd), 1e-9)) <= 1e-8
+                @test note("spkacs dlt", abs(d - cd) / max(abs(cd), 1.0e-9)) <= 1.0e-8
                 # spkacs in an inertial frame is the state of spkezr. (With NONE, spkacs
                 # takes the difference of two barycentric states and spkezr does not.)
                 ab == "NONE" || @test (s, l) == spkezr(ctx, targ, et, ref, ab, obs)
@@ -264,7 +280,7 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
                 @test note("spkapo lt", abs(pl - cpl) / cpl) <= tol
                 if ab != "NONE"
                     q, ql = spkpos(ctx, targ, et, ref, ab, obs)
-                    @test isapprox(p, q; rtol=1e-12) && isapprox(pl, ql; rtol=1e-12)
+                    @test isapprox(p, q; rtol = 1.0e-12) && isapprox(pl, ql; rtol = 1.0e-12)
                 end
             end
             for dir in ("->", "<-")
@@ -276,39 +292,52 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             # Stellar aberration of a position, with the true observer velocity and with
             # a velocity near the limit.
             p0 = spkpos(ctx, targ, et, ref, "LT", obs)[1]
-            for v in (ssb[SVector(4, 5, 6)], SVector(1e5, -2e5, 3e4), SVector(0.0, 0.0, 0.0))
+            for v in (ssb[SVector(4, 5, 6)], SVector(1.0e5, -2.0e5, 3.0e4), SVector(0.0, 0.0, 0.0))
                 capp = SPICE.stelab(collect(p0), collect(v))
                 app = stelab(p0, v)
-                @test app isa SVector{3,Float64}
-                @test note("stelab", ab_reldiff(app, capp)) <= 1e-14
-                @test isapprox(norm(app), norm(p0); rtol=1e-14)
-                @test note("stlabx", ab_reldiff(stlabx(p0, v), SPICE.stelab(collect(p0), collect(-v)))) <= 1e-14
+                @test app isa SVector{3, Float64}
+                @test note("stelab", ab_reldiff(app, capp)) <= 1.0e-14
+                @test isapprox(norm(app), norm(p0); rtol = 1.0e-14)
+                @test note("stlabx", ab_reldiff(stlabx(p0, v), SPICE.stelab(collect(p0), collect(-v)))) <= 1.0e-14
             end
         end
         for name in sort!(collect(keys(worst)))
             measured(@sprintf("  %-58s max=%.3e", name * ", relative", worst[name]))
         end
-        # Errors of the low-level calls.
+        # Errors of the low-level calls, with the short messages of CSPICE N0067 (checked
+        # with SPICE.jl): a frame that is not inertial is BADFRAME, and a bad correction
+        # is reported before it.
         st = spkssb(ctx, 399, 0.0, "J2000")
-        @test throws_kind(() -> spkltc(ctx, 301, 0.0, "IAU_EARTH", "LT", st), :badarg)
-        @test throws_kind(() -> spkaps(ctx, 301, 0.0, "IAU_EARTH", "LT", st, zeros(3)), :badarg)
-        @test throws_kind(() -> spkacs(ctx, 301, 0.0, "IAU_EARTH", "LT", 399), :badarg)
-        @test throws_kind(() -> spkapo(ctx, 301, 0.0, "IAU_EARTH", st, "LT"), :badarg)
+        @test throws_kind(() -> spkltc(ctx, 301, 0.0, "IAU_EARTH", "LT", st), :badframe)
+        @test throws_kind(() -> spkaps(ctx, 301, 0.0, "IAU_EARTH", "LT", st, zeros(3)), :badframe)
+        @test throws_kind(() -> spkacs(ctx, 301, 0.0, "IAU_EARTH", "LT", 399), :badframe)
+        @test throws_kind(() -> spkapo(ctx, 301, 0.0, "IAU_EARTH", st, "LT"), :badframe)
+        @test throws_kind(() -> spkltc(ctx, 301, 0.0, "IAU_EARTH", "XYZ", st), :invalidoption)
+        @test throws_kind(() -> spkaps(ctx, 301, 0.0, "IAU_EARTH", "S", st, zeros(3)), :invalidoption)
+        @test throws_kind(() -> spkapo(ctx, 301, 0.0, "IAU_EARTH", st, "XYZ"), :spkinvalidoption)
         @test throws_kind(() -> spkltc(ctx, 301, 0.0, "J2000", "LT", zeros(5)), :badarg)
         @test throws_kind(() -> spkaps(ctx, 301, 0.0, "J2000", "LT", st, zeros(2)), :badarg)
         @test throws_kind(() -> spkltc(ctx, 301, 0.0, "J2000", "S", st), :invalidoption)
-        @test throws_kind(() -> ltime(ctx, 0.0, 399, "<>", 301), :badarg)
-        @test throws_kind(() -> stelab(SVector(1.0, 0.0, 0.0), SVector(3e5, 0.0, 0.0)), :badarg)
+        @test throws_kind(() -> ltime(ctx, 0.0, 399, "<>", 301), :baddirection)
+        @test throws_kind(() -> stelab(SVector(1.0, 0.0, 0.0), SVector(3.0e5, 0.0, 0.0)), :valueoutofrange)
+        @test throws_kind(() -> stlabx(SVector(1.0, 0.0, 0.0), SVector(3.0e5, 0.0, 0.0)), :valueoutofrange)
         @test throws_kind(() -> stelab([1.0, 0.0], [0.0, 0.0, 0.0]), :badarg)
+        # extreme magnitudes: the unit vector is scaled as in `vhat` (audit of 2026-11-16)
+        for mag in (1.0e-300, 1.0e-200, 1.0e200, 1.0e300), d in ((1.0, 0.0, 0.0), (0.6, 0.8, 0.0))
+            p = mag .* collect(d)
+            @test stelab(p, [0.0, 30.0, 0.0]) == SPICE.stelab(p, [0.0, 30.0, 0.0])
+        end
         # An epoch whose light-time corrected epoch leaves the coverage.
         @test throws_kind(() -> spkezr(ctx, 8, DE440S_COVERAGE[1] - 86000.0, "J2000", "LT", 399), :spkinsuffdata)
     end
 
-    cases = [(301, 399, "J2000", AB_FD_INERTIAL), (399, 10, "J2000", AB_FD_INERTIAL),
+    cases = [
+        (301, 399, "J2000", AB_FD_INERTIAL), (399, 10, "J2000", AB_FD_INERTIAL),
         (10, 301, "ECLIPJ2000", AB_FD_INERTIAL), (5, 399, "J2000", AB_FD_INERTIAL),
         (301, 399, "IAU_EARTH", AB_FD_FAST), (10, 399, "IAU_EARTH", AB_FD_FAST),
         (399, 301, "MOON_PA_DE440", AB_FD_INERTIAL), (10, 301, "IAU_MOON", AB_FD_INERTIAL),
-        (4, 399, "IAU_MOON", AB_FD_INERTIAL)]
+        (4, 399, "IAU_MOON", AB_FD_INERTIAL),
+    ]
     depochs = record_safe_epochs(rng, 6)
 
     @apart @testset "spkder: order 0 and the CSPICE velocity" begin
@@ -319,7 +348,7 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             w1b = 0.0
             for (targ, obs, ref, _) in cases, et in depochs[1:nsample(2, 6)]
                 jet = spkder(ctx, targ, et, ref, ab, obs, Val(1))
-                @test jet isa NTuple{2,SVector{3,Float64}}
+                @test jet isa NTuple{2, SVector{3, Float64}}
                 state, _ = spkezr(ctx, targ, et, ref, ab, obs)
                 cstate, _ = SPICE.spkezr(string(targ), et, ref, ab, string(obs))
                 w0 = max(w0, ab_reldiff(jet[1], state[SOneTo(3)]))
@@ -327,21 +356,25 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
                 ref in ("J2000", "ECLIPJ2000") ? (w1i = max(w1i, d)) : (w1b = max(w1b, d))
                 # A lower order is a prefix of a higher order.
                 full = spkder(ctx, targ, et, ref, ab, obs, Val(3))
-                @test all(isapprox(jet[k], full[k]; rtol=1e-12) for k in 1:2)
-                @test isapprox(spkder(ctx, targ, et, ref, ab, obs, Val(0))[1], full[1]; rtol=1e-13)
+                @test all(isapprox(jet[k], full[k]; rtol = 1.0e-12) for k in 1:2)
+                @test isapprox(spkder(ctx, targ, et, ref, ab, obs, Val(0))[1], full[1]; rtol = 1.0e-13)
             end
-            measured(@sprintf("    %-6s order 0 vs spkezr %.2e; order 1 vs CSPICE velocity: inertial %.2e, body-fixed %.2e",
-                ab, w0, w1i, w1b))
-            @test w0 <= 1e-12
+            measured(
+                @sprintf(
+                    "    %-6s order 0 vs spkezr %.2e; order 1 vs CSPICE velocity: inertial %.2e, body-fixed %.2e",
+                    ab, w0, w1i, w1b
+                )
+            )
+            @test w0 <= 1.0e-12
             # `CN` forms: rounding. `LT` forms: CSPICE takes the light-time rate of the
             # converged equation for a position that is one iteration from the geometric
             # light time, which is a relative difference of order (v/c) * (range rate/c).
-            @test w1i <= (occursin("CN", ab) ? 5e-12 : 1e-6)
-            @test w1b <= (occursin("CN", ab) ? 5e-11 : 1e-5)
+            @test w1i <= (occursin("CN", ab) ? 5.0e-12 : 1.0e-6)
+            @test w1b <= (occursin("CN", ab) ? 5.0e-11 : 1.0e-5)
         end
         # NONE through the corrected form is the geometric form.
         @test spkder(ctx, 301, depochs[1], "IAU_EARTH", "NONE", 399, Val(3)) ==
-              spkder(ctx, 301, depochs[1], "IAU_EARTH", 399, Val(3))
+            spkder(ctx, 301, depochs[1], "IAU_EARTH", 399, Val(3))
         @test throws_kind(() -> spkder(ctx, 301, 0.0, "J2000", "LT", 399, Val(-1)), :badarg)
     end
 
@@ -352,15 +385,18 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             for et in depochs
                 jet(t) = spkder(ctx, targ, t, ref, ab, obs, Val(3))
                 j0 = jet(et); jp = jet(et + fd.h); jm = jet(et - fd.h)
-                worst .= max.(worst, [ab_reldiff((jp[k] - jm[k]) / (2 * fd.h), j0[k+1]) for k in 1:3])
+                worst .= max.(worst, [ab_reldiff((jp[k] - jm[k]) / (2 * fd.h), j0[k + 1]) for k in 1:3])
                 # Order 1 against the central difference of the position of spkpos.
                 pp = spkpos(ctx, targ, et + fd.h, ref, ab, obs)[1]
                 pm = spkpos(ctx, targ, et - fd.h, ref, ab, obs)[1]
                 wpos = max(wpos, ab_reldiff((pp - pm) / (2 * fd.h), j0[2]))
             end
-            ab in ("LT", "XCN+S") && measured(@sprintf(
-                "  FD  %3d rel %3d %-13s %-6s orders 1..3: %s; order 1 vs spkpos %.2e (tol %.0e)",
-                targ, obs, ref, ab, join((@sprintf("%.2e", w) for w in worst), " "), wpos, fd.rtol))
+            ab in ("LT", "XCN+S") && measured(
+                @sprintf(
+                    "  FD  %3d rel %3d %-13s %-6s orders 1..3: %s; order 1 vs spkpos %.2e (tol %.0e)",
+                    targ, obs, ref, ab, join((@sprintf("%.2e", w) for w in worst), " "), wpos, fd.rtol
+                )
+            )
             @test all(<=(fd.rtol), worst)
             @test wpos <= fd.rtol
         end
@@ -387,8 +423,12 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
                 worst[1] = max(worst[1], ab_reldiff(jet[1], ezr))
                 worst[2:4] .= max.(worst[2:4], [ab_reldiff(jet[k], ad[k]) for k in 2:4])
             end
-            measured(@sprintf("  AD  %-6s orders 0..3: %s", ab,
-                join((@sprintf("%.2e", w) for w in worst), " ")))
+            measured(
+                @sprintf(
+                    "  AD  %-6s orders 0..3: %s", ab,
+                    join((@sprintf("%.2e", w) for w in worst), " ")
+                )
+            )
             @test all(worst[k] <= AB_AD_RTOL[k] for k in 1:4)
         end
         # A dual-number epoch through spkezr and through spkder itself.
@@ -396,17 +436,19 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         for ab in ("LT+S", "XCN"), ref in ("J2000", "IAU_MOON")
             jet = spkder(ctx, 10, et, ref, ab, 301, Val(3))
             dstate = spkezr(ctx, 10, ForwardDiff.Dual(et, 1.0), ref, ab, 301)[1]
-            @test isapprox(ForwardDiff.value.(dstate), spkezr(ctx, 10, et, ref, ab, 301)[1]; rtol=1e-14)
-            @test isapprox(ForwardDiff.partials.(dstate, 1)[SOneTo(3)], jet[2]; rtol=1e-6)
+            @test isapprox(ForwardDiff.value.(dstate), spkezr(ctx, 10, et, ref, ab, 301)[1]; rtol = 1.0e-14)
+            @test isapprox(ForwardDiff.partials.(dstate, 1)[SOneTo(3)], jet[2]; rtol = 1.0e-6)
             d3 = ForwardDiff.derivative(t -> spkder(ctx, 10, t, ref, ab, 301, Val(2))[3], et)
-            @test isapprox(d3, jet[4]; rtol=1e-10)
+            @test isapprox(d3, jet[4]; rtol = 1.0e-10)
         end
     end
 
     @apart @testset "zero allocation and inferred types" begin
         et = 1.2345e8
-        refs = (1, 17, Int(namfrm(ctx, "IAU_EARTH")), Int(namfrm(ctx, "MOON_PA_DE440")),
-            Int(namfrm(ctx, "MOON_ME")))
+        refs = (
+            1, 17, Int(namfrm(ctx, "IAU_EARTH")), Int(namfrm(ctx, "MOON_PA_DE440")),
+            Int(namfrm(ctx, "MOON_ME")),
+        )
         for ref in refs, ab in ("NONE", AB_CORRECTIONS...)
             @test ab_warm(ab_alloc_ezr, ctx, et, ref, ab) == 0
             @test ab_warm(ab_alloc_pos, ctx, et, ref, ab) == 0
@@ -416,7 +458,7 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             end
         end
         st = spkssb(ctx, 399, et, 1)
-        acc = SVector(1e-6, 2e-6, 3e-6)
+        acc = SVector(1.0e-6, 2.0e-6, 3.0e-6)
         @test ab_warm(ab_alloc_ssb, ctx, et) == 0
         @test ab_warm(ab_alloc_ltime, ctx, et) == 0
         @test ab_warm(ab_alloc_stelab, st[SOneTo(3)], st[SVector(4, 5, 6)]) == 0
@@ -428,18 +470,18 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         end
         ks = Almanac.kernelset(ctx)
         for ref in (1, refs[3]), ab in ("LT", "XCN+S")
-            @test (@inferred spkezr(ks, 301, et, ref, ab, 399)) isa Tuple{SVector{6,Float64},Float64}
-            @test (@inferred spkpos(ks, 301, et, ref, ab, 399)) isa Tuple{SVector{3,Float64},Float64}
-            @test (@inferred spkder(ks, 301, et, ref, ab, 399, Val(3))) isa NTuple{4,SVector{3,Float64}}
-            @test (@inferred spkezr(ctx, 301, et, ref, Aberration(ab), 399)) isa Tuple{SVector{6,Float64},Float64}
+            @test (@inferred spkezr(ks, 301, et, ref, ab, 399)) isa Tuple{SVector{6, Float64}, Float64}
+            @test (@inferred spkpos(ks, 301, et, ref, ab, 399)) isa Tuple{SVector{3, Float64}, Float64}
+            @test (@inferred spkder(ks, 301, et, ref, ab, 399, Val(3))) isa NTuple{4, SVector{3, Float64}}
+            @test (@inferred spkezr(ctx, 301, et, ref, Aberration(ab), 399)) isa Tuple{SVector{6, Float64}, Float64}
         end
-        @test (@inferred spkssb(ks, 399, et, 1)) isa SVector{6,Float64}
-        @test (@inferred spkltc(ks, 301, et, 1, "CN", st)) isa Tuple{SVector{6,Float64},Float64,Float64}
-        @test (@inferred spkaps(ks, 301, et, 1, "CN+S", st, acc)) isa Tuple{SVector{6,Float64},Float64,Float64}
-        @test (@inferred spkacs(ks, 301, et, 1, "CN+S", 399)) isa Tuple{SVector{6,Float64},Float64,Float64}
-        @test (@inferred spkapo(ks, 301, et, 1, st, "CN+S")) isa Tuple{SVector{3,Float64},Float64}
-        @test (@inferred ltime(ks, et, 399, "<-", 301)) isa Tuple{Float64,Float64}
-        @test (@inferred stelab(st[SOneTo(3)], st[SVector(4, 5, 6)])) isa SVector{3,Float64}
+        @test (@inferred spkssb(ks, 399, et, 1)) isa SVector{6, Float64}
+        @test (@inferred spkltc(ks, 301, et, 1, "CN", st)) isa Tuple{SVector{6, Float64}, Float64, Float64}
+        @test (@inferred spkaps(ks, 301, et, 1, "CN+S", st, acc)) isa Tuple{SVector{6, Float64}, Float64, Float64}
+        @test (@inferred spkacs(ks, 301, et, 1, "CN+S", 399)) isa Tuple{SVector{6, Float64}, Float64, Float64}
+        @test (@inferred spkapo(ks, 301, et, 1, st, "CN+S")) isa Tuple{SVector{3, Float64}, Float64}
+        @test (@inferred ltime(ks, et, 399, "<-", 301)) isa Tuple{Float64, Float64}
+        @test (@inferred stelab(st[SOneTo(3)], st[SVector(4, 5, 6)])) isa SVector{3, Float64}
     end
 end
 

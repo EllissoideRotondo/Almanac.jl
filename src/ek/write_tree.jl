@@ -56,19 +56,25 @@ Write `val` as five base-128 characters at the character address `addr` (`zzekse
 `prtenc`). Precondition: `0 <= val < 128^5`, else `SpiceError(:outofrange)`.
 """
 function _ekw_sei(h::DASHandle, addr::Integer, val::Integer)
-    (0 <= val < 34359738368) || throw(SpiceError(:outofrange,
-        "the integer $val cannot be encoded in five base-128 characters"))
+    (0 <= val < 34359738368) || throw(
+        SpiceError(
+            :outofrange,
+            "the integer $val cannot be encoded in five base-128 characters"
+        )
+    )
     n = Int(val)
     chars = h.chars
     for k in 4:-1:0                      # invariant: digits after k are stored
-        chars[addr+k] = (n % 128) % UInt8
+        chars[addr + k] = (n % 128) % UInt8
         n ÷= 128
     end
     return nothing
 end
 
-@inline function _ekw_udc(h::DASHandle, addr::Integer, src::AbstractVector{UInt8}, first::Int,
-        n::Int)
+@inline function _ekw_udc(
+        h::DASHandle, addr::Integer, src::AbstractVector{UInt8}, first::Int,
+        n::Int
+    )
     n > 0 && copyto!(h.chars, Int(addr), src, first, n)
     return nothing
 end
@@ -86,9 +92,13 @@ integers hold the architecture code, the page sizes and the page counts (all zer
 """
 function _ekw_pgin(h::DASHandle)
     _das_check_write(h, "zzekpgin")
-    (isempty(h.chars) && isempty(h.dps) && isempty(h.ints)) || throw(SpiceError(:dasnotempty,
-        "File $(h.path) contains data; LASTC = $(length(h.chars)); LASTD = " *
-        "$(length(h.dps)); LASTI = $(length(h.ints))."))
+    (isempty(h.chars) && isempty(h.dps) && isempty(h.ints)) || throw(
+        SpiceError(
+            :dasnotempty,
+            "File $(h.path) contains data; LASTC = $(length(h.chars)); LASTD = " *
+                "$(length(h.dps)); LASTI = $(length(h.ints))."
+        )
+    )
     append!(h.ints, zeros(Int32, 256))
     ints = h.ints
     ints[1] = _EK_ARCH
@@ -112,15 +122,15 @@ function _ekw_pgan(h::DASHandle, t::Int)
     if t == 1
         n = length(h.chars)
         resize!(h.chars, n + 1024)
-        fill!(view(h.chars, n+1:n+1024), UInt8(' '))
+        fill!(view(h.chars, (n + 1):(n + 1024)), UInt8(' '))
     elseif t == 2
         n = length(h.dps)
         resize!(h.dps, n + 128)
-        fill!(view(h.dps, n+1:n+128), 0.0)
+        fill!(view(h.dps, (n + 1):(n + 128)), 0.0)
     elseif t == 3
         n = length(ints)
         resize!(ints, n + 256)
-        fill!(view(ints, n+1:n+256), Int32(0))
+        fill!(view(ints, (n + 1):(n + 256)), Int32(0))
     else
         throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     end
@@ -142,8 +152,8 @@ function _ekw_pgal(h::DASHandle, t::Int)
     p = Int(ints[_ekw_FREEP[t]])
     p > 0 || return _ekw_pgan(h, t)
     base = _ekw_base(t, p)
-    next = t == 1 ? _ek_gei(h.chars, base + 1) : t == 2 ? round(Int, h.dps[base+1]) :
-           Int(ints[base+1])
+    next = t == 1 ? _ek_gei(h.chars, base + 1) : t == 2 ? round(Int, h.dps[base + 1]) :
+        Int(ints[base + 1])
     ints[_ekw_NFREE[t]] -= 1
     ints[_ekw_FREEP[t]] = next
     return p, base
@@ -160,16 +170,20 @@ function _ekw_pgfr(h::DASHandle, t::Int, p::Integer)
     (1 <= t <= 3) || throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     ints = h.ints
     np = Int(ints[_ekw_NPAGE[t]])
-    (1 <= p <= np) || throw(SpiceError(:invalidindex, "Attempt to free non-existent " *
-        "$(("CHR", "DP", "INT")[t]) page. Page number = $p; valid range is 1:$np"))
+    (1 <= p <= np) || throw(
+        SpiceError(
+            :invalidindex, "Attempt to free non-existent " *
+                "$(("CHR", "DP", "INT")[t]) page. Page number = $p; valid range is 1:$np"
+        )
+    )
     head = Int(ints[_ekw_FREEP[t]])
     base = _ekw_base(t, p)
     if t == 1
         _ekw_sei(h, base + 1, head)
     elseif t == 2
-        h.dps[base+1] = Float64(head)
+        h.dps[base + 1] = Float64(head)
     else
-        ints[base+1] = head
+        ints[base + 1] = head
     end
     ints[_ekw_FREEP[t]] = p
     ints[_ekw_NFREE[t]] += 1
@@ -180,8 +194,8 @@ end
 # number, in the word before it; in a character page each takes five characters.
 @inline function _ekw_glnk(h::DASHandle, t::Int, p::Integer)
     base = _ekw_base(t, p)
-    return t == 1 ? _ek_gei(h.chars, base + 1020) : t == 2 ? round(Int, h.dps[base+128]) :
-           Int(h.ints[base+256])
+    return t == 1 ? _ek_gei(h.chars, base + 1020) : t == 2 ? round(Int, h.dps[base + 128]) :
+        Int(h.ints[base + 256])
 end
 
 @inline function _ekw_slnk(h::DASHandle, t::Int, p::Integer, n::Integer)
@@ -189,17 +203,17 @@ end
     if t == 1
         _ekw_sei(h, base + 1020, n)
     elseif t == 2
-        h.dps[base+128] = Float64(n)
+        h.dps[base + 128] = Float64(n)
     else
-        h.ints[base+256] = n
+        h.ints[base + 256] = n
     end
     return nothing
 end
 
 @inline function _ekw_gfwd(h::DASHandle, t::Int, p::Integer)
     base = _ekw_base(t, p)
-    return t == 1 ? _ek_gei(h.chars, base + 1015) : t == 2 ? round(Int, h.dps[base+127]) :
-           Int(h.ints[base+255])
+    return t == 1 ? _ek_gei(h.chars, base + 1015) : t == 2 ? round(Int, h.dps[base + 127]) :
+        Int(h.ints[base + 255])
 end
 
 @inline function _ekw_sfwd(h::DASHandle, t::Int, p::Integer, fwd::Integer)
@@ -207,9 +221,9 @@ end
     if t == 1
         _ekw_sei(h, base + 1015, fwd)
     elseif t == 2
-        h.dps[base+127] = Float64(fwd)
+        h.dps[base + 127] = Float64(fwd)
     else
-        h.ints[base+255] = fwd
+        h.ints[base + 255] = fwd
     end
     return nothing
 end
@@ -228,8 +242,8 @@ struct _ekw_Page
     v::Vector{Int32}
 end
 _ekw_Page() = _ekw_Page(zeros(Int32, 256))
-@inline Base.getindex(p::_ekw_Page, k::Integer) = Int(p.v[k+1])
-@inline Base.setindex!(p::_ekw_Page, x::Integer, k::Integer) = (p.v[k+1] = x)
+@inline Base.getindex(p::_ekw_Page, k::Integer) = Int(p.v[k + 1])
+@inline Base.setindex!(p::_ekw_Page, x::Integer, k::Integer) = (p.v[k + 1] = x)
 
 @inline function _ekw_ipage_check(h::DASHandle, p::Integer)
     np = Int(h.ints[14])
@@ -258,11 +272,11 @@ end
 end
 
 @inline function _ekw_clear!(page::_ekw_Page, k::Int, n::Int)
-    n > 0 && fill!(view(page.v, k+1:k+n), Int32(0))
+    n > 0 && fill!(view(page.v, (k + 1):(k + n)), Int32(0))
     return nothing
 end
 
-@inline _ekw_w(ints::Vector{Int32}, b::Int, k::Int) = Int(ints[b+k+1])
+@inline _ekw_w(ints::Vector{Int32}, b::Int, k::Int) = Int(ints[b + k + 1])
 
 # ---------------------------------------------------------------------------------------
 # Tree: lookups that the writers need
@@ -270,7 +284,7 @@ end
 
 "Number of keys of the node `node` of the tree `tree` (`zzektrnk`)."
 @inline _ekw_trnk(h::DASHandle, tree::Integer, node::Integer) =
-    Int(h.ints[_ek_ibase(node)+(tree == node ? 5 : 1)])
+    Int(h.ints[_ek_ibase(node) + (tree == node ? 5 : 1)])
 
 """
     _ekw_trpi(h, tree, key) -> (parent, pkey, poffst, lpidx, lpkey, lsib, rpidx, rpkey, rsib)
@@ -288,8 +302,12 @@ function _ekw_trpi(h::DASHandle, tree::Integer, key::Integer)
     b = _ek_ibase(tree)
     parent = pkey = poffst = lpidx = lpkey = lsib = rpidx = rpkey = rsib = 0
     totkey = _ekw_w(ints, b, 2)
-    (1 <= lkey <= totkey) || throw(SpiceError(:indexoutofrange,
-        "Key = $lkey; valid range = 1:$totkey. Tree = $tree, file = $(h.path)"))
+    (1 <= lkey <= totkey) || throw(
+        SpiceError(
+            :indexoutofrange,
+            "Key = $lkey; valid range = 1:$totkey. Tree = $tree, file = $(h.path)"
+        )
+    )
     prev = _ek_lstlei(ints, b + 6, _ekw_w(ints, b, 4), lkey)
     prvkey = prev > 0 ? _ekw_w(ints, b, prev + 4) : 0
     prvkey == lkey && return (0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -344,9 +362,13 @@ function _ekw_trpi(h::DASHandle, tree::Integer, key::Integer)
             child = _ekw_w(ints, b, prev + 64)
         end
     end
-    found || throw(SpiceError(:itemnotfound, "Key $lkey; valid range = 1:$totkey. Tree = " *
-        "$tree, file = $(h.path).  Key was not found.  This probably indicates a corrupted " *
-        "file or a bug in the EK code."))
+    found || throw(
+        SpiceError(
+            :itemnotfound, "Key $lkey; valid range = 1:$totkey. Tree = " *
+                "$tree, file = $(h.path).  Key was not found.  This probably indicates a corrupted " *
+                "file or a bug in the EK code."
+        )
+    )
     return (parent, pkey, poffst, lpidx, lpkey, lsib, rpidx, rpkey, rsib)
 end
 
@@ -359,10 +381,14 @@ The absolute value of key number `n` of the node that holds the key `nodkey`
 function _ekw_trki(h::DASHandle, tree::Integer, nodkey::Integer, n::Integer)
     _, node, noffst, _, level = _ek_trlk(h.ints, tree, nodkey)
     size = _ekw_trnk(h, tree, node)
-    (0 <= n <= size) || throw(SpiceError(:invalidindex,
-        "Key index = $n; valid range in node $node is 1:$size"))
+    (0 <= n <= size) || throw(
+        SpiceError(
+            :invalidindex,
+            "Key index = $n; valid range in node $node is 1:$size"
+        )
+    )
     base = _ek_ibase(node)
-    return Int(h.ints[base+(level == 1 ? 5 : 1)+n]) + noffst
+    return Int(h.ints[base + (level == 1 ? 5 : 1) + n]) + noffst
 end
 
 """
@@ -378,13 +404,13 @@ function _ekw_trsb(h::DASHandle, tree::Integer, key::Integer)
     lkey = 0
     rkey = 0
     if lpidx > 1
-        loffst = Int(ints[_ek_ibase(parent)+keybas+lpidx-1]) + poffst
-        lkey = Int(ints[_ek_ibase(lsib)+2]) + loffst
+        loffst = Int(ints[_ek_ibase(parent) + keybas + lpidx - 1]) + poffst
+        lkey = Int(ints[_ek_ibase(lsib) + 2]) + loffst
     elseif lpidx == 1
-        lkey = Int(ints[_ek_ibase(lsib)+2]) + poffst
+        lkey = Int(ints[_ek_ibase(lsib) + 2]) + poffst
     end
     if rpidx > 0
-        rkey = Int(ints[_ek_ibase(rsib)+2]) + rpkey + poffst
+        rkey = Int(ints[_ek_ibase(rsib) + 2]) + rpkey + poffst
     end
     return lsib, lkey, rsib, rkey
 end
@@ -406,10 +432,10 @@ end
 function _ekw_trit(h::DASHandle)
     p, base = _ekw_pgal(h, 3)
     ints = h.ints
-    fill!(view(ints, base+1:base+256), Int32(0))
-    ints[base+_EK_TRTYPE] = 1
-    ints[base+_EK_TRNNOD] = 1
-    ints[base+_EK_TRDPTH] = 1
+    fill!(view(ints, (base + 1):(base + 256)), Int32(0))
+    ints[base + _EK_TRTYPE] = 1
+    ints[base + _EK_TRNNOD] = 1
+    ints[base + _EK_TRDPTH] = 1
     return p
 end
 
@@ -424,8 +450,12 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
     root = Int(tree)
     rpage = _ekw_pgri(h, root)
     totkey = rpage[2]
-    (1 <= key <= totkey + 1) || throw(SpiceError(:invalidindex,
-        "Key = $key. Valid range is 1:$(totkey + 1).  File = $(h.path)."))
+    (1 <= key <= totkey + 1) || throw(
+        SpiceError(
+            :invalidindex,
+            "Key = $key. Valid range is 1:$(totkey + 1).  File = $(h.path)."
+        )
+    )
     nnode = rpage[1]
     depth = rpage[3]
     if nnode == 1
@@ -433,15 +463,15 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         rpage[2] = nkeys + 1
         rpage[4] = nkeys + 1
         for i in nkeys:-1:key
-            rpage[i+5] = rpage[i+4] + 1
-            rpage[i+172] = rpage[i+171]
+            rpage[i + 5] = rpage[i + 4] + 1
+            rpage[i + 172] = rpage[i + 171]
         end
-        for i in nkeys+1:-1:key
-            rpage[i+88] = rpage[i+87]
+        for i in (nkeys + 1):-1:key
+            rpage[i + 88] = rpage[i + 87]
         end
-        rpage[key+4] = key
-        rpage[key+171] = value
-        rpage[key+87] = 0
+        rpage[key + 4] = key
+        rpage[key + 171] = value
+        rpage[key + 87] = 0
         nkeys += 1
         _ekw_pgwi(h, root, rpage)
         return nkeys == 83
@@ -452,9 +482,9 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         keyloc = nkeys + 2
         datloc = nkeys + 129
         kidloc = nkeys + 65
-        tpage[keyloc-1] = tpage[keyloc-2] + 1
-        tpage[datloc-1] = value
-        tpage[kidloc-1] = 0
+        tpage[keyloc - 1] = tpage[keyloc - 2] + 1
+        tpage[datloc - 1] = value
+        tpage[kidloc - 1] = 0
         tpage[0] = tpage[0] + 1
         rpage[2] = totkey + 1
         _ekw_pgwi(h, root, rpage)
@@ -467,18 +497,22 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         parent, pkey, _, _, _, _, rpidx, _, _ = _ekw_trpi(h, tree, key)
         tpage = _ekw_pgri(h, target)
         tnkeys = tpage[0]
-        tnkeys > 62 && throw(SpiceError(:nodetoofull, "Node = $target. Tree = $tree. File = " *
-            "$(h.path). Key count = $tnkeys; max allowed, including overflow, is 63."))
+        tnkeys > 62 && throw(
+            SpiceError(
+                :nodetoofull, "Node = $target. Tree = $tree. File = " *
+                    "$(h.path). Key count = $tnkeys; max allowed, including overflow, is 63."
+            )
+        )
         for i in tnkeys:-1:next
-            tpage[i+1] = tpage[i] + 1
+            tpage[i + 1] = tpage[i] + 1
         end
         for i in tnkeys:-1:next
-            tpage[i+128] = tpage[i+127]
+            tpage[i + 128] = tpage[i + 127]
         end
-        for i in tnkeys+1:-1:next
-            tpage[i+64] = tpage[i+63]
+        for i in (tnkeys + 1):-1:next
+            tpage[i + 64] = tpage[i + 63]
         end
-        tpage[next+127] = value
+        tpage[next + 127] = value
     else
         # The key is not in a leaf: its predecessor is the last key of a leaf, and the
         # new key goes after that one.
@@ -486,11 +520,15 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         parent, pkey, _, _, _, _, rpidx, _, _ = _ekw_trpi(h, tree, key - 1)
         tpage = _ekw_pgri(h, target)
         tnkeys = tpage[0]
-        tnkeys > 63 && throw(SpiceError(:nodetoofull, "Node = $target. Tree = $tree. File = " *
-            "$(h.path). Key count = $tnkeys; max allowed, including overflow, is 63."))
-        tpage[prev+1] = prev + 1
-        tpage[prev+128] = value
-        tpage[prev+65] = 0
+        tnkeys > 63 && throw(
+            SpiceError(
+                :nodetoofull, "Node = $target. Tree = $tree. File = " *
+                    "$(h.path). Key count = $tnkeys; max allowed, including overflow, is 63."
+            )
+        )
+        tpage[prev + 1] = prev + 1
+        tpage[prev + 128] = value
+        tpage[prev + 65] = 0
     end
     tpage[0] = tnkeys + 1
     overfl = tnkeys == 62
@@ -512,7 +550,7 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
     end
     if rpidx > 0
         for i in rpidx:rpage[4]
-            rpage[i+4] = rpage[i+4] + 1
+            rpage[i + 4] = rpage[i + 4] + 1
         end
     end
     rpage[2] = totkey + 1
@@ -544,12 +582,12 @@ function _ekw_tr13(h::DASHandle, tree::Integer)
     _ekw_move!(c2page, 1, rpage, middle + 5, 41)
     _ekw_move!(c2page, 128, rpage, middle + 172, 41)
     _ekw_move!(c2page, 64, rpage, middle + 88, 42)
-    delta = rpage[middle+4]
+    delta = rpage[middle + 4]
     for i in 1:41
         c2page[i] = c2page[i] - delta
     end
-    rpage[5] = rpage[middle+4]
-    rpage[172] = rpage[middle+171]
+    rpage[5] = rpage[middle + 4]
+    rpage[172] = rpage[middle + 171]
     rpage[88] = child1
     rpage[89] = child2
     rpage[4] = 1
@@ -567,13 +605,17 @@ end
 "Key, data and child bases (0-based offsets) of a node: the root or another node."
 @inline _ekw_bases(isroot::Bool) = isroot ? (5, 172, 88) : (1, 128, 64)
 
-@inline function _ekw_sibling_check(ppage::_ekw_Page, kidbas::Int, pkidx::Int, left::Int,
-        right::Int, parent::Int)
-    lsib = ppage[kidbas+pkidx-1]
-    rsib = ppage[kidbas+pkidx]
-    (lsib == left && rsib == right) || _ekw_bug("LEFT, RIGHT, PARENT, and PKIDX are " *
-        "inconsistent. LEFT = $left; RIGHT = $right; PARENT = $parent; PKIDX = $pkidx; " *
-        "LSIB derived from PARENT = $lsib; RSIB = $rsib.")
+@inline function _ekw_sibling_check(
+        ppage::_ekw_Page, kidbas::Int, pkidx::Int, left::Int,
+        right::Int, parent::Int
+    )
+    lsib = ppage[kidbas + pkidx - 1]
+    rsib = ppage[kidbas + pkidx]
+    (lsib == left && rsib == right) || _ekw_bug(
+        "LEFT, RIGHT, PARENT, and PKIDX are " *
+            "inconsistent. LEFT = $left; RIGHT = $right; PARENT = $parent; PKIDX = $pkidx; " *
+            "LSIB derived from PARENT = $lsib; RSIB = $rsib."
+    )
     return nothing
 end
 
@@ -582,7 +624,7 @@ end
     if parent == root
         ppage[1] = ppage[1] + delta
     else
-        h.ints[_ek_ibase(root)+2] += delta
+        h.ints[_ek_ibase(root) + 2] += delta
     end
     return nothing
 end
@@ -607,45 +649,47 @@ function _ekw_tr23(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     _ekw_sibling_check(ppage, kidbas, pkidx, left, right, parent)
     nlkeys = c1page[0]
     nrkeys = c2page[0]
-    nlkeys + nrkeys == 125 || _ekw_bug("Number of keys in LEFT = $nlkeys; number of keys " *
-        "in right = $nrkeys; but sum should be 125.")
+    nlkeys + nrkeys == 125 || _ekw_bug(
+        "Number of keys in LEFT = $nlkeys; number of keys " *
+            "in right = $nrkeys; but sum should be 125."
+    )
     new, _ = _ekw_pgal(h, 3)
     c3page = _ekw_Page()
     lshift = nlkeys - (lsize + 1)
-    ldelta = c1page[lsize+1]
+    ldelta = c1page[lsize + 1]
     for i in 1:lshift
-        c3page[i] = c1page[lsize+2+i-1] - ldelta
+        c3page[i] = c1page[lsize + 2 + i - 1] - ldelta
     end
     _ekw_move!(c3page, 128, c1page, lsize + 129, lshift)
     _ekw_move!(c3page, 64, c1page, lsize + 65, lshift + 1)
-    ltrsiz = pkidx == 1 ? ppage[keybas] - 1 : ppage[keybas+pkidx-1] - ppage[keybas+pkidx-2] - 1
+    ltrsiz = pkidx == 1 ? ppage[keybas] - 1 : ppage[keybas + pkidx - 1] - ppage[keybas + pkidx - 2] - 1
     lnmove = ltrsiz - ldelta
-    c3page[lshift+1] = lnmove + 1
-    c3page[lshift+128] = ppage[datbas+pkidx-1]
+    c3page[lshift + 1] = lnmove + 1
+    c3page[lshift + 128] = ppage[datbas + pkidx - 1]
     rshift = nrkeys - (rsize + 1)
     rdelta = lnmove + 1
     for i in 1:rshift
-        c3page[lshift+2+i-1] = c2page[i] + rdelta
+        c3page[lshift + 2 + i - 1] = c2page[i] + rdelta
     end
     _ekw_move!(c3page, lshift + 129, c2page, 128, rshift)
     _ekw_move!(c3page, lshift + 65, c2page, 64, rshift + 1)
-    rnmove = c2page[rshift+1] - 1
+    rnmove = c2page[rshift + 1] - 1
     c3page[0] = msize
     npkeys = parent == root ? ppage[4] : ppage[0]
-    for i in npkeys:-1:pkidx+1
-        ppage[keybas+i] = ppage[keybas+i-1]
+    for i in npkeys:-1:(pkidx + 1)
+        ppage[keybas + i] = ppage[keybas + i - 1]
     end
-    for i in npkeys:-1:pkidx+1
-        ppage[datbas+i] = ppage[datbas+i-1]
+    for i in npkeys:-1:(pkidx + 1)
+        ppage[datbas + i] = ppage[datbas + i - 1]
     end
-    for i in npkeys+1:-1:pkidx+1
-        ppage[kidbas+i] = ppage[kidbas+i-1]
+    for i in (npkeys + 1):-1:(pkidx + 1)
+        ppage[kidbas + i] = ppage[kidbas + i - 1]
     end
-    ppage[datbas+pkidx-1] = c1page[lsize+128]
-    ppage[keybas+pkidx-1] = pkidx == 1 ? ldelta : ppage[keybas+pkidx-2] + ldelta
-    ppage[datbas+pkidx] = c2page[rshift+128]
-    ppage[keybas+pkidx] = ppage[keybas+pkidx-1] + lnmove + rnmove + 2
-    ppage[kidbas+pkidx] = new
+    ppage[datbas + pkidx - 1] = c1page[lsize + 128]
+    ppage[keybas + pkidx - 1] = pkidx == 1 ? ldelta : ppage[keybas + pkidx - 2] + ldelta
+    ppage[datbas + pkidx] = c2page[rshift + 128]
+    ppage[keybas + pkidx] = ppage[keybas + pkidx - 1] + lnmove + rnmove + 2
+    ppage[kidbas + pkidx] = new
     local overfl::Bool
     if parent == root
         ppage[4] = ppage[4] + 1
@@ -659,13 +703,13 @@ function _ekw_tr23(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     _ekw_clear!(c1page, lsize + 128, 63 - lsize)
     _ekw_clear!(c1page, lsize + 65, 64 - (lsize + 1))
     for i in 1:rsize
-        c2page[i] = c2page[rshift+2+i-1] - (rnmove + 1)
+        c2page[i] = c2page[rshift + 2 + i - 1] - (rnmove + 1)
     end
     for i in 1:rsize
-        c2page[i+127] = c2page[rshift+129+i-1]
+        c2page[i + 127] = c2page[rshift + 129 + i - 1]
     end
-    for i in 1:rsize+1
-        c2page[i+63] = c2page[rshift+65+i-1]
+    for i in 1:(rsize + 1)
+        c2page[i + 63] = c2page[rshift + 65 + i - 1]
     end
     c2page[0] = rsize
     _ekw_clear!(c2page, rsize + 1, 63 - rsize)
@@ -687,8 +731,10 @@ right sibling `right` (`zzektrrk`); a negative `nrot` rotates to the left. Preco
 both nodes keep 40 to 63 keys, else `SpiceError(:bug)`. The words of a node after its
 last key are not cleared, as in CSPICE.
 """
-function _ekw_trrk(h::DASHandle, tree::Integer, left::Int, right::Int, parent::Int,
-        pkidx::Int, nrot::Int)
+function _ekw_trrk(
+        h::DASHandle, tree::Integer, left::Int, right::Int, parent::Int,
+        pkidx::Int, nrot::Int
+    )
     nrot == 0 && return nothing
     root = Int(tree)
     (left == root || right == root) &&
@@ -701,39 +747,43 @@ function _ekw_trrk(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     lnkeys = lpage[0]
     rnkeys = rpage[0]
     if nrot > 0
-        (lnkeys - nrot < 40 || rnkeys + nrot > 63) && _ekw_bug("Node $left and right sibling " *
-            "$right contain $lnkeys and $rnkeys keys respectively; rotation of $nrot keys " *
-            "to the right will violate the key count bounds of 40:63.")
+        (lnkeys - nrot < 40 || rnkeys + nrot > 63) && _ekw_bug(
+            "Node $left and right sibling " *
+                "$right contain $lnkeys and $rnkeys keys respectively; rotation of $nrot keys " *
+                "to the right will violate the key count bounds of 40:63."
+        )
     else
-        (lnkeys - nrot > 63 || rnkeys + nrot < 40) && _ekw_bug("Node $left and right sibling " *
-            "$right contain $lnkeys and $rnkeys keys respectively; rotation of $(-nrot) " *
-            "keys to the left will violate the key count bounds of 40:63.")
+        (lnkeys - nrot > 63 || rnkeys + nrot < 40) && _ekw_bug(
+            "Node $left and right sibling " *
+                "$right contain $lnkeys and $rnkeys keys respectively; rotation of $(-nrot) " *
+                "keys to the left will violate the key count bounds of 40:63."
+        )
     end
-    lnsize = pkidx == 1 ? ppage[keybas] - 1 : ppage[keybas+pkidx-1] - ppage[keybas+pkidx-2] - 1
+    lnsize = pkidx == 1 ? ppage[keybas] - 1 : ppage[keybas + pkidx - 1] - ppage[keybas + pkidx - 2] - 1
     if nrot > 0
         schlep = nrot
         remain = lnkeys - schlep
-        futrpk = lpage[remain+1]
+        futrpk = lpage[remain + 1]
         subsiz = lnsize - futrpk
         drotat = -futrpk
         dshift = subsiz + 1
         nvopar = dshift
         dpar = -dshift
         for i in rnkeys:-1:1
-            rpage[i+1+schlep-1] = rpage[i] + dshift
+            rpage[i + 1 + schlep - 1] = rpage[i] + dshift
         end
         for i in rnkeys:-1:1
-            rpage[i+128+schlep-1] = rpage[i+127]
+            rpage[i + 128 + schlep - 1] = rpage[i + 127]
         end
-        for i in rnkeys+1:-1:1
-            rpage[i+64+schlep-1] = rpage[i+63]
+        for i in (rnkeys + 1):-1:1
+            rpage[i + 64 + schlep - 1] = rpage[i + 63]
         end
         rpage[schlep] = nvopar
-        rpage[schlep+127] = ppage[datbas+pkidx-1]
-        ppage[datbas+pkidx-1] = lpage[remain+128]
-        ppage[keybas+pkidx-1] = ppage[keybas+pkidx-1] + dpar
-        for i in 1:schlep-1
-            rpage[i] = lpage[remain+2+i-1] + drotat
+        rpage[schlep + 127] = ppage[datbas + pkidx - 1]
+        ppage[datbas + pkidx - 1] = lpage[remain + 128]
+        ppage[keybas + pkidx - 1] = ppage[keybas + pkidx - 1] + dpar
+        for i in 1:(schlep - 1)
+            rpage[i] = lpage[remain + 2 + i - 1] + drotat
         end
         _ekw_move!(rpage, 128, lpage, remain + 129, schlep - 1)
         _ekw_move!(rpage, 64, lpage, remain + 65, schlep)
@@ -748,24 +798,24 @@ function _ekw_trrk(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
         dshift = -(subsiz + 1)
         nvopar = drotat
         dpar = -dshift
-        lpage[lnkeys+1] = nvopar
-        lpage[lnkeys+128] = ppage[datbas+pkidx-1]
-        ppage[datbas+pkidx-1] = rpage[schlep+127]
-        ppage[keybas+pkidx-1] = ppage[keybas+pkidx-1] + dpar
+        lpage[lnkeys + 1] = nvopar
+        lpage[lnkeys + 128] = ppage[datbas + pkidx - 1]
+        ppage[datbas + pkidx - 1] = rpage[schlep + 127]
+        ppage[keybas + pkidx - 1] = ppage[keybas + pkidx - 1] + dpar
         _ekw_move!(lpage, lnkeys + 2, rpage, 1, schlep - 1)
         _ekw_move!(lpage, lnkeys + 129, rpage, 128, schlep - 1)
         _ekw_move!(lpage, lnkeys + 65, rpage, 64, schlep)
-        for i in 1:schlep-1
-            lpage[lnkeys+2+i-1] = lpage[lnkeys+2+i-1] + drotat
+        for i in 1:(schlep - 1)
+            lpage[lnkeys + 2 + i - 1] = lpage[lnkeys + 2 + i - 1] + drotat
         end
         for i in 1:remain
-            rpage[i] = rpage[i+1+schlep-1] + dshift
+            rpage[i] = rpage[i + 1 + schlep - 1] + dshift
         end
         for i in 1:remain
-            rpage[i+127] = rpage[i+128+schlep-1]
+            rpage[i + 127] = rpage[i + 128 + schlep - 1]
         end
-        for i in 1:remain+1
-            rpage[i+63] = rpage[i+64+schlep-1]
+        for i in 1:(remain + 1)
+            rpage[i + 63] = rpage[i + 64 + schlep - 1]
         end
         lpage[0] = lpage[0] + schlep
         rpage[0] = rpage[0] - schlep
@@ -788,10 +838,12 @@ function _ekw_trbn(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     lnkeys = _ekw_trnk(h, tree, left)
     rnkeys = _ekw_trnk(h, tree, right)
     sum = lnkeys + rnkeys
-    (82 <= sum <= 124) || _ekw_bug("Node $left and right sibling $right contain $lnkeys " *
-        "and $rnkeys keys respectively; count sum should be in range 82:124.")
+    (82 <= sum <= 124) || _ekw_bug(
+        "Node $left and right sibling $right contain $lnkeys " *
+            "and $rnkeys keys respectively; count sum should be in range 82:124."
+    )
     schlep = lnkeys > rnkeys ? lnkeys - (sum + 1) ÷ 2 :
-             lnkeys < rnkeys ? -(rnkeys - (sum + 1) ÷ 2) : 0
+        lnkeys < rnkeys ? -(rnkeys - (sum + 1) ÷ 2) : 0
     _ekw_trrk(h, tree, left, right, parent, pkidx, schlep)
     return nothing
 end
@@ -847,7 +899,7 @@ function _ekw_trin(h::DASHandle, tree::Integer, key::Integer, value::Integer)
         elseif state == 5
             # `trust` is a key that stays in the same child of `parent` after the split.
             trust = node == lnode ? _ekw_trki(h, tree, lkey, 1) :
-                    _ekw_trki(h, tree, lkey, _ekw_trnk(h, tree, node))
+                _ekw_trki(h, tree, lkey, _ekw_trnk(h, tree, node))
             if _ekw_tr23(h, tree, lnode, rnode, parent, pkidx)
                 if parent == root
                     state = 6
@@ -890,24 +942,28 @@ function _ekw_trud(h::DASHandle, tree::Integer, key::Int)
     root = Int(tree)
     rpage = _ekw_pgri(h, root)
     totkey = rpage[2]
-    (1 <= key <= totkey) || throw(SpiceError(:invalidindex,
-        "Key = $key. Valid range is 1:$totkey.  File = $(h.path)."))
+    (1 <= key <= totkey) || throw(
+        SpiceError(
+            :invalidindex,
+            "Key = $key. Valid range is 1:$totkey.  File = $(h.path)."
+        )
+    )
     nnode = rpage[1]
     depth = rpage[3]
     if nnode == 1
         nkeys = totkey
         rpage[2] = nkeys - 1
         rpage[4] = nkeys - 1
-        for i in key:nkeys-1
-            rpage[i+4] = rpage[i+5] - 1
-            rpage[i+171] = rpage[i+172]
+        for i in key:(nkeys - 1)
+            rpage[i + 4] = rpage[i + 5] - 1
+            rpage[i + 171] = rpage[i + 172]
         end
         for i in key:nkeys
-            rpage[i+87] = rpage[i+88]
+            rpage[i + 87] = rpage[i + 88]
         end
-        rpage[nkeys+4] = 0
-        rpage[nkeys+171] = 0
-        rpage[nkeys+88] = 0
+        rpage[nkeys + 4] = 0
+        rpage[nkeys + 171] = 0
+        rpage[nkeys + 88] = 0
         nkeys -= 1
         trgkey = nkeys > 0 ? rpage[5] : 0
         _ekw_pgwi(h, root, rpage)
@@ -917,8 +973,8 @@ function _ekw_trud(h::DASHandle, tree::Integer, key::Int)
         tpage = _ekw_pgri(h, target)
         nkeys = tpage[0]
         tpage[nkeys] = 0
-        tpage[nkeys+127] = 0
-        tpage[nkeys+64] = 0
+        tpage[nkeys + 127] = 0
+        tpage[nkeys + 64] = 0
         tpage[0] = tpage[0] - 1
         rpage[2] = totkey - 1
         trgkey = tpage[1] + toffst
@@ -933,16 +989,18 @@ function _ekw_trud(h::DASHandle, tree::Integer, key::Int)
         parent, pkey, _, _, _, _, rpidx, _, _ = _ekw_trpi(h, tree, key)
         _ekw_pgri!(tpage, h, target)
         tnkeys = tpage[0]
-        tnkeys < 41 && _ekw_bug("Node = $target. Tree = $tree. File = $(h.path). Key count " *
-            "= $tnkeys; max allowed, including overflow, is 41.")
-        for i in keyidx:tnkeys-1
-            tpage[i] = tpage[i+1] - 1
+        tnkeys < 41 && _ekw_bug(
+            "Node = $target. Tree = $tree. File = $(h.path). Key count " *
+                "= $tnkeys; max allowed, including overflow, is 41."
+        )
+        for i in keyidx:(tnkeys - 1)
+            tpage[i] = tpage[i + 1] - 1
         end
-        for i in keyidx:tnkeys-1
-            tpage[i+127] = tpage[i+128]
+        for i in keyidx:(tnkeys - 1)
+            tpage[i + 127] = tpage[i + 128]
         end
         for i in keyidx:tnkeys
-            tpage[i+63] = tpage[i+64]
+            tpage[i + 63] = tpage[i + 64]
         end
         tpage[0] = tnkeys - 1
         undrfl = tnkeys == 41
@@ -953,15 +1011,15 @@ function _ekw_trud(h::DASHandle, tree::Integer, key::Int)
         parent, pkey, _, _, _, _, rpidx, _, _ = _ekw_trpi(h, tree, key - 1)
         lpage = _ekw_pgri(h, leaf)
         if target == root
-            rpage[keyidx+171] = lpage[prev+127]
+            rpage[keyidx + 171] = lpage[prev + 127]
         else
             _ekw_pgri!(tpage, h, target)
-            tpage[keyidx+127] = lpage[prev+127]
+            tpage[keyidx + 127] = lpage[prev + 127]
         end
         nlkeys = lpage[0]
-        for i in prev:nlkeys-1
-            lpage[i] = lpage[i+1] - 1
-            lpage[i+127] = lpage[i+128]
+        for i in prev:(nlkeys - 1)
+            lpage[i] = lpage[i + 1] - 1
+            lpage[i + 127] = lpage[i + 128]
         end
         lpage[0] = nlkeys - 1
         undrfl = nlkeys == 41
@@ -985,7 +1043,7 @@ function _ekw_trud(h::DASHandle, tree::Integer, key::Int)
     end
     if rpidx > 0
         for i in rpidx:rpage[4]
-            rpage[i+4] = rpage[i+4] - 1
+            rpage[i + 4] = rpage[i + 4] - 1
         end
     end
     rpage[2] = totkey - 1
@@ -1011,17 +1069,19 @@ function _ekw_tr31(h::DASHandle, tree::Integer)
     c2page = _ekw_pgri(h, child2)
     nlkeys = c1page[0]
     nrkeys = c2page[0]
-    nlkeys + nrkeys == 81 || _ekw_bug("Number of keys in nodes LEFT = $nlkeys; in RIGHT = " *
-        "$nrkeys; counts summing to 81 were expected.")
-    rpage[nlkeys+5] = rpage[5]
-    rpage[nlkeys+172] = rpage[172]
+    nlkeys + nrkeys == 81 || _ekw_bug(
+        "Number of keys in nodes LEFT = $nlkeys; in RIGHT = " *
+            "$nrkeys; counts summing to 81 were expected."
+    )
+    rpage[nlkeys + 5] = rpage[5]
+    rpage[nlkeys + 172] = rpage[172]
     _ekw_move!(rpage, 5, c1page, 1, nlkeys)
     _ekw_move!(rpage, 172, c1page, 128, nlkeys)
     _ekw_move!(rpage, 88, c1page, 64, nlkeys + 1)
     middle = nlkeys + 1
-    delta = rpage[middle+4]
+    delta = rpage[middle + 4]
     for i in 1:nrkeys
-        rpage[middle+5+i-1] = c2page[i] + delta
+        rpage[middle + 5 + i - 1] = c2page[i] + delta
     end
     _ekw_move!(rpage, middle + 172, c2page, 128, nrkeys)
     _ekw_move!(rpage, middle + 88, c2page, 64, nrkeys + 1)
@@ -1042,8 +1102,10 @@ into `left` (61 keys) and `right` (62 keys), and free `middle` (`zzektr32`). `lp
 is the position in `parent` of the key between `left` and `middle`. The result tells
 that the parent now holds one key less than its lower bound (for the root: no key).
 """
-function _ekw_tr32(h::DASHandle, tree::Integer, left::Int, middle::Int, right::Int,
-        parent::Int, lpkidx::Int)
+function _ekw_tr32(
+        h::DASHandle, tree::Integer, left::Int, middle::Int, right::Int,
+        parent::Int, lpkidx::Int
+    )
     c1page = _ekw_pgri(h, left)
     c2page = _ekw_pgri(h, middle)
     c3page = _ekw_pgri(h, right)
@@ -1051,68 +1113,74 @@ function _ekw_tr32(h::DASHandle, tree::Integer, left::Int, middle::Int, right::I
     root = Int(tree)
     keybas, datbas, kidbas = _ekw_bases(parent == root)
     psize = parent == root ? ppage[4] : ppage[0]
-    (1 <= lpkidx <= psize - 1) || _ekw_bug("Left parent key of MIDDLE is out of range.  " *
-        "Value is $lpkidx; valid range is 1:$(psize - 1)")
-    lpkey = ppage[keybas+lpkidx-1]
-    rpkey = ppage[keybas+lpkidx]
-    lsib = ppage[kidbas+lpkidx-1]
-    msib = ppage[kidbas+lpkidx]
-    rsib = ppage[kidbas+lpkidx+1]
-    (lsib == left && msib == middle && rsib == right) || _ekw_bug("LEFT, RIGHT, MIDDLE, " *
-        "PARENT, and PKIDX are inconsistent. LEFT = $left; MIDDLE = $middle; RIGHT = " *
-        "$right; PARENT = $parent; LPKIDX = $lpkidx; LSIB derived from PARENT = $lsib; " *
-        "MSIB = $msib; RSIB = $rsib.")
+    (1 <= lpkidx <= psize - 1) || _ekw_bug(
+        "Left parent key of MIDDLE is out of range.  " *
+            "Value is $lpkidx; valid range is 1:$(psize - 1)"
+    )
+    lpkey = ppage[keybas + lpkidx - 1]
+    rpkey = ppage[keybas + lpkidx]
+    lsib = ppage[kidbas + lpkidx - 1]
+    msib = ppage[kidbas + lpkidx]
+    rsib = ppage[kidbas + lpkidx + 1]
+    (lsib == left && msib == middle && rsib == right) || _ekw_bug(
+        "LEFT, RIGHT, MIDDLE, " *
+            "PARENT, and PKIDX are inconsistent. LEFT = $left; MIDDLE = $middle; RIGHT = " *
+            "$right; PARENT = $parent; LPKIDX = $lpkidx; LSIB derived from PARENT = $lsib; " *
+            "MSIB = $msib; RSIB = $rsib."
+    )
     npkeys = psize
     nlkeys = c1page[0]
     nmkeys = c2page[0]
     nrkeys = c3page[0]
-    nlkeys + nmkeys + nrkeys == 122 || _ekw_bug("Number of keys in nodes LEFT = $nlkeys; " *
-        "in MIDDLE = $nmkeys; in RIGHT = $nrkeys; counts summing to 122 were expected.")
-    leftsz = lpkidx == 1 ? lpkey - 1 : lpkey - ppage[keybas+lpkidx-2] - 1
+    nlkeys + nmkeys + nrkeys == 122 || _ekw_bug(
+        "Number of keys in nodes LEFT = $nlkeys; " *
+            "in MIDDLE = $nmkeys; in RIGHT = $nrkeys; counts summing to 122 were expected."
+    )
+    leftsz = lpkidx == 1 ? lpkey - 1 : lpkey - ppage[keybas + lpkidx - 2] - 1
     n = 61 - (nlkeys + 1) + 1
     lmidsz = c2page[n] - 1
     midsiz = rpkey - lpkey - 1
     rmidsz = midsiz - lmidsz - 1
-    c1page[nlkeys+1] = leftsz + 1
-    c1page[nlkeys+128] = ppage[datbas+lpkidx-1]
-    for i in 1:n-1
-        c1page[nlkeys+2+i-1] = c2page[i] + leftsz + 1
+    c1page[nlkeys + 1] = leftsz + 1
+    c1page[nlkeys + 128] = ppage[datbas + lpkidx - 1]
+    for i in 1:(n - 1)
+        c1page[nlkeys + 2 + i - 1] = c2page[i] + leftsz + 1
     end
     _ekw_move!(c1page, nlkeys + 129, c2page, 128, n - 1)
     _ekw_move!(c1page, nlkeys + 65, c2page, 64, n)
     c1page[0] = 61
     rshift = nmkeys - n + 1
     for i in nrkeys:-1:1
-        c3page[rshift+1+i-1] = c3page[i] + rmidsz + 1
+        c3page[rshift + 1 + i - 1] = c3page[i] + rmidsz + 1
     end
     for i in nrkeys:-1:1
-        c3page[rshift+128+i-1] = c3page[i+127]
+        c3page[rshift + 128 + i - 1] = c3page[i + 127]
     end
-    for i in nrkeys+1:-1:1
-        c3page[rshift+64+i-1] = c3page[i+63]
+    for i in (nrkeys + 1):-1:1
+        c3page[rshift + 64 + i - 1] = c3page[i + 63]
     end
     c3page[rshift] = rmidsz + 1
-    c3page[rshift+127] = ppage[datbas+lpkidx]
-    for i in 1:rshift-1
-        c3page[i] = c2page[n+1+i-1] - lmidsz - 1
+    c3page[rshift + 127] = ppage[datbas + lpkidx]
+    for i in 1:(rshift - 1)
+        c3page[i] = c2page[n + 1 + i - 1] - lmidsz - 1
     end
     _ekw_move!(c3page, 128, c2page, n + 128, rshift - 1)
     _ekw_move!(c3page, 64, c2page, n + 64, rshift)
     c3page[0] = 62
-    ppage[keybas+lpkidx-1] = lpkey + lmidsz + 1
-    ppage[datbas+lpkidx-1] = c2page[n+127]
-    for i in lpkidx+1:npkeys-1
-        ppage[keybas+i-1] = ppage[keybas+i]
+    ppage[keybas + lpkidx - 1] = lpkey + lmidsz + 1
+    ppage[datbas + lpkidx - 1] = c2page[n + 127]
+    for i in (lpkidx + 1):(npkeys - 1)
+        ppage[keybas + i - 1] = ppage[keybas + i]
     end
-    for i in lpkidx+1:npkeys-1
-        ppage[datbas+i-1] = ppage[datbas+i]
+    for i in (lpkidx + 1):(npkeys - 1)
+        ppage[datbas + i - 1] = ppage[datbas + i]
     end
-    for i in lpkidx+1:npkeys
-        ppage[kidbas+i-1] = ppage[kidbas+i]
+    for i in (lpkidx + 1):npkeys
+        ppage[kidbas + i - 1] = ppage[kidbas + i]
     end
-    ppage[keybas+npkeys-1] = 0
-    ppage[datbas+npkeys-1] = 0
-    ppage[kidbas+npkeys] = 0
+    ppage[keybas + npkeys - 1] = 0
+    ppage[datbas + npkeys - 1] = 0
+    ppage[kidbas + npkeys] = 0
     local undrfl::Bool
     if parent == root
         ppage[4] = ppage[4] - 1
@@ -1267,8 +1335,12 @@ files are equal.
 function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer})
     size = length(values)
     tsize = _ek_trsz(h.ints, tree)
-    tsize > 0 && throw(SpiceError(:nonemptytree,
-        "Tree has size $tsize; should be empty.EK = $(h.path); TREE = $tree."))
+    tsize > 0 && throw(
+        SpiceError(
+            :nonemptytree,
+            "Tree has size $tsize; should be empty.EK = $(h.path); TREE = $tree."
+        )
+    )
     tsize = 82
     d = 1
     s = 1
@@ -1277,8 +1349,12 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
         s = d == 2 ? 82 : s * 63 + 83
         tsize = s * 62 + 82
     end
-    d > _EK_TRMXDP && throw(SpiceError(:counttoolarge, "Tree has depth $d; max supported " *
-        "depth is $_EK_TRMXDP.EK = $(h.path); TREE = $tree."))
+    d > _EK_TRMXDP && throw(
+        SpiceError(
+            :counttoolarge, "Tree has depth $d; max supported " *
+                "depth is $_EK_TRMXDP.EK = $(h.path); TREE = $tree."
+        )
+    )
     stnode = zeros(Int, _EK_TRMXDP)
     stnkey = zeros(Int, _EK_TRMXDP)
     stlsiz = zeros(Int, _EK_TRMXDP)
@@ -1300,7 +1376,7 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
             if level == 1
                 if d > 1
                     nnodes = 0
-                    for _ in 1:d-1
+                    for _ in 1:(d - 1)
                         nnodes = nnodes * 63 + 1
                     end
                     maxsiz = nnodes * 62
@@ -1318,15 +1394,15 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
                 end
                 _ekw_pgri!(page, h, tree)
                 for i in 1:nkeys
-                    npred = i == 1 ? 0 : page[i+3]
+                    npred = i == 1 ? 0 : page[i + 3]
                     key = d > 1 ? (i <= nbig ? npred + bigsiz + 1 : npred + bigsiz) : i
-                    page[i+4] = key
-                    page[i+171] = values[key]
+                    page[i + 4] = key
+                    page[i + 171] = values[key]
                 end
                 totnod = 1
                 for i in 1:nkids
                     child, _ = _ekw_pgal(h, 3)
-                    page[i+87] = child
+                    page[i + 87] = child
                     totnod += 1
                 end
                 page[2] = size
@@ -1339,7 +1415,7 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
                 n = subsiz - 41
                 reqsiz = (n + 40) ÷ 41
                 nnodes = 0
-                for _ in 1:d-level
+                for _ in 1:(d - level)
                     nnodes = nnodes * 63 + 1
                 end
                 maxsiz = nnodes * 62
@@ -1360,14 +1436,14 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
                 end
                 nkeys = nkids - 1
                 for i in 1:nkeys
-                    npred = i == 1 ? basidx : basidx + page[i-1]
+                    npred = i == 1 ? basidx : basidx + page[i - 1]
                     key = i <= nbig ? npred + bigsiz + 1 : npred + bigsiz
                     page[i] = key - basidx
-                    page[i+127] = values[key]
+                    page[i + 127] = values[key]
                 end
                 for i in 1:nkids
                     child, _ = _ekw_pgal(h, 3)
-                    page[i+63] = child
+                    page[i + 63] = child
                     totnod += 1
                 end
                 page[0] = nkeys
@@ -1389,7 +1465,7 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
                 nkeys = subsiz
                 for i in 1:nkeys
                     page[i] = i
-                    page[i+127] = values[basidx+i]
+                    page[i + 127] = values[basidx + i]
                 end
                 page[0] = nkeys
                 _ekw_pgwi(h, node, page)
@@ -1408,13 +1484,13 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
         elseif next <= nkids
             stnext[level] = next + 1
             kidbas = level == 1 ? 88 : 64
-            node = page[kidbas+next-1]
+            node = page[kidbas + next - 1]
             subsiz = next <= nbig ? stlsiz[level] : stlsiz[level] - 1
             basidx = if next <= nbig + 1
                 stnbas[level] + (next - 1) * stlsiz[level] + (next - 1)
             else
                 stnbas[level] + nbig * stlsiz[level] + (next - nbig - 1) * (stlsiz[level] - 1) +
-                (next - 1)
+                    (next - 1)
             end
             level += 1
             next = 1
@@ -1432,7 +1508,7 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
             end
         end
     end
-    h.ints[_ek_ibase(tree)+2] = totnod
+    h.ints[_ek_ibase(tree) + 2] = totnod
     return nothing
 end
 
@@ -1445,8 +1521,12 @@ depth is at most 10, else `SpiceError(:invalidformat)`.
 function _ekw_trfr(h::DASHandle, tree::Integer)
     page = _ekw_pgri(h, tree)
     depth = page[3]
-    depth > _EK_TRMXDP && throw(SpiceError(:invalidformat, "Tree has depth $depth; max " *
-        "supported depth is $_EK_TRMXDP.EK = $(h.path); TREE = $tree."))
+    depth > _EK_TRMXDP && throw(
+        SpiceError(
+            :invalidformat, "Tree has depth $depth; max " *
+                "supported depth is $_EK_TRMXDP.EK = $(h.path); TREE = $tree."
+        )
+    )
     stack = zeros(Int, 3 * _EK_TRMXDP)
     level = 1
     remain = page[1]
@@ -1456,11 +1536,11 @@ function _ekw_trfr(h::DASHandle, tree::Integer)
     while remain > 0                     # invariant: `remain` nodes of the tree are not free
         if nkids > 0
             kidbas = level == 1 ? 88 : 64
-            stack[3level-2] = node
-            stack[3level-1] = nkids
+            stack[3level - 2] = node
+            stack[3level - 1] = nkids
             stack[3level] = first
             level += 1
-            node = page[kidbas+first-1]
+            node = page[kidbas + first - 1]
             _ekw_pgri!(page, h, node)
             nkids = level < depth ? page[0] + 1 : 0
             first = 1
@@ -1469,9 +1549,9 @@ function _ekw_trfr(h::DASHandle, tree::Integer)
             remain -= 1
             level -= 1
             if level > 0
-                node = stack[3level-2]
+                node = stack[3level - 2]
                 first = stack[3level] + 1
-                nkids = stack[3level-1] - 1
+                nkids = stack[3level - 1] - 1
                 _ekw_pgri!(page, h, node)
             end
         end

@@ -20,8 +20,10 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 "`badkpv_c` of CSPICE: its result, or the short error message as a lower-case symbol."
 function pw_oracle_badkpv(caller, name, comp, size, divby, type)
-    r = ccall((:badkpv_c, SPICE.libcspice), Cint, (Cstring, Cstring, Cstring, Cint, Cint, UInt8),
-        caller, name, comp, size, divby, UInt8(type))
+    r = ccall(
+        (:badkpv_c, SPICE.libcspice), Cint, (Cstring, Cstring, Cstring, Cint, Cint, UInt8),
+        caller, name, comp, size, divby, UInt8(type)
+    )
     ccall((:failed_c, SPICE.libcspice), Cint, ()) == 0 && return r != 0
     buf = zeros(UInt8, 64)
     ccall((:getmsg_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ptr{UInt8}), "SHORT", 64, buf)
@@ -58,10 +60,10 @@ function pw_pool_differences(ctx)
         if dtpool(ctx, name) != (n, type)
             push!(bad, name)
         elseif type === :N
-            gdpool(ctx, name) == SPICE.gdpool(name; room=n) || push!(bad, name)
+            gdpool(ctx, name) == SPICE.gdpool(name; room = n) || push!(bad, name)
             expool(ctx, name) || push!(bad, name)
         else
-            gcpool(ctx, name) == SPICE.gcpool(name; room=n, lenout=128) || push!(bad, name)
+            gcpool(ctx, name) == SPICE.gcpool(name; room = n, lenout = 128) || push!(bad, name)
             expool(ctx, name) && push!(bad, name)
         end
     end
@@ -78,12 +80,18 @@ end
 "Run the same operation on CSPICE (`fo`) and on Almanac (`fn`)."
 pw_both(fo, fn) = (fo(); fn(); nothing)
 
-group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.PCK11,
-    Kernels.MOON_TF, Kernels.DE440S) do
+group(
+    "18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.PCK11,
+    Kernels.MOON_TF, Kernels.DE440S
+) do
     rng = MersenneTwister(SEED + 18)
     ka = pw_kernel("a.tpc", ["PW_A = ( 1.0, 2.0, 3.0 )", "PW_SHARED = 10", "PW_TEXT = 'from a'"])
-    kb = pw_kernel("b.tpc", ["PW_B = ( 4.0, 5.0 )", "PW_SHARED = 20", "PW_SHARED += 21",
-        "PW_WATCHED = 7"])
+    kb = pw_kernel(
+        "b.tpc", [
+            "PW_B = ( 4.0, 5.0 )", "PW_SHARED = 20", "PW_SHARED += 21",
+            "PW_WATCHED = 7",
+        ]
+    )
     kc = pw_kernel("c.tpc", ["PW_C = 'c'", "PW_EDIT_D = -1.0", "PW_DATE = @2000-JAN-01/12:00:00"])
 
     @apart @testset "edits, furnsh, unload and kclear" begin
@@ -91,15 +99,17 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         oracle_load(set)
         ctx = neo_context(set)
         steps = 0
-        check(what) = (bad = pw_pool_differences(ctx); steps += 1;
+        check(what) = (
+            bad = pw_pool_differences(ctx); steps += 1;
             isempty(bad) || @info "pool differs after: $what" first(bad, 8);
-            @test isempty(bad); @test ktotal(ctx) == SPICE.ktotal("ALL"))
+            @test isempty(bad); @test ktotal(ctx) == SPICE.ktotal("ALL")
+        )
         check("load")
-        pw_both(() -> SPICE.pdpool("PW_EDIT_D", [1.5, -2.5, 1e300]), () -> pdpool(ctx, "PW_EDIT_D", [1.5, -2.5, 1e300]))
+        pw_both(() -> SPICE.pdpool("PW_EDIT_D", [1.5, -2.5, 1.0e300]), () -> pdpool(ctx, "PW_EDIT_D", [1.5, -2.5, 1.0e300]))
         pw_both(() -> SPICE.pipool("PW_EDIT_I", [1, -2, 3]), () -> pipool(ctx, "PW_EDIT_I", [1, -2, 3]))
         pw_both(() -> SPICE.pcpool("PW_EDIT_C", ["one", "two words", "x"]), () -> pcpool(ctx, "PW_EDIT_C", ["one", "two words", "x"]))
         check("pdpool, pipool, pcpool of new variables")
-        @test gdpool(ctx, "PW_EDIT_D") == [1.5, -2.5, 1e300]
+        @test gdpool(ctx, "PW_EDIT_D") == [1.5, -2.5, 1.0e300]
         @test gipool(ctx, "PW_EDIT_I") == [1, -2, 3]
         @test gcpool(ctx, "PW_EDIT_C") == ["one", "two words", "x"]
 
@@ -115,8 +125,10 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         check("dvpool")
         @test !expool(ctx, "PW_EDIT_I") && !SPICE.expool("PW_EDIT_I")
 
-        lines = ["PW_L1 = 1", "PW_L2 = ( 1.0, 2.0D0, 3E1 )", "PW_L3 = 'text'", "PW_L2 += 4",
-            "PW_L4 = ( 'a', 'b' )", "PW_L4 += 'c'", "PW_L5 = @2001-FEB-03", "PW_EDIT_D = 9.0"]
+        lines = [
+            "PW_L1 = 1", "PW_L2 = ( 1.0, 2.0D0, 3E1 )", "PW_L3 = 'text'", "PW_L2 += 4",
+            "PW_L4 = ( 'a', 'b' )", "PW_L4 += 'c'", "PW_L5 = @2001-FEB-03", "PW_EDIT_D = 9.0",
+        ]
         pw_both(() -> SPICE.lmpool(lines), () -> lmpool(ctx, lines))
         check("lmpool")
         pw_both(() -> SPICE.ldpool(kc), () -> ldpool(ctx, kc))
@@ -178,19 +190,25 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
     @apart @testset "random sequence of operations" begin
         SPICE.kclear()
         ctx = SpiceContext()
-        files = [pw_kernel("r$i.tpc", ["PW_R$(i) = $(i)", "PW_V$(i % 3) = ( $(i).5, 2.0 )",
-            "PW_S$(i % 2) = 'file $i'", "PW_V$(i % 3) += $(i)"]) for i in 1:6]
+        files = [
+            pw_kernel(
+                "r$i.tpc", [
+                    "PW_R$(i) = $(i)", "PW_V$(i % 3) = ( $(i).5, 2.0 )",
+                    "PW_S$(i % 2) = 'file $i'", "PW_V$(i % 3) += $(i)",
+                ]
+            ) for i in 1:6
+        ]
         loaded = String[]
         vars = ["PW_V0", "PW_V1", "PW_V2", "PW_S0", "PW_S1", "PW_X1", "PW_X2", "PW_X3"]
         nbad = 0
-        counts = Dict{Symbol,Int}()
+        counts = Dict{Symbol, Int}()
         # 150 operations reach each of the nine kinds with the seed of the suite (the
         # rarest, `clpool` and `kclear`, have a probability of 0.03 each: 4 and 2 times).
         nops = nsample(150, 400)
         for step in 1:nops
             r = rand(rng)
             op = r < 0.2 ? :pdpool : r < 0.35 ? :pcpool : r < 0.45 ? :pipool : r < 0.6 ? :dvpool :
-                 r < 0.7 ? :lmpool : r < 0.82 ? :furnsh : r < 0.94 ? :unload : r < 0.97 ? :clpool : :kclear
+                r < 0.7 ? :lmpool : r < 0.82 ? :furnsh : r < 0.94 ? :unload : r < 0.97 ? :clpool : :kclear
             counts[op] = get(counts, op, 0) + 1
             v = rand(rng, vars)
             if op === :pdpool
@@ -207,8 +225,16 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
             elseif op === :lmpool
                 x = ["$v = ( $(rand(rng, 1:9)), $(rand(rng, 1:9)) )", "$(rand(rng, vars)) += $(rand(rng, 1:9))"]
                 # `+=` on a character variable with a number is an error in both engines.
-                ok = try SPICE.lmpool(x); true catch e; e isa SPICE.SpiceError || rethrow(); false end
-                okn = try lmpool(ctx, x); true catch e; e isa Almanac.SpiceError || rethrow(); false end
+                ok = try
+                    SPICE.lmpool(x); true
+                catch e
+                    e isa SPICE.SpiceError || rethrow(); false
+                end
+                okn = try
+                    lmpool(ctx, x); true
+                catch e
+                    e isa Almanac.SpiceError || rethrow(); false
+                end
                 ok == okn || (nbad += 1)
                 (ok && okn) || (SPICE.kclear(); kclear(ctx); empty!(loaded))
             elseif op === :furnsh
@@ -230,8 +256,10 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
                 nbad <= 3 && @info "pool differs" step op bad ktotal(ctx) SPICE.ktotal("ALL")
             end
         end
-        println("  ", nops, " random operations ", sort!(collect(counts); by=first),
-            ", steps with a difference: ", nbad)
+        println(
+            "  ", nops, " random operations ", sort!(collect(counts); by = first),
+            ", steps with a difference: ", nbad
+        )
         @test nbad == 0
     end
 
@@ -240,11 +268,15 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         oracle_load(set)
         ctx = neo_context(set)
         ks = Almanac.kernelset(ctx)
-        long = ["PW_LONG = ( 'first part //', 'second part //', 'end.', 'alone', 'x //', 'y' )",
-            "PW_MARK = ( 'a -', 'b -', 'c', 'd' )", "PW_NUM = ( 1, 2 )"]
+        long = [
+            "PW_LONG = ( 'first part //', 'second part //', 'end.', 'alone', 'x //', 'y' )",
+            "PW_MARK = ( 'a -', 'b -', 'c', 'd' )", "PW_NUM = ( 1, 2 )",
+        ]
         pw_both(() -> SPICE.lmpool(long), () -> lmpool(ctx, long))
-        for name in ("BODY399_RADII", "FRAME_31008_NAME", "PW_A", "PW_TEXT", "NOT_THERE",
-            "body399_radii", "DELTET/DELTA_AT", "PW_LONG", "", "BODY399_RADII ")
+        for name in (
+                "BODY399_RADII", "FRAME_31008_NAME", "PW_A", "PW_TEXT", "NOT_THERE",
+                "body399_radii", "DELTET/DELTA_AT", "PW_LONG", "", "BODY399_RADII ",
+            )
             isempty(name) && continue
             @test expool(ctx, name) == SPICE.expool(name)
             @test dtpool(ctx, name) == SPICE.dtpool(name)
@@ -253,9 +285,11 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         @test (@inferred dtpool(ks, "BODY399_RADII")) == (3, :N)
         @test (@inferred expool(ks, "BODY399_RADII")) === true
 
-        for t in ("*", "BODY399_*", "BODY%%%_RADII", "*_PM", "FRAME_*_NAME", "body399_r*",
-            "PW_*", "BODY3*9_*A*", "%%%%", "*RADII", "BODY399_RADII", "NOTHING*", "*%",
-            "TKFRAME_31___*", "DELTET/*")
+        for t in (
+                "*", "BODY399_*", "BODY%%%_RADII", "*_PM", "FRAME_*_NAME", "body399_r*",
+                "PW_*", "BODY3*9_*A*", "%%%%", "*RADII", "BODY399_RADII", "NOTHING*", "*%",
+                "TKFRAME_31___*", "DELTET/*",
+            )
             want = pw_oracle_names(t)
             got = gnpool(ctx, t)
             got == want || @info "gnpool" t length(got) length(want)
@@ -274,13 +308,17 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         @test length(SPICE.gnpool("BODY*", 11, 5)) == 5
         @test throws_kind(() -> gnpool(ctx, "*", 1, 0), :badarraysize)
 
-        for name in ("MAXVAR", "MAXVAL", "MAXLIN", "MAXCHR", "MXNOTE", "MAXLEN", "MAXAGT",
-            "maxvar", " MaxLen ", "NOTHING", "MAXVARS")
+        for name in (
+                "MAXVAR", "MAXVAL", "MAXLIN", "MAXCHR", "MXNOTE", "MAXLEN", "MAXAGT",
+                "maxvar", " MaxLen ", "NOTHING", "MAXVARS",
+            )
             @test szpool(name) == SPICE.szpool(name)
         end
 
-        for (item, contin) in (("PW_LONG", "//"), ("PW_MARK", "-"), ("PW_LONG", "-"),
-            ("PW_MARK", "//"), ("FRAME_31008_NAME", "//")), nth in 1:7
+        for (item, contin) in (
+                    ("PW_LONG", "//"), ("PW_MARK", "-"), ("PW_LONG", "-"),
+                    ("PW_MARK", "//"), ("FRAME_31008_NAME", "//"),
+                ), nth in 1:7
             got = stpool(ctx, item, nth, contin)
             want = SPICE.stpool(item, nth, contin)
             if got === nothing
@@ -299,7 +337,8 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
 
         # badkpv: each comparison, the divisor (negative, zero), the type, and each error
         # kind, against CSPICE. PW_LONG holds 6 strings, BODY399_RADII 3 numbers.
-        for args in (("ME", "PW_LONG", "=", 6, 3, 'C'), ("ME", "PW_LONG", "<", 7, 2, 'c'),
+        for args in (
+                ("ME", "PW_LONG", "=", 6, 3, 'C'), ("ME", "PW_LONG", "<", 7, 2, 'c'),
                 ("ME", "PW_LONG", ">", 5, -3, 'C'), ("ME", "PW_LONG", "<=", 6, 6, 'C'),
                 ("ME", "PW_LONG", "=>", 6, 1, 'C'), ("ME", "PW_LONG", "= ", 6, 1, 'C'),
                 ("ME", "PW_LONG", "<", 6, 1, 'C'), ("ME", "PW_LONG", "=", 6, 4, 'C'),
@@ -307,7 +346,8 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
                 ("ME", "PW_LONG", " =", 6, 1, 'C'), ("ME", "PW_LONG", "=", 6, 1, 'N'),
                 ("ME", "BODY399_RADII", "=", 3, 3, 'C'), ("ME", "BODY399_RADII", "=", 3, 3, 'n'),
                 ("ME", "BODY399_RADII", "=", 3, 3, 'X'), ("ME", "NOT_THERE", "=", 3, 3, 'N'),
-                ("", "BODY399_RADII", "=", 3, 3, 'N'), ("ME", "BODY399_RADII", "", 3, 3, 'N'))
+                ("", "BODY399_RADII", "=", 3, 3, 'N'), ("ME", "BODY399_RADII", "", 3, 3, 'N'),
+            )
             got = try
                 badkpv(ctx, args...)
             catch e
@@ -329,20 +369,22 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         pw_both(() -> SPICE.pdpool("BODY399_PM", pm), () -> pdpool(ctx, "BODY399_PM", pm))
         after = pxform(ctx, "J2000", "IAU_EARTH", et)
         @test after != before
-        @test maximum(abs.(after .- SPICE.pxform("J2000", "IAU_EARTH", et))) <= 1e-13
+        @test maximum(abs.(after .- SPICE.pxform("J2000", "IAU_EARTH", et))) <= 1.0e-13
 
-        frame = ["FRAME_PW_TK = 1777001", "FRAME_1777001_NAME = 'PW_TK'", "FRAME_1777001_CLASS = 4",
+        frame = [
+            "FRAME_PW_TK = 1777001", "FRAME_1777001_NAME = 'PW_TK'", "FRAME_1777001_CLASS = 4",
             "FRAME_1777001_CLASS_ID = 1777001", "FRAME_1777001_CENTER = 399",
             "TKFRAME_1777001_SPEC = 'ANGLES'", "TKFRAME_1777001_RELATIVE = 'IAU_EARTH'",
             "TKFRAME_1777001_ANGLES = ( 10.0, 20.0, 30.0 )", "TKFRAME_1777001_AXES = ( 3, 2, 1 )",
-            "TKFRAME_1777001_UNITS = 'DEGREES'"]
+            "TKFRAME_1777001_UNITS = 'DEGREES'",
+        ]
         @test namfrm(ctx, "PW_TK") == 0
         pw_both(() -> SPICE.lmpool(frame), () -> lmpool(ctx, frame))
         @test namfrm(ctx, "PW_TK") == SPICE.namfrm("PW_TK") == 1777001
-        @test maximum(abs.(pxform(ctx, "PW_TK", "J2000", et) .- SPICE.pxform("PW_TK", "J2000", et))) <= 1e-13
+        @test maximum(abs.(pxform(ctx, "PW_TK", "J2000", et) .- SPICE.pxform("PW_TK", "J2000", et))) <= 1.0e-13
         a = spkezr(ctx, "MOON", et, "PW_TK", "LT+S", "EARTH")[1]
         b = SPICE.spkezr("MOON", et, "PW_TK", "LT+S", "EARTH")[1]
-        @test norm(a[1:3] .- b[1:3]) <= 1e-12 * norm(b[1:3])
+        @test norm(a[1:3] .- b[1:3]) <= 1.0e-12 * norm(b[1:3])
 
         pw_both(() -> SPICE.pcpool("NAIF_BODY_NAME", ["PW_PROBE", "PW_OTHER"]), () -> pcpool(ctx, "NAIF_BODY_NAME", ["PW_PROBE", "PW_OTHER"]))
         pw_both(() -> SPICE.pipool("NAIF_BODY_CODE", [-9901, -9902]), () -> pipool(ctx, "NAIF_BODY_CODE", [-9901, -9902]))
@@ -365,16 +407,26 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         ctx = neo_context(set)
         # CSPICE keeps these pairs for the whole process, also through `kclear`, so the
         # codes are ones that no other group uses.
-        pairs = (("PW_BODDEF_ONE", 7654321), ("Pw Boddef  Two", -7654322), ("PW_BODDEF_ONE", 7654323),
-            ("PW_ALIAS", 7654324), ("PW_ALIAS_AGAIN", 7654324), ("PW_SECOND_NAME", 7654321))
+        pairs = (
+            ("PW_BODDEF_ONE", 7654321), ("Pw Boddef  Two", -7654322), ("PW_BODDEF_ONE", 7654323),
+            ("PW_ALIAS", 7654324), ("PW_ALIAS_AGAIN", 7654324), ("PW_SECOND_NAME", 7654321),
+        )
         for (name, code) in pairs
             pw_both(() -> SPICE.boddef(name, code), () -> boddef(ctx, name, code))
         end
-        names = ("PW_BODDEF_ONE", "pw_boddef_one", "PW BODDEF TWO", "pw boddef two", "PW_ALIAS",
-            "PW_ALIAS_AGAIN", "EARTH", "PW_SECOND_NAME", "PW_NOTHING", "MOON")
+        names = (
+            "PW_BODDEF_ONE", "pw_boddef_one", "PW BODDEF TWO", "pw boddef two", "PW_ALIAS",
+            "PW_ALIAS_AGAIN", "EARTH", "PW_SECOND_NAME", "PW_NOTHING", "MOON",
+        )
         codes = (7654321, -7654322, 7654323, 7654324, 399, 301, 5)
-        compare() = (for n in names; @test bodn2c(ctx, n) == SPICE.bodn2c(n); end;
-            for c in codes; @test bodc2n(ctx, c) == SPICE.bodc2n(c); end)
+        compare() = (
+            for n in names
+                @test bodn2c(ctx, n) == SPICE.bodn2c(n)
+            end;
+            for c in codes
+                @test bodc2n(ctx, c) == SPICE.bodc2n(c)
+            end
+        )
         compare()
         @test bodn2c(ctx, "PW_BODDEF_ONE") == 7654323
         # The pairs stay through furnsh, unload and kclear, as in CSPICE.
@@ -394,8 +446,10 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         oracle_load(set)
         ctx = neo_context(set)
         nsteps = 0
-        same(agent) = (nsteps += 1; a = cvpool(ctx, agent); b = SPICE.cvpool(agent);
-            a == b || @info "cvpool differs" agent nsteps a b; @test a == b; a)
+        same(agent) = (
+            nsteps += 1; a = cvpool(ctx, agent); b = SPICE.cvpool(agent);
+            a == b || @info "cvpool differs" agent nsteps a b; @test a == b; a
+        )
         pw_both(() -> SPICE.swpool("PW_AGENT_1", ["PW_WATCHED", "PW_SHARED"]), () -> swpool(ctx, "PW_AGENT_1", ["PW_WATCHED", "PW_SHARED"]))
         pw_both(() -> SPICE.swpool("PW_AGENT_2", ["PW_OTHER"]), () -> swpool(ctx, "PW_AGENT_2", ["PW_OTHER"]))
         @test same("PW_AGENT_1") === true        # true once after swpool
@@ -482,6 +536,36 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
         @test throws_kind(() -> gnpool(ctx, "*", 1, -1), :badarraysize)
     end
 
+    # A malformed text kernel: the kind is the short message of CSPICE (tspice F_POOL,
+    # F_BODCOD), for ldpool and for furnsh of a context with and without direct edits.
+    @apart @testset "malformed text kernels give the error kinds of CSPICE" begin
+        cases = [
+            ["PW_BAD"], ["PW_BAD 1 2"], ["PW_BAD = ( ABC )"], ["PW_BAD = ''"],
+            ["PW_BAD = ( )"], ["PW_BAD += ( )"], ["PW_BAD = (", " )"], ["PW_BAD = 1, 'a'"],
+            ["PW_BAD = 'a', 1"], ["PW_BAD_" * "X"^30 * " = 1"], ["PW_BAD = @"],
+            ["PW_BAD = @JUNK"], ["PW_BAD = @2000 JAN 1 PST"],
+            ["NAIF_BODY_NAME = 'PW_SPUD'", "NAIF_BODY_CODE = ( 1009, 1010 )"],
+            ["NAIF_BODY_NAME = 'PW_SPUD'"], ["NAIF_BODY_NAME = ' '", "NAIF_BODY_CODE = 1009"],
+        ]
+        for (i, lines) in enumerate(cases)
+            k = pw_kernel("bad$i.tpc", lines)
+            ccall((:furnsh_c, SPICE.libcspice), Cvoid, (Cstring,), k)
+            kc = cspice_kind()
+            ccall((:unload_c, SPICE.libcspice), Cvoid, (Cstring,), k)
+            for v in ("PW_BAD", "NAIF_BODY_NAME", "NAIF_BODY_CODE")
+                ccall((:dvpool_c, SPICE.libcspice), Cvoid, (Cstring,), v)
+            end
+            cspice_kind()
+            @test kc !== :none
+            @test throws_kind(() -> furnsh(SpiceContext(), k), kc)
+            edited = SpiceContext()
+            pdpool(edited, "PW_EDIT", [1.0])
+            @test throws_kind(() -> furnsh(edited, k), kc)
+            any(l -> startswith(l, "NAIF"), lines) ||
+                @test throws_kind(() -> ldpool(SpiceContext(), k), kc)
+        end
+    end
+
     if Threads.nthreads() == 1
         skip_notice("18. threads", "one thread only")
     else
@@ -540,8 +624,10 @@ group("18. kernel-pool edits and watchers against CSPICE", Kernels.LSK, Kernels.
             foreach(fetch, writers)
             stop[] = true
             foreach(fetch, readers)
-            println("  ", nwriters * nrounds * 2, " concurrent edits, ", reads[], " reader rounds, torn reads: ",
-                torn[], ", wrong answers: ", wrong[])
+            println(
+                "  ", nwriters * nrounds * 2, " concurrent edits, ", reads[], " reader rounds, torn reads: ",
+                torn[], ", wrong answers: ", wrong[]
+            )
             @test torn[] == 0
             @test wrong[] == 0
             @test reads[] > 0

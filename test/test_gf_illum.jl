@@ -41,13 +41,15 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
 
     @testset "every angle and relation against CSPICE" begin
         # (target, frame, source, observer, steps, span)
-        cases = (("MOON", "IAU_MOON", "SUN", "EARTH", (day, day / 2), 60 * day),
+        cases = (
+            ("MOON", "IAU_MOON", "SUN", "EARTH", (day, day / 2), 60 * day),
             ("EARTH", "IAU_EARTH", "SUN", "MOON", (2 * hour, 3 * hour), 5 * day),
-            ("EARTH", "IAU_EARTH", "MOON", "SUN", (3 * hour,), 4 * day))
+            ("EARTH", "IAU_EARTH", "MOON", "SUN", (3 * hour,), 4 * day),
+        )
         n = 0
         i = 0
         for (targ, fix, src, obs, steps, span) in cases, _ in 1:2, ang in GFI_ANGLES,
-            (rel, wadj) in GF_VARIANTS
+                (rel, wadj) in GF_VARIANTS
 
             gf_pick(i += 1, 4) || continue
             corr = rand(rng, GFI_CORRS)
@@ -57,10 +59,14 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
             q = Almanac.GFIllumination(ks, "Ellipsoid", ang, targ, src, fix, corr, obs, sp)
             refval, adjust = gf_reference(rng, q, cn, rel, wadj)
             w = gfilum(ctx, "Ellipsoid", ang, targ, src, fix, corr, obs, sp, rel, refval, adjust, step, cn)
-            ref = GFO.gfilum("Ellipsoid", ang, targ, src, fix, corr, obs, sp, rel, refval, adjust, step,
-                collect(cn))
-            ok = gf_compare("gfilum " * lowercase(ang) * " " * gf_family(rel, adjust), w, ref;
-                value=t -> Almanac._gf_value(q, t), vtol=1.0e-12)
+            ref = GFO.gfilum(
+                "Ellipsoid", ang, targ, src, fix, corr, obs, sp, rel, refval, adjust, step,
+                collect(cn)
+            )
+            ok = gf_compare(
+                "gfilum " * lowercase(ang) * " " * gf_family(rel, adjust), w, ref;
+                value = t -> Almanac._gf_value(q, t), vtol = 1.0e-12
+            )
             ok || @info "gfilum case" targ src obs ang corr sp rel refval adjust step cn
             @test ok
             @test all(t -> wnelmd(cn, t), w)
@@ -82,13 +88,15 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
                 fd = (Almanac._gf_value(q, t + h) - Almanac._gf_value(q, t - h)) / (2h)
                 @test Almanac._gf_ilurate(q, t) ≈ fd rtol = 1.0e-4 atol = 1.0e-11
             end
-            vals = [Almanac._gf_value(q, t) for t in range(cn[1], cn[2]; length=200)]
+            vals = [Almanac._gf_value(q, t) for t in range(cn[1], cn[2]; length = 200)]
             refval = (minimum(vals) + maximum(vals)) / 2
-            w = gfilum(ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", corr, "EARTH", sp, "=", refval,
-                0.0, day, cn)
+            w = gfilum(
+                ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", corr, "EARTH", sp, "=", refval,
+                0.0, day, cn
+            )
             @test wncard(w) >= 2
             for k in 1:wncard(w)
-                t = w[2k-1]
+                t = w[2k - 1]
                 @test (Almanac._gf_value(q, t - 5.0) - refval) * (Almanac._gf_value(q, t + 5.0) - refval) < 0
             end
         end
@@ -98,25 +106,43 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
         sp = g_srfrec(301, -0.4, 0.5)
         cn = Window([0.0, 60 * day])
         names = ["TARGET", "ILLUM", "OBSERVER", "ABCORR", "REFERENCE FRAME", "ANGTYP", "METHOD", "SPOINT"]
-        ev(vals, d; op="<", refval=1.2) = gfevnt(ctx, day, gfrefn, "ILLUMINATION ANGLE", names, vals, d,
-            Int[], Bool[], op, refval, 1.0e-6, 0.0, cn)
+        ev(vals, d; op = "<", refval = 1.2) = gfevnt(
+            ctx, day, gfrefn, "ILLUMINATION ANGLE", names, vals, d,
+            Int[], Bool[], op, refval, 1.0e-6, 0.0, cn
+        )
         for ang in GFI_ANGLES
-            base = gfilum(ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", "LT+S", "EARTH", sp, "<", 1.2,
-                0.0, day, cn)
+            base = gfilum(
+                ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", "LT+S", "EARTH", sp, "<", 1.2,
+                0.0, day, cn
+            )
             @test !isempty(base)
             @test ev(["MOON", "SUN", "EARTH", "LT+S", "IAU_MOON", ang, "ELLIPSOID", " "], sp) == base
-            @test ev([" moon", "sun", "earth ", "lt+s", "iau_moon", lowercase(ang), "ellipsoid", " "],
-                vcat(sp, 7.0)) == base
+            @test ev(
+                [" moon", "sun", "earth ", "lt+s", "iau_moon", lowercase(ang), "ellipsoid", " "],
+                vcat(sp, 7.0)
+            ) == base
         end
-        @test gfevnt(ctx, day, gfrefn, "illumination angle", lowercase.(names),
+        @test gfevnt(
+            ctx, day, gfrefn, "illumination angle", lowercase.(names),
             ["MOON", "SUN", "EARTH", "NONE", "IAU_MOON", "PHASE", "ELLIPSOID", " "], sp, Int[], Bool[],
-            "LOCMIN", 0.0, 1.0e-6, 0.0, cn) == gfilum(ctx, "ELLIPSOID", "PHASE", "MOON", "SUN",
-            "IAU_MOON", "NONE", "EARTH", sp, "LOCMIN", 0.0, 0.0, day, cn)
-        @test throws_kind(() -> ev(["MOON", "SUN", "EARTH", "LT+S", "IAU_MOON", "PHASE", "ELLIPSOID", " "],
-                sp[1:2]), :invalidcount)
-        @test throws_kind(() -> gfevnt(ctx, day, gfrefn, "ILLUMINATION ANGLE", names[1:7],
+            "LOCMIN", 0.0, 1.0e-6, 0.0, cn
+        ) == gfilum(
+            ctx, "ELLIPSOID", "PHASE", "MOON", "SUN",
+            "IAU_MOON", "NONE", "EARTH", sp, "LOCMIN", 0.0, 0.0, day, cn
+        )
+        @test throws_kind(
+            () -> ev(
+                ["MOON", "SUN", "EARTH", "LT+S", "IAU_MOON", "PHASE", "ELLIPSOID", " "],
+                sp[1:2]
+            ), :invalidcount
+        )
+        @test throws_kind(
+            () -> gfevnt(
+                ctx, day, gfrefn, "ILLUMINATION ANGLE", names[1:7],
                 ["MOON", "SUN", "EARTH", "LT+S", "IAU_MOON", "PHASE", "ELLIPSOID"], sp, Int[], Bool[], "<",
-                1.2, 1.0e-6, 0.0, cn), :missingvalue)
+                1.2, 1.0e-6, 0.0, cn
+            ), :missingvalue
+        )
     end
 
     @testset "forms, keywords and threads" begin
@@ -127,25 +153,35 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
         base = gfilum(ctx, a..., cn)
         @test wncard(base) >= 3
         @test gfilum(ks, a..., cn) == base
-        @test gfilum(ks, "ELLIPSOID", "incidence ", 301, 10, namfrm(ctx, "IAU_MOON"), Aberration("LT+S"),
-            399, SVector{3}(sp), a[9:end]..., cn) == base
-        @test gfilum(ctx, a..., cn; threads=true) == base
-        @test gfilum(ctx, a..., many; threads=true) == gfilum(ctx, a..., many)
+        @test gfilum(
+            ks, "ELLIPSOID", "incidence ", 301, 10, namfrm(ctx, "IAU_MOON"), Aberration("LT+S"),
+            399, SVector{3}(sp), a[9:end]..., cn
+        ) == base
+        @test gfilum(ctx, a..., cn; threads = true) == base
+        @test gfilum(ctx, a..., many; threads = true) == gfilum(ctx, a..., many)
         @test isempty(gfilum(ctx, a..., Window()))
-        loose = gfilum(ctx, a..., cn; tol=1.0e-2)
+        loose = gfilum(ctx, a..., cn; tol = 1.0e-2)
         @test length(loose) == length(base) && maximum(abs.(collect(loose) .- collect(base))) < 2.0e-2
         gfstol(ctx, 1.0e-2)
         @test gfilum(ctx, a..., cn) == loose
         gfstol(ctx, 1.0e-6)
         log = String[]
-        gfilum(ctx, a..., cn; report=GFLog(log), bail=GFStop(false))
+        gfilum(ctx, a..., cn; report = GFLog(log), bail = GFStop(false))
         @test log == ["Illumination angle pass 1 of 2", "Illumination angle pass 2 of 2"]
-        @test_throws InterruptException gfilum(ctx, a..., cn; report=GFLog(String[]), bail=GFStop(true))
+        @test_throws InterruptException gfilum(ctx, a..., cn; report = GFLog(String[]), bail = GFStop(true))
         # many tasks, one context
-        serial = [gfilum(ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", corr, "EARTH", sp, "=", 1.0,
-            0.0, day, cn) for ang in GFI_ANGLES, corr in GFI_CORRS]
-        tasks = [Threads.@spawn gfilum(ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", corr, "EARTH",
-            sp, "=", 1.0, 0.0, day, cn) for ang in GFI_ANGLES, corr in GFI_CORRS]
+        serial = [
+            gfilum(
+                ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", corr, "EARTH", sp, "=", 1.0,
+                0.0, day, cn
+            ) for ang in GFI_ANGLES, corr in GFI_CORRS
+        ]
+        tasks = [
+            Threads.@spawn gfilum(
+                ctx, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", corr, "EARTH",
+                sp, "=", 1.0, 0.0, day, cn
+            ) for ang in GFI_ANGLES, corr in GFI_CORRS
+        ]
         @test all(fetch(t) == s for (t, s) in zip(tasks, serial))
     end
 
@@ -160,38 +196,51 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
         with(i, v) = ntuple(k -> k == i ? v : good[k], length(good))
         both(:none, () -> gfilum(ctx, good..., cn), () -> GFO.gfilum(good..., c))
         for (kind, args) in (
-            (:invalidmethod, with(1, "DSK/UNPRIORITIZED")),
-            (:invalidmethod, with(1, "Near point: ellipsoid")),
-            (:notsupported, with(2, "SOLAR INCIDENCE")),
-            (:idcodenotfound, with(3, "NOSUCHBODY")),
-            (:idcodenotfound, with(4, "NOSUCHBODY")),
-            (:idcodenotfound, with(7, "NOSUCHBODY")),
-            (:bodiesnotdistinct, with(7, "MOON")),
-            (:bodiesnotdistinct, with(4, "MOON")),
-            (:unknownframe, with(5, "NOSUCHFRAME")),
-            (:invalidframe, with(5, "IAU_EARTH")),
-            (:invalidoption, with(6, "LT+X")),
-            (:notsupported, with(6, "XLT")),
-            (:notsupported, with(6, "XCN+S")),
-            (:notrecognized, with(9, "=<")),
-            (:valueoutofrange, with(11, -1.0)),
-            (:invalidvalue, with(11, 1.0)),
-            (:invalidstep, with(12, 0.0)),
-            (:invalidstep, with(12, -day)))
+                (:invalidmethod, with(1, "DSK/UNPRIORITIZED")),
+                (:invalidmethod, with(1, "Near point: ellipsoid")),
+                (:notsupported, with(2, "SOLAR INCIDENCE")),
+                (:idcodenotfound, with(3, "NOSUCHBODY")),
+                (:idcodenotfound, with(4, "NOSUCHBODY")),
+                (:idcodenotfound, with(7, "NOSUCHBODY")),
+                (:bodiesnotdistinct, with(7, "MOON")),
+                (:bodiesnotdistinct, with(4, "MOON")),
+                (:unknownframe, with(5, "NOSUCHFRAME")),
+                (:invalidframe, with(5, "IAU_EARTH")),
+                (:invalidoption, with(6, "LT+X")),
+                (:notsupported, with(6, "XLT")),
+                (:notsupported, with(6, "XCN+S")),
+                (:notrecognized, with(9, "=<")),
+                (:valueoutofrange, with(11, -1.0)),
+                (:invalidvalue, with(11, 1.0)),
+                (:invalidstep, with(12, 0.0)),
+                (:invalidstep, with(12, -day)),
+            )
             both(kind, () -> gfilum(ctx, args..., cn), () -> GFO.gfilum(args..., c))
         end
         # the source can be the observer; case and blanks of the angle and of the method
         both(:none, () -> gfilum(ctx, with(4, "EARTH")..., cn), () -> GFO.gfilum(with(4, "EARTH")..., c))
-        both(:none, () -> gfilum(ctx, " ellipsoid", " emis sion", "moon", "sun", "iau_moon", "cn + s",
-                "earth", sp, "locmax", 0.0, 0.0, day, cn),
-            () -> GFO.gfilum(" ellipsoid", " emis sion", "moon", "sun", "iau_moon", "cn + s", "earth", sp,
-                "locmax", 0.0, 0.0, day, c))
+        both(
+            :none, () -> gfilum(
+                ctx, " ellipsoid", " emis sion", "moon", "sun", "iau_moon", "cn + s",
+                "earth", sp, "locmax", 0.0, 0.0, day, cn
+            ),
+            () -> GFO.gfilum(
+                " ellipsoid", " emis sion", "moon", "sun", "iau_moon", "cn + s", "earth", sp,
+                "locmax", 0.0, 0.0, day, c
+            )
+        )
         @test gfilum(ctx, with(4, "EARTH")..., cn) == Window(GFO.gfilum(with(4, "EARTH")..., c))
         # a target without radii
-        both(:kernelvarnotfound, () -> gfilum(ctx, "ELLIPSOID", "PHASE", "EARTH BARYCENTER", "SUN",
-                "J2000", "NONE", "MOON", sp, "<", 1.2, 0.0, day, cn),
-            () -> GFO.gfilum("ELLIPSOID", "PHASE", "EARTH BARYCENTER", "SUN", "J2000", "NONE", "MOON", sp,
-                "<", 1.2, 0.0, day, c))
+        both(
+            :kernelvarnotfound, () -> gfilum(
+                ctx, "ELLIPSOID", "PHASE", "EARTH BARYCENTER", "SUN",
+                "J2000", "NONE", "MOON", sp, "<", 1.2, 0.0, day, cn
+            ),
+            () -> GFO.gfilum(
+                "ELLIPSOID", "PHASE", "EARTH BARYCENTER", "SUN", "J2000", "NONE", "MOON", sp,
+                "<", 1.2, 0.0, day, c
+            )
+        )
         @test throws_kind(() -> gfilum(ctx, with(8, [1.0, 2.0])..., cn), :badarg)
     end
 
@@ -200,21 +249,33 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
         sp = g_srfrec(301, 0.3, 0.2)
         spe = g_srfrec(399, -1.2, 0.6)
         cases2 = (
-            ("gfilum incidence at a point of the Moon, 1 year, '<', LT+S", 365 * day,
-                ("ELLIPSOID", "INCIDENCE", "MOON", "SUN", "IAU_MOON", "LT+S", "EARTH", sp, "<", 1.4, 0.0, day)),
-            ("gfilum phase at a point of the Moon, 1 year, LOCMIN, NONE", 365 * day,
-                ("ELLIPSOID", "PHASE", "MOON", "SUN", "IAU_MOON", "NONE", "EARTH", sp, "LOCMIN", 0.0, 0.0, day)),
-            ("gfilum emission at a point of the Earth, 30 days, '=', CN+S", 30 * day,
-                ("ELLIPSOID", "EMISSION", "EARTH", "SUN", "IAU_EARTH", "CN+S", "MOON", spe, "=", 1.0, 0.0,
-                    3 * hour)),
+            (
+                "gfilum incidence at a point of the Moon, 1 year, '<', LT+S", 365 * day,
+                ("ELLIPSOID", "INCIDENCE", "MOON", "SUN", "IAU_MOON", "LT+S", "EARTH", sp, "<", 1.4, 0.0, day),
+            ),
+            (
+                "gfilum phase at a point of the Moon, 1 year, LOCMIN, NONE", 365 * day,
+                ("ELLIPSOID", "PHASE", "MOON", "SUN", "IAU_MOON", "NONE", "EARTH", sp, "LOCMIN", 0.0, 0.0, day),
+            ),
+            (
+                "gfilum emission at a point of the Earth, 30 days, '=', CN+S", 30 * day,
+                (
+                    "ELLIPSOID", "EMISSION", "EARTH", "SUN", "IAU_EARTH", "CN+S", "MOON", spe, "=", 1.0, 0.0,
+                    3 * hour,
+                ),
+            ),
         )
         for (name, span, a) in cases2
             cn = Window([t0, t0 + span])
             c = collect(cn)
             @test gf_compare("timing", gfilum(ctx, a..., cn), GFO.gfilum(a..., c))
             tn, to = gf_time(() -> gfilum(ctx, a..., cn)), gf_time(() -> GFO.gfilum(a..., c))
-            measured(@sprintf("  %-62s Almanac %8.2f ms  CSPICE %8.2f ms  ratio %.2f", name,
-                1e3 * tn, 1e3 * to, to / tn))
+            measured(
+                @sprintf(
+                    "  %-62s Almanac %8.2f ms  CSPICE %8.2f ms  ratio %.2f", name,
+                    1.0e3 * tn, 1.0e3 * to, to / tn
+                )
+            )
         end
     end
 

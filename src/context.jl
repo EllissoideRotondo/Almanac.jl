@@ -21,14 +21,16 @@ The same with the kernel pool `edited` in the place of the pool of the text kern
 (a pool with direct edits, see `pool_write.jl`; `nothing` for no edits) and with the
 name and code pairs `bodydefs` of `boddef`.
 """
-function build_kernelset(loaded::Vector{Loaded},
-        edited::Union{Nothing,Dict{String,PoolValue}}=nothing,
-        bodydefs::Vector{Tuple{String,Int32}}=Tuple{String,Int32}[])
+function build_kernelset(
+        loaded::Vector{Loaded},
+        edited::Union{Nothing, Dict{String, PoolValue}} = nothing,
+        bodydefs::Vector{Tuple{String, Int32}} = Tuple{String, Int32}[]
+    )
     daf = Vector{Float64}[]
-    spk = Dict{Int32,Vector{Segment}}()
-    pck = Dict{Int32,Vector{Segment}}()
-    ck = Dict{Int32,Vector{CKSegment}}()
-    pool = Dict{String,PoolValue}()
+    spk = Dict{Int32, Vector{Segment}}()
+    pck = Dict{Int32, Vector{Segment}}()
+    ck = Dict{Int32, Vector{CKSegment}}()
+    pool = Dict{String, PoolValue}()
     dskfiles = DSKFile[]
     ekfiles = EKFile[]
     filenumber = zeros(Int, length(loaded))
@@ -54,8 +56,10 @@ function build_kernelset(loaded::Vector{Loaded},
     for i in length(loaded):-1:1
         content = loaded[i].content
         if content isa EphemerisProvider
-            seg = Segment(content.body, content.center, content.frame, PROVIDER_DTYPE,
-                content.t0, content.t1, Int32(0), i, 0, 0.0, 0.0, Int32(0), Int32(0))
+            seg = Segment(
+                content.body, content.center, content.frame, PROVIDER_DTYPE,
+                content.t0, content.t1, Int32(0), i, 0, 0.0, 0.0, Int32(0), Int32(0)
+            )
             push!(get!(() -> Segment[], spk, seg.target), seg)
             continue
         end
@@ -86,12 +90,16 @@ function build_kernelset(loaded::Vector{Loaded},
     tk = build_tk(pool, frames)
     bodyrot = build_bodyrot(pool)
     lsk = build_lsk(pool)
-    return _dyn_levels(KernelSet(copy(loaded), daf, spk, pck, pool, name2code, code2name, frames,
-        framename2id, tk, bodyrot, lsk, ck, build_sclk(pool), build_ckmeta(pool),
-        Dict{Int32,DynFrame}(), Dict{Int32,SwitchFrame}(), nothing, false,
-        Tuple{String,Int32}[], dskfiles, _dsk_segment_table(dskfiles), ekfiles,
-        _ek_build_tables(ekfiles)),
-        edited !== nothing, bodydefs)
+    return _dyn_levels(
+        KernelSet(
+            copy(loaded), daf, spk, pck, pool, name2code, code2name, frames,
+            framename2id, tk, bodyrot, lsk, ck, build_sclk(pool), build_ckmeta(pool),
+            Dict{Int32, DynFrame}(), Dict{Int32, SwitchFrame}(), nothing, false,
+            Tuple{String, Int32}[], dskfiles, _dsk_segment_table(dskfiles), ekfiles,
+            _ek_build_tables(ekfiles)
+        ),
+        edited !== nothing, bodydefs
+    )
 end
 
 SpiceContext() = SpiceContext(empty_kernelset(), ReentrantLock())
@@ -129,8 +137,8 @@ Open the binary kernel (DAF, or DSK) or parse the text kernel at `path` (with th
 bound `yearbound` of `tsetyr` and the range check `check` of `tparch` for its `@`
 dates); throws `SpiceError` if the file does not exist.
 """
-function read_kernel(path::AbstractString, yearbound::Int=1969, check::Bool=false)
-    isfile(path) || throw(SpiceError(:nosuchfile, "kernel file not found: $path"))
+function read_kernel(path::AbstractString, yearbound::Int = 1969, check::Bool = false)
+    _isfile(path) || throw(SpiceError(:nosuchfile, "kernel file not found: $path"))
     arch = kernel_arch(path)
     arch === :DSK && return open_dsk(path)
     arch === :EK && return open_ek(path)
@@ -144,7 +152,7 @@ end
 Read the kernel at `path` and return its load-list entries: one entry for the kernel
 and, for a meta-kernel, one entry for each listed file (in order, `source == path`).
 """
-function load_entries(path::AbstractString, yearbound::Int=1969, check::Bool=false)
+function load_entries(path::AbstractString, yearbound::Int = 1969, check::Bool = false)
     p = String(path)
     content = read_kernel(p, yearbound, check)
     entries = Loaded[Loaded(p, "", content)]
@@ -152,8 +160,12 @@ function load_entries(path::AbstractString, yearbound::Int=1969, check::Bool=fal
         for file in metakernel_files(content)
             sub = read_kernel(file, yearbound, check)
             if sub isa TextKernel && !isempty(metakernel_files(sub))
-                throw(SpiceError(:recursiveloading,
-                    "meta-kernel $p lists the meta-kernel $file; CSPICE does not allow this"))
+                throw(
+                    SpiceError(
+                        :recursiveloading,
+                        "meta-kernel $p lists the meta-kernel $file; CSPICE does not allow this"
+                    )
+                )
             end
             push!(entries, Loaded(String(file), p, sub))
         end
@@ -184,7 +196,8 @@ Throws `SpiceError(:emptystring)` if `path` is empty, `SpiceError(:blankfilename
 holds only blanks, `SpiceError(:nosuchfile)` if the
 file (or a file that a meta-kernel lists) does not exist, and
 `SpiceError(:recursiveloading)` if a meta-kernel lists a meta-kernel. A binary file that is damaged throws
-`SpiceError(:baddaf)`, and a meta-kernel that is not consistent throws
+`SpiceError(:baddaf)`, a malformed assignment in a text kernel throws the kinds that
+[`ldpool`](@ref) lists, and a meta-kernel that is not consistent throws
 `SpiceError(:badkernel)`.
 
 # Examples

@@ -27,7 +27,7 @@ function occ_scan(ctx, t1, s1, f1, t2, s2, f2, cor, obs, et0, span, n)
         b = g_occult(t1, s1, f1, t2, s2, f2, cor, obs, et)
         push!(codes, b)
         a == b && continue
-        near = (g_occult(t1, s1, f1, t2, s2, f2, cor, obs, et - 1e-3), g_occult(t1, s1, f1, t2, s2, f2, cor, obs, et + 1e-3))
+        near = (g_occult(t1, s1, f1, t2, s2, f2, cor, obs, et - 1.0e-3), g_occult(t1, s1, f1, t2, s2, f2, cor, obs, et + 1.0e-3))
         if a in near && near[1] != near[2]
             contact += 1
         else
@@ -44,7 +44,7 @@ occ_alloc_ep(ks, et, c) = @allocated occult(ks, 301, "ELLIPSOID", 10020, 10, "PO
 
 @gf_light group("geom_occult: occult", Kernels.FULL_SET_FILES...) do
     spk, tk = geo_occult_kernels()
-    paths = [geo_kernels(; dsk=true)..., spk, tk]
+    paths = [geo_kernels(; dsk = true)..., spk, tk]
     oracle_load(paths)
     ctx = neo_context(paths)
     rng = MersenneTwister(SEED + 105)
@@ -52,11 +52,13 @@ occ_alloc_ep(ks, et, c) = @allocated occult(ks, 301, "ELLIPSOID", 10020, 10, "PO
     ncontact = 0
 
     @testset "real events: eclipses and a transit" begin
-        events = (("MOON", "SUN", "EARTH", "2017-08-21T18:26:00", 6 * 3600.0),
+        events = (
+            ("MOON", "SUN", "EARTH", "2017-08-21T18:26:00", 6 * 3600.0),
             ("MOON", "SUN", "EARTH", "2012-05-20T23:53:00", 6 * 3600.0),
             ("VENUS", "SUN", "EARTH", "2012-06-06T01:30:00", 10 * 3600.0),
             ("EARTH", "SUN", "MOON", "2019-01-21T05:12:00", 8 * 3600.0),
-            ("EARTH", "MOON", "SUN", "2019-01-21T05:12:00", 8 * 3600.0))
+            ("EARTH", "MOON", "SUN", "2019-01-21T05:12:00", 8 * 3600.0),
+        )
         nbad = 0
         ncase = 0
         nscan = nsample(50, 150)
@@ -65,10 +67,12 @@ occ_alloc_ep(ks, et, c) = @allocated occult(ks, 301, "ELLIPSOID", 10020, 10, "PO
             fa = "IAU_" * a
             fb = "IAU_" * b
             for (sa, sb) in (("ELLIPSOID", "ELLIPSOID"), ("POINT", "ELLIPSOID"), ("ELLIPSOID", "POINT")),
-                (x, sx, fx, y, sy, fy) in ((a, sa, fa, b, sb, fb), (b, sb, fb, a, sa, fa))
+                    (x, sx, fx, y, sy, fy) in ((a, sa, fa, b, sb, fb), (b, sb, fb, a, sa, fa))
 
-                bad, contact, codes = occ_scan(ctx, x, sx, sx == "POINT" ? " " : fx, y, sy, sy == "POINT" ? " " : fy,
-                    cor, obs, et0, span, nscan)
+                bad, contact, codes = occ_scan(
+                    ctx, x, sx, sx == "POINT" ? " " : fx, y, sy, sy == "POINT" ? " " : fy,
+                    cor, obs, et0, span, nscan
+                )
                 nbad += bad
                 ncontact += contact
                 ncase += nscan + 1
@@ -113,7 +117,7 @@ occ_alloc_ep(ks, et, c) = @allocated occult(ks, 301, "ELLIPSOID", 10020, 10, "PO
         @test codes_syn == Set(-3:3)
         # The forms with IDs.
         @test occult(ctx, -5001, "ellipsoid", "GEO_A_FIXED", -5002, " Ellipsoid", namfrm(ctx, "GEO_B_FIXED"), Aberration("LT"), -5000, 100.0) ==
-              occult(ctx, "GEO_A", "ELLIPSOID", "GEO_A_FIXED", "GEO_B", "ELLIPSOID", "GEO_B_FIXED", "LT", "GEO_OBS", 100.0)
+            occult(ctx, "GEO_A", "ELLIPSOID", "GEO_A_FIXED", "GEO_B", "ELLIPSOID", "GEO_B_FIXED", "LT", "GEO_OBS", 100.0)
     end
 
     @testset "DSK shape against a point" begin
@@ -165,22 +169,29 @@ occ_alloc_ep(ks, et, c) = @allocated occult(ks, 301, "ELLIPSOID", 10020, 10, "PO
                 ("MOON", "DSK/UNPRIORITIZED", "IAU_MOON", "EARTH", "DSK/UNPRIORITIZED", "IAU_EARTH", "LT", "SUN"),
                 ("MOON", "DSK", "IAU_MOON", "SUN", "POINT", " ", "LT", "EARTH"),
                 ("MOON", "DSK/UNPRIORITIZED/SURFACES = 9", "IAU_MOON", "SUN", "POINT", " ", "LT", "EARTH"),
-                ("EARTH", "DSK/UNPRIORITIZED", "IAU_EARTH", "SUN", "POINT", " ", "LT", "MOON"))
-            @test same_kind(() -> g_occult(t1, s1, f1, t2, s2, f2, cor, obs, et),
-                () -> occult(ctx, t1, s1, f1, t2, s2, f2, cor, obs, et))
+                ("EARTH", "DSK/UNPRIORITIZED", "IAU_EARTH", "SUN", "POINT", " ", "LT", "MOON"),
+            )
+            @test same_kind(
+                () -> g_occult(t1, s1, f1, t2, s2, f2, cor, obs, et),
+                () -> occult(ctx, t1, s1, f1, t2, s2, f2, cor, obs, et)
+            )
         end
         # Radii that are not valid.
         radii = gdpool(ctx, "BODY301_RADII")
         for bad in ([1737.4, 1737.4], [1737.4, -1.0, 1737.4])
             both_pdpool(ctx, "BODY301_RADII", bad)
-            @test same_kind(() -> g_occult("MOON", E, "IAU_MOON", "SUN", E, "IAU_SUN", "LT", "EARTH", et),
-                () -> occult(ctx, "MOON", E, "IAU_MOON", "SUN", E, "IAU_SUN", "LT", "EARTH", et))
+            @test same_kind(
+                () -> g_occult("MOON", E, "IAU_MOON", "SUN", E, "IAU_SUN", "LT", "EARTH", et),
+                () -> occult(ctx, "MOON", E, "IAU_MOON", "SUN", E, "IAU_SUN", "LT", "EARTH", et)
+            )
         end
         both_pdpool(ctx, "BODY301_RADII", radii)
         # An observer inside of a target.
         both_pdpool(ctx, "BODY-5002_RADII", [3000.0, 3000.0, 3000.0])
-        @test same_kind(() -> g_occult("GEO_A", E, "GEO_A_FIXED", "GEO_B", E, "GEO_B_FIXED", "NONE", "GEO_OBS", 0.0),
-            () -> occult(ctx, "GEO_A", E, "GEO_A_FIXED", "GEO_B", E, "GEO_B_FIXED", "NONE", "GEO_OBS", 0.0))
+        @test same_kind(
+            () -> g_occult("GEO_A", E, "GEO_A_FIXED", "GEO_B", E, "GEO_B_FIXED", "NONE", "GEO_OBS", 0.0),
+            () -> occult(ctx, "GEO_A", E, "GEO_A_FIXED", "GEO_B", E, "GEO_B_FIXED", "NONE", "GEO_OBS", 0.0)
+        )
         both_pdpool(ctx, "BODY-5002_RADII", [80.0, 60.0, 50.0])
     end
 

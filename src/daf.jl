@@ -8,8 +8,10 @@
 const _DAF_RECLEN = 1024
 const _DAF_RECWORDS = 128
 # Characters that a text-mode transfer would damage; a valid file holds them unchanged.
-const _DAF_FTPSTR = UInt8[codeunits("FTPSTR:\r:\n:\r\n:\r")..., 0x00, UInt8(':'), 0x81,
-    UInt8(':'), 0x10, 0xce, codeunits(":ENDFTP")...]
+const _DAF_FTPSTR = UInt8[
+    codeunits("FTPSTR:\r:\n:\r\n:\r")..., 0x00, UInt8(':'), 0x81,
+    UInt8(':'), 0x10, 0xce, codeunits(":ENDFTP")...,
+]
 
 """
     _unmap!(a::Array) -> Nothing
@@ -31,8 +33,8 @@ end
 
 "32-bit integer at 0-based byte offset `off` of `raw`, stored little-endian if `little`, else big-endian; requires `off + 4 <= length(raw)`."
 @inline function _daf_i32(raw::AbstractVector{UInt8}, off::Int, little::Bool)
-    v = UInt32(raw[off+1]) | (UInt32(raw[off+2]) << 8) | (UInt32(raw[off+3]) << 16) |
-        (UInt32(raw[off+4]) << 24)
+    v = UInt32(raw[off + 1]) | (UInt32(raw[off + 2]) << 8) | (UInt32(raw[off + 3]) << 16) |
+        (UInt32(raw[off + 4]) << 24)
     return reinterpret(Int32, little ? v : bswap(v))
 end
 
@@ -40,7 +42,7 @@ end
 @inline function _daf_f64(raw::AbstractVector{UInt8}, off::Int, little::Bool)
     v = UInt64(0)
     for i in 1:8                      # invariant: v holds bytes off+1 .. off+i-1, little-endian
-        v |= UInt64(raw[off+i]) << (8 * (i - 1))
+        v |= UInt64(raw[off + i]) << (8 * (i - 1))
     end
     return reinterpret(Float64, little ? v : bswap(v))
 end
@@ -58,14 +60,20 @@ Throws `SpiceError` with kind `:unsupportedbff` for a VAX format, `:filereadfail
 the first summary record cannot be read, and `:unknownbff` for any other format or for
 a file without the format string and without summaries.
 """
-function _daf_little(io::IO, rec1::AbstractVector{UInt8}, path::AbstractString,
-        who::AbstractString)
+function _daf_little(
+        io::IO, rec1::AbstractVector{UInt8}, path::AbstractString,
+        who::AbstractString
+    )
     @assert length(rec1) >= _DAF_RECLEN
     bff = String(rec1[89:96])
     bff == "LTL-IEEE" && return true
     bff == "BIG-IEEE" && return false
-    bff in ("VAX-GFLT", "VAX-DFLT") && throw(SpiceError(:unsupportedbff,
-        "$who: the binary file format $bff of $path is not supported"))
+    bff in ("VAX-GFLT", "VAX-DFLT") && throw(
+        SpiceError(
+            :unsupportedbff,
+            "$who: the binary file format $bff of $path is not supported"
+        )
+    )
     unknown(why) = SpiceError(:unknownbff, "$who: the binary file format of $path $why")
     all(iszero, view(rec1, 89:96)) || throw(unknown("($(repr(rstrip(bff)))) is not known"))
     # NI is in 2:250, so one of its four bytes is nonzero and the others are zero.
@@ -78,10 +86,18 @@ function _daf_little(io::IO, rec1::AbstractVector{UInt8}, path::AbstractString,
     fward = Int(_daf_i32(rec1, 76, true))
     ctl = Vector{UInt8}(undef, 24)
     (fward >= 2 && (seek(io, (fward - 1) * _DAF_RECLEN); readbytes!(io, ctl, 24) == 24)) ||
-        throw(SpiceError(:filereadfailed,
-            "$who: the first summary record $fward of $path cannot be read"))
-    all(iszero, view(ctl, 17:24)) && throw(unknown("cannot be determined, because the " *
-        "file contains no data"))
+        throw(
+        SpiceError(
+            :filereadfailed,
+            "$who: the first summary record $fward of $path cannot be read"
+        )
+    )
+    all(iszero, view(ctl, 17:24)) && throw(
+        unknown(
+            "cannot be determined, because the " *
+                "file contains no data"
+        )
+    )
     all(iszero, view(ctl, 17:20)) && return true
     throw(SpiceError(:unsupportedbff, "$who: $path appears to be a VAX file, which is not supported"))
 end
@@ -100,27 +116,45 @@ Directory values (the last four doubles) of a fixed-interval Chebyshev segment t
 occupies `data[baddr:eaddr]`; throws `SpiceError(:baddaf)` unless RSIZE and N are
 positive whole numbers that agree with the segment length and the data type.
 """
-function _daf_directory(data::Vector{Float64}, path::AbstractString, kind::Symbol,
-        dtype::Int32, baddr::Int, eaddr::Int)
+function _daf_directory(
+        data::Vector{Float64}, path::AbstractString, kind::Symbol,
+        dtype::Int32, baddr::Int, eaddr::Int
+    )
     len = eaddr - baddr + 1
     # SPK type 20 ends with DSCALE, TSCALE, INITJD, INITFR, INTLEN, RSIZE, N, and binary
     # PCK type 20 the same way, with ASCALE (radians) in the place of DSCALE.
     trailer = dtype == 20 ? 7 : 4
-    len > trailer || throw(SpiceError(:baddaf,
-        "segment of type $dtype at $baddr:$eaddr is too short ($len doubles) in $path"))
-    init = data[eaddr-3]
-    intlen = data[eaddr-2]
-    (isfinite(init) && isfinite(intlen) && intlen > 0) || throw(SpiceError(:baddaf,
-        "segment at $baddr:$eaddr has INIT = $init, INTLEN = $intlen in $path"))
-    rsize = _daf_int(data[eaddr-1], 1, Int(typemax(Int32)), "RSIZE", path)
+    len > trailer || throw(
+        SpiceError(
+            :baddaf,
+            "segment of type $dtype at $baddr:$eaddr is too short ($len doubles) in $path"
+        )
+    )
+    init = data[eaddr - 3]
+    intlen = data[eaddr - 2]
+    (isfinite(init) && isfinite(intlen) && intlen > 0) || throw(
+        SpiceError(
+            :baddaf,
+            "segment at $baddr:$eaddr has INIT = $init, INTLEN = $intlen in $path"
+        )
+    )
+    rsize = _daf_int(data[eaddr - 1], 1, Int(typemax(Int32)), "RSIZE", path)
     nrec = _daf_int(data[eaddr], 1, Int(typemax(Int32)), "N", path)
-    Int128(rsize) * nrec + trailer == len || throw(SpiceError(:baddaf,
-        "segment at $baddr:$eaddr: RSIZE = $rsize and N = $nrec do not agree with " *
-        "the length $len in $path"))
+    Int128(rsize) * nrec + trailer == len || throw(
+        SpiceError(
+            :baddaf,
+            "segment at $baddr:$eaddr: RSIZE = $rsize and N = $nrec do not agree with " *
+                "the length $len in $path"
+        )
+    )
     if dtype == 2 || dtype == 3
         per = dtype == 2 ? 3 : 6      # coefficient sets in one record
-        (rsize > 2 && (rsize - 2) % per == 0) || throw(SpiceError(:baddaf,
-            "segment at $baddr:$eaddr: RSIZE = $rsize is not 2 + $per*NCOEF in $path"))
+        (rsize > 2 && (rsize - 2) % per == 0) || throw(
+            SpiceError(
+                :baddaf,
+                "segment at $baddr:$eaddr: RSIZE = $rsize is not 2 + $per*NCOEF in $path"
+            )
+        )
     end
     return init, intlen, Int32(rsize), Int32(nrec)
 end
@@ -150,7 +184,7 @@ flag of a CK segment (0 or 1), the second is the center of an SPK segment (0 is 
 center, but not a valid frame of a CK segment), and for the case that stays open the
 size of the segment decides between SPK type 1 and CK. Requires `length(ic) == 6`.
 """
-function _daf_ckspk(data::Vector{Float64}, ic::NTuple{6,Int32}, nwords::Int)
+function _daf_ckspk(data::Vector{Float64}, ic::NTuple{6, Int32}, nwords::Int)
     angvel, dtype = ic[4], ic[3]
     angvel == 0 && return :CK
     angvel > 1 && return :SPK
@@ -165,10 +199,10 @@ function _daf_ckspk(data::Vector{Float64}, ic::NTuple{6,Int32}, nwords::Int)
     ck2ok, nck2 = _daf_sizeok(size, 10, 100, 1)
     ck2ok || return :SPK
     if nck2 < 201
-        return data[first+(nspk-1)*71] > data[last-nspk] ? :SPK : :CK
+        return data[first + (nspk - 1) * 71] > data[last - nspk] ? :SPK : :CK
     end
     from = last - (nck2 - 1) ÷ 100
-    return data[from] > data[from+1] ? :CK : :SPK
+    return data[from] > data[from + 1] ? :CK : :SPK
 end
 
 """
@@ -193,10 +227,14 @@ The ID words `DAF/SPK`, `DAF/PCK` and `DAF/CK` are accepted, and also the old
 or CK, and `_daf_ckspk` decides from the first segment).
 """
 function open_daf(path::AbstractString)
-    isfile(path) || throw(SpiceError(:filenotfound, "no such file: $path"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "no such file: $path"))
     nbytes = filesize(path)
-    nbytes >= 2 * _DAF_RECLEN || throw(SpiceError(:baddaf,
-        "file of $nbytes bytes is too short to be a DAF: $path"))
+    nbytes >= 2 * _DAF_RECLEN || throw(
+        SpiceError(
+            :baddaf,
+            "file of $nbytes bytes is too short to be a DAF: $path"
+        )
+    )
     nwords = Int(nbytes ÷ 8)
     nrecords = Int(nbytes ÷ _DAF_RECLEN)
 
@@ -207,25 +245,40 @@ function open_daf(path::AbstractString)
         try
             # --- file record ---------------------------------------------------------
             idword = rstrip(String(raw[1:8]))
-            idword in ("DAF/SPK", "DAF/PCK", "DAF/CK", "NAIF/DAF") || throw(SpiceError(
-                :baddaf, "ID word $(repr(idword)) is not DAF/SPK, DAF/PCK, DAF/CK or " *
-                "NAIF/DAF in $path"))
+            idword in ("DAF/SPK", "DAF/PCK", "DAF/CK", "NAIF/DAF") || throw(
+                SpiceError(
+                    :baddaf, "ID word $(repr(idword)) is not DAF/SPK, DAF/PCK, DAF/CK or " *
+                        "NAIF/DAF in $path"
+                )
+            )
             little = _daf_little(io, raw, path, "furnsh")
             swap = little != (ENDIAN_BOM == 0x04030201)
             if raw[700:705] == _DAF_FTPSTR[1:6]      # the string is absent in old files
-                raw[700:727] == _DAF_FTPSTR || throw(SpiceError(:baddaf,
-                    "FTP validation string is damaged (text-mode transfer?) in $path"))
+                raw[700:727] == _DAF_FTPSTR || throw(
+                    SpiceError(
+                        :baddaf,
+                        "FTP validation string is damaged (text-mode transfer?) in $path"
+                    )
+                )
             end
             nd = Int(_daf_i32(raw, 8, little))
             ni = Int(_daf_i32(raw, 12, little))
             fward = Int(_daf_i32(raw, 76, little))
             kind = idword == "DAF/SPK" ? :SPK : idword == "DAF/PCK" ? :PCK :
-                   idword == "DAF/CK" ? :CK : ni == 6 ? :SPK : ni == 5 ? :PCK : :UNKNOWN
+                idword == "DAF/CK" ? :CK : ni == 6 ? :SPK : ni == 5 ? :PCK : :UNKNOWN
             want_ni = kind === :PCK ? 5 : 6
-            (kind !== :UNKNOWN && nd == 2 && ni == want_ni) || throw(SpiceError(:baddaf,
-                "ND = $nd, NI = $ni do not fit ID word $(repr(idword)) in $path"))
-            1 < fward <= nrecords || throw(SpiceError(:baddaf, "first summary record " *
-                "$fward is outside the file ($nrecords records): $path"))
+            (kind !== :UNKNOWN && nd == 2 && ni == want_ni) || throw(
+                SpiceError(
+                    :baddaf,
+                    "ND = $nd, NI = $ni do not fit ID word $(repr(idword)) in $path"
+                )
+            )
+            1 < fward <= nrecords || throw(
+                SpiceError(
+                    :baddaf, "first summary record " *
+                        "$fward is outside the file ($nrecords records): $path"
+                )
+            )
 
             # --- data array -----------------------------------------------------------
             data = if swap
@@ -249,30 +302,50 @@ function open_daf(path::AbstractString)
                 # invariant: `visited` summary records were read, and none twice while
                 # `visited <= nrecords`
                 visited += 1
-                visited <= nrecords || throw(SpiceError(:baddaf,
-                    "the chain of summary records has a cycle in $path"))
+                visited <= nrecords || throw(
+                    SpiceError(
+                        :baddaf,
+                        "the chain of summary records has a cycle in $path"
+                    )
+                )
                 base = (rec - 1) * _DAF_RECLEN       # 0-based byte offset of the record
-                next = _daf_int(data[(rec-1)*_DAF_RECWORDS+1], 0, nrecords,
-                    "next summary record", path)
-                nsum = _daf_int(data[(rec-1)*_DAF_RECWORDS+3], 0, maxsum,
-                    "summary count of record $rec", path)
+                next = _daf_int(
+                    data[(rec - 1) * _DAF_RECWORDS + 1], 0, nrecords,
+                    "next summary record", path
+                )
+                nsum = _daf_int(
+                    data[(rec - 1) * _DAF_RECWORDS + 3], 0, maxsum,
+                    "summary count of record $rec", path
+                )
                 for i in 1:nsum
                     off = base + 8 * (3 + (i - 1) * ss)
                     t0 = _daf_f64(raw, off, little)
                     t1 = _daf_f64(raw, off + 8, little)
-                    (isfinite(t0) && isfinite(t1)) || throw(SpiceError(:baddaf,
-                        "segment $(length(segments) + 1) has non-finite epochs in $path"))
+                    (isfinite(t0) && isfinite(t1)) || throw(
+                        SpiceError(
+                            :baddaf,
+                            "segment $(length(segments) + 1) has non-finite epochs in $path"
+                        )
+                    )
                     ic = ntuple(j -> _daf_i32(raw, off + 16 + 4 * (j - 1), little), 6)
                     if idword == "NAIF/DAF" && ni == 6 && visited == 1 && i == 1
                         kind = _daf_ckspk(data, ic, nwords)
                     end
                     if kind === :CK
                         b, e = Int(ic[5]), Int(ic[6])
-                        (1 <= b <= e <= nwords) || throw(SpiceError(:baddaf,
-                            "CK segment $(length(cksegments) + 1) has addresses $b:$e " *
-                            "outside the file ($nwords doubles): $path"))
-                        push!(cksegments, CKSegment(ic[1], ic[2], ic[3], ic[4] == 1, t0, t1,
-                            Int32(0), b, e))
+                        (1 <= b <= e <= nwords) || throw(
+                            SpiceError(
+                                :baddaf,
+                                "CK segment $(length(cksegments) + 1) has addresses $b:$e " *
+                                    "outside the file ($nwords doubles): $path"
+                            )
+                        )
+                        push!(
+                            cksegments, CKSegment(
+                                ic[1], ic[2], ic[3], ic[4] == 1, t0, t1,
+                                Int32(0), b, e
+                            )
+                        )
                         continue
                     end
                     target, center, frame, dtype, b, e = if kind === :SPK
@@ -284,16 +357,24 @@ function open_daf(path::AbstractString)
                     # end address is the begin address minus one) loads, as in CSPICE;
                     # an evaluation of it throws.
                     empty = b == e + 1 && b >= 1
-                    (empty || 1 <= b <= e <= nwords) || throw(SpiceError(:baddaf,
-                        "segment $(length(segments) + 1) has addresses $b:$e outside " *
-                        "the file ($nwords doubles): $path"))
+                    (empty || 1 <= b <= e <= nwords) || throw(
+                        SpiceError(
+                            :baddaf,
+                            "segment $(length(segments) + 1) has addresses $b:$e outside " *
+                                "the file ($nwords doubles): $path"
+                        )
+                    )
                     chebyshev = kind === :SPK ? (dtype == 2 || dtype == 3 || dtype == 20) :
-                                (dtype == 2 || dtype == 20)
+                        (dtype == 2 || dtype == 20)
                     init, intlen, rsize, nrec = (chebyshev && !empty) ?
                         _daf_directory(data, path, kind, dtype, b, e) :
                         (0.0, 0.0, Int32(0), Int32(0))
-                    push!(segments, Segment(target, center, frame, dtype, t0, t1, Int32(0),
-                        b, e, init, intlen, rsize, nrec))
+                    push!(
+                        segments, Segment(
+                            target, center, frame, dtype, t0, t1, Int32(0),
+                            b, e, init, intlen, rsize, nrec
+                        )
+                    )
                 end
                 rec = next
             end

@@ -12,7 +12,7 @@ const _GRID = -1
 
 "Abscissa `i` of a window: `data[xbase+i]`, or the whole number `i` if `xbase` is `_GRID`."
 @inline _abscissa(data::Vector{Float64}, xbase::Int, i::Int) =
-    xbase < 0 ? Float64(i) : @inbounds data[xbase+i]
+    xbase < 0 ? Float64(i) : @inbounds data[xbase + i]
 
 # --- interpolation kernels, shared with `ck.jl` and `math/polynomials.jl` -------------
 #
@@ -29,18 +29,18 @@ Value at `x` of the polynomial through the `n` points `(xa(i), w[i])`, by the Ne
 recurrence of `lgrint`; `w` is overwritten. `onequal(i, j)` is called before the
 division by `xa(i) - xa(j)` when that difference is zero.
 """
-@inline function _neville!(w::AbstractVector, n::Int, xa::F, x, onequal::G) where {F,G}
+@inline function _neville!(w::AbstractVector, n::Int, xa::F, x, onequal::G) where {F, G}
     # invariant: after pass j, w[i] is the value at x of the polynomial through the
     # points i .. i+j, for i = 1 .. n-j
-    @inbounds for j in 1:n-1
-        for i in 1:n-j
+    @inbounds for j in 1:(n - 1)
+        for i in 1:(n - j)
             xi = xa(i)
             xij = xa(i + j)
             denom = xi - xij
             primal(denom) == 0.0 && onequal(i, i + j)
             c1 = x - xij
             c2 = xi - x
-            w[i] = (c1 * w[i] + c2 * w[i+1]) / denom
+            w[i] = (c1 * w[i] + c2 * w[i + 1]) / denom
         end
     end
     return @inbounds w[1]
@@ -52,23 +52,25 @@ end
 As `_neville!`, with the derivative of the polynomial at `x`, by the recurrence of
 `lgrind`; `w` and `dw` are overwritten, and `dw[1:n]` need not be set by the caller.
 """
-@inline function _neville_d!(w::AbstractVector, dw::AbstractVector, n::Int, xa::F, x,
-        onequal::G) where {F,G}
+@inline function _neville_d!(
+        w::AbstractVector, dw::AbstractVector, n::Int, xa::F, x,
+        onequal::G
+    ) where {F, G}
     @inbounds for i in 1:n
         dw[i] = zero(eltype(dw))
     end
     # invariant: after pass j, w[i] and dw[i] are the value and the derivative at x of
     # the polynomial through the points i .. i+j
-    @inbounds for j in 1:n-1
-        for i in 1:n-j
+    @inbounds for j in 1:(n - 1)
+        for i in 1:(n - j)
             xi = xa(i)
             xij = xa(i + j)
             denom = xi - xij
             primal(denom) == 0.0 && onequal(i, i + j)
             c1 = x - xij
             c2 = xi - x
-            dw[i] = (c1 * dw[i] + c2 * dw[i+1] + (w[i] - w[i+1])) / denom
-            w[i] = (c1 * w[i] + c2 * w[i+1]) / denom
+            dw[i] = (c1 * dw[i] + c2 * dw[i + 1] + (w[i] - w[i + 1])) / denom
+            w[i] = (c1 * w[i] + c2 * w[i + 1]) / denom
         end
     end
     return @inbounds (w[1], dw[1])
@@ -83,11 +85,13 @@ the derivative `w1[2k]` at the abscissa `xa(k)`, `k = 1:n`, by the recurrence of
 are those of `hrmesp`. `onequal(i, j)` is called before a division by a zero
 difference of the abscissas `i` and `j`.
 """
-@inline function _hermite_table!(w1::AbstractVector, w2::AbstractVector, n::Int, xa::F, x,
-        onequal::G) where {F,G}
+@inline function _hermite_table!(
+        w1::AbstractVector, w2::AbstractVector, n::Int, xa::F, x,
+        onequal::G
+    ) where {F, G}
     # First column of the table: the polynomials through two consecutive entries of
     # the doubled abscissa list (x1, x1, x2, x2, ...).
-    @inbounds for i in 1:n-1
+    @inbounds for i in 1:(n - 1)
         xi = xa(i)
         xn = xa(i + 1)
         c1 = xn - x
@@ -104,13 +108,13 @@ difference of the abscissas `i` and `j`.
         w1[prev] = temp
     end
     @inbounds begin
-        w2[2n-1] = w1[2n]
-        w1[2n-1] = w1[2n] * (x - xa(n)) + w1[2n-1]
+        w2[2n - 1] = w1[2n]
+        w1[2n - 1] = w1[2n] * (x - xa(n)) + w1[2n - 1]
     end
     # invariant: after pass j, w1[i] and w2[i] are the value and the derivative at x of
     # the polynomial through the entries i .. i+j of the doubled list
-    @inbounds for j in 2:2n-1
-        for i in 1:2n-j
+    @inbounds for j in 2:(2n - 1)
+        for i in 1:(2n - j)
             ki = (i + 1) ÷ 2
             kij = (i + j + 1) ÷ 2
             xi = xa(ki)
@@ -119,8 +123,8 @@ difference of the abscissas `i` and `j`.
             c2 = x - xi
             denom = xij - xi
             primal(denom) == 0.0 && onequal(ki, kij)
-            w2[i] = (c1 * w2[i] + c2 * w2[i+1] + (w1[i+1] - w1[i])) / denom
-            w1[i] = (c1 * w1[i] + c2 * w1[i+1]) / denom
+            w2[i] = (c1 * w2[i] + c2 * w2[i + 1] + (w1[i + 1] - w1[i])) / denom
+            w1[i] = (c1 * w1[i] + c2 * w1[i + 1]) / denom
         end
     end
     return @inbounds (w1[1], w2[1])
@@ -141,12 +145,14 @@ the scaled abscissa `(t - first)/step + 1`).
 Requires `1 <= n <= _MAXWIN` and the packets and abscissas inside `data` (not
 checked). Throws `SpiceError(:baddaf)` if two abscissas are equal.
 """
-function _lagrange(seg::Segment, data::Vector{Float64}, pbase::Int, n::Int, xbase::Int,
-        x::T) where {T}
-    work = MVector{_MAXWIN,SVector{6,T}}(undef)
+function _lagrange(
+        seg::Segment, data::Vector{Float64}, pbase::Int, n::Int, xbase::Int,
+        x::T
+    ) where {T}
+    work = MVector{_MAXWIN, SVector{6, T}}(undef)
     @inbounds for i in 1:n
         a = pbase + 6 * (i - 1)
-        work[i] = SVector{6,T}(data[a+1], data[a+2], data[a+3], data[a+4], data[a+5], data[a+6])
+        work[i] = SVector{6, T}(data[a + 1], data[a + 2], data[a + 3], data[a + 4], data[a + 5], data[a + 6])
     end
     return _neville!(work, n, i -> _abscissa(data, xbase, i), x, (_, _) -> _equal_epochs(seg))
 end
@@ -164,20 +170,24 @@ respect to the scaled abscissa.
 Requires `1 <= n <= _MAXWIN` and the packets and abscissas inside `data` (not
 checked). Throws `SpiceError(:baddaf)` if two abscissas are equal.
 """
-function _hermite(seg::Segment, data::Vector{Float64}, pbase::Int, psize::Int, off::Int,
-        n::Int, xbase::Int, x::T, dscale::Float64) where {T}
-    w1 = MVector{2 * _MAXWIN,Vec3{T}}(undef)      # column 1 of WORK: values
-    w2 = MVector{2 * _MAXWIN,Vec3{T}}(undef)      # column 2 of WORK: derivatives
+function _hermite(
+        seg::Segment, data::Vector{Float64}, pbase::Int, psize::Int, off::Int,
+        n::Int, xbase::Int, x::T, dscale::Float64
+    ) where {T}
+    w1 = MVector{2 * _MAXWIN, Vec3{T}}(undef)      # column 1 of WORK: values
+    w2 = MVector{2 * _MAXWIN, Vec3{T}}(undef)      # column 2 of WORK: derivatives
     @inbounds for k in 1:n
         a = pbase + psize * (k - 1) + off
-        w1[2k-1] = Vec3{T}(data[a+1], data[a+2], data[a+3])
-        w1[2k] = Vec3{T}(data[a+4] * dscale, data[a+5] * dscale, data[a+6] * dscale)
+        w1[2k - 1] = Vec3{T}(data[a + 1], data[a + 2], data[a + 3])
+        w1[2k] = Vec3{T}(data[a + 4] * dscale, data[a + 5] * dscale, data[a + 6] * dscale)
     end
-    return _hermite_table!(w1, w2, n, i -> _abscissa(data, xbase, i), x,
-        (_, _) -> _equal_epochs(seg))
+    return _hermite_table!(
+        w1, w2, n, i -> _abscissa(data, xbase, i), x,
+        (_, _) -> _equal_epochs(seg)
+    )
 end
 
-@inline _split6(s::SVector{6,T}) where {T} = (Vec3{T}(s[1], s[2], s[3]), Vec3{T}(s[4], s[5], s[6]))
+@inline _split6(s::SVector{6, T}) where {T} = (Vec3{T}(s[1], s[2], s[3]), Vec3{T}(s[4], s[5], s[6]))
 
 """
     _spk_equal(data, seg, et::T) -> (pos, vel)
@@ -191,14 +201,14 @@ one with an even number on the interval that contains it, and the window moves
 inward at the two ends of the segment. Type 12 gives the derivative of the position
 polynomial as the velocity.
 """
-function _spk_equal(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk_equal(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 10 || _badsegment(seg, "the segment is too short")
-    @inbounds start, step = data[e-3], data[e-2]
+    @inbounds start, step = data[e - 3], data[e - 2]
     (isfinite(start) && isfinite(step) && step != 0.0) ||
         _badsegment(seg, "the first epoch or the step is not valid")
-    window = _seg_count(seg, @inbounds(data[e-1]), 0, _MAXWIN - 1, "window size - 1") + 1
+    window = _seg_count(seg, @inbounds(data[e - 1]), 0, _MAXWIN - 1, "window size - 1") + 1
     n = _seg_count(seg, @inbounds(data[e]), window, _MAXCOUNT, "state count")
     6 * n + 4 == len || _badsegment(seg, "the state count does not agree with the length")
     degree = window - 1
@@ -222,11 +232,11 @@ State of a type 9 (Lagrange) or type 13 (Hermite) segment: states at arbitrary
 epochs, as `spkr09` with `spke09` or `spke13`. The segment holds the states, the
 epochs, an epoch directory, the window size minus 1 and the number of states.
 """
-function _spk_unequal(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk_unequal(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 9 || _badsegment(seg, "the segment is too short")
-    window = _seg_count(seg, @inbounds(data[e-1]), 0, _MAXWIN - 1, "window size - 1") + 1
+    window = _seg_count(seg, @inbounds(data[e - 1]), 0, _MAXWIN - 1, "window size - 1") + 1
     n = _seg_count(seg, @inbounds(data[e]), window, _MAXCOUNT, "state count")
     7 * n + (n - 1) ÷ 100 + 2 == len ||
         _badsegment(seg, "the state count does not agree with the length")
@@ -236,7 +246,7 @@ function _spk_unequal(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real
     low = max(_lstltd(data, ebase, n, t), 1)    # last epoch before t, or the first epoch
     center = low
     if isodd(window) && low < n
-        @inbounds center = abs(t - data[ebase+low]) < abs(t - data[ebase+low+1]) ? low : low + 1
+        @inbounds center = abs(t - data[ebase + low]) < abs(t - data[ebase + low + 1]) ? low : low + 1
     end
     first = min(max(center - degree ÷ 2, 1), n - degree)
     pbase = b - 1 + 6 * (first - 1)
@@ -276,8 +286,10 @@ of the first pair and the velocity from the one of the second pair. Subtype 1:
 Lagrange polynomials of the six state components. Subtype 2: Hermite polynomial of
 position and velocity, with its derivative as the velocity.
 """
-function _packet_state(seg::Segment, data::Vector{Float64}, subtyp::Int, pbase::Int, n::Int,
-        xbase::Int, et::T) where {T<:Real}
+function _packet_state(
+        seg::Segment, data::Vector{Float64}, subtyp::Int, pbase::Int, n::Int,
+        xbase::Int, et::T
+    ) where {T <: Real}
     if subtyp == 0
         pos, _ = _hermite(seg, data, pbase, 12, 0, n, xbase, et, 1.0)
         vel, _ = _hermite(seg, data, pbase, 12, 6, n, xbase, et, 1.0)
@@ -296,12 +308,12 @@ State of a type 18 segment, as `spkr18` and `spke18`. The segment holds the pack
 the epochs, an epoch directory, the subtype (0 or 1), the window size and the number
 of packets. The window size is even and not above 8 (subtype 0) or 16 (subtype 1).
 """
-function _spk18(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk18(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 10 || _badsegment(seg, "the segment is too short")
-    subtyp = _seg_count(seg, @inbounds(data[e-2]), 0, 1, "subtype")
-    wnd = _seg_count(seg, @inbounds(data[e-1]), 2, subtyp == 0 ? 8 : 16, "window size")
+    subtyp = _seg_count(seg, @inbounds(data[e - 2]), 0, 1, "subtype")
+    wnd = _seg_count(seg, @inbounds(data[e - 1]), 2, subtyp == 0 ? 8 : 16, "window size")
     iseven(wnd) || _badsegment(seg, "the window size is odd")
     n = _seg_count(seg, @inbounds(data[e]), 2, _MAXCOUNT, "packet count")
     psize = _packet_size(subtyp)
@@ -309,8 +321,10 @@ function _spk18(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
         _badsegment(seg, "the packet count does not agree with the length")
     ebase = b - 1 + n * psize
     first, count = _packet_window(data, ebase, n, wnd, primal(et))
-    return _packet_state(seg, data, subtyp, b - 1 + (first - 1) * psize, count,
-        ebase + first - 1, et)
+    return _packet_state(
+        seg, data, subtyp, b - 1 + (first - 1) * psize, count,
+        ebase + first - 1, et
+    )
 end
 
 """
@@ -326,27 +340,27 @@ For an epoch that is a bound between two intervals the flag selects the later
 interval (1) or the earlier one (0). The window size is even and not above 14
 (subtype 0) or 28 (subtypes 1 and 2).
 """
-function _spk19(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk19(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 6 || _badsegment(seg, "the segment is too short")
-    later = @inbounds(data[e-1]) == 1.0         # the writer of CSPICE stores -1 for "earlier"
+    later = @inbounds(data[e - 1]) == 1.0         # the writer of CSPICE stores -1 for "earlier"
     n = _seg_count(seg, @inbounds(data[e]), 1, _MAXCOUNT, "interval count")
     pbas = e - 2 - (n + 1)                      # pointer i is data[pbas+i]
     ivbas = pbas - n ÷ 100 - (n + 1)            # interval bound i is data[ivbas+i]
     # The last pointer is the place after the last mini-segment: the first bound.
-    (ivbas >= b && @inbounds(data[pbas+n+1]) == ivbas - b + 2) ||
+    (ivbas >= b && @inbounds(data[pbas + n + 1]) == ivbas - b + 2) ||
         _badsegment(seg, "the interval count does not agree with the length")
     t = primal(et)
     mini = later ? min(_lstled(data, ivbas, n + 1, t), n) : _lstltd(data, ivbas, n + 1, t)
     mini = clamp(mini, 1, n)
-    @inbounds p1, p2 = data[pbas+mini], data[pbas+mini+1]
+    @inbounds p1, p2 = data[pbas + mini], data[pbas + mini + 1]
     minib = _seg_count(seg, p1, 1, len, "mini-segment pointer") + b - 1
     minie = _seg_count(seg, p2, 1, len, "mini-segment pointer") + b - 2
     (minie - minib >= 3 && minie <= ivbas) ||
         _badsegment(seg, "the pointers of mini-segment $mini are not valid")
-    subtyp = _seg_count(seg, @inbounds(data[minie-2]), 0, 2, "subtype")
-    wnd = _seg_count(seg, @inbounds(data[minie-1]), 2, subtyp == 0 ? 14 : 28, "window size")
+    subtyp = _seg_count(seg, @inbounds(data[minie - 2]), 0, 2, "subtype")
+    wnd = _seg_count(seg, @inbounds(data[minie - 1]), 2, subtyp == 0 ? 14 : 28, "window size")
     iseven(wnd) || _badsegment(seg, "the window size is odd")
     npkt = _seg_count(seg, @inbounds(data[minie]), 1, _MAXCOUNT, "packet count")
     psize = _packet_size(subtyp)
@@ -354,6 +368,8 @@ function _spk19(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
         _badsegment(seg, "the packet count of mini-segment $mini does not agree with its length")
     ebase = minib - 1 + npkt * psize
     first, count = _packet_window(data, ebase, npkt, wnd, t)
-    return _packet_state(seg, data, subtyp, minib - 1 + (first - 1) * psize, count,
-        ebase + first - 1, et)
+    return _packet_state(
+        seg, data, subtyp, minib - 1 + (first - 1) * psize, count,
+        ebase + first - 1, et
+    )
 end

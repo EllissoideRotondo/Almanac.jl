@@ -22,20 +22,37 @@ function _dsk_surface_vars(ks::KernelSet)
     codes = get(ks.pool, _DSK_SRF_VARS[2], nothing)
     bodies = get(ks.pool, _DSK_SRF_VARS[3], nothing)
     (names === nothing && codes === nothing && bodies === nothing) && return nothing
-    (names === nothing || codes === nothing || bodies === nothing) && throw(SpiceError(
-        :badsurfacemap, "the surface name map needs the three kernel variables " *
-        "NAIF_SURFACE_NAME, NAIF_SURFACE_CODE and NAIF_SURFACE_BODY, but only some are present"))
+    (names === nothing || codes === nothing || bodies === nothing) && throw(
+        SpiceError(
+            :badsurfacemap, "the surface name map needs the three kernel variables " *
+                "NAIF_SURFACE_NAME, NAIF_SURFACE_CODE and NAIF_SURFACE_BODY, but only some are present"
+        )
+    )
     (names isa Vector{String} && codes isa Vector{Float64} && bodies isa Vector{Float64}) ||
-        throw(SpiceError(:badvariabletype, "NAIF_SURFACE_NAME must be character, and " *
-            "NAIF_SURFACE_CODE and NAIF_SURFACE_BODY must be numeric"))
-    max(length(names), length(codes), length(bodies)) > _DSK_MXNSRF && throw(SpiceError(
-        :toomanysurfaces, "a surface name map variable has more than $_DSK_MXNSRF values"))
-    (length(codes) == length(names) && length(bodies) == length(names)) || throw(SpiceError(
-        :arraysizemismatch, "the surface name map variables have the sizes " *
-        "$(length(names)), $(length(codes)) and $(length(bodies)); they must be equal"))
+        throw(
+        SpiceError(
+            :badvariabletype, "NAIF_SURFACE_NAME must be character, and " *
+                "NAIF_SURFACE_CODE and NAIF_SURFACE_BODY must be numeric"
+        )
+    )
+    max(length(names), length(codes), length(bodies)) > _DSK_MXNSRF && throw(
+        SpiceError(
+            :toomanysurfaces, "a surface name map variable has more than $_DSK_MXNSRF values"
+        )
+    )
+    (length(codes) == length(names) && length(bodies) == length(names)) || throw(
+        SpiceError(
+            :arraysizemismatch, "the surface name map variables have the sizes " *
+                "$(length(names)), $(length(codes)) and $(length(bodies)); they must be equal"
+        )
+    )
     for n in names
-        isempty(strip(n, ' ')) && throw(SpiceError(:blanknameassigned,
-            "a blank surface name is assigned in NAIF_SURFACE_NAME"))
+        isempty(strip(n, ' ')) && throw(
+            SpiceError(
+                :blanknameassigned,
+                "a blank surface name is assigned in NAIF_SURFACE_NAME"
+            )
+        )
     end
     return names, codes, bodies
 end
@@ -75,7 +92,7 @@ function _dsk_surface_c2n(ks::KernelSet, code::Integer, bodyid::Integer)
         (round(Int, bodies[i]) == bodyid && round(Int, codes[i]) == code) || continue
         nn = normalize_name(names[i])
         masked = false
-        for j in i+1:n
+        for j in (i + 1):n
             if round(Int, bodies[j]) == bodyid && normalize_name(names[j]) == nn
                 masked = true
                 break
@@ -224,7 +241,7 @@ function _dsk_lex_method(method::AbstractString)
             closed = false
             while j <= n
                 if chars[j] == '"'
-                    if j < n && chars[j+1] == '"'
+                    if j < n && chars[j + 1] == '"'
                         j += 2
                         continue
                     end
@@ -233,8 +250,12 @@ function _dsk_lex_method(method::AbstractString)
                 end
                 j += 1
             end
-            closed || throw(SpiceError(:syntaxerror,
-                "a quoted string in the method string is not terminated: $method"))
+            closed || throw(
+                SpiceError(
+                    :syntaxerror,
+                    "a quoted string in the method string is not terminated: $method"
+                )
+            )
             push!(tokens, String(chars[i:j]))
             i = j + 1
         elseif c in "/,=:"
@@ -242,20 +263,28 @@ function _dsk_lex_method(method::AbstractString)
             i += 1
         else
             j = i
-            while j < n && !(chars[j+1] in " /,=:\"")
+            while j < n && !(chars[j + 1] in " /,=:\"")
                 j += 1
             end
             push!(tokens, String(chars[i:j]))
             i = j + 1
         end
     end
-    length(tokens) > _DSK_MAXSRF && throw(SpiceError(:arraytoosmall,
-        "the method string has more than $_DSK_MAXSRF tokens"))
+    length(tokens) > _DSK_MAXSRF && throw(
+        SpiceError(
+            :arraytoosmall,
+            "the method string has more than $_DSK_MAXSRF tokens"
+        )
+    )
     return tokens
 end
 
-@noinline _dsk_bad_method(method, why) = throw(SpiceError(:badmethodsyntax,
-    "$why in the method string <$method>"))
+@noinline _dsk_bad_method(method, why) = throw(
+    SpiceError(
+        :badmethodsyntax,
+        "$why in the method string <$method>"
+    )
+)
 
 "True if `a` and `b` are equal when case and blanks are ignored (`eqstr`)."
 _dsk_eqstr(a::AbstractString, b::AbstractString) =
@@ -300,10 +329,18 @@ function _dsk_parse_method(ks::KernelSet, bodyid::Integer, method::AbstractStrin
                             s = s[nextind(s, 1):prevind(s, lastindex(s))]
                         end
                         code = srfscc(ks, s, bodyid)
-                        code === nothing && throw(SpiceError(:idcodenotfound, "could not " *
-                            "map the surface name $s to an ID code for the body $bodyid"))
-                        length(srflst) == _DSK_MAXSRF && throw(SpiceError(:toomanysurfaces,
-                            "the method string names more than $_DSK_MAXSRF surfaces"))
+                        code === nothing && throw(
+                            SpiceError(
+                                :idcodenotfound, "could not " *
+                                    "map the surface name $s to an ID code for the body $bodyid"
+                            )
+                        )
+                        length(srflst) == _DSK_MAXSRF && throw(
+                            SpiceError(
+                                :toomanysurfaces,
+                                "the method string names more than $_DSK_MAXSRF surfaces"
+                            )
+                        )
                         push!(srflst, code)
                         i == n && break
                         i += 1
@@ -339,8 +376,12 @@ function _dsk_parse_method(ks::KernelSet, bodyid::Integer, method::AbstractStrin
             end
             i += 1
         end
-        pri && throw(SpiceError(:badpriorityspec, "the method string <$method> does not " *
-            "contain UNPRIORITIZED; prioritized DSK data are not supported, as in CSPICE"))
+        pri && throw(
+            SpiceError(
+                :badpriorityspec, "the method string <$method> does not " *
+                    "contain UNPRIORITIZED; prioritized DSK data are not supported, as in CSPICE"
+            )
+        )
         return :dsk, subtyp, false, srflst
     end
     _dsk_eqstr(method, "ELLIPSOID") && return :ellipsoid, "", true, srflst
@@ -359,7 +400,7 @@ function _dsk_parse_method(ks::KernelSet, bodyid::Integer, method::AbstractStrin
             nsubtp += 1
             nsubtp > 1 && _dsk_bad_method(method, "extra sub-observer point type")
             if t == "NEAR"
-                (i < n && tok[i+1] == "POINT") && (subtyp = "NADIR")
+                (i < n && tok[i + 1] == "POINT") && (subtyp = "NADIR")
             else
                 subtyp = t
             end
@@ -382,8 +423,10 @@ end
 # ---------------------------------------------------------------------------------------
 
 "Target code, frame ID, shape and surface list for `latsrf` and `srfnrm`, after their common checks."
-function _dsk_surface_setup(ks::KernelSet, method::AbstractString, target::NameOrID,
-        fixref::NameOrID)
+function _dsk_surface_setup(
+        ks::KernelSet, method::AbstractString, target::NameOrID,
+        fixref::NameOrID
+    )
     _dsk_nonempty("latsrf/srfnrm", "method", method)
     target isa AbstractString && _dsk_nonempty("latsrf/srfnrm", "target", target)
     fixref isa AbstractString && _dsk_nonempty("latsrf/srfnrm", "fixref", fixref)
@@ -391,29 +434,45 @@ function _dsk_surface_setup(ks::KernelSet, method::AbstractString, target::NameO
     fixfid = _dsk_frame_code(ks, fixref)
     center = fixfid == 0 ? nothing : _dsk_frame_center(ks, fixfid)
     center === nothing && throw(SpiceError(:noframe, "the reference frame $fixref is not recognized"))
-    center == trgcde || throw(SpiceError(:invalidframe, "the reference frame $fixref is " *
-        "not centered at the target body $target"))
+    center == trgcde || throw(
+        SpiceError(
+            :invalidframe, "the reference frame $fixref is " *
+                "not centered at the target body $target"
+        )
+    )
     shape, subtyp, _, srflst = _dsk_parse_method(ks, trgcde, method)
-    isempty(subtyp) || throw(SpiceError(:invalidmethod, "the method string <$method> " *
-        "contains the sub-observer point type $subtyp, which is not valid here"))
+    isempty(subtyp) || throw(
+        SpiceError(
+            :invalidmethod, "the method string <$method> " *
+                "contains the sub-observer point type $subtyp, which is not valid here"
+        )
+    )
     return trgcde, fixfid, shape, srflst
 end
 
 "The three radii of the body `code` from the kernel pool; throws `SpiceError(:badaxislength)` unless all are positive."
 function _dsk_radii(ks::KernelSet, code::Integer)
     radii = bodvrd(ks, code, "RADII")
-    length(radii) == 3 || throw(SpiceError(:badaxislength,
-        "BODY$(code)_RADII has $(length(radii)) values; 3 are required"))
-    min(min(radii[1], radii[2]), radii[3]) <= 0.0 && throw(SpiceError(:badaxislength,
-        "the radii of the body $code must be positive but were $radii"))
+    length(radii) == 3 || throw(
+        SpiceError(
+            :badaxislength,
+            "BODY$(code)_RADII has $(length(radii)) values; 3 are required"
+        )
+    )
+    min(min(radii[1], radii[2]), radii[3]) <= 0.0 && throw(
+        SpiceError(
+            :badaxislength,
+            "the radii of the body $code must be positive but were $radii"
+        )
+    )
     return radii[1], radii[2], radii[3]
 end
 
 @inline _dsk_get2(a::AbstractMatrix, i::Int) = (Float64(a[1, i]), Float64(a[2, i]))
 @inline function _dsk_get2(a::AbstractVector, i::Int)
-    e = a[begin+i-1]
+    e = a[begin + i - 1]
     length(e) == 2 || throw(SpiceError(:badarg, "element $i does not have 2 components"))
-    return Float64(e[begin]), Float64(e[begin+1])
+    return Float64(e[begin]), Float64(e[begin + 1])
 end
 function _dsk_count2(a::AbstractMatrix)
     size(a, 1) == 2 || throw(SpiceError(:badarg, "a 2 x n matrix is required, got $(size(a))"))
@@ -457,17 +516,23 @@ Throws `SpiceError`:
 
 See also [`srfnrm`](@ref), [`dskxsi`](@ref).
 """
-function latsrf(ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,
-        fixref::NameOrID, lonlat)
+function latsrf(
+        ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,
+        fixref::NameOrID, lonlat
+    )
     return _dsk_latsrf(ks, _DSK_DEFAULT_TOLS, method, target, et, fixref, lonlat)
 end
-latsrf(ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
-    lonlat) = _dsk_latsrf(kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, lonlat)
+latsrf(
+    ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+    lonlat
+) = _dsk_latsrf(kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, lonlat)
 latsrf(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, lonlat) =
     latsrf(default_context(), method, target, et, fixref, lonlat)
 
-function _dsk_latsrf(ks::KernelSet, tols::DSKTolerances, method::AbstractString, target, et::Real,
-        fixref, lonlat)
+function _dsk_latsrf(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString, target, et::Real,
+        fixref, lonlat
+    )
     trgcde, fixfid, shape, srflst = _dsk_surface_setup(ks, method, target, fixref)
     npts = _dsk_count2(lonlat)
     out = Vector{Vec3{Float64}}(undef, npts)
@@ -495,10 +560,18 @@ function _dsk_latsrf(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         lon, lat = _dsk_get2(lonlat, i)
         x = _dsk_latrec(r, lon, lat)
         xpt, _, _, found = _dsk_bux(ks, tols, trgcde, srflst, t, fixfid, x, _dsk_vminus(x))
-        found || throw(SpiceError(:pointnotfound, "no surface point was found on body " *
-            "$trgcde at planetocentric longitude $(rad2deg(lon)) deg, latitude $(rad2deg(lat)) deg"))
-        _dsk_vdot(x, xpt) < 0.0 && throw(SpiceError(:shapenotsupported, "the intercept is " *
-            "on the far side of the center of body $trgcde; such a shape is not supported"))
+        found || throw(
+            SpiceError(
+                :pointnotfound, "no surface point was found on body " *
+                    "$trgcde at planetocentric longitude $(rad2deg(lon)) deg, latitude $(rad2deg(lat)) deg"
+            )
+        )
+        _dsk_vdot(x, xpt) < 0.0 && throw(
+            SpiceError(
+                :shapenotsupported, "the intercept is " *
+                    "on the far side of the center of body $trgcde; such a shape is not supported"
+            )
+        )
         out[i] = xpt
     end
     return out
@@ -525,17 +598,23 @@ Throws `SpiceError`:
   the target is loaded, `:pointnotinsegment` if no segment holds a point,
   `:pointoffsurface` if a point is not on a plate (DSK).
 """
-function srfnrm(ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,
-        fixref::NameOrID, srfpts)
+function srfnrm(
+        ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,
+        fixref::NameOrID, srfpts
+    )
     return _dsk_srfnrm(ks, _DSK_DEFAULT_TOLS, method, target, et, fixref, srfpts)
 end
-srfnrm(ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
-    srfpts) = _dsk_srfnrm(kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, srfpts)
+srfnrm(
+    ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+    srfpts
+) = _dsk_srfnrm(kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, srfpts)
 srfnrm(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, srfpts) =
     srfnrm(default_context(), method, target, et, fixref, srfpts)
 
-function _dsk_srfnrm(ks::KernelSet, tols::DSKTolerances, method::AbstractString, target, et::Real,
-        fixref, srfpts)
+function _dsk_srfnrm(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString, target, et::Real,
+        fixref, srfpts
+    )
     trgcde, fixfid, shape, srflst = _dsk_surface_setup(ks, method, target, fixref)
     npts = _dsk_count3(srfpts)
     out = Vector{Vec3{Float64}}(undef, npts)
@@ -548,8 +627,12 @@ function _dsk_srfnrm(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         for i in 1:npts                  # invariant: out[1:i-1] holds the normals 1 .. i-1
             p = _dsk_get3(srfpts, i)
             level = (p[1] * p[1] / a2 + p[2] * p[2] / b2 + p[3] * p[3] / c2)^0.5
-            abs(level - 1.0) >= limit && throw(SpiceError(:pointnotonsurface,
-                "the input point at index $i is not on the target body's reference ellipsoid"))
+            abs(level - 1.0) >= limit && throw(
+                SpiceError(
+                    :pointnotonsurface,
+                    "the input point at index $i is not on the target body's reference ellipsoid"
+                )
+            )
             out[i] = _dsk_surfnm(a, b, c, p)
         end
         return out

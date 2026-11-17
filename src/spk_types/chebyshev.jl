@@ -19,12 +19,12 @@ Only the layout that `spk14b` of CSPICE writes is accepted (fixed packet size,
 explicit reference values with the index type "last less than or equal"); another
 one throws `SpiceError(:notsupported)`.
 """
-function _spk14(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk14(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     lay = _spk14_layout(data, seg)
     b, ncoef, stride = seg.baddr, lay.ncoef, lay.stride
     k = clamp(_lstled(data, b - 1 + lay.refbas, lay.nref, primal(et)), 1, lay.npkt)
     a = b + lay.pktbas + (k - 1) * stride + lay.pktoff  # address of MID
-    @inbounds mid, radius = data[a], data[a+1]
+    @inbounds mid, radius = data[a], data[a + 1]
     tau = (et - mid) / radius
     (pos,) = _cheb3(data, a + 2, ncoef, tau, 1 / radius, Val(0))
     (vel,) = _cheb3(data, a + 2 + 3 * ncoef, ncoef, tau, 1 / radius, Val(0))
@@ -48,24 +48,28 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
     mb = e - max(nmeta, 16)                     # meta item i is data[mb+i]
     mb >= b - 1 || _badsegment(seg, "the meta data do not fit the segment")
     @inbounds begin
-        conbas = _seg_count(seg, data[mb+1], 0, len, "constants base")
-        ncon = _seg_count(seg, data[mb+2], 1, len, "constants count")
-        rdrtyp = _seg_count(seg, data[mb+5], 0, 4, "reference directory type")
-        refbas = _seg_count(seg, data[mb+6], 0, len, "reference base")
-        nref = _seg_count(seg, data[mb+7], 1, len, "reference count")
-        pdrtyp = _seg_count(seg, data[mb+10], 0, 1, "packet directory type")
-        pktbas = _seg_count(seg, data[mb+11], 0, len, "packet base")
-        npkt = _seg_count(seg, data[mb+12], 1, len, "packet count")
-        pktsz = _seg_count(seg, data[mb+15], 8, len, "packet size")
-        pktoff = nmeta >= 16 ? _seg_count(seg, data[mb+16], 0, len, "packet offset") : 0
+        conbas = _seg_count(seg, data[mb + 1], 0, len, "constants base")
+        ncon = _seg_count(seg, data[mb + 2], 1, len, "constants count")
+        rdrtyp = _seg_count(seg, data[mb + 5], 0, 4, "reference directory type")
+        refbas = _seg_count(seg, data[mb + 6], 0, len, "reference base")
+        nref = _seg_count(seg, data[mb + 7], 1, len, "reference count")
+        pdrtyp = _seg_count(seg, data[mb + 10], 0, 1, "packet directory type")
+        pktbas = _seg_count(seg, data[mb + 11], 0, len, "packet base")
+        npkt = _seg_count(seg, data[mb + 12], 1, len, "packet count")
+        pktsz = _seg_count(seg, data[mb + 15], 8, len, "packet size")
+        pktoff = nmeta >= 16 ? _seg_count(seg, data[mb + 16], 0, len, "packet offset") : 0
     end
-    (rdrtyp == 3 && pdrtyp == 0) || throw(SpiceError(:notsupported,
-        "SPK type 14 segment with reference directory type $rdrtyp and packet " *
-        "directory type $pdrtyp is not supported"))
+    (rdrtyp == 3 && pdrtyp == 0) || throw(
+        SpiceError(
+            :notsupported,
+            "SPK type 14 segment with reference directory type $rdrtyp and packet " *
+                "directory type $pdrtyp is not supported"
+        )
+    )
     stride = pktsz + pktoff
     (nref == npkt && refbas + nref <= len && Int128(pktbas) + Int128(npkt) * stride <= len) ||
         _badsegment(seg, "the meta data do not agree with the length")
-    ncoef = _seg_count(seg, @inbounds(data[b-1+conbas+1]), 1, len, "coefficient count")
+    ncoef = _seg_count(seg, @inbounds(data[b - 1 + conbas + 1]), 1, len, "coefficient count")
     6 * ncoef + 2 == pktsz || _badsegment(seg, "the packet size is not 2 + 6*NCOEF")
     return (; conbas, refbas, nref, pktbas, npkt, pktsz, pktoff, stride, ncoef)
 end
@@ -78,9 +82,11 @@ Value at `x` of the Chebyshev series with the `ncof` coefficients
 `mid` to `x`, by the recurrences of `chbigr`; also the kernel of the public `chbigr`.
 Requires `ncof >= 1`, `radius > 0` and the coefficients inside `data` (not checked).
 """
-@inline function _chbigr(data::AbstractVector, a::Int, ncof::Int, scale::Float64, mid::Real,
-        radius::Real, x::T) where {T}
-    cp(i) = @inbounds data[a+i-1] * scale       # coefficient i, 1-based
+@inline function _chbigr(
+        data::AbstractVector, a::Int, ncof::Int, scale::Float64, mid::Real,
+        radius::Real, x::T
+    ) where {T}
+    cp(i) = @inbounds data[a + i - 1] * scale       # coefficient i, 1-based
     degp = ncof - 1
     s = (x - mid) / radius
     s2 = s * 2.0
@@ -119,7 +125,7 @@ of the velocity series (in units of DSCALE km per TSCALE s) and then the positio
 the middle of the record interval (in units of DSCALE km). The velocity is the
 series; the position is the middle position plus the integral of the series.
 """
-function _spk20(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk20(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     recsiz, nrec = Int(seg.rsize), Int(seg.nrec)
     (nrec >= 1 && recsiz >= 1 && e - b + 1 == Int128(recsiz) * nrec + 7) ||
@@ -127,10 +133,12 @@ function _spk20(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
     nterms = recsiz ÷ 3
     ncof = nterms - 1
     (ncof >= 1 && 3 * nterms == recsiz) || _badsegment(seg, "the record size $recsiz is not valid")
-    @inbounds dscale, tscale, initjd, initfr, intlen = data[e-6], data[e-5], data[e-4],
-        data[e-3], data[e-2]
-    (isfinite(dscale) && isfinite(tscale) && tscale != 0.0 && isfinite(initjd) &&
-     isfinite(initfr) && isfinite(intlen) && intlen > 0.0) ||
+    @inbounds dscale, tscale, initjd, initfr, intlen = data[e - 6], data[e - 5], data[e - 4],
+        data[e - 3], data[e - 2]
+    (
+        isfinite(dscale) && isfinite(tscale) && tscale != 0.0 && isfinite(initjd) &&
+            isfinite(initfr) && isfinite(intlen) && intlen > 0.0
+    ) ||
         _badsegment(seg, "the scales or the interval values are not valid")
     init = (initjd - _J2000_JD + initfr) * _SPD
     intrvl = intlen * _SPD
@@ -143,7 +151,7 @@ function _spk20(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
     vx, ix = _chbigr(data, r, ncof, vscale, mid, radius, et)
     vy, iy = _chbigr(data, r + nterms, ncof, vscale, mid, radius, et)
     vz, iz = _chbigr(data, r + 2 * nterms, ncof, vscale, mid, radius, et)
-    @inbounds px, py, pz = dscale * data[r+nterms-1], dscale * data[r+2*nterms-1],
-        dscale * data[r+3*nterms-1]
+    @inbounds px, py, pz = dscale * data[r + nterms - 1], dscale * data[r + 2 * nterms - 1],
+        dscale * data[r + 3 * nterms - 1]
     return Vec3{T}(px + ix, py + iy, pz + iz), Vec3{T}(vx, vy, vz)
 end

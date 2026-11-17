@@ -66,18 +66,26 @@ function write(dir::AbstractString)
     last = first + 365 * 86400.0
     h = spkopn(spk, "manual examples", 0)
     # The Sun stays at the solar system barycentre, which aberration corrections need.
-    spkw08(h, 10, 0, "J2000", first, last, "Sun at the barycentre", 1,
-        [zeros(6) for _ in 1:2], first, last - first)
+    spkw08(
+        h, 10, 0, "J2000", first, last, "Sun at the barycentre", 1,
+        [zeros(6) for _ in 1:2], first, last - first
+    )
     earth = [1.495978707e8, 0.0, 0.0, 0.0, 100.46 * rpd(), 0.0, first, MU_SUN]
-    epochs = collect(range(first, last; length=74))
-    spkw05(h, 399, 10, "ECLIPJ2000", first, last, "Earth, two-body", MU_SUN,
-        [conics(earth, t) for t in epochs], epochs)
+    epochs = collect(range(first, last; length = 74))
+    spkw05(
+        h, 399, 10, "ECLIPJ2000", first, last, "Earth, two-body", MU_SUN,
+        [conics(earth, t) for t in epochs], epochs
+    )
     rp, ra = 6378.1366 + 700.0, 6378.1366 + 35786.0
-    probe = [rp, (ra - rp) / (ra + rp), 28.5 * rpd(), 40.0 * rpd(), 270.0 * rpd(), 0.0,
-        first, MU_EARTH]
-    epochs = collect(range(first, last; length=4001))
-    spkw05(h, -999, 399, "J2000", first, last, "PROBE, two-body", MU_EARTH,
-        [conics(probe, t) for t in epochs], epochs)
+    probe = [
+        rp, (ra - rp) / (ra + rp), 28.5 * rpd(), 40.0 * rpd(), 270.0 * rpd(), 0.0,
+        first, MU_EARTH,
+    ]
+    epochs = collect(range(first, last; length = 4001))
+    spkw05(
+        h, -999, 399, "J2000", first, last, "PROBE, two-body", MU_EARTH,
+        [conics(probe, t) for t in epochs], epochs
+    )
     spkcls(h)
     return [lsk, pck, spk]
 end

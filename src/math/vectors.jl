@@ -22,12 +22,14 @@
     length(a) == 3 || _m_baddim("a vector", 3)
     @inbounds return SVector(_m_f(a[1]), _m_f(a[2]), _m_f(a[3]))
 end
-@inline _m_v3(a::SVector{3,<:AbstractFloat}) = a
+@inline _m_v3(a::SVector{3, <:AbstractFloat}) = a
 
 @inline function _m_v6(a::AbstractVector)
     length(a) == 6 || _m_baddim("a state vector", 6)
-    @inbounds return SVector(_m_f(a[1]), _m_f(a[2]), _m_f(a[3]), _m_f(a[4]), _m_f(a[5]),
-        _m_f(a[6]))
+    @inbounds return SVector(
+        _m_f(a[1]), _m_f(a[2]), _m_f(a[3]), _m_f(a[4]), _m_f(a[5]),
+        _m_f(a[6])
+    )
 end
 
 @inline function _m_v4(a::AbstractVector)
@@ -37,16 +39,18 @@ end
 
 @inline function _m_m3(m::AbstractMatrix)
     size(m) == (3, 3) || _m_baddim("a matrix", "3 by 3")
-    @inbounds return SMatrix{3,3}(_m_f(m[1, 1]), _m_f(m[2, 1]), _m_f(m[3, 1]), _m_f(m[1, 2]),
-        _m_f(m[2, 2]), _m_f(m[3, 2]), _m_f(m[1, 3]), _m_f(m[2, 3]), _m_f(m[3, 3]))
+    @inbounds return SMatrix{3, 3}(
+        _m_f(m[1, 1]), _m_f(m[2, 1]), _m_f(m[3, 1]), _m_f(m[1, 2]),
+        _m_f(m[2, 2]), _m_f(m[3, 2]), _m_f(m[1, 3]), _m_f(m[2, 3]), _m_f(m[3, 3])
+    )
 end
-@inline _m_m3(m::SMatrix{3,3,<:AbstractFloat,9}) = m
+@inline _m_m3(m::SMatrix{3, 3, <:AbstractFloat, 9}) = m
 
 @inline function _m_m6(m::AbstractMatrix)
     size(m) == (6, 6) || _m_baddim("a state transformation", "6 by 6")
-    return SMatrix{6,6}(ntuple(k -> @inbounds(_m_f(m[k])), Val(36)))
+    return SMatrix{6, 6}(ntuple(k -> @inbounds(_m_f(m[k])), Val(36)))
 end
-@inline _m_m6(m::SMatrix{6,6,<:AbstractFloat,36}) = m
+@inline _m_m6(m::SMatrix{6, 6, <:AbstractFloat, 36}) = m
 
 @inline _m_pv(s::SVector{6}) = SVector(s[1], s[2], s[3]), SVector(s[4], s[5], s[6])
 
@@ -62,11 +66,13 @@ end
 
 @inline _m_dot(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 
-@inline _m_cross(a, b) = SVector(a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3],
-    a[1] * b[2] - a[2] * b[1])
+@inline _m_cross(a, b) = SVector(
+    a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3],
+    a[1] * b[2] - a[2] * b[1]
+)
 
 "Norm with the scaling by the largest component of `vnorm`."
-@inline function _m_norm(v::SVector{3,T}) where {T}
+@inline function _m_norm(v::SVector{3, T}) where {T}
     vmax = _m_maxabs(v)
     vmax == 0.0 && return zero(T)
     a = v[1] / vmax
@@ -150,47 +156,57 @@ large products.
 The forms `_m_mtxv`, `_m_mxm`, `_m_mtxm` and `_m_mxmt` obey the same rule; the package uses
 them in place of `*` for each 3 by 3 product.
 """
-@inline _m_mxv(m::SMatrix{3,3}, v::SVector{3}) = SVector(
+@inline _m_mxv(m::SMatrix{3, 3}, v::SVector{3}) = SVector(
     m[1, 1] * v[1] + m[1, 2] * v[2] + m[1, 3] * v[3],
     m[2, 1] * v[1] + m[2, 2] * v[2] + m[2, 3] * v[3],
-    m[3, 1] * v[1] + m[3, 2] * v[2] + m[3, 3] * v[3])
+    m[3, 1] * v[1] + m[3, 2] * v[2] + m[3, 3] * v[3]
+)
 
-@inline _m_mtxv(m::SMatrix{3,3}, v::SVector{3}) = SVector(
+@inline _m_mtxv(m::SMatrix{3, 3}, v::SVector{3}) = SVector(
     m[1, 1] * v[1] + m[2, 1] * v[2] + m[3, 1] * v[3],
     m[1, 2] * v[1] + m[2, 2] * v[2] + m[3, 2] * v[3],
-    m[1, 3] * v[1] + m[2, 3] * v[2] + m[3, 3] * v[3])
+    m[1, 3] * v[1] + m[2, 3] * v[2] + m[3, 3] * v[3]
+)
 
 @inline _m_rowcol(k::Int) = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
 
-@inline _m_mxm(a::SMatrix{3,3}, b::SMatrix{3,3}) = SMatrix{3,3}(ntuple(Val(9)) do k
-    i, j = _m_rowcol(k)
-    a[i, 1] * b[1, j] + a[i, 2] * b[2, j] + a[i, 3] * b[3, j]
-end)
+@inline _m_mxm(a::SMatrix{3, 3}, b::SMatrix{3, 3}) = SMatrix{3, 3}(
+    ntuple(Val(9)) do k
+        i, j = _m_rowcol(k)
+        a[i, 1] * b[1, j] + a[i, 2] * b[2, j] + a[i, 3] * b[3, j]
+    end
+)
 
-@inline _m_mtxm(a::SMatrix{3,3}, b::SMatrix{3,3}) = SMatrix{3,3}(ntuple(Val(9)) do k
-    i, j = _m_rowcol(k)
-    a[1, i] * b[1, j] + a[2, i] * b[2, j] + a[3, i] * b[3, j]
-end)
+@inline _m_mtxm(a::SMatrix{3, 3}, b::SMatrix{3, 3}) = SMatrix{3, 3}(
+    ntuple(Val(9)) do k
+        i, j = _m_rowcol(k)
+        a[1, i] * b[1, j] + a[2, i] * b[2, j] + a[3, i] * b[3, j]
+    end
+)
 
-@inline _m_mxmt(a::SMatrix{3,3}, b::SMatrix{3,3}) = SMatrix{3,3}(ntuple(Val(9)) do k
-    i, j = _m_rowcol(k)
-    a[i, 1] * b[j, 1] + a[i, 2] * b[j, 2] + a[i, 3] * b[j, 3]
-end)
+@inline _m_mxmt(a::SMatrix{3, 3}, b::SMatrix{3, 3}) = SMatrix{3, 3}(
+    ntuple(Val(9)) do k
+        i, j = _m_rowcol(k)
+        a[i, 1] * b[j, 1] + a[i, 2] * b[j, 2] + a[i, 3] * b[j, 3]
+    end
+)
 
-@inline _m_xpose(m::SMatrix{3,3}) = SMatrix{3,3}(m[1, 1], m[1, 2], m[1, 3], m[2, 1], m[2, 2],
-    m[2, 3], m[3, 1], m[3, 2], m[3, 3])
+@inline _m_xpose(m::SMatrix{3, 3}) = SMatrix{3, 3}(
+    m[1, 1], m[1, 2], m[1, 3], m[2, 1], m[2, 2],
+    m[2, 3], m[3, 1], m[3, 2], m[3, 3]
+)
 
-@inline _m_col(m::SMatrix{3,3}, j::Int) = SVector(m[1, j], m[2, j], m[3, j])
-@inline _m_row(m::SMatrix{3,3}, i::Int) = SVector(m[i, 1], m[i, 2], m[i, 3])
+@inline _m_col(m::SMatrix{3, 3}, j::Int) = SVector(m[1, j], m[2, j], m[3, j])
+@inline _m_row(m::SMatrix{3, 3}, i::Int) = SVector(m[i, 1], m[i, 2], m[i, 3])
 
 @inline _m_cols(a::SVector{3}, b::SVector{3}, c::SVector{3}) =
-    SMatrix{3,3}(a[1], a[2], a[3], b[1], b[2], b[3], c[1], c[2], c[3])
+    SMatrix{3, 3}(a[1], a[2], a[3], b[1], b[2], b[3], c[1], c[2], c[3])
 
 @inline _m_rows(a::SVector{3}, b::SVector{3}, c::SVector{3}) =
-    SMatrix{3,3}(a[1], b[1], c[1], a[2], b[2], c[2], a[3], b[3], c[3])
+    SMatrix{3, 3}(a[1], b[1], c[1], a[2], b[2], c[2], a[3], b[3], c[3])
 
 "Determinant with the operation order of `det_c`."
-@inline _m_det(m::SMatrix{3,3}) =
+@inline _m_det(m::SMatrix{3, 3}) =
     (m[1, 1] * (m[2, 2] * m[3, 3] - m[3, 2] * m[2, 3])) -
     (m[1, 2] * (m[2, 1] * m[3, 3] - m[3, 1] * m[2, 3])) +
     (m[1, 3] * (m[2, 1] * m[3, 2] - m[3, 1] * m[2, 2]))
@@ -201,30 +217,34 @@ end)
     return t == 1 ? (1, 2, 3) : t == 2 ? (2, 3, 1) : (3, 1, 2)
 end
 
-@inline function _m_rotate(angle::T, iaxis::Integer) where {T<:Real}
+@inline function _m_rotate(angle::T, iaxis::Integer) where {T <: Real}
     s, c = sincos(angle)
     i1, i2, i3 = _m_axes(iaxis)
     z = zero(s)
     o = one(s)
-    return SMatrix{3,3}(ntuple(Val(9)) do k
-        i, j = _m_rowcol(k)
-        (i == i1 || j == i1) ? (i == j ? o : z) :
-        i == j ? c : (i == i2 ? s : -s)
-    end)
+    return SMatrix{3, 3}(
+        ntuple(Val(9)) do k
+            i, j = _m_rowcol(k)
+            (i == i1 || j == i1) ? (i == j ? o : z) :
+                i == j ? c : (i == i2 ? s : -s)
+        end
+    )
 end
 
-@inline function _m_rotmat(m::SMatrix{3,3}, angle::Real, iaxis::Integer)
+@inline function _m_rotmat(m::SMatrix{3, 3}, angle::Real, iaxis::Integer)
     s, c = sincos(angle)
     i1, i2, i3 = _m_axes(iaxis)
-    return SMatrix{3,3}(ntuple(Val(9)) do k
-        i, j = _m_rowcol(k)
-        i == i1 ? m[i1, j] - zero(c) :
-        i == i2 ? c * m[i2, j] + s * m[i3, j] : -s * m[i2, j] + c * m[i3, j]
-    end)
+    return SMatrix{3, 3}(
+        ntuple(Val(9)) do k
+            i, j = _m_rowcol(k)
+            i == i1 ? m[i1, j] - zero(c) :
+                i == i2 ? c * m[i2, j] + s * m[i3, j] : -s * m[i2, j] + c * m[i3, j]
+        end
+    )
 end
 
 "True if `m` is a rotation within the tolerances, as `isrot_c` (no argument checks)."
-@inline function _m_isrot(m::SMatrix{3,3}, ntol::Real, dtol::Real)
+@inline function _m_isrot(m::SMatrix{3, 3}, ntol::Real, dtol::Real)
     u1, n1 = _m_unorm(_m_col(m, 1))
     u2, n2 = _m_unorm(_m_col(m, 2))
     u3, n3 = _m_unorm(_m_col(m, 3))
@@ -245,7 +265,7 @@ reciprocal of a velocity below about 5.6e-309 is infinite, so only the division 
 such a velocity finite. Postcondition: a zero position gives the zero position and the
 velocity as it is.
 """
-@inline function _m_dvhat(s::SVector{6}, recip::Bool=true)
+@inline function _m_dvhat(s::SVector{6}, recip::Bool = true)
     p, v = _m_pv(s)
     u, len = _m_unorm(p)
     primal(len) == 0.0 && return _m_state(u, v - zero(u))
@@ -772,7 +792,7 @@ See also [`xpose`](@ref), [`xposeg`](@ref).
 """
 function xpose6(m1::AbstractMatrix)
     m = _m_m6(m1)
-    return SMatrix{6,6}(ntuple(k -> m[(k-1)÷6+1, (k-1)%6+1], Val(36)))
+    return SMatrix{6, 6}(ntuple(k -> m[(k - 1) ÷ 6 + 1, (k - 1) % 6 + 1], Val(36)))
 end
 
 """
@@ -801,11 +821,13 @@ See also [`xpose6`](@ref), [`invert`](@ref).
 function invstm(mat::AbstractMatrix)
     m = _m_m6(mat)
     # element k in column order is (i, j); its source is the transposed place in its block
-    return SMatrix{6,6}(ntuple(Val(36)) do k
-        i, j = (k - 1) % 6, (k - 1) ÷ 6
-        bi, bj = 3 * (i ÷ 3), 3 * (j ÷ 3)
-        m[bi+j-bj+1, bj+i-bi+1]
-    end)
+    return SMatrix{6, 6}(
+        ntuple(Val(36)) do k
+            i, j = (k - 1) % 6, (k - 1) ÷ 6
+            bi, bj = 3 * (i ÷ 3), 3 * (j ÷ 3)
+            m[bi + j - bj + 1, bj + i - bi + 1]
+        end
+    )
 end
 
 """
@@ -857,7 +879,7 @@ function invert(m1::AbstractMatrix)
     mdet = _m_det(m)
     abs(primal(mdet)) < 1.0e-16 && return zero(m) * zero(mdet)
     invdet = 1.0 / mdet
-    return invdet * SMatrix{3,3}(
+    return invdet * SMatrix{3, 3}(
         (m[2, 2] * m[3, 3] - m[3, 2] * m[2, 3]),
         -(m[2, 1] * m[3, 3] - m[3, 1] * m[2, 3]),
         (m[2, 1] * m[3, 2] - m[3, 1] * m[2, 2]),
@@ -866,7 +888,8 @@ function invert(m1::AbstractMatrix)
         -(m[1, 1] * m[3, 2] - m[3, 1] * m[1, 2]),
         (m[1, 2] * m[2, 3] - m[2, 2] * m[1, 3]),
         -(m[1, 1] * m[2, 3] - m[2, 1] * m[1, 3]),
-        (m[1, 1] * m[2, 2] - m[2, 1] * m[1, 2]))
+        (m[1, 1] * m[2, 2] - m[2, 1] * m[1, 2])
+    )
 end
 
 """
@@ -891,8 +914,12 @@ function invort(m1::AbstractMatrix)
         u, len = _m_unorm(_m_col(m, i))
         l0 = primal(len)
         l0 == 0.0 && throw(SpiceError(:zerolengthcolumn, "column $i of the matrix has norm zero"))
-        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(SpiceError(:columntoosmall,
-            "the length $l0 of column $i cannot be inverted"))
+        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(
+            SpiceError(
+                :columntoosmall,
+                "the length $l0 of column $i cannot be inverted"
+            )
+        )
         (1.0 / len) * u
     end
     return _m_rows(unit(1), unit(2), unit(3))
@@ -924,7 +951,7 @@ end
 Return the 3 by 3 identity matrix, as
 [`ident_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ident_c.html) of CSPICE.
 """
-ident() = SMatrix{3,3,Float64,9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+ident() = SMatrix{3, 3, Float64, 9}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
 
 """
     rotate(angle, iaxis) -> SMatrix{3,3}
@@ -993,10 +1020,18 @@ function rotvec(v1::AbstractVector, angle::Real, iaxis::Integer)
 end
 
 @noinline function _m_check_twovec(indexa::Integer, indexp::Integer)
-    (max(indexp, indexa) > 3 || min(indexp, indexa) < 1) && throw(SpiceError(:badindex,
-        "the definition indexes must be in 1:3; they are $indexa and $indexp"))
-    indexa == indexp && throw(SpiceError(:undefinedframe,
-        "the two definition indexes are both $indexa; they must be different"))
+    (max(indexp, indexa) > 3 || min(indexp, indexa) < 1) && throw(
+        SpiceError(
+            :badindex,
+            "the definition indexes must be in 1:3; they are $indexa and $indexp"
+        )
+    )
+    indexa == indexp && throw(
+        SpiceError(
+            :undefinedframe,
+            "the two definition indexes are both $indexa; they must be different"
+        )
+    )
     return nothing
 end
 
@@ -1043,8 +1078,12 @@ function twovec(axdef::AbstractVector, indexa::Integer, plndef::AbstractVector, 
         r2 = _m_ucrss(p, a)
         r3 = _m_ucrss(a, r2)
     end
-    _m_iszero(r2) && throw(SpiceError(:dependentvectors,
-        "the vectors axdef and plndef are linearly dependent"))
+    _m_iszero(r2) && throw(
+        SpiceError(
+            :dependentvectors,
+            "the vectors axdef and plndef are linearly dependent"
+        )
+    )
     return i1 == 1 ? _m_rows(r1, r2, r3) : i1 == 2 ? _m_rows(r3, r1, r2) : _m_rows(r2, r3, r1)
 end
 
@@ -1076,26 +1115,32 @@ function twovxf(axdef::AbstractVector, indexa::Integer, plndef::AbstractVector, 
         s2 = _m_ducrss(p, a)
         s3 = _m_ducrss(a, s2)
     end
-    _m_iszero(_m_pv(s2)[1]) && throw(SpiceError(:dependentvectors,
-        "the direction vectors of the states axdef and plndef are linearly dependent"))
+    _m_iszero(_m_pv(s2)[1]) && throw(
+        SpiceError(
+            :dependentvectors,
+            "the direction vectors of the states axdef and plndef are linearly dependent"
+        )
+    )
     x, y, z = i1 == 1 ? (s1, s2, s3) : i1 == 2 ? (s3, s1, s2) : (s2, s3, s1)
     r = _m_rows(_m_pv(x)[1], _m_pv(y)[1], _m_pv(z)[1])
     d = _m_rows(_m_pv(x)[2], _m_pv(y)[2], _m_pv(z)[2])
     return _m_xform(r, d)
 end
 
-@inline function _m_xform(r::SMatrix{3,3}, d::SMatrix{3,3})
+@inline function _m_xform(r::SMatrix{3, 3}, d::SMatrix{3, 3})
     z = zero(r[1, 1] + d[1, 1])
-    return SMatrix{6,6}(ntuple(Val(36)) do k
-        i = (k - 1) % 6 + 1
-        j = (k - 1) ÷ 6 + 1
-        j <= 3 ? (i <= 3 ? r[i, j] + z : d[i-3, j] + z) : (i <= 3 ? z : r[i-3, j-3] + z)
-    end)
+    return SMatrix{6, 6}(
+        ntuple(Val(36)) do k
+            i = (k - 1) % 6 + 1
+            j = (k - 1) ÷ 6 + 1
+            j <= 3 ? (i <= 3 ? r[i, j] + z : d[i - 3, j] + z) : (i <= 3 ? z : r[i - 3, j - 3] + z)
+        end
+    )
 end
 
-@inline function _m_blocks(x::SMatrix{6,6})
-    r = SMatrix{3,3}(ntuple(k -> x[(k-1)%3+1, (k-1)÷3+1], Val(9)))
-    d = SMatrix{3,3}(ntuple(k -> x[(k-1)%3+4, (k-1)÷3+1], Val(9)))
+@inline function _m_blocks(x::SMatrix{6, 6})
+    r = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
+    d = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
     return r, d
 end
 
@@ -1267,12 +1312,12 @@ end
 "Elementwise `f` over `v`: a static vector if `v` and every array of `others` are static, a `Vector` otherwise."
 @inline _m_gmap(f::F, v::StaticVector, others::StaticArray...) where {F} = map(f, v)
 _m_gmap(f::F, v::AbstractVector, others::AbstractArray...) where {F} =
-    [f(v[begin+i-1]) for i in 1:length(v)]
+    [f(v[begin + i - 1]) for i in 1:length(v)]
 
 "Elementwise `f` over `a` and `b` of equal length, with the result container of `_m_gmap`."
 @inline _m_gmap2(f::F, a::StaticVector, b::StaticVector) where {F} = map(f, a, b)
 _m_gmap2(f::F, a::AbstractVector, b::AbstractVector) where {F} =
-    [f(a[begin+i-1], b[begin+i-1]) for i in 1:length(a)]
+    [f(a[begin + i - 1], b[begin + i - 1]) for i in 1:length(a)]
 
 @inline function _m_samelen(a::AbstractVector, b::AbstractVector)
     length(a) == length(b) ||
@@ -1551,7 +1596,7 @@ function vtmvg(v1::AbstractVector, matrix::AbstractMatrix, v2::AbstractVector)
         throw(SpiceError(:badarg, "the matrix size does not fit the vectors"))
     val = zero(_m_f(zero(eltype(v1))) * _m_f(zero(eltype(matrix))) * _m_f(zero(eltype(v2))))
     @inbounds for k in 1:length(v1), l in 1:length(v2)   # invariant: sum of terms before (k, l)
-        val += _m_f(v1[begin+k-1]) * _m_f(matrix[begin+k-1, begin+l-1]) * _m_f(v2[begin+l-1])
+        val += _m_f(v1[begin + k - 1]) * _m_f(matrix[begin + k - 1, begin + l - 1]) * _m_f(v2[begin + l - 1])
     end
     return val
 end
@@ -1580,18 +1625,18 @@ function mxvg(m1::AbstractMatrix, v2::AbstractVector)
     size(m1, 2) == length(v2) || throw(SpiceError(:badarg, "the matrix and the vector do not fit"))
     out = zeros(_m_eltype(m1, v2), size(m1, 1))
     @inbounds for i in 1:size(m1, 1), k in 1:size(m1, 2)   # invariant: out[i] sums terms before k
-        out[i] += _m_f(m1[begin+i-1, begin+k-1]) * _m_f(v2[begin+k-1])
+        out[i] += _m_f(m1[begin + i - 1, begin + k - 1]) * _m_f(v2[begin + k - 1])
     end
     return out
 end
 "Sum of `g(1)`, ..., `g(M)` added to zero in that order: the static forms give the bits of the array forms."
-@inline function _m_ordsum(g::G, ::Val{M}) where {G,M}
+@inline function _m_ordsum(g::G, ::Val{M}) where {G, M}
     t = ntuple(g, Val(M))
-    return foldl(+, t; init=zero(t[1]))
+    return foldl(+, t; init = zero(t[1]))
 end
 @inline _m_ordsum(g::G, ::Val{0}) where {G} = 0.0
 
-mxvg(m1::StaticMatrix{N,M}, v2::StaticVector{M}) where {N,M} =
+mxvg(m1::StaticMatrix{N, M}, v2::StaticVector{M}) where {N, M} =
     SVector{N}(ntuple(i -> _m_ordsum(k -> _m_f(m1[i, k]) * _m_f(v2[k]), Val(M)), Val(N)))
 
 """
@@ -1609,11 +1654,11 @@ function mtxvg(m1::AbstractMatrix, v2::AbstractVector)
     size(m1, 1) == length(v2) || throw(SpiceError(:badarg, "the matrix and the vector do not fit"))
     out = zeros(_m_eltype(m1, v2), size(m1, 2))
     @inbounds for i in 1:size(m1, 2), k in 1:size(m1, 1)   # invariant: out[i] sums terms before k
-        out[i] += _m_f(m1[begin+k-1, begin+i-1]) * _m_f(v2[begin+k-1])
+        out[i] += _m_f(m1[begin + k - 1, begin + i - 1]) * _m_f(v2[begin + k - 1])
     end
     return out
 end
-mtxvg(m1::StaticMatrix{N,M}, v2::StaticVector{N}) where {N,M} =
+mtxvg(m1::StaticMatrix{N, M}, v2::StaticVector{N}) where {N, M} =
     SVector{M}(ntuple(i -> _m_ordsum(k -> _m_f(m1[k, i]) * _m_f(v2[k]), Val(N)), Val(M)))
 
 """
@@ -1632,12 +1677,12 @@ function mxmg(m1::AbstractMatrix, m2::AbstractMatrix)
     out = zeros(_m_eltype(m1, m2), size(m1, 1), size(m2, 2))
     @inbounds for i in 1:size(m1, 1), j in 1:size(m2, 2), k in 1:size(m1, 2)
         # invariant: out[i, j] is the sum of the terms before k
-        out[i, j] += _m_f(m1[begin+i-1, begin+k-1]) * _m_f(m2[begin+k-1, begin+j-1])
+        out[i, j] += _m_f(m1[begin + i - 1, begin + k - 1]) * _m_f(m2[begin + k - 1, begin + j - 1])
     end
     return out
 end
-mxmg(m1::StaticMatrix{N,M}, m2::StaticMatrix{M,P}) where {N,M,P} =
-    SMatrix{N,P}(ntuple(q -> _m_ordsum(k -> _m_f(m1[(q-1)%N+1, k]) * _m_f(m2[k, (q-1)÷N+1]), Val(M)), Val(N * P)))
+mxmg(m1::StaticMatrix{N, M}, m2::StaticMatrix{M, P}) where {N, M, P} =
+    SMatrix{N, P}(ntuple(q -> _m_ordsum(k -> _m_f(m1[(q - 1) % N + 1, k]) * _m_f(m2[k, (q - 1) ÷ N + 1]), Val(M)), Val(N * P)))
 
 """
     mtxmg(m1, m2)
@@ -1654,12 +1699,12 @@ function mtxmg(m1::AbstractMatrix, m2::AbstractMatrix)
     out = zeros(_m_eltype(m1, m2), size(m1, 2), size(m2, 2))
     @inbounds for i in 1:size(m1, 2), j in 1:size(m2, 2), k in 1:size(m1, 1)
         # invariant: out[i, j] is the sum of the terms before k
-        out[i, j] += _m_f(m1[begin+k-1, begin+i-1]) * _m_f(m2[begin+k-1, begin+j-1])
+        out[i, j] += _m_f(m1[begin + k - 1, begin + i - 1]) * _m_f(m2[begin + k - 1, begin + j - 1])
     end
     return out
 end
-mtxmg(m1::StaticMatrix{N,M}, m2::StaticMatrix{N,P}) where {N,M,P} =
-    SMatrix{M,P}(ntuple(q -> _m_ordsum(k -> _m_f(m1[k, (q-1)%M+1]) * _m_f(m2[k, (q-1)÷M+1]), Val(N)), Val(M * P)))
+mtxmg(m1::StaticMatrix{N, M}, m2::StaticMatrix{N, P}) where {N, M, P} =
+    SMatrix{M, P}(ntuple(q -> _m_ordsum(k -> _m_f(m1[k, (q - 1) % M + 1]) * _m_f(m2[k, (q - 1) ÷ M + 1]), Val(N)), Val(M * P)))
 
 """
     mxmtg(m1, m2)
@@ -1676,12 +1721,12 @@ function mxmtg(m1::AbstractMatrix, m2::AbstractMatrix)
     out = zeros(_m_eltype(m1, m2), size(m1, 1), size(m2, 1))
     @inbounds for i in 1:size(m1, 1), j in 1:size(m2, 1), k in 1:size(m1, 2)
         # invariant: out[i, j] is the sum of the terms before k
-        out[i, j] += _m_f(m1[begin+i-1, begin+k-1]) * _m_f(m2[begin+j-1, begin+k-1])
+        out[i, j] += _m_f(m1[begin + i - 1, begin + k - 1]) * _m_f(m2[begin + j - 1, begin + k - 1])
     end
     return out
 end
-mxmtg(m1::StaticMatrix{N,M}, m2::StaticMatrix{P,M}) where {N,M,P} =
-    SMatrix{N,P}(ntuple(q -> _m_ordsum(k -> _m_f(m1[(q-1)%N+1, k]) * _m_f(m2[(q-1)÷N+1, k]), Val(M)), Val(N * P)))
+mxmtg(m1::StaticMatrix{N, M}, m2::StaticMatrix{P, M}) where {N, M, P} =
+    SMatrix{N, P}(ntuple(q -> _m_ordsum(k -> _m_f(m1[(q - 1) % N + 1, k]) * _m_f(m2[(q - 1) ÷ N + 1, k]), Val(M)), Val(N * P)))
 
 """
     xposeg(matrix)
@@ -1692,5 +1737,5 @@ Return the transpose of a matrix of any size, as
 See also [`xpose`](@ref), [`xpose6`](@ref).
 """
 xposeg(matrix::AbstractMatrix) =
-    [_m_f(matrix[begin+j-1, begin+i-1]) for i in 1:size(matrix, 2), j in 1:size(matrix, 1)]
+    [_m_f(matrix[begin + j - 1, begin + i - 1]) for i in 1:size(matrix, 2), j in 1:size(matrix, 1)]
 xposeg(matrix::StaticMatrix) = SMatrix(transpose(_m_f.(matrix)))

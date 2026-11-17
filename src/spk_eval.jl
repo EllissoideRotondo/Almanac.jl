@@ -41,9 +41,11 @@ One step of the Clenshaw recurrence with derivatives: from `b1 = b_{k+1}` and
 `b_k^(m) = 2m b_{k+1}^(m-1) + 2s b_{k+1}^(m) - b_{k+2}^(m)`, plus `c` for `m = 0`.
 Orders 0 and 1 use the operation order of `chbint_` of CSPICE.
 """
-@inline _clenshaw_step(c::Real, s2::T, b1::NTuple{M,T}, b2::NTuple{M,T}) where {M,T} =
-    ntuple(m -> m == 1 ? c + (s2 * b1[1] - b2[1]) :
-        (2 * (m - 1)) * b1[m-1] + b1[m] * s2 - b2[m], Val(M))
+@inline _clenshaw_step(c::Real, s2::T, b1::NTuple{M, T}, b2::NTuple{M, T}) where {M, T} =
+    ntuple(
+    m -> m == 1 ? c + (s2 * b1[1] - b2[1]) :
+        (2 * (m - 1)) * b1[m - 1] + b1[m] * s2 - b2[m], Val(M)
+)
 
 """
     _clenshaw_end(c0, s::T, b1::NTuple{M,T}, b2::NTuple{M,T}) -> NTuple{M,T}
@@ -52,9 +54,11 @@ Value and derivatives (orders 0 to M-1 with respect to `s`) of the Chebyshev ser
 from the last two Clenshaw terms `b1 = b_1` and `b2 = b_2` and the coefficient `c0`:
 `f^(m) = m b_1^(m-1) + s b_1^(m) - b_2^(m)`, plus `c0` for `m = 0`.
 """
-@inline _clenshaw_end(c0::Real, s::T, b1::NTuple{M,T}, b2::NTuple{M,T}) where {M,T} =
-    ntuple(m -> m == 1 ? c0 + (s * b1[1] - b2[1]) :
-        (m - 1) * b1[m-1] + s * b1[m] - b2[m], Val(M))
+@inline _clenshaw_end(c0::Real, s::T, b1::NTuple{M, T}, b2::NTuple{M, T}) where {M, T} =
+    ntuple(
+    m -> m == 1 ? c0 + (s * b1[1] - b2[1]) :
+        (m - 1) * b1[m - 1] + s * b1[m] - b2[m], Val(M)
+)
 
 """
     _cheb3(data, a, ncoef, s::T, radius, ::Val{N}) -> NTuple{N+1,Vec3{T}}
@@ -70,8 +74,10 @@ the value and the first derivative come from the same floating-point operations 
 an angle of many turns, where a difference of one unit in the last place is large
 relative to the reduced angle.
 """
-@inline function _cheb3(data::AbstractVector{<:Real}, a::Int, ncoef::Int, s::T, radius::Real,
-        ::Val{N}) where {T,N}
+@inline function _cheb3(
+        data::AbstractVector{<:Real}, a::Int, ncoef::Int, s::T, radius::Real,
+        ::Val{N}
+    ) where {T, N}
     M = Val(N + 1)
     z = ntuple(_ -> zero(T), M)
     s2 = s * 2
@@ -80,13 +86,13 @@ relative to the reduced angle.
     z1, z2 = z, z
     # invariant: (x1, x2), (y1, y2), (z1, z2) are the Clenshaw terms b_{k+1}, b_{k+2}
     # of the three series, with derivatives to order N
-    for k in ncoef-1:-1:1
-        @inbounds cx, cy, cz = data[a+k], data[a+ncoef+k], data[a+2*ncoef+k]
+    for k in (ncoef - 1):-1:1
+        @inbounds cx, cy, cz = data[a + k], data[a + ncoef + k], data[a + 2 * ncoef + k]
         x1, x2 = _clenshaw_step(cx, s2, x1, x2), x1
         y1, y2 = _clenshaw_step(cy, s2, y1, y2), y1
         z1, z2 = _clenshaw_step(cz, s2, z1, z2), z1
     end
-    @inbounds cx, cy, cz = data[a], data[a+ncoef], data[a+2*ncoef]
+    @inbounds cx, cy, cz = data[a], data[a + ncoef], data[a + 2 * ncoef]
     fx = _clenshaw_end(cx, s, x1, x2)
     fy = _clenshaw_end(cy, s, y1, y2)
     fz = _clenshaw_end(cz, s, z1, z2)
@@ -100,11 +106,13 @@ relative to the reduced angle.
 end
 
 "Jet of order N of the first three coefficient sets (`nsets` sets in a record) of the record of `seg` at `et`; `skip` sets are passed over first."
-@inline function _cheb_eval(data::Vector{Float64}, seg::Segment, et::T, nsets::Int,
-        skip::Int, v::Val{N}) where {T,N}
+@inline function _cheb_eval(
+        data::Vector{Float64}, seg::Segment, et::T, nsets::Int,
+        skip::Int, v::Val{N}
+    ) where {T, N}
     addr = _cheb_record(data, seg, et)
     ncoef = (Int(seg.rsize) - 2) ÷ nsets
-    @inbounds mid, radius = data[addr], data[addr+1]
+    @inbounds mid, radius = data[addr], data[addr + 1]
     s = (et - mid) / radius
     return _cheb3(data, addr + 2 + skip * ncoef, ncoef, s, radius, v)
 end
@@ -119,8 +127,12 @@ end
 # `spkpvn` of CSPICE signals SPICE(SPKTYPENOTSUPP); a binary PCK of another type has no
 # message of its own there.
 @noinline _unsupported(what, dtype) =
-    throw(SpiceError(what == "SPK" ? :spktypenotsupp : :notsupported,
-        "$what data type $dtype is not supported"))
+    throw(
+    SpiceError(
+        what == "SPK" ? :spktypenotsupp : :notsupported,
+        "$what data type $dtype is not supported"
+    )
+)
 
 """
     spk_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
@@ -136,10 +148,14 @@ velocity series. Types 1, 5, 8, 9, 12 to 15 and 17 to 21 (`spk_more.jl`): order
 `k >= 2` is derivative `k-1` of the velocity function that CSPICE defines. Type 10
 and unknown types throw `SpiceError(:spktypenotsupp, ...)`. No allocation.
 """
-@noinline _empty_segment(seg) = throw(SpiceError(:baddaf,
-    "the segment of body or frame $(seg.target) has no data (addresses $(seg.baddr):$(seg.eaddr))"))
+@noinline _empty_segment(seg) = throw(
+    SpiceError(
+        :baddaf,
+        "the segment of body or frame $(seg.target) has no data (addresses $(seg.baddr):$(seg.eaddr))"
+    )
+)
 
-@inline function spk_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T<:Real,N}
+@inline function spk_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T <: Real, N}
     seg.eaddr < seg.baddr && _empty_segment(seg)
     if seg.dtype == 2
         return _cheb_eval(data, seg, et, 3, 0, v)
@@ -163,11 +179,11 @@ the stored 3-1-3 angles `(PHI, DELTA, W)` with `PHI = RA + pi/2` and
 frame is `R3(W) * R1(DELTA) * R3(PHI)`. Other types throw
 `SpiceError(:notsupported, ...)`. No allocation.
 """
-@inline function pck_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T<:Real,N}
+@inline function pck_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T <: Real, N}
     seg.eaddr < seg.baddr && _empty_segment(seg)
     seg.dtype == 2 && return _cheb_eval(data, seg, et, 3, 0, v)
     # Type 20 stores the rates of the angles and the angles at the middle of each
     # record, as SPK type 20 stores velocities and positions (`pcke20_`).
     seg.dtype == 20 && return _spk_more(data, seg, et, v)
-    _unsupported("binary PCK", seg.dtype)
+    return _unsupported("binary PCK", seg.dtype)
 end

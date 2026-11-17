@@ -23,22 +23,30 @@ const _GF_J2000 = Int32(1)
 
 function _gf_body(ks::KernelSet, name::AbstractString, what::AbstractString)
     id = bods2c(ks, name)
-    id === nothing && throw(SpiceError(:idcodenotfound, "The $what, '$name', is not a " *
-        "recognized name for an ephemeris object. The cause of this problem may be that " *
-        "you need an updated version of the SPICE Toolkit."))
+    id === nothing && throw(
+        SpiceError(
+            :idcodenotfound, "The $what, '$name', is not a " *
+                "recognized name for an ephemeris object. The cause of this problem may be that " *
+                "you need an updated version of the SPICE Toolkit."
+        )
+    )
     return Int32(id)
 end
 _gf_body(ks::KernelSet, id::Integer, what::AbstractString) = Int32(id)
 
 "State (km, km/s) of `targ` relative to `obs` in frame `ref`, and the light time (`spkez`)."
-@inline _gf_spkez(ks::KernelSet, targ::Int32, et::Float64, ref::Int32, corr::Aberration,
-    obs::Int32) = spkezr(ks, targ, et, ref, corr, obs)
+@inline _gf_spkez(
+    ks::KernelSet, targ::Int32, et::Float64, ref::Int32, corr::Aberration,
+    obs::Int32
+) = spkezr(ks, targ, et, ref, corr, obs)
 
 "Position (km) of `targ` relative to `obs` in frame `ref`, and the light time (`spkezp`)."
-@inline _gf_spkezp(ks::KernelSet, targ::Int32, et::Float64, ref::Int32, corr::Aberration,
-    obs::Int32) = spkpos(ks, targ, et, ref, corr, obs)
+@inline _gf_spkezp(
+    ks::KernelSet, targ::Int32, et::Float64, ref::Int32, corr::Aberration,
+    obs::Int32
+) = spkpos(ks, targ, et, ref, corr, obs)
 
-@inline _gf_pv(s::SVector{6,Float64}) =
+@inline _gf_pv(s::SVector{6, Float64}) =
     (SVector(s[1], s[2], s[3]), SVector(s[4], s[5], s[6]))
 
 """
@@ -50,11 +58,19 @@ The three radii of `body` from the kernel pool, as `zzgftreb`. Throws
 """
 function _gf_radii(ks::KernelSet, body::Integer)
     r = bodvcd(ks, body, "RADII")
-    length(r) == 3 || throw(SpiceError(:invalidcount,
-        "Only $(length(r)) axes were found  for ID $body. Three axes expected."))
+    length(r) == 3 || throw(
+        SpiceError(
+            :invalidcount,
+            "Only $(length(r)) axes were found  for ID $body. Three axes expected."
+        )
+    )
     for i in 1:3
-        r[i] > 0.0 || throw(SpiceError(:badaxislength, "Degenerate case. The $i axis of " *
-            "body $body is negative or zero.  Please check the text PCK file."))
+        r[i] > 0.0 || throw(
+            SpiceError(
+                :badaxislength, "Degenerate case. The $i axis of " *
+                    "body $body is negative or zero.  Please check the text PCK file."
+            )
+        )
     end
     return SVector(r[1], r[2], r[3])
 end
@@ -78,9 +94,13 @@ Contract (`zzgfdiin`): the bodies are known (`:idcodenotfound`) and distinct
 function GFDistance(ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID)
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer object")
-    targ == obs && throw(SpiceError(:bodiesnotdistinct,
-        "The observer and target must be distinct objects, but are not: " *
-        "OBSRVR = $obsrvr; TARGET = $target."))
+    targ == obs && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer and target must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr; TARGET = $target."
+        )
+    )
     return GFDistance(ks, targ, obs, Aberration(abcorr))
 end
 
@@ -111,8 +131,12 @@ function _gf_shape_radius(ks::KernelSet, body::Int32, shape::AbstractString)
     s = uppercase(strip(shape, ' '))
     s == "POINT" && return 0.0
     s == "SPHERE" && return maximum(_gf_radii(ks, body))
-    throw(SpiceError(:notrecognized,
-        "The body shape, $shape is not recognized.  Supported quantities are: POINT, SPHERE."))
+    throw(
+        SpiceError(
+            :notrecognized,
+            "The body shape, $shape is not recognized.  Supported quantities are: POINT, SPHERE."
+        )
+    )
 end
 
 """
@@ -123,15 +147,21 @@ Contract (`zzgfspin`): the three bodies are known (`:idcodenotfound`) and distin
 or `SPHERE` (`:notrecognized`); a sphere takes the largest of the radii of its body.
 The frames are not used by these shapes, as in CSPICE.
 """
-function GFSeparation(ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1,
-        targ2::NameOrID, shape2::AbstractString, frame2, abcorr::AbcorrArg, obsrvr::NameOrID)
+function GFSeparation(
+        ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1,
+        targ2::NameOrID, shape2::AbstractString, frame2, abcorr::AbcorrArg, obsrvr::NameOrID
+    )
     b1 = _gf_body(ks, targ1, "object name for target 1")
     b2 = _gf_body(ks, targ2, "object name for target 2")
     obs = _gf_body(ks, obsrvr, "object name for the observer")
-    (obs == b1 || obs == b2 || b1 == b2) && throw(SpiceError(:bodiesnotdistinct,
-        "All three objects associated with an ANGULAR SEPARATION search must be " *
-        "distinct. The objects whose angular separation is of interest were $b1 and " *
-        "$b2. The observer was $obs."))
+    (obs == b1 || obs == b2 || b1 == b2) && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "All three objects associated with an ANGULAR SEPARATION search must be " *
+                "distinct. The objects whose angular separation is of interest were $b1 and " *
+                "$b2. The observer was $obs."
+        )
+    )
     corr = Aberration(abcorr)
     r1 = _gf_shape_radius(ks, b1, shape1)
     r2 = _gf_shape_radius(ks, b2, shape2)
@@ -142,8 +172,12 @@ _gf_label(::GFSeparation) = "Angular separation pass # of #"
 
 "Angular radius of a sphere of radius `r` at the range `range` (`zzsepq`)."
 @inline function _gf_angrad(q::GFSeparation, body::Int32, r::Float64, range::Float64)
-    range > r || throw(SpiceError(:insidebody, "Observer object $(q.obs) located within " *
-        "surface of target object $body. Range to target $range, radius of target $r"))
+    range > r || throw(
+        SpiceError(
+            :insidebody, "Observer object $(q.obs) located within " *
+                "surface of target object $body. Range to target $range, radius of target $r"
+        )
+    )
     return asin(clamp(r / range, -1.0, 1.0))
 end
 
@@ -164,16 +198,24 @@ observer, for the state `state` of its center, as `dhfa`. Throws
 `SpiceError(:degeneratecase)` for a zero position and `SpiceError(:badgeometry)` if the
 observer is not outside the sphere.
 """
-@inline function _gf_dhfa(state::SVector{6,Float64}, bodyr::Float64)
+@inline function _gf_dhfa(state::SVector{6, Float64}, bodyr::Float64)
     r, v = _gf_pv(state)
     rmag = vnorm(r)
-    rmag == 0.0 && throw(SpiceError(:degeneratecase,
-        "The position component of the input state vector equals the zero vector."))
+    rmag == 0.0 && throw(
+        SpiceError(
+            :degeneratecase,
+            "The position component of the input state vector equals the zero vector."
+        )
+    )
     p = vhat(r)
     rngrat = vdot(p, v)
     base = rmag * rmag - bodyr * bodyr
-    base <= 0.0 && throw(SpiceError(:badgeometry, "Invalid case. The body radius, " *
-        "$bodyr, equals or exceeds the range to the target, $rmag."))
+    base <= 0.0 && throw(
+        SpiceError(
+            :badgeometry, "Invalid case. The body radius, " *
+                "$bodyr, equals or exceeds the range to the target, $rmag."
+        )
+    )
     return -(rngrat * bodyr) / (sqrt(base) * rmag)
 end
 
@@ -203,16 +245,26 @@ Contract (`zzgfrrin`): the bodies are known (`:idcodenotfound`) and distinct
 (`:bodiesnotdistinct`), `abcorr` is a correction of `spkezr`, and `dt != 0`
 (`:invalidvalue`); `gfevnt` of CSPICE uses one second.
 """
-function GFRangeRate(ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
-        dt::Real=1.0)
+function GFRangeRate(
+        ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
+        dt::Real = 1.0
+    )
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer object")
-    targ == obs && throw(SpiceError(:bodiesnotdistinct,
-        "The observer and target must be distinct objects, but are not: " *
-        "OBSRVR = $obsrvr; TARGET = $target."))
+    targ == obs && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer and target must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr; TARGET = $target."
+        )
+    )
     corr = Aberration(abcorr)
-    dt == 0 && throw(SpiceError(:invalidvalue,
-        "The timestep value for the numerical derivative is zero."))
+    dt == 0 && throw(
+        SpiceError(
+            :invalidvalue,
+            "The timestep value for the numerical derivative is zero."
+        )
+    )
     return GFRangeRate(ks, targ, obs, corr, Float64(dt))
 end
 
@@ -232,7 +284,7 @@ the derivative of the state is the difference quotient of the states at `et - dt
     s2 = _gf_spkez(q.ks, q.targ, et + q.dt, _GF_J2000, q.corr, q.obs)[1]
     dfdt = (0.5 / q.dt) * s2 + (-0.5 / q.dt) * s0
     s = _gf_spkez(q.ks, q.targ, et, _GF_J2000, q.corr, q.obs)[1]
-    srhat = _m_dvhat(SVector{6,Float64}(s), false)   # f2c `dvhat_`: division, as zzgfrru
+    srhat = _m_dvhat(SVector{6, Float64}(s), false)   # f2c `dvhat_`: division, as zzgfrru
     drvel = vdot(_gf_pv(dfdt)[2], _gf_pv(srhat)[1]) + vdot(_gf_pv(s)[2], _gf_pv(srhat)[2])
     return drvel < 0.0
 end
@@ -255,18 +307,28 @@ Contract (`zzgfpain`): the three bodies are known (`:idcodenotfound`) and distin
 (`:bodiesnotdistinct`), and `abcorr` is a reception correction of `spkezr`; a
 transmission correction throws `SpiceError(:invalidoption)`.
 """
-function GFPhase(ks::KernelSet, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
-        obsrvr::NameOrID)
+function GFPhase(
+        ks::KernelSet, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
+        obsrvr::NameOrID
+    )
     targ = _gf_body(ks, target, "target object")
     illum = _gf_body(ks, illmn, "illuminator object")
     obs = _gf_body(ks, obsrvr, "observer object")
-    (targ == obs || targ == illum || obs == illum) && throw(SpiceError(:bodiesnotdistinct,
-        "The observer, illuminator, and target must be distinct objects, but are not: " *
-        "OBSRVR = $obsrvr, TARGET = $target, are not: ILLUM= $illmn."))
+    (targ == obs || targ == illum || obs == illum) && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer, illuminator, and target must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr, TARGET = $target, are not: ILLUM= $illmn."
+        )
+    )
     corr = Aberration(abcorr)
-    corr.transmit && throw(SpiceError(:invalidoption, "Invalid aberration correction " *
-        "'$(string(corr))'. Phase angle geometry calculations currently restricted to " *
-        "reception cases."))
+    corr.transmit && throw(
+        SpiceError(
+            :invalidoption, "Invalid aberration correction " *
+                "'$(string(corr))'. Phase angle geometry calculations currently restricted to " *
+                "reception cases."
+        )
+    )
     return GFPhase(ks, targ, illum, obs, corr)
 end
 
@@ -302,7 +364,7 @@ end
 # --- user-defined scalar function ------------------------------------------------------
 
 "A quantity given by two functions of the epoch: the value and the test \"is decreasing\" (`gfuds`)."
-struct GFFunction{F,D} <: GFQuantity
+struct GFFunction{F, D} <: GFQuantity
     udfuns::F
     udqdec::D
 end
@@ -323,14 +385,18 @@ const _GF_GEODETIC = 6
 const _GF_PLANETOGRAPHIC = 7
 
 "Names of the coordinate systems, blanks removed, in the order of the codes."
-const _GF_SYSNMS = ("RECTANGULAR", "LATITUDINAL", "RA/DEC", "SPHERICAL", "CYLINDRICAL",
-    "GEODETIC", "PLANETOGRAPHIC")
+const _GF_SYSNMS = (
+    "RECTANGULAR", "LATITUDINAL", "RA/DEC", "SPHERICAL", "CYLINDRICAL",
+    "GEODETIC", "PLANETOGRAPHIC",
+)
 
 "Names of the three coordinates of each system, in the order of the conversion call."
-const _GF_CRDNMS = (("X", "Y", "Z"), ("RADIUS", "LONGITUDE", "LATITUDE"),
+const _GF_CRDNMS = (
+    ("X", "Y", "Z"), ("RADIUS", "LONGITUDE", "LATITUDE"),
     ("RANGE", "RIGHT ASCENSION", "DECLINATION"), ("RADIUS", "COLATITUDE", "LONGITUDE"),
     ("RADIUS", "LONGITUDE", "Z"), ("LONGITUDE", "LATITUDE", "ALTITUDE"),
-    ("LONGITUDE", "LATITUDE", "ALTITUDE"))
+    ("LONGITUDE", "LATITUDE", "ALTITUDE"),
+)
 
 """
     GFVector
@@ -380,7 +446,7 @@ equatorial radius and the flattening of the center of the frame (geodetic and
 planetographic systems; else 0), `sense` +1 or -1 for planetographic longitude positive
 east or west (else 0), and `center` the center of the frame of the vector.
 """
-struct GFCoordinate{V<:GFVector} <: GFQuantity
+struct GFCoordinate{V <: GFVector} <: GFQuantity
     vec::V
     sys::Int
     idx::Int
@@ -408,12 +474,20 @@ another system or coordinate. Postcondition: `1 <= sys <= 7` and `1 <= idx <= 3`
 function _gf_sysidx(crdsys::AbstractString, crdnam::AbstractString)
     csys = _gf_squeeze(crdsys)
     sys = something(findfirst(==(csys), _GF_SYSNMS), 0)
-    sys == 0 && throw(SpiceError(:notsupported,
-        "The coordinate system $crdsys is not supported."))
+    sys == 0 && throw(
+        SpiceError(
+            :notsupported,
+            "The coordinate system $crdsys is not supported."
+        )
+    )
     crd = _gf_compress(crdnam)
     idx = something(findfirst(==(crd), _GF_CRDNMS[sys]), 0)
-    idx == 0 && throw(SpiceError(:notsupported, "The coordinate name $crdnam belonging " *
-        "to the coordinate system $crdsys is not recognized."))
+    idx == 0 && throw(
+        SpiceError(
+            :notsupported, "The coordinate name $crdnam belonging " *
+                "to the coordinate system $crdsys is not recognized."
+        )
+    )
     return sys, idx
 end
 
@@ -427,8 +501,10 @@ center of the frame of the vector has three positive radii in the kernel pool
 (`:noframe`, `:badframe`, `:invalidcount`, `:badaxislength`) with equal equatorial radii
 (`:notsupported`).
 """
-function GFCoordinate(vec::GFVector, ks::KernelSet, crdsys::AbstractString,
-        crdnam::AbstractString)
+function GFCoordinate(
+        vec::GFVector, ks::KernelSet, crdsys::AbstractString,
+        crdnam::AbstractString
+    )
     sys, idx = _gf_sysidx(crdsys, crdnam)
     csys = _GF_SYSNMS[sys]
     re = 0.0
@@ -438,18 +514,30 @@ function GFCoordinate(vec::GFVector, ks::KernelSet, crdsys::AbstractString,
     if sys == _GF_GEODETIC || sys == _GF_PLANETOGRAPHIC
         ref = _gf_vecframe(vec)
         info = frinfo(ks, ref)
-        info === nothing && throw(SpiceError(:noframe,
-            "Frame system did not recognize frame $ref."))
+        info === nothing && throw(
+            SpiceError(
+                :noframe,
+                "Frame system did not recognize frame $ref."
+            )
+        )
         center = Int32(info[1])
-        bodfnd(ks, center, "RADII") || throw(SpiceError(:badframe, "No RADII data in " *
-            "kernel pool for frame '$ref' center body, ID $center. Geodetic and " *
-            "planetographic coordinates require a reference frame centered on a finite " *
-            "body. Confirm the proper input frame. Bodies $center may lack radii data in " *
-            "the kernel pool."))
+        bodfnd(ks, center, "RADII") || throw(
+            SpiceError(
+                :badframe, "No RADII data in " *
+                    "kernel pool for frame '$ref' center body, ID $center. Geodetic and " *
+                    "planetographic coordinates require a reference frame centered on a finite " *
+                    "body. Confirm the proper input frame. Bodies $center may lack radii data in " *
+                    "the kernel pool."
+            )
+        )
         radii = _gf_radii(ks, center)
-        radii[1] == radii[2] || throw(SpiceError(:notsupported, "Central body $center " *
-            "of reference frame $ref has radii $(radii[1]) $(radii[2]) $(radii[3]). " *
-            "Unequal equatorial ellipsoid radii are not supported for $csys coordinates."))
+        radii[1] == radii[2] || throw(
+            SpiceError(
+                :notsupported, "Central body $center " *
+                    "of reference frame $ref has radii $(radii[1]) $(radii[2]) $(radii[3]). " *
+                    "Unequal equatorial ellipsoid radii are not supported for $csys coordinates."
+            )
+        )
         re = radii[1]
         f = (radii[1] - radii[3]) / radii[1]
         if sys == _GF_PLANETOGRAPHIC
@@ -464,7 +552,7 @@ _gf_ks(v::GFPositionVector) = v.ks
 
 _gf_label(::GFCoordinate) = "Coordinate pass # of #"
 
-@inline function _gf_coords(q::GFCoordinate, pos::SVector{3,Float64})
+@inline function _gf_coords(q::GFCoordinate, pos::SVector{3, Float64})
     sys = q.sys
     sys == _GF_RECTANGULAR && return (pos[1], pos[2], pos[3])
     sys == _GF_LATITUDINAL && return reclat(pos)
@@ -475,8 +563,12 @@ _gf_label(::GFCoordinate) = "Coordinate pass # of #"
     return recpgr(_gf_ks(q.vec), q.center, pos, q.re, q.f)
 end
 
-@noinline _gf_notcomputable(et::Float64) = throw(SpiceError(:notcomputable,
-    "Coordinate could not be computed at $(etcal(et)) TDB"))
+@noinline _gf_notcomputable(et::Float64) = throw(
+    SpiceError(
+        :notcomputable,
+        "Coordinate could not be computed at $(etcal(et)) TDB"
+    )
+)
 
 "Value of the coordinate (`zzgfcog`); throws `SpiceError(:notcomputable)` if the vector does not exist."
 @inline function _gf_value(q::GFCoordinate, et::Float64)
@@ -486,17 +578,23 @@ end
 end
 
 "`zzrtnmat`: the matrix from the base frame to the frame of the radial, east and north directions of `v`."
-@inline function _gf_rtnmat(v::SVector{3,Float64})
-    (v[1] == 0.0 && v[2] == 0.0) && throw(SpiceError(:degeneratecase,
-        "Input vector ($(v[1]) $(v[2]) $(v[3])) lies on Z-axis; tangential and normal " *
-        "directions are undefined."))
+@inline function _gf_rtnmat(v::SVector{3, Float64})
+    (v[1] == 0.0 && v[2] == 0.0) && throw(
+        SpiceError(
+            :degeneratecase,
+            "Input vector ($(v[1]) $(v[2]) $(v[3])) lies on Z-axis; tangential and normal " *
+                "directions are undefined."
+        )
+    )
     lon = atan(v[2], v[1])
     vlon = SVector(cos(lon), sin(lon), 0.0)
-    east = SVector{3,Float64}(ucrss(SVector(0.0, 0.0, 1.0), vlon))
-    north = SVector{3,Float64}(ucrss(v, east))
-    rad = SVector{3,Float64}(vhat(v))
-    return SMatrix{3,3,Float64,9}(rad[1], east[1], north[1], rad[2], east[2], north[2],
-        rad[3], east[3], north[3])
+    east = SVector{3, Float64}(ucrss(SVector(0.0, 0.0, 1.0), vlon))
+    north = SVector{3, Float64}(ucrss(v, east))
+    rad = SVector{3, Float64}(vhat(v))
+    return SMatrix{3, 3, Float64, 9}(
+        rad[1], east[1], north[1], rad[2], east[2], north[2],
+        rad[3], east[3], north[3]
+    )
 end
 
 @inline _gf_isign(x::Float64) = x == 0.0 ? 0 : (x < 0.0 ? -1 : 1)
@@ -510,13 +608,13 @@ of the local radial, east and north directions, whose components have the signs 
 derivatives of radius (or altitude), longitude and latitude. On the Z axis the signs of
 the longitude and of the latitude are zero.
 """
-function _gf_cprx(state::SVector{6,Float64}, sys::Int, re::Float64, f::Float64, sense::Int)
+function _gf_cprx(state::SVector{6, Float64}, sys::Int, re::Float64, f::Float64, sense::Int)
     if sys == _GF_PLANETOGRAPHIC && sense != 1 && sense != -1
         throw(SpiceError(:valueoutofrange, "Longitude sense $sense should be 1 or -1."))
     end
     pos, v = _gf_pv(state)
     (v[1] == 0.0 && v[2] == 0.0 && v[3] == 0.0) && return (0, 0, 0)
-    vel = SVector{3,Float64}(vhat(v))
+    vel = SVector{3, Float64}(vhat(v))
     sys == _GF_RECTANGULAR &&
         return (_gf_isign(vel[1]), _gf_isign(vel[2]), _gf_isign(vel[3]))
     if pos[1] == 0.0 && pos[2] == 0.0
@@ -528,11 +626,11 @@ function _gf_cprx(state::SVector{6,Float64}, sys::Int, re::Float64, f::Float64, 
     end
     if sys == _GF_GEODETIC || sys == _GF_PLANETOGRAPHIC
         lon, lat, _ = recgeo(pos, re, f)
-        normal = SVector{3,Float64}(latrec(1.0, lon, lat))
+        normal = SVector{3, Float64}(latrec(1.0, lon, lat))
     elseif sys == _GF_CYLINDRICAL
-        normal = SVector{3,Float64}(vhat(SVector(pos[1], pos[2], 0.0)))
+        normal = SVector{3, Float64}(vhat(SVector(pos[1], pos[2], 0.0)))
     else
-        normal = SVector{3,Float64}(vhat(pos))
+        normal = SVector{3, Float64}(vhat(pos))
     end
     rtnvel = _m_mxv(_gf_rtnmat(normal), vel)
     r = (_gf_isign(rtnvel[1]), _gf_isign(rtnvel[2]), _gf_isign(rtnvel[3]))
@@ -578,10 +676,10 @@ end
 "The two progress messages of a search of `q`: `#` is the pass, then the number of passes."
 function _gf_prefix(q::GFQuantity, rel::Int, adjust::Real)
     one = rel == _GF_LOCMIN || rel == _GF_LOCMAX ||
-          (adjust == 0 && (rel == _GF_ABSMIN || rel == _GF_ABSMAX))
+        (adjust == 0 && (rel == _GF_ABSMIN || rel == _GF_ABSMAX))
     n = one ? 1 : 2
     t = _gf_label(q)
-    p(i) = replace(replace(t, "#" => string(i); count=1), "#" => string(n); count=1)
+    p(i) = replace(replace(t, "#" => string(i); count = 1), "#" => string(n); count = 1)
     return (p(1), n == 2 ? p(2) : "")
 end
 
@@ -592,9 +690,13 @@ Window of `cnfine` on which the quantity `q` satisfies the relation: the call of
 `zzgfrelx` that `gfevnt` makes for `q`. The method for a `GFCoordinate` is in
 `gf/longitude.jl`.
 """
-function _gf_search(q::GFQuantity, relate::AbstractString, refval::Real, adjust::Real,
-        cnfine::Window, run::_GFRun)
+function _gf_search(
+        q::GFQuantity, relate::AbstractString, refval::Real, adjust::Real,
+        cnfine::Window, run::_GFRun
+    )
     rel = _gf_relcode(relate)
-    return _gf_relx(et -> _gf_value(q, et), et -> _gf_decreasing(q, et), relate, refval,
-        adjust, cnfine, run, _gf_prefix(q, rel, adjust), "done.")
+    return _gf_relx(
+        et -> _gf_value(q, et), et -> _gf_decreasing(q, et), relate, refval,
+        adjust, cnfine, run, _gf_prefix(q, rel, adjust), "done."
+    )
 end

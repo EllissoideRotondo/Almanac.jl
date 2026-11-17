@@ -26,22 +26,34 @@
 
 const _EK_DPTBAS = 2              # the data pointers of a record follow two integers
 
-@inline _ek_datptr(s, col::_EKColumn, recptr::Integer) = Int(s.ints[Int(recptr)+_EK_DPTBAS+col.ord])
+@inline _ek_datptr(s, col::_EKColumn, recptr::Integer) = Int(s.ints[Int(recptr) + _EK_DPTBAS + col.ord])
 
 "Throws the error of CSPICE for a data pointer that is not an address and not null."
 @noinline function _ek_badptr(col::_EKColumn, datptr::Int, recptr::Integer)
     if datptr == _EK_UNINIT || datptr == _EK_NOBACK
         kind = (col.cclass == 3 || col.cclass == 6) ? :uninitialized : :uninitializedvalue
-        throw(SpiceError(kind, "Attempted to read uninitialized column entry.  " *
-            "COLUMN = $(col.name); record pointer = $recptr"))
+        throw(
+            SpiceError(
+                kind, "Attempted to read uninitialized column entry.  " *
+                    "COLUMN = $(col.name); record pointer = $recptr"
+            )
+        )
     end
-    throw(SpiceError(:bug, "Data pointer is corrupted. COLUMN = $(col.name); " *
-        "record pointer = $recptr"))
+    throw(
+        SpiceError(
+            :bug, "Data pointer is corrupted. COLUMN = $(col.name); " *
+                "record pointer = $recptr"
+        )
+    )
 end
 
-@noinline _ek_noclass(col::_EKColumn, what::AbstractString) = throw(SpiceError(:noclass,
-    "Class $(col.cclass) from input column descriptor is not a supported $what class.  " *
-    "COLUMN = $(col.name)."))
+@noinline _ek_noclass(col::_EKColumn, what::AbstractString) = throw(
+    SpiceError(
+        :noclass,
+        "Class $(col.cclass) from input column descriptor is not a supported $what class.  " *
+            "COLUMN = $(col.name)."
+    )
+)
 
 # ---------------------------------------------------------------------------------------
 # Streams: words of one entry that continue over linked pages
@@ -61,12 +73,12 @@ function _ek_stream_i!(out::AbstractVector, ints::AbstractVector{Int32}, addr::I
     while done < n
         # invariant: `done` elements are copied; the next one is at stream offset `off` of the page
         while off > _EK_IPSIZE
-            base = _ek_ibase(ints[base+255])
+            base = _ek_ibase(ints[base + 255])
             off -= _EK_IPSIZE
         end
         take = min(n - done, _EK_IPSIZE - off + 1)
-        for k in 0:take-1
-            out[done+k+1] = ints[base+off+k]
+        for k in 0:(take - 1)
+            out[done + k + 1] = ints[base + off + k]
         end
         done += take
         off += take
@@ -82,12 +94,12 @@ function _ek_stream_d!(out::AbstractVector, dps::AbstractVector{Float64}, addr::
     while done < n
         # invariant: as in `_ek_stream_i!`
         while off > _EK_DPSIZE
-            base = _ek_dbase(round(Int, dps[base+127]))
+            base = _ek_dbase(round(Int, dps[base + 127]))
             off -= _EK_DPSIZE
         end
         take = min(n - done, _EK_DPSIZE - off + 1)
-        for k in 0:take-1
-            out[done+k+1] = dps[base+off+k]
+        for k in 0:(take - 1)
+            out[done + k + 1] = dps[base + off + k]
         end
         done += take
         off += take
@@ -145,10 +157,10 @@ end
 "True if row `recno` of the class 7 to 9 column `col` is null."
 @inline function _ek_fixed_null(s, col::_EKColumn, recno::Int)
     col.nullok || return false
-    nflbas = Int(s.ints[col.metptr+2])
+    nflbas = Int(s.ints[col.metptr + 2])
     q = (recno - 1) ÷ _EK_CPSIZE
     r = recno - q * _EK_CPSIZE
-    return s.chars[nflbas+r+q*1024] == UInt8('T')
+    return s.chars[nflbas + r + q * 1024] == UInt8('T')
 end
 
 # ---------------------------------------------------------------------------------------
@@ -163,14 +175,14 @@ at `recptr`, as `zzekrsi`. `found` is false if the entry has no element `elt`; a
 entry gives `(0, true, true)`. Throws `SpiceError` (`:uninitializedvalue`, `:bug`,
 `:noclass`).
 """
-function _ek_elt_i(s, col::_EKColumn, recptr::Integer, elt::Integer=1)
+function _ek_elt_i(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
     c = col.cclass
     if c == 7
         recno = Int(recptr)
         _ek_fixed_null(s, col, recno) && return 0, true, true
         q = (recno - 1) ÷ _EK_IPSIZE
         r = recno - q * _EK_IPSIZE
-        return Int(s.ints[Int(s.ints[col.metptr+1])+r+q*256]), false, true
+        return Int(s.ints[Int(s.ints[col.metptr + 1]) + r + q * 256]), false, true
     end
     (c == 1 || c == 4) || _ek_noclass(col, "integer")
     datptr = _ek_datptr(s, col, recptr)
@@ -198,14 +210,14 @@ Base.getindex(v::_EKRefVec, ::Int) = v.r[]
 Element `elt` of the entry of the double or time column `col` (class 2, 5 or 8), as
 `zzekrsd`. Results and errors as [`_ek_elt_i`](@ref).
 """
-function _ek_elt_d(s, col::_EKColumn, recptr::Integer, elt::Integer=1)
+function _ek_elt_d(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
     c = col.cclass
     if c == 8
         recno = Int(recptr)
         _ek_fixed_null(s, col, recno) && return 0.0, true, true
         q = (recno - 1) ÷ _EK_DPSIZE
         r = recno - q * _EK_DPSIZE
-        return s.dps[Int(s.ints[col.metptr+1])+r+q*128], false, true
+        return s.dps[Int(s.ints[col.metptr + 1]) + r + q * 128], false, true
     end
     (c == 2 || c == 5) || _ek_noclass(col, "double precision")
     datptr = _ek_datptr(s, col, recptr)
@@ -228,7 +240,7 @@ length for class 3, the string length of the column for classes 6 and 9, so trai
 blanks can be present). Results and errors as [`_ek_elt_i`](@ref), with
 `:uninitialized` for an entry that was never written.
 """
-function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer=1)
+function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
     c = col.cclass
     if c == 9
         recno = Int(recptr)
@@ -237,8 +249,8 @@ function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer=1)
         spp = _EK_CPSIZE ÷ l
         q = (recno - 1) ÷ spp
         r = recno - q * spp
-        a = Int(s.ints[col.metptr+1]) + q * 1024 + (r - 1) * l + 1
-        return String(s.chars[a:a+l-1]), false, true
+        a = Int(s.ints[col.metptr + 1]) + q * 1024 + (r - 1) * l + 1
+        return String(s.chars[a:(a + l - 1)]), false, true
     end
     (c == 3 || c == 6) || _ek_noclass(col, "character")
     datptr = _ek_datptr(s, col, recptr)

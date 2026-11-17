@@ -33,59 +33,61 @@ const DSK_FULL = (-pi, pi, -pi / 2, pi / 2)
 "Text kernel with the frames, the Mars constants and the surface names of the group."
 function dsk_text_kernel(dir)
     path = joinpath(dir, "dsk_test.tf")
-    write(path, """
-KPL/FK
-\\begindata
-BODY499_POLE_RA  = ( 317.269202  -0.10927547  0. )
-BODY499_POLE_DEC = (  54.432516  -0.05827105  0. )
-BODY499_PM       = ( 176.049863 350.891982443297 0. )
-BODY499_RADII    = ( 3.0 2.5 2.0 )
-BODY401_RADII    = ( 1.3 1.1 0.9 )
+    write(
+        path, """
+        KPL/FK
+        \\begindata
+        BODY499_POLE_RA  = ( 317.269202  -0.10927547  0. )
+        BODY499_POLE_DEC = (  54.432516  -0.05827105  0. )
+        BODY499_PM       = ( 176.049863 350.891982443297 0. )
+        BODY499_RADII    = ( 3.0 2.5 2.0 )
+        BODY401_RADII    = ( 1.3 1.1 0.9 )
 
-FRAME_MARS_TILT          = 1499001
-FRAME_1499001_NAME       = 'MARS_TILT'
-FRAME_1499001_CLASS      = 4
-FRAME_1499001_CLASS_ID   = 1499001
-FRAME_1499001_CENTER     = 499
-TKFRAME_1499001_RELATIVE = 'IAU_MARS'
-TKFRAME_1499001_SPEC     = 'ANGLES'
-TKFRAME_1499001_UNITS    = 'DEGREES'
-TKFRAME_1499001_AXES     = ( 3 1 2 )
-TKFRAME_1499001_ANGLES   = ( 20 -35 50 )
+        FRAME_MARS_TILT          = 1499001
+        FRAME_1499001_NAME       = 'MARS_TILT'
+        FRAME_1499001_CLASS      = 4
+        FRAME_1499001_CLASS_ID   = 1499001
+        FRAME_1499001_CENTER     = 499
+        TKFRAME_1499001_RELATIVE = 'IAU_MARS'
+        TKFRAME_1499001_SPEC     = 'ANGLES'
+        TKFRAME_1499001_UNITS    = 'DEGREES'
+        TKFRAME_1499001_AXES     = ( 3 1 2 )
+        TKFRAME_1499001_ANGLES   = ( 20 -35 50 )
 
-FRAME_MARS_PCK2          = 1499002
-FRAME_1499002_NAME       = 'MARS_PCK2'
-FRAME_1499002_CLASS      = 2
-FRAME_1499002_CLASS_ID   = 499
-FRAME_1499002_CENTER     = 499
+        FRAME_MARS_PCK2          = 1499002
+        FRAME_1499002_NAME       = 'MARS_PCK2'
+        FRAME_1499002_CLASS      = 2
+        FRAME_1499002_CLASS_ID   = 499
+        FRAME_1499002_CENTER     = 499
 
-FRAME_MARS_OFF           = 1499003
-FRAME_1499003_NAME       = 'MARS_OFF'
-FRAME_1499003_CLASS      = 4
-FRAME_1499003_CLASS_ID   = 1499003
-FRAME_1499003_CENTER     = 4
-TKFRAME_1499003_RELATIVE = 'IAU_MARS'
-TKFRAME_1499003_SPEC     = 'ANGLES'
-TKFRAME_1499003_UNITS    = 'DEGREES'
-TKFRAME_1499003_AXES     = ( 1 2 3 )
-TKFRAME_1499003_ANGLES   = ( 10 0 0 )
+        FRAME_MARS_OFF           = 1499003
+        FRAME_1499003_NAME       = 'MARS_OFF'
+        FRAME_1499003_CLASS      = 4
+        FRAME_1499003_CLASS_ID   = 1499003
+        FRAME_1499003_CENTER     = 4
+        TKFRAME_1499003_RELATIVE = 'IAU_MARS'
+        TKFRAME_1499003_SPEC     = 'ANGLES'
+        TKFRAME_1499003_UNITS    = 'DEGREES'
+        TKFRAME_1499003_AXES     = ( 1 2 3 )
+        TKFRAME_1499003_ANGLES   = ( 10 0 0 )
 
-FRAME_PHOBOS_FIX         = 1401001
-FRAME_1401001_NAME       = 'PHOBOS_FIX'
-FRAME_1401001_CLASS      = 4
-FRAME_1401001_CLASS_ID   = 1401001
-FRAME_1401001_CENTER     = 401
-TKFRAME_1401001_RELATIVE = 'J2000'
-TKFRAME_1401001_SPEC     = 'ANGLES'
-TKFRAME_1401001_UNITS    = 'DEGREES'
-TKFRAME_1401001_AXES     = ( 3 2 1 )
-TKFRAME_1401001_ANGLES   = ( 30 40 50 )
+        FRAME_PHOBOS_FIX         = 1401001
+        FRAME_1401001_NAME       = 'PHOBOS_FIX'
+        FRAME_1401001_CLASS      = 4
+        FRAME_1401001_CLASS_ID   = 1401001
+        FRAME_1401001_CENTER     = 401
+        TKFRAME_1401001_RELATIVE = 'J2000'
+        TKFRAME_1401001_SPEC     = 'ANGLES'
+        TKFRAME_1401001_UNITS    = 'DEGREES'
+        TKFRAME_1401001_AXES     = ( 3 2 1 )
+        TKFRAME_1401001_ANGLES   = ( 30 40 50 )
 
-NAIF_SURFACE_NAME = ( 'Ellipsoid One', 'ROUGH', 'tilted  cube', 'rough', 'old name', 'Old Name', 'p shape' )
-NAIF_SURFACE_CODE = ( 1, 2, 3, 22, 5, 6, 1 )
-NAIF_SURFACE_BODY = ( 499, 499, 499, 499, 499, 499, 401 )
-\\begintext
-""")
+        NAIF_SURFACE_NAME = ( 'Ellipsoid One', 'ROUGH', 'tilted  cube', 'rough', 'old name', 'Old Name', 'p shape' )
+        NAIF_SURFACE_CODE = ( 1, 2, 3, 22, 5, 6, 1 )
+        NAIF_SURFACE_BODY = ( 499, 499, 499, 499, 499, 499, 401 )
+        \\begintext
+        """
+    )
     return path
 end
 
@@ -113,16 +115,20 @@ function dsk_specs(rng)
     cv, cp_ = cube_shape(1.0)
     c2v, c2p = cube_shape(1.5)
     pv, pp = ellipsoid_shape(1.3, 1.1, 0.9, 30, 16)
-    a = [DskSpec(499, 1, 2, "IAU_MARS", 1, Float64[], DSK_FULL, -1e9, 1e9, 5.0, 4, ev, ep),
-        DskSpec(499, 2, 2, "IAU_MARS", 1, Float64[], DSK_FULL, -1e9, 1e9, 3.0, 3, rv, rp),
-        DskSpec(499, 3, 2, "MARS_TILT", 3, Float64[], (-1.0, 1.0, -1.0, 1.0), -1e9, 1e9, 1.0, 1, cv, cp_)]
-    b = [DskSpec(499, 4, 1, "MARS_PCK2", 4, [3.0, 1 / 3], DSK_FULL, -1e9, 1e9, 5.0, 4, e4v, e4p),
-        DskSpec(499, 5, 2, "IAU_MARS", 1, Float64[], (-pi, 0.0, -pi / 2, pi / 2), -1e9, 1e9, 4.0, 2, wv, wp),
-        DskSpec(499, 5, 2, "IAU_MARS", 1, Float64[], (0.0, pi, -pi / 2, pi / 2), -1e9, 1e9, 4.0, 2, xv, xp),
+    a = [
+        DskSpec(499, 1, 2, "IAU_MARS", 1, Float64[], DSK_FULL, -1.0e9, 1.0e9, 5.0, 4, ev, ep),
+        DskSpec(499, 2, 2, "IAU_MARS", 1, Float64[], DSK_FULL, -1.0e9, 1.0e9, 3.0, 3, rv, rp),
+        DskSpec(499, 3, 2, "MARS_TILT", 3, Float64[], (-1.0, 1.0, -1.0, 1.0), -1.0e9, 1.0e9, 1.0, 1, cv, cp_),
+    ]
+    b = [
+        DskSpec(499, 4, 1, "MARS_PCK2", 4, [3.0, 1 / 3], DSK_FULL, -1.0e9, 1.0e9, 5.0, 4, e4v, e4p),
+        DskSpec(499, 5, 2, "IAU_MARS", 1, Float64[], (-pi, 0.0, -pi / 2, pi / 2), -1.0e9, 1.0e9, 4.0, 2, wv, wp),
+        DskSpec(499, 5, 2, "IAU_MARS", 1, Float64[], (0.0, pi, -pi / 2, pi / 2), -1.0e9, 1.0e9, 4.0, 2, xv, xp),
         DskSpec(499, 6, 1, "IAU_MARS", 1, Float64[], DSK_FULL, 0.0, 100.0, 4.0, 3, s4v, s4p),
         DskSpec(499, 6, 1, "IAU_MARS", 1, Float64[], DSK_FULL, 50.0, 200.0, 4.0, 3, s5v, s5p),
-        DskSpec(499, 7, 2, "MARS_OFF", 3, Float64[], (-1.5, 1.5, -1.5, 1.5), -1e9, 1e9, 1.0, 1, c2v, c2p)]
-    c = [DskSpec(401, 1, 1, "PHOBOS_FIX", 4, [1.3, 0.2], DSK_FULL, -1e9, 1e9, 4.0, 3, pv, pp)]
+        DskSpec(499, 7, 2, "MARS_OFF", 3, Float64[], (-1.5, 1.5, -1.5, 1.5), -1.0e9, 1.0e9, 1.0, 1, c2v, c2p),
+    ]
+    c = [DskSpec(401, 1, 1, "PHOBOS_FIX", 4, [1.3, 0.2], DSK_FULL, -1.0e9, 1.0e9, 4.0, 3, pv, pp)]
     return a, b, c
 end
 
@@ -174,7 +180,7 @@ function compare_xsi(ctx, ks, target, srf, et, fixref, v, d)
     cf || return false, true, true, false, 0.0, true, 0.0
     xpt, seg, plid = r
     same = dla_tuple(cdla) == dla_tuple(seg.dladsc) && dsk_tuple(cdsk) == dsk_tuple(seg.dskdsc) &&
-           SPICE.dashfn(chh) == ks.dskfiles[seg.file].path
+        SPICE.dashfn(chh) == ks.dskfiles[seg.file].path
     stale = false
     fixfid = Almanac.namfrm(ctx, fixref)
     inframe = seg.dskdsc.frmcde == fixfid
@@ -214,26 +220,34 @@ function dsk_part_1(env)
         for s in (FULL ? specs : specs[1:1]), makvtl in (true, false)
             z = index_sizes(s)
             cd, ci = c_dskmi2(s; makvtl)
-            nd, ni = dskmi2(s.verts, s.plates, s.finscl, s.corscl, z.worksz, z.voxpsz,
-                z.voxlsz, makvtl, index_spxisz(s))
+            nd, ni = dskmi2(
+                s.verts, s.plates, s.finscl, s.corscl, z.worksz, z.voxpsz,
+                z.voxlsz, makvtl, index_spxisz(s)
+            )
             @test bits_equal(cd, nd)
             @test ci == ni
             # The matrix form gives the same index.
-            md, mi = dskmi2(reduce(hcat, s.verts), reduce(hcat, s.plates), s.finscl, s.corscl,
-                z.worksz, z.voxpsz, z.voxlsz, makvtl, index_spxisz(s))
+            md, mi = dskmi2(
+                reduce(hcat, s.verts), reduce(hcat, s.plates), s.finscl, s.corscl,
+                z.worksz, z.voxpsz, z.voxlsz, makvtl, index_spxisz(s)
+            )
             @test bits_equal(md, nd) && mi == ni
         end
         # The coordinate system is the branch of `dskrb2`; the shapes of file `a` (ellipsoid,
         # rough surface, cube) are the default sample.
-        for s in (FULL || name === :a ? specs : specs[1:1]), (corsys, corpar) in ((1, zeros(10)), (3, zeros(10)),
-                (4, [3.0, 1 / 3, 0, 0, 0, 0, 0, 0, 0, 0]), (4, [2.0, -0.4, 0, 0, 0, 0, 0, 0, 0, 0]))
+        for s in (FULL || name === :a ? specs : specs[1:1]), (corsys, corpar) in (
+                    (1, zeros(10)), (3, zeros(10)),
+                    (4, [3.0, 1 / 3, 0, 0, 0, 0, 0, 0, 0, 0]), (4, [2.0, -0.4, 0, 0, 0, 0, 0, 0, 0, 0]),
+                )
             c3 = c_dskrb2(s.verts, s.plates, corsys, corpar)
             n3 = dskrb2(s.verts, s.plates, corsys, corpar)
             @test c3 === n3
         end
-        cpath = c_write_dsk(joinpath(dir, "c_$name.bds"), specs; ncomch=300, comments)
-        npath = neo_write_dsk(joinpath(dir, "n_$name.bds"), specs; ncomch=300, comments,
-            ctx=wctx)
+        cpath = c_write_dsk(joinpath(dir, "c_$name.bds"), specs; ncomch = 300, comments)
+        npath = neo_write_dsk(
+            joinpath(dir, "n_$name.bds"), specs; ncomch = 300, comments,
+            ctx = wctx
+        )
         files[name] = (cpath, npath)
         ci, cd, _ = c_das_data(cpath)
         ni, nd, _ = neo_das_data(npath)
@@ -253,17 +267,19 @@ function dsk_part_1(env)
         dprec = cld(lastla[2], 128)
         first_data = (2 + ncomr) * 1024
         pad = falses(length(bn))
-        pad[first_data+lastla[2]*8+1:first_data+dprec*1024] .= true
-        pad[first_data+dprec*1024+lastla[3]*4+1:end] .= true
+        pad[(first_data + lastla[2] * 8 + 1):(first_data + dprec * 1024)] .= true
+        pad[(first_data + dprec * 1024 + lastla[3] * 4 + 1):end] .= true
         @test all(bc[.!pad] .== bn[.!pad])
         @test all(==(0x00), bn[pad])
         nident += bc == bn
     end
-    measured("  DSK writer: $(nident) of 3 files are equal to the CSPICE files byte " *
-             "for byte; the others differ only in record padding")
+    measured(
+        "  DSK writer: $(nident) of 3 files are equal to the CSPICE files byte " *
+            "for byte; the others differ only in record padding"
+    )
     # A file without the vertex-plate list.
-    c0 = c_write_dsk(joinpath(dir, "c_novtl.bds"), specs_a[1:2]; makvtl=false)
-    n0 = neo_write_dsk(joinpath(dir, "n_novtl.bds"), specs_a[1:2]; makvtl=false, ctx=wctx)
+    c0 = c_write_dsk(joinpath(dir, "c_novtl.bds"), specs_a[1:2]; makvtl = false)
+    n0 = neo_write_dsk(joinpath(dir, "n_novtl.bds"), specs_a[1:2]; makvtl = false, ctx = wctx)
     @test c_das_data(c0)[1] == neo_das_data(n0)[1]
     @test bits_equal(c_das_data(c0)[2], neo_das_data(n0)[2])
     return nothing
@@ -365,8 +381,12 @@ function dsk_part_3(env)
         c_dascls(ch)
         dascls(h)
     end
-    measured(@sprintf("  dskx02: %d rays on 10 segments, %d intercepts, %d differences in found or plate, max |dxpt| = %.3e km",
-        nray, nhit, nbad, maxerr))
+    measured(
+        @sprintf(
+            "  dskx02: %d rays on 10 segments, %d intercepts, %d differences in found or plate, max |dxpt| = %.3e km",
+            nray, nhit, nbad, maxerr
+        )
+    )
     @test nbad == 0
     @test maxerr == 0.0
     @test nhit > nsample(250, 8_000)
@@ -377,9 +397,11 @@ end
 function dsk_part_4(env)
     (; rng, dir, tk, spk, specs_a, specs_b, specs_c, files, wctx, comments) = env
     (; loadlist, ctx, ks, shape_e, shape_r, shape_w) = env
-    surface_lists = ((), [1], [2], [3], [4], [5], [6], [7], [1, 2], [2, 5], [3, 7], [5, 6],
-        [7, 6, 5, 4, 3, 2, 1])
-    rows = Tuple{String,Int,Int,Int,Int,Int,Float64,Float64}[]
+    surface_lists = (
+        (), [1], [2], [3], [4], [5], [6], [7], [1, 2], [2, 5], [3, 7], [5, 6],
+        [7, 6, 5, 4, 3, 2, 1],
+    )
+    rows = Tuple{String, Int, Int, Int, Int, Int, Float64, Float64}[]
     function run_case(label, nfull, fixref, kinds, shapes, epochs, tol)
         n = nsample(nfull ÷ 25, nfull)
         nhit = 0; nfound = 0; nplate = 0; nstale = 0; maxerr = 0.0; maxrot = 0.0; maxacr = 0.0
@@ -407,16 +429,16 @@ function dsk_part_4(env)
         # Measured on 65,000 rays: 9e-15 km across the ray, 8e-12 km along it.
         @test maxacr <= tol / 100
         @test maxrot <= 100 * tol
-        @test nhit > n ÷ 50          # CSPICE finds no intercept from a vertex below the inner radius bound
+        return @test nhit > n ÷ 50          # CSPICE finds no intercept from a vertex below the inner radius bound
     end
     epochs = (0.0, 75.0, 150.0, 1.0e5)
-    run_case("IAU_MARS, toward the body", 15_000, "IAU_MARS", (1,), (shape_e,), epochs, 1e-11)
-    run_case("IAU_MARS, random direction", 8_000, "IAU_MARS", (2,), (shape_e,), epochs, 1e-11)
-    run_case("IAU_MARS, from inside", 8_000, "IAU_MARS", (3,), (shape_e,), epochs, 1e-11)
-    run_case("IAU_MARS, vertices and edges", 12_000, "IAU_MARS", (4,), (shape_e, shape_r, shape_w), epochs, 1e-11)
-    run_case("IAU_MARS, vertex on the surface", 6_000, "IAU_MARS", (5,), (shape_e, shape_r, shape_w), epochs, 1e-11)
-    run_case("MARS_TILT, mixed", 8_000, "MARS_TILT", (1, 2, 3), (shape_e,), epochs, 1e-11)
-    run_case("MARS_PCK2, mixed", 8_000, "MARS_PCK2", (1, 2, 3), (shape_e,), epochs, 1e-11)
+    run_case("IAU_MARS, toward the body", 15_000, "IAU_MARS", (1,), (shape_e,), epochs, 1.0e-11)
+    run_case("IAU_MARS, random direction", 8_000, "IAU_MARS", (2,), (shape_e,), epochs, 1.0e-11)
+    run_case("IAU_MARS, from inside", 8_000, "IAU_MARS", (3,), (shape_e,), epochs, 1.0e-11)
+    run_case("IAU_MARS, vertices and edges", 12_000, "IAU_MARS", (4,), (shape_e, shape_r, shape_w), epochs, 1.0e-11)
+    run_case("IAU_MARS, vertex on the surface", 6_000, "IAU_MARS", (5,), (shape_e, shape_r, shape_w), epochs, 1.0e-11)
+    run_case("MARS_TILT, mixed", 8_000, "MARS_TILT", (1, 2, 3), (shape_e,), epochs, 1.0e-11)
+    run_case("MARS_PCK2, mixed", 8_000, "MARS_PCK2", (1, 2, 3), (shape_e,), epochs, 1.0e-11)
     measured("  dskxsi against CSPICE (13 surface lists, 4 epochs, 9 segments of body 499):")
     measured("    case                              rays    hits  found/segment diff  plate diff  CSPICE stale plate  max |dxpt| km (same frame)  (other frame)")
     for r in rows
@@ -430,14 +452,14 @@ function dsk_part_4(env)
         v = V3(randn(rng, 3)) * 5
         d = V3(randn(rng, 3)) - v
         cf, same, plate, stale, err, _ = compare_xsi(ctx, ks, "PHOBOS", (), 10.0, "PHOBOS_FIX", v, d)
-        nbad += !(same && (plate || stale) && err <= 1e-11)
+        nbad += !(same && (plate || stale) && err <= 1.0e-11)
     end
     @test nbad == 0
     nbad = 0; nhit = 0
     nseam = nsample(400, 4000)
     for k in 1:nseam
         lat = (rand(rng) - 0.5) * 3
-        lon = rand(rng, (0.0, pi, -pi)) + (rand(rng, Bool) ? 0.0 : 1e-9 * randn(rng))
+        lon = rand(rng, (0.0, pi, -pi)) + (rand(rng, Bool) ? 0.0 : 1.0e-9 * randn(rng))
         target = 3.6 * V3(cos(lon) * cos(lat), sin(lon) * cos(lat), sin(lat))
         v = target * 2 + V3(0.0, 0.0, randn(rng))
         cf, same, plate, stale, err, _ = compare_xsi(ctx, ks, "MARS", [5], 0.0, "IAU_MARS", v, target - v)
@@ -458,19 +480,25 @@ function dsk_part_5(env)
         v, d = dsk_ray(rng, rand(rng, 1:4), shape_r)
         push!(vtx, v); push!(dirs, d)
     end
-    for (srf, et, fixref) in (((), 0.0, "IAU_MARS"), ([2, 5], 75.0, "IAU_MARS"),
-            ([6], 75.0, "IAU_MARS"), ([3, 7], 0.0, "MARS_TILT"))
+    for (srf, et, fixref) in (
+            ((), 0.0, "IAU_MARS"), ([2, 5], 75.0, "IAU_MARS"),
+            ([6], 75.0, "IAU_MARS"), ([3, 7], 0.0, "MARS_TILT"),
+        )
         cx, cf = c_dskxv("MARS", srf, et, fixref, vtx, dirs)
         nx, nf = dskxv(ctx, false, "MARS", srf, et, fixref, vtx, dirs)
         @test nf == cf
-        @test maximum(norm(cx[i] - nx[i]) for i in 1:n if cf[i]) <= (isempty(srf) || fixref != "IAU_MARS" ? 1e-11 : 0.0)
+        @test maximum(norm(cx[i] - nx[i]) for i in 1:n if cf[i]) <= (isempty(srf) || fixref != "IAU_MARS" ? 1.0e-11 : 0.0)
         @test all(iszero(nx[i]) for i in 1:n if !nf[i])
         # The matrix form, vectors of plain vectors, and integer IDs give the same.
-        mx, mf = dskxv(ctx, false, 499, srf, et, Almanac.namfrm(ctx, fixref),
-            reduce(hcat, vtx), reduce(hcat, dirs))
+        mx, mf = dskxv(
+            ctx, false, 499, srf, et, Almanac.namfrm(ctx, fixref),
+            reduce(hcat, vtx), reduce(hcat, dirs)
+        )
         @test mx == nx && mf == nf
-        px, pf = dskxv(ctx, false, "mars", collect(srf), et, lowercase(fixref),
-            Vector.(vtx[1:50]), Vector.(dirs[1:50]))
+        px, pf = dskxv(
+            ctx, false, "mars", collect(srf), et, lowercase(fixref),
+            Vector.(vtx[1:50]), Vector.(dirs[1:50])
+        )
         @test px == nx[1:50] && pf == nf[1:50]
     end
     # Coverage in time of surface 6: the first segment only, both, the second only, none.
@@ -479,7 +507,7 @@ function dsk_part_5(env)
     @test r(0.0)[2].dskdsc.stop == 100.0 && r(25.0)[2].dskdsc.stop == 100.0
     @test r(75.0)[2].dskdsc.stop == 200.0 && r(100.0)[2].dskdsc.stop == 200.0
     @test r(150.0)[2].dskdsc.stop == 200.0 && r(200.0) !== nothing
-    @test r(-1e-9) === nothing && r(200.0 + 1e-9) === nothing && r(1e5) === nothing
+    @test r(-1.0e-9) === nothing && r(200.0 + 1.0e-9) === nothing && r(1.0e5) === nothing
     for et in (0.0, 25.0, 50.0, 75.0, 100.0, 150.0, 200.0, 201.0, -1.0)
         cf, cx = c_dskxsi("MARS", [6], et, "IAU_MARS", v, -v)
         @test cf == (r(et) !== nothing) && (!cf || cx == r(et)[1])
@@ -501,9 +529,11 @@ function dsk_part_5(env)
     @test dskx02(seg, v, -v) == dskx02(ctx, seg, v, -v) == dskx02(ks, seg, v, -v)
     # `dskxsi` moves a far vertex onto a sphere around the body first, so the point can
     # differ from that of `dskx02` in the last bits.
-    @test dskx02(seg, v, -v)[1] == plid && norm(dskx02(seg, v, -v)[2] - xpt) <= 1e-13
-    @test pltnp(xpt, dskv02(seg, shape_r[2][plid][1], 1)[1], dskv02(seg, shape_r[2][plid][2], 1)[1],
-        dskv02(seg, shape_r[2][plid][3], 1)[1])[2] <= 1e-12
+    @test dskx02(seg, v, -v)[1] == plid && norm(dskx02(seg, v, -v)[2] - xpt) <= 1.0e-13
+    @test pltnp(
+        xpt, dskv02(seg, shape_r[2][plid][1], 1)[1], dskv02(seg, shape_r[2][plid][2], 1)[1],
+        dskv02(seg, shape_r[2][plid][3], 1)[1]
+    )[2] <= 1.0e-12
     kclear()
     return nothing
 end
@@ -528,10 +558,12 @@ function dsk_part_6(env)
     end
     # Fixed cases: three vertices exactly on one line, with the longest edge first, second
     # and third. A random plate reaches these branches about once in a thousand.
-    for (a, b, c) in ((V3(0.0, 0.0, 0.0), V3(2.0, 0.0, 0.0), V3(1.0, 0.0, 0.0)),
-            (V3(1.0, 0.0, 0.0), V3(0.0, 0.0, 0.0), V3(2.0, 0.0, 0.0)),
-            (V3(2.0, 0.0, 0.0), V3(1.0, 0.0, 0.0), V3(0.0, 0.0, 0.0))),
-        p in (V3(0.5, 1.0, 0.0), V3(-1.0, 2.0, 3.0), V3(5.0, 0.0, 1.0))
+    for (a, b, c) in (
+                (V3(0.0, 0.0, 0.0), V3(2.0, 0.0, 0.0), V3(1.0, 0.0, 0.0)),
+                (V3(1.0, 0.0, 0.0), V3(0.0, 0.0, 0.0), V3(2.0, 0.0, 0.0)),
+                (V3(2.0, 0.0, 0.0), V3(1.0, 0.0, 0.0), V3(0.0, 0.0, 0.0)),
+            ),
+            p in (V3(0.5, 1.0, 0.0), V3(-1.0, 2.0, 3.0), V3(5.0, 0.0, 1.0))
 
         np_, nd = pltnp(p, a, b, c)
         cp_, cd = SPICE.pltnp(collect(p), collect(a), collect(b), collect(c))
@@ -544,7 +576,7 @@ function dsk_part_6(env)
         length(s.plates) >= 4 && @test pltvol(s.verts, s.plates) === c_pltvol(s.verts, s.plates)
     end
     ev, ep = shape_e
-    @test isapprox(pltvol(ev, ep), 4 / 3 * pi * 3.0 * 2.5 * 2.0; rtol=2e-2)
+    @test isapprox(pltvol(ev, ep), 4 / 3 * pi * 3.0 * 2.5 * 2.0; rtol = 2.0e-2)
     @test pltvol(cube_shape(1.0)...) ≈ 8.0 && pltar(cube_shape(1.0)...) ≈ 24.0
     @test pltar(ev, P3[]) == 0.0
     @test neo_kind(() -> pltar(ev[1:2], [P3(1, 2, 1)])) === :toofewvertices
@@ -561,16 +593,22 @@ end
 function dsk_part_7(env)
     (; rng, dir, tk, spk, specs_a, specs_b, specs_c, files, wctx, comments) = env
     (; loadlist, ctx, ks, shape_e, shape_r, shape_w) = env
-    for (code, body) in ((1, 499), (2, 499), (3, 499), (22, 499), (5, 499), (6, 499), (1, 401),
-            (7, 499), (1, 5), (-3, 499))
+    for (code, body) in (
+            (1, 499), (2, 499), (3, 499), (22, 499), (5, 499), (6, 499), (1, 401),
+            (7, 499), (1, 5), (-3, 499),
+        )
         @test srfc2s(ctx, code, body) == SPICE.srfc2s(code, body)
     end
-    for (code, body) in ((1, "MARS"), (22, "499"), (1, "phobos"), (6, "Mars"), (5, "MARS"),
-            (1, "NO SUCH BODY"), (9, "MARS"))
+    for (code, body) in (
+            (1, "MARS"), (22, "499"), (1, "phobos"), (6, "Mars"), (5, "MARS"),
+            (1, "NO SUCH BODY"), (9, "MARS"),
+        )
         @test srfcss(ctx, code, body) == SPICE.srfcss(code, body)
     end
-    for name in ("Ellipsoid One", "ellipsoid   one", " ROUGH ", "rough", "tilted cube",
-            "old name", "OLD NAME", "p shape", "12", " -7 ", "nothing", " ", "1.5", "-1.5", "2e1", "x1")
+    for name in (
+            "Ellipsoid One", "ellipsoid   one", " ROUGH ", "rough", "tilted cube",
+            "old name", "OLD NAME", "p shape", "12", " -7 ", "nothing", " ", "1.5", "-1.5", "2e1", "x1",
+        )
         for body in (499, 401, 5)
             @test srfscc(ctx, name, body) == SPICE.srfscc(name, body)
         end
@@ -579,8 +617,12 @@ function dsk_part_7(env)
         end
     end
     # An empty string is an error of the C interface of CSPICE.
-    c_empty = c_kind(() -> ccall((:srfscc_c, DSKLIB), Cvoid, (Cstring, Cint, Ref{Cint}, Ref{Cint}),
-        "", 499, Ref{Cint}(0), Ref{Cint}(0)))
+    c_empty = c_kind(
+        () -> ccall(
+            (:srfscc_c, DSKLIB), Cvoid, (Cstring, Cint, Ref{Cint}, Ref{Cint}),
+            "", 499, Ref{Cint}(0), Ref{Cint}(0)
+        )
+    )
     @test neo_kind(() -> srfscc(ctx, "", 499)) === :emptystring === c_empty
     @test neo_kind(() -> srfs2c(ctx, "", "MARS")) === :emptystring
     @test neo_kind(() -> srfs2c(ctx, "ROUGH", "")) === :emptystring
@@ -596,14 +638,20 @@ function dsk_part_7(env)
         furnsh(c, p)
         SPICE.kclear()
         SPICE.furnsh(p)
-        ck = c_kind(() -> ccall((:srfscc_c, DSKLIB), Cvoid, (Cstring, Cint, Ref{Cint}, Ref{Cint}),
-            "X", 499, Ref{Cint}(0), Ref{Cint}(0)))
+        ck = c_kind(
+            () -> ccall(
+                (:srfscc_c, DSKLIB), Cvoid, (Cstring, Cint, Ref{Cint}, Ref{Cint}),
+                "X", 499, Ref{Cint}(0), Ref{Cint}(0)
+            )
+        )
         return neo_kind(() -> srfscc(c, "X", 499)), neo_kind(() -> srfc2s(c, 1, 499)), ck
     end
-    for (text, kind) in (("NAIF_SURFACE_NAME = ( 'A' )", :badsurfacemap),
+    for (text, kind) in (
+            ("NAIF_SURFACE_NAME = ( 'A' )", :badsurfacemap),
             ("NAIF_SURFACE_NAME = ( 'A' )\nNAIF_SURFACE_CODE = ( 1 )\nNAIF_SURFACE_BODY = ( 'B' )", :badvariabletype),
             ("NAIF_SURFACE_NAME = ( 'A', 'B' )\nNAIF_SURFACE_CODE = ( 1 )\nNAIF_SURFACE_BODY = ( 499, 499 )", :arraysizemismatch),
-            ("NAIF_SURFACE_NAME = ( 'A', ' ' )\nNAIF_SURFACE_CODE = ( 1, 2 )\nNAIF_SURFACE_BODY = ( 499, 499 )", :blanknameassigned))
+            ("NAIF_SURFACE_NAME = ( 'A', ' ' )\nNAIF_SURFACE_CODE = ( 1, 2 )\nNAIF_SURFACE_BODY = ( 499, 499 )", :blanknameassigned),
+        )
         @test bad_map(text) == (kind, kind, kind)
     end
     oracle_load(loadlist)
@@ -616,15 +664,17 @@ function dsk_part_8(env)
     (; loadlist, ctx, ks, shape_e, shape_r, shape_w) = env
     lonlat = [[2pi * rand(rng) - pi, pi * rand(rng) - pi / 2] for _ in 1:nsample(100, 400)]
     push!(lonlat, [0.0, pi / 2], [0.0, -pi / 2], [pi, 0.0], [-pi, 0.0])
-    for (method, target, fixref, tol) in (("ELLIPSOID", "MARS", "IAU_MARS", 1e-13),
-            ("ellipsoid", "499", "MARS_TILT", 1e-13),
-            ("DSK/UNPRIORITIZED", "MARS", "IAU_MARS", 1e-13),
-            ("DSK/UNPRIORITIZED/SURFACES = 1", "MARS", "IAU_MARS", 1e-13),
-            ("dsk/unprioritized/surfaces = \"Ellipsoid One\", rough", "MARS", "IAU_MARS", 1e-13),
-            ("UNPRIORITIZED/DSK/SURFACES=2,5", "MARS", "IAU_MARS", 1e-13),
-            ("DSK / SURFACES = \"tilted cube\" / UNPRIORITIZED", "MARS", "MARS_TILT", 1e-11),
-            ("DSK/UNPRIORITIZED/SURFACES = 7, 3", "MARS", "MARS_PCK2", 1e-11),
-            ("DSK/UNPRIORITIZED/SURFACES = \"p shape\"", "PHOBOS", "PHOBOS_FIX", 1e-11))
+    for (method, target, fixref, tol) in (
+            ("ELLIPSOID", "MARS", "IAU_MARS", 1.0e-13),
+            ("ellipsoid", "499", "MARS_TILT", 1.0e-13),
+            ("DSK/UNPRIORITIZED", "MARS", "IAU_MARS", 1.0e-13),
+            ("DSK/UNPRIORITIZED/SURFACES = 1", "MARS", "IAU_MARS", 1.0e-13),
+            ("dsk/unprioritized/surfaces = \"Ellipsoid One\", rough", "MARS", "IAU_MARS", 1.0e-13),
+            ("UNPRIORITIZED/DSK/SURFACES=2,5", "MARS", "IAU_MARS", 1.0e-13),
+            ("DSK / SURFACES = \"tilted cube\" / UNPRIORITIZED", "MARS", "MARS_TILT", 1.0e-11),
+            ("DSK/UNPRIORITIZED/SURFACES = 7, 3", "MARS", "MARS_PCK2", 1.0e-11),
+            ("DSK/UNPRIORITIZED/SURFACES = \"p shape\"", "PHOBOS", "PHOBOS_FIX", 1.0e-11),
+        )
         for et in (0.0, 75.0)
             cpts = c_latsrf(method, target, et, fixref, lonlat)
             npts = latsrf(ctx, method, target, et, fixref, lonlat)
@@ -632,19 +682,28 @@ function dsk_part_8(env)
             @test latsrf(ctx, method, target, et, fixref, reduce(hcat, lonlat)) == npts
             cn = c_srfnrm(method, target, et, fixref, cpts)
             nn = srfnrm(ctx, method, target, et, fixref, cpts)
-            @test maximum(norm(cn[i] - nn[i]) for i in eachindex(cn)) <= max(tol, 0.0) * 1e3
+            @test maximum(norm(cn[i] - nn[i]) for i in eachindex(cn)) <= max(tol, 0.0) * 1.0e3
             @test all(abs(norm(v) - 1) <= 4eps() for v in nn)
             @test srfnrm(ctx, method, target, et, fixref, reduce(hcat, cpts)) == nn
         end
     end
     # Error kinds of the method string, the target and the frame, as CSPICE.
-    c_latsrf_kind(method, target, fixref) = c_kind(() -> ccall((:latsrf_c, DSKLIB), Cvoid,
-        (Cstring, Cstring, Float64, Cstring, Cint, Ptr{Float64}, Ptr{Float64}), method, target,
-        0.0, fixref, 1, [0.1, 0.2], zeros(3)))
-    c_srfnrm_kind(method, target, fixref, p) = c_kind(() -> ccall((:srfnrm_c, DSKLIB), Cvoid,
-        (Cstring, Cstring, Float64, Cstring, Cint, Ptr{Float64}, Ptr{Float64}), method, target,
-        0.0, fixref, 1, collect(p), zeros(3)))
-    for (method, target, fixref) in (("DSK", "MARS", "IAU_MARS"),
+    c_latsrf_kind(method, target, fixref) = c_kind(
+        () -> ccall(
+            (:latsrf_c, DSKLIB), Cvoid,
+            (Cstring, Cstring, Float64, Cstring, Cint, Ptr{Float64}, Ptr{Float64}), method, target,
+            0.0, fixref, 1, [0.1, 0.2], zeros(3)
+        )
+    )
+    c_srfnrm_kind(method, target, fixref, p) = c_kind(
+        () -> ccall(
+            (:srfnrm_c, DSKLIB), Cvoid,
+            (Cstring, Cstring, Float64, Cstring, Cint, Ptr{Float64}, Ptr{Float64}), method, target,
+            0.0, fixref, 1, collect(p), zeros(3)
+        )
+    )
+    for (method, target, fixref) in (
+            ("DSK", "MARS", "IAU_MARS"),
             ("DSK/UNPRIORITIZED/SURFACES", "MARS", "IAU_MARS"),
             ("DSK/UNPRIORITIZED/SURFACES =", "MARS", "IAU_MARS"),
             ("DSK/UNPRIORITIZED/SURFACES = 1,", "MARS", "IAU_MARS"),
@@ -667,7 +726,8 @@ function dsk_part_8(env)
             ("ELLIPSOID", "MARS", "IAU_EARTH"), ("ELLIPSOID", "MARS", "J2000"),
             ("DSK/UNPRIORITIZED", "EARTH", "IAU_EARTH"),
             ("DSK/UNPRIORITIZED/SURFACES = 99", "MARS", "IAU_MARS"),
-            ("DSK/UNPRIORITIZED/SURFACES = 3", "MARS", "IAU_MARS"))
+            ("DSK/UNPRIORITIZED/SURFACES = 3", "MARS", "IAU_MARS"),
+        )
         nk = neo_kind(() -> latsrf(ctx, method, target, 0.0, fixref, [[0.1, 0.2]]))
         ck = c_latsrf_kind(method, target, fixref)
         @test (method, nk) == (method, ck)
@@ -675,10 +735,12 @@ function dsk_part_8(env)
     # (regression: a pair with three components threw `ArgumentError`, not a `SpiceError`)
     @test neo_kind(() -> latsrf(ctx, "ELLIPSOID", "MARS", 0.0, "IAU_MARS", [[0.1, 0.2, 0.3]])) === :badarg
     on = c_latsrf("ELLIPSOID", "MARS", 0.0, "IAU_MARS", [[0.3, 0.4]])[1]
-    for (method, p) in (("ELLIPSOID", on * 1.01), ("ELLIPSOID", on * (1 + 1e-9)),
+    for (method, p) in (
+            ("ELLIPSOID", on * 1.01), ("ELLIPSOID", on * (1 + 1.0e-9)),
             ("DSK/UNPRIORITIZED/SURFACES = 1", on * 1.5),
             ("DSK/UNPRIORITIZED/SURFACES = 1", on * 0.99),
-            ("DSK/UNPRIORITIZED/SURFACES = 3", V3(5.0, 0.0, 0.0)))
+            ("DSK/UNPRIORITIZED/SURFACES = 3", V3(5.0, 0.0, 0.0)),
+        )
         nk = neo_kind(() -> srfnrm(ctx, method, "MARS", 0.0, "IAU_MARS", [p]))
         @test (method, nk) == (method, c_srfnrm_kind(method, "MARS", "IAU_MARS", p))
     end
@@ -708,7 +770,7 @@ function dsk_part_9(env)
     end
     base = dskxv(ctx, false, "MARS", [5], 0.0, "IAU_MARS", vtx, dirs)
     try
-        for (k, val) in ((1, 1e-2), (2, 1e-3), (4, 1e-3))
+        for (k, val) in ((1, 1.0e-2), (2, 1.0e-3), (4, 1.0e-3))
             c_dskstl(k, val)
             dskstl(ctx, k, val)
             @test dskgtl(ctx, k) === val === c_dskgtl(k)
@@ -718,12 +780,12 @@ function dsk_part_9(env)
         @test nf == cf && all(cx[i] == nx[i] for i in eachindex(cx) if cf[i])
         @test (nx, nf) != base
         @test dskxv(other, false, "MARS", [5], 0.0, "IAU_MARS", vtx, dirs) == base
-        @test dskgtl(other, 1) == 1e-10 && dskgtl(other, 2) == 1e-8
-        on = c_latsrf("ELLIPSOID", "MARS", 0.0, "IAU_MARS", [[0.3, 0.4]])[1] * (1 + 1e-5)
+        @test dskgtl(other, 1) == 1.0e-10 && dskgtl(other, 2) == 1.0e-8
+        on = c_latsrf("ELLIPSOID", "MARS", 0.0, "IAU_MARS", [[0.3, 0.4]])[1] * (1 + 1.0e-5)
         @test srfnrm(ctx, "ELLIPSOID", "MARS", 0.0, "IAU_MARS", [on]) == c_srfnrm("ELLIPSOID", "MARS", 0.0, "IAU_MARS", [on])
         @test neo_kind(() -> srfnrm(other, "ELLIPSOID", "MARS", 0.0, "IAU_MARS", [on])) === :pointnotonsurface
     finally
-        for (k, val) in ((1, 1e-10), (2, 1e-8), (4, 1e-7))
+        for (k, val) in ((1, 1.0e-10), (2, 1.0e-8), (4, 1.0e-7))
             c_dskstl(k, val)
             dskstl(ctx, k, val)
         end
@@ -771,15 +833,17 @@ function dsk_part_11(env)
     (; rng, dir, tk, spk, specs_a, specs_b, specs_c, files, wctx, comments) = env
     (; loadlist, ctx, ks, shape_e, shape_r, shape_w) = env
     v = V3(10.0, 1.0, 2.0)
-    c_xsi_kind(target, srf, fixref, vtx, d; pri=false) = c_kind(() -> c_dskxsi(target, srf, 0.0, fixref, vtx, d; pri))
-    for (target, srf, fixref, vtx, d, pri) in (("MARS", (), "IAU_MARS", v, -v, true),
+    c_xsi_kind(target, srf, fixref, vtx, d; pri = false) = c_kind(() -> c_dskxsi(target, srf, 0.0, fixref, vtx, d; pri))
+    for (target, srf, fixref, vtx, d, pri) in (
+            ("MARS", (), "IAU_MARS", v, -v, true),
             ("NO SUCH BODY", (), "IAU_MARS", v, -v, false),
             ("MARS", (), "NO_SUCH_FRAME", v, -v, false),
             ("MARS", (), "IAU_EARTH", v, -v, false), ("MARS", (), "J2000", v, -v, false),
             ("MARS", [99], "IAU_MARS", v, -v, false), ("MARS", [1, 99], "IAU_MARS", v, -v, false),
             ("EARTH", (), "IAU_EARTH", v, -v, false),
             ("MARS", (), "IAU_MARS", v, V3(0.0, 0.0, 0.0), false),
-            ("MARS", [1], "IAU_MARS", V3(0.0, 0.0, 0.0), V3(0.0, 0.0, 0.0), false))
+            ("MARS", [1], "IAU_MARS", V3(0.0, 0.0, 0.0), V3(0.0, 0.0, 0.0), false),
+        )
         nk = neo_kind(() -> dskxsi(ctx, pri, target, srf, 0.0, fixref, vtx, d))
         @test (target, fixref, nk) == (target, fixref, c_xsi_kind(target, srf, fixref, vtx, d; pri))
     end
@@ -794,14 +858,28 @@ function dsk_part_11(env)
     d = dlabfs(h)
     cd = SPICE.dlabfs(ch)
     nv, np = dskz02(h, d)
-    c_i02_kind(item, start, room) = c_kind(() -> ccall((:dski02_c, DSKLIB), Cvoid, (Cint,
-            Ref{SPICE.DLADescr}, Cint, Cint, Cint, Ref{Cint}, Ptr{Cint}), ch, cd, item, start - 1,
-        room, Ref{Cint}(0), zeros(Cint, 10)))
-    c_d02_kind(item, start, room) = c_kind(() -> ccall((:dskd02_c, DSKLIB), Cvoid, (Cint,
-            Ref{SPICE.DLADescr}, Cint, Cint, Cint, Ref{Cint}, Ptr{Float64}), ch, cd, item, start - 1,
-        room, Ref{Cint}(0), zeros(10)))
-    for (item, start, room) in ((1, 1, 0), (9, 1, -1), (0, 1, 1), (15, 1, 1), (9, 0, 1),
-            (9, 3 * np + 1, 1), (4, 4, 1), (14, 100000, 1), (5, 0, 1))
+    c_i02_kind(item, start, room) = c_kind(
+        () -> ccall(
+            (:dski02_c, DSKLIB), Cvoid, (
+                Cint,
+                Ref{SPICE.DLADescr}, Cint, Cint, Cint, Ref{Cint}, Ptr{Cint},
+            ), ch, cd, item, start - 1,
+            room, Ref{Cint}(0), zeros(Cint, 10)
+        )
+    )
+    c_d02_kind(item, start, room) = c_kind(
+        () -> ccall(
+            (:dskd02_c, DSKLIB), Cvoid, (
+                Cint,
+                Ref{SPICE.DLADescr}, Cint, Cint, Cint, Ref{Cint}, Ptr{Float64},
+            ), ch, cd, item, start - 1,
+            room, Ref{Cint}(0), zeros(10)
+        )
+    )
+    for (item, start, room) in (
+            (1, 1, 0), (9, 1, -1), (0, 1, 1), (15, 1, 1), (9, 0, 1),
+            (9, 3 * np + 1, 1), (4, 4, 1), (14, 100000, 1), (5, 0, 1),
+        )
         @test (item, start, neo_kind(() -> dski02(h, d, item, start, room))) == (item, start, c_i02_kind(item, start, room))
     end
     # Item 1 (the number of vertices) has one element. For a start index above 1 the
@@ -810,8 +888,10 @@ function dsk_part_11(env)
     # (three equal calls in a row gave two of them). Almanac always gives the first one,
     # and CSPICE is not asked: it is no oracle here.
     @test neo_kind(() -> dski02(h, d, 1, 2, 1)) === :indexoutofrange
-    for (item, start, room) in ((19, 1, 0), (14, 1, 1), (20, 1, 1), (19, 0, 1), (19, 3 * nv + 1, 1),
-            (15, 25, 1), (16, 7, 1), (17, 4, 1), (18, 2, 1))
+    for (item, start, room) in (
+            (19, 1, 0), (14, 1, 1), (20, 1, 1), (19, 0, 1), (19, 3 * nv + 1, 1),
+            (15, 25, 1), (16, 7, 1), (17, 4, 1), (18, 2, 1),
+        )
         @test (item, start, neo_kind(() -> dskd02(h, d, item, start, room))) == (item, start, c_d02_kind(item, start, room))
     end
     @test neo_kind(() -> dskv02(h, d, 0, 1)) === :indexoutofrange
@@ -831,8 +911,14 @@ function dsk_part_11(env)
     w = dasonw(gen, "TEST", "x", 0)
     dasadi(w, Cint[1000000, -1, -1])
     dascls(w)
-    c_obj_kind(p) = c_kind(() -> (cell = SPICE.SpiceIntCell(10); ccall((:dskobj_c, DSKLIB), Cvoid,
-        (Cstring, Ref{SPICE.Cell{Cint}}), p, cell.cell)))
+    c_obj_kind(p) = c_kind(
+        () -> (
+            cell = SPICE.SpiceIntCell(10); ccall(
+                (:dskobj_c, DSKLIB), Cvoid,
+                (Cstring, Ref{SPICE.Cell{Cint}}), p, cell.cell
+            )
+        )
+    )
     @test neo_kind(() -> dskobj(gen)) === :invalidfiletype === c_obj_kind(gen)
     @test neo_kind(() -> dskobj(tk)) === :invalidarchtype === c_obj_kind(tk)
     @test neo_kind(() -> dskobj(spk)) === :invalidarchtype === c_obj_kind(spk)
@@ -851,66 +937,92 @@ function dsk_part_12(env)
     z = index_sizes(s)
     spaixd, spaixi = c_dskmi2(s)
     mn3, mx3 = c_dskrb2(s.verts, s.plates, 1, zeros(10))
-    nmi2(; finscl=s.finscl, corscl=s.corscl, worksz=z.worksz, voxpsz=z.voxpsz, voxlsz=z.voxlsz,
-        spxisz=index_spxisz(s), verts=s.verts, plates=s.plates) = neo_kind(() -> dskmi2(verts,
-        plates, finscl, corscl, worksz, voxpsz, voxlsz, true, spxisz))
-    cmi2(; finscl=s.finscl, corscl=s.corscl, worksz=z.worksz, voxpsz=z.voxpsz, voxlsz=z.voxlsz,
-        spxisz=index_spxisz(s)) = c_kind(() -> c_dskmi2(s; finscl, corscl,
-        sizes=(; worksz, voxpsz, voxlsz), spxisz))
-    for kw in ((finscl=0.0,), (finscl=-1.0,), (corscl=0,), (worksz=10,), (voxpsz=0,), (voxlsz=10,),
-            (spxisz=1000,), (corscl=7,), (corscl=100,), (finscl=1e-3,), (voxpsz=100,),
-            (worksz=length(s.plates) + 1, voxpsz=10), (voxlsz=length(s.plates) + 1,),
-            (finscl=0.3, corscl=1))
+    nmi2(;
+        finscl = s.finscl, corscl = s.corscl, worksz = z.worksz, voxpsz = z.voxpsz, voxlsz = z.voxlsz,
+        spxisz = index_spxisz(s), verts = s.verts, plates = s.plates
+    ) = neo_kind(
+        () -> dskmi2(
+            verts,
+            plates, finscl, corscl, worksz, voxpsz, voxlsz, true, spxisz
+        )
+    )
+    cmi2(;
+        finscl = s.finscl, corscl = s.corscl, worksz = z.worksz, voxpsz = z.voxpsz, voxlsz = z.voxlsz,
+        spxisz = index_spxisz(s)
+    ) = c_kind(
+        () -> c_dskmi2(
+            s; finscl, corscl,
+            sizes = (; worksz, voxpsz, voxlsz), spxisz
+        )
+    )
+    for kw in (
+            (finscl = 0.0,), (finscl = -1.0,), (corscl = 0,), (worksz = 10,), (voxpsz = 0,), (voxlsz = 10,),
+            (spxisz = 1000,), (corscl = 7,), (corscl = 100,), (finscl = 1.0e-3,), (voxpsz = 100,),
+            (worksz = length(s.plates) + 1, voxpsz = 10), (voxlsz = length(s.plates) + 1,),
+            (finscl = 0.3, corscl = 1),
+        )
         @test (kw, nmi2(; kw...)) == (kw, cmi2(; kw...))
     end
-    @test nmi2(verts=s.verts[1:2], plates=[P3(1, 2, 1)]) === :badvertexcount
-    @test nmi2(plates=P3[]) === :badplatecount
-    @test nmi2(plates=[P3(1, 2, length(s.verts) + 1)]) === :badvertexindex
+    @test nmi2(verts = s.verts[1:2], plates = [P3(1, 2, 1)]) === :badvertexcount
+    @test nmi2(plates = P3[]) === :badplatecount
+    @test nmi2(plates = [P3(1, 2, length(s.verts) + 1)]) === :badvertexindex
     @test neo_kind(() -> dskrb2(s.verts, s.plates, 2, zeros(10))) === :notsupported
     @test neo_kind(() -> dskrb2(s.verts, s.plates, 4, [-1.0, 0.1])) === :valueoutofrange
     @test neo_kind(() -> dskrb2(s.verts, s.plates, 4, [1.0, 1.0])) === :valueoutofrange
 
-    function w02_kinds(; bounds=s.bounds, first=s.first, last=s.last, dclass=s.dclass,
-            corsys=s.corsys, frame=s.frame, corpar=zeros(10), plates=s.plates, mn=mn3, mx=mx3,
-            ixd=spaixd, ixi=spaixi)
+    function w02_kinds(;
+            bounds = s.bounds, first = s.first, last = s.last, dclass = s.dclass,
+            corsys = s.corsys, frame = s.frame, corpar = zeros(10), plates = s.plates, mn = mn3, mx = mx3,
+            ixd = spaixd, ixi = spaixi
+        )
         pc = joinpath(dir, "wc.bds")
         pn = joinpath(dir, "wn.bds")
-        rm(pc; force=true)
-        rm(pn; force=true)
+        rm(pc; force = true)
+        rm(pn; force = true)
         ch = c_dskopn(pc, "x", 0)
-        ck = c_kind(() -> c_dskw02(ch, s, mn, mx, ixd, Cint.(ixi); bounds, first, last, dclass,
-            corsys, frame, corpar, plates))
+        ck = c_kind(
+            () -> c_dskw02(
+                ch, s, mn, mx, ixd, Cint.(ixi); bounds, first, last, dclass,
+                corsys, frame, corpar, plates
+            )
+        )
         c_dskcls(ch)
         nh = dskopn(pn, "x", 0)
-        nk = neo_kind(() -> dskw02(wctx, nh, s.center, s.surfid, dclass, frame, corsys, corpar,
-            bounds..., mn, mx, first, last, s.verts, plates, ixd, ixi))
+        nk = neo_kind(
+            () -> dskw02(
+                wctx, nh, s.center, s.surfid, dclass, frame, corsys, corpar,
+                bounds..., mn, mx, first, last, s.verts, plates, ixd, ixi
+            )
+        )
         dskcls(nh)
         # After a failed call the file has no segment in both engines.
         same = c_das_data(pc)[1] == neo_das_data(pn)[1]
         return nk, ck, same
     end
     tp = 2pi
-    cases = Any[(frame="NO_SUCH_FRAME",), (first=1.0, last=1.0), (first=2.0, last=1.0),
-        (bounds=(0.5, 0.5, -1.0, 1.0),), (bounds=(-7.0, 1.0, -1.0, 1.0),),
-        (bounds=(tp, 1.0, -1.0, 1.0),), (bounds=(0.0, 7.0, -1.0, 1.0),),
-        (bounds=(0.0, -tp, -1.0, 1.0),), (bounds=(-tp, tp, -1.0, 1.0),),
-        (bounds=(-1.0, 1.0, -2.0, 1.0),), (bounds=(-1.0, 1.0, pi / 2, pi / 2),),
-        (bounds=(-1.0, 1.0, -1.0, 2.0),), (bounds=(-1.0, 1.0, 1.0, -1.0),),
-        (bounds=(-1.0, 1.0, -1.0, -pi / 2),), (bounds=(1.0, -1.0, -1.0, 1.0),),
-        (bounds=(0.0, tp, 0.0, 1.0),), (bounds=(-tp, 0.0, -pi / 2, 0.0),),
-        (mn=-1.0,), (mx=0.0, mn=0.0), (mn=5.0, mx=4.0), (mn=3.0, mx=3.0),
-        (corsys=4, corpar=[0.0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (corsys=4, corpar=[3.0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0]),
-        (corsys=4, corpar=[3.0, 0.2, 0, 0, 0, 0, 0, 0, 0, 0], mn=-10.0),
-        (corsys=4, corpar=[3.0, 0.2, 0, 0, 0, 0, 0, 0, 0, 0], mn=-1.0, mx=1.0),
-        (corsys=3, bounds=(1.0, -1.0, -1.0, 1.0)), (corsys=3, bounds=(-1.0, 1.0, 1.0, 1.0)),
-        (corsys=3, mn=1.0, mx=1.0), (corsys=3, bounds=(-9.0, 9.0, -9.0, 9.0), mn=-9.0, mx=9.0),
-        (corsys=2,), (corsys=0,), (dclass=0,), (dclass=3,),
-        (plates=vcat(s.plates[1:end-1], [P3(1, 2, 0)]),),
-        (plates=vcat(s.plates[1:end-1], [P3(1, 2, length(s.verts) + 1)]),),
-        (ixi=(x = copy(spaixi); x[1] = 0; x),), (ixi=(x = copy(spaixi); x[4] = 0; x),),
-        (ixi=(x = copy(spaixi); x[4] = 5; x),), (ixi=(x = copy(spaixi); x[4] = 64; x),),
-        (ixi=(x = copy(spaixi); x[1:3] .= 1000; x),), (ixi=(x = copy(spaixi); x[1:3] .= 400; x[4] = 1; x),)]
+    cases = Any[
+        (frame = "NO_SUCH_FRAME",), (first = 1.0, last = 1.0), (first = 2.0, last = 1.0),
+        (bounds = (0.5, 0.5, -1.0, 1.0),), (bounds = (-7.0, 1.0, -1.0, 1.0),),
+        (bounds = (tp, 1.0, -1.0, 1.0),), (bounds = (0.0, 7.0, -1.0, 1.0),),
+        (bounds = (0.0, -tp, -1.0, 1.0),), (bounds = (-tp, tp, -1.0, 1.0),),
+        (bounds = (-1.0, 1.0, -2.0, 1.0),), (bounds = (-1.0, 1.0, pi / 2, pi / 2),),
+        (bounds = (-1.0, 1.0, -1.0, 2.0),), (bounds = (-1.0, 1.0, 1.0, -1.0),),
+        (bounds = (-1.0, 1.0, -1.0, -pi / 2),), (bounds = (1.0, -1.0, -1.0, 1.0),),
+        (bounds = (0.0, tp, 0.0, 1.0),), (bounds = (-tp, 0.0, -pi / 2, 0.0),),
+        (mn = -1.0,), (mx = 0.0, mn = 0.0), (mn = 5.0, mx = 4.0), (mn = 3.0, mx = 3.0),
+        (corsys = 4, corpar = [0.0, 0.1, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (corsys = 4, corpar = [3.0, 1.0, 0, 0, 0, 0, 0, 0, 0, 0]),
+        (corsys = 4, corpar = [3.0, 0.2, 0, 0, 0, 0, 0, 0, 0, 0], mn = -10.0),
+        (corsys = 4, corpar = [3.0, 0.2, 0, 0, 0, 0, 0, 0, 0, 0], mn = -1.0, mx = 1.0),
+        (corsys = 3, bounds = (1.0, -1.0, -1.0, 1.0)), (corsys = 3, bounds = (-1.0, 1.0, 1.0, 1.0)),
+        (corsys = 3, mn = 1.0, mx = 1.0), (corsys = 3, bounds = (-9.0, 9.0, -9.0, 9.0), mn = -9.0, mx = 9.0),
+        (corsys = 2,), (corsys = 0,), (dclass = 0,), (dclass = 3,),
+        (plates = vcat(s.plates[1:(end - 1)], [P3(1, 2, 0)]),),
+        (plates = vcat(s.plates[1:(end - 1)], [P3(1, 2, length(s.verts) + 1)]),),
+        (ixi = (x = copy(spaixi); x[1] = 0; x),), (ixi = (x = copy(spaixi); x[4] = 0; x),),
+        (ixi = (x = copy(spaixi); x[4] = 5; x),), (ixi = (x = copy(spaixi); x[4] = 64; x),),
+        (ixi = (x = copy(spaixi); x[1:3] .= 1000; x),), (ixi = (x = copy(spaixi); x[1:3] .= 400; x[4] = 1; x),),
+    ]
     nerr = 0
     for kw in cases
         nk, ck, same = w02_kinds(; kw...)
@@ -920,8 +1032,12 @@ function dsk_part_12(env)
     end
     @test nerr >= 30
     h = dasopr(files[:a][1])
-    @test neo_kind(() -> dskw02(wctx, h, 499, 1, 1, "IAU_MARS", 1, zeros(10), s.bounds..., mn3, mx3,
-        0.0, 1.0, s.verts, s.plates, spaixd, spaixi)) === :dasinvalidaccess
+    @test neo_kind(
+        () -> dskw02(
+            wctx, h, 499, 1, 1, "IAU_MARS", 1, zeros(10), s.bounds..., mn3, mx3,
+            0.0, 1.0, s.verts, s.plates, spaixd, spaixi
+        )
+    ) === :dasinvalidaccess
     dascls(h)
     @test neo_kind(() -> dskopn(files[:a][1], "x", 0)) === :fileopenfailed
     @test neo_kind(() -> dskopn(joinpath(dir, "neg.bds"), "x", -1)) === :badrecordcount
@@ -939,7 +1055,7 @@ function dsk_part_13(env)
     miss = V3(0.0, 0.0, 1.0)
     srf = [1, 2, 3, 4, 5, 6, 7]
     for fixfid in (iau, tilt, pck2), (lst, et) in (((), 0.0), (srf, 75.0), ((2, 5), 0.0)),
-        (vtx, d) in ((v, -v), (v, miss), (V3(0.1, 0.2, 0.3), miss))
+            (vtx, d) in ((v, -v), (v, miss), (V3(0.1, 0.2, 0.3), miss))
         @test dsk_warm(alloc_dskxsi, ctx, lst, et, fixfid, vtx, d) == 0 skip = STACK_BUFFERS_ESCAPE
     end
     n = 256
@@ -953,19 +1069,27 @@ function dsk_part_13(env)
     seg = dskxsi(ctx, false, 499, [2], 0.0, iau, v, -v)[2]
     @test dsk_warm(alloc_dskx02, ks, seg, v, -v) == 0
     @test dsk_warm(alloc_dskx02, ks, seg, v, miss) == 0
-    R = Tuple{V3,DSKSegment,Int}
-    @test (@inferred Union{Nothing,R} dskxsi(ctx, false, 499, srf, 0.0, iau, v, -v)) isa R
-    @test (@inferred Union{Nothing,R} dskxsi(ctx, false, "MARS", (), 0.0, "IAU_MARS", v, -v)) isa R
-    @test (@inferred Union{Nothing,R} dskxsi(ctx, false, 499, (), 0.0, iau, v, miss)) === nothing
-    @test (@inferred Almanac._dsk_bux(ks, Almanac._DSK_DEFAULT_TOLS, Int32(499), srf, 0.0,
-        Int32(iau), v, -v)) isa Tuple{V3,Int,Int,Bool}
+    R = Tuple{V3, DSKSegment, Int}
+    @test (@inferred Union{Nothing, R} dskxsi(ctx, false, 499, srf, 0.0, iau, v, -v)) isa R
+    @test (@inferred Union{Nothing, R} dskxsi(ctx, false, "MARS", (), 0.0, "IAU_MARS", v, -v)) isa R
+    @test (@inferred Union{Nothing, R} dskxsi(ctx, false, 499, (), 0.0, iau, v, miss)) === nothing
+    @test (
+        @inferred Almanac._dsk_bux(
+            ks, Almanac._DSK_DEFAULT_TOLS, Int32(499), srf, 0.0,
+            Int32(iau), v, -v
+        )
+    ) isa Tuple{V3, Int, Int, Bool}
     file = ks.dskfiles[seg.file]
-    @test (@inferred Almanac._dsk_x02(file.ints, file.dps, seg, Almanac._DSK_DEFAULT_TOLS,
-        v, -v)) isa Tuple{Int,V3,Bool}
-    @test (@inferred dskxv!(xpt, fnd, ctx, false, 499, srf, 0.0, iau, vtx, dirs)) isa Tuple{Vector{V3},Vector{Bool}}
-    @test (@inferred dskxv(ctx, false, 499, srf, 0.0, iau, vtx, dirs)) isa Tuple{Vector{V3},Vector{Bool}}
+    @test (
+        @inferred Almanac._dsk_x02(
+            file.ints, file.dps, seg, Almanac._DSK_DEFAULT_TOLS,
+            v, -v
+        )
+    ) isa Tuple{Int, V3, Bool}
+    @test (@inferred dskxv!(xpt, fnd, ctx, false, 499, srf, 0.0, iau, vtx, dirs)) isa Tuple{Vector{V3}, Vector{Bool}}
+    @test (@inferred dskxv(ctx, false, 499, srf, 0.0, iau, vtx, dirs)) isa Tuple{Vector{V3}, Vector{Bool}}
     @test (@inferred dskgtl(ctx, 1)) isa Float64
-    @test (@inferred pltnp(v, vtx[1], vtx[2], vtx[3])) isa Tuple{V3,Float64}
+    @test (@inferred pltnp(v, vtx[1], vtx[2], vtx[3])) isa Tuple{V3, Float64}
     @test (@inferred pltnrm(vtx[1], vtx[2], vtx[3])) isa V3
     @test isbitstype(DSKSegment) && isbitstype(DLADescr) && isbitstype(DSKDescr)
     return nothing
@@ -986,13 +1110,17 @@ function dsk_part_14(env)
         lst = collect(Cint, srf)
         best = Inf
         for _ in 1:3
-            t = @elapsed ccall((:dskxv_c, DSKLIB), Cvoid, (Cint, Cstring, Cint, Ptr{Cint}, Float64,
-                    Cstring, Cint, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Cint}), 0, "MARS",
-                length(lst), lst, 0.0, fixref, n, fv, fd, cx, cf)
+            t = @elapsed ccall(
+                (:dskxv_c, DSKLIB), Cvoid, (
+                    Cint, Cstring, Cint, Ptr{Cint}, Float64,
+                    Cstring, Cint, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Cint},
+                ), 0, "MARS",
+                length(lst), lst, 0.0, fixref, n, fv, fd, cx, cf
+            )
             best = min(best, t)
         end
         c_check()
-        return best / n * 1e9
+        return best / n * 1.0e9
     end
     function n_time(srf, fixfid)
         best = Inf
@@ -1000,14 +1128,16 @@ function dsk_part_14(env)
             t = @elapsed dskxv!(xpt, fnd, ctx, false, 499, srf, 0.0, fixfid, vtx, dirs)
             best = min(best, t)
         end
-        return best / n * 1e9
+        return best / n * 1.0e9
     end
     measured("  time per intercept (ns), best of 3 runs of $n rays, one thread:")
     measured("    case                                      Almanac    CSPICE   ratio")
-    for (label, srf, fixref) in (("one segment, 3480 plates (surface 1)", [1], "IAU_MARS"),
+    for (label, srf, fixref) in (
+            ("one segment, 3480 plates (surface 1)", [1], "IAU_MARS"),
             ("one segment, 5040 plates (surface 2)", [2], "IAU_MARS"),
             ("9 segments, all surfaces", Int[], "IAU_MARS"),
-            ("9 segments, other frame (MARS_TILT)", Int[], "MARS_TILT"))
+            ("9 segments, other frame (MARS_TILT)", Int[], "MARS_TILT"),
+        )
         tn = n_time(srf, Int(Almanac.namfrm(ctx, fixref)))
         tc = c_time(srf, fixref)
         measured(@sprintf("    %-40s %9.0f %9.0f %7.2f", label, tn, tc, tn / tc))
@@ -1052,30 +1182,34 @@ function dsk_part_15(env)
             end
             cycles
         end
-        readers = [Threads.@spawn begin
-            for rep in 1:nsample(8, 40), i in 1:n
-                r = try
-                    key(q(shared, i))
-                catch
-                    Threads.atomic_add!(bad, 1)
-                    continue
+        readers = [
+            Threads.@spawn begin
+                for rep in 1:nsample(8, 40), i in 1:n
+                    r = try
+                        key(q(shared, i))
+                    catch
+                        Threads.atomic_add!(bad, 1)
+                        continue
+                    end
+                    if r == refA[i]
+                        Threads.atomic_add!(seenA, 1)
+                    elseif r == refB[i]
+                        Threads.atomic_add!(seenB, 1)
+                    else
+                        Threads.atomic_add!(bad, 1)
+                    end
+                    Threads.atomic_add!(total, 1)
                 end
-                if r == refA[i]
-                    Threads.atomic_add!(seenA, 1)
-                elseif r == refB[i]
-                    Threads.atomic_add!(seenB, 1)
-                else
-                    Threads.atomic_add!(bad, 1)
-                end
-                Threads.atomic_add!(total, 1)
-            end
-        end for _ in 1:max(2, Threads.nthreads() - 1)]
+            end for _ in 1:max(2, Threads.nthreads() - 1)
+        ]
         foreach(wait, readers)
         stop[] = true
         cycles = fetch(writer)
-        measured("  DSK threads: $(total[]) intercepts on $(length(readers)) tasks during " *
-                 "$cycles load/unload cycles; $(seenA[]) saw the set without the file, " *
-                 "$(seenB[]) the set with it, $(bad[]) saw neither")
+        measured(
+            "  DSK threads: $(total[]) intercepts on $(length(readers)) tasks during " *
+                "$cycles load/unload cycles; $(seenA[]) saw the set without the file, " *
+                "$(seenB[]) the set with it, $(bad[]) saw neither"
+        )
         @test bad[] == 0
         @test cycles > 0 && seenA[] > 0
         # A pure parallel loop gives the serial results.
@@ -1094,7 +1228,7 @@ group("12. DSK type 2 against CSPICE") do
     tk = dsk_text_kernel(dir)
     spk = dsk_offset_spk(dir)
     specs_a, specs_b, specs_c = dsk_specs(rng)
-    files = Dict{Symbol,NTuple{2,String}}()
+    files = Dict{Symbol, NTuple{2, String}}()
     oracle_load([tk, spk])               # the writers need the frame names
     wctx = neo_context([tk, spk])
     comments = ["DSK test file", "second comment line"]

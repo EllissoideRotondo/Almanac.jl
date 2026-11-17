@@ -13,8 +13,12 @@
 # the evaluator reads them from the end of the segment (`data[seg.eaddr - k]`) at each
 # call and checks them, because `open_daf` does not validate these types.
 
-@noinline _badsegment(seg::Segment, msg::String) = throw(SpiceError(:baddaf,
-    "SPK type $(seg.dtype) segment at $(seg.baddr):$(seg.eaddr): $msg"))
+@noinline _badsegment(seg::Segment, msg::String) = throw(
+    SpiceError(
+        :baddaf,
+        "SPK type $(seg.dtype) segment at $(seg.baddr):$(seg.eaddr): $msg"
+    )
+)
 
 """
     _seg_count(seg, x::Float64, lo::Int, hi::Int, what) -> Int
@@ -45,7 +49,7 @@ and the range inside `data` (not checked).
     # invariant: data[base+i] < x for 1 <= i <= lo, and data[base+i] >= x for i > hi
     @inbounds while lo < hi
         mid = (lo + hi + 1) >>> 1
-        if data[base+mid] < x
+        if data[base + mid] < x
             lo = mid
         else
             hi = mid - 1
@@ -64,7 +68,7 @@ As `_lstltd`, for the elements that are less than or equal to `x` (`lstled`).
     # invariant: data[base+i] <= x for 1 <= i <= lo, and data[base+i] > x for i > hi
     @inbounds while lo < hi
         mid = (lo + hi + 1) >>> 1
-        if data[base+mid] <= x
+        if data[base + mid] <= x
             lo = mid
         else
             hi = mid - 1
@@ -81,7 +85,7 @@ end
     unsafe_trunc(Int, round(clamp(x, -1.0e15, 1.0e15), RoundNearestTiesAway))
 
 "Three consecutive doubles `data[a:a+2]` as a vector; requires the range inside `data` (not checked)."
-@inline _vec3(data::Vector{Float64}, a::Int) = @inbounds Vec3{Float64}(data[a], data[a+1], data[a+2])
+@inline _vec3(data::Vector{Float64}, a::Int) = @inbounds Vec3{Float64}(data[a], data[a + 1], data[a + 2])
 
 include("spk_types/numeric.jl")     # Taylor extras, implicit derivatives, vector helpers
 include("spk_types/interp.jl")      # types 8, 9, 12, 13, 18, 19
@@ -99,7 +103,7 @@ Contract: as `spk_eval`. Every discrete decision uses `primal(et)`, so with a
 series-valued `et` both results are the series of the CSPICE position and velocity
 functions of the selected record or window.
 """
-function _spk_state(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
+function _spk_state(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     dtype = seg.dtype
     if dtype == 9 || dtype == 13
         return _spk_unequal(data, seg, et)
@@ -128,10 +132,10 @@ function _spk_state(data::Vector{Float64}, seg::Segment, et::T) where {T<:Real}
     end
 end
 
-@inline _values(x::Vec3{Taylor{M,T}}) where {M,T} = Vec3{T}(x[1].v, x[2].v, x[3].v)
+@inline _values(x::Vec3{Taylor{M, T}}) where {M, T} = Vec3{T}(x[1].v, x[2].v, x[3].v)
 
 "Tuple of the ordinary derivatives of orders 0 to M of `x`, as vectors."
-@inline function _vec_derivatives(x::Vec3{Taylor{M,T}}) where {M,T}
+@inline function _vec_derivatives(x::Vec3{Taylor{M, T}}) where {M, T}
     dx, dy, dz = derivatives(x[1]), derivatives(x[2]), derivatives(x[3])
     return ntuple(k -> Vec3{T}(dx[k], dy[k], dz[k]), Val(M + 1))
 end
@@ -143,11 +147,11 @@ end
 CSPICE velocity, and order k >= 2 is derivative k-1 of the CSPICE velocity function.
 No allocation; the epoch type must be a bits type.
 """
-@inline _spk_more(data::Vector{Float64}, seg::Segment, et::T, ::Val{0}) where {T<:Real} =
+@inline _spk_more(data::Vector{Float64}, seg::Segment, et::T, ::Val{0}) where {T <: Real} =
     (_spk_state(data, seg, et)[1],)
-@inline _spk_more(data::Vector{Float64}, seg::Segment, et::T, ::Val{1}) where {T<:Real} =
+@inline _spk_more(data::Vector{Float64}, seg::Segment, et::T, ::Val{1}) where {T <: Real} =
     _spk_state(data, seg, et)
-@inline function _spk_more(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) where {T<:Real,N}
+@inline function _spk_more(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) where {T <: Real, N}
     p, v = _spk_state(data, seg, taylor_var(et, Val(N - 1)))
     return (_values(p), _vec_derivatives(v)...)
 end

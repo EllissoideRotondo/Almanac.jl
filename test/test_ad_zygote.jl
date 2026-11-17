@@ -8,8 +8,10 @@ using ADTypes: AutoZygote
 
 group("ad zygote", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
     ctx, epochs, default, full = ad_setup()
-    ad_check("Zygote", AutoZygote(), ctx, epochs, default, full;
-        gradient=true, batched=false, nested=true)
+    ad_check(
+        "Zygote", AutoZygote(), ctx, epochs, default, full;
+        gradient = true, batched = false, nested = true
+    )
     ad_orbit_check("Zygote", AutoZygote())
     return nothing
 end

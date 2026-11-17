@@ -11,96 +11,86 @@ Use it to check a kind that a handler tests: `:spkinsuffdata in Almanac.ERROR_KI
 with such a kind is never true.
 """
 const ERROR_KINDS = (
-    :arraysizemismatch, :arraytoosmall, :avaloutofrange, :axisunderflow, :badarg,
-    :badarraysize, :badattribute, :badattributes, :badaxislength, :badaxisnumbers,
+    :arraysizemismatch, :arraytoosmall, :avaloutofrange, :axisunderflow, :badaction,
+    :badarg, :badarraysize, :badattribute, :badattributes, :badaxislength, :badaxisnumbers,
     :badboresightspec, :badboundary, :badcoarsevoxscale, :badcolumdecl, :badcolumndecl,
     :badcommentarea, :badcoordbounds, :badcoordsys, :baddaf, :baddascommentarea,
-    :baddasdirectory, :baddescrtimes, :baddimensions, :baddladescriptor, :badeccentricity,
-    :badendpoints, :badepochtype, :badfile, :badfinevoxelscale, :badformat, :badframe,
-    :badframeclass,
-    :badframecount, :badframespec, :badframespec2, :badgeometry, :badgm, :badindex,
-    :badinitstate, :badkernel,
-    :badlatitudebounds, :badlatituderange, :badlatusrectum, :badlimblocusmix,
+    :baddasdirectory, :baddefaultvalue, :baddescrtimes, :baddimensions, :baddirection,
+    :baddladescriptor, :badeccentricity, :badendpoints, :badepochtype, :badfile,
+    :badfinevoxelscale, :badformat, :badframe, :badframeclass, :badframecount,
+    :badframespec, :badframespec2, :badgeometry, :badgm, :badindex, :badinitstate,
+    :badkernel, :badlatitudebounds, :badlatituderange, :badlatusrectum, :badlimblocusmix,
     :badlongituderange, :badmeanmotion, :badmeccentricity, :badmethodsyntax, :badmsemimajor,
     :badnumber, :badorbit, :badpartnumber, :badpeccentricity, :badperiapsevalue,
-    :badplatecount, :badpool, :badpriorityspec, :badquatsign, :badradius, :badradiuscount,
+    :badplatecount, :badpriorityspec, :badquatsign, :badradius, :badradiuscount,
     :badrecordcount, :badrefvectorspec, :badsemiaxis, :badsemilatus, :badsourceradius,
-    :badstoptime, :badsubscript, :badsurfacemap, :badtermlocusmix, :badtime,
-    :badtimebounds, :badtimecase,
-    :badtimedefault, :badtimetype, :badtle, :badtypeshapecombo, :badunits,
-    :badvariablesize, :badvariabletype, :badvarname, :badvector, :badvertexcount,
-    :badvertexindex, :badwindowsize, :barraytoosmall, :barycenterephem, :blankfilename,
-    :blankfiletype, :blanknameassigned, :bodiesnotdistinct, :bodyandcentersame,
-    :boresightmissing, :boundarymissing, :boundarytoobig, :boundsdisagree,
-    :boundsoutoforder, :buffertoosmall, :bug, :cantfindframe, :cantgetrotationtype,
-    :cellarraytoosmall, :celltoosmall, :cknonexistrec, :ckunknowndatatype, :ckwrongdatatype,
-    :coarsegridoverflow,
-    :columnstoredtwice, :columntoosmall, :competingframespec, :coordsysnotrec,
-    :countmismatch, :counttoolarge, :coveragegap, :crossanglemissing, :dafbeggtend,
-    :daffrnotfound, :dafinvalidaccess, :dafinvalidparams, :dafnegaddr, :dafnewconflict,
-    :dafnoresv, :dafnosearch, :dafnosuchhandle, :dafwritefail, :dasfilereadfailed,
-    :dasinvalidaccess, :dasnosuchaddress, :dasnosuchhandle, :dasnotempty, :daswritefail,
-    :degeneratecase,
+    :badstoptime, :badsubscript, :badsurfacemap, :badtermlocusmix, :badtimebounds,
+    :badtimecase, :badtimeitem, :badtimespec, :badtimestring, :badtimetype, :badtle,
+    :badtypeshapecombo, :badunits, :badvarassign, :badvariablesize, :badvariabletype,
+    :badvarname, :badvector, :badvertexcount, :badvertexindex, :badwindowsize,
+    :barraytoosmall, :barycenterephem, :blankfilename, :blankfiletype, :blanknameassigned,
+    :bodiesnotdistinct, :bodyandcentersame, :boresightmissing, :boundarymissing,
+    :boundarytoobig, :boundsdisagree, :boundsoutoforder, :buffertoosmall, :bug,
+    :cantfindframe, :cantgetrotationtype, :cellarraytoosmall, :celltoosmall, :cknonexistrec,
+    :ckunknowndatatype, :ckwrongdatatype, :coarsegridoverflow, :columnstoredtwice,
+    :columntoosmall, :competingframespec, :coordsysnotrec, :countmismatch, :counttoolarge,
+    :coveragegap, :crossanglemissing, :dafbeggtend, :daffrnotfound, :dafinvalidaccess,
+    :dafinvalidparams, :dafnegaddr, :dafnewconflict, :dafnoresv, :dafnosearch,
+    :dafnosuchhandle, :dafwritefail, :dasfilereadfailed, :dasinvalidaccess,
+    :dasnosuchaddress, :dasnosuchhandle, :dasnotempty, :daswritefail, :degeneratecase,
     :degenerateinterval, :degeneratesurface, :degreeoutofrange, :dependentvectors,
     :difflinetoolarge, :difflinetoosmall, :dividebyzero, :dskdatanotfound, :dtoutofrange,
-    :eccoutofbounds, :eccoutofrange,
-    :ekcolnummismatch, :ekmissingcolumn, :eknosegments, :emptysegment, :emptystring,
-    :endpointsmatch, :facenotfound, :filarchmismatch, :fileisnotspk, :filenotfound,
-    :fileopenconflict, :fileopenfailed, :filereadfailed, :fovtoowide,
-    :framechain, :framedatanotfound,
-    :framedeferror, :frameidnotfound, :frameinfonotfound, :framemissing, :framenamenotfound,
-    :ftpxfererror, :gridtoolarge, :idcodenotfound, :idstringtoolong, :illegalcharacter,
-    :immutablevalue, :incompatiblescale, :incompatibleunits, :incompleteframe,
-    :indexoutofrange,
+    :eccoutofbounds, :eccoutofrange, :ekcolnummismatch, :ekmissingcolumn, :eknosegments,
+    :emptysegment, :emptystring, :endpointsmatch, :facenotfound, :filarchmismatch,
+    :fileisnotspk, :filenotfound, :fileopenconflict, :fileopenfailed, :filereadfailed,
+    :fovtoowide, :framechain, :framedatanotfound, :framedeferror, :frameidnotfound,
+    :frameinfonotfound, :framemissing, :framenamenotfound, :ftpxfererror, :gridtoolarge,
+    :idcodenotfound, :idstringtoolong, :illegalcharacter, :immutablevalue,
+    :incompatiblescale, :incompatibleunits, :incompleteframe, :indexoutofrange,
     :inputoutofbounds, :inputstoolarge, :insidebody, :insufficientangles, :intindextoosmall,
     :intlennotpos, :invalidaddress, :invalidangle, :invalidarchtype, :invalidargument,
     :invalidaxis, :invalidaxislength, :invalidconststep, :invalidcount, :invaliddatatype,
     :invaliddegree, :invaliddescrtime, :invalidelements, :invalidellipse,
-    :invalidendpntspec, :invalidfiletype,
-    :invalidfixref, :invalidformat, :invalidfov, :invalidframe, :invalidframedef,
-    :invalidgeometry, :invalidindex, :invalidlimbtype, :invalidlocus, :invalidlonextent, :invalidmethod,
-    :invalidname, :invalidnode, :invalidnumint, :invalidnumints, :invalidnumrec,
-    :invalidocctype, :invalidoperation, :invalidoption, :invalidplane, :invalidradii,
-    :invalidradius,
-    :invalidrefframe, :invalidrollstep, :invalidsclkrate, :invalidsclkstring,
-    :invalidsclktime, :invalidsearchstep, :invalidselection, :invalidshadow, :invalidshape,
+    :invalidendpntspec, :invalidfiletype, :invalidfixref, :invalidformat, :invalidfov,
+    :invalidframe, :invalidframedef, :invalidgeometry, :invalidindex, :invalidlimbtype,
+    :invalidlocus, :invalidlonextent, :invalidmethod, :invalidname, :invalidnode,
+    :invalidnumint, :invalidnumints, :invalidnumrec, :invalidocctype, :invalidoperation,
+    :invalidoption, :invalidplane, :invalidradii, :invalidradius, :invalidrefframe,
+    :invalidrollstep, :invalidsclkrate, :invalidsclkstring, :invalidsclktime,
+    :invalidsearchstep, :invalidselection, :invalidshadow, :invalidshape,
     :invalidshapecombo, :invalidsize, :invalidstarttime, :invalidstate, :invalidstep,
     :invalidstepsize, :invalidsublist, :invalidsubtype, :invalidtarget, :invalidtermtype,
-    :invalidtolerance, :invalidtype, :invalidvalue, :invalidvertex, :irfnotrec,
-    :itemnotfound, :kernelvarnotfound, :lowerboundtoolow, :missingdata, :missingframevar,
-    :missingtimeinfo, :missingvalue, :namesnotresolved, :noclass, :noconverg,
-    :noconvergence, :nocurrentarray, :nodetoofull, :nodsksegments, :noframe,
-    :noframeconnect, :noframeinfo, :nofreenodes, :nointerval, :noleapseconds,
+    :invalidtimestring, :invalidtolerance, :invalidtype, :invalidvalue, :invalidvertex,
+    :irfnotrec, :itemnotfound, :kernelvarnotfound, :lowerboundtoolow, :missingdata,
+    :missingframevar, :missingkpv, :missingtimeinfo, :missingvalue, :namesnotresolved,
+    :noclass, :noconverg, :noconvergence, :nocurrentarray, :nodetoofull, :nodsksegments,
+    :noframe, :noframeconnect, :noframeinfo, :nofreenodes, :nointerval, :noleapseconds,
     :noloadeddskfiles, :noloadedfiles, :nonconicmotion, :nonemptyentry, :nonemptytree,
-    :nonpositiveaxis,
-    :nonpositivemass, :nonpositiveradius, :nonpositivescale, :nonpositivevalue,
-    :nonprintablechars, :nonprintingchars, :nopartition, :nosegmentsfound, :noseparation,
-    :nosuchfile, :nosuchhandle, :notanumber, :notarotation, :notcomputable, :notdisjoint,
-    :notindexed, :notinpart, :notranslation, :notrecognized, :notsupported,
-    :numcoeffsnotpos, :numericoverflow, :numpacketsnotpos, :numstatesnotpos,
-    :objectstooclose, :orbitdecay, :outofrange, :outofroom, :partialframespec,
-    :platelisttoosmall, :pointeroutofrange, :pointnotfound, :pointnotinsegment,
-    :pointnotonsurface, :pointoffsurface, :pointonzaxis, :pointtoosmall, :ptrarraytoosmall,
-    :querynotparsed, :radiioutoforder, :rayiszerovector, :recordnotfound, :recursiontoodeep,
-    :recursiveloading, :refanglemissing, :refvectormissing, :segidtoolong, :segmentnotopen,
-    :shapemissing, :shapenotsupported, :sizemismatch, :spkinsuffdata, :spkinvalidoption,
-    :spknotasubset, :spkrectoolarge, :spkstructureerror,
+    :nonpositiveaxis, :nonpositivemass, :nonpositiveradius, :nonpositivescale,
+    :nonpositivevalue, :nonprintablechars, :nonprintingchars, :nopartition,
+    :nosegmentsfound, :noseparation, :nosuchfile, :nosuchhandle, :notanumber, :notarotation,
+    :notcomputable, :notdisjoint, :notindexed, :notinpart, :notranslation, :notrecognized,
+    :notsupported, :numberexpected, :numcoeffsnotpos, :numericoverflow, :numpacketsnotpos,
+    :numstatesnotpos, :objectstooclose, :orbitdecay, :outofrange, :outofroom,
+    :partialframespec, :platelisttoosmall, :pointeroutofrange, :pointnotfound,
+    :pointnotinsegment, :pointnotonsurface, :pointoffsurface, :pointonzaxis, :pointtoosmall,
+    :ptrarraytoosmall, :querynotparsed, :radiioutoforder, :rayiszerovector, :recordnotfound,
+    :recursiontoodeep, :recursiveloading, :refanglemissing, :refvectormissing,
+    :segidtoolong, :segmentnotopen, :shapemissing, :shapenotsupported, :sizemismatch,
+    :spkinsuffdata, :spkinvalidoption, :spknotasubset, :spkrectoolarge, :spkstructureerror,
     :spktypenotsupp, :suborbital, :subpointnotfound, :syntaxerror, :tablenotloaded,
-    :timeoutofbounds, :timesdontmatch, :timesoutoforder, :toofewpackets, :toofewplates, :toofewstates,
-    :toofewvertices, :toomanyconjunctions, :toomanyhits, :toomanysurfaces, :typemismatch,
-    :typenotsupported, :unallocatednode, :undefinedframe, :uninitialized,
-    :uninitializedvalue, :unitsmissing, :unitsnotrec, :unknownbff, :unknownckmeta,
-    :unknowncompare,
-    :unknownfilarc, :unknownframe, :unknownframespec, :unknownframetype, :unknownmode,
-    :unknownspktype,
-    :unknownsystem, :unmatchendpts, :unnaturalrelation, :unorderedrefs, :unorderedtimes,
+    :timeconflict, :timeoutofbounds, :timesdontmatch, :timesoutoforder, :timezoneerror,
+    :toofewpackets, :toofewplates, :toofewstates, :toofewvertices, :toomanyconjunctions,
+    :toomanyhits, :toomanysurfaces, :typemismatch, :typenotsupported, :unallocatednode,
+    :undefinedframe, :uninitialized, :uninitializedvalue, :unitsmissing, :unitsnotrec,
+    :unknownbff, :unknownckmeta, :unknowncompare, :unknownfilarc, :unknownframe,
+    :unknownframespec, :unknownframetype, :unknownmode, :unknownspktype, :unknownsystem,
+    :unmatchendpts, :unnaturalrelation, :unorderedrefs, :unorderedtimes, :unparsedtime,
     :unrecognizedtype, :unresolvednames, :unresolvedtimes, :unsupportedbff,
     :unsupportedspec, :valueoutofrange, :variablenotfound, :varnametoolong, :vectortoobig,
-    :vertexnotingrid,
-    :workspacetoosmall, :wrongarchitecture, :wrongdatatype, :wrongsegment, :zeroboresight,
-    :zeroboundsextent, :zeroframeid, :zerolengthcolumn, :zeroposition, :zeroquaternion,
-    :zerostep,
-    :zerovector, :zerovelocity,
+    :vertexnotingrid, :workspacetoosmall, :wrongarchitecture, :wrongdatatype, :wrongsegment,
+    :yearoutofrange, :zeroboresight, :zeroboundsextent, :zeroframeid, :zerolengthcolumn,
+    :zeroposition, :zeroquaternion, :zerostep, :zerovector, :zerovelocity,
 )
 
 # The check is not inlined, so that a throw site in a numeric kernel stays one call.
@@ -214,10 +204,12 @@ struct SpkInsufficientDataError <: SpiceError
     target::Int
     observer::Int
     et::Float64
-    body::Union{Nothing,Int}
+    body::Union{Nothing, Int}
     loaded::Bool
-    function SpkInsufficientDataError(kind::Symbol, msg::AbstractString, target::Integer,
-            observer::Integer, et::Real, body::Union{Nothing,Integer}, loaded::Bool)
+    function SpkInsufficientDataError(
+            kind::Symbol, msg::AbstractString, target::Integer,
+            observer::Integer, et::Real, body::Union{Nothing, Integer}, loaded::Bool
+        )
         @assert kind === :spkinsuffdata || kind === :noloadedfiles
         @assert !loaded || body !== nothing
         return new(_check_kind(kind), msg, target, observer, et, body, loaded)
@@ -235,4 +227,16 @@ Base.showerror(io::IO, e::SpkInsufficientDataError) =
     isempty(strip(path)) &&
         throw(SpiceError(:blankfilename, "$who: the file name is blank"))
     return nothing
+end
+
+# `isfile`, with a path that the system cannot look up (a name longer than the system
+# allows) taken as absent: `isfile` throws an `IOError` for it, a type that Base does
+# not make public.
+function _isfile(path::AbstractString)
+    try
+        return isfile(path)
+    catch e
+        e isa InterruptException && rethrow()
+        return false
+    end
 end

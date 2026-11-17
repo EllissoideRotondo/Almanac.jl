@@ -21,17 +21,23 @@ using ADTypes: AutoEnzyme
 group("ad enzyme", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
     ctx, epochs, default, full = ad_setup()
     skip = ("subpnt", "unitim", "table_position")
-    ad_check("Enzyme forward", AutoEnzyme(; mode=Enzyme.Forward, function_annotation=Enzyme.Const), ctx, epochs, default, full;
-        gradient=false, batched=true, nested=true, skip)
-    rev = AutoEnzyme(; mode=Enzyme.Reverse, function_annotation=Enzyme.Const)
-    ad_check("Enzyme reverse", rev, ctx, epochs, default, full;
-        gradient=true, batched=false, nested=false, skip)
-    ad_orbit_check("Enzyme forward", AutoEnzyme(; mode=Enzyme.Forward, function_annotation=Enzyme.Const))
+    ad_check(
+        "Enzyme forward", AutoEnzyme(; mode = Enzyme.Forward, function_annotation = Enzyme.Const), ctx, epochs, default, full;
+        gradient = false, batched = true, nested = true, skip
+    )
+    rev = AutoEnzyme(; mode = Enzyme.Reverse, function_annotation = Enzyme.Const)
+    ad_check(
+        "Enzyme reverse", rev, ctx, epochs, default, full;
+        gradient = true, batched = false, nested = false, skip
+    )
+    ad_orbit_check("Enzyme forward", AutoEnzyme(; mode = Enzyme.Forward, function_annotation = Enzyme.Const))
     ad_orbit_check("Enzyme reverse", rev)
     @testset "Enzyme reverse refuses a Dual epoch" begin
         f(t) = norm(spkpos(ctx, "MOON", t, "IAU_EARTH", "LT+S", "EARTH")[1])
-        @test_throws ArgumentError DI.second_derivative(f, DI.SecondOrder(AutoForwardDiff(), rev),
-            epochs[1])
+        @test_throws ArgumentError DI.second_derivative(
+            f, DI.SecondOrder(AutoForwardDiff(), rev),
+            epochs[1]
+        )
     end
     return nothing
 end

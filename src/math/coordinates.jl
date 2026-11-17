@@ -328,10 +328,18 @@ end
 
 # --- geodetic -------------------------------------------------------------------------
 
-@noinline _m_badre(re) = throw(SpiceError(:valueoutofrange,
-    "the equatorial radius must be positive; it is $(primal(re))"))
-@noinline _m_badflat(f) = throw(SpiceError(:valueoutofrange,
-    "the flattening coefficient must be less than 1; it is $(primal(f))"))
+@noinline _m_badre(re) = throw(
+    SpiceError(
+        :valueoutofrange,
+        "the equatorial radius must be positive; it is $(primal(re))"
+    )
+)
+@noinline _m_badflat(f) = throw(
+    SpiceError(
+        :valueoutofrange,
+        "the flattening coefficient must be less than 1; it is $(primal(f))"
+    )
+)
 
 @inline function _m_recgeo(v::SVector{3}, re, f)
     primal(re) > 0.0 || _m_badre(re)
@@ -387,8 +395,10 @@ recgeo(rectan::AbstractVector, re::Real, f::Real) = _m_recgeo(_m_v3(rectan), _m_
     x = re * cphi / big
     y = rp * sphi / big
     scale = 1.0 / (big * sqrt(x * x + y * y))
-    base = SVector(scale * re * re * clmbda * cphi, scale * re * re * slmbda * cphi,
-        scale * rp * rp * sphi)
+    base = SVector(
+        scale * re * re * clmbda * cphi, scale * re * re * slmbda * cphi,
+        scale * rp * rp * sphi
+    )
     normal = _m_surfnm(re, re, rp, base)
     return 1.0 * base + alt * normal
 end
@@ -428,13 +438,21 @@ function _m_pgrsense(ks::KernelSet, body::NameOrID)
         s = s[1:min(4, lastindex(s))]
         s == "EAST" && return 1
         s == "WEST" && return -1
-        throw(SpiceError(:invalidoption,
-            "the variable BODY$(id)_PGR_POSITIVE_LON may be EAST or WEST; it is $(kv[1])"))
+        throw(
+            SpiceError(
+                :invalidoption,
+                "the variable BODY$(id)_PGR_POSITIVE_LON may be EAST or WEST; it is $(kv[1])"
+            )
+        )
     end
     id == 399 && return 1
     pm = get(ks.pool, string("BODY", id, "_PM"), nothing)
-    (pm isa Vector{Float64} && length(pm) >= 2) || throw(SpiceError(:missingdata,
-        "the prime meridian rate BODY$(id)_PM is required but not available"))
+    (pm isa Vector{Float64} && length(pm) >= 2) || throw(
+        SpiceError(
+            :missingdata,
+            "the prime meridian rate BODY$(id)_PM is required but not available"
+        )
+    )
     (id == 301 || id == 10) && return 1
     return pm[2] < 0.0 ? 1 : -1
 end
@@ -521,15 +539,21 @@ end
 
 # --- Jacobians ------------------------------------------------------------------------
 
-@noinline _m_onzaxis() = throw(SpiceError(:pointonzaxis,
-    "the Jacobian is not defined for a point on the z axis"))
+@noinline _m_onzaxis() = throw(
+    SpiceError(
+        :pointonzaxis,
+        "the Jacobian is not defined for a point on the z axis"
+    )
+)
 
 @inline function _m_drdlat(r, lon, lat)
     slon, clon = sincos(lon)
     slat, clat = sincos(lat)
-    return SMatrix{3,3}(clon * clat, slon * clat, slat - zero(r),
+    return SMatrix{3, 3}(
+        clon * clat, slon * clat, slat - zero(r),
         -r * slon * clat, r * clon * clat, zero(r * clat),
-        -r * clon * slat, -r * slon * slat, r * clat)
+        -r * clon * slat, -r * slon * slat, r * clat
+    )
 end
 
 """
@@ -544,13 +568,17 @@ See also [`dlatdr`](@ref), [`latrec`](@ref).
 drdlat(r::Real, lon::Real, lat::Real) = _m_drdlat(promote(_m_f(r), _m_f(lon), _m_f(lat))...)
 
 "Inverse of a Jacobian with orthogonal columns, with the checks of `invort_`."
-@inline function _m_invort(m::SMatrix{3,3})
+@inline function _m_invort(m::SMatrix{3, 3})
     unit(i) = begin
         u, len = _m_unorm(_m_col(m, i))
         l0 = primal(len)
         l0 == 0.0 && throw(SpiceError(:zerolengthcolumn, "column $i of the matrix has norm zero"))
-        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(SpiceError(:columntoosmall,
-            "the length $l0 of column $i cannot be inverted"))
+        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(
+            SpiceError(
+                :columntoosmall,
+                "the length $l0 of column $i cannot be inverted"
+            )
+        )
         (1.0 / len) * u
     end
     return _m_rows(unit(1), unit(2), unit(3))
@@ -584,9 +612,11 @@ end
 @inline function _m_drdsph(r, colat, slon)
     scolat, ccolat = sincos(colat)
     slong, clong = sincos(slon)
-    return SMatrix{3,3}(clong * scolat, slong * scolat, ccolat - zero(r),
+    return SMatrix{3, 3}(
+        clong * scolat, slong * scolat, ccolat - zero(r),
         r * clong * ccolat, r * slong * ccolat, -r * scolat,
-        -r * slong * scolat, r * clong * scolat, zero(r * scolat))
+        -r * slong * scolat, r * clong * scolat, zero(r * scolat)
+    )
 end
 
 """
@@ -621,7 +651,7 @@ end
 @inline function _m_drdcyl(r, clon, z)
     s, c = sincos(clon)
     z0 = zero(r * c)
-    return SMatrix{3,3}(c + z0, s + z0, z0, -s * r, c * r, z0, z0, z0, one(z0))
+    return SMatrix{3, 3}(c + z0, s + z0, z0, -s * r, c * r, z0, z0, z0, one(z0))
 end
 
 """
@@ -655,8 +685,12 @@ end
 
 @inline function _m_drdgeo(lon, lat, alt, re, f)
     primal(f) < 1.0 || _m_badflat(f)
-    primal(re) > 0.0 || throw(SpiceError(:badradius,
-        "the equatorial radius must be positive; it is $(primal(re))"))
+    primal(re) > 0.0 || throw(
+        SpiceError(
+            :badradius,
+            "the equatorial radius must be positive; it is $(primal(re))"
+        )
+    )
     slat, clat = sincos(lat)
     slon, clon = sincos(lon)
     flat = 1.0 - f
@@ -664,7 +698,7 @@ end
     g = sqrt(clat * clat + flat2 * slat * slat)
     g2 = g * g
     dgdlat = (flat2 - 1.0) * slat * clat / g
-    return SMatrix{3,3}(
+    return SMatrix{3, 3}(
         -(alt + re / g) * slon * clat,
         (alt + re / g) * clon * clat,
         zero(alt + re / g),
@@ -673,7 +707,8 @@ end
         -flat2 * re * dgdlat / g2 * slat + (alt + flat2 * re / g) * clat,
         clon * clat - zero(alt + re / g),
         slon * clat - zero(alt + re / g),
-        slat - zero(alt + re / g))
+        slat - zero(alt + re / g)
+    )
 end
 
 """
@@ -695,8 +730,12 @@ drdgeo(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
 
 @inline function _m_dgeodr(v::SVector{3}, re, f)
     primal(f) < 1.0 || _m_badflat(f)
-    primal(re) > 0.0 || throw(SpiceError(:badradius,
-        "the equatorial radius must be positive; it is $(primal(re))"))
+    primal(re) > 0.0 || throw(
+        SpiceError(
+            :badradius,
+            "the equatorial radius must be positive; it is $(primal(re))"
+        )
+    )
     (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && _m_onzaxis()
     lon, lat, alt = _m_recgeo(v, re, f)
     return _m_invort(_m_drdgeo(promote(lon, lat, alt, re, f)...))
@@ -780,8 +819,10 @@ end
 
 # --- state between coordinate systems -------------------------------------------------
 
-const _M_COSYS = ("RECTANGULAR", "CYLINDRICAL", "LATITUDINAL", "SPHERICAL", "GEODETIC",
-    "PLANETOGRAPHIC")
+const _M_COSYS = (
+    "RECTANGULAR", "CYLINDRICAL", "LATITUDINAL", "SPHERICAL", "GEODETIC",
+    "PLANETOGRAPHIC",
+)
 
 function _m_cosys(name::AbstractString)
     s = uppercase(filter(!isspace, name))
@@ -789,12 +830,16 @@ function _m_cosys(name::AbstractString)
 end
 
 "`SpiceError(:numericoverflow)` if a product of `jac` and `v` would overflow, as `xfmsta_`."
-@inline function _m_xfm_overflow(jac::SMatrix{3,3}, v::SVector{3})
+@inline function _m_xfm_overflow(jac::SMatrix{3, 3}, v::SVector{3})
     toobig = sqrt(floatmax(Float64) / 100.0)
     for i in 1:3, j in 1:3
         sqrt(abs(primal(jac[i, j]))) * sqrt(abs(primal(v[j]))) > toobig &&
-            throw(SpiceError(:numericoverflow,
-                "a product of a Jacobian element and a velocity component would overflow"))
+            throw(
+            SpiceError(
+                :numericoverflow,
+                "a product of a Jacobian element and a velocity component would overflow"
+            )
+        )
     end
     return nothing
 end
@@ -846,13 +891,19 @@ true
 
 See also [`reclat`](@ref), [`recgeo`](@ref), [`recpgr`](@ref), [`dlatdr`](@ref).
 """
-function xfmsta(ks::KernelSet, istate::AbstractVector, icosys::AbstractString,
-        ocosys::AbstractString, body::NameOrID)
+function xfmsta(
+        ks::KernelSet, istate::AbstractVector, icosys::AbstractString,
+        ocosys::AbstractString, body::NameOrID
+    )
     s = _m_v6(istate)
     isys = _m_cosys(icosys)
     osys = _m_cosys(ocosys)
-    (isys == 0 || osys == 0) && throw(SpiceError(:coordsysnotrec,
-        "a coordinate system of \"$icosys\", \"$ocosys\" is not recognized"))
+    (isys == 0 || osys == 0) && throw(
+        SpiceError(
+            :coordsysnotrec,
+            "a coordinate system of \"$icosys\", \"$ocosys\" is not recognized"
+        )
+    )
     isys == osys && return s / 1.0
     T = typeof(atan(s[1] / 1.0))
     re = 1.0
@@ -862,73 +913,83 @@ function xfmsta(ks::KernelSet, istate::AbstractVector, icosys::AbstractString,
         r1, r2, r3 = _m_radii(ks, id)
         sqrt(abs(r1 - r3)) / sqrt(abs(r1)) >= sqrt(floatmax(Float64)) &&
             throw(SpiceError(:invalidradius, "the radii of body $body give no flattening"))
-        r1 == r2 || throw(SpiceError(:notsupported,
-            "body $body has two different equatorial radii; a spheroid is required"))
+        r1 == r2 || throw(
+            SpiceError(
+                :notsupported,
+                "body $body has two different equatorial radii; a spheroid is required"
+            )
+        )
         re = r1
         f = (r1 - r3) / r1
     end
     c1, c2, c3 = s[1], s[2], s[3]
     rates = SVector(s[4], s[5], s[6])
     if isys == 1
-        ipos = SVector{3,T}(c1, c2, c3)
-        ivel = SVector{3,T}(rates)
+        ipos = SVector{3, T}(c1, c2, c3)
+        ivel = SVector{3, T}(rates)
     else
         if isys == 2
-            ipos = SVector{3,T}(_m_cylrec(c1, c2, c3))
-            jac = SMatrix{3,3,T,9}(_m_drdcyl(c1, c2, c3))
+            ipos = SVector{3, T}(_m_cylrec(c1, c2, c3))
+            jac = SMatrix{3, 3, T, 9}(_m_drdcyl(c1, c2, c3))
         elseif isys == 3
-            ipos = SVector{3,T}(_m_latrec(c1, c2, c3))
-            jac = SMatrix{3,3,T,9}(_m_drdlat(c1, c2, c3))
+            ipos = SVector{3, T}(_m_latrec(c1, c2, c3))
+            jac = SMatrix{3, 3, T, 9}(_m_drdlat(c1, c2, c3))
         elseif isys == 4
-            ipos = SVector{3,T}(_m_sphrec(c1, c2, c3))
-            jac = SMatrix{3,3,T,9}(_m_drdsph(c1, c2, c3))
+            ipos = SVector{3, T}(_m_sphrec(c1, c2, c3))
+            jac = SMatrix{3, 3, T, 9}(_m_drdsph(c1, c2, c3))
         elseif isys == 5
-            ipos = SVector{3,T}(_m_georec(c1, c2, c3, re, f))
-            jac = SMatrix{3,3,T,9}(_m_drdgeo(promote(c1, c2, c3, re, f)...))
+            ipos = SVector{3, T}(_m_georec(c1, c2, c3, re, f))
+            jac = SMatrix{3, 3, T, 9}(_m_drdgeo(promote(c1, c2, c3, re, f)...))
         else
-            ipos = SVector{3,T}(pgrrec(ks, body, c1, c2, c3, re, f))
-            jac = SMatrix{3,3,T,9}(drdpgr(ks, body, c1, c2, c3, re, f))
+            ipos = SVector{3, T}(pgrrec(ks, body, c1, c2, c3, re, f))
+            jac = SMatrix{3, 3, T, 9}(drdpgr(ks, body, c1, c2, c3, re, f))
         end
         _m_xfm_overflow(jac, rates)
-        ivel = SVector{3,T}(_m_mxv(jac, rates))
+        ivel = SVector{3, T}(_m_mxv(jac, rates))
     end
     osys == 1 && return _m_state(ipos, ivel)
     if abs(primal(ipos[1])) + abs(primal(ipos[2])) == 0.0
-        abs(primal(ivel[1])) + abs(primal(ivel[2])) == 0.0 || throw(SpiceError(:invalidstate,
-            "the position is on the z axis and the velocity is not: the output rates are not defined"))
+        abs(primal(ivel[1])) + abs(primal(ivel[2])) == 0.0 || throw(
+            SpiceError(
+                :invalidstate,
+                "the position is on the z axis and the velocity is not: the output rates are not defined"
+            )
+        )
         z0 = zero(T)
         if osys == 2
-            return _m_state(SVector{3,T}(_m_reccyl(ipos)), SVector(z0, z0, ivel[3]))
+            return _m_state(SVector{3, T}(_m_reccyl(ipos)), SVector(z0, z0, ivel[3]))
         elseif osys == 3
-            return _m_state(SVector{3,T}(_m_reclat(ipos, false)), SVector(ivel[3], z0, z0))
+            return _m_state(SVector{3, T}(_m_reclat(ipos, false)), SVector(ivel[3], z0, z0))
         elseif osys == 4
-            return _m_state(SVector{3,T}(_m_recsph(ipos)), SVector(ivel[3], z0, z0))
+            return _m_state(SVector{3, T}(_m_recsph(ipos)), SVector(ivel[3], z0, z0))
         elseif osys == 5
-            return _m_state(SVector{3,T}(_m_recgeo(ipos, re, f)), SVector(z0, z0, ivel[3]))
+            return _m_state(SVector{3, T}(_m_recgeo(ipos, re, f)), SVector(z0, z0, ivel[3]))
         end
-        return _m_state(SVector{3,T}(recpgr(ks, body, ipos, re, f)), SVector(z0, z0, ivel[3]))
+        return _m_state(SVector{3, T}(recpgr(ks, body, ipos, re, f)), SVector(z0, z0, ivel[3]))
     end
     if osys == 2
-        jac = SMatrix{3,3,T,9}(_m_invort(_m_drdcyl(_m_reccyl(ipos)...)))
-        opos = SVector{3,T}(_m_reccyl(ipos))
+        jac = SMatrix{3, 3, T, 9}(_m_invort(_m_drdcyl(_m_reccyl(ipos)...)))
+        opos = SVector{3, T}(_m_reccyl(ipos))
     elseif osys == 3
-        jac = SMatrix{3,3,T,9}(_m_invort(_m_drdlat(_m_reclat(ipos, false)...)))
-        opos = SVector{3,T}(_m_reclat(ipos, false))
+        jac = SMatrix{3, 3, T, 9}(_m_invort(_m_drdlat(_m_reclat(ipos, false)...)))
+        opos = SVector{3, T}(_m_reclat(ipos, false))
     elseif osys == 4
-        jac = SMatrix{3,3,T,9}(_m_invort(_m_drdsph(_m_recsph(ipos)...)))
-        opos = SVector{3,T}(_m_recsph(ipos))
+        jac = SMatrix{3, 3, T, 9}(_m_invort(_m_drdsph(_m_recsph(ipos)...)))
+        opos = SVector{3, T}(_m_recsph(ipos))
     elseif osys == 5
-        jac = SMatrix{3,3,T,9}(_m_dgeodr(ipos, re, f))
-        opos = SVector{3,T}(_m_recgeo(ipos, re, f))
+        jac = SMatrix{3, 3, T, 9}(_m_dgeodr(ipos, re, f))
+        opos = SVector{3, T}(_m_recgeo(ipos, re, f))
     else
-        jac = SMatrix{3,3,T,9}(dpgrdr(ks, body, ipos[1], ipos[2], ipos[3], re, f))
-        opos = SVector{3,T}(recpgr(ks, body, ipos, re, f))
+        jac = SMatrix{3, 3, T, 9}(dpgrdr(ks, body, ipos[1], ipos[2], ipos[3], re, f))
+        opos = SVector{3, T}(recpgr(ks, body, ipos, re, f))
     end
     _m_xfm_overflow(jac, ivel)
     return _m_state(opos, _m_mxv(jac, ivel))
 end
-xfmsta(ctx::SpiceContext, istate::AbstractVector, icosys::AbstractString, ocosys::AbstractString,
-    body::NameOrID) = xfmsta(kernelset(ctx), istate, icosys, ocosys, body)
+xfmsta(
+    ctx::SpiceContext, istate::AbstractVector, icosys::AbstractString, ocosys::AbstractString,
+    body::NameOrID
+) = xfmsta(kernelset(ctx), istate, icosys, ocosys, body)
 xfmsta(istate::AbstractVector, icosys::AbstractString, ocosys::AbstractString, body::NameOrID) =
     xfmsta(default_context(), istate, icosys, ocosys, body)
 
@@ -950,7 +1011,8 @@ const _M_UNITS = (
     ("PARSECS", 30856775797231604.0, :distance),
     ("SECONDS", 1.0, :time), ("MINUTES", 60.0, :time), ("HOURS", 3600.0, :time),
     ("DAYS", 86400.0, :time), ("JULIAN_YEARS", 31557600.0, :time),
-    ("TROPICAL_YEARS", 31556925.976319999, :time), ("YEARS", 31557600.0, :time))
+    ("TROPICAL_YEARS", 31556925.976319999, :time), ("YEARS", 31557600.0, :time),
+)
 
 function _m_unit(name::AbstractString)
     s = uppercase(rstrip(name, ' '))
@@ -986,9 +1048,17 @@ julia> convrt(1, "km", "METERS")
 function convrt(x::Real, in::AbstractString, out::AbstractString)
     i = _m_unit(in)
     j = _m_unit(out)
-    (i == 0 || j == 0) && throw(SpiceError(:unitsnotrec,
-        "the units \"$in\" or \"$out\" were not recognized"))
-    _M_UNITS[i][3] === _M_UNITS[j][3] || throw(SpiceError(:incompatibleunits,
-        "cannot convert $in ($(_M_UNITS[i][3])) to $out ($(_M_UNITS[j][3]))"))
+    (i == 0 || j == 0) && throw(
+        SpiceError(
+            :unitsnotrec,
+            "the units \"$in\" or \"$out\" were not recognized"
+        )
+    )
+    _M_UNITS[i][3] === _M_UNITS[j][3] || throw(
+        SpiceError(
+            :incompatibleunits,
+            "cannot convert $in ($(_M_UNITS[i][3])) to $out ($(_M_UNITS[j][3]))"
+        )
+    )
     return _m_f(x) * _M_UNITS[i][2] / _M_UNITS[j][2]
 end

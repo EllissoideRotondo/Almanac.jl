@@ -42,11 +42,15 @@ SPICE.jl keeps the long message only.
 function df_oracle_kind(call::Symbol, from::AbstractString, to::AbstractString, et::Float64)
     out = zeros(36)
     if call === :pxform_c
-        ccall((:pxform_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cdouble, Ptr{Float64}),
-            from, to, et, out)
+        ccall(
+            (:pxform_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cdouble, Ptr{Float64}),
+            from, to, et, out
+        )
     else
-        ccall((:sxform_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cdouble, Ptr{Float64}),
-            from, to, et, out)
+        ccall(
+            (:sxform_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cdouble, Ptr{Float64}),
+            from, to, et, out
+        )
     end
     ccall((:failed_c, SPICE.libcspice), Cint, ()) == 0 && return :none
     buf = zeros(UInt8, 64)
@@ -75,9 +79,9 @@ Largest element of `|a - b|`, divided by the largest element of `|b|` or by `flo
 that is larger. If both arrays are below 1e-17 the result is zero: the derivative block
 of a frame that does not rotate is the rounding noise of a cancellation in both engines.
 """
-function df_rel(a, b, floor=0.0)
+function df_rel(a, b, floor = 0.0)
     s = maximum(abs, b)
-    (s <= 1e-17 && maximum(abs, a) <= 1e-17) && return 0.0
+    (s <= 1.0e-17 && maximum(abs, a) <= 1.0e-17) && return 0.0
     return maximum(abs.(a .- b)) / max(s, floor, floatmin())
 end
 
@@ -105,24 +109,24 @@ Thresholds per frame, `(pxform, sxform derivative block, spkezr position, spkezr
 velocity)`: the default, and the frames whose derivative comes from a numerical
 difference in CSPICE.
 """
-const DF_DEFAULT_TOL = (5e-14, 2e-12, 5e-14, 2e-12)
+const DF_DEFAULT_TOL = (5.0e-14, 2.0e-12, 5.0e-14, 2.0e-12)
 const DF_TOL = Dict(
-    "DT_GSE" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_GSE_LTS" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_GSE_CN" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_NADIR" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_NADIR_LT" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_VEL_PCK" => (5e-14, 5e-9, 5e-14, 5e-7),
-    "DT_CONST_ABCORR" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_EULER_ON_GSE" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_SWITCH_TIME" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_SWITCH_NEST" => (5e-14, 5e-9, 5e-14, 5e-10),
-    "DT_PRODUCT" => (5e-14, 5e-9, 5e-14, 5e-10),
+    "DT_GSE" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_GSE_LTS" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_GSE_CN" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_NADIR" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_NADIR_LT" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_VEL_PCK" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-7),
+    "DT_CONST_ABCORR" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_EULER_ON_GSE" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_SWITCH_TIME" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_SWITCH_NEST" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
+    "DT_PRODUCT" => (5.0e-14, 5.0e-9, 5.0e-14, 5.0e-10),
     # A velocity that is given in a dynamic frame: CSPICE differentiates a quantity
     # that already holds a numerical derivative. Measured (2026-10-12): the residual of
     # a cubic fit of the `pxform` elements over 20 s is 1.1e-11 in both engines (7e-16
     # for `DT_GSE`), and the two engines differ by up to 8e-12, which is that noise.
-    "DT_TWOVEC_IN_DYN" => (5e-10, 5e-4, 5e-10, 5e-4),
+    "DT_TWOVEC_IN_DYN" => (5.0e-10, 5.0e-4, 5.0e-10, 5.0e-4),
 )
 
 """
@@ -141,25 +145,35 @@ function df_thread_check(ctx, rng)
     @testset "threads: the same answers from many tasks" begin
         names = first.(DynFix.FRAMES)
         jobs = [(rand(rng, names), (2 * rand(rng) - 1) * 2.9e8) for _ in 1:nsample(200, 400)]
-        serial = [(pxform(ctx, "J2000", n, et), sxform(ctx, "J2000", n, et),
-            spkezr(ctx, 301, et, n, "LT+S", 399)[1]) for (n, et) in jobs]
+        serial = [
+            (
+                pxform(ctx, "J2000", n, et), sxform(ctx, "J2000", n, et),
+                spkezr(ctx, 301, et, n, "LT+S", 399)[1],
+            ) for (n, et) in jobs
+        ]
         results = Vector{Any}(undef, length(jobs))
         der = Vector{Any}(undef, length(jobs))
         Threads.@threads for i in eachindex(jobs)
             n, et = jobs[i]
             der[i] = df_has_der(n) ? pxder(ctx, "J2000", n, et, Val(DF_THREAD)) : nothing
-            results[i] = (pxform(ctx, "J2000", n, et), sxform(ctx, "J2000", n, et),
-                spkezr(ctx, 301, et, n, "LT+S", 399)[1])
+            results[i] = (
+                pxform(ctx, "J2000", n, et), sxform(ctx, "J2000", n, et),
+                spkezr(ctx, 301, et, n, "LT+S", 399)[1],
+            )
         end
         @test all(i -> results[i] == serial[i], eachindex(jobs))
-        @test all(i -> !df_has_der(jobs[i][1]) ||
-                       der[i] == pxder(ctx, "J2000", jobs[i][1], jobs[i][2], Val(DF_THREAD)), eachindex(jobs))
+        @test all(
+            i -> !df_has_der(jobs[i][1]) ||
+                der[i] == pxder(ctx, "J2000", jobs[i][1], jobs[i][2], Val(DF_THREAD)), eachindex(jobs)
+        )
     end
     return nothing
 end
 
-group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernels.PCK11,
-    Kernels.DE440S) do
+group(
+    "17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernels.PCK11,
+    Kernels.DE440S
+) do
     rng = MersenneTwister(SEED + 17)
     set = [Kernels.LSK, Kernels.PCK11, Kernels.DE440S, DynFix.frame_kernel()]
     oracle_load(set)
@@ -211,11 +225,15 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
                     t, lu = SPICE.spkezr(targ, et, name, "LT+S", obs)
                     dra = max(dra, norm(s[1:3] .- t[1:3]) / norm(t[1:3]))
                     dva = max(dva, norm(s[4:6] .- t[4:6]) / norm(t[4:6]))
-                    @test abs(lt - lu) <= 1e-12 * lu
+                    @test abs(lt - lu) <= 1.0e-12 * lu
                 end
             end
-            push!(rows, @sprintf("  %-17s px=%.1e sx=%.1e ezr NONE r=%.1e v=%.1e  LT+S r=%.1e v=%.1e  %s",
-                name, dp, ds, dr, dv, dra, dva, family))
+            push!(
+                rows, @sprintf(
+                    "  %-17s px=%.1e sx=%.1e ezr NONE r=%.1e v=%.1e  LT+S r=%.1e v=%.1e  %s",
+                    name, dp, ds, dr, dv, dra, dva, family
+                )
+            )
             ok = dp <= tol[1] && ds <= tol[2] && max(dr, dra) <= tol[3] && max(dv, dva) <= tol[4]
             ok || @info "above the threshold" name tol dp ds dr dv dra dva
             @test dp <= tol[1]
@@ -223,8 +241,10 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
             @test max(dr, dra) <= tol[3]
             @test max(dv, dva) <= tol[4]
         end
-        measured("  largest difference from CSPICE, $nepoch epochs per frame (px: element of the " *
-                 "matrix; sx: derivative block, relative; ezr: relative)")
+        measured(
+            "  largest difference from CSPICE, $nepoch epochs per frame (px: element of the " *
+                "matrix; sx: derivative block, relative; ezr: relative)"
+        )
         foreach(measured, rows)
     end
 
@@ -257,9 +277,9 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
         s3 = report_quantiles("spkpos, 7 other corrections: position, relative", dq)
         s4 = report_quantiles("pxform between two dynamic or switch frames", dx)
         s5 = report_quantiles("pxform between DT_TWOVEC_IN_DYN and another frame", dxl)
-        @test s1.max <= 5e-13
-        @test s2.max <= 5e-7
-        @test s3.max <= 5e-13
+        @test s1.max <= 5.0e-13
+        @test s2.max <= 5.0e-7
+        @test s3.max <= 5.0e-13
         # The limit of a pair is the sum of the `pxform` limits of its two frames:
         # 5e-14 for each frame without the noise (measured 1.6e-14 on 18000 pairs).
         @test s4.max <= 2 * DF_DEFAULT_TOL[1]
@@ -278,12 +298,12 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
             loose = name == "DT_TWOVEC_IN_DYN"
             df_has_der(name) || continue
             e1 = 0.0; e2 = 0.0; es = 0.0
-            for et in record_safe_epochs(rng, 12; span=2.8e8)
+            for et in record_safe_epochs(rng, 12; span = 2.8e8)
                 # Not near an epoch at which a switch frame changes its base.
                 switch && any(e -> abs(et - e) < 200, DynFix.SWITCH_EDGES) && continue
                 R, dR, ddR = pxder(ctx, "J2000", name, et, Val(DF_ORDER))
                 # Order 0 is the rotation of `pxform`, computed with series arithmetic.
-                @test maximum(abs.(R .- pxform(ctx, "J2000", name, et))) <= (loose ? 1e-9 : 1e-13)
+                @test maximum(abs.(R .- pxform(ctx, "J2000", name, et))) <= (loose ? 1.0e-9 : 1.0e-13)
                 if frozen
                     @test iszero(dR) && iszero(ddR)
                     @test iszero(sxform(ctx, "J2000", name, et)[4:6, 1:3])
@@ -294,8 +314,8 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
                 fd2 = df_fd(t -> pxder(ctx, "J2000", name, t, Val(DF_LOW))[2], et, h)
                 # The floors are the rounding noise of the differences: a frame that
                 # turns slower than this is compared in absolute terms.
-                e1 = max(e1, df_rel(dR, fd1, 1e-10))
-                e2 = max(e2, df_rel(ddR, fd2, 1e-15))
+                e1 = max(e1, df_rel(dR, fd1, 1.0e-10))
+                e2 = max(e2, df_rel(ddR, fd2, 1.0e-15))
                 sx = sxform(ctx, "J2000", name, et)[4:6, 1:3]
                 if inertial
                     @test iszero(sx)
@@ -309,39 +329,45 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
                     # omit (measured on 4000 epochs: at most 2.6e-17 rad/s for
                     # `DT_ETE_OF_DATE` and `DT_SWITCH_ALL`). A quotient by the derivative
                     # has no bound there; with the floor it is at most 2.6e-5.
-                    es = max(es, df_rel(sx, dR, 1e-12))
+                    es = max(es, df_rel(sx, dR, 1.0e-12))
                 end
             end
             frozen && continue
-            push!(lines, @sprintf("  %-17s order 1 vs FD=%.1e  order 2 vs FD=%.1e  sxform vs order 1=%.1e",
-                name, e1, e2, es))
-            @test e1 <= (loose ? 1e-3 : 2e-6)
-            @test e2 <= (loose ? 1e-1 : 2e-5)
+            push!(
+                lines, @sprintf(
+                    "  %-17s order 1 vs FD=%.1e  order 2 vs FD=%.1e  sxform vs order 1=%.1e",
+                    name, e1, e2, es
+                )
+            )
+            @test e1 <= (loose ? 1.0e-3 : 2.0e-6)
+            @test e2 <= (loose ? 1.0e-1 : 2.0e-5)
             # The derivative block of CSPICE is not the derivative of its rotation for
             # every definition (see the docstring of `sxform`); the difference is small.
-            @test es <= (loose ? 1e-3 : 5e-5)
+            @test es <= (loose ? 1.0e-3 : 5.0e-5)
         end
         measured("  pxder of the rotation from J2000 to each frame (relative to the largest element)")
         foreach(measured, lines)
         # Orders 0 to 3 are consistent with each other (orders 0 and 2 in the default run).
         for name in ("DT_GSE", "DT_ETE_OF_DATE", "DT_EULER", "DT_GSM", "DT_SWITCH_ALL", "DT_NADIR_LT")
-            et = record_safe_epochs(rng, 1; span=2.8e8)[1]
+            et = record_safe_epochs(rng, 1; span = 2.8e8)[1]
             j0 = pxder(ctx, "J2000", name, et, Val(0))
             if FULL
                 j3 = pxder(ctx, "J2000", name, et, Val(3))
                 j1 = pxder(ctx, "J2000", name, et, Val(1))
-                @test maximum(abs.(j0[1] .- j3[1])) <= 1e-13 && maximum(abs.(j1[1] .- j3[1])) <= 1e-13
-                @test df_rel(j1[2], j3[2]) <= 1e-12
+                @test maximum(abs.(j0[1] .- j3[1])) <= 1.0e-13 && maximum(abs.(j1[1] .- j3[1])) <= 1.0e-13
+                @test df_rel(j1[2], j3[2]) <= 1.0e-12
             else
                 j2 = pxder(ctx, "J2000", name, et, Val(DF_ORDER))
-                @test maximum(abs.(j0[1] .- j2[1])) <= 1e-13
+                @test maximum(abs.(j0[1] .- j2[1])) <= 1.0e-13
             end
         end
     end
 
     @apart @testset "frozen frames and inertial rotation state" begin
-        for (frozen, live, t0) in (("DT_GSE_FROZEN", "DT_GSE", "2015-MAR-03 01:02:03 TDB"),
-            ("DT_ETE_FROZEN", "DT_ETE_OF_DATE", "1995-JUN-15 00:00:00 TDB"))
+        for (frozen, live, t0) in (
+                ("DT_GSE_FROZEN", "DT_GSE", "2015-MAR-03 01:02:03 TDB"),
+                ("DT_ETE_FROZEN", "DT_ETE_OF_DATE", "1995-JUN-15 00:00:00 TDB"),
+            )
             et0 = str2et(ctx, t0)
             fixed = pxform(ctx, "J2000", live, et0)
             for et in random_epochs(rng, 20, -span, span)
@@ -361,8 +387,8 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
     @apart @testset "switch frames at the ends of the intervals" begin
         worst = 0.0
         n = 0
-        for edge in DynFix.SWITCH_EDGES, delta in (-1.0, -1e-3, 0.0, 1e-3, 1.0),
-            name in ("DT_SWITCH_TIME", "DT_SWITCH_NEST")
+        for edge in DynFix.SWITCH_EDGES, delta in (-1.0, -1.0e-3, 0.0, 1.0e-3, 1.0),
+                name in ("DT_SWITCH_TIME", "DT_SWITCH_NEST")
             et = edge + delta
             want = df_oracle_kind(:pxform_c, "J2000", name, et)
             got = df_neo_kind(() -> pxform(ctx, "J2000", name, et))
@@ -373,7 +399,7 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
             n += 1
         end
         measured(@sprintf("  %-58s n=%-7d max=%.3e", "switch frames at interval ends: pxform element", n, worst))
-        @test worst <= 5e-14
+        @test worst <= 5.0e-14
         @test n >= 40
         # The base that is listed last has priority where the intervals overlap.
         @test pxform(ctx, "J2000", "DT_SWITCH_TIME", 2.0e8) == pxform(ctx, "J2000", "DT_EULER", 2.0e8)
@@ -399,28 +425,30 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
             for ab in (lts, none, cn)
                 spkezr(ks, 301, et, id, ab, 399); spkpos(ks, 301, et, id, ab, 399)
             end
-            a = (df_alloc_px(ks, 1, id, et), df_alloc_px(ks, id, 10013, et), df_alloc_sx(ks, 1, id, et),
+            a = (
+                df_alloc_px(ks, 1, id, et), df_alloc_px(ks, id, 10013, et), df_alloc_sx(ks, 1, id, et),
                 der ? df_alloc_der(ks, 1, id, et, Val(DF_ORDER)) : 0,
                 der ? df_alloc_der(ks, id, 17, et, Val(DF_LOW)) : 0,
                 df_alloc_ezr(ks, et, id, lts), df_alloc_ezr(ks, et, id, none), df_alloc_ezr(ks, et, id, cn),
-                df_alloc_pos(ks, et, id, lts), df_alloc_pos(ks, et, id, none))
+                df_alloc_pos(ks, et, id, lts), df_alloc_pos(ks, et, id, none),
+            )
             all(==(0), a) || @info "allocation" name a
             @test all(==(0), a)
             nalloc += length(a)
-            @test (@inferred pxform(ks, 1, id, et)) isa SMatrix{3,3,Float64,9}
-            @test (@inferred sxform(ks, 1, id, et)) isa SMatrix{6,6,Float64,36}
-            der && @test (@inferred pxder(ks, 1, id, et, Val(DF_ORDER))) isa NTuple{3,SMatrix{3,3,Float64,9}}
-            @test (@inferred spkezr(ks, 301, et, id, lts, 399)) isa Tuple{SVector{6,Float64},Float64}
-            @test (@inferred spkezr(ks, 301, et, id, none, 399)) isa Tuple{SVector{6,Float64},Float64}
-            @test (@inferred spkpos(ks, 301, et, id, lts, 399)) isa Tuple{SVector{3,Float64},Float64}
+            @test (@inferred pxform(ks, 1, id, et)) isa SMatrix{3, 3, Float64, 9}
+            @test (@inferred sxform(ks, 1, id, et)) isa SMatrix{6, 6, Float64, 36}
+            der && @test (@inferred pxder(ks, 1, id, et, Val(DF_ORDER))) isa NTuple{3, SMatrix{3, 3, Float64, 9}}
+            @test (@inferred spkezr(ks, 301, et, id, lts, 399)) isa Tuple{SVector{6, Float64}, Float64}
+            @test (@inferred spkezr(ks, 301, et, id, none, 399)) isa Tuple{SVector{6, Float64}, Float64}
+            @test (@inferred spkpos(ks, 301, et, id, lts, 399)) isa Tuple{SVector{3, Float64}, Float64}
         end
         println("  ", nalloc, " calls with zero allocation")
         # The rotation is generic over the number type of the epoch.
         tv = Almanac.taylor_var(et, Val(2))
         id = namfrm(ctx, "DT_GSE_LTS")
         m = @inferred Almanac.frame_rotation(ks, Int32(1), Int32(id), tv)
-        @test m isa SMatrix{3,3,Almanac.Taylor{2,Float64},9}
-        @test maximum(abs.(map(x -> x.v, m) .- pxform(ks, 1, id, et))) <= 1e-13
+        @test m isa SMatrix{3, 3, Almanac.Taylor{2, Float64}, 9}
+        @test maximum(abs.(map(x -> x.v, m) .- pxform(ks, 1, id, et))) <= 1.0e-13
     end
 
     FULL && df_thread_check(ctx, rng)
@@ -442,22 +470,26 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
             @test df_neo_kind(() -> sxform(ctx2, "J2000", name, et)) == kind
             @test df_neo_kind(() -> spkezr(ctx2, 301, et, name, "LT+S", 399)) == kind
             if kind === :none
-                @test maximum(abs.(pxform(ctx2, "J2000", name, et) .- SPICE.pxform("J2000", name, et))) <= 5e-10
+                @test maximum(abs.(pxform(ctx2, "J2000", name, et) .- SPICE.pxform("J2000", name, et))) <= 5.0e-10
             end
         end
         foreach(println, lines)
         # The valid frames of the same context are not affected.
-        @test maximum(abs.(pxform(ctx2, "J2000", "DT_GSE", et) .- SPICE.pxform("J2000", "DT_GSE", et))) <= 5e-14
+        @test maximum(abs.(pxform(ctx2, "J2000", "DT_GSE", et) .- SPICE.pxform("J2000", "DT_GSE", et))) <= 5.0e-14
         # A class 5 frame without any definition, and a class above 6.
         extra = joinpath(mktempdir(), "empty.tf")
-        write(extra, "KPL/FK\n\\begindata\n" * DynFix.head("DT_EMPTY", 1850131, 5) *
-                     DynFix.head("DT_CLASS7", 1850132, 7) * "\\begintext\n")
+        write(
+            extra, "KPL/FK\n\\begindata\n" * DynFix.head("DT_EMPTY", 1850131, 5) *
+                DynFix.head("DT_CLASS7", 1850132, 7) * "\\begintext\n"
+        )
         SPICE.furnsh(extra); furnsh(ctx2, extra)
         @test df_neo_kind(() -> pxform(ctx2, "J2000", "DT_EMPTY", et)) !== :none
         @test df_oracle_kind(:pxform_c, "J2000", "DT_EMPTY", et) !== :none
         k7 = df_neo_kind(() -> pxform(ctx2, "J2000", "DT_CLASS7", et))
-        println("  class 5 frame without a definition: Almanac :",
-            df_neo_kind(() -> pxform(ctx2, "J2000", "DT_EMPTY", et)), "; frame of class 7: Almanac :", k7)
+        println(
+            "  class 5 frame without a definition: Almanac :",
+            df_neo_kind(() -> pxform(ctx2, "J2000", "DT_EMPTY", et)), "; frame of class 7: Almanac :", k7
+        )
         @test k7 !== :none
         @test df_oracle_kind(:pxform_c, "J2000", "DT_CLASS7", et) !== :none
     end
@@ -466,37 +498,45 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
         # Forms of a definition that the kernel of `DynFix` does not use. Each angle unit
         # has a factor of its own in the code (the kernel has RADIANS and DEGREES only);
         # the bases of a switch frame can be frame IDs and its bounds can be time strings.
-        units = (("ARCMINUTES", 600.0), ("ARCSECONDS", 36000.0), ("HOURANGLE", 1.5),
-            ("MINUTEANGLE", 90.0), ("SECONDANGLE", 5400.0))      # 10 degrees and 22.5 degrees
+        units = (
+            ("ARCMINUTES", 600.0), ("ARCSECONDS", 36000.0), ("HOURANGLE", 1.5),
+            ("MINUTEANGLE", 90.0), ("SECONDANGLE", 5400.0),
+        )      # 10 degrees and 22.5 degrees
         io = IOBuffer()
         print(io, "KPL/FK\n\\begindata\n")
         for (k, (unit, a)) in enumerate(units)
             id = 1850140 + k
-            print(io, DynFix.head("DT_UNIT_$k", id, 5), """
-                   FRAME_$(id)_RELATIVE = 'J2000'
-                   FRAME_$(id)_DEF_STYLE = 'PARAMETERIZED'
-                   FRAME_$(id)_FAMILY = 'EULER'
-                   FRAME_$(id)_EPOCH = @2010-JAN-01/12:00:00
-                   FRAME_$(id)_AXES = ( 3, 1, 3 )
-                   FRAME_$(id)_UNITS = '$unit'
-                   FRAME_$(id)_ANGLE_1_COEFFS = ( $a, $(a * 1.0e-7) )
-                   FRAME_$(id)_ANGLE_2_COEFFS = ( $(2a) )
-                   FRAME_$(id)_ANGLE_3_COEFFS = ( $(-3a), $(a * 2.0e-8) )
-            """)
+            print(
+                io, DynFix.head("DT_UNIT_$k", id, 5), """
+                       FRAME_$(id)_RELATIVE = 'J2000'
+                       FRAME_$(id)_DEF_STYLE = 'PARAMETERIZED'
+                       FRAME_$(id)_FAMILY = 'EULER'
+                       FRAME_$(id)_EPOCH = @2010-JAN-01/12:00:00
+                       FRAME_$(id)_AXES = ( 3, 1, 3 )
+                       FRAME_$(id)_UNITS = '$unit'
+                       FRAME_$(id)_ANGLE_1_COEFFS = ( $a, $(a * 1.0e-7) )
+                       FRAME_$(id)_ANGLE_2_COEFFS = ( $(2a) )
+                       FRAME_$(id)_ANGLE_3_COEFFS = ( $(-3a), $(a * 2.0e-8) )
+                """
+            )
         end
         # IAU_EARTH (10013) from 2000 to 2006, ECLIPJ2000 (17) from 2005 to 2010
-        print(io, DynFix.head("DT_SWITCH_IDS", 1850150, 6), """
-               FRAME_1850150_ALIGNED_WITH = ( 10013, 17 )
-               FRAME_1850150_START = ( '2000 JAN 01 00:00:00 TDB', '2005 JAN 01 00:00:00 TDB' )
-               FRAME_1850150_STOP = ( '2006 JAN 01 00:00:00 TDB', '2010 JAN 01 00:00:00 TDB' )
-        """)
+        print(
+            io, DynFix.head("DT_SWITCH_IDS", 1850150, 6), """
+                   FRAME_1850150_ALIGNED_WITH = ( 10013, 17 )
+                   FRAME_1850150_START = ( '2000 JAN 01 00:00:00 TDB', '2005 JAN 01 00:00:00 TDB' )
+                   FRAME_1850150_STOP = ( '2006 JAN 01 00:00:00 TDB', '2010 JAN 01 00:00:00 TDB' )
+            """
+        )
         # an item of the wrong type, and an item with more values than it can have
         for (name, id, family) in (("DT_BADTYPE", 1850151, "5"), ("DT_BADSIZE", 1850152, "( 'EULER', 'EULER' )"))
-            print(io, DynFix.head(name, id, 5), """
-                   FRAME_$(id)_RELATIVE = 'J2000'
-                   FRAME_$(id)_DEF_STYLE = 'PARAMETERIZED'
-                   FRAME_$(id)_FAMILY = $family
-            """)
+            print(
+                io, DynFix.head(name, id, 5), """
+                       FRAME_$(id)_RELATIVE = 'J2000'
+                       FRAME_$(id)_DEF_STYLE = 'PARAMETERIZED'
+                       FRAME_$(id)_FAMILY = $family
+                """
+            )
         end
         print(io, "\\begintext\n")
         set4 = [set..., joinpath(mktempdir(), "forms.tf")]
@@ -512,17 +552,23 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
         # the units are not equal by accident: 10 degrees and 22.5 degrees
         @test pxform(c, "J2000", "DT_UNIT_1", 0.0) != pxform(c, "J2000", "DT_UNIT_3", 0.0)
         y(s) = str2et(c, s)
-        for (t, base) in (("2002 JUN 01 TDB", "IAU_EARTH"), ("2005 JUN 01 TDB", "ECLIPJ2000"),
-            ("2008 JUN 01 TDB", "ECLIPJ2000"))
+        for (t, base) in (
+                ("2002 JUN 01 TDB", "IAU_EARTH"), ("2005 JUN 01 TDB", "ECLIPJ2000"),
+                ("2008 JUN 01 TDB", "ECLIPJ2000"),
+            )
             @test pxform(c, "J2000", "DT_SWITCH_IDS", y(t)) == pxform(c, "J2000", base, y(t))
-            @test maximum(abs.(pxform(c, "J2000", "DT_SWITCH_IDS", y(t)) .-
-                               SPICE.pxform("J2000", "DT_SWITCH_IDS", y(t)))) <= DF_DEFAULT_TOL[1]
+            @test maximum(
+                abs.(
+                    pxform(c, "J2000", "DT_SWITCH_IDS", y(t)) .-
+                        SPICE.pxform("J2000", "DT_SWITCH_IDS", y(t))
+                )
+            ) <= DF_DEFAULT_TOL[1]
         end
         @test df_neo_kind(() -> pxform(c, "J2000", "DT_SWITCH_IDS", y("2012 JUN 01 TDB"))) ===
-              df_oracle_kind(:pxform_c, "J2000", "DT_SWITCH_IDS", y("2012 JUN 01 TDB")) === :noframeconnect
+            df_oracle_kind(:pxform_c, "J2000", "DT_SWITCH_IDS", y("2012 JUN 01 TDB")) === :noframeconnect
         for (name, kind) in (("DT_BADTYPE", :badvariabletype), ("DT_BADSIZE", :badvariablesize))
             @test df_neo_kind(() -> pxform(c, "J2000", name, 0.0)) ===
-                  df_oracle_kind(:pxform_c, "J2000", name, 0.0) === kind
+                df_oracle_kind(:pxform_c, "J2000", name, 0.0) === kind
         end
     end
 
@@ -538,17 +584,19 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
         SPICE.kclear(); foreach(SPICE.furnsh, set); SPICE.pdpool("FRAME_1850013_ANGLE_2_COEFFS", [0.2])
         b = pxform(c, "J2000", "DT_EULER", et)
         @test b != a
-        @test maximum(abs.(b .- SPICE.pxform("J2000", "DT_EULER", et))) <= 5e-14
+        @test maximum(abs.(b .- SPICE.pxform("J2000", "DT_EULER", et))) <= 5.0e-14
         unload(c, DynFix.frame_kernel())
         @test namfrm(c, "DT_EULER") == 0
         @test Almanac.kernelset(c).inner === nothing
         @test throws_kind(() -> pxform(c, "J2000", "DT_EULER", et), :unknownframe) ||
-              throws_kind(() -> pxform(c, "J2000", "DT_EULER", et), :noframe)
+            throws_kind(() -> pxform(c, "J2000", "DT_EULER", et), :noframe)
     end
 
     @apart @testset "switch frames over CK frames" begin
-        set3 = [Kernels.LSK, Kernels.PCK11, Kernels.DE440S, CKFix.all_kernels()...,
-            DynFix.switch_ck_kernel()]
+        set3 = [
+            Kernels.LSK, Kernels.PCK11, Kernels.DE440S, CKFix.all_kernels()...,
+            DynFix.switch_ck_kernel(),
+        ]
         oracle_load(set3)
         c = neo_context(set3)
         tk = CKFix.ticks_tdb()
@@ -557,12 +605,14 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
         # CSPICE keeps the segment of the last CK search of an instrument, and its answer
         # can then depend on the earlier calls (see `test_ck.jl`). A search far outside
         # the coverage clears that state before each query of the oracle.
-        reset() = foreach(i -> (@assert SPICE.ckgp(i, 1e11, 0.0, "J2000") === nothing),
-            (-77001, -77002, -77003, -77013))
+        reset() = foreach(
+            i -> (@assert SPICE.ckgp(i, 1.0e11, 0.0, "J2000") === nothing),
+            (-77001, -77002, -77003, -77013)
+        )
         for name in ("DT_SWITCH_CK", "DT_SWITCH_CK_NOAV")
             dp = Float64[]; ds = Float64[]
             bases = name == "DT_SWITCH_CK" ? ("IAU_EARTH", "TESTSC_T3", "TESTSC_T2") :
-                    ("ECLIPJ2000", "TESTSC_T1", "TESTSC_T3_NOAV")
+                ("ECLIPJ2000", "TESTSC_T1", "TESTSC_T3_NOAV")
             used = zeros(Int, 3)
             nerr = 0
             for et in random_epochs(rng, 500, t0, t1)
@@ -589,8 +639,8 @@ group("17. dynamic frames and switch frames against CSPICE", Kernels.LSK, Kernel
             println("  ", name, ": bases used (lowest priority first) ", used, ", epochs with an error: ", nerr)
             s1 = report_quantiles("$name: pxform element", dp)
             s2 = report_quantiles("$name: sxform element", ds)
-            @test s1.max <= 1e-12
-            @test s2.max <= 1e-12
+            @test s1.max <= 1.0e-12
+            @test s2.max <= 1.0e-12
             @test count(>(0), used) >= 2
         end
     end

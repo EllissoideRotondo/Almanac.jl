@@ -12,10 +12,14 @@ group("ad tracked", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
     ctx, epochs, default, full = ad_setup()
     # Tracker has no arithmetic between a `Dual` and a `TrackedReal`, so ForwardDiff runs
     # over ReverseDiff only.
-    for (bname, backend, nested) in (("ReverseDiff", AutoReverseDiff(), true),
-            ("Tracker", AutoTracker(), false))
-        ad_check(bname, backend, ctx, epochs, default, full;
-            gradient=true, batched=false, nested)
+    for (bname, backend, nested) in (
+            ("ReverseDiff", AutoReverseDiff(), true),
+            ("Tracker", AutoTracker(), false),
+        )
+        ad_check(
+            bname, backend, ctx, epochs, default, full;
+            gradient = true, batched = false, nested
+        )
         ad_orbit_check(bname, backend)
         @testset "$bname: a plain-epoch call refuses a tracked epoch" begin
             lst(t) = et2lst(ctx, t, 399, 0.0, "PLANETOCENTRIC")[1]

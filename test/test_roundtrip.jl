@@ -18,11 +18,15 @@ group("roundtrip", Kernels.LSK, Kernels.DE440S) do
     dir = mktempdir()
     # --- SPK type 13: a spacecraft near the Earth, states on a smooth curve -------------
     n = 60
-    epochs = collect(range(1.0e8, 1.0e8 + 5900.0, length=n))
+    epochs = collect(range(1.0e8, 1.0e8 + 5900.0, length = n))
     a, w = 7000.0, 1.1e-3
-    states = [[a * cos(w * (t - epochs[1])), a * sin(w * (t - epochs[1])), 30.0 * sin(2w * (t - epochs[1])),
-        -a * w * sin(w * (t - epochs[1])), a * w * cos(w * (t - epochs[1])), 60.0 * w * cos(2w * (t - epochs[1]))]
-        for t in epochs]
+    states = [
+        [
+            a * cos(w * (t - epochs[1])), a * sin(w * (t - epochs[1])), 30.0 * sin(2w * (t - epochs[1])),
+            -a * w * sin(w * (t - epochs[1])), a * w * cos(w * (t - epochs[1])), 60.0 * w * cos(2w * (t - epochs[1])),
+        ]
+            for t in epochs
+    ]
     bsp = joinpath(dir, "roundtrip.bsp")
     h = spkopn(bsp, "roundtrip", 0)
     spkw13(h, -901, 399, "J2000", epochs[1], epochs[end], "type 13 round trip", 7, states, epochs)
@@ -32,7 +36,8 @@ group("roundtrip", Kernels.LSK, Kernels.DE440S) do
 
     # --- CK type 3 with a type 1 clock --------------------------------------------------
     tsc = joinpath(dir, "roundtrip.tsc")
-    write(tsc, """
+    write(
+        tsc, """
         \\begindata
         SCLK_KERNEL_ID            = ( @2026-10-11 )
         SCLK_DATA_TYPE_901        = ( 1 )
@@ -45,9 +50,11 @@ group("roundtrip", Kernels.LSK, Kernels.DE440S) do
         SCLK_PARTITION_END_901    = ( 4.294967296E+12 )
         SCLK01_COEFFICIENTS_901   = ( 0.0  0.0  1.0 )
         \\begintext
-        """)
+        """
+    )
     tf = joinpath(dir, "roundtrip.tf")
-    write(tf, """
+    write(
+        tf, """
         \\begindata
         FRAME_RT_BUS              = -901000
         FRAME_-901000_NAME        = 'RT_BUS'
@@ -57,7 +64,8 @@ group("roundtrip", Kernels.LSK, Kernels.DE440S) do
         CK_-901000_SCLK           = -901
         CK_-901000_SPK            = -901
         \\begintext
-        """)
+        """
+    )
     ticks = [1000.0 * t for t in epochs]          # 1000 ticks per second, ET = seconds
     quats = map(epochs) do t
         ang = 2.0e-3 * (t - epochs[1])
@@ -67,8 +75,10 @@ group("roundtrip", Kernels.LSK, Kernels.DE440S) do
     avvs = [collect(2.0e-3 * normalize(SVector(0.3, -0.5, 0.8))) for _ in epochs]
     bc = joinpath(dir, "roundtrip.bc")
     h = ckopn(bc, "roundtrip", 0)
-    ckw03(h, ticks[1], ticks[end], -901000, "J2000", "type 3 round trip", ticks, quats,
-        avvs, [ticks[1]])
+    ckw03(
+        h, ticks[1], ticks[end], -901000, "J2000", "type 3 round trip", ticks, quats,
+        avvs, [ticks[1]]
+    )
     ckcls(h)
     @test getfat(bc) == ("DAF", "CK")
 
@@ -85,10 +95,10 @@ group("roundtrip", Kernels.LSK, Kernels.DE440S) do
             worst = max(worst, norm(s - sc) / norm(sc))
         end
         measured(@sprintf("  %-58s max=%.3e", "round trip type 13, state against CSPICE, relative", worst))
-        @test worst <= 1e-14
+        @test worst <= 1.0e-14
         # The states at the knots are the states that were written.
         for k in (1, 7, n)
-            @test isapprox(spkezr(ctx, -901, epochs[k], "J2000", "NONE", 399)[1], states[k]; rtol=1e-14)
+            @test isapprox(spkezr(ctx, -901, epochs[k], "J2000", "NONE", 399)[1], states[k]; rtol = 1.0e-14)
         end
         @test spkcov(bsp, -901)[1] == epochs[1]
     end
@@ -103,10 +113,10 @@ group("roundtrip", Kernels.LSK, Kernels.DE440S) do
         end
         @test allfound
         measured(@sprintf("  %-58s max=%.3e", "round trip type 3 CK, pxform against CSPICE, absolute", worst))
-        @test worst <= 1e-14
+        @test worst <= 1.0e-14
         s = spkezr(ctx, 301, ets[5], "RT_BUS", "LT+S", -901)[1]
         sc = SPICE.spkezr("301", ets[5], "RT_BUS", "LT+S", "-901")[1]
-        @test isapprox(s, sc; rtol=1e-10)
+        @test isapprox(s, sc; rtol = 1.0e-10)
     end
     # CSPICE keeps a loaded binary kernel open, and a context keeps it mapped until the
     # garbage collector frees the snapshot; Windows deletes neither kind of file.

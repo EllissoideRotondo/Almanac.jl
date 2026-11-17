@@ -18,17 +18,21 @@ Contract: returns the leap-second data when `pool` has all of `DELTET/DELTA_T_A`
 `DELTET/K`, `DELTET/EB`, `DELTET/M` (two values) and `DELTET/DELTA_AT` (a non-empty
 list of pairs) as numeric variables, and `nothing` otherwise.
 """
-function build_lsk(pool::AbstractDict{String,PoolValue})::Union{Nothing,LeapSeconds}
+function build_lsk(pool::AbstractDict{String, PoolValue})::Union{Nothing, LeapSeconds}
     num(key) = begin
         v = get(pool, key, nothing)
         v isa Vector{Float64} ? v : nothing
     end
     dta, k, eb = num("DELTET/DELTA_T_A"), num("DELTET/K"), num("DELTET/EB")
     m, dat = num("DELTET/M"), num("DELTET/DELTA_AT")
-    (dta === nothing || k === nothing || eb === nothing || m === nothing ||
-     dat === nothing) && return nothing
-    (isempty(dta) || isempty(k) || isempty(eb) || length(m) < 2 || length(dat) < 2 ||
-     isodd(length(dat))) && return nothing
+    (
+        dta === nothing || k === nothing || eb === nothing || m === nothing ||
+            dat === nothing
+    ) && return nothing
+    (
+        isempty(dta) || isempty(k) || isempty(eb) || length(m) < 2 || length(dat) < 2 ||
+            isodd(length(dat))
+    ) && return nothing
     return LeapSeconds(dta[1], k[1], eb[1], (m[1], m[2]), copy(dat))
 end
 
@@ -40,13 +44,17 @@ is loaded. CSPICE signals another message by call: NOLEAPSECONDS in `ttrans` and
 calls it, MISSINGTIMEINFO in `unitim`, `timout`, `et2utc` and the spacecraft clocks,
 KERNELVARNOTFOUND in `deltet`.
 """
-function _lsk(ks::KernelSet, kind::Symbol=:noleapseconds)::LeapSeconds
+function _lsk(ks::KernelSet, kind::Symbol = :noleapseconds)::LeapSeconds
     l = ks.lsk
     l === nothing && _throw_nolsk(kind)
     return l
 end
-@noinline _throw_nolsk(kind::Symbol) = throw(SpiceError(kind,
-    "no leap-second kernel is loaded; load one (for example naif0012.tls) with furnsh"))
+@noinline _throw_nolsk(kind::Symbol) = throw(
+    SpiceError(
+        kind,
+        "no leap-second kernel is loaded; load one (for example naif0012.tls) with furnsh"
+    )
+)
 
 "Contract: `b` is upper case; returns whether `a` equals `b` when case is ignored, without allocation."
 _eqci(a::AbstractString, b::AbstractString) =
@@ -78,8 +86,12 @@ function deltet(ks::KernelSet, epoch::Real, eptype::AbstractString)::Float64
     l = _lsk(ks, :kernelvarnotfound)
     typ = strip(eptype)
     isutc = _eqci(typ, "UTC")
-    isutc || _eqci(typ, "ET") || throw(SpiceError(:badepochtype,
-        "the epoch type '$eptype' is neither 'UTC' nor 'ET'"))
+    isutc || _eqci(typ, "ET") || throw(
+        SpiceError(
+            :badepochtype,
+            "the epoch type '$eptype' is neither 'UTC' nor 'ET'"
+        )
+    )
     t = primal(epoch)
     dleap = l.delta_at
     dta, k, eb = l.delta_t_a, l.k, l.eb
@@ -87,19 +99,19 @@ function deltet(ks::KernelSet, epoch::Real, eptype::AbstractString)::Float64
     leaps = dleap[1] - 1.0
     # Loop invariant: `leaps` is TAI - UTC of the last pair before `i` whose epoch is
     # not after `t`, or one second less than the first value if there is none.
-    @inbounds for i in 1:2:length(dleap)-1
+    @inbounds for i in 1:2:(length(dleap) - 1)
         if isutc
-            t >= dleap[i+1] && (leaps = dleap[i])
-        elseif t > dleap[i+1]
-            aet = round(dleap[i+1] + dta + dleap[i], RoundNearestTiesAway)
+            t >= dleap[i + 1] && (leaps = dleap[i])
+        elseif t > dleap[i + 1]
+            aet = round(dleap[i + 1] + dta + dleap[i], RoundNearestTiesAway)
             ma = m0 + m1 * aet
             ea = ma + eb * sin(ma)
-            et = dleap[i+1] + dta + dleap[i] + k * sin(ea)
+            et = dleap[i + 1] + dta + dleap[i] + k * sin(ea)
             t >= et && (leaps = dleap[i])
         end
     end
     aet = isutc ? round(t + dta + leaps, RoundNearestTiesAway) :
-          round(t, RoundNearestTiesAway)
+        round(t, RoundNearestTiesAway)
     ma = m0 + m1 * aet
     ea = ma + eb * sin(ma)
     return dta + leaps + k * sin(ea)
@@ -119,7 +131,7 @@ _leap(year::Int) = (year % 4 == 0) - (year % 100 == 0) + (year % 400 == 0)
 function _daynum(year::Int, month::Int, day::Int)::Int
     y = year - 1
     return y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
-           (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1
+        (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1
 end
 
 const _DN2000 = _daynum(2000, 1, 1)
@@ -142,9 +154,9 @@ function _calendar(daynum::Int)
     dofyr = rem + 1
     year = yr400 * 400 + yr100 * 100 + yr4 * 4 + yr1 + 1
     tab = (mod(year, 4) == 0) - (mod(year, 100) == 0) + (mod(year, 400) == 0) == 0 ?
-          _DPJAN0 : _DPBEGL
+        _DPJAN0 : _DPBEGL
     month = 1
-    while month < 12 && tab[month+1] < dofyr
+    while month < 12 && tab[month + 1] < dofyr
         month += 1
     end
     return year, month, dofyr - tab[month], dofyr
@@ -154,13 +166,13 @@ end
 @inline function _taitab(l::LeapSeconds, i::Int)::Float64
     d = l.delta_at
     j = (i + 1) >> 1
-    @inbounds begin
+    return @inbounds begin
         formal = d[2j]
         if isodd(i)
-            lastdt = j == 1 ? d[1] - 1.0 : d[2j-3]
+            lastdt = j == 1 ? d[1] - 1.0 : d[2j - 3]
             return formal - _SPD + lastdt
         else
-            return formal + d[2j-1]
+            return formal + d[2j - 1]
         end
     end
 end
@@ -365,7 +377,7 @@ const _SUNDAY = _tt_daynum(1991, 1, 6)
     tab = leap ? _DPBEGL : _DPJAN0
     month = 1
     # Loop invariant: `tab[month] < dofyr`.
-    while month < 12 && tab[month+1] < dofyr
+    while month < 12 && tab[month + 1] < dofyr
         month += 1
     end
     return month, dofyr - tab[month]
@@ -410,7 +422,7 @@ function jul2gr(year::Integer, month::Integer, day::Integer)
     end
     jleap = yr % 4 == 0 ? 1 : 0
     dayj = (yr - 1) * 365 + div(yr - 1, 4) + (_DPJAN0[mon] + (mon > 2 ? jleap : 0) + Int(day)) -
-           1 + offset
+        1 + offset
     m400, dayg = fldmod(dayj + _OFFSTG, 146097)
     m100 = min(3, div(dayg, 36524))
     dayg -= m100 * 36524
@@ -479,7 +491,7 @@ function _eqsys(a::AbstractString, b::String)::Bool
         (UInt8('a') <= c <= UInt8('z')) && (c -= 0x20)
         c == cb[i] || return false
     end
-    @inbounds for i in n+1:length(ca)
+    @inbounds for i in (n + 1):length(ca)
         ca[i] == UInt8(' ') || return false
     end
     return true
@@ -577,18 +589,24 @@ function unitim(ks::KernelSet, epoch::Real, insys::AbstractString, outsys::Abstr
     return _unitim(l, epoch, i, o)
 end
 
-@noinline _unitim_error(insys, outsys) = throw(SpiceError(:badtimetype,
-    "one of the time scales '$insys' and '$outsys' is not a uniform scale; the scales " *
-    "are TAI, TDT, TT, GPS, JDTDT, TDB, ET, JDTDB and JED"))
+@noinline _unitim_error(insys, outsys) = throw(
+    SpiceError(
+        :badtimetype,
+        "one of the time scales '$insys' and '$outsys' is not a uniform scale; the scales " *
+            "are TAI, TDT, TT, GPS, JDTDT, TDB, ET, JDTDB and JED"
+    )
+)
 
 # ---------------------------------------------------------------------------------
 # Time vectors: TTRANS
 # ---------------------------------------------------------------------------------
 
 # Codes of the representations of `ttrans`, in the order of its sorted name table.
-const _TT_NAMES = ("DAYSEC", "DP2000", "ET", "FORMAL", "JDTDB", "JDTDT", "JDUTC", "JED",
+const _TT_NAMES = (
+    "DAYSEC", "DP2000", "ET", "FORMAL", "JDTDB", "JDTDT", "JDUTC", "JED",
     "TAI", "TDB", "TDT", "YD", "YD.D", "YD.DF", "YDF", "YMD", "YMDF", "YMWD", "YMWDF", "YWD",
-    "YWDF")
+    "YWDF",
+)
 const _TT_DAYSEC = 1
 const _TT_DP2000 = 2
 const _TT_ET = 3
@@ -613,7 +631,7 @@ const _TT_YWDF = 21
 
 "Contract: `1 <= p <= 21`; returns whether representation `p` is formal, that is, counts every day as 86400 seconds."
 @inline _tt_formal(p::Int) = p == _TT_FORMAL || p == _TT_JDUTC || p == _TT_YDDF ||
-                             p == _TT_YDF || p == _TT_YMDF || p == _TT_YMWDF || p == _TT_YWDF
+    p == _TT_YDF || p == _TT_YMDF || p == _TT_YMWDF || p == _TT_YWDF
 
 "Contract: returns the `unitim` code of the uniform representation `p` of `ttrans`, or 0 if `p` is not uniform."
 @inline function _tt_uniform(p::Int)::Int
@@ -634,9 +652,9 @@ function _tt_code(name::AbstractString)::Int
     return i === nothing ? 0 : i
 end
 
-const TVec = NTuple{7,Float64}
+const TVec = NTuple{7, Float64}
 
-@inline _tvec(x::Vararg{Real,N}) where {N} = ntuple(i -> i <= N ? Float64(x[i]) : 0.0, Val(7))
+@inline _tvec(x::Vararg{Real, N}) where {N} = ntuple(i -> i <= N ? Float64(x[i]) : 0.0, Val(7))
 
 """
     _ttrans(l, pfrom, pto, tv) -> NTuple{7,Float64}
@@ -692,8 +710,13 @@ function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
         secs = tv[4] * 3600.0 + tv[5] * 60.0 + tv[6]
     elseif pfrom == _TT_YMWD || pfrom == _TT_YMWDF
         month = _cint(tv[2])
-        (1 <= month <= 12) || throw(SpiceError(:badtime,
-            "the month $month of a year-month-week-day time vector is not in 1..12"))
+        # CSPICE aborts here on a subscript out of range (BADSUBSCRIPT)
+        (1 <= month <= 12) || throw(
+            SpiceError(
+                :badsubscript,
+                "the month $month of a year-month-week-day time vector is not in 1..12"
+            )
+        )
         week = _cint(tv[3]) - 1
         day = _cint(tv[4])
         daynum = _tt_daynum(_cint(tv[1]), month, 1)
@@ -754,8 +777,10 @@ function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
     elseif pto == _TT_YMWD || pto == _TT_YMWDF
         week = div(daynum - _tt_daynum(year, month, 1), 7) + 1
         wday = mod(daynum - _SUNDAY, 7)
-        return (Float64(year), Float64(month), Float64(week), Float64(wday) + 1.0, hours, mins,
-            tsecs)
+        return (
+            Float64(year), Float64(month), Float64(week), Float64(wday) + 1.0, hours, mins,
+            tsecs,
+        )
     else
         tai = _day_to_tai(l, daynum, secs)
         return Base.setindex(tv, _unitim(l, tai, _US_TAI, _tt_uniform(pto)), 1)
@@ -777,9 +802,17 @@ function ttrans(ks::KernelSet, from::AbstractString, to::AbstractString, tv)
     l = _lsk(ks)
     pfrom = _tt_code(from)
     pto = _tt_code(to)
-    pfrom == 0 && throw(SpiceError(:badtimetype,
-        "the time-vector representation '$from' is not one that ttrans knows"))
-    pto == 0 && throw(SpiceError(:badtimetype,
-        "the time-vector representation '$to' is not one that ttrans knows"))
+    pfrom == 0 && throw(
+        SpiceError(
+            :badtimetype,
+            "the time-vector representation '$from' is not one that ttrans knows"
+        )
+    )
+    pto == 0 && throw(
+        SpiceError(
+            :badtimetype,
+            "the time-vector representation '$to' is not one that ttrans knows"
+        )
+    )
     return _ttrans(l, pfrom, pto, _tvec(tv...))
 end

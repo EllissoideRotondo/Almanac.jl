@@ -53,7 +53,7 @@ struct DSKDescr
     dtype::Int
     frmcde::Int
     corsys::Int
-    corpar::NTuple{10,Float64}
+    corpar::NTuple{10, Float64}
     co1min::Float64
     co1max::Float64
     co2min::Float64
@@ -76,10 +76,10 @@ struct DSK02Header
     nv::Int
     np::Int
     nvxtot::Int
-    vtxbds::NTuple{6,Float64}
+    vtxbds::NTuple{6, Float64}
     voxsiz::Float64
-    voxori::SVector{3,Float64}
-    vgrext::NTuple{3,Int}
+    voxori::SVector{3, Float64}
+    vgrext::NTuple{3, Int}
     cgscal::Int
     vtxnpl::Int
     voxnpt::Int
@@ -109,7 +109,7 @@ struct DSKSegment
     file::Int32
     dladsc::DLADescr
     dskdsc::DSKDescr
-    boxctr::SVector{3,Float64}
+    boxctr::SVector{3, Float64}
     boxrad::Float64
     hdr::DSK02Header
 end
@@ -151,10 +151,12 @@ mutable struct DSKTolerances
 end
 
 "The tolerances of CSPICE at start."
-DSKTolerances() = DSKTolerances(1e-10, 1e-8, 1e-10, 1e-7, 1e-12, 1e-12)
+DSKTolerances() = DSKTolerances(1.0e-10, 1.0e-8, 1.0e-10, 1.0e-7, 1.0e-12, 1.0e-12)
 
-_dsk_withfile(s::DSKSegment, file::Integer) = DSKSegment(Int32(file), s.dladsc, s.dskdsc, s.boxctr,
-    s.boxrad, s.hdr)
+_dsk_withfile(s::DSKSegment, file::Integer) = DSKSegment(
+    Int32(file), s.dladsc, s.dskdsc, s.boxctr,
+    s.boxrad, s.hdr
+)
 
 """
     _dsk_segment_table(files) -> Dict{Int32,Vector{DSKSegment}}
@@ -164,7 +166,7 @@ order of CSPICE: later file first, and inside one file later segment first. Each
 segment gets the number of its file.
 """
 function _dsk_segment_table(files::Vector{DSKFile})
-    table = Dict{Int32,Vector{DSKSegment}}()
+    table = Dict{Int32, Vector{DSKSegment}}()
     for i in length(files):-1:1
         segs = files[i].segments
         for j in length(segs):-1:1

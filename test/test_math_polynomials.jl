@@ -42,7 +42,7 @@ group("20. math: polynomials and interpolation") do
         for _ in 1:n
             cp = [rval() for _ in 1:rand(rng, 1:21)]
             rad = 10.0^(6 * rand(rng) - 3)
-            x2s = [1e3 * randn(rng), rad]
+            x2s = [1.0e3 * randn(rng), rad]
             x = x2s[1] + rad * (2.4 * rand(rng) - 1.2)
             versus!(t, :chbval, () -> chbval(cp, x2s, x), () -> CS.chbval(cp, x2s, x))
             versus!(t, :chbint, () -> chbint(cp, x2s, x), () -> CS.chbint(cp, x2s, x))
@@ -56,10 +56,10 @@ group("20. math: polynomials and interpolation") do
         end
         # chbint and chbder give the derivative of chbval; chbigr its integral
         cp, x2s = [0.3, -1.2, 0.8, 0.25, -0.1], [2.0, 3.0]
-        @test chbint(cp, x2s, 2.7)[2] ≈ ForwardDiff.derivative(x -> chbval(cp, x2s, x), 2.7) rtol = 1e-14
-        @test chbder(cp, x2s, 2.7, 2)[3] ≈ ForwardDiff.derivative(x -> chbint(cp, x2s, x)[2], 2.7) rtol = 1e-14
-        h = 1e-5
-        @test (chbigr(cp, x2s, 3.1 + h)[2] - chbigr(cp, x2s, 3.1 - h)[2]) / 2h ≈ chbval(cp, x2s, 3.1) rtol = 1e-9
+        @test chbint(cp, x2s, 2.7)[2] ≈ ForwardDiff.derivative(x -> chbval(cp, x2s, x), 2.7) rtol = 1.0e-14
+        @test chbder(cp, x2s, 2.7, 2)[3] ≈ ForwardDiff.derivative(x -> chbint(cp, x2s, x)[2], 2.7) rtol = 1.0e-14
+        h = 1.0e-5
+        @test (chbigr(cp, x2s, 3.1 + h)[2] - chbigr(cp, x2s, 3.1 - h)[2]) / 2h ≈ chbval(cp, x2s, 3.1) rtol = 1.0e-9
         @test chbigr(cp, x2s, 2.0)[2] == 0.0
         @test throws_kind(() -> chbval(Float64[], x2s, 1.0), :invaliddegree)
         @test throws_kind(() -> chbval(cp, [1.0], 1.0), :badarg)
@@ -101,10 +101,10 @@ group("20. math: polynomials and interpolation") do
         p(x) = 2.0 - x + 0.5x^2 - 0.25x^3
         dp(x) = -1.0 + x - 0.75x^2
         xs = [-1.0, 0.5, 2.0, 3.0]
-        @test lgrint(xs, p.(xs), 1.3) ≈ p(1.3) rtol = 1e-14
+        @test lgrint(xs, p.(xs), 1.3) ≈ p(1.3) rtol = 1.0e-14
         @test all(lgrind(xs, p.(xs), 1.3) .≈ (p(1.3), dp(1.3)))
         @test all(hrmint(xs[1:2], [p(-1.0), dp(-1.0), p(0.5), dp(0.5)], 1.3) .≈ (p(1.3), dp(1.3)))
-        @test lgresp(-1.0, 1.5, p.([-1.0, 0.5, 2.0, 3.5]), 1.3) ≈ p(1.3) rtol = 1e-14
+        @test lgresp(-1.0, 1.5, p.([-1.0, 0.5, 2.0, 3.5]), 1.3) ≈ p(1.3) rtol = 1.0e-14
     end
 
     @apart @testset "derivatives of a polynomial and numerical derivative" begin
@@ -134,7 +134,7 @@ group("20. math: polynomials and interpolation") do
             # a zero or a negative discriminant, and coefficients of very different size
             v = rand(rng)
             v < 0.1 && (c = b * b / (4a))
-            v > 0.9 && ((a, c) = (1e-300 * a, 1e300 * c))
+            v > 0.9 && ((a, c) = (1.0e-300 * a, 1.0e300 * c))
             (a == 0.0 && b == 0.0) && (b = 1.0)     # see the note on the degenerate case
             versus!(t, :rquad, () -> rquad(a, b, c), () -> CS.rquad(a, b, c))
             s = [rval() 0.0; 0.0 rval()]
@@ -149,7 +149,7 @@ group("20. math: polynomials and interpolation") do
         measured(@sprintf("  diags2: residual %.1e, |det(rotate) - 1| %.1e", resid, rotdev))
         # The residual is rounding of the products: up to 4.9e-14 measured in the
         # exhaustive sample, where the two diagonal values differ by many orders.
-        @test resid < 1e-13 && rotdev < 1e-15
+        @test resid < 1.0e-13 && rotdev < 1.0e-15
         # `rquad_c` signals SPICE(DEGENERATECASE) for a == b == 0 (measured); its
         # traceback then has a wrong routine name, so the case is not sent to CSPICE.
         @test throws_kind(() -> rquad(0.0, 0.0, 1.0), :degeneratecase)
@@ -158,38 +158,40 @@ group("20. math: polynomials and interpolation") do
     end
 
     @apart @testset "differences against CSPICE" begin
-        report!(t, "polynomials"; tol=0.0)
+        report!(t, "polynomials"; tol = 0.0)
     end
 
     @apart @testset "number types: ForwardDiff and Taylor" begin
         xs, ys = [0.0, 1.0, 2.5, 4.0], [1.0, -2.0, 0.5, 3.0]
-        @test ForwardDiff.derivative(x -> lgrint(xs, ys, x), 1.7) ≈ lgrind(xs, ys, 1.7)[2] rtol = 1e-14
+        @test ForwardDiff.derivative(x -> lgrint(xs, ys, x), 1.7) ≈ lgrind(xs, ys, 1.7)[2] rtol = 1.0e-14
         # the derivative with respect to the data: a Lagrange basis polynomial
         g = ForwardDiff.gradient(y -> lgrint(xs, y, 1.7), ys)
-        @test g ≈ [lgrint(xs, Float64.(1:4 .== i), 1.7) for i in 1:4] rtol = 1e-14
+        @test g ≈ [lgrint(xs, Float64.(1:4 .== i), 1.7) for i in 1:4] rtol = 1.0e-14
         yd = [1.0, 0.5, -2.0, 1.0, 0.5, 0.0, 3.0, -1.0]
-        @test ForwardDiff.derivative(x -> hrmint(xs, yd, x)[1], 1.7) ≈ hrmint(xs, yd, 1.7)[2] rtol = 1e-13
+        @test ForwardDiff.derivative(x -> hrmint(xs, yd, x)[1], 1.7) ≈ hrmint(xs, yd, 1.7)[2] rtol = 1.0e-13
         tt = Almanac.taylor_var(1.7, Val(2))
         p = lgrind(xs, ys, tt)[1]
-        @test Almanac.derivatives(p)[2] ≈ lgrind(xs, ys, 1.7)[2] rtol = 1e-14
+        @test Almanac.derivatives(p)[2] ≈ lgrind(xs, ys, 1.7)[2] rtol = 1.0e-14
         cp, x2s = [0.3, -1.2, 0.8, 0.25], [2.0, 3.0]
         q = chbval(cp, x2s, tt)
-        @test collect(Almanac.derivatives(q)) ≈ chbder(cp, x2s, 1.7, 2) rtol = 1e-14
-        @test ForwardDiff.derivative(x -> rquad(1.0, -x, 2.0)[1][1], 3.0) ≈ (1 + 3 / sqrt(1.0)) / 2 rtol = 1e-14
+        @test collect(Almanac.derivatives(q)) ≈ chbder(cp, x2s, 1.7, 2) rtol = 1.0e-14
+        @test ForwardDiff.derivative(x -> rquad(1.0, -x, 2.0)[1][1], 3.0) ≈ (1 + 3 / sqrt(1.0)) / 2 rtol = 1.0e-14
     end
 
     @apart @testset "inferred types and no allocation for static arguments" begin
         xs, ys = SVector(0.0, 1.0, 2.5, 4.0), SVector(1.0, -2.0, 0.5, 3.0)
         yd = SVector(1.0, 0.5, -2.0, 1.0, 0.5, 0.0, 3.0, -1.0)
         cp, x2s = SVector(0.3, -1.2, 0.8, 0.25), SVector(2.0, 3.0)
-        s = SMatrix{2,2}(2.0, 1.0, 1.0, 3.0)
-        M2 = SMatrix{2,2,Float64,4}
-        calls = Any[(lgrint, (xs, ys, 1.7), Float64), (lgrind, (xs, ys, 1.7), NTuple{2,Float64}),
-            (lgresp, (0.0, 1.5, ys, 1.7), Float64), (hrmint, (xs, yd, 1.7), NTuple{2,Float64}),
-            (hrmesp, (0.0, 1.5, yd, 1.7), NTuple{2,Float64}), (chbval, (cp, x2s, 1.7), Float64),
-            (chbint, (cp, x2s, 1.7), NTuple{2,Float64}), (chbigr, (cp, x2s, 1.7), NTuple{2,Float64}),
-            (qderiv, (xs, ys, 0.5), SVector{4,Float64}),
-            (rquad, (1.0, 2.0, 3.0), NTuple{2,SVector{2,Float64}}), (diags2, (s,), Tuple{M2,M2})]
+        s = SMatrix{2, 2}(2.0, 1.0, 1.0, 3.0)
+        M2 = SMatrix{2, 2, Float64, 4}
+        calls = Any[
+            (lgrint, (xs, ys, 1.7), Float64), (lgrind, (xs, ys, 1.7), NTuple{2, Float64}),
+            (lgresp, (0.0, 1.5, ys, 1.7), Float64), (hrmint, (xs, yd, 1.7), NTuple{2, Float64}),
+            (hrmesp, (0.0, 1.5, yd, 1.7), NTuple{2, Float64}), (chbval, (cp, x2s, 1.7), Float64),
+            (chbint, (cp, x2s, 1.7), NTuple{2, Float64}), (chbigr, (cp, x2s, 1.7), NTuple{2, Float64}),
+            (qderiv, (xs, ys, 0.5), SVector{4, Float64}),
+            (rquad, (1.0, 2.0, 3.0), NTuple{2, SVector{2, Float64}}), (diags2, (s,), Tuple{M2, M2}),
+        ]
         for (f, args, T) in calls
             @test (@inferred f(args...)) isa T
             @test alloc_of(f, args...) == 0 skip = STACK_BUFFERS_ESCAPE && f in (lgrint, lgrind)

@@ -46,7 +46,7 @@ julia> getfat(path)
 See also [`ckw01`](@ref), [`ckw02`](@ref), [`ckw03`](@ref), [`ckw05`](@ref),
 [`ckw06`](@ref), [`dafac`](@ref) to add comments.
 """
-function ckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer=0)
+function ckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
     _seg_chkfstr("ckopn", "path", path)
     _seg_chkfstr("ckopn", "ifname", ifname)
     ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
@@ -66,10 +66,14 @@ segment. The handle then stays open; close it with [`dafcls`](@ref).
 """
 ckcls(h::DAFHandle) = _seg_close(h, "CK")
 
-function _ck_add!(h::DAFHandle, inst::Integer, refcod::Int, dtype::Int, avflag::Bool,
-        begtim::Real, endtim::Real, segid::AbstractString, data::Vector{Float64})
-    _daf_add_array!(h, Float64[begtim, endtim], Int[inst, refcod, dtype, avflag ? 1 : 0, 0, 0],
-        segid, data)
+function _ck_add!(
+        h::DAFHandle, inst::Integer, refcod::Int, dtype::Int, avflag::Bool,
+        begtim::Real, endtim::Real, segid::AbstractString, data::Vector{Float64}
+    )
+    _daf_add_array!(
+        h, Float64[begtim, endtim], Int[inst, refcod, dtype, avflag ? 1 : 0, 0, 0],
+        segid, data
+    )
     return nothing
 end
 
@@ -82,8 +86,12 @@ hold `nrec` vectors. Another count throws `SpiceError(:badarg)`.
 function _ck_avvs(who::AbstractString, avvs, nrec::Int)
     avvs === nothing && return Float64[], false
     av, n, _ = _seg_flat(who, "avvs", avvs, 3)
-    n == nrec || throw(SpiceError(:badarg,
-        "$who: `avvs` must have $nrec elements (or be `nothing`) but has $n"))
+    n == nrec || throw(
+        SpiceError(
+            :badarg,
+            "$who: `avvs` must have $nrec elements (or be `nothing`) but has $n"
+        )
+    )
     return av, true
 end
 
@@ -91,17 +99,27 @@ end
 function _ck_nonzero_quats(who::AbstractString, flat::Vector{Float64}, n::Int, step::Int)
     for i in 1:n
         base = (i - 1) * step
-        (flat[base+1] == 0.0 && flat[base+2] == 0.0 && flat[base+3] == 0.0 &&
-            flat[base+4] == 0.0) && throw(SpiceError(:zeroquaternion,
-            "$who: the quaternion at index $i has magnitude zero"))
+        (
+            flat[base + 1] == 0.0 && flat[base + 2] == 0.0 && flat[base + 3] == 0.0 &&
+                flat[base + 4] == 0.0
+        ) && throw(
+            SpiceError(
+                :zeroquaternion,
+                "$who: the quaternion at index $i has magnitude zero"
+            )
+        )
     end
     return nothing
 end
 
 function _ck_increasing(who::AbstractString, what::AbstractString, t::Vector{Float64})
     for i in 2:length(t)
-        t[i] <= t[i-1] && throw(SpiceError(:timesoutoforder, "$who: the $what times are " *
-            "not strictly increasing: $what($(i - 1)) = $(t[i-1]) and $what($i) = $(t[i])"))
+        t[i] <= t[i - 1] && throw(
+            SpiceError(
+                :timesoutoforder, "$who: the $what times are " *
+                    "not strictly increasing: $what($(i - 1)) = $(t[i - 1]) and $what($i) = $(t[i])"
+            )
+        )
     end
     return nothing
 end
@@ -168,8 +186,10 @@ Throws `SpiceError`. Every `ckwNN` writer throws:
 See also [`ckw02`](@ref), [`ckw03`](@ref), [`ckw05`](@ref), [`ckw06`](@ref), and
 [`ckopn`](@ref) for an example.
 """
-function ckw01(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
-        ref::SegFrame, segid::AbstractString, sclkdp, quats, avvs)
+function ckw01(
+        ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
+        ref::SegFrame, segid::AbstractString, sclkdp, quats, avvs
+    )
     who = "ckw01"
     _daf_check_write(h, who)
     ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
@@ -179,12 +199,24 @@ function ckw01(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::
     q, nq, _ = _seg_flat(who, "quats", quats, 4)
     nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
     av, avflag = _ck_avvs(who, avvs, nrec)
-    nrec <= 0 && throw(SpiceError(:invalidnumrec,
-        "$who: $nrec is an invalid number of pointing instances for type 1"))
-    begtim > t[1] && throw(SpiceError(:invaliddescrtime, "$who: the first d.p. component " *
-        "of the descriptor is invalid: DCD(1) = $begtim and SCLKDP(1) = $(t[1])"))
-    endtim < t[nrec] && throw(SpiceError(:invaliddescrtime, "$who: the second d.p. component " *
-        "of the descriptor is invalid: DCD(2) = $endtim and SCLKDP(NREC) = $(t[nrec])"))
+    nrec <= 0 && throw(
+        SpiceError(
+            :invalidnumrec,
+            "$who: $nrec is an invalid number of pointing instances for type 1"
+        )
+    )
+    begtim > t[1] && throw(
+        SpiceError(
+            :invaliddescrtime, "$who: the first d.p. component " *
+                "of the descriptor is invalid: DCD(1) = $begtim and SCLKDP(1) = $(t[1])"
+        )
+    )
+    endtim < t[nrec] && throw(
+        SpiceError(
+            :invaliddescrtime, "$who: the second d.p. component " *
+                "of the descriptor is invalid: DCD(2) = $endtim and SCLKDP(NREC) = $(t[nrec])"
+        )
+    )
     refcod = _seg_refcode(who, ctx, ref)
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
@@ -193,15 +225,17 @@ function ckw01(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::
     _ck_nonzero_quats(who, q, nrec, 4)
     data = _ck_pointing(q, av, nrec, avflag)
     append!(data, t)
-    for i in 1:(nrec-1)÷100              # directory: midpoints between records 100i and 100i+1
-        push!(data, (t[100i] + t[100i+1]) / 2.0)
+    for i in 1:((nrec - 1) ÷ 100)              # directory: midpoints between records 100i and 100i+1
+        push!(data, (t[100i] + t[100i + 1]) / 2.0)
     end
     push!(data, Float64(nrec))
     _ck_add!(h, inst, refcod, 1, avflag, begtim, endtim, segid, data)
     return nothing
 end
-ckw01(h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
-    segid::AbstractString, sclkdp, quats, avvs) =
+ckw01(
+    h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
+    segid::AbstractString, sclkdp, quats, avvs
+) =
     ckw01(default_context(), h, begtim, endtim, inst, ref, segid, sclkdp, quats, avvs)
 
 """
@@ -225,8 +259,10 @@ Throws `SpiceError`:
 - `:badstoptime` if `stop[i-1] > start[i]`;
 - `:zeroquaternion` if a quaternion is zero.
 """
-function ckw02(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
-        ref::SegFrame, segid::AbstractString, start, stop, quats, avvs, rates)
+function ckw02(
+        ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
+        ref::SegFrame, segid::AbstractString, start, stop, quats, avvs, rates
+    )
     who = "ckw02"
     _daf_check_write(h, who)
     ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
@@ -237,26 +273,54 @@ function ckw02(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::
     rt = _seg_vec(who, "rates", rates, nrec)
     q, nq, _ = _seg_flat(who, "quats", quats, 4)
     av, na, _ = _seg_flat(who, "avvs", avvs, 3)
-    (nq == nrec && na == nrec) || throw(SpiceError(:badarg,
-        "$who: `quats` and `avvs` must have $nrec elements but have $nq and $na"))
-    nrec <= 0 && throw(SpiceError(:invalidnumrec,
-        "$who: $nrec is an invalid number of pointing instances for type 2"))
-    begtim > t0[1] && throw(SpiceError(:invaliddescrtime, "$who: the first d.p. component " *
-        "of the descriptor is invalid: DCD(1) = $begtim and START(1) = $(t0[1])"))
-    endtim < t1[nrec] && throw(SpiceError(:invaliddescrtime, "$who: the second d.p. component " *
-        "of the descriptor is invalid: DCD(2) = $endtim and STOP(NREC) = $(t1[nrec])"))
+    (nq == nrec && na == nrec) || throw(
+        SpiceError(
+            :badarg,
+            "$who: `quats` and `avvs` must have $nrec elements but have $nq and $na"
+        )
+    )
+    nrec <= 0 && throw(
+        SpiceError(
+            :invalidnumrec,
+            "$who: $nrec is an invalid number of pointing instances for type 2"
+        )
+    )
+    begtim > t0[1] && throw(
+        SpiceError(
+            :invaliddescrtime, "$who: the first d.p. component " *
+                "of the descriptor is invalid: DCD(1) = $begtim and START(1) = $(t0[1])"
+        )
+    )
+    endtim < t1[nrec] && throw(
+        SpiceError(
+            :invaliddescrtime, "$who: the second d.p. component " *
+                "of the descriptor is invalid: DCD(2) = $endtim and STOP(NREC) = $(t1[nrec])"
+        )
+    )
     refcod = _seg_refcode(who, ctx, ref)
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
     t0[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first START time $(t0[1]) is negative"))
     for i in 1:nrec                      # invariant: intervals 1 .. i-1 are valid and ordered
-        t1[i] <= t0[i] && throw(SpiceError(:degenerateinterval, "$who: the STOP time is " *
-            "less than or equal to the START time for interval number $i"))
+        t1[i] <= t0[i] && throw(
+            SpiceError(
+                :degenerateinterval, "$who: the STOP time is " *
+                    "less than or equal to the START time for interval number $i"
+            )
+        )
         i == 1 && continue
-        t0[i] <= t0[i-1] && throw(SpiceError(:timesoutoforder, "$who: the START times are " *
-            "not strictly increasing: START($(i - 1)) = $(t0[i-1]) and START($i) = $(t0[i])"))
-        t1[i-1] > t0[i] && throw(SpiceError(:badstoptime, "$who: the STOP time for " *
-            "interval $(i - 1) is greater than the following START time"))
+        t0[i] <= t0[i - 1] && throw(
+            SpiceError(
+                :timesoutoforder, "$who: the START times are " *
+                    "not strictly increasing: START($(i - 1)) = $(t0[i - 1]) and START($i) = $(t0[i])"
+            )
+        )
+        t1[i - 1] > t0[i] && throw(
+            SpiceError(
+                :badstoptime, "$who: the STOP time for " *
+                    "interval $(i - 1) is greater than the following START time"
+            )
+        )
     end
     _ck_nonzero_quats(who, q, nrec, 4)
     data = Vector{Float64}(undef, 8nrec)
@@ -267,16 +331,20 @@ function ckw02(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::
     end
     append!(data, t0)
     append!(data, t1)
-    for i in 1:(nrec-1)÷100
-        push!(data, (t1[100i] + t0[100i+1]) / 2.0)
+    for i in 1:((nrec - 1) ÷ 100)
+        push!(data, (t1[100i] + t0[100i + 1]) / 2.0)
     end
     _ck_add!(h, inst, refcod, 2, true, begtim, endtim, segid, data)
     return nothing
 end
-ckw02(h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
-    segid::AbstractString, start, stop, quats, avvs, rates) =
-    ckw02(default_context(), h, begtim, endtim, inst, ref, segid, start, stop, quats, avvs,
-        rates)
+ckw02(
+    h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
+    segid::AbstractString, start, stop, quats, avvs, rates
+) =
+    ckw02(
+    default_context(), h, begtim, endtim, inst, ref, segid, start, stop, quats, avvs,
+    rates
+)
 
 """
     ckw03([ctx,] handle, begtim, endtim, inst, ref, segid, sclkdp, quats, avvs, starts)
@@ -302,8 +370,10 @@ Throws `SpiceError`:
 
 See [`ckopn`](@ref) for an example.
 """
-function ckw03(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
-        ref::SegFrame, segid::AbstractString, sclkdp, quats, avvs, starts)
+function ckw03(
+        ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
+        ref::SegFrame, segid::AbstractString, sclkdp, quats, avvs, starts
+    )
     who = "ckw03"
     _daf_check_write(h, who)
     ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
@@ -315,23 +385,43 @@ function ckw03(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::
     q, nq, _ = _seg_flat(who, "quats", quats, 4)
     nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
     av, avflag = _ck_avvs(who, avvs, nrec)
-    nrec <= 0 && throw(SpiceError(:invalidnumrec,
-        "$who: $nrec is an invalid number of pointing instances for type 3"))
-    nints <= 0 && throw(SpiceError(:invalidnumint,
-        "$who: $nints is an invalid number of interpolation intervals for type 3"))
-    begtim > t[1] && throw(SpiceError(:invaliddescrtime, "$who: the segment begin time is " *
-        "greater than the time of the first pointing instance: DCD(1) = $begtim and " *
-        "SCLKDP(1) = $(t[1])"))
-    endtim < t[nrec] && throw(SpiceError(:invaliddescrtime, "$who: the segment end time is " *
-        "less than the time of the last pointing instance: DCD(2) = $endtim and " *
-        "SCLKDP($nrec) = $(t[nrec])"))
+    nrec <= 0 && throw(
+        SpiceError(
+            :invalidnumrec,
+            "$who: $nrec is an invalid number of pointing instances for type 3"
+        )
+    )
+    nints <= 0 && throw(
+        SpiceError(
+            :invalidnumint,
+            "$who: $nints is an invalid number of interpolation intervals for type 3"
+        )
+    )
+    begtim > t[1] && throw(
+        SpiceError(
+            :invaliddescrtime, "$who: the segment begin time is " *
+                "greater than the time of the first pointing instance: DCD(1) = $begtim and " *
+                "SCLKDP(1) = $(t[1])"
+        )
+    )
+    endtim < t[nrec] && throw(
+        SpiceError(
+            :invaliddescrtime, "$who: the segment end time is " *
+                "less than the time of the last pointing instance: DCD(2) = $endtim and " *
+                "SCLKDP($nrec) = $(t[nrec])"
+        )
+    )
     refcod = _seg_refcode(who, ctx, ref)
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
     t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
     _ck_increasing(who, "SCLKDP", t)
-    t[1] != st[1] && throw(SpiceError(:timesdontmatch, "$who: the start time of the first " *
-        "interval $(st[1]) and the time of the first pointing instance $(t[1]) are not the same"))
+    t[1] != st[1] && throw(
+        SpiceError(
+            :timesdontmatch, "$who: the start time of the first " *
+                "interval $(st[1]) and the time of the first pointing instance $(t[1]) are not the same"
+        )
+    )
     _ck_increasing(who, "STARTS", st)
     index = 0
     for i in 1:nints                     # invariant: starts 1 .. i-1 match records up to `index`
@@ -340,8 +430,12 @@ function ckw03(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::
             index += 1
             match = st[i] == t[index]
         end
-        match || throw(SpiceError(:invalidstarttime,
-            "$who: interval start time number $i is invalid: STARTS($i) = $(st[i])"))
+        match || throw(
+            SpiceError(
+                :invalidstarttime,
+                "$who: interval start time number $i is invalid: STARTS($i) = $(st[i])"
+            )
+        )
     end
     _ck_nonzero_quats(who, q, nrec, 4)
     data = _ck_pointing(q, av, nrec, avflag)
@@ -353,10 +447,14 @@ function ckw03(ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::
     _ck_add!(h, inst, refcod, 3, avflag, begtim, endtim, segid, data)
     return nothing
 end
-ckw03(h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
-    segid::AbstractString, sclkdp, quats, avvs, starts) =
-    ckw03(default_context(), h, begtim, endtim, inst, ref, segid, sclkdp, quats, avvs,
-        starts)
+ckw03(
+    h::DAFHandle, begtim::Real, endtim::Real, inst::Integer, ref::SegFrame,
+    segid::AbstractString, sclkdp, quats, avvs, starts
+) =
+    ckw03(
+    default_context(), h, begtim, endtim, inst, ref, segid, sclkdp, quats, avvs,
+    starts
+)
 
 """
     ckw05([ctx,] handle, subtyp, degree, begtim, endtim, inst, ref, avflag, segid, sclkdp,
@@ -401,9 +499,11 @@ Throws `SpiceError`:
 - `:emptysegment` if no time of `sclkdp` is inside [`begtim`, `endtim`];
 - `:invalidvalue` if `rate` is zero.
 """
-function ckw05(ctx::SegContext, h::DAFHandle, subtyp::Integer, degree::Integer,
+function ckw05(
+        ctx::SegContext, h::DAFHandle, subtyp::Integer, degree::Integer,
         begtim::Real, endtim::Real, inst::Integer, ref::SegFrame, avflag::Bool,
-        segid::AbstractString, sclkdp, packts, rate::Real, nints::Integer, starts)
+        segid::AbstractString, sclkdp, packts, rate::Real, nints::Integer, starts
+    )
     who = "ckw05"
     _daf_check_write(h, who)
     ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
@@ -411,12 +511,24 @@ function ckw05(ctx::SegContext, h::DAFHandle, subtyp::Integer, degree::Integer,
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     n = length(t)
     allst = _seg_vec(who, "starts", starts, -1)
-    nints <= length(allst) || throw(SpiceError(:badarg,
-        "$who: `starts` has $(length(allst)) elements, fewer than nints = $nints"))
-    n < 1 && throw(SpiceError(:toofewpackets,
-        "$who: at least 1 packet is required for CK type 5; number of packets supplied: $n"))
-    nints <= 0 && throw(SpiceError(:invalidnumints,
-        "$who: $nints is an invalid number of interpolation intervals for type 5"))
+    nints <= length(allst) || throw(
+        SpiceError(
+            :badarg,
+            "$who: `starts` has $(length(allst)) elements, fewer than nints = $nints"
+        )
+    )
+    n < 1 && throw(
+        SpiceError(
+            :toofewpackets,
+            "$who: at least 1 packet is required for CK type 5; number of packets supplied: $n"
+        )
+    )
+    nints <= 0 && throw(
+        SpiceError(
+            :invalidnumints,
+            "$who: $nints is an invalid number of interpolation intervals for type 5"
+        )
+    )
     st = allst[1:nints]
     refcod = _seg_refcode(who, ctx, ref)
     _seg_idlen(who, segid)
@@ -426,27 +538,51 @@ function ckw05(ctx::SegContext, h::DAFHandle, subtyp::Integer, degree::Integer,
     _ck_increasing(who, "STARTS", st)
     for i in 1:nints
         k = searchsortedfirst(t, st[i])
-        (k <= n && t[k] == st[i]) || throw(SpiceError(:invalidstarttime,
-            "$who: interval start time number $i is invalid: STARTS($i) = $(st[i])"))
+        (k <= n && t[k] == st[i]) || throw(
+            SpiceError(
+                :invalidstarttime,
+                "$who: interval start time number $i is invalid: STARTS($i) = $(st[i])"
+            )
+        )
     end
     (0 <= subtyp <= 3) || throw(SpiceError(:notsupported, "$who: CK type 5 subtype <$subtyp> is not supported"))
-    packsz = (8, 4, 14, 7)[subtyp+1]
+    packsz = (8, 4, 14, 7)[subtyp + 1]
     winsiz = isodd(subtyp) ? degree + 1 : (degree + 1) ÷ 2
     pk, np, _ = _seg_flat(who, "packts", packts, packsz)
     np == n || throw(SpiceError(:badarg, "$who: `packts` must have $n elements but has $np"))
     _ck_nonzero_quats(who, pk, n, packsz)
-    (degree < 1 || degree > 23) && throw(SpiceError(:invaliddegree, "$who: the " *
-        "interpolating polynomials have degree $degree; the valid degree range is [1, 23]"))
-    isodd(winsiz) && throw(SpiceError(:invaliddegree, "$who: the interpolating polynomials " *
-        "have degree $degree; for CK type 5, the degree must be equivalent to 3 mod 4 " *
-        "for Hermite interpolation and odd for Lagrange interpolation"))
-    endtim < begtim && throw(SpiceError(:baddescrtimes,
-        "$who: descriptor bounds are non-increasing: $begtim:$endtim"))
+    (degree < 1 || degree > 23) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 23]"
+        )
+    )
+    isodd(winsiz) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the interpolating polynomials " *
+                "have degree $degree; for CK type 5, the degree must be equivalent to 3 mod 4 " *
+                "for Hermite interpolation and odd for Lagrange interpolation"
+        )
+    )
+    endtim < begtim && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: descriptor bounds are non-increasing: $begtim:$endtim"
+        )
+    )
     i = searchsortedfirst(t, begtim) - 1     # number of time tags less than begtim
-    i == n && throw(SpiceError(:emptysegment,
-        "$who: all time tags are less than segment start time $begtim"))
-    t[i+1] > endtim && throw(SpiceError(:emptysegment, "$who: no time tags lie between " *
-        "the segment start time $begtim and segment end time $endtim"))
+    i == n && throw(
+        SpiceError(
+            :emptysegment,
+            "$who: all time tags are less than segment start time $begtim"
+        )
+    )
+    t[i + 1] > endtim && throw(
+        SpiceError(
+            :emptysegment, "$who: no time tags lie between " *
+                "the segment start time $begtim and segment end time $endtim"
+        )
+    )
     rate == 0 && throw(SpiceError(:invalidvalue, "$who: the SCLK rate RATE was zero"))
     data = append!(pk, t)
     _seg_directory!(data, t, (n - 1) ÷ 100)
@@ -456,11 +592,15 @@ function ckw05(ctx::SegContext, h::DAFHandle, subtyp::Integer, degree::Integer,
     _ck_add!(h, inst, refcod, 5, avflag, begtim, endtim, segid, data)
     return nothing
 end
-ckw05(h::DAFHandle, subtyp::Integer, degree::Integer, begtim::Real, endtim::Real,
+ckw05(
+    h::DAFHandle, subtyp::Integer, degree::Integer, begtim::Real, endtim::Real,
     inst::Integer, ref::SegFrame, avflag::Bool, segid::AbstractString, sclkdp, packts,
-    rate::Real, nints::Integer, starts) =
-    ckw05(default_context(), h, subtyp, degree, begtim, endtim, inst, ref, avflag, segid,
-        sclkdp, packts, rate, nints, starts)
+    rate::Real, nints::Integer, starts
+) =
+    ckw05(
+    default_context(), h, subtyp, degree, begtim, endtim, inst, ref, avflag, segid,
+    sclkdp, packts, rate, nints, starts
+)
 
 const _CK06_PKTSZS = (8, 4, 14, 7)
 
@@ -508,87 +648,153 @@ For a mini-segment it throws:
 - `:badquatsign`, for a Hermite subtype, if a quaternion is farther from its
   predecessor than its negative is.
 """
-function ckw06(ctx::SegContext, h::DAFHandle, inst::Integer, ref::SegFrame, avflag::Bool,
+function ckw06(
+        ctx::SegContext, h::DAFHandle, inst::Integer, ref::SegFrame, avflag::Bool,
         first::Real, last::Real, segid::AbstractString, npkts::AbstractVector{<:Integer},
         subtps::AbstractVector{<:Integer}, degres::AbstractVector{<:Integer}, packts, rates,
-        sclkdp, ivlbds, sellst::Bool)
+        sclkdp, ivlbds, sellst::Bool
+    )
     who = "ckw06"
     _daf_check_write(h, who)
     ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
     _seg_chkfstr(who, "segid", segid)
     nmini = length(npkts)
-    (length(subtps) == nmini && length(degres) == nmini) || throw(SpiceError(:badarg,
-        "$who: `npkts`, `subtps` and `degres` must have the same length"))
+    (length(subtps) == nmini && length(degres) == nmini) || throw(
+        SpiceError(
+            :badarg,
+            "$who: `npkts`, `subtps` and `degres` must have the same length"
+        )
+    )
     pk = _seg_vec(who, "packts", packts, -1)
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     rt = _seg_vec(who, "rates", rates, nmini)
     bd = _seg_vec(who, "ivlbds", ivlbds, nmini < 1 ? -1 : nmini + 1)
-    last < first && throw(SpiceError(:baddescrtimes, "$who: segment start time is " *
-        "$first; stop time is $last; bounds must be in nondecreasing order"))
+    last < first && throw(
+        SpiceError(
+            :baddescrtimes, "$who: segment start time is " *
+                "$first; stop time is $last; bounds must be in nondecreasing order"
+        )
+    )
     refcod = _seg_refcode(who, ctx, ref)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    nmini < 1 && throw(SpiceError(:invalidcount,
-        "$who: mini-segment count was $nmini; this count must be positive"))
+    nmini < 1 && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: mini-segment count was $nmini; this count must be positive"
+        )
+    )
     for i in 1:nmini
-        bd[i] >= bd[i+1] && throw(SpiceError(:boundsoutoforder, "$who: mini-segment interval " *
-            "bounds at indices $i and $(i + 1) are $(bd[i]) and $(bd[i+1]); they must be " *
-            "strictly increasing"))
+        bd[i] >= bd[i + 1] && throw(
+            SpiceError(
+                :boundsoutoforder, "$who: mini-segment interval " *
+                    "bounds at indices $i and $(i + 1) are $(bd[i]) and $(bd[i + 1]); they must be " *
+                    "strictly increasing"
+            )
+        )
     end
-    (first < bd[1] || last > bd[nmini+1]) && throw(SpiceError(:coveragegap, "$who: segment " *
-        "coverage [$first, $last] must be contained within the union of the mini-segment " *
-        "intervals [$(bd[1]), $(bd[nmini+1])]"))
+    (first < bd[1] || last > bd[nmini + 1]) && throw(
+        SpiceError(
+            :coveragegap, "$who: segment " *
+                "coverage [$first, $last] must be contained within the union of the mini-segment " *
+                "intervals [$(bd[1]), $(bd[nmini + 1])]"
+        )
+    )
     winsizes = zeros(Int, nmini)
     pktend = 0
     eepix = 0
     for i in 1:nmini                     # invariant: mini-segments 1 .. i-1 are valid
         n = Int(npkts[i])
-        n < 2 && throw(SpiceError(:toofewpackets, "$who: at least 2 packets are required " *
-            "for CK type 6; $n were supplied in mini-segment $i"))
+        n < 2 && throw(
+            SpiceError(
+                :toofewpackets, "$who: at least 2 packets are required " *
+                    "for CK type 6; $n were supplied in mini-segment $i"
+            )
+        )
         subtyp = Int(subtps[i])
-        (subtyp < 0 || subtyp > 3) && throw(SpiceError(:invalidsubtype,
-            "$who: unexpected CK type 6 subtype $subtyp found in mini-segment $i"))
-        pktsiz = _CK06_PKTSZS[subtyp+1]
+        (subtyp < 0 || subtyp > 3) && throw(
+            SpiceError(
+                :invalidsubtype,
+                "$who: unexpected CK type 6 subtype $subtyp found in mini-segment $i"
+            )
+        )
+        pktsiz = _CK06_PKTSZS[subtyp + 1]
         winsiz = isodd(subtyp) ? degres[i] + 1 : (degres[i] + 1) ÷ 2
-        rt[i] <= 0.0 && throw(SpiceError(:invalidsclkrate,
-            "$who: SCLK rate in mini-segment $i was $(rt[i]); the rate must be positive"))
+        rt[i] <= 0.0 && throw(
+            SpiceError(
+                :invalidsclkrate,
+                "$who: SCLK rate in mini-segment $i was $(rt[i]); the rate must be positive"
+            )
+        )
         pktbeg = pktend + 1
         pktend = pktbeg - 1 + n * pktsiz
-        (degres[i] < 1 || degres[i] > 23) && throw(SpiceError(:invaliddegree, "$who: the " *
-            "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
-            "valid degree range is [1, 23]"))
-        isodd(winsiz) && throw(SpiceError(:badwindowsize, "$who: the interpolating " *
-            "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"))
+        (degres[i] < 1 || degres[i] > 23) && throw(
+            SpiceError(
+                :invaliddegree, "$who: the " *
+                    "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
+                    "valid degree range is [1, 23]"
+            )
+        )
+        isodd(winsiz) && throw(
+            SpiceError(
+                :badwindowsize, "$who: the interpolating " *
+                    "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"
+            )
+        )
         winsizes[i] = winsiz
         bepix = eepix + 1
         eepix = bepix - 1 + n
-        (length(t) >= eepix && length(pk) >= pktend) || throw(SpiceError(:badarg,
-            "$who: `sclkdp` or `packts` is shorter than the packet counts require"))
-        for k in bepix:eepix-1
-            t[k] >= t[k+1] && throw(SpiceError(:timesoutoforder, "$who: in mini-segment $i, " *
-                "epoch $(t[k]) having index $k is greater than or equal to its successor"))
+        (length(t) >= eepix && length(pk) >= pktend) || throw(
+            SpiceError(
+                :badarg,
+                "$who: `sclkdp` or `packts` is shorter than the packet counts require"
+            )
+        )
+        for k in bepix:(eepix - 1)
+            t[k] >= t[k + 1] && throw(
+                SpiceError(
+                    :timesoutoforder, "$who: in mini-segment $i, " *
+                        "epoch $(t[k]) having index $k is greater than or equal to its successor"
+                )
+            )
         end
-        t[bepix] > bd[i] && throw(SpiceError(:boundsdisagree, "$who: mini-segment interval " *
-            "$i start time $(bd[i]) precedes mini-segment's first epoch $(t[bepix])"))
+        t[bepix] > bd[i] && throw(
+            SpiceError(
+                :boundsdisagree, "$who: mini-segment interval " *
+                    "$i start time $(bd[i]) precedes mini-segment's first epoch $(t[bepix])"
+            )
+        )
         # SPICELIB compares the last epoch with the interval start here, not with its end.
-        t[eepix] < bd[i] && throw(SpiceError(:boundsdisagree, "$who: mini-segment interval " *
-            "$i end time exceeds mini-segment's last epoch $(t[eepix])"))
+        t[eepix] < bd[i] && throw(
+            SpiceError(
+                :boundsdisagree, "$who: mini-segment interval " *
+                    "$i end time exceeds mini-segment's last epoch $(t[eepix])"
+            )
+        )
         for j in 1:n
             a = pktbeg + pktsiz * (j - 1)
-            (pk[a] == 0.0 && pk[a+1] == 0.0 && pk[a+2] == 0.0 && pk[a+3] == 0.0) &&
-                throw(SpiceError(:zeroquaternion, "$who: the quaternion at index $j within " *
-                    "mini-segment $i has magnitude zero"))
+            (pk[a] == 0.0 && pk[a + 1] == 0.0 && pk[a + 2] == 0.0 && pk[a + 3] == 0.0) &&
+                throw(
+                SpiceError(
+                    :zeroquaternion, "$who: the quaternion at index $j within " *
+                        "mini-segment $i has magnitude zero"
+                )
+            )
             if j > 1 && iseven(subtyp)
                 p = a - pktsiz
                 dneg = 0.0
                 dpos = 0.0
                 for c in 0:3
-                    dneg += (pk[p+c] + pk[a+c])^2
-                    dpos += (pk[p+c] - pk[a+c])^2
+                    dneg += (pk[p + c] + pk[a + c])^2
+                    dpos += (pk[p + c] - pk[a + c])^2
                 end
-                sqrt(dneg) < sqrt(dpos) && throw(SpiceError(:badquatsign, "$who: the " *
-                    "quaternion at index $j within mini-segment $i is farther than its " *
-                    "negative from its predecessor at index $(j - 1)"))
+                sqrt(dneg) < sqrt(dpos) && throw(
+                    SpiceError(
+                        :badquatsign, "$who: the " *
+                            "quaternion at index $j within mini-segment $i is farther than its " *
+                            "negative from its predecessor at index $(j - 1)"
+                    )
+                )
             end
         end
     end
@@ -598,15 +804,15 @@ function ckw06(ctx::SegContext, h::DAFHandle, inst::Integer, ref::SegFrame, avfl
     pointers = Float64[]
     segend = 0
     for i in 1:nmini                     # invariant: mini-segments 1 .. i-1 are in data
-        pktsiz = _CK06_PKTSZS[subtps[i]+1]
+        pktsiz = _CK06_PKTSZS[subtps[i] + 1]
         n = Int(npkts[i])
-        append!(data, view(pk, pktend+1:pktend+n*pktsiz))
+        append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
         pktend += n * pktsiz
         bepix = eepix + 1
         eepix = bepix - 1 + n
         append!(data, view(t, bepix:eepix))
-        for j in 1:(n-1)÷100
-            push!(data, t[bepix-1+100j])
+        for j in 1:((n - 1) ÷ 100)
+            push!(data, t[bepix - 1 + 100j])
         end
         push!(data, rt[i], Float64(subtps[i]), Float64(winsizes[i]), Float64(n))
         minisz = n * (pktsiz + 1) + (n - 1) ÷ 100 + 4
@@ -614,7 +820,7 @@ function ckw06(ctx::SegContext, h::DAFHandle, inst::Integer, ref::SegFrame, avfl
         segend += minisz
     end
     append!(data, bd)
-    for i in 1:nmini÷100
+    for i in 1:(nmini ÷ 100)
         push!(data, bd[100i])
     end
     append!(data, pointers)
@@ -622,9 +828,13 @@ function ckw06(ctx::SegContext, h::DAFHandle, inst::Integer, ref::SegFrame, avfl
     _ck_add!(h, inst, refcod, 6, avflag, first, last, segid, data)
     return nothing
 end
-ckw06(h::DAFHandle, inst::Integer, ref::SegFrame, avflag::Bool, first::Real, last::Real,
+ckw06(
+    h::DAFHandle, inst::Integer, ref::SegFrame, avflag::Bool, first::Real, last::Real,
     segid::AbstractString, npkts::AbstractVector{<:Integer},
     subtps::AbstractVector{<:Integer}, degres::AbstractVector{<:Integer}, packts, rates,
-    sclkdp, ivlbds, sellst::Bool) =
-    ckw06(default_context(), h, inst, ref, avflag, first, last, segid, npkts, subtps,
-        degres, packts, rates, sclkdp, ivlbds, sellst)
+    sclkdp, ivlbds, sellst::Bool
+) =
+    ckw06(
+    default_context(), h, inst, ref, avflag, first, last, segid, npkts, subtps,
+    degres, packts, rates, sclkdp, ivlbds, sellst
+)

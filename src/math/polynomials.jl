@@ -19,18 +19,26 @@
 "The midpoint and the radius of the interval of a Chebyshev expansion."
 @inline function _m_x2s(x2s::AbstractVector)
     length(x2s) == 2 || _m_baddim("x2s", 2)
-    @inbounds return _m_f(x2s[begin]), _m_f(x2s[begin+1])
+    @inbounds return _m_f(x2s[begin]), _m_f(x2s[begin + 1])
 end
 
-@noinline _m_nodegree() = throw(SpiceError(:invaliddegree,
-    "the expansion has no coefficient: the degree must be non-negative"))
+@noinline _m_nodegree() = throw(
+    SpiceError(
+        :invaliddegree,
+        "the expansion has no coefficient: the degree must be non-negative"
+    )
+)
 
 @noinline _m_badsize(n) = throw(SpiceError(:invalidsize, "array size must be positive; was $n"))
 
 @noinline _m_zerostep() = throw(SpiceError(:invalidstepsize, "the step size is zero"))
 
-@noinline _m_sameabscissa(xvals, i, j) = throw(SpiceError(:dividebyzero,
-    "xvals[$i] = xvals[$j] = $(primal(_m_f(xvals[begin+i-1])))"))
+@noinline _m_sameabscissa(xvals, i, j) = throw(
+    SpiceError(
+        :dividebyzero,
+        "xvals[$i] = xvals[$j] = $(primal(_m_f(xvals[begin + i - 1])))"
+    )
+)
 
 "`onequal` of an interpolation on the grid 1, 2, 3, ..., where no two abscissas are equal."
 @inline _m_never(_, _) = nothing
@@ -44,14 +52,14 @@ Value and derivatives with respect to `s`, orders 0 to N, of the Chebyshev serie
 the coefficients `cp` at `s`, by the Clenshaw steps of `_cheb3`. Orders 0 and 1 take
 the operations of `chbval` and `chbint`. Requires `length(cp) >= 1`.
 """
-@inline function _m_cheb(cp::AbstractVector, s::T, ::Val{N}) where {T,N}
+@inline function _m_cheb(cp::AbstractVector, s::T, ::Val{N}) where {T, N}
     M = Val(N + 1)
     z = ntuple(_ -> zero(T), M)
     s2 = s * 2
     b1, b2 = z, z
     # invariant: b1 and b2 are the Clenshaw terms b_{k+1} and b_{k+2}, with derivatives
-    @inbounds for k in length(cp)-1:-1:1
-        b1, b2 = _clenshaw_step(_m_f(cp[begin+k]), s2, b1, b2), b1
+    @inbounds for k in (length(cp) - 1):-1:1
+        b1, b2 = _clenshaw_step(_m_f(cp[begin + k]), s2, b1, b2), b1
     end
     return _clenshaw_end(_m_f(@inbounds cp[begin]), s, b1, b2)
 end
@@ -153,12 +161,12 @@ function chbder(cp::AbstractVector, x2s::AbstractVector, x::Real, nderiv::Intege
     @inbounds for k in length(cp):-1:2
         b[3, 1] = b[2, 1]
         b[2, 1] = b[1, 1]
-        b[1, 1] = _m_f(cp[begin+k-1]) + (s2 * b[2, 1] - b[3, 1])
+        b[1, 1] = _m_f(cp[begin + k - 1]) + (s2 * b[2, 1] - b[3, 1])
         scale = 2.0
         for m in 1:nd
-            b[3, m+1] = b[2, m+1]
-            b[2, m+1] = b[1, m+1]
-            b[1, m+1] = b[2, m] * scale + b[2, m+1] * s2 - b[3, m+1]
+            b[3, m + 1] = b[2, m + 1]
+            b[2, m + 1] = b[1, m + 1]
+            b[1, m + 1] = b[2, m] * scale + b[2, m + 1] * s2 - b[3, m + 1]
             scale += 2.0
         end
     end
@@ -166,13 +174,13 @@ function chbder(cp::AbstractVector, x2s::AbstractVector, x::Real, nderiv::Intege
     @inbounds dpdxs[1] = _m_f(cp[begin]) + (s * b[1, 1] - b[2, 1])
     scale = 1.0
     @inbounds for m in 1:nd
-        dpdxs[m+1] = b[1, m] * scale + b[1, m+1] * s - b[2, m+1]
+        dpdxs[m + 1] = b[1, m] * scale + b[1, m + 1] * s - b[2, m + 1]
         scale += 1.0
     end
     # derivative m is divided by rad^m, the power formed by products as in CSPICE
     radm = rad
     @inbounds for m in 1:nd
-        dpdxs[m+1] /= radm
+        dpdxs[m + 1] /= radm
         radm = rad * radm
     end
     return dpdxs
@@ -202,8 +210,12 @@ See also [`chbval`](@ref).
 function chbigr(cp::AbstractVector, x2s::AbstractVector, x::Real)
     mid, rad = _m_x2s(x2s)
     isempty(cp) && _m_nodegree()
-    primal(rad) > 0.0 || throw(SpiceError(:invalidradius,
-        "the interval radius must be positive; was $(primal(rad))"))
+    primal(rad) > 0.0 || throw(
+        SpiceError(
+            :invalidradius,
+            "the interval radius must be positive; was $(primal(rad))"
+        )
+    )
     Base.require_one_based_indexing(cp)
     T = _m_restype(x, cp, x2s)
     return _chbigr(cp, 1, length(cp), 1.0, mid, rad, convert(T, _m_f(x)))
@@ -254,8 +266,10 @@ See also [`lgrind`](@ref), [`lgresp`](@ref), [`hrmint`](@ref).
 function lgrint(xvals::AbstractVector, yvals::AbstractVector, x::Real)
     n = _m_npoints(xvals, yvals, 1)
     w = _m_work(yvals, _m_restype(x, xvals, yvals))
-    return _neville!(w, n, i -> _m_f(@inbounds xvals[i]), _m_f(x),
-        (i, j) -> _m_sameabscissa(xvals, i, j))
+    return _neville!(
+        w, n, i -> _m_f(@inbounds xvals[i]), _m_f(x),
+        (i, j) -> _m_sameabscissa(xvals, i, j)
+    )
 end
 
 """
@@ -279,8 +293,10 @@ function lgrind(xvals::AbstractVector, yvals::AbstractVector, x::Real)
     n = _m_npoints(xvals, yvals, 1)
     T = _m_restype(x, xvals, yvals)
     w = _m_work(yvals, T)
-    return _neville_d!(w, similar(w), n, i -> _m_f(@inbounds xvals[i]), _m_f(x),
-        (i, j) -> _m_sameabscissa(xvals, i, j))
+    return _neville_d!(
+        w, similar(w), n, i -> _m_f(@inbounds xvals[i]), _m_f(x),
+        (i, j) -> _m_sameabscissa(xvals, i, j)
+    )
 end
 
 """
@@ -340,8 +356,10 @@ See also [`hrmesp`](@ref), [`lgrind`](@ref).
 function hrmint(xvals::AbstractVector, yvals::AbstractVector, x::Real)
     n = _m_npoints(xvals, yvals, 2)
     w1 = _m_work(yvals, _m_restype(x, xvals, yvals))
-    return _hermite_table!(w1, similar(w1), n, i -> _m_f(@inbounds xvals[i]), _m_f(x),
-        (i, j) -> _m_sameabscissa(xvals, i, j))
+    return _hermite_table!(
+        w1, similar(w1), n, i -> _m_f(@inbounds xvals[i]), _m_f(x),
+        (i, j) -> _m_sameabscissa(xvals, i, j)
+    )
 end
 
 """
@@ -364,8 +382,12 @@ See also [`hrmint`](@ref), [`lgresp`](@ref).
 """
 function hrmesp(first::Real, step::Real, yvals::AbstractVector, x::Real)
     isempty(yvals) && _m_badsize(0)
-    iseven(length(yvals)) || throw(SpiceError(:badarg,
-        "yvals must hold a value and a derivative for each abscissa: its length is odd"))
+    iseven(length(yvals)) || throw(
+        SpiceError(
+            :badarg,
+            "yvals must hold a value and a derivative for each abscissa: its length is odd"
+        )
+    )
     n = length(yvals) ÷ 2
     h = _m_f(step)
     primal(h) == 0.0 && _m_zerostep()
@@ -414,10 +436,10 @@ function polyds(coeffs::AbstractVector, nderiv::Integer, t::Real)
     @inbounds for k in length(coeffs):-1:1
         scale = Float64(nd)
         for i in nd:-1:1
-            p[i+1] = tt * p[i+1] + scale * p[i]
+            p[i + 1] = tt * p[i + 1] + scale * p[i]
             scale -= 1.0
         end
-        p[1] = tt * p[1] + _m_f(coeffs[begin+k-1])
+        p[1] = tt * p[1] + _m_f(coeffs[begin + k - 1])
     end
     return p
 end
@@ -443,8 +465,12 @@ true
 """
 function qderiv(f0::AbstractVector, f2::AbstractVector, delta::Real)
     d = _m_f(delta)
-    primal(d) == 0.0 && throw(SpiceError(:dividebyzero,
-        "delta abscissa value is zero; a non-zero value is required"))
+    primal(d) == 0.0 && throw(
+        SpiceError(
+            :dividebyzero,
+            "delta abscissa value is zero; a non-zero value is required"
+        )
+    )
     return vlcomg(0.5 / d, f2, -0.5 / d, f0)
 end
 
@@ -506,11 +532,13 @@ See also [`rquad`](@ref).
 """
 function diags2(symmat::AbstractMatrix)
     size(symmat) == (2, 2) || _m_baddim("a symmetric matrix", "2 by 2")
-    @inbounds s11, s12, s22 = promote(_m_f(symmat[begin, begin]), _m_f(symmat[begin, begin+1]),
-        _m_f(symmat[begin+1, begin+1]))
+    @inbounds s11, s12, s22 = promote(
+        _m_f(symmat[begin, begin]), _m_f(symmat[begin, begin + 1]),
+        _m_f(symmat[begin + 1, begin + 1])
+    )
     d1, d2, r = _m_diags2(s11, s12, s22)
     z = zero(d1)
     # CSPICE copies the off-diagonal zero of a diagonal input with its sign
-    diag = SMatrix{2,2}(d1, z, primal(s12) == 0.0 ? s12 : z, d2)
-    return diag, SMatrix{2,2}(r[1], r[3], r[2], r[4])
+    diag = SMatrix{2, 2}(d1, z, primal(s12) == 0.0 ? s12 : z, d2)
+    return diag, SMatrix{2, 2}(r[1], r[3], r[2], r[4])
 end

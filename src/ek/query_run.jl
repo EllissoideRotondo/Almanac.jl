@@ -192,8 +192,12 @@ function _ek_matchi(string::AbstractString, templ::AbstractString)
     return false
 end
 
-@noinline _ek_noelt(col::_EKColumn, recptr::Integer) = throw(SpiceError(:invalidindex,
-    "COLUMN = $(col.name); ROW = $recptr; ELTIDX = 1. Column entry element was not found."))
+@noinline _ek_noelt(col::_EKColumn, recptr::Integer) = throw(
+    SpiceError(
+        :invalidindex,
+        "COLUMN = $(col.name); ROW = $recptr; ELTIDX = 1. Column entry element was not found."
+    )
+)
 
 _ek_trunc(s::String) = sizeof(s) > _EK_MAXSTR ? String(codeunits(s)[1:_EK_MAXSTR]) : s
 
@@ -206,8 +210,10 @@ Port of `zzekscmp`: true if the first element of the entry of column `col` in th
 false for it. Throws `SpiceError(:bug)` for types that cannot be compared and
 `:unnaturalrelation` for an operator that the types do not have.
 """
-function _ek_scmp(op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval::String,
-        dval::Float64, ival::Int)
+function _ek_scmp(
+        op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval::String,
+        dval::Float64, ival::Int
+    )
     coltyp = Int(col.dtype)
     eltc = ""
     eltd = 0.0
@@ -244,8 +250,12 @@ function _ek_scmp(op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval:
         m = _ek_matchi(_ek_trunc(eltc), cval)
         return op == _EK_LIKE ? m : !m
     end
-    throw(SpiceError(:unnaturalrelation, "The relational operator $op was not recognized " *
-        "or was not applicable for data type $dtype."))
+    throw(
+        SpiceError(
+            :unnaturalrelation, "The relational operator $op was not recognized " *
+                "or was not applicable for data type $dtype."
+        )
+    )
 end
 
 """
@@ -299,11 +309,16 @@ One constraint between two columns, as `zzekvmch`: the relation of `_ek_ecmp`, o
 LIKE and UNLIKE the match of the left string against the right string as template (a
 null entry counts as a blank string).
 """
-function _ek_colmatch(op::Int, f1, col1::_EKColumn, row1::Integer, f2, col2::_EKColumn,
-        row2::Integer)
+function _ek_colmatch(
+        op::Int, f1, col1::_EKColumn, row1::Integer, f2, col2::_EKColumn,
+        row2::Integer
+    )
     op <= _EK_NE && return _ek_relop(op, _ek_ecmp(f1, col1, row1, f2, col2, row2))
-    ((op == _EK_LIKE || op == _EK_UNLIKE) && col1.dtype == _EK_CHR) || throw(SpiceError(
-        :unnaturalrelation, "The relational operator $op was not recognized."))
+    ((op == _EK_LIKE || op == _EK_UNLIKE) && col1.dtype == _EK_CHR) || throw(
+        SpiceError(
+            :unnaturalrelation, "The relational operator $op was not recognized."
+        )
+    )
     a, n1, fnd1 = _ek_elt_c(f1, col1, row1, 1)
     b, n2, fnd2 = _ek_elt_c(f2, col2, row2, 1)
     fnd1 || _ek_noelt(col1, row1)
@@ -325,10 +340,14 @@ integer pages. Throws `SpiceError(:invalidtype)` for another index type.
 """
 function _ek_ixlk(f, col::_EKColumn, key::Int)
     col.ixtype == 1 && return _ek_trdp(f.ints, col.ixptr, key)
-    col.ixtype == 2 || throw(SpiceError(:invalidtype,
-        "The index type $(col.ixtype) is not supported."))
+    col.ixtype == 2 || throw(
+        SpiceError(
+            :invalidtype,
+            "The index type $(col.ixtype) is not supported."
+        )
+    )
     q = (key - 1) ÷ _EK_IPSIZE
-    return Int(f.ints[Int(col.ixptr)+q*256+(key-q*_EK_IPSIZE)])
+    return Int(f.ints[Int(col.ixptr) + q * 256 + (key - q * _EK_IPSIZE)])
 end
 
 """
@@ -338,8 +357,10 @@ Position of the last entry in the index of `col` that is less than (`strict`) or
 greater than the value, 0 if there is none: the binary search of `zzeklltc`/`zzekllec`
 and their integer and double forms. Precondition: `col` has an index over `nrows` rows.
 """
-function _ek_ixlast(f, col::_EKColumn, nrows::Int, strict::Bool, dtype::Int, cval::String,
-        dval::Float64, ival::Int)
+function _ek_ixlast(
+        f, col::_EKColumn, nrows::Int, strict::Bool, dtype::Int, cval::String,
+        dval::Float64, ival::Int
+    )
     nrows == 0 && return 0
     notbelow = strict ? _EK_GE : _EK_GT       # the first entry is too large
     below = strict ? _EK_LT : _EK_LE
@@ -482,7 +503,7 @@ struct _EKRowSet
     rows::Vector{Vector{Int32}}
 end
 
-_ek_nrows(rs::_EKRowSet) = sum(r -> length(r) ÷ rs.nt, rs.rows; init=0)
+_ek_nrows(rs::_EKRowSet) = sum(r -> length(r) ÷ rs.nt, rs.rows; init = 0)
 
 "Remove the segment vectors without rows from `rs`, as `zzekjsqz`."
 function _ek_squeeze!(rs::_EKRowSet)
@@ -506,7 +527,7 @@ function _ek_shellsort!(ord::Vector{Int}, jle)
     n = length(ord)
     gap = n ÷ 2
     while gap > 0
-        for i in gap+1:n
+        for i in (gap + 1):n
             j = i - gap
             while j > 0
                 jg = j + gap
@@ -542,8 +563,12 @@ end
 _EKKeys(dtype::Int) = _EKKeys(dtype, Bool[], Int[], Float64[], String[])
 
 function _ek_pushkey!(keys::_EKKeys, f, col::_EKColumn, recptr::Integer)
-    col.dtype == keys.dtype || throw(SpiceError(:bug, "Data type mismatch for the column " *
-        "$(col.name): type $(col.dtype) in one segment, $(keys.dtype) in another"))
+    col.dtype == keys.dtype || throw(
+        SpiceError(
+            :bug, "Data type mismatch for the column " *
+                "$(col.name): type $(col.dtype) in one segment, $(keys.dtype) in another"
+        )
+    )
     if keys.dtype == _EK_CHR
         v, isnull, found = _ek_elt_c(f, col, recptr, 1)
         found || _ek_noelt(col, recptr)
@@ -589,8 +614,10 @@ The rows of table number `t` of the FROM clause that satisfy the constraints of 
 conjunction `cons` on that table alone (step 1 of the file header). `segids` are the
 segments of the table in load order, as indices into `segs`.
 """
-function _ek_table_rows(segs::Vector{_EKQSeg}, segids::Vector{Int}, t::Int, cons::Vector,
-        compat::Bool)
+function _ek_table_rows(
+        segs::Vector{_EKQSeg}, segids::Vector{Int}, t::Int, cons::Vector,
+        compat::Bool
+    )
     rs = _EKRowSet(1, Vector{Int}[], Vector{Int32}[])
     n = length(cons)
     activc = Vector{Bool}(undef, n)
@@ -609,15 +636,19 @@ function _ek_table_rows(segs::Vector{_EKQSeg}, segids::Vector{Int}, t::Int, cons
             ok = true
             for (i, c) in enumerate(cons)
                 activv[i] || continue
-                ok = _ek_scmp(c.opcode, f, qs.cols[c.lhs.colidx], recptr, c.dtype, c.cval,
-                    c.dval, c.ival)
+                ok = _ek_scmp(
+                    c.opcode, f, qs.cols[c.lhs.colidx], recptr, c.dtype, c.cval,
+                    c.dval, c.ival
+                )
                 ok || break
             end
             ok || continue
             for (i, c) in enumerate(cons)
                 activc[i] || continue
-                ok = _ek_colmatch(c.opcode, f, qs.cols[c.lhs.colidx], recptr, f,
-                    qs.cols[c.rhs.colidx], recptr)
+                ok = _ek_colmatch(
+                    c.opcode, f, qs.cols[c.lhs.colidx], recptr, f,
+                    qs.cols[c.rhs.colidx], recptr
+                )
                 ok || break
             end
             ok && push!(rows, Int32(recptr))
@@ -633,13 +664,15 @@ end
 # ---------------------------------------------------------------------------------------
 
 "Keys of the column `colidx` of table `tab` for the `nr` row vectors `rows` (`nt` pointers each) of one segment vector."
-function _ek_join_keys(segs::Vector{_EKQSeg}, segvec::Vector{Int}, tab::Int, colidx::Int,
-        rows::Vector{Int32}, nt::Int, off::Int)
+function _ek_join_keys(
+        segs::Vector{_EKQSeg}, segvec::Vector{Int}, tab::Int, colidx::Int,
+        rows::Vector{Int32}, nt::Int, off::Int
+    )
     qs = segs[segvec[tab]]
     col = qs.cols[colidx]
     keys = _EKKeys(Int(col.dtype))
-    for i in 1:(length(rows)÷nt)
-        _ek_pushkey!(keys, qs.file, col, rows[(i-1)*nt+tab-off])
+    for i in 1:(length(rows) ÷ nt)
+        _ek_pushkey!(keys, qs.file, col, rows[(i - 1) * nt + tab - off])
     end
     return keys
 end
@@ -653,8 +686,10 @@ which compare a column of one row set with a column of the other. The order of t
 result is that of CSPICE: segment vectors of `rs1` outside, of `rs2` inside; in a pair
 of segment vectors, the order that the join method gives (see the file header).
 """
-function _ek_join(segs::Vector{_EKQSeg}, rs1::_EKRowSet, rs2::_EKRowSet, cons::Vector,
-        active::Vector{Bool})
+function _ek_join(
+        segs::Vector{_EKQSeg}, rs1::_EKRowSet, rs2::_EKRowSet, cons::Vector,
+        active::Vector{Bool}
+    )
     nt1 = rs1.nt
     nt2 = rs2.nt
     nt3 = nt1 + nt2
@@ -663,8 +698,10 @@ function _ek_join(segs::Vector{_EKQSeg}, rs1::_EKRowSet, rs2::_EKRowSet, cons::V
     # inequality with LT, LE, GE or GT.
     equal = findfirst(i -> active[i] && cons[i].opcode == _EK_EQ, eachindex(cons))
     ordered = equal !== nothing ? nothing :
-              findfirst(i -> active[i] && cons[i].opcode in (_EK_LT, _EK_LE, _EK_GE, _EK_GT),
-        eachindex(cons))
+        findfirst(
+            i -> active[i] && cons[i].opcode in (_EK_LT, _EK_LE, _EK_GE, _EK_GT),
+            eachindex(cons)
+        )
     cnstr = equal !== nothing ? equal : ordered
     case = equal !== nothing ? 1 : ordered !== nothing ? 2 : 3
     rowvec = Vector{Int32}(undef, nt3)
@@ -683,8 +720,10 @@ function _ek_join(segs::Vector{_EKQSeg}, rs1::_EKRowSet, rs2::_EKRowSet, cons::V
                 r = c.rhs.tabidx
                 ql = segs[segvec[l]]
                 qr = segs[segvec[r]]
-                _ek_colmatch(c.opcode, ql.file, ql.cols[c.lhs.colidx], rowvec[l], qr.file,
-                    qr.cols[c.rhs.colidx], rowvec[r]) || return false
+                _ek_colmatch(
+                    c.opcode, ql.file, ql.cols[c.lhs.colidx], rowvec[l], qr.file,
+                    qr.cols[c.rhs.colidx], rowvec[r]
+                ) || return false
             end
             return true
         end
@@ -705,10 +744,10 @@ function _ek_join(segs::Vector{_EKQSeg}, rs1::_EKRowSet, rs2::_EKRowSet, cons::V
             # "Left" is the row set that holds the table of the left side of the constraint.
             lfirst = c.lhs.tabidx <= nt1
             lkeys = lfirst ? _ek_join_keys(segs, segvec, c.lhs.tabidx, c.lhs.colidx, rows1, nt1, 0) :
-                    _ek_join_keys(segs, segvec, c.lhs.tabidx, c.lhs.colidx, rows2, nt2, nt1)
+                _ek_join_keys(segs, segvec, c.lhs.tabidx, c.lhs.colidx, rows2, nt2, nt1)
             rfirst = c.rhs.tabidx <= nt1
             rkeys = rfirst ? _ek_join_keys(segs, segvec, c.rhs.tabidx, c.rhs.colidx, rows1, nt1, 0) :
-                    _ek_join_keys(segs, segvec, c.rhs.tabidx, c.rhs.colidx, rows2, nt2, nt1)
+                _ek_join_keys(segs, segvec, c.rhs.tabidx, c.rhs.colidx, rows2, nt2, nt1)
             nl = length(lkeys.null)
             nr = length(rkeys.null)
             lov = _ek_shellsort!(collect(1:nl), (a, b) -> _ek_keycmp(lkeys, a, lkeys, b) != _EK_GT)
@@ -826,17 +865,17 @@ header), and the empty segment vectors are removed as CSPICE does it (defect (c)
 function _ek_weed!(sets::Vector{_EKRowSet}, compat::Bool)
     isempty(sets) && return sets
     nt = sets[1].nt
-    seen = Set{Tuple{Vector{Int},Vector{Int32}}}()
+    seen = Set{Tuple{Vector{Int}, Vector{Int32}}}()
     for (c, rs) in enumerate(sets)
         # invariant: `seen` holds the row vectors of the row sets before c
-        newkeys = Tuple{Vector{Int},Vector{Int32}}[]
+        newkeys = Tuple{Vector{Int}, Vector{Int32}}[]
         counts = Int[length(r) ÷ nt for r in rs.rows]
         for (pos, sv) in enumerate(rs.segvecs)
             rows = rs.rows[pos]
             kept = Int32[]
             tag = compat ? [pos] : sv
             for i in 1:counts[pos]
-                rv = rows[(i-1)*nt+1:i*nt]
+                rv = rows[((i - 1) * nt + 1):(i * nt)]
                 if c > 1 && (tag, rv) in seen
                     continue
                 end
@@ -897,11 +936,15 @@ struct EKResult
 end
 
 Base.length(r::EKResult) = r.nmrows
-Base.show(io::IO, r::EKResult) = print(io, "EKResult(", r.nmrows, " rows, columns ",
-    join(r.selname, ", "), ")")
+Base.show(io::IO, r::EKResult) = print(
+    io, "EKResult(", r.nmrows, " rows, columns ",
+    join(r.selname, ", "), ")"
+)
 
-_ek_empty_result() = EKResult(0, 0, _EKQSeg[], Matrix{Int32}(undef, 0, 0),
-    Matrix{Int32}(undef, 0, 0), Int[], Int[], Symbol[], String[])
+_ek_empty_result() = EKResult(
+    0, 0, _EKQSeg[], Matrix{Int32}(undef, 0, 0),
+    Matrix{Int32}(undef, 0, 0), Int[], Int[], Symbol[], String[]
+)
 
 "Contract: returns `c` with the correctly rounded value `c.dexact` in place of `c.dval`."
 _ek_exact_constraint(c::_EKQConstraint) = c.dval === c.dexact ? c :
@@ -914,11 +957,11 @@ Port of `eksrch`: run the encoded query `q` (the result of `_ek_encode_query` fo
 tables of `ks`) on the snapshot `ks`. Pure function of its arguments. `compat = true`
 reproduces three defects of CSPICE (see the file header); it exists for the tests.
 """
-function _ek_search(ks::KernelSet, q; compat::Bool=false)
+function _ek_search(ks::KernelSet, q; compat::Bool = false)
     ntab = length(q.tables)
     segs = _EKQSeg[]
     tabsegs = Vector{Vector{Int}}(undef, ntab)
-    first_of = Dict{Int,Vector{Int}}()
+    first_of = Dict{Int, Vector{Int}}()
     for t in 1:ntab
         tabsegs[t] = get!(first_of, q.tabcat[t]) do
             table = ks.ektables[q.tabcat[t]]
@@ -936,7 +979,7 @@ function _ek_search(ks::KernelSet, q; compat::Bool=false)
     cjend = 0
     for conj in 1:max(1, nconj)
         cjsize = nconj == 0 ? 0 : q.conjsizes[conj]
-        cons = q.constraints[cjend+1:cjend+cjsize]
+        cons = q.constraints[(cjend + 1):(cjend + cjsize)]
         # The public search compares with the correctly rounded number of the query.
         compat || (cons = map(_ek_exact_constraint, cons))
         cjend += cjsize
@@ -944,9 +987,11 @@ function _ek_search(ks::KernelSet, q; compat::Bool=false)
         for t in 2:ntab
             # invariant: `res` holds the combinations of tables 1 to t-1
             rst = _ek_table_rows(segs, tabsegs[t], t, cons, compat)
-            active = Bool[c.cnstyp == 1 && 1 <= c.lhs.tabidx <= t && 1 <= c.rhs.tabidx <= t &&
-                          c.lhs.tabidx != c.rhs.tabidx && (c.lhs.tabidx == t || c.rhs.tabidx == t)
-                          for c in cons]
+            active = Bool[
+                c.cnstyp == 1 && 1 <= c.lhs.tabidx <= t && 1 <= c.rhs.tabidx <= t &&
+                    c.lhs.tabidx != c.rhs.tabidx && (c.lhs.tabidx == t || c.rhs.tabidx == t)
+                    for c in cons
+            ]
             res = _ek_join(segs, res, rst, cons, active)
         end
         push!(sets, res)
@@ -955,17 +1000,17 @@ function _ek_search(ks::KernelSet, q; compat::Bool=false)
         compat && _ek_weed!(sets, true)
     end
     compat || _ek_weed!(sets, false)
-    n = sum(_ek_nrows, sets; init=0)
+    n = sum(_ek_nrows, sets; init = 0)
     rowseg = Matrix{Int32}(undef, ntab, n)
     rowptr = Matrix{Int32}(undef, ntab, n)
     k = 0
     for rs in sets, (pos, sv) in enumerate(rs.segvecs)
         rows = rs.rows[pos]
-        for i in 1:(length(rows)÷ntab)
+        for i in 1:(length(rows) ÷ ntab)
             k += 1
             for t in 1:ntab
                 rowseg[t, k] = sv[t]
-                rowptr[t, k] = rows[(i-1)*ntab+t]
+                rowptr[t, k] = rows[(i - 1) * ntab + t]
             end
         end
     end
@@ -989,8 +1034,10 @@ result is row `ord[i]`. `orderby` holds the column and the sense code (0 ascendi
 1 descending) of each key. A null entry is less than every value. The Shell sort is
 that of CSPICE, so rows with equal keys end in the same order.
 """
-function _ek_order(segs::Vector{_EKQSeg}, rowseg::Matrix{Int32}, rowptr::Matrix{Int32},
-        orderby::Vector)
+function _ek_order(
+        segs::Vector{_EKQSeg}, rowseg::Matrix{Int32}, rowptr::Matrix{Int32},
+        orderby::Vector
+    )
     n = size(rowseg, 2)
     keys = _EKKeys[]
     senses = Int[]

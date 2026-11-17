@@ -37,7 +37,7 @@ struct _GFFov
     corr::Aberration
     ustl::Bool
     xmit::Bool
-    trad::NTuple{3,Float64}
+    trad::NTuple{3, Float64}
     rdir::Vec3{Float64}
     ifid::Int32
     ifrname::String
@@ -57,7 +57,7 @@ struct _GFFov
     fsmx::Mat3{Float64}
     fx::Vec3{Float64}
     fy::Vec3{Float64}
-    fpol::Vector{SVector{2,Float64}}
+    fpol::Vector{SVector{2, Float64}}
 end
 
 """
@@ -78,9 +78,11 @@ positive radii; a ray is not zero (`:zerovector`); the instrument is known
 and the errors of the axis of a polygon (`:degeneratecase`, `:facenotfound`,
 `:notsupported`). The frame of the instrument is looked up at the first evaluation.
 """
-function _gf_fov(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
+function _gf_fov(
+        ks::KernelSet, inst::NameOrID, tshape::AbstractString,
         raydir::Vec3{Float64}, target::NameOrID, tframe::NameOrID, abcorr::AbcorrArg,
-        obsrvr::NameOrID)
+        obsrvr::NameOrID
+    )
     obs = _geo_body(ks, obsrvr, "observer")
     shp = _geo_fov_tshape(tshape)
     uray = shp == _GEO_FOV_RAY
@@ -92,14 +94,20 @@ function _gf_fov(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
     end
     tfid = Int32(0)
     if uray || etrg
-        (tframe isa AbstractString && all(==(' '), tframe)) && _geo_fov_error(:invalidframe,
-            "the name of the reference frame is blank")
+        (tframe isa AbstractString && all(==(' '), tframe)) && _geo_fov_error(
+            :invalidframe,
+            "the name of the reference frame is blank"
+        )
         tfid = _geo_namfrm(ks, tframe)
-        tfid == Int32(0) && _geo_fov_error(:invalidframe,
-            "the reference frame $tframe is not recognized")
+        tfid == Int32(0) && _geo_fov_error(
+            :invalidframe,
+            "the reference frame $tframe is not recognized"
+        )
         center, _, found = _geo_frinfo(ks, tfid)
-        found || _geo_fov_error(:frameinfonotfound,
-            "no data are available for the reference frame $tframe")
+        found || _geo_fov_error(
+            :frameinfonotfound,
+            "no data are available for the reference frame $tframe"
+        )
         (etrg && center != targ) && _geo_bad_center(tframe, target, center)
     end
     ustl = false
@@ -113,8 +121,10 @@ function _gf_fov(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
     trad = etrg ? _geo_radii(ks, targ) : (0.0, 0.0, 0.0)
     rdir = _GF_ZERO3
     if uray
-        _m_iszero(raydir) && _geo_fov_error(:zerovector,
-            "the direction of the ray is the zero vector")
+        _m_iszero(raydir) && _geo_fov_error(
+            :zerovector,
+            "the direction of the ray is the zero vector"
+        )
         rdir = _m_hat(raydir)
     end
     instid = _geo_body(ks, inst, "instrument")
@@ -127,9 +137,11 @@ function _gf_fov(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
     for b in bounds                      # invariant: arad is the largest angle so far
         arad = max(arad, vsep(b, faxi))
     end
-    arad > _M_HALFPI - 1e-6 && _geo_fov_error(:fovtoowide,
+    arad > _M_HALFPI - 1.0e-6 && _geo_fov_error(
+        :fovtoowide,
         "the field of view of the instrument $inst has the angular radius " *
-        "$(rad2deg(arad)) degrees; the limit is $(rad2deg(_M_HALFPI - 1e-6)) degrees")
+            "$(rad2deg(arad)) degrees; the limit is $(rad2deg(_M_HALFPI - 1.0e-6)) degrees"
+    )
     plane = nvc2pl(faxi, 1.0)
     fvct = _m_hat(faxi)
     origin = _GF_ZERO3
@@ -140,14 +152,18 @@ function _gf_fov(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
     if shape == "ELLIPSE" || (circle && etrg)
         b2 = circle ? _m_vrotv(bounds[1], faxi, _M_HALFPI) : bounds[2]
         nx, p = inrypl(origin, bounds[1], plane)
-        nx == 1 || _geo_fov_error(:degeneratecase,
-            "the first boundary vector does not meet the plane of the field of view")
+        nx == 1 || _geo_fov_error(
+            :degeneratecase,
+            "the first boundary vector does not meet the plane of the field of view"
+        )
         semi1 = p - fvct
         xmag1 = _m_norm(semi1)
         xmag1 == 0.0 && _geo_fov_error(:degeneratecase, "the field of view has a zero semi-axis")
         nx, p = inrypl(origin, b2, plane)
-        nx == 1 || _geo_fov_error(:degeneratecase,
-            "the second boundary vector does not meet the plane of the field of view")
+        nx == 1 || _geo_fov_error(
+            :degeneratecase,
+            "the second boundary vector does not meet the plane of the field of view"
+        )
         semi2 = p - fvct
         xmag2 = _m_norm(semi2)
         xmag2 == 0.0 && _geo_fov_error(:degeneratecase, "the field of view has a zero semi-axis")
@@ -162,28 +178,32 @@ function _gf_fov(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
         c1 = r3 * _m_hat(semi1)
         r2 = xmag2 / xmag1 * r3
         c2 = r2 * _m_ucrss(c3, c1)
-        escale = 1e-5 / (_m_norm(edct) + max(r3, r2))
+        escale = 1.0e-5 / (_m_norm(edct) + max(r3, r2))
         fsmx = hcat(escale * c1, escale * c2, escale * c3)
         edct = escale * edct
     end
     cang = circle ? vsep(faxi, bounds[1]) : 0.0
     fx = _GF_ZERO3
     fy = _GF_ZERO3
-    fpol = SVector{2,Float64}[]
+    fpol = SVector{2, Float64}[]
     if poly && !etrg
         _, fx, fy = _geo_frame(faxi)
         for i in eachindex(bounds)       # invariant: fpol holds the vertices before i
             nx, p = inrypl(origin, bounds[i], plane)
-            nx == 1 || _geo_fov_error(:degeneratecase,
-                "the boundary vector $i does not meet the plane of the field of view")
+            nx == 1 || _geo_fov_error(
+                :degeneratecase,
+                "the boundary vector $i does not meet the plane of the field of view"
+            )
             q = p - fvct
             push!(fpol, SVector(_m_dot(fx, q), _m_dot(fy, q)))
         end
     end
-    return _GFFov(ks, obs, targ, shp, tfid, corr, ustl, xmit, trad, rdir, ifid,
+    return _GFFov(
+        ks, obs, targ, shp, tfid, corr, ustl, xmit, trad, rdir, ifid,
         String(ifrname), poly, circle, faxi, arad, Float64(cang), bounds,
         SpicePlane{Float64}(plane.normal, plane.constant), fvct, semi1, semi2, xmag1, xmag2,
-        edct, fsmx, fx, fy, fpol)
+        edct, fsmx, fx, fy, fpol
+    )
 end
 
 """
@@ -206,8 +226,10 @@ function _gf_visible(v::_GFFov, et::Float64)
         trad = v.trad
         pos, lt = _geo_spkezp(ks, v.targ, et, v.tfid, v.corr, v.obs)
         ettarg = et + _geo_sign(v.corr) * lt
-        insmat = _m_mxm(frame_rotation(ks, _GF_J2000, ifid, et),
-            frame_rotation(ks, v.tfid, _GF_J2000, ettarg))
+        insmat = _m_mxm(
+            frame_rotation(ks, _GF_J2000, ifid, et),
+            frame_rotation(ks, v.tfid, _GF_J2000, ettarg)
+        )
         if v.poly
             limb = edlimb(trad[1], trad[2], trad[3], -pos)
             lc, s1, s2 = el2cgv(limb)
@@ -250,9 +272,11 @@ end
 then the search of each interval of `cnfine` for the intervals on which the state
 `_gf_visible` is true. Postcondition: a new window, a subset of `cnfine`.
 """
-function _gf_fove(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
+function _gf_fove(
+        ks::KernelSet, inst::NameOrID, tshape::AbstractString,
         raydir::Vec3{Float64}, target::NameOrID, tframe::NameOrID, abcorr::AbcorrArg,
-        obsrvr::NameOrID, cnfine::Window, run::_GFRun)
+        obsrvr::NameOrID, cnfine::Window, run::_GFRun
+    )
     v = _gf_fov(ks, inst, tshape, raydir, target, tframe, abcorr, obsrvr)
     _gf_repi(run, cnfine, "Target visibility search ", "done.")
     result = _gf_scan!(Window(), et -> _gf_visible(v, et), cnfine, run, false)
@@ -260,8 +284,12 @@ function _gf_fove(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
     return result
 end
 
-@noinline _gf_ray_in_gftfov() = throw(SpiceError(:invalidoption, "The target shape RAY " *
-    "is not supported by this routine. Use the routine GFRFOV instead."))
+@noinline _gf_ray_in_gftfov() = throw(
+    SpiceError(
+        :invalidoption, "The target shape RAY " *
+            "is not supported by this routine. Use the routine GFRFOV instead."
+    )
+)
 
 """
     gftfov([ctx,] inst, target, tshape, tframe, abcorr, obsrvr, step, cnfine;
@@ -291,7 +319,8 @@ The result is a new `Window` that is a subset of the confinement window `cnfine`
 
 The keywords are those of [`gfdist`](@ref).
 
-Throws `SpiceError(:invalidstep)` if `step <= 0`, `SpiceError(:invalidtolerance)` if
+Throws `SpiceError(:invalidstep)` if `step <= 0` or a step does not advance the time
+(CSPICE then loops for ever), `SpiceError(:invalidtolerance)` if
 `tol <= 0`, and
 - `SpiceError(:invalidoption)` if `tshape` is `"RAY"` (use [`gfrfov`](@ref)) or `abcorr`
   is not a correction;
@@ -312,22 +341,32 @@ shape of the field of view and for an observer inside the target. The errors of
 
 See also [`gfrfov`](@ref), [`gffove`](@ref), [`fovtrg`](@ref).
 """
-function gftfov(ks::KernelSet, inst::NameOrID, target::NameOrID, tshape::AbstractString,
+function gftfov(
+        ks::KernelSet, inst::NameOrID, target::NameOrID, tshape::AbstractString,
         tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window;
-        tol::Real=_GF_CNVTOL, bail=nothing, report=nothing, threads::Bool=false)
+        tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
+    )
     _dsk_eqstr(tshape, "RAY") && _gf_ray_in_gftfov()
     run = _gf_run(step, tol; bail, report, threads)
     return _gf_fove(ks, inst, tshape, _GF_ZERO3, target, tframe, abcorr, obsrvr, cnfine, run)
 end
-gftfov(ctx::SpiceContext, inst::NameOrID, target::NameOrID, tshape::AbstractString,
+gftfov(
+    ctx::SpiceContext, inst::NameOrID, target::NameOrID, tshape::AbstractString,
     tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window;
-    tol::Real=gfstol(ctx), kw...) =
-    gftfov(kernelset(ctx), inst, target, tshape, tframe, abcorr, obsrvr, step, cnfine;
-        tol, kw...)
-gftfov(inst::NameOrID, target::NameOrID, tshape::AbstractString, tframe::NameOrID,
-    abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window; kw...) =
-    gftfov(default_context(), inst, target, tshape, tframe, abcorr, obsrvr, step, cnfine;
-        kw...)
+    tol::Real = gfstol(ctx), kw...
+) =
+    gftfov(
+    kernelset(ctx), inst, target, tshape, tframe, abcorr, obsrvr, step, cnfine;
+    tol, kw...
+)
+gftfov(
+    inst::NameOrID, target::NameOrID, tshape::AbstractString, tframe::NameOrID,
+    abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window; kw...
+) =
+    gftfov(
+    default_context(), inst, target, tshape, tframe, abcorr, obsrvr, step, cnfine;
+    kw...
+)
 
 """
     gfrfov([ctx,] inst, raydir, rframe, abcorr, obsrvr, step, cnfine;
@@ -352,18 +391,24 @@ and its field of view, and `SpiceError` with the kind
 
 See also [`gftfov`](@ref), [`gffove`](@ref), [`fovray`](@ref).
 """
-function gfrfov(ks::KernelSet, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
+function gfrfov(
+        ks::KernelSet, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
         abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window;
-        tol::Real=_GF_CNVTOL, bail=nothing, report=nothing, threads::Bool=false)
+        tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
+    )
     run = _gf_run(step, tol; bail, report, threads)
     return _gf_fove(ks, inst, "RAY", _geo_pos(raydir), 0, rframe, abcorr, obsrvr, cnfine, run)
 end
-gfrfov(ctx::SpiceContext, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
-    abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window; tol::Real=gfstol(ctx),
-    kw...) =
+gfrfov(
+    ctx::SpiceContext, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
+    abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window; tol::Real = gfstol(ctx),
+    kw...
+) =
     gfrfov(kernelset(ctx), inst, raydir, rframe, abcorr, obsrvr, step, cnfine; tol, kw...)
-gfrfov(inst::NameOrID, raydir::AbstractVector, rframe::NameOrID, abcorr::AbcorrArg,
-    obsrvr::NameOrID, step::Real, cnfine::Window; kw...) =
+gfrfov(
+    inst::NameOrID, raydir::AbstractVector, rframe::NameOrID, abcorr::AbcorrArg,
+    obsrvr::NameOrID, step::Real, cnfine::Window; kw...
+) =
     gfrfov(default_context(), inst, raydir, rframe, abcorr, obsrvr, step, cnfine; kw...)
 
 """
@@ -385,21 +430,33 @@ gives the window of `gftfov` or `gfrfov` with the step `step` and the tolerance 
 
 See also [`gftfov`](@ref), [`gfrfov`](@ref), [`gfevnt`](@ref).
 """
-function gffove(ks::KernelSet, inst::NameOrID, tshape::AbstractString,
+function gffove(
+        ks::KernelSet, inst::NameOrID, tshape::AbstractString,
         raydir::AbstractVector, target::NameOrID, tframe::NameOrID, abcorr::AbcorrArg,
-        obsrvr::NameOrID, tol::Real, udstep, udrefn, cnfine::Window; bail=nothing,
-        report=nothing, threads::Bool=false)
-    run = _gf_run(udstep, tol; refine=udrefn, bail, report, threads)
-    return _gf_fove(ks, inst, tshape, _geo_pos(raydir), target, tframe, abcorr, obsrvr,
-        cnfine, run)
+        obsrvr::NameOrID, tol::Real, udstep, udrefn, cnfine::Window; bail = nothing,
+        report = nothing, threads::Bool = false
+    )
+    run = _gf_run(udstep, tol; refine = udrefn, bail, report, threads)
+    return _gf_fove(
+        ks, inst, tshape, _geo_pos(raydir), target, tframe, abcorr, obsrvr,
+        cnfine, run
+    )
 end
-gffove(ctx::SpiceContext, inst::NameOrID, tshape::AbstractString, raydir::AbstractVector,
+gffove(
+    ctx::SpiceContext, inst::NameOrID, tshape::AbstractString, raydir::AbstractVector,
     target::NameOrID, tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, tol::Real,
-    udstep, udrefn, cnfine::Window; kw...) =
-    gffove(kernelset(ctx), inst, tshape, raydir, target, tframe, abcorr, obsrvr, tol,
-        udstep, udrefn, cnfine; kw...)
-gffove(inst::NameOrID, tshape::AbstractString, raydir::AbstractVector, target::NameOrID,
+    udstep, udrefn, cnfine::Window; kw...
+) =
+    gffove(
+    kernelset(ctx), inst, tshape, raydir, target, tframe, abcorr, obsrvr, tol,
+    udstep, udrefn, cnfine; kw...
+)
+gffove(
+    inst::NameOrID, tshape::AbstractString, raydir::AbstractVector, target::NameOrID,
     tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, tol::Real, udstep, udrefn,
-    cnfine::Window; kw...) =
-    gffove(default_context(), inst, tshape, raydir, target, tframe, abcorr, obsrvr, tol,
-        udstep, udrefn, cnfine; kw...)
+    cnfine::Window; kw...
+) =
+    gffove(
+    default_context(), inst, tshape, raydir, target, tframe, abcorr, obsrvr, tol,
+    udstep, udrefn, cnfine; kw...
+)

@@ -131,15 +131,17 @@ struct EKTable
     name::String
     cnames::Vector{String}
     attrs::Vector{EKColumnAttr}
-    segs::Vector{NTuple{2,Int32}}
+    segs::Vector{NTuple{2, Int32}}
     cols::Vector{Vector{_EKColumn}}
 end
 
 # A catalog entry without column descriptors.
 EKTable(name, cnames, attrs, segs) = EKTable(name, cnames, attrs, segs, Vector{_EKColumn}[])
 
-_ek_attr(c::_EKColumn) = EKColumnAttr(Int(c.cclass), _EK_TYPE_SYMBOLS[c.dtype],
-    c.dtype == _EK_CHR ? Int(c.strlen) : 0, Int(c.size), c.ixtype != -1, c.nullok)
+_ek_attr(c::_EKColumn) = EKColumnAttr(
+    Int(c.cclass), _EK_TYPE_SYMBOLS[c.dtype],
+    c.dtype == _EK_CHR ? Int(c.strlen) : 0, Int(c.size), c.ixtype != -1, c.nullok
+)
 
 _ek_same_attributes(a::_EKColumn, b::_EKColumn) = a.cclass == b.cclass && a.dtype == b.dtype &&
     a.strlen == b.strlen && a.size == b.size && (a.ixtype != -1) == (b.ixtype != -1) &&
@@ -160,26 +162,42 @@ function _ek_build_tables(files::Vector{EKFile})
     for (fno, file) in enumerate(files), seg in file.segments
         k = findfirst(t -> t.name == seg.table, tables)
         if k === nothing
-            push!(tables, EKTable(seg.table, String[c.name for c in seg.columns],
-                EKColumnAttr[_ek_attr(c) for c in seg.columns],
-                NTuple{2,Int32}[(Int32(fno), seg.segno)], Vector{_EKColumn}[seg.columns]))
+            push!(
+                tables, EKTable(
+                    seg.table, String[c.name for c in seg.columns],
+                    EKColumnAttr[_ek_attr(c) for c in seg.columns],
+                    NTuple{2, Int32}[(Int32(fno), seg.segno)], Vector{_EKColumn}[seg.columns]
+                )
+            )
             continue
         end
         t = tables[k]
-        length(seg.columns) == length(t.cnames) || throw(SpiceError(:ekcolnummismatch,
-            "The EK file $(file.path) could not be loaded; the number of columns " *
-            "($(length(seg.columns))) in segment $(seg.segno) does not match the number of " *
-            "columns ($(length(t.cnames))) in the parent table $(t.name)."))
+        length(seg.columns) == length(t.cnames) || throw(
+            SpiceError(
+                :ekcolnummismatch,
+                "The EK file $(file.path) could not be loaded; the number of columns " *
+                    "($(length(seg.columns))) in segment $(seg.segno) does not match the number of " *
+                    "columns ($(length(t.cnames))) in the parent table $(t.name)."
+            )
+        )
         cols = Vector{_EKColumn}(undef, length(t.cnames))
         for (i, name) in enumerate(t.cnames)   # invariant: cols[1:i-1] match the table
             j = findfirst(c -> c.name == name, seg.columns)
-            j === nothing && throw(SpiceError(:ekmissingcolumn, "The EK file $(file.path) " *
-                "could not be loaded; the column $name in already loaded table $(t.name) " *
-                "is not present in segment $(seg.segno) in the EK file."))
-            _ek_same_attributes(seg.columns[j], t.cols[1][i]) || throw(SpiceError(:badattributes,
-                "EK file $(file.path) contains a column whose attributes conflict with a " *
-                "loaded column.  The offending column name is $name; the column is in " *
-                "segment $(seg.segno) of the file."))
+            j === nothing && throw(
+                SpiceError(
+                    :ekmissingcolumn, "The EK file $(file.path) " *
+                        "could not be loaded; the column $name in already loaded table $(t.name) " *
+                        "is not present in segment $(seg.segno) in the EK file."
+                )
+            )
+            _ek_same_attributes(seg.columns[j], t.cols[1][i]) || throw(
+                SpiceError(
+                    :badattributes,
+                    "EK file $(file.path) contains a column whose attributes conflict with a " *
+                        "loaded column.  The offending column name is $name; the column is in " *
+                        "segment $(seg.segno) of the file."
+                )
+            )
             cols[i] = seg.columns[j]
         end
         push!(t.segs, (Int32(fno), seg.segno))

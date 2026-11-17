@@ -43,7 +43,7 @@ segregated (see [`DASHandle`](@ref)), which is what `optmiz = true` gives in CSP
 Throws `SpiceError(:daswritefail)` if the file cannot be written; the handle then stays
 open.
 """
-dskcls(h::DASHandle, optmiz::Bool=true) = dascls(h)
+dskcls(h::DASHandle, optmiz::Bool = true) = dascls(h)
 
 # ---------------------------------------------------------------------------------------
 # Linked cells (zzinilnk, zzaddlnk, zztrvlnk, zzuntngl)
@@ -52,23 +52,31 @@ dskcls(h::DASHandle, optmiz::Bool=true) = dascls(h)
 "`zzinilnk`: all `maxp` pointers of `a[poff+1:...]` become -1 and the cell count 0."
 function _dsk_inilnk!(a::Vector{Int}, poff::Int, maxp::Int, maxc::Int)
     maxp < 1 && _dsk_throw(:valueoutofrange, "the pointer array size MAXP = $maxp; it must be >= 1")
-    maxc < maxp && _dsk_throw(:valueoutofrange, "Cell array size MAXC = $maxc; size must " *
-        "be at least as large as pointer array size $maxp.")
-    fill!(view(a, poff+1:poff+maxp), -1)
+    maxc < maxp && _dsk_throw(
+        :valueoutofrange, "Cell array size MAXC = $maxc; size must " *
+            "be at least as large as pointer array size $maxp."
+    )
+    fill!(view(a, (poff + 1):(poff + maxp)), -1)
     return 0
 end
 
 "`zzaddlnk`: add the value `bval` to the list of the pointer `aval`; returns the new cell count."
-@inline function _dsk_addlnk!(a::Vector{Int}, poff::Int, aval::Int, bval::Int, maxa::Int,
-        cval::Vector{Int32}, cnext::Vector{Int32}, ncell::Int)
-    (1 <= aval <= maxa) || _dsk_throw(:avaloutofrange,
-        "the index AVAL is out of range: AVAL = $aval, MAXA = $maxa")
+@inline function _dsk_addlnk!(
+        a::Vector{Int}, poff::Int, aval::Int, bval::Int, maxa::Int,
+        cval::Vector{Int32}, cnext::Vector{Int32}, ncell::Int
+    )
+    (1 <= aval <= maxa) || _dsk_throw(
+        :avaloutofrange,
+        "the index AVAL is out of range: AVAL = $aval, MAXA = $maxa"
+    )
     ncell += 1
-    ncell > length(cval) && _dsk_throw(:cellarraytoosmall,
-        "NCELL is larger than the cell array size $(length(cval))")
+    ncell > length(cval) && _dsk_throw(
+        :cellarraytoosmall,
+        "NCELL is larger than the cell array size $(length(cval))"
+    )
     @inbounds cval[ncell] = bval
-    @inbounds cnext[ncell] = a[poff+aval]
-    @inbounds a[poff+aval] = ncell
+    @inbounds cnext[ncell] = a[poff + aval]
+    @inbounds a[poff + aval] = ncell
     return ncell
 end
 
@@ -80,40 +88,52 @@ end
 one that was added first), and make each pointer the position of its count, or -1 for
 an empty list. Returns the number of elements that were written.
 """
-function _dsk_untngl!(a::Vector{Int}, poff::Int, nptr::Int, cval::Vector{Int32},
-        cnext::Vector{Int32}, loff::Int, maxb::Int)
-    nptr > length(cval) && _dsk_throw(:barraytoosmall,
-        "the input pointer array is larger than the cell array")
+function _dsk_untngl!(
+        a::Vector{Int}, poff::Int, nptr::Int, cval::Vector{Int32},
+        cnext::Vector{Int32}, loff::Int, maxb::Int
+    )
+    nptr > length(cval) && _dsk_throw(
+        :barraytoosmall,
+        "the input pointer array is larger than the cell array"
+    )
     room = maxb
     ptrdex = 0
     for aval in 1:nptr
         # invariant: a[loff+1:loff+ptrdex] holds the lists of the pointers 1 .. aval-1
-        (ptrdex + 2 > maxb || room <= 0) && _dsk_throw(:barraytoosmall,
-            "the output list array of size $maxb is too small")
+        (ptrdex + 2 > maxb || room <= 0) && _dsk_throw(
+            :barraytoosmall,
+            "the output list array of size $maxb is too small"
+        )
         nb = 0
-        a[loff+ptrdex+1] = 0
-        a[loff+ptrdex+2] = 0
-        ptr = a[poff+aval]
+        a[loff + ptrdex + 1] = 0
+        a[loff + ptrdex + 2] = 0
+        ptr = a[poff + aval]
         while ptr != -1
-            (ptr < -1 || ptr == 0 || ptr > length(cval)) && _dsk_throw(:pointeroutofrange,
-                "the cell pointer $ptr is out of range")
+            (ptr < -1 || ptr == 0 || ptr > length(cval)) && _dsk_throw(
+                :pointeroutofrange,
+                "the cell pointer $ptr is out of range"
+            )
             nb += 1
-            nb > room && _dsk_throw(:barraytoosmall,
-                "the output list array of size $maxb is too small")
+            nb > room && _dsk_throw(
+                :barraytoosmall,
+                "the output list array of size $maxb is too small"
+            )
             # CSPICE stores the count in the first element after the walk; an element
             # count of `room` then does not fit, which the check above reports.
-            loff + ptrdex + 1 + nb <= length(a) || _dsk_throw(:barraytoosmall,
-                "the output list array of size $maxb is too small")
-            a[loff+ptrdex+1+nb] = cval[ptr]
+            loff + ptrdex + 1 + nb <= length(a) || _dsk_throw(
+                :barraytoosmall,
+                "the output list array of size $maxb is too small"
+            )
+            a[loff + ptrdex + 1 + nb] = cval[ptr]
             ptr = Int(cnext[ptr])
         end
-        a[loff+ptrdex+1] = nb
+        a[loff + ptrdex + 1] = nb
         if nb > 0
-            a[poff+aval] = ptrdex + 1
+            a[poff + aval] = ptrdex + 1
             room -= nb + 1
             ptrdex += 1 + nb
         else
-            a[poff+aval] = -1
+            a[poff + aval] = -1
         end
     end
     return ptrdex
@@ -124,8 +144,10 @@ end
 # ---------------------------------------------------------------------------------------
 
 "`zzgetvox`: the voxel (1-based) of the point `(x, y, z)`, or `nothing` if it is outside of the grid."
-@inline function _dsk_getvox(voxsiz::Float64, voxori::NTuple{3,Float64}, nvox::NTuple{3,Int},
-        xyz::NTuple{3,Float64})
+@inline function _dsk_getvox(
+        voxsiz::Float64, voxori::NTuple{3, Float64}, nvox::NTuple{3, Int},
+        xyz::NTuple{3, Float64}
+    )
     voxsiz <= 0.0 && _dsk_throw(:nonpositivevalue, "the voxel size must be positive")
     t1 = (xyz[1] - voxori[1]) / voxsiz
     (t1 < 0.0 || t1 > nvox[1]) && return nothing
@@ -133,8 +155,10 @@ end
     (t2 < 0.0 || t2 > nvox[2]) && return nothing
     t3 = (xyz[3] - voxori[3]) / voxsiz
     (t3 < 0.0 || t3 > nvox[3]) && return nothing
-    return (min(unsafe_trunc(Int, t1) + 1, nvox[1]), min(unsafe_trunc(Int, t2) + 1, nvox[2]),
-        min(unsafe_trunc(Int, t3) + 1, nvox[3]))
+    return (
+        min(unsafe_trunc(Int, t1) + 1, nvox[1]), min(unsafe_trunc(Int, t2) + 1, nvox[2]),
+        min(unsafe_trunc(Int, t3) + 1, nvox[3]),
+    )
 end
 
 "`d_nint`: the nearest integer, with a tie away from zero."
@@ -150,23 +174,27 @@ size to `spaixd[10]`, the grid extents to `spaixi[1:3]`, the pointer count to
 `spaixi[5]`, the list size to `spaixi[6]`, the coarse grid to `spaixi[8:...]`, the
 pointers to `spaixi[100008:...]` and the list after `maxptr` pointers.
 """
-function _dsk_mkspin!(spaixd::Vector{Float64}, spaixi::Vector{Int}, vf::Vector{Float64},
+function _dsk_mkspin!(
+        spaixd::Vector{Float64}, spaixi::Vector{Int}, vf::Vector{Float64},
         pf::Vector{Int}, np::Int, voxscl::Float64, cgscal::Int, maxptr::Int, maxvxl::Int,
-        cval::Vector{Int32}, cnext::Vector{Int32})
-    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(:valueoutofrange,
-        "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT")
+        cval::Vector{Int32}, cnext::Vector{Int32}
+    )
+    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(
+        :valueoutofrange,
+        "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
+    )
     cgscal < 1 && _dsk_throw(:valueoutofrange, "the coarse voxel scale = $cgscal; it must be >= 1")
     avext = 0.0
     xmin = ymin = zmin = _DSK_DPMAX
     xmax = ymax = zmax = -_DSK_DPMAX
     for i in 1:np                        # invariant: the extents cover the plates 1 .. i-1
-        k1 = 3 * pf[3i-2]
-        k2 = 3 * pf[3i-1]
+        k1 = 3 * pf[3i - 2]
+        k2 = 3 * pf[3i - 1]
         k3 = 3 * pf[3i]
-        bxmin = min(vf[k1-2], vf[k2-2], vf[k3-2])
-        bxmax = max(vf[k1-2], vf[k2-2], vf[k3-2])
-        bymin = min(vf[k1-1], vf[k2-1], vf[k3-1])
-        bymax = max(vf[k1-1], vf[k2-1], vf[k3-1])
+        bxmin = min(vf[k1 - 2], vf[k2 - 2], vf[k3 - 2])
+        bxmax = max(vf[k1 - 2], vf[k2 - 2], vf[k3 - 2])
+        bymin = min(vf[k1 - 1], vf[k2 - 1], vf[k3 - 1])
+        bymax = max(vf[k1 - 1], vf[k2 - 1], vf[k3 - 1])
         bzmin = min(vf[k1], vf[k2], vf[k3])
         bzmax = max(vf[k1], vf[k2], vf[k3])
         xmin = min(xmin, bxmin)
@@ -194,24 +222,34 @@ function _dsk_mkspin!(spaixd::Vector{Float64}, spaixi::Vector{Int}, vf::Vector{F
     zvmax = _dsk_nint(zmax / cvxsiz + 1.0)
     voxori = (xvmin * cvxsiz, yvmin * cvxsiz, zvmin * cvxsiz)
     spans = (xvmax - xvmin, yvmax - yvmin, zvmax - zvmin)
-    all(s -> isfinite(s) && s * cgscal <= _DSK_MAXVOX, spans) || _dsk_throw(:valueoutofrange,
-        "the fine voxel grid is too large or not defined; check the fine voxel scale")
+    all(s -> isfinite(s) && s * cgscal <= _DSK_MAXVOX, spans) || _dsk_throw(
+        :valueoutofrange,
+        "the fine voxel grid is too large or not defined; check the fine voxel scale"
+    )
     nx = Int(_dsk_nint(spans[1])) * cgscal
     ny = Int(_dsk_nint(spans[2])) * cgscal
     nz = Int(_dsk_nint(spans[3])) * cgscal
     nvox = (nx, ny, nz)
     nvxtot = nx * ny * nz
-    nvxtot > _DSK_MAXVOX && _dsk_throw(:valueoutofrange,
-        "the fine voxel count NVXTOT = $nvxtot; the count must be in the range 1:$_DSK_MAXVOX")
-    cgscal > Float64(nvxtot)^0.33333333333333331 && _dsk_throw(:valueoutofrange,
+    nvxtot > _DSK_MAXVOX && _dsk_throw(
+        :valueoutofrange,
+        "the fine voxel count NVXTOT = $nvxtot; the count must be in the range 1:$_DSK_MAXVOX"
+    )
+    cgscal > Float64(nvxtot)^0.33333333333333331 && _dsk_throw(
+        :valueoutofrange,
         "the coarse voxel scale = $cgscal; the scale must be in the range " *
-        "1:NVXTOT**(1/3), where NVXTOT = $nvxtot")
+            "1:NVXTOT**(1/3), where NVXTOT = $nvxtot"
+    )
     npcg = cgscal * (cgscal * cgscal)
-    nvxtot % npcg == 0 || _dsk_throw(:incompatiblescale,
-        "the total number of voxels, $nvxtot, is not a multiple of the coarse scale cubed")
+    nvxtot % npcg == 0 || _dsk_throw(
+        :incompatiblescale,
+        "the total number of voxels, $nvxtot, is not a multiple of the coarse scale cubed"
+    )
     ncgflg = nvxtot ÷ npcg
-    ncgflg > _DSK_MAXCGR && _dsk_throw(:coarsegridoverflow, "the number of coarse voxels " *
-        "$ncgflg is larger than the maximum $_DSK_MAXCGR")
+    ncgflg > _DSK_MAXCGR && _dsk_throw(
+        :coarsegridoverflow, "the number of coarse voxels " *
+            "$ncgflg is larger than the maximum $_DSK_MAXCGR"
+    )
     spaixd[7], spaixd[8], spaixd[9] = voxori
     spaixd[10] = voxsiz
     spaixi[1], spaixi[2], spaixi[3] = nvox
@@ -219,35 +257,37 @@ function _dsk_mkspin!(spaixd::Vector{Float64}, spaixi::Vector{Int}, vf::Vector{F
     ncell = _dsk_inilnk!(spaixi, vxpoff, maxptr, length(cval))
     cg1 = nx ÷ cgscal
     cg2 = ny ÷ cgscal
-    fill!(view(spaixi, 8:7+ncgflg), 0)
+    fill!(view(spaixi, 8:(7 + ncgflg)), 0)
     to = 1
     for i in 1:np
         # invariant: the plates 1 .. i-1 are in the lists of all voxels that they can touch
-        k1 = 3 * pf[3i-2]
-        k2 = 3 * pf[3i-1]
+        k1 = 3 * pf[3i - 2]
+        k2 = 3 * pf[3i - 1]
         k3 = 3 * pf[3i]
-        bxmin = _dsk_brcktd(min(min(vf[k1-2], vf[k2-2]), vf[k3-2]) - mdltol, xe[1], xe[2])
-        bxmax = _dsk_brcktd(max(max(vf[k1-2], vf[k2-2]), vf[k3-2]) + mdltol, xe[1], xe[2])
-        bymin = _dsk_brcktd(min(min(vf[k1-1], vf[k2-1]), vf[k3-1]) - mdltol, xe[3], xe[4])
-        bymax = _dsk_brcktd(max(max(vf[k1-1], vf[k2-1]), vf[k3-1]) + mdltol, xe[3], xe[4])
+        bxmin = _dsk_brcktd(min(min(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) - mdltol, xe[1], xe[2])
+        bxmax = _dsk_brcktd(max(max(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) + mdltol, xe[1], xe[2])
+        bymin = _dsk_brcktd(min(min(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) - mdltol, xe[3], xe[4])
+        bymax = _dsk_brcktd(max(max(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) + mdltol, xe[3], xe[4])
         bzmin = _dsk_brcktd(min(min(vf[k1], vf[k2]), vf[k3]) - mdltol, xe[5], xe[6])
         bzmax = _dsk_brcktd(max(max(vf[k1], vf[k2]), vf[k3]) + mdltol, xe[5], xe[6])
         gmin = _dsk_getvox(voxsiz, voxori, nvox, (bxmin, bymin, bzmin))
         gmax = _dsk_getvox(voxsiz, voxori, nvox, (bxmax, bymax, bzmax))
-        (gmin === nothing || gmax === nothing) && _dsk_throw(:bug,
-            "a plate of the model is outside of the voxel grid")
+        (gmin === nothing || gmax === nothing) && _dsk_throw(
+            :bug,
+            "a plate of the model is outside of the voxel grid"
+        )
         for iz in gmin[3]:gmax[3], iy in gmin[2]:gmax[2], ix in gmin[1]:gmax[1]
             c1 = (ix - 1) ÷ cgscal + 1
             c2 = (iy - 1) ÷ cgscal + 1
             c3 = (iz - 1) ÷ cgscal + 1
             cgof1d = (iz - cgscal * (c3 - 1) - 1) * cgscal * cgscal +
-                     (iy - cgscal * (c2 - 1) - 1) * cgscal + (ix - cgscal * (c1 - 1))
+                (iy - cgscal * (c2 - 1) - 1) * cgscal + (ix - cgscal * (c1 - 1))
             cvid = c1 + cg1 * (c2 - 1 + (c3 - 1) * cg2)
-            if spaixi[7+cvid] == 0
-                spaixi[7+cvid] = to
+            if spaixi[7 + cvid] == 0
+                spaixi[7 + cvid] = to
                 to += npcg
             end
-            ixptr = spaixi[7+cvid] - 1 + cgof1d
+            ixptr = spaixi[7 + cvid] - 1 + cgof1d
             ncell = _dsk_addlnk!(spaixi, vxpoff, ixptr, i, maxptr, cval, cnext, ncell)
         end
     end
@@ -299,32 +339,48 @@ Throws `SpiceError`:
 
 See also [`dskrb2`](@ref), and [`dskw02`](@ref) for an example.
 """
-function dskmi2(vrtces, plates, finscl::Real, corscl::Integer, worksz::Integer,
-        voxpsz::Integer, voxlsz::Integer, makvtl::Bool, spxisz::Integer)
+function dskmi2(
+        vrtces, plates, finscl::Real, corscl::Integer, worksz::Integer,
+        voxpsz::Integer, voxlsz::Integer, makvtl::Bool, spxisz::Integer
+    )
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
     finscl <= 0.0 && _dsk_throw(:badfinevoxelscale, "the fine voxel scale = $finscl; the scale must be positive")
     corscl < 1 && _dsk_throw(:badcoarsevoxscale, "the coarse voxel scale = $corscl; the scale must be >= 1")
-    (nv < 3 || nv > _DSK_MAXVRT) && _dsk_throw(:badvertexcount,
-        "the vertex count NV = $nv; the count must be in the range 3:$_DSK_MAXVRT")
-    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(:badplatecount,
-        "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT")
-    worksz < np + 1 && _dsk_throw(:workspacetoosmall,
-        "the workspace size = $worksz; the size is too small to hold all voxel-plate associations")
-    voxpsz < 1 && _dsk_throw(:ptrarraytoosmall, "the voxel-plate pointer array size = $voxpsz; " *
-        "the size is too small to be compatible with the coarse voxel scale $corscl")
-    voxlsz < np + 1 && _dsk_throw(:platelisttoosmall,
-        "the voxel-plate list array size = $voxlsz; the size is too small")
+    (nv < 3 || nv > _DSK_MAXVRT) && _dsk_throw(
+        :badvertexcount,
+        "the vertex count NV = $nv; the count must be in the range 3:$_DSK_MAXVRT"
+    )
+    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(
+        :badplatecount,
+        "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
+    )
+    worksz < np + 1 && _dsk_throw(
+        :workspacetoosmall,
+        "the workspace size = $worksz; the size is too small to hold all voxel-plate associations"
+    )
+    voxpsz < 1 && _dsk_throw(
+        :ptrarraytoosmall, "the voxel-plate pointer array size = $voxpsz; " *
+            "the size is too small to be compatible with the coarse voxel scale $corscl"
+    )
+    voxlsz < np + 1 && _dsk_throw(
+        :platelisttoosmall,
+        "the voxel-plate list array size = $voxlsz; the size is too small"
+    )
     reqsiz = _DSK_IXIFIX + Int(voxpsz) + Int(voxlsz)
     vtxlsz = makvtl ? nv + 3 * np : 0
     makvtl && (reqsiz += nv + vtxlsz)
-    spxisz < reqsiz && _dsk_throw(:intindextoosmall,
-        "the integer spatial index size = $spxisz; the required size is >= $reqsiz")
+    spxisz < reqsiz && _dsk_throw(
+        :intindextoosmall,
+        "the integer spatial index size = $spxisz; the required size is >= $reqsiz"
+    )
     vf = _dsk_flat(Float64, vrtces)
     pf = _dsk_flat(Int, plates)
     for k in eachindex(pf)               # invariant: the vertex numbers before k are valid
-        (1 <= pf[k] <= nv) || _dsk_throw(:badvertexindex, "vertex index $(k - 3 * ((k - 1) ÷ 3)) " *
-            "of plate $((k - 1) ÷ 3 + 1) was $(pf[k]); vertex indices must be in the range 1:$nv")
+        (1 <= pf[k] <= nv) || _dsk_throw(
+            :badvertexindex, "vertex index $(k - 3 * ((k - 1) ÷ 3)) " *
+                "of plate $((k - 1) ÷ 3 + 1) was $(pf[k]); vertex indices must be in the range 1:$nv"
+        )
     end
     spaixd = zeros(Float64, 10)
     spaixi = zeros(Int, spxisz)
@@ -332,24 +388,28 @@ function dskmi2(vrtces, plates, finscl::Real, corscl::Integer, worksz::Integer,
     cnext = fill(Int32(-1), worksz)
     spaixi[4] = corscl
     vxlidx = _DSK_IXIFIX + 1 + Int(voxpsz)
-    _dsk_mkspin!(spaixd, spaixi, vf, pf, np, Float64(finscl), Int(corscl), Int(voxpsz),
-        Int(voxlsz), cval, cnext)
+    _dsk_mkspin!(
+        spaixd, spaixi, vf, pf, np, Float64(finscl), Int(corscl), Int(voxpsz),
+        Int(voxlsz), cval, cnext
+    )
     # Move the voxel-plate list down so that it starts directly after the pointers.
     nshift = Int(voxpsz) - spaixi[5]
     for i in 1:spaixi[6]                 # invariant: the elements 1 .. i-1 of the list are moved
         j = vxlidx - 1 + i
-        spaixi[j-nshift] = spaixi[j]
+        spaixi[j - nshift] = spaixi[j]
     end
     vxlidx -= nshift
     if makvtl
         vtpoff = vxlidx - 1 + spaixi[6]
         vtloff = vtpoff + nv
-        worksz < 3 * np && _dsk_throw(:cellarraytoosmall,
-            "the cell array size = $worksz; the size must be >= 3*NP, which is $(3 * np)")
+        worksz < 3 * np && _dsk_throw(
+            :cellarraytoosmall,
+            "the cell array size = $worksz; the size must be >= 3*NP, which is $(3 * np)"
+        )
         fill!(cnext, Int32(-1))
         ncell = _dsk_inilnk!(spaixi, vtpoff, nv, length(cval))
         for i in 1:np, j in 1:3
-            ncell = _dsk_addlnk!(spaixi, vtpoff, pf[3*(i-1)+j], i, nv, cval, cnext, ncell)
+            ncell = _dsk_addlnk!(spaixi, vtpoff, pf[3 * (i - 1) + j], i, nv, cval, cnext, ncell)
         end
         spaixi[7] = _dsk_untngl!(spaixi, vtpoff, nv, cval, cnext, vtloff, vtxlsz)
     else
@@ -391,8 +451,10 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
     for i in 1:np, k in _dsk_plate3(plates, i)
-        (1 <= k <= nv) || _dsk_throw(:badvertexindex,
-            "a vertex index of plate $i was $k; vertex indices must be in the range 1:$nv")
+        (1 <= k <= nv) || _dsk_throw(
+            :badvertexindex,
+            "a vertex index of plate $i was $k; vertex indices must be in the range 1:$nv"
+        )
     end
     if corsys == 1
         mx = 0.0
@@ -402,8 +464,10 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
         mn = _DSK_DPMAX
         for i in 1:np                    # invariant: mn is the least distance of the plates 1 .. i-1
             i1, i2, i3 = _dsk_plate3(plates, i)
-            _, dist = _dsk_pltnp(_DSK_ORIGIN, _dsk_get3(vrtces, i1), _dsk_get3(vrtces, i2),
-                _dsk_get3(vrtces, i3))
+            _, dist = _dsk_pltnp(
+                _DSK_ORIGIN, _dsk_get3(vrtces, i1), _dsk_get3(vrtces, i2),
+                _dsk_get3(vrtces, i3)
+            )
             mn = min(dist, mn)
         end
         return mn, mx
@@ -418,7 +482,7 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
         return mn, mx
     elseif corsys == 4
         re = Float64(corpar[begin])
-        f = Float64(corpar[begin+1])
+        f = Float64(corpar[begin + 1])
         mx = -_DSK_DPMAX
         mn = _DSK_DPMAX
         for i in 1:nv
@@ -532,15 +596,19 @@ true
 
 See also [`dskopn`](@ref), [`dskmi2`](@ref), [`dskrb2`](@ref), [`dskcls`](@ref).
 """
-function dskw02(ctx::SpiceContext, h::DASHandle, center::Integer, surfid::Integer,
+function dskw02(
+        ctx::SpiceContext, h::DASHandle, center::Integer, surfid::Integer,
         dclass::Integer, frame::NameOrID, corsys::Integer, corpar, mncor1::Real, mxcor1::Real,
         mncor2::Real, mxcor2::Real, mncor3::Real, mxcor3::Real, first::Real, last::Real,
-        vrtces, plates, spaixd, spaixi)
+        vrtces, plates, spaixd, spaixi
+    )
     _das_check_write(h, "dskw02")
     frmcde = frame isa Integer ? Int(frame) : namfrm(kernelset(ctx), frame)
     frmcde == 0 && _dsk_throw(:frameidnotfound, "the frame name $frame could not be mapped to an ID code")
-    last <= first && _dsk_throw(:timesoutoforder,
-        "the segment stop time $last must be greater than the start time $first")
+    last <= first && _dsk_throw(
+        :timesoutoforder,
+        "the segment stop time $last must be greater than the start time $first"
+    )
     mn1, mx1, mn2, mx2, mn3, mx3 = Float64(mncor1), Float64(mxcor1), Float64(mncor2),
         Float64(mxcor2), Float64(mncor3), Float64(mxcor3)
     length(corpar) <= 10 || throw(SpiceError(:badarg, "dskw02: CORPAR has more than 10 elements"))
@@ -549,28 +617,41 @@ function dskw02(ctx::SpiceContext, h::DASHandle, center::Integer, surfid::Intege
     twopi_ = _DSK_TWOPI
     hpi = _DSK_HALFPI
     if corsys == 1 || corsys == 4
-        mn1 == mx1 && _dsk_throw(:zeroboundsextent,
-            "the minimum and maximum longitude were both $(rad2deg(mn1)) degrees")
-        (mn1 < -twopi_ - 1e-12 || mn1 > twopi_ - 1e-12) && _dsk_throw(:valueoutofrange,
-            "the minimum longitude $(rad2deg(mn1)) degrees is out of range")
-        (mx1 < -twopi_ + 1e-12 || mx1 > twopi_ + 1e-12) && _dsk_throw(:valueoutofrange,
-            "the maximum longitude $(rad2deg(mx1)) degrees is out of range")
+        mn1 == mx1 && _dsk_throw(
+            :zeroboundsextent,
+            "the minimum and maximum longitude were both $(rad2deg(mn1)) degrees"
+        )
+        (mn1 < -twopi_ - 1.0e-12 || mn1 > twopi_ - 1.0e-12) && _dsk_throw(
+            :valueoutofrange,
+            "the minimum longitude $(rad2deg(mn1)) degrees is out of range"
+        )
+        (mx1 < -twopi_ + 1.0e-12 || mx1 > twopi_ + 1.0e-12) && _dsk_throw(
+            :valueoutofrange,
+            "the maximum longitude $(rad2deg(mx1)) degrees is out of range"
+        )
         b1 = max(-twopi_, mn1)
         b2 = min(twopi_, mx1)
-        (mx1 > mn1 + twopi_ + 1e-12 || mx1 < mn1 - twopi_ - 1e-12) && _dsk_throw(
+        (mx1 > mn1 + twopi_ + 1.0e-12 || mx1 < mn1 - twopi_ - 1.0e-12) && _dsk_throw(
             :invalidlonextent, "the longitude bounds $(rad2deg(mn1)):$(rad2deg(mx1)) " *
-            "degrees are too far apart")
+                "degrees are too far apart"
+        )
         if b2 > b1
             b2 = min(b2, b1 + twopi_)
         elseif b2 < b1
             b2 = max(b2, b1 - twopi_)
         end
-        (b2 == b1 || b2 == b1 - twopi_) && _dsk_throw(:zeroboundsextent,
-            "the longitude bounds have zero extent after adjustment")
-        (mn2 < -hpi - 1e-12 || mn2 > hpi - 1e-12) && _dsk_throw(:valueoutofrange,
-            "the minimum latitude $(rad2deg(mn2)) degrees is out of range")
-        (mx2 < -hpi + 1e-12 || mx2 > hpi + 1e-12) && _dsk_throw(:valueoutofrange,
-            "the maximum latitude $(rad2deg(mx2)) degrees is out of range")
+        (b2 == b1 || b2 == b1 - twopi_) && _dsk_throw(
+            :zeroboundsextent,
+            "the longitude bounds have zero extent after adjustment"
+        )
+        (mn2 < -hpi - 1.0e-12 || mn2 > hpi - 1.0e-12) && _dsk_throw(
+            :valueoutofrange,
+            "the minimum latitude $(rad2deg(mn2)) degrees is out of range"
+        )
+        (mx2 < -hpi + 1.0e-12 || mx2 > hpi + 1.0e-12) && _dsk_throw(
+            :valueoutofrange,
+            "the maximum latitude $(rad2deg(mx2)) degrees is out of range"
+        )
         b3 = max(-hpi, mn2)
         b4 = min(hpi, mx2)
         mx2 < mn2 && _dsk_throw(:boundsoutoforder, "the latitude bounds are out of order")
@@ -583,14 +664,18 @@ function dskw02(ctx::SpiceContext, h::DASHandle, center::Integer, surfid::Intege
             a = par[1]
             b = a * (1 - par[2])
             altlim = max(-(a * a) / b, -(b * b) / a)
-            mn3 <= altlim && _dsk_throw(:degeneratesurface,
-                "the minimum altitude $mn3 is not above the limit $altlim")
+            mn3 <= altlim && _dsk_throw(
+                :degeneratesurface,
+                "the minimum altitude $mn3 is not above the limit $altlim"
+            )
         end
         mx3 < mn3 && _dsk_throw(:boundsoutoforder, "the bounds of the third coordinate are out of order")
         mx3 == mn3 && _dsk_throw(:zeroboundsextent, "the bounds of the third coordinate are equal")
     elseif corsys == 3
-        (mx1 <= mn1 || mx2 <= mn2 || mx3 <= mn3) && _dsk_throw(:boundsoutoforder,
-            "the rectangular coordinate bounds must be strictly increasing")
+        (mx1 <= mn1 || mx2 <= mn2 || mx3 <= mn3) && _dsk_throw(
+            :boundsoutoforder,
+            "the rectangular coordinate bounds must be strictly increasing"
+        )
         b1, b2, b3, b4 = mn1, mx1, mn2, mx2
     else
         _dsk_throw(:notsupported, "the coordinate system code $corsys is not recognized")
@@ -598,41 +683,67 @@ function dskw02(ctx::SpiceContext, h::DASHandle, center::Integer, surfid::Intege
     (dclass < 1 || dclass > 2) && _dsk_throw(:notsupported, "the data class code $dclass is not recognized")
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
-    (nv < 1 || nv > _DSK_MAXVRT) && _dsk_throw(:valueoutofrange,
-        "the vertex count NV = $nv; the count must be in the range 1:$_DSK_MAXVRT")
-    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(:valueoutofrange,
-        "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT")
+    (nv < 1 || nv > _DSK_MAXVRT) && _dsk_throw(
+        :valueoutofrange,
+        "the vertex count NV = $nv; the count must be in the range 1:$_DSK_MAXVRT"
+    )
+    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(
+        :valueoutofrange,
+        "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
+    )
     pf = _dsk_flat(Int32, plates)
     for k in eachindex(pf)               # invariant: the vertex numbers before k are valid
-        (1 <= pf[k] <= nv) || _dsk_throw(:badvertexindex, "vertex index $(k - 3 * ((k - 1) ÷ 3)) " *
-            "of plate $((k - 1) ÷ 3 + 1) was $(pf[k]); vertex indices must be in the range 1:$nv")
+        (1 <= pf[k] <= nv) || _dsk_throw(
+            :badvertexindex, "vertex index $(k - 3 * ((k - 1) ÷ 3)) " *
+                "of plate $((k - 1) ÷ 3 + 1) was $(pf[k]); vertex indices must be in the range 1:$nv"
+        )
     end
-    (length(spaixd) >= 10 && length(spaixi) >= _DSK_IXIFIX) || throw(SpiceError(:badarg, 
-        "dskw02: SPAIXD needs 10 elements and SPAIXI at least $_DSK_IXIFIX"))
+    (length(spaixd) >= 10 && length(spaixi) >= _DSK_IXIFIX) || throw(
+        SpiceError(
+            :badarg,
+            "dskw02: SPAIXD needs 10 elements and SPAIXI at least $_DSK_IXIFIX"
+        )
+    )
     ix0 = firstindex(spaixi) - 1
-    vgrext = (Int(spaixi[ix0+1]), Int(spaixi[ix0+2]), Int(spaixi[ix0+3]))
-    cgrscl = Int(spaixi[ix0+4])
-    voxnpt = Int(spaixi[ix0+5])
-    voxnpl = Int(spaixi[ix0+6])
-    vtxnpl = Int(spaixi[ix0+7])
+    vgrext = (Int(spaixi[ix0 + 1]), Int(spaixi[ix0 + 2]), Int(spaixi[ix0 + 3]))
+    cgrscl = Int(spaixi[ix0 + 4])
+    voxnpt = Int(spaixi[ix0 + 5])
+    voxnpl = Int(spaixi[ix0 + 6])
+    vtxnpl = Int(spaixi[ix0 + 7])
     for i in 1:3
-        (vgrext[i] < 1 || vgrext[i] > _DSK_MAXVOX) && _dsk_throw(:valueoutofrange,
-            "the voxel grid extents are $vgrext; all must be in the range 1:$_DSK_MAXVOX")
+        (vgrext[i] < 1 || vgrext[i] > _DSK_MAXVOX) && _dsk_throw(
+            :valueoutofrange,
+            "the voxel grid extents are $vgrext; all must be in the range 1:$_DSK_MAXVOX"
+        )
     end
     nvxtot = vgrext[1] * vgrext[2] * vgrext[3]
-    nvxtot > _DSK_MAXVOX && _dsk_throw(:valueoutofrange,
-        "the fine voxel count NVXTOT = $nvxtot; the count must be in the range 1:$_DSK_MAXVOX")
-    (cgrscl < 1 || cgrscl > Float64(nvxtot)^0.33333333333333331) && _dsk_throw(:valueoutofrange,
-        "the coarse voxel scale = $cgrscl; the scale must be in the range 1:NVXTOT**(1/3)")
+    nvxtot > _DSK_MAXVOX && _dsk_throw(
+        :valueoutofrange,
+        "the fine voxel count NVXTOT = $nvxtot; the count must be in the range 1:$_DSK_MAXVOX"
+    )
+    (cgrscl < 1 || cgrscl > Float64(nvxtot)^0.33333333333333331) && _dsk_throw(
+        :valueoutofrange,
+        "the coarse voxel scale = $cgrscl; the scale must be in the range 1:NVXTOT**(1/3)"
+    )
     npcg = cgrscl * (cgrscl * cgrscl)
-    nvxtot % npcg == 0 || _dsk_throw(:incompatiblescale,
-        "the total number of voxels, $nvxtot, is not a multiple of the coarse scale cubed")
+    nvxtot % npcg == 0 || _dsk_throw(
+        :incompatiblescale,
+        "the total number of voxels, $nvxtot, is not a multiple of the coarse scale cubed"
+    )
     ncgr = nvxtot ÷ npcg
-    (ncgr < 1 || ncgr > _DSK_MAXCGR) && _dsk_throw(:valueoutofrange,
-        "the coarse voxel count = $ncgr; the count must be in the range 1:$_DSK_MAXCGR")
-    (voxnpt >= 0 && voxnpl >= 0 && vtxnpl >= 0 &&
-     length(spaixi) >= _DSK_IXIFIX + voxnpt + voxnpl + nv + vtxnpl) || throw(SpiceError(:badarg, 
-        "dskw02: SPAIXI is shorter than the sizes that it holds"))
+    (ncgr < 1 || ncgr > _DSK_MAXCGR) && _dsk_throw(
+        :valueoutofrange,
+        "the coarse voxel count = $ncgr; the count must be in the range 1:$_DSK_MAXCGR"
+    )
+    (
+        voxnpt >= 0 && voxnpl >= 0 && vtxnpl >= 0 &&
+            length(spaixi) >= _DSK_IXIFIX + voxnpt + voxnpl + nv + vtxnpl
+    ) || throw(
+        SpiceError(
+            :badarg,
+            "dskw02: SPAIXI is shorter than the sizes that it holds"
+        )
+    )
     vf = _dsk_flat(Float64, vrtces)
     pvoxpt = ix0 + _DSK_IXIFIX
     pvoxpl = pvoxpt + voxnpt
@@ -654,20 +765,24 @@ function dskw02(ctx::SpiceContext, h::DASHandle, center::Integer, surfid::Intege
     descr[23] = first
     descr[24] = last
     dasadd(h, descr)
-    dasadd(h, Float64[spaixd[begin+k] for k in 0:9])
+    dasadd(h, Float64[spaixd[begin + k] for k in 0:9])
     dasadd(h, vf)
     dasadi(h, Int32[nv, np, nvxtot, vgrext[1], vgrext[2], vgrext[3], cgrscl, voxnpt, voxnpl, vtxnpl])
     dasadi(h, pf)
-    dasadi(h, Int32[spaixi[pvoxpt+k] for k in 1:voxnpt])
-    dasadi(h, Int32[spaixi[pvoxpl+k] for k in 1:voxnpl])
-    dasadi(h, Int32[spaixi[pvtxpt+k] for k in 1:nv])
-    dasadi(h, Int32[spaixi[pvtxpl+k] for k in 1:vtxnpl])
-    dasadi(h, Int32[spaixi[ix0+7+k] for k in 1:ncgr])
+    dasadi(h, Int32[spaixi[pvoxpt + k] for k in 1:voxnpt])
+    dasadi(h, Int32[spaixi[pvoxpl + k] for k in 1:voxnpl])
+    dasadi(h, Int32[spaixi[pvtxpt + k] for k in 1:nv])
+    dasadi(h, Int32[spaixi[pvtxpl + k] for k in 1:vtxnpl])
+    dasadi(h, Int32[spaixi[ix0 + 7 + k] for k in 1:ncgr])
     dlaens(h)
     return nothing
 end
-dskw02(h::DASHandle, center::Integer, surfid::Integer, dclass::Integer, frame::NameOrID,
+dskw02(
+    h::DASHandle, center::Integer, surfid::Integer, dclass::Integer, frame::NameOrID,
     corsys::Integer, corpar, mncor1::Real, mxcor1::Real, mncor2::Real, mxcor2::Real,
-    mncor3::Real, mxcor3::Real, first::Real, last::Real, vrtces, plates, spaixd, spaixi) =
-    dskw02(default_context(), h, center, surfid, dclass, frame, corsys, corpar, mncor1, mxcor1,
-        mncor2, mxcor2, mncor3, mxcor3, first, last, vrtces, plates, spaixd, spaixi)
+    mncor3::Real, mxcor3::Real, first::Real, last::Real, vrtces, plates, spaixd, spaixi
+) =
+    dskw02(
+    default_context(), h, center, surfid, dclass, frame, corsys, corpar, mncor1, mxcor1,
+    mncor2, mxcor2, mncor3, mxcor3, first, last, vrtces, plates, spaixd, spaixi
+)

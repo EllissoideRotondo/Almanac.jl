@@ -29,7 +29,7 @@ end
 function loop_neo_pxder(ctx, epochs, from, to, v::Val{N}) where {N}
     acc = 0.0
     for et in epochs
-        acc += pxder(ctx, from, to, et, v)[N+1][1]
+        acc += pxder(ctx, from, to, et, v)[N + 1][1]
     end
     return acc
 end
@@ -61,9 +61,11 @@ function main()
         toid = Int(namfrm(ctx, to))
         @assert toid != 0
         # The engines must compute the same thing before they are timed.
-        d = maximum(maximum(abs.(pxform(ctx, 1, toid, et) .- SPICE.pxform("J2000", to, et)))
-                    for et in epochs)
-        @assert d <= 1e-8 "Almanac differs from CSPICE for J2000 to $to: $d"
+        d = maximum(
+            maximum(abs.(pxform(ctx, 1, toid, et) .- SPICE.pxform("J2000", to, et)))
+                for et in epochs
+        )
+        @assert d <= 1.0e-8 "Almanac differs from CSPICE for J2000 to $to: $d"
         push!(agreement, @sprintf("| J2000 to %s | %.2e |", to, d))
         g = "J2000 to $to"
         push!(rows, bench_row(g, "Almanac pxform, integer IDs", loop_neo_pxform, ctx, epochs, 1, toid; n))
@@ -77,19 +79,19 @@ function main()
     end
 
     text = run_header("Rotation benchmark: Almanac, CSPICE") * """
-    Kernels: naif0012.tls, pck00011.tpc, moon_de440_200625.tf, the MOON_PA alias kernel of
-    the tests and moon_pa_de440_200625.bpc. Epochs: 100, evenly spaced from 1900-01-01
-    12:00 ET to 2099-01-01 12:00 ET (end excluded).
+        Kernels: naif0012.tls, pck00011.tpc, moon_de440_200625.tf, the MOON_PA alias kernel of
+        the tests and moon_pa_de440_200625.bpc. Epochs: 100, evenly spaced from 1900-01-01
+        12:00 ET to 2099-01-01 12:00 ET (end excluded).
 
-    Largest element difference of `pxform` from CSPICE on the timed queries:
+        Largest element difference of `pxform` from CSPICE on the timed queries:
 
-    | Rotation | max abs difference |
-    |---|---:|
-    $(join(agreement, "\n"))
+        | Rotation | max abs difference |
+        |---|---:|
+        $(join(agreement, "\n"))
 
-    ## Time per query
+        ## Time per query
 
-    """ * markdown_table(rows)
+        """ * markdown_table(rows)
     println()
     println(text)
     write_results("rotations", text)

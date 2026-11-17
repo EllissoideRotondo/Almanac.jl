@@ -1,7 +1,7 @@
 # Shared data types. Every type here is immutable: a `KernelSet` is a snapshot that
 # queries read without a lock, and `furnsh`/`unload` replace it as a whole.
 
-const Vec3{T} = SVector{3,T}
+const Vec3{T} = SVector{3, T}
 
 """
     _vec_of(T, x, f=identity) -> Vector{T}
@@ -10,14 +10,14 @@ A new `Vector{T}` of `f(v)` for the elements `v` of `x` in linear order, for any
 iterable: a vector, a static vector, a matrix, a tuple. A typed comprehension is not
 used because over a static vector it gives a `SizedVector` (StaticArrays).
 """
-function _vec_of(::Type{T}, x, f=identity) where {T}
+function _vec_of(::Type{T}, x, f = identity) where {T}
     out = Vector{T}(undef, length(x))
     for (i, v) in enumerate(x)
         @inbounds out[i] = f(v)
     end
     return out
 end
-const Mat3{T} = SMatrix{3,3,T,9}
+const Mat3{T} = SMatrix{3, 3, T, 9}
 
 """
     Segment
@@ -50,8 +50,10 @@ struct Segment
     nrec::Int32
 end
 
-withfile(s::Segment, file::Integer) = Segment(s.target, s.center, s.frame, s.dtype, s.t0,
-    s.t1, Int32(file), s.baddr, s.eaddr, s.init, s.intlen, s.rsize, s.nrec)
+withfile(s::Segment, file::Integer) = Segment(
+    s.target, s.center, s.frame, s.dtype, s.t0,
+    s.t1, Int32(file), s.baddr, s.eaddr, s.init, s.intlen, s.rsize, s.nrec
+)
 
 """
     CKSegment
@@ -74,8 +76,10 @@ struct CKSegment
     eaddr::Int
 end
 
-withfile(s::CKSegment, file::Integer) = CKSegment(s.inst, s.frame, s.dtype, s.avflag,
-    s.t0, s.t1, Int32(file), s.baddr, s.eaddr)
+withfile(s::CKSegment, file::Integer) = CKSegment(
+    s.inst, s.frame, s.dtype, s.avflag,
+    s.t0, s.t1, Int32(file), s.baddr, s.eaddr
+)
 
 """
     DAF
@@ -98,7 +102,7 @@ DAF(path, kind, data, segments::Vector{Segment}) =
     DAF(path, kind, data, segments, CKSegment[])
 
 "Value of a kernel-pool variable: numeric or character, always a vector."
-const PoolValue = Union{Vector{Float64},Vector{String}}
+const PoolValue = Union{Vector{Float64}, Vector{String}}
 
 "One assignment of a text kernel: `name = value` or, if `append`, `name += value`."
 struct Assignment
@@ -166,7 +170,7 @@ the meta-kernel that caused the load, or `""` for a kernel loaded directly.
 struct Loaded
     path::String
     source::String
-    content::Union{DAF,TextKernel,DSKFile,EKFile,EphemerisProvider,FrameProvider}
+    content::Union{DAF, TextKernel, DSKFile, EKFile, EphemerisProvider, FrameProvider}
 end
 
 """
@@ -234,7 +238,7 @@ struct LeapSeconds
     delta_t_a::Float64
     k::Float64
     eb::Float64
-    m::NTuple{2,Float64}
+    m::NTuple{2, Float64}
     delta_at::Vector{Float64}
 end
 
@@ -312,26 +316,26 @@ and readers on many threads do not contend.
 mutable struct KernelSet
     const loaded::Vector{Loaded}
     const daf::Vector{Vector{Float64}}
-    const spk::Dict{Int32,Vector{Segment}}
-    const pck::Dict{Int32,Vector{Segment}}
-    const pool::Dict{String,PoolValue}
-    const name2code::Dict{String,Int32}
-    const code2name::Dict{Int32,String}
-    const frames::Dict{Int32,FrameDef}
-    const framename2id::Dict{String,Int32}
-    const tk::Dict{Int32,TKFrame}
-    const bodyrot::Dict{Int32,BodyRot}
-    const lsk::Union{Nothing,LeapSeconds}
-    const ck::Dict{Int32,Vector{CKSegment}}
-    const sclk::Dict{Int32,SclkType1}
-    const ckmeta::Dict{Int32,NTuple{2,Int32}}
-    const dyn::Dict{Int32,DynFrame}
-    const switch::Dict{Int32,SwitchFrame}
-    const inner::Union{Nothing,DynLevel{KernelSet}}
+    const spk::Dict{Int32, Vector{Segment}}
+    const pck::Dict{Int32, Vector{Segment}}
+    const pool::Dict{String, PoolValue}
+    const name2code::Dict{String, Int32}
+    const code2name::Dict{Int32, String}
+    const frames::Dict{Int32, FrameDef}
+    const framename2id::Dict{String, Int32}
+    const tk::Dict{Int32, TKFrame}
+    const bodyrot::Dict{Int32, BodyRot}
+    const lsk::Union{Nothing, LeapSeconds}
+    const ck::Dict{Int32, Vector{CKSegment}}
+    const sclk::Dict{Int32, SclkType1}
+    const ckmeta::Dict{Int32, NTuple{2, Int32}}
+    const dyn::Dict{Int32, DynFrame}
+    const switch::Dict{Int32, SwitchFrame}
+    const inner::Union{Nothing, DynLevel{KernelSet}}
     const pooledited::Bool
-    const bodydefs::Vector{Tuple{String,Int32}}
+    const bodydefs::Vector{Tuple{String, Int32}}
     const dskfiles::Vector{DSKFile}
-    const dsk::Dict{Int32,Vector{DSKSegment}}
+    const dsk::Dict{Int32, Vector{DSKSegment}}
     const ekfiles::Vector{EKFile}
     const ektables::Vector{EKTable}
 end
@@ -354,7 +358,7 @@ mutable struct TimeDefaults
     const zone::String
     const yearbound::Int
     const check::Bool
-    function TimeDefaults(calendar, system, zone, yearbound::Integer=1969, check::Bool=false)
+    function TimeDefaults(calendar, system, zone, yearbound::Integer = 1969, check::Bool = false)
         @assert yearbound > 0 "the first year of the interval of abbreviated years is positive"
         return new(calendar, system, zone, yearbound, check)
     end
@@ -416,4 +420,3 @@ mutable struct SpiceContext
     SpiceContext(ks::KernelSet, lock::ReentrantLock) =
         new(ks, lock, TimeDefaults(), PoolWatch(), DSKTolerances(), 1.0e-6)
 end
-

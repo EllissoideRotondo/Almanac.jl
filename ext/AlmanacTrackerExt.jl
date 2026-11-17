@@ -11,20 +11,28 @@ using Tracker: Tracker, TrackedReal, TrackedVector
 Almanac.primal(x::TrackedReal) = Almanac.primal(Tracker.data(x))
 Almanac._ad_order(::Type{<:TrackedReal{V}}) where {V} = 1 + Almanac._ad_order(V)
 
-Almanac.spk_jet(ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32, obs::Int32,
-    v::Val) = Almanac._ad_spk_jet(ks, targ, et, ref, obs, v)
+Almanac.spk_jet(
+    ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32, obs::Int32,
+    v::Val
+) = Almanac._ad_spk_jet(ks, targ, et, ref, obs, v)
 Almanac.frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::TrackedReal) =
     Almanac._ad_frame_rotation(ks, from, to, et)
 Almanac.frame_jet(ks::KernelSet, from::Int32, to::Int32, et::TrackedReal, v::Val) =
     Almanac._ad_frame_jet(ks, from, to, et, v)
 Almanac.frame_jet(ks::KernelSet, from::Int32, to::Int32, et::TrackedReal, v::Val{0}) =
     Almanac._ad_frame_jet(ks, from, to, et, v)
-Almanac.abcorr_jet(ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
-    corr::Aberration, obs::Int32, v::Val) = Almanac._ad_abcorr_jet(ks, targ, et, ref, corr, obs, v)
-Almanac.abcorr_position(ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
-    corr::Aberration, obs::Int32) = Almanac._ad_abcorr_position(ks, targ, et, ref, corr, obs)
-Almanac.abcorr_state(ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
-    corr::Aberration, obs::Int32) = Almanac._ad_abcorr_state(ks, targ, et, ref, corr, obs)
+Almanac.abcorr_jet(
+    ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
+    corr::Aberration, obs::Int32, v::Val
+) = Almanac._ad_abcorr_jet(ks, targ, et, ref, corr, obs, v)
+Almanac.abcorr_position(
+    ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
+    corr::Aberration, obs::Int32
+) = Almanac._ad_abcorr_position(ks, targ, et, ref, corr, obs)
+Almanac.abcorr_state(
+    ks::KernelSet, targ::Int32, et::TrackedReal, ref::Int32,
+    corr::Aberration, obs::Int32
+) = Almanac._ad_abcorr_state(ks, targ, et, ref, corr, obs)
 
 # An array of Tracker has the element type of its data (Float64) and returns tracked
 # numbers, so an `Orbit` takes its elements one by one.

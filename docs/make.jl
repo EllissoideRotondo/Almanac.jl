@@ -1,14 +1,16 @@
 # Build the manual: julia --project=docs docs/make.jl
 using Documenter, Almanac
 
-DocMeta.setdocmeta!(Almanac, :DocTestSetup, :(using Almanac); recursive=true)
+DocMeta.setdocmeta!(Almanac, :DocTestSetup, :(using Almanac); recursive = true)
 
 makedocs(;
-    sitename="Almanac.jl",
-    modules=[Almanac],
-    format=Documenter.HTML(; prettyurls=get(ENV, "CI", "false") == "true",
-        size_threshold=600_000, size_threshold_warn=300_000),
-    pages=[
+    sitename = "Almanac.jl",
+    modules = [Almanac],
+    format = Documenter.HTML(;
+        prettyurls = get(ENV, "CI", "false") == "true",
+        size_threshold = 600_000, size_threshold_warn = 300_000
+    ),
+    pages = [
         "Home" => "index.md",
         "First session" => "tutorial.md",
         "Tasks" => [
@@ -39,7 +41,7 @@ makedocs(;
             "reference/ek.md",
         ],
     ],
-    checkdocs=:exports,
+    checkdocs = :exports,
 )
 
-deploydocs(; repo="github.com/Orbitology/Almanac.jl.git", devbranch="main")
+deploydocs(; repo = "github.com/Orbitology/Almanac.jl.git", devbranch = "main")

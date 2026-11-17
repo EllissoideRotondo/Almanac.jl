@@ -34,8 +34,11 @@ a string that names neither) and to [`timout`](@ref) for a picture that names no
 system, zone or calendar. They belong to the context; CSPICE keeps one set for the
 process.
 
-Throws `SpiceError(:badtimedefault)` if the action, the item or the value is not one
-of the above; the defaults are then unchanged.
+Throws `SpiceError`, and leaves the defaults unchanged:
+- `:emptystring` if the action, the item or the value to set is `""`;
+- `:badaction` if the action is neither `"SET"` nor `"GET"`;
+- `:badtimeitem` if the item is not one of the above;
+- `:baddefaultvalue` if the value is not one of the above.
 
 # Examples
 ```jldoctest
@@ -51,19 +54,38 @@ julia> timdef(ctx, "GET", "SYSTEM")
 ""
 ```
 """
-function timdef(ctx::SpiceContext, action::AbstractString, item::AbstractString,
-        value::AbstractString="")
+function timdef(
+        ctx::SpiceContext, action::AbstractString, item::AbstractString,
+        value::AbstractString = ""
+    )
+    # the string checks of the CSPICE wrapper come first
+    (isempty(action) || isempty(item)) && throw(
+        SpiceError(
+            :emptystring,
+            "timdef: the action and the item must not be empty strings"
+        )
+    )
     act = uppercase(strip(action, ' '))
     act == "GET" && return _timdef_get(timedefaults(ctx), item)
-    act == "SET" || throw(SpiceError(:badtimedefault,
-        "the action '$action' is neither 'SET' nor 'GET'"))
+    act == "SET" && isempty(value) && throw(
+        SpiceError(
+            :emptystring,
+            "timdef: the value to set must not be an empty string"
+        )
+    )
+    act == "SET" || throw(
+        SpiceError(
+            :badaction,
+            "the action '$action' is neither 'SET' nor 'GET'"
+        )
+    )
     return lock(ctx.lock) do
         defs = _timdef_set(timedefaults(ctx), item, value)
         @atomic ctx.timedefs = defs
         _timdef_get(defs, item)
     end
 end
-timdef(action::AbstractString, item::AbstractString, value::AbstractString="") =
+timdef(action::AbstractString, item::AbstractString, value::AbstractString = "") =
     timdef(default_context(), action, item, value)
 
 # Context and default-context forms.
@@ -163,7 +185,7 @@ julia> try
        catch err
            err.kind
        end
-:badtime
+:badtimestring
 ```
 """
 function tparch(ctx::SpiceContext, type::AbstractString)
@@ -180,8 +202,8 @@ tparch(type::AbstractString) = tparch(default_context(), type)
 
 # These three need no kernel; the context forms exist so that every call has them. The
 # context form of `tparse` uses the interval of abbreviated years of the context.
-etcal(::Union{SpiceContext,KernelSet}, et::Real) = etcal(et)
+etcal(::Union{SpiceContext, KernelSet}, et::Real) = etcal(et)
 tparse(ctx::SpiceContext, s::AbstractString) = tparse(s, timedefaults(ctx))
 tparse(::KernelSet, s::AbstractString) = tparse(s, TimeDefaults())
 tparse(s::AbstractString) = tparse(default_context(), s)
-tpictr(::Union{SpiceContext,KernelSet}, sample::AbstractString) = tpictr(sample)
+tpictr(::Union{SpiceContext, KernelSet}, sample::AbstractString) = tpictr(sample)

@@ -4,7 +4,7 @@ using Almanac
 using Almanac: KernelSet, Aberration, Orbit, element, elements, _orbit_property, _ORBIT_FIELDS,
     spk_jet, frame_rotation, frame_jet, abcorr_jet,
     abcorr_position, abcorr_state, _ma_to_ta, _ad_rule, _AD_CONSTANT, _ad_typeof
-using ChainRulesCore
+using ChainRulesCore: ChainRulesCore
 using ChainRulesCore: AbstractZero, AbstractThunk, NoTangent, Tangent, unthunk, backing,
     RuleConfig, HasReverseMode, rrule_via_ad
 using LinearAlgebra: dot
@@ -32,12 +32,12 @@ _tangent(::Any, dy, Δ) = dy * Δ
 
 # The position of the epoch in the arguments of each derivative point.
 const POINTS = (
-    (spk_jet, :(Tuple{KernelSet,Int32,Real,Int32,Int32,Val}), 3),
-    (frame_rotation, :(Tuple{KernelSet,Int32,Int32,Real}), 4),
-    (frame_jet, :(Tuple{KernelSet,Int32,Int32,Real,Val}), 4),
-    (abcorr_jet, :(Tuple{KernelSet,Int32,Real,Int32,Aberration,Int32,Val}), 3),
-    (abcorr_position, :(Tuple{KernelSet,Int32,Real,Int32,Aberration,Int32}), 3),
-    (abcorr_state, :(Tuple{KernelSet,Int32,Real,Int32,Aberration,Int32}), 3),
+    (spk_jet, :(Tuple{KernelSet, Int32, Real, Int32, Int32, Val}), 3),
+    (frame_rotation, :(Tuple{KernelSet, Int32, Int32, Real}), 4),
+    (frame_jet, :(Tuple{KernelSet, Int32, Int32, Real, Val}), 4),
+    (abcorr_jet, :(Tuple{KernelSet, Int32, Real, Int32, Aberration, Int32, Val}), 3),
+    (abcorr_position, :(Tuple{KernelSet, Int32, Real, Int32, Aberration, Int32}), 3),
+    (abcorr_state, :(Tuple{KernelSet, Int32, Real, Int32, Aberration, Int32}), 3),
 )
 
 for (f, sig, iet) in POINTS
@@ -47,8 +47,10 @@ for (f, sig, iet) in POINTS
     typed = [:($(args[i])::$(types[i])) for i in 1:n]
     nots = [i == iet ? :d : :(NoTangent()) for i in 1:n]
     @eval begin
-        function ChainRulesCore.frule((_, $([Symbol(:Δ, i) for i in 1:n]...)),
-                ::typeof($f), $(typed...))
+        function ChainRulesCore.frule(
+                (_, $([Symbol(:Δ, i) for i in 1:n]...)),
+                ::typeof($f), $(typed...)
+            )
             y, dy = _ad_rule($f, $(args...))
             return y, _tangent(y, dy, $(Symbol(:Δ, iet)))
         end

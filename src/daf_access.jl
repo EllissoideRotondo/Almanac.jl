@@ -27,7 +27,7 @@ const _DAF_EOL = 0x00                     # end of a comment line
 # write, cannot be opened for write again; unlike CSPICE, a file that is open for write
 # can be opened for read. The keys are weak, so a handle that is no longer referenced
 # leaves the table when the garbage collector frees it.
-const _OPEN_FILES = WeakKeyDict{Any,Tuple{UInt64,UInt64,Bool}}()
+const _OPEN_FILES = WeakKeyDict{Any, Tuple{UInt64, UInt64, Bool}}()
 const _OPEN_FILES_LOCK = ReentrantLock()
 
 function _file_id(path::AbstractString)
@@ -42,8 +42,10 @@ Enter the open handle `h` of the existing file `path` in the table of open files
 `check`, throw `SpiceError(:fileopenconflict)` if another open handle has the same file
 (the same device and inode, under any path); `h` is then not entered.
 """
-function _open_register!(h, path::AbstractString, writable::Bool, who::AbstractString;
-        check::Bool=writable)
+function _open_register!(
+        h, path::AbstractString, writable::Bool, who::AbstractString;
+        check::Bool = writable
+    )
     @assert isopen(h)
     dev, ino = _file_id(path)
     lock(_OPEN_FILES_LOCK) do
@@ -51,8 +53,12 @@ function _open_register!(h, path::AbstractString, writable::Bool, who::AbstractS
             for (other, (odev, oino, ow)) in _OPEN_FILES
                 # invariant: no handle before `other` has the file open
                 (odev == dev && oino == ino && other !== h && isopen(other)) &&
-                    throw(SpiceError(:fileopenconflict, "$who: the file $path is open " *
-                        "for $(ow ? "write" : "read") through another handle; close it first"))
+                    throw(
+                    SpiceError(
+                        :fileopenconflict, "$who: the file $path is open " *
+                            "for $(ow ? "write" : "read") through another handle; close it first"
+                    )
+                )
             end
         end
         _OPEN_FILES[h] = (dev, ino, writable)
@@ -115,8 +121,10 @@ mutable struct DAFHandle
 end
 
 function Base.show(io::IO, h::DAFHandle)
-    print(io, "DAFHandle(", repr(h.path), ", ", h.writable ? "write" : "read",
-        h.isopen ? "" : ", closed", ")")
+    return print(
+        io, "DAFHandle(", repr(h.path), ", ", h.writable ? "write" : "read",
+        h.isopen ? "" : ", closed", ")"
+    )
 end
 Base.isopen(h::DAFHandle) = h.isopen
 Base.close(h::DAFHandle) = dafcls(h)
@@ -131,8 +139,12 @@ end
 
 @inline function _daf_check_write(h::DAFHandle, who::AbstractString)
     _daf_check_open(h, who)
-    h.writable || throw(SpiceError(:dafinvalidaccess,
-        "$who: the DAF $(h.path) is not open for write"))
+    h.writable || throw(
+        SpiceError(
+            :dafinvalidaccess,
+            "$who: the DAF $(h.path) is not open for write"
+        )
+    )
     return nothing
 end
 
@@ -189,7 +201,7 @@ function _daf_sumrec(h::DAFHandle, recno::Integer)
     n == _DAF_RECLEN || return zeros(Float64, _DAF_RECWORDS), false
     if h.swap
         ss = _daf_sumsize(h.nd, h.ni)
-        for w in 0:_DAF_RECWORDS-1       # invariant: words before w are converted
+        for w in 0:(_DAF_RECWORDS - 1)       # invariant: words before w are converted
             base = 8w
             k = w < 3 ? 0 : (w - 3) % ss         # position of the word inside its summary
             if w < 3 || k < h.nd
@@ -264,35 +276,58 @@ kind `:emptystring`, `:blankfilename`, `:filenotfound`, `:filereadfailed`,
 """
 function _daf_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
-    isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
     raw, little = open(path, "r") do io
         raw = read(io, _DAF_RECLEN)
-        length(raw) == _DAF_RECLEN || throw(SpiceError(:filereadfailed,
-            "$who: $path is too short ($(length(raw)) bytes) to hold a DAF file record"))
+        length(raw) == _DAF_RECLEN || throw(
+            SpiceError(
+                :filereadfailed,
+                "$who: $path is too short ($(length(raw)) bytes) to hold a DAF file record"
+            )
+        )
         arch, _ = idw2at(String(raw[1:8]))
-        arch == "DAS" && throw(SpiceError(:filarchmismatch,
-            "$who: the file $path is a DAS file, not a DAF"))
-        arch == "DAF" || throw(SpiceError(:unknownfilarc,
-            "$who: the file $path is neither a DAF nor a DAS file"))
+        arch == "DAS" && throw(
+            SpiceError(
+                :filarchmismatch,
+                "$who: the file $path is a DAS file, not a DAF"
+            )
+        )
+        arch == "DAF" || throw(
+            SpiceError(
+                :unknownfilarc,
+                "$who: the file $path is neither a DAF nor a DAS file"
+            )
+        )
         if raw[700:705] == _DAF_FTPSTR[1:6] && raw[700:727] != _DAF_FTPSTR
-            throw(SpiceError(:ftpxfererror, "$who: the FTP validation string of $path is " *
-                "damaged; the file was most likely moved in text mode"))
+            throw(
+                SpiceError(
+                    :ftpxfererror, "$who: the FTP validation string of $path is " *
+                        "damaged; the file was most likely moved in text mode"
+                )
+            )
         end
         raw, _daf_little(io, raw, path, who)
     end
     swap = little != _DAF_NATIVE_LITTLE
     nd = Int(_daf_i32(raw, 8, little))
     ni = Int(_daf_i32(raw, 12, little))
-    (0 <= nd <= 124 && 2 <= ni <= 250 && _daf_sumsize(nd, ni) <= 125) || throw(SpiceError(
-        :dafinvalidparams, "$who: ND = $nd, NI = $ni of $path are not a DAF summary format"))
+    (0 <= nd <= 124 && 2 <= ni <= 250 && _daf_sumsize(nd, ni) <= 125) || throw(
+        SpiceError(
+            :dafinvalidparams, "$who: ND = $nd, NI = $ni of $path are not a DAF summary format"
+        )
+    )
     return nd, ni, swap
 end
 
-function _daf_handle(path::AbstractString, io::IOStream, writable::Bool, swap::Bool,
-        nd::Int, ni::Int)
-    return DAFHandle(String(path), io, writable, swap, nd, ni, true,
+function _daf_handle(
+        path::AbstractString, io::IOStream, writable::Bool, swap::Bool,
+        nd::Int, ni::Int
+    )
+    return DAFHandle(
+        String(path), io, writable, swap, nd, ni, true,
         false, 0, 0, 0, 0, 0, zeros(Float64, _DAF_RECWORDS),
-        false, 0, 0, Float64[], UInt8[])
+        false, 0, 0, Float64[], UInt8[]
+    )
 end
 
 """
@@ -404,8 +439,12 @@ end
 "Raw file record of `h` and its fields `(fward, bward, free)`; throws `SpiceError(:daffrnotfound)`."
 function _daf_filerecord(h::DAFHandle, who::AbstractString)
     raw, n = _daf_raw_record(h, 1)
-    n == _DAF_RECLEN || throw(SpiceError(:daffrnotfound,
-        "$who: the file record of $(h.path) cannot be read"))
+    n == _DAF_RECLEN || throw(
+        SpiceError(
+            :daffrnotfound,
+            "$who: the file record of $(h.path) cannot be read"
+        )
+    )
     return raw, _daf_frint(raw, 76, h.swap), _daf_frint(raw, 80, h.swap), _daf_frint(raw, 84, h.swap)
 end
 
@@ -442,11 +481,15 @@ fewer than 12 bytes and no complete line.
 """
 function getfat(path::AbstractString)
     _chk_filename("getfat", path)
-    isfile(path) || throw(SpiceError(:filenotfound, "getfat: the kernel file $path does not exist"))
+    _isfile(path) || throw(SpiceError(:filenotfound, "getfat: the kernel file $path does not exist"))
     head = open(io -> read(io, 12), path, "r")
     # A file of fewer than 12 bytes that has no complete line cannot be read by CSPICE.
-    (length(head) < 12 && !(UInt8('\n') in head)) && throw(SpiceError(:filereadfailed,
-        "getfat: attempt to read the first 12 bytes of the file $path failed"))
+    (length(head) < 12 && !(UInt8('\n') in head)) && throw(
+        SpiceError(
+            :filereadfailed,
+            "getfat: attempt to read the first 12 bytes of the file $path failed"
+        )
+    )
     for i in eachindex(head)
         (head[i] < 0x20 || head[i] > 0x7e) && (head[i] = UInt8(' '))
     end
@@ -531,15 +574,19 @@ julia> dafus(packed, 2, 6)
 function dafps(dc::AbstractVector{<:Real}, ic::AbstractVector{<:Integer})
     nd = length(dc)
     ni = length(ic)
-    all(i -> typemin(Int32) <= i <= typemax(Int32), ic) || throw(SpiceError(:dafinvalidparams,
-        "dafps: an integer component does not fit in 32 bits: $(collect(ic))"))
+    all(i -> typemin(Int32) <= i <= typemax(Int32), ic) || throw(
+        SpiceError(
+            :dafinvalidparams,
+            "dafps: an integer component does not fit in 32 bits: $(collect(ic))"
+        )
+    )
     sum = zeros(Float64, _daf_sumsize(nd, ni))
     for j in 1:nd
         sum[j] = Float64(dc[j])
     end
     ints = reinterpret(Int32, sum)
     for j in 1:ni                        # invariant: integers 1 .. j-1 are packed
-        ints[2nd+j] = Int32(ic[j])
+        ints[2nd + j] = Int32(ic[j])
     end
     return sum
 end
@@ -557,13 +604,16 @@ doubles.
 See also [`dafps`](@ref), [`dafgs`](@ref).
 """
 function dafus(sum::AbstractVector{<:Real}, nd::Integer, ni::Integer)
-    (nd >= 0 && ni >= 0 && length(sum) >= _daf_sumsize(nd, ni)) || throw(SpiceError(
-        :dafinvalidparams, "dafus: a summary of $(length(sum)) doubles does not hold " *
-        "ND = $nd, NI = $ni"))
+    (nd >= 0 && ni >= 0 && length(sum) >= _daf_sumsize(nd, ni)) || throw(
+        SpiceError(
+            :dafinvalidparams, "dafus: a summary of $(length(sum)) doubles does not hold " *
+                "ND = $nd, NI = $ni"
+        )
+    )
     s = _vec_of(Float64, sum)
     dc = s[1:nd]
     ints = reinterpret(Int32, s)
-    ic = Int[ints[2nd+j] for j in 1:ni]
+    ic = Int[ints[2nd + j] for j in 1:ni]
     return dc, ic
 end
 
@@ -574,14 +624,24 @@ end
 "Load summary record `recno` into the search buffer of `h`; throws `SpiceError(:recordnotfound)`."
 function _daf_load_sumrec!(h::DAFHandle, recno::Int, who::AbstractString)
     rec, found = _daf_sumrec(h, recno)
-    found || throw(SpiceError(:recordnotfound,
-        "$who: summary record $recno is not in the file $(h.path)"))
+    found || throw(
+        SpiceError(
+            :recordnotfound,
+            "$who: summary record $recno is not in the file $(h.path)"
+        )
+    )
     copyto!(h.sbuf, rec)
     maxsum = 125 ÷ _daf_sumsize(h.nd, h.ni)
     nsum = rec[3]
-    (isfinite(rec[1]) && isfinite(rec[2]) && 0 <= nsum <= maxsum && nsum == trunc(nsum) &&
-        rec[1] >= 0 && rec[2] >= 0) || throw(SpiceError(:baddaf,
-        "$who: summary record $recno of $(h.path) has the control words $(rec[1:3])"))
+    (
+        isfinite(rec[1]) && isfinite(rec[2]) && 0 <= nsum <= maxsum && nsum == trunc(nsum) &&
+            rec[1] >= 0 && rec[2] >= 0
+    ) || throw(
+        SpiceError(
+            :baddaf,
+            "$who: summary record $recno of $(h.path) has the control words $(rec[1:3])"
+        )
+    )
     h.sthis = recno
     h.snext = Int(rec[1])
     h.sprev = Int(rec[2])
@@ -635,8 +695,12 @@ end
 
 function _daf_check_search(h::DAFHandle, who::AbstractString)
     _daf_check_open(h, who)
-    h.searching || throw(SpiceError(:dafnosearch,
-        "$who: no search was begun on the DAF $(h.path); call dafbfs or dafbbs first"))
+    h.searching || throw(
+        SpiceError(
+            :dafnosearch,
+            "$who: no search was begun on the DAF $(h.path); call dafbfs or dafbbs first"
+        )
+    )
     return nothing
 end
 
@@ -659,8 +723,12 @@ function daffna(h::DAFHandle)
     while h.scurr > h.snsum && h.snext != 0
         # invariant: every summary record before `snext` in the chain is exhausted
         steps += 1
-        steps <= 1 + filesize(h.io) ÷ _DAF_RECLEN || throw(SpiceError(:baddaf,
-            "daffna: the chain of summary records has a cycle in $(h.path)"))
+        steps <= 1 + filesize(h.io) ÷ _DAF_RECLEN || throw(
+            SpiceError(
+                :baddaf,
+                "daffna: the chain of summary records has a cycle in $(h.path)"
+            )
+        )
         _daf_load_sumrec!(h, h.snext, "daffna")
         h.scurr = 1
     end
@@ -690,8 +758,12 @@ function daffpa(h::DAFHandle)
     while h.scurr <= 0 && h.sprev != 0
         # invariant: every summary record after `sprev` in the chain is exhausted
         steps += 1
-        steps <= 1 + filesize(h.io) ÷ _DAF_RECLEN || throw(SpiceError(:baddaf,
-            "daffpa: the chain of summary records has a cycle in $(h.path)"))
+        steps <= 1 + filesize(h.io) ÷ _DAF_RECLEN || throw(
+            SpiceError(
+                :baddaf,
+                "daffpa: the chain of summary records has a cycle in $(h.path)"
+            )
+        )
         _daf_load_sumrec!(h, h.sprev, "daffpa")
         h.scurr = h.snsum
     end
@@ -704,8 +776,12 @@ end
 
 function _daf_check_current(h::DAFHandle, who::AbstractString)
     _daf_check_search(h, who)
-    (h.sthis != 0 && 1 <= h.scurr <= h.snsum) || throw(SpiceError(:nocurrentarray,
-        "$who: no array is current in the search on $(h.path)"))
+    (h.sthis != 0 && 1 <= h.scurr <= h.snsum) || throw(
+        SpiceError(
+            :nocurrentarray,
+            "$who: no array is current in the search on $(h.path)"
+        )
+    )
     return nothing
 end
 
@@ -734,7 +810,7 @@ function dafgs(h::DAFHandle)
     _daf_check_current(h, "dafgs")
     ss = _daf_sumsize(h.nd, h.ni)
     off = 3 + (h.scurr - 1) * ss
-    return h.sbuf[off+1:off+ss]
+    return h.sbuf[(off + 1):(off + ss)]
 end
 
 """
@@ -751,7 +827,7 @@ function dafgn(h::DAFHandle)
     namsiz = 8 * _daf_sumsize(h.nd, h.ni)
     names, _ = _daf_crec(h, h.sthis + 1)
     off = (h.scurr - 1) * namsiz
-    return String(rstrip(String(names[off+1:off+namsiz]), [' ', '\0']))
+    return String(rstrip(String(names[(off + 1):(off + namsiz)]), [' ', '\0']))
 end
 
 # ---------------------------------------------------------------------------------------
@@ -776,12 +852,20 @@ Throws `SpiceError(:dafnegaddr)` if `first < 1`, `:dafbeggtend` if `first > last
 function dafgda(h::DAFHandle, first::Integer, last::Integer)
     _daf_check_open(h, "dafgda")
     first <= 0 && throw(SpiceError(:dafnegaddr, "dafgda: negative value for the first address: $first"))
-    first > last && throw(SpiceError(:dafbeggtend,
-        "dafgda: beginning address ($first) greater than ending address ($last)"))
+    first > last && throw(
+        SpiceError(
+            :dafbeggtend,
+            "dafgda: beginning address ($first) greater than ending address ($last)"
+        )
+    )
     n = Int(last) - Int(first) + 1
     data = Vector{Float64}(undef, n)
-    8 * Int(last) <= filesize(h.io) || throw(SpiceError(:filereadfailed,
-        "dafgda: the addresses $first:$last are not inside the file $(h.path)"))
+    8 * Int(last) <= filesize(h.io) || throw(
+        SpiceError(
+            :filereadfailed,
+            "dafgda: the addresses $first:$last are not inside the file $(h.path)"
+        )
+    )
     seek(h.io, 8 * (Int(first) - 1))
     read!(h.io, data)
     if h.swap
@@ -803,8 +887,12 @@ Throws `SpiceError(:dafinvalidparams)` unless `1 <= first <= last <= 128`.
 """
 function dafgsr(h::DAFHandle, recno::Integer, first::Integer, last::Integer)
     _daf_check_open(h, "dafgsr")
-    (1 <= first <= last <= _DAF_RECWORDS) || throw(SpiceError(:dafinvalidparams,
-        "dafgsr: the words $first:$last are not in 1:$(_DAF_RECWORDS)"))
+    (1 <= first <= last <= _DAF_RECWORDS) || throw(
+        SpiceError(
+            :dafinvalidparams,
+            "dafgsr: the words $first:$last are not in 1:$(_DAF_RECWORDS)"
+        )
+    )
     rec, found = _daf_sumrec(h, recno)
     found || return nothing
     return rec[first:last]
@@ -830,9 +918,13 @@ function _daf_comment_extent(h::DAFHandle, fward::Int, who::AbstractString)
         rec, _ = _daf_crec(h, ncomr + 1)
         eocpos = findfirst(==(_DAF_EOC), rec)
         eocpos !== nothing && return (ncomr - 1) * _DAF_CRECLEN + eocpos - 1, ncomr, notused
-        all(==(_DAF_EOL), rec) || throw(SpiceError(:badcommentarea,
-            "$who: the comment area of $(h.path) may be damaged; the end of the " *
-            "comments could not be found"))
+        all(==(_DAF_EOL), rec) || throw(
+            SpiceError(
+                :badcommentarea,
+                "$who: the comment area of $(h.path) may be damaged; the end of the " *
+                    "comments could not be found"
+            )
+        )
         ncomr -= 1
         notused += 1
     end
@@ -866,12 +958,16 @@ function dafec(h::DAFHandle)
         recno += 1
     end
     resize!(chars, ncomc)
-    chars[end] == _DAF_EOL || throw(SpiceError(:badcommentarea,
-        "dafec: the last comment line of $(h.path) is not terminated"))
+    chars[end] == _DAF_EOL || throw(
+        SpiceError(
+            :badcommentarea,
+            "dafec: the last comment line of $(h.path) is not terminated"
+        )
+    )
     start = 1
     for k in 1:ncomc                     # invariant: lines holds the lines that end before k
         if chars[k] == _DAF_EOL
-            push!(lines, String(rstrip(String(chars[start:k-1]))))
+            push!(lines, String(rstrip(String(chars[start:(k - 1)]))))
             start = k + 1
         end
     end

@@ -18,19 +18,33 @@ values, with no test of their signs. Throws `SpiceError` (`:kernelvarnotfound`,
 `:typemismatch`, `:arraytoosmall`, and `kind` for a count that is not 3).
 """
 @inline function _geo_radii3(ks::KernelSet, body::Integer, kind::Symbol)
-    v = get(ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
-            string("BODY", body, "_RADII"), nothing)
+    v = get(
+        ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
+            string("BODY", body, "_RADII"), nothing
+    )
     v isa Vector{Float64} || _geo_bad_radii3(body, v, kind)
     length(v) == 3 || _geo_bad_radii3(body, v, kind)
     return @inbounds (v[1], v[2], v[3])
 end
 @noinline function _geo_bad_radii3(body, v, kind::Symbol)
-    v === nothing && throw(SpiceError(:kernelvarnotfound,
-        "the variable BODY$(body)_RADII could not be found in the kernel pool"))
-    v isa Vector{Float64} || throw(SpiceError(:typemismatch,
-        "the variable BODY$(body)_RADII is not numeric"))
-    throw(SpiceError(length(v) > 3 ? :arraytoosmall : kind,
-        "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"))
+    v === nothing && throw(
+        SpiceError(
+            :kernelvarnotfound,
+            "the variable BODY$(body)_RADII could not be found in the kernel pool"
+        )
+    )
+    v isa Vector{Float64} || throw(
+        SpiceError(
+            :typemismatch,
+            "the variable BODY$(body)_RADII is not numeric"
+        )
+    )
+    throw(
+        SpiceError(
+            length(v) > 3 ? :arraytoosmall : kind,
+            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
+        )
+    )
 end
 
 # --- terminator point of an ellipsoid ---------------------------------------------------
@@ -49,15 +63,25 @@ Contract: positive axes (`SpiceError(:invalidaxislength)`) and radius
 ellipsoid (`:objectstooclose`). The iteration of CSPICE: at most 20 steps, to an angular
 error of `1e-15` (`:noconvergence`).
 """
-function _geo_edtmpt(umbral::Bool, a::Float64, b::Float64, c::Float64, r::Float64,
-        axis::Vec3{Float64}, plnvec::Vec3{Float64})
-    (a <= 0.0 || b <= 0.0 || c <= 0.0) && throw(SpiceError(:invalidaxislength,
-        "the target radii must be positive; they are $a, $b, $c"))
+function _geo_edtmpt(
+        umbral::Bool, a::Float64, b::Float64, c::Float64, r::Float64,
+        axis::Vec3{Float64}, plnvec::Vec3{Float64}
+    )
+    (a <= 0.0 || b <= 0.0 || c <= 0.0) && throw(
+        SpiceError(
+            :invalidaxislength,
+            "the target radii must be positive; they are $a, $b, $c"
+        )
+    )
     r <= 0.0 && throw(SpiceError(:invalidradius, "the radius of the source must be positive; it is $r"))
     _m_iszero(axis) && throw(SpiceError(:zerovector, "the axis vector is the zero vector"))
-    r + max(max(a, b), c) >= _m_norm(axis) && throw(SpiceError(:objectstooclose,
-        "the source touches the bounding sphere of the target: the distance between the " *
-        "centers is $(_m_norm(axis))"))
+    r + max(max(a, b), c) >= _m_norm(axis) && throw(
+        SpiceError(
+            :objectstooclose,
+            "the source touches the bounding sphere of the target: the distance between the " *
+                "centers is $(_m_norm(axis))"
+        )
+    )
     _m_iszero(plnvec) && throw(SpiceError(:zerovector, "the reference vector is the zero vector"))
     # In the scaled space the target is the unit sphere and the source is an ellipsoid.
     ta = 1.0 / a
@@ -70,16 +94,20 @@ function _geo_edtmpt(umbral::Bool, a::Float64, b::Float64, c::Float64, r::Float6
     taxis = Vec3(ta * axis[1], tb * axis[2], tc * axis[3])
     utaxis = _m_hat(taxis)
     hplnml = _m_cross(tplnvc, taxis)
-    _m_iszero(hplnml) && throw(SpiceError(:degeneratecase,
-        "the reference vector and the axis vector are parallel"))
+    _m_iszero(hplnml) && throw(
+        SpiceError(
+            :degeneratecase,
+            "the reference vector and the axis vector are parallel"
+        )
+    )
     maxr = max(max(xa, xb), xc)
     d = _m_norm(taxis)
     if umbral
-        angle = _geo_dasine((maxr - 1.0) / d, 1e-14)
+        angle = _geo_dasine((maxr - 1.0) / d, 1.0e-14)
         targpt = _m_vrotv(utaxis, hplnml, -(_M_HALFPI + angle))
         s = 1.0
     else
-        angle = _geo_dasine((maxr + 1.0) / d, 1e-14)
+        angle = _geo_dasine((maxr + 1.0) / d, 1.0e-14)
         targpt = _m_vrotv(utaxis, hplnml, angle - _M_HALFPI)
         s = -1.0
     end
@@ -91,7 +119,7 @@ function _geo_edtmpt(umbral::Bool, a::Float64, b::Float64, c::Float64, r::Float6
     nitr = 0
     # invariant: `targpt` is on the unit sphere in the half plane; `angerr` is the angle
     # by which the tangent plane at `targpt` misses the source
-    while abs(angerr) > 1e-15 && nitr <= 20
+    while abs(angerr) > 1.0e-15 && nitr <= 20
         targpt = _m_vrotv(targpt, hplnml, angerr)
         normal = _m_hat(targpt)
         konst = _m_dot(normal, targpt)
@@ -100,8 +128,12 @@ function _geo_edtmpt(umbral::Bool, a::Float64, b::Float64, c::Float64, r::Float6
         d = _m_norm(_m_perp(srcpnt, hplnml, false) - targpt)
         angerr = -h / d
         nitr += 1
-        nitr > 20 && throw(SpiceError(:noconvergence,
-            "the terminator point iteration did not converge in 20 steps"))
+        nitr > 20 && throw(
+            SpiceError(
+                :noconvergence,
+                "the terminator point iteration did not converge in 20 steps"
+            )
+        )
     end
     return Vec3(a * targpt[1], b * targpt[2], c * targpt[3])
 end
@@ -115,9 +147,11 @@ end
 its surface intercept. For the limb (`curve == 0`) the ray leaves the vertex; for the
 umbral (`1`) and the penumbral (`2`) terminator it is tangent to the source sphere.
 """
-@inline function _geo_tansta(ks::KernelSet, sh::_GeoShape, curve::Int, srcrad::Float64,
+@inline function _geo_tansta(
+        ks::KernelSet, sh::_GeoShape, curve::Int, srcrad::Float64,
         et::Float64, vrtx::Vec3{Float64}, uaxis::Vec3{Float64}, nrml::Vec3{Float64},
-        angle::Float64)
+        angle::Float64
+    )
     if curve == 0
         return _geo_rayx(ks, sh, vrtx, _m_vrotv(uaxis, nrml, angle), et)
     elseif curve == 1
@@ -147,20 +181,26 @@ tolerance `soltol`, and the intercept that was found last is the tangent point. 
 than $(_GEO_MAXWIN) points, and `:bug` where CSPICE signals `SPICE(BUG)` (a transition
 without an intercept in the refinement).
 """
-function _geo_tangnt!(ends::Vector{Float64}, pts::Vector{Vec3{Float64}}, ks::KernelSet,
+function _geo_tangnt!(
+        ends::Vector{Float64}, pts::Vector{Vec3{Float64}}, ks::KernelSet,
         sh::_GeoShape, curve::Int, srcrad::Float64, et::Float64, plnvec::Vec3{Float64},
-        axis::Vec3{Float64}, schstp::Float64, soltol::Float64)
+        axis::Vec3{Float64}, schstp::Float64, soltol::Float64
+    )
     empty!(ends)
     empty!(pts)
     refvec = curve == 2 ? _m_vrotv(plnvec, axis, Float64(pi)) : plnvec
     # `zztanini`
     _m_iszero(axis) && _geo_tan_error(:zerovector, "the axis vector is the zero vector")
     _m_iszero(refvec) && _geo_tan_error(:zerovector, "the reference vector is the zero vector")
-    (curve != 0 && srcrad <= 0.0) && _geo_tan_error(:badsourceradius,
-        "the radius of the source must be positive; it is $srcrad")
+    (curve != 0 && srcrad <= 0.0) && _geo_tan_error(
+        :badsourceradius,
+        "the radius of the source must be positive; it is $srcrad"
+    )
     nrml = _m_cross(axis, refvec)
-    _m_iszero(nrml) && _geo_tan_error(:degeneratecase,
-        "the reference vector and the axis vector are parallel")
+    _m_iszero(nrml) && _geo_tan_error(
+        :degeneratecase,
+        "the reference vector and the axis vector are parallel"
+    )
     nrml = _m_hat(nrml)
     uaxis = _m_hat(axis)
     maxrad = sh.maxrad * 1.001
@@ -169,30 +209,38 @@ function _geo_tangnt!(ends::Vector{Float64}, pts::Vector{Vec3{Float64}}, ks::Ker
     pival = Float64(pi)
     if curve == 0
         start = 0.0
-        r > maxrad * 1.0000000000010001 && (start = pival - _geo_dasine(maxrad / r, 1e-12))
+        r > maxrad * 1.0000000000010001 && (start = pival - _geo_dasine(maxrad / r, 1.0e-12))
         finish = pival
     else
-        srcrad + maxrad > r && _geo_tan_error(:objectstooclose,
-            "the source touches the bounding sphere of the target")
+        srcrad + maxrad > r && _geo_tan_error(
+            :objectstooclose,
+            "the source touches the bounding sphere of the target"
+        )
         if curve == 1
-            start = pival + _geo_dasine((srcrad - maxrad) / r, 1e-12)
-            finish = pival + _geo_dasine(srcrad / r, 1e-12)
+            start = pival + _geo_dasine((srcrad - maxrad) / r, 1.0e-12)
+            finish = pival + _geo_dasine(srcrad / r, 1.0e-12)
         else
             alpha = srcrad / (srcrad + maxrad)
-            start = pival - _geo_dasine(srcrad / (alpha * r), 1e-12)
-            finish = pival - _geo_dasine(srcrad / r, 1e-12)
+            start = pival - _geo_dasine(srcrad / (alpha * r), 1.0e-12)
+            finish = pival - _geo_dasine(srcrad / r, 1.0e-12)
         end
     end
     # `zztanslv`
     soltol <= 0.0 && _geo_tan_error(:invalidtolerance, "the tolerance must be positive; it is $soltol")
     start > finish && _geo_tan_error(:boundsoutoforder, "the search bounds are out of order")
-    (start - soltol == start || start + soltol == start || finish - soltol == finish ||
-     finish + soltol == finish) && _geo_tan_error(:invalidtolerance,
-        "the tolerance $soltol is too small for the search bounds")
+    (
+        start - soltol == start || start + soltol == start || finish - soltol == finish ||
+            finish + soltol == finish
+    ) && _geo_tan_error(
+        :invalidtolerance,
+        "the tolerance $soltol is too small for the search bounds"
+    )
     schstp <= 0.0 && _geo_tan_error(:invalidconststep, "the search step must be positive; it is $schstp")
     maxmag = max(abs(start), abs(finish))
-    maxmag + schstp == maxmag && _geo_tan_error(:invalidconststep,
-        "the search step $schstp is too small for the search bounds")
+    maxmag + schstp == maxmag && _geo_tan_error(
+        :invalidconststep,
+        "the search step $schstp is too small for the search bounds"
+    )
     curx = start
     cursta, xpoint = _geo_tansta(ks, sh, curve, srcrad, et, axis, uaxis, nrml, curx)
     prvpnt = xpoint
@@ -229,8 +277,10 @@ function _geo_tangnt!(ends::Vector{Float64}, pts::Vector{Vec3{Float64}}, ks::Ker
             # invariant: the state is `state1` at x1 and the other state at x2
             while x2 - x1 > soltol
                 nloop += 1
-                nloop >= 1000 && _geo_tan_error(:noconvergence,
-                    "the bisection of a state change did not converge in 1000 steps")
+                nloop >= 1000 && _geo_tan_error(
+                    :noconvergence,
+                    "the bisection of a state change did not converge in 1000 steps"
+                )
                 t = max(x1, min(x2, x1 * 0.5 + x2 * 0.5))
                 if t == x1
                     x2 = t
@@ -244,10 +294,14 @@ function _geo_tangnt!(ends::Vector{Float64}, pts::Vector{Vec3{Float64}}, ks::Ker
             end
             trnstn = max(x1, min(x2, (x1 + x2) * 0.5))
             instat = !instat
-            length(ends) >= _GEO_MAXWIN && _geo_tan_error(:arraytoosmall,
-                "more than $_GEO_MAXWIN tangent points were found on one cutting half plane")
-            prvset || _geo_tan_error(:bug, "a state change was found without a surface " *
-                "intercept in its refinement, as SPICE(BUG) of CSPICE")
+            length(ends) >= _GEO_MAXWIN && _geo_tan_error(
+                :arraytoosmall,
+                "more than $_GEO_MAXWIN tangent points were found on one cutting half plane"
+            )
+            prvset || _geo_tan_error(
+                :bug, "a state change was found without a surface " *
+                    "intercept in its refinement, as SPICE(BUG) of CSPICE"
+            )
             push!(ends, trnstn)
             push!(pts, prvpnt)
             prvset = false
@@ -271,8 +325,12 @@ end
 
 # --- limb points ------------------------------------------------------------------------
 
-@noinline _geo_bad_locus(corloc, values) = throw(SpiceError(:invalidlocus,
-    "the aberration correction locus <$corloc> is not recognized; the values are $values"))
+@noinline _geo_bad_locus(corloc, values) = throw(
+    SpiceError(
+        :invalidlocus,
+        "the aberration correction locus <$corloc> is not recognized; the values are $values"
+    )
+)
 
 "The locus code of `corloc` (`ljucrs`: case, leading blanks and repeated blanks are ignored)."
 @inline function _geo_locus(corloc::AbstractString, second::String)
@@ -284,16 +342,20 @@ end
     n = normalize_name(corloc)
     n == "CENTER" && return _GEO_LOC_CENTER
     n == second && return _GEO_LOC_ELLIPSOID
-    _geo_bad_locus(corloc, "CENTER and $second")
+    return _geo_bad_locus(corloc, "CENTER and $second")
 end
 
 # `limbpt_` calls `edlimb_`, which signals SPICE(INVALIDAXISLENGTH) for a radius that is not
 # positive; `edlimb_c`, the counterpart of `edlimb`, signals SPICE(DEGENERATECASE).
-@noinline _geo_bad_limb_radii(r) = throw(SpiceError(:invalidaxislength,
-    "semi-axis lengths: a = $(r[1]), b = $(r[2]), c = $(r[3])"))
+@noinline _geo_bad_limb_radii(r) = throw(
+    SpiceError(
+        :invalidaxislength,
+        "semi-axis lengths: a = $(r[1]), b = $(r[2]), c = $(r[3])"
+    )
+)
 
 "The limb plane normal that points toward the observer, and the limb center."
-@inline function _geo_limb_frame(radii::NTuple{3,Float64}, axis::Vec3{Float64})
+@inline function _geo_limb_frame(radii::NTuple{3, Float64}, axis::Vec3{Float64})
     (radii[1] <= 0.0 || radii[2] <= 0.0 || radii[3] <= 0.0) && _geo_bad_limb_radii(radii)
     limb = edlimb(radii[1], radii[2], radii[3], axis)
     enorml = _m_ucrss(limb.semimajor, limb.semiminor)
@@ -301,17 +363,31 @@ end
     return limb.center, enorml
 end
 
-@noinline _geo_cut_degenerate(i) = throw(SpiceError(:degeneratecase,
-    "the cutting half plane $i is parallel to the limb plane"))
-@noinline _geo_limb_bug() = throw(SpiceError(:bug,
-    "no intercept of the limb ray with the ellipsoid was found"))
-@noinline _geo_out_of_room(i, n, room) = throw(SpiceError(:outofroom,
-    "out of room in the output arrays: the cutting half plane $i has $n points and the " *
-    "room left is $room"))
+@noinline _geo_cut_degenerate(i) = throw(
+    SpiceError(
+        :degeneratecase,
+        "the cutting half plane $i is parallel to the limb plane"
+    )
+)
+@noinline _geo_limb_bug() = throw(
+    SpiceError(
+        :bug,
+        "no intercept of the limb ray with the ellipsoid was found"
+    )
+)
+@noinline _geo_out_of_room(i, n, room) = throw(
+    SpiceError(
+        :outofroom,
+        "out of room in the output arrays: the cutting half plane $i has $n points and the " *
+            "room left is $room"
+    )
+)
 
 "The limb point of the ellipsoid in the half plane with the normal `cutnml`."
-@inline function _geo_limb_point(radii::NTuple{3,Float64}, center::Vec3{Float64},
-        enorml::Vec3{Float64}, cutnml::Vec3{Float64}, i::Int)
+@inline function _geo_limb_point(
+        radii::NTuple{3, Float64}, center::Vec3{Float64},
+        enorml::Vec3{Float64}, cutnml::Vec3{Float64}, i::Int
+    )
     edir = _m_ucrss(cutnml, enorml)
     _m_iszero(edir) && _geo_cut_degenerate(i)
     found, pt = _m_surfpt(center, edir, radii[1], radii[2], radii[3])
@@ -319,10 +395,12 @@ end
     return pt, edir
 end
 
-function _geo_limbpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
+function _geo_limbpt(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg,
         corloc::AbstractString, obsrvr::NameOrID, refvec0::AbstractVector, rolstp0::Real,
-        ncuts::Integer, schstp0::Real, soltol0::Real, maxn::Integer)
+        ncuts::Integer, schstp0::Real, soltol0::Real, maxn::Integer
+    )
     _plain_epoch(et0, "limbpt")
     corr = _geo_abcorr(abcorr)
     s = _geo_sign(corr)
@@ -331,31 +409,55 @@ function _geo_limbpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
     obscde == trgcde && _geo_same_bodies("limb points", obsrvr)
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
     m = _geo_method(ks, trgcde, method)
-    m.pntdef == 0x00 && throw(SpiceError(:invalidlimbtype,
-        "the method string <$method> has no limb type; use TANGENT or GUIDED"))
-    (m.subtyp != 0x00 || m.trmtyp != 0x00) && throw(SpiceError(:invalidmethod,
-        "the method string <$method> has a sub-point type or a terminator type, which " *
-        "is not valid here"))
+    m.pntdef == 0x00 && throw(
+        SpiceError(
+            :invalidlimbtype,
+            "the method string <$method> has no limb type; use TANGENT or GUIDED"
+        )
+    )
+    (m.subtyp != 0x00 || m.trmtyp != 0x00) && throw(
+        SpiceError(
+            :invalidmethod,
+            "the method string <$method> has a sub-point type or a terminator type, which " *
+                "is not valid here"
+        )
+    )
     tangent = m.pntdef == _GEO_TANGENT
     loccde = _geo_locus(corloc, "ELLIPSOID LIMB")
     refvec = _geo_pos(refvec0)
     _m_iszero(refvec) && throw(SpiceError(:zerovector, "the reference vector is the zero vector"))
     maxn < 1 && throw(SpiceError(:invalidsize, "maxn = $maxn; it must be at least 1"))
-    (ncuts < 1 || ncuts > maxn) && throw(SpiceError(:invalidcount,
-        "ncuts = $ncuts; it must be in 1:$maxn"))
+    (ncuts < 1 || ncuts > maxn) && throw(
+        SpiceError(
+            :invalidcount,
+            "ncuts = $ncuts; it must be in 1:$maxn"
+        )
+    )
     rolstp, schstp, soltol = Float64(rolstp0), Float64(schstp0), Float64(soltol0)
     if m.dsk
-        schstp <= 0.0 && throw(SpiceError(:invalidsearchstep,
-            "the search step must be positive; it is $schstp"))
-        soltol <= 0.0 && throw(SpiceError(:invalidtolerance,
-            "the solution tolerance must be positive; it is $soltol"))
+        schstp <= 0.0 && throw(
+            SpiceError(
+                :invalidsearchstep,
+                "the search step must be positive; it is $schstp"
+            )
+        )
+        soltol <= 0.0 && throw(
+            SpiceError(
+                :invalidtolerance,
+                "the solution tolerance must be positive; it is $soltol"
+            )
+        )
     end
-    (ncuts > 1 && rolstp == 0.0) && throw(SpiceError(:invalidrollstep,
-        "the roll step is zero and more than one cutting half plane is asked for"))
+    (ncuts > 1 && rolstp == 0.0) && throw(
+        SpiceError(
+            :invalidrollstep,
+            "the roll step is zero and more than one cutting half plane is asked for"
+        )
+    )
     sh = m.dsk ? _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst) :
-         _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+        _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
     radii = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?
-            _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
+        _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
     et = Float64(check_epoch(et0))
     npts = zeros(Int, ncuts)
     points = Vec3{Float64}[]
@@ -364,14 +466,22 @@ function _geo_limbpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
     ends = Float64[]
     pntbuf = Vec3{Float64}[]
     pos, lt = _geo_spkezp(ks, trgcde, et, fixfid, corr, obscde)
-    _m_iszero(pos) && throw(SpiceError(:noseparation,
-        "the distance between the observer and the target is zero"))
+    _m_iszero(pos) && throw(
+        SpiceError(
+            :noseparation,
+            "the distance between the observer and the target is zero"
+        )
+    )
     room = Int(maxn)
     if loccde == _GEO_LOC_CENTER
         trgepc = et + s * lt
         axis = -pos
-        _m_iszero(_m_cross(axis, refvec)) && throw(SpiceError(:degeneratecase,
-            "the reference vector is parallel to the observer-target vector"))
+        _m_iszero(_m_cross(axis, refvec)) && throw(
+            SpiceError(
+                :degeneratecase,
+                "the reference vector is parallel to the observer-target vector"
+            )
+        )
         center = zero(Vec3{Float64})
         enorml = zero(Vec3{Float64})
         (!m.dsk || !tangent) && ((center, enorml) = _geo_limb_frame(radii, axis))
@@ -404,8 +514,12 @@ function _geo_limbpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         end
         return npts, points, epochs, tangts
     end
-    tangent || throw(SpiceError(:badlimblocusmix,
-        "the limb type GUIDED cannot be used with the locus ELLIPSOID LIMB"))
+    tangent || throw(
+        SpiceError(
+            :badlimblocusmix,
+            "the limb type GUIDED cannot be used with the locus ELLIPSOID LIMB"
+        )
+    )
     robs, vobs = _ssb(ks, obscde, et, Int32(1))
     vstl = corr.transmit ? -vobs : vobs
     stloff = zero(Vec3{Float64})
@@ -420,7 +534,7 @@ function _geo_limbpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
             cortrg = zero(Vec3{Float64})
             # invariant: `lt` is the light time to the limb point after j iterations
             # (it starts from the value of the previous cut, as in CSPICE)
-            while j < numitr && lterr > 1e-18
+            while j < numitr && lterr > 1.0e-18
                 epoch = et + s * lt
                 ptarg = _ssbpos(ks, trgcde, epoch, Int32(1)) - robs
                 cortrg = !corr.stellar ? ptarg : j == 0 ? _stelab(ptarg, vstl) : ptarg + stloff
@@ -466,27 +580,45 @@ end
 
 # --- terminator points ------------------------------------------------------------------
 
-function _geo_termpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
+function _geo_termpt(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         ilusrc::NameOrID, target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg,
         corloc::AbstractString, obsrvr::NameOrID, refvec0::AbstractVector, rolstp0::Real,
-        ncuts::Integer, schstp0::Real, soltol0::Real, maxn::Integer)
+        ncuts::Integer, schstp0::Real, soltol0::Real, maxn::Integer
+    )
     _plain_epoch(et0, "termpt")
     corr = _geo_abcorr(abcorr)
-    corr.transmit && throw(SpiceError(:invalidoption,
-        "the aberration correction $(string(corr)) calls for transmission; termpt " *
-        "accepts reception corrections only"))
+    corr.transmit && throw(
+        SpiceError(
+            :invalidoption,
+            "the aberration correction $(string(corr)) calls for transmission; termpt " *
+                "accepts reception corrections only"
+        )
+    )
     trgcde = _geo_body(ks, target, "target")
     obscde = _geo_body(ks, obsrvr, "observer")
     ilucde = _geo_body(ks, ilusrc, "illumination source")
     obscde == trgcde && _geo_same_bodies("terminator points", obsrvr)
-    ilucde == trgcde && throw(SpiceError(:bodiesnotdistinct,
-        "the illumination source and the target are the same body: $ilusrc"))
+    ilucde == trgcde && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "the illumination source and the target are the same body: $ilusrc"
+        )
+    )
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
     m = _geo_method(ks, trgcde, method)
-    m.pntdef == 0x00 && throw(SpiceError(:invalidtermtype,
-        "the method string <$method> has no terminator point definition; use TANGENT or GUIDED"))
-    m.trmtyp == 0x00 && throw(SpiceError(:invalidshadow,
-        "the method string <$method> has no shadow type; use UMBRAL or PENUMBRAL"))
+    m.pntdef == 0x00 && throw(
+        SpiceError(
+            :invalidtermtype,
+            "the method string <$method> has no terminator point definition; use TANGENT or GUIDED"
+        )
+    )
+    m.trmtyp == 0x00 && throw(
+        SpiceError(
+            :invalidshadow,
+            "the method string <$method> has no shadow type; use UMBRAL or PENUMBRAL"
+        )
+    )
     m.subtyp == 0x00 || _geo_sub_in_method(method)
     tangent = m.pntdef == _GEO_TANGENT
     umbral = m.trmtyp == _GEO_UMBRAL
@@ -495,17 +627,25 @@ function _geo_termpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
     refvec = _geo_pos(refvec0)
     _m_iszero(refvec) && throw(SpiceError(:zerovector, "the reference vector is the zero vector"))
     maxn < 1 && throw(SpiceError(:invalidsize, "maxn = $maxn; it must be at least 1"))
-    (ncuts < 0 || ncuts > maxn) && throw(SpiceError(:invalidcount,
-        "ncuts = $ncuts; it must be in 0:$maxn"))
+    (ncuts < 0 || ncuts > maxn) && throw(
+        SpiceError(
+            :invalidcount,
+            "ncuts = $ncuts; it must be in 0:$maxn"
+        )
+    )
     rolstp, schstp, soltol = Float64(rolstp0), Float64(schstp0), Float64(soltol0)
-    (ncuts > 1 && rolstp == 0.0) && throw(SpiceError(:invalidrollstep,
-        "the roll step is zero and more than one cutting half plane is asked for"))
+    (ncuts > 1 && rolstp == 0.0) && throw(
+        SpiceError(
+            :invalidrollstep,
+            "the roll step is zero and more than one cutting half plane is asked for"
+        )
+    )
     sh = m.dsk ? _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst) :
-         _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+        _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
     srad = _geo_radii3(ks, ilucde, :badradiuscount)
     ilurad = max(max(srad[1], srad[2]), srad[3])
     trad = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?
-           _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
+        _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
     et = Float64(check_epoch(et0))
     npts = zeros(Int, ncuts)
     points = Vec3{Float64}[]
@@ -514,19 +654,29 @@ function _geo_termpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
     ends = Float64[]
     pntbuf = Vec3{Float64}[]
     trgpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, corr, obscde)
-    _m_iszero(trgpos) && throw(SpiceError(:noseparation,
-        "the distance between the observer and the target is zero"))
+    _m_iszero(trgpos) && throw(
+        SpiceError(
+            :noseparation,
+            "the distance between the observer and the target is zero"
+        )
+    )
     room = Int(maxn)
     if loccde == _GEO_LOC_CENTER
         trgepc = et + _geo_sign(corr) * lt
         axis, _ = _geo_spkezp(ks, ilucde, trgepc, fixfid, corr, trgcde)
-        _m_iszero(_m_cross(axis, refvec)) && throw(SpiceError(:degeneratecase,
-            "the reference vector is parallel to the target-source vector"))
+        _m_iszero(_m_cross(axis, refvec)) && throw(
+            SpiceError(
+                :degeneratecase,
+                "the reference vector is parallel to the target-source vector"
+            )
+        )
         for i in 1:ncuts                 # invariant: the cuts 1 .. i-1 are in the outputs
             plnvec = _m_vrotv(refvec, axis, (i - 1) * rolstp)
             if m.dsk && tangent
-                n = _geo_tangnt!(ends, pntbuf, ks, sh, shadow, ilurad, trgepc, plnvec, axis,
-                    schstp, soltol)
+                n = _geo_tangnt!(
+                    ends, pntbuf, ks, sh, shadow, ilurad, trgepc, plnvec, axis,
+                    schstp, soltol
+                )
             elseif m.dsk
                 edir = _m_hat(_geo_edtmpt(umbral, trad[1], trad[2], trad[3], ilurad, axis, plnvec))
                 found, pt = _geo_rayx(ks, sh, (sh.maxrad * 3.0) * edir, -edir, trgepc)
@@ -550,8 +700,12 @@ function _geo_termpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         end
         return npts, points, epochs, trmvcs
     end
-    tangent || throw(SpiceError(:badtermlocusmix,
-        "the point definition GUIDED cannot be used with the locus ELLIPSOID TERMINATOR"))
+    tangent || throw(
+        SpiceError(
+            :badtermlocusmix,
+            "the point definition GUIDED cannot be used with the locus ELLIPSOID TERMINATOR"
+        )
+    )
     robs, vobs = _ssb(ks, obscde, et, Int32(1))
     stloff = zero(Vec3{Float64})
     epoint = zero(Vec3{Float64})
@@ -564,7 +718,7 @@ function _geo_termpt(ks::KernelSet, tols::DSKTolerances, method::AbstractString,
             lterr = 1.0
             # invariant: `lt` is the light time to the terminator point after j
             # iterations (it starts from the value of the previous cut, as in CSPICE)
-            while j < numitr && lterr > 1e-17
+            while j < numitr && lterr > 1.0e-17
                 epoch = et - lt
                 ptarg = _ssbpos(ks, trgcde, epoch, Int32(1)) - robs
                 axis, _ = _geo_spkezp(ks, ilucde, epoch, fixfid, corr, trgcde)
@@ -695,21 +849,33 @@ lonlat = [reclat(p)[2:3] for p in points]
 
 See also [`termpt`](@ref), [`tangpt`](@ref), [`edlimb`](@ref).
 """
-limbpt(ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+limbpt(
+    ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
     abcorr::AbcorrArg, corloc::AbstractString, obsrvr::NameOrID, refvec::AbstractVector,
-    rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer) =
-    _geo_limbpt(ks, _DSK_DEFAULT_TOLS, method, target, et, fixref, abcorr, corloc, obsrvr,
-        refvec, rolstp, ncuts, schstp, soltol, maxn)
-limbpt(ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+    rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer
+) =
+    _geo_limbpt(
+    ks, _DSK_DEFAULT_TOLS, method, target, et, fixref, abcorr, corloc, obsrvr,
+    refvec, rolstp, ncuts, schstp, soltol, maxn
+)
+limbpt(
+    ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
     abcorr::AbcorrArg, corloc::AbstractString, obsrvr::NameOrID, refvec::AbstractVector,
-    rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer) =
-    _geo_limbpt(kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, abcorr, corloc,
-        obsrvr, refvec, rolstp, ncuts, schstp, soltol, maxn)
-limbpt(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
+    rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer
+) =
+    _geo_limbpt(
+    kernelset(ctx), dsktolerances(ctx), method, target, et, fixref, abcorr, corloc,
+    obsrvr, refvec, rolstp, ncuts, schstp, soltol, maxn
+)
+limbpt(
+    method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
     corloc::AbstractString, obsrvr::NameOrID, refvec::AbstractVector, rolstp::Real,
-    ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer) =
-    limbpt(default_context(), method, target, et, fixref, abcorr, corloc, obsrvr, refvec,
-        rolstp, ncuts, schstp, soltol, maxn)
+    ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer
+) =
+    limbpt(
+    default_context(), method, target, et, fixref, abcorr, corloc, obsrvr, refvec,
+    rolstp, ncuts, schstp, soltol, maxn
+)
 
 """
     termpt([ctx,] method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr, refvec,
@@ -780,21 +946,33 @@ lonlat = [reclat(p)[2:3] for p in points]
 
 See also [`limbpt`](@ref), [`edterm`](@ref), [`ilumin`](@ref).
 """
-termpt(ks::KernelSet, method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real,
+termpt(
+    ks::KernelSet, method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real,
     fixref::NameOrID, abcorr::AbcorrArg, corloc::AbstractString, obsrvr::NameOrID,
     refvec::AbstractVector, rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real,
-    maxn::Integer) = _geo_termpt(ks, _DSK_DEFAULT_TOLS, method, ilusrc, target, et, fixref,
-    abcorr, corloc, obsrvr, refvec, rolstp, ncuts, schstp, soltol, maxn)
-termpt(ctx::SpiceContext, method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real,
+    maxn::Integer
+) = _geo_termpt(
+    ks, _DSK_DEFAULT_TOLS, method, ilusrc, target, et, fixref,
+    abcorr, corloc, obsrvr, refvec, rolstp, ncuts, schstp, soltol, maxn
+)
+termpt(
+    ctx::SpiceContext, method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real,
     fixref::NameOrID, abcorr::AbcorrArg, corloc::AbstractString, obsrvr::NameOrID,
     refvec::AbstractVector, rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real,
-    maxn::Integer) = _geo_termpt(kernelset(ctx), dsktolerances(ctx), method, ilusrc, target,
-    et, fixref, abcorr, corloc, obsrvr, refvec, rolstp, ncuts, schstp, soltol, maxn)
-termpt(method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real, fixref::NameOrID,
+    maxn::Integer
+) = _geo_termpt(
+    kernelset(ctx), dsktolerances(ctx), method, ilusrc, target,
+    et, fixref, abcorr, corloc, obsrvr, refvec, rolstp, ncuts, schstp, soltol, maxn
+)
+termpt(
+    method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real, fixref::NameOrID,
     abcorr::AbcorrArg, corloc::AbstractString, obsrvr::NameOrID, refvec::AbstractVector,
-    rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer) =
-    termpt(default_context(), method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr,
-        refvec, rolstp, ncuts, schstp, soltol, maxn)
+    rolstp::Real, ncuts::Integer, schstp::Real, soltol::Real, maxn::Integer
+) =
+    termpt(
+    default_context(), method, ilusrc, target, et, fixref, abcorr, corloc, obsrvr,
+    refvec, rolstp, ncuts, schstp, soltol, maxn
+)
 
 # --- tangent point of a ray -------------------------------------------------------------
 
@@ -844,14 +1022,19 @@ Also throws the errors of [`spkpos`](@ref).
 
 See also [`limbpt`](@ref), [`sincpt`](@ref), [`npedln`](@ref).
 """
-function tangpt(ks::KernelSet, method::AbstractString, target::NameOrID, et0::Real,
+function tangpt(
+        ks::KernelSet, method::AbstractString, target::NameOrID, et0::Real,
         fixref::NameOrID, abcorr::AbcorrArg, corloc::AbstractString, obsrvr::NameOrID,
-        dref::NameOrID, dvec0::AbstractVector)
+        dref::NameOrID, dvec0::AbstractVector
+    )
     _plain_epoch(et0, "tangpt")
     corr = _geo_abcorr(abcorr)
     s = _geo_sign(corr)
-    (method == "ELLIPSOID" || _dsk_eqstr(method, "ELLIPSOID")) || throw(SpiceError(
-        :notsupported, "the method <$method> is not supported; use ELLIPSOID"))
+    (method == "ELLIPSOID" || _dsk_eqstr(method, "ELLIPSOID")) || throw(
+        SpiceError(
+            :notsupported, "the method <$method> is not supported; use ELLIPSOID"
+        )
+    )
     tanloc = _geo_tanloc(corloc)
     dvec = _geo_pos(dvec0)
     _m_iszero(dvec) && throw(SpiceError(:zerovector, "the ray direction is the zero vector"))
@@ -865,11 +1048,19 @@ function tangpt(ks::KernelSet, method::AbstractString, target::NameOrID, et0::Re
     found || _geo_no_frame(dref)
     et = Float64(check_epoch(et0))
     tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, corr, obscde)
-    _m_iszero(tpos) && throw(SpiceError(:noseparation,
-        "the distance between the observer and the target is zero"))
+    _m_iszero(tpos) && throw(
+        SpiceError(
+            :noseparation,
+            "the distance between the observer and the target is zero"
+        )
+    )
     fixobs = -tpos
-    _m_norm(edpnt(fixobs, a, b, c)) >= _m_norm(fixobs) && throw(SpiceError(:invalidgeometry,
-        "the observer is inside or on the surface of the reference ellipsoid of the target"))
+    _m_norm(edpnt(fixobs, a, b, c)) >= _m_norm(fixobs) && throw(
+        SpiceError(
+            :invalidgeometry,
+            "the observer is inside or on the surface of the reference ellipsoid of the target"
+        )
+    )
     trgepc = et + s * lt
     refepc = et
     if !(dclass == Int32(1) || dcentr == obscde || !corr.uselt)
@@ -936,17 +1127,21 @@ function tangpt(ks::KernelSet, method::AbstractString, target::NameOrID, et0::Re
         prevlt = lt
         prvepc = trgepc
         i += 1
-        ltcnv = ltdiff < abs(lt) * 1e-16 || epcdif == 0.0
-        corr.stellar && (stlcnv = vrel(tanpt, prvtan) < 1e-16 && vrel(srfpt, prvsrf) < 1e-16)
+        ltcnv = ltdiff < abs(lt) * 1.0e-16 || epcdif == 0.0
+        corr.stellar && (stlcnv = vrel(tanpt, prvtan) < 1.0e-16 && vrel(srfpt, prvsrf) < 1.0e-16)
     end
     return tanpt, alt, _m_norm(stlobs - tanpt), srfpt, trgepc, srfvec
 end
-tangpt(ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
+tangpt(
+    ctx::SpiceContext, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
     abcorr::AbcorrArg, corloc::AbstractString, obsrvr::NameOrID, dref::NameOrID,
-    dvec::AbstractVector) =
+    dvec::AbstractVector
+) =
     tangpt(kernelset(ctx), method, target, et, fixref, abcorr, corloc, obsrvr, dref, dvec)
-tangpt(method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
-    corloc::AbstractString, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector) =
+tangpt(
+    method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
+    corloc::AbstractString, obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector
+) =
     tangpt(default_context(), method, target, et, fixref, abcorr, corloc, obsrvr, dref, dvec)
 
 @inline function _geo_tanloc(corloc::AbstractString)
@@ -957,6 +1152,10 @@ end
 @noinline function _geo_tanloc_slow(corloc::AbstractString)
     _dsk_eqstr(corloc, "TANGENTPOINT") && return true
     _dsk_eqstr(corloc, "SURFACEPOINT") && return false
-    throw(SpiceError(:notsupported, "the aberration correction locus <$corloc> is not " *
-        "recognized; the values are TANGENT POINT and SURFACE POINT"))
+    throw(
+        SpiceError(
+            :notsupported, "the aberration correction locus <$corloc> is not " *
+                "recognized; the values are TANGENT POINT and SURFACE POINT"
+        )
+    )
 end

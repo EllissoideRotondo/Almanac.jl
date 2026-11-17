@@ -7,19 +7,30 @@
 # SPICELIB interface on which tspice passes) at the commit below into OUTDIR/pepper,
 # instruments that interface with instrument.py for the routines of routines.txt,
 # builds it with fpm (gfortran 16, as PEPPER requires), and runs each family in its own
-# directory with the log OUTDIR/logs/F_XXX.log. Nothing here is committed to Almanac.jl:
+# directory with the log OUTDIR/logs/F_XXX.log.gz. Nothing here is committed to Almanac.jl:
 # the tspice sources stay in the clone, and the logs and the copies of the kernels that
 # the families write stay in OUTDIR.
 #
-# Environment: PEPPER_COMMIT (default below), JOBS (parallel families, default nproc),
-# TIMEOUT (seconds per family, default 1800).
+# A full recording (no FAMILY) writes OUTDIR/logs/manifest.tsv: the PEPPER commit, the
+# hashes of instrument.py and routines.txt, and the list of the families; run.jl checks a
+# recording against it. Each family adds its status to OUTDIR/logs/status.tsv. The exit
+# status is 1 if a family failed or timed out.
+#
+# Environment: PEPPER_COMMIT (default below), JOBS (parallel families, default: the CPU
+# threads, at most one per 2 GB of available memory),
+# TIMEOUT (seconds per family, default 1800), TSPICE_ALL=1 (log every call; by default a
+# routine without state, or a query between two changes of state, is logged once per
+# distinct input, and a routine without state at most TSPICE_MAXPURE times per family,
+# default 20000; see instrument.py).
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
 out=$(mkdir -p "$1" && cd "$1" && pwd)
 shift
-commit=${PEPPER_COMMIT:-454d6ba}
-jobs=${JOBS:-$(nproc)}
+commit=${PEPPER_COMMIT:-454d6ba6ca78d2a597f312f7d3afa0465aa4de30}
+memjobs=$(awk '/MemAvailable/ {print int($2 / 2097152)}' /proc/meminfo 2>/dev/null || echo 0)
+jobs=${JOBS:-$(n=$(nproc); [ "$memjobs" -ge 1 ] && [ "$memjobs" -lt "$n" ] && n=$memjobs; echo "$n")}
+echo "recording with $jobs parallel families"
 timeout=${TIMEOUT:-1800}
 
 if [ ! -d "$out/pepper/.git" ]; then
@@ -37,15 +48,45 @@ if [ $# -gt 0 ]; then
     families=$(printf '%s\n' "$@" | tr 'a-z' 'A-Z' | sed 's/^\(F_\)\{0,1\}/F_/')
 else
     families=$("$exe" --list)
+    # a full recording replaces the manifest and the status of every family
+    {
+        printf 'pepper\t%s\n' "$(git -C "$out/pepper" rev-parse HEAD)"
+        printf 'instrument.py\t%s\n' "$(sha256sum "$here/instrument.py" | cut -d' ' -f1)"
+        printf 'routines.txt\t%s\n' "$(sha256sum "$here/routines.txt" | cut -d' ' -f1)"
+        printf 'TSPICE_ALL\t%s\n' "${TSPICE_ALL:-0}"
+        printf 'TSPICE_MAXPURE\t%s\n' "${TSPICE_MAXPURE:-20000}"
+        printf '%s\n' $families | sed 's/^/family\t/'
+    } > "$out/logs/manifest.tsv"
+    : > "$out/logs/status.tsv"
 fi
 
+# The log is written into a FIFO that gzip compresses to F_XXX.log.gz.
 run_family() {
-    local fam=$1 wd="$out/work/$1"
-    rm -rf "$wd" "$out/logs/$fam.log" "$out/logs/$fam.log.files"
+    local fam=$1 wd="$out/work/$1" log="$out/logs/$1.log" ok=0 gz
+    rm -rf "$wd" "$log" "$log.gz" "$log.files"
     mkdir -p "$wd"
-    (cd "$wd" && TSPICE_LOG="$out/logs/$fam.log" timeout "$timeout" "$exe" "$fam" > output.txt 2>&1) \
-        && echo "$fam passed" || echo "$fam FAILED (see $wd/output.txt)"
+    mkfifo "$log"
+    gzip -1 < "$log" > "$log.gz" &
+    gz=$!
+    (cd "$wd" && TSPICE_LOG="$log" timeout "$timeout" "$exe" "$fam" > output.txt 2>&1) || ok=$?
+    # a family that wrote nothing never opened the FIFO: let gzip see its end
+    kill -0 "$gz" 2>/dev/null && timeout 5 sh -c ": > '$log'" 2>/dev/null
+    wait "$gz"
+    rm -f "$log"
+    # one short line per family: `>>` of it is atomic between the parallel families
+    if [ "$ok" = 0 ]; then
+        echo "$fam passed"
+        printf '%s\tpassed\n' "$fam" >> "$out/logs/status.tsv"
+    else
+        [ "$ok" = 124 ] && why=timeout || why="exit $ok"
+        echo "$fam FAILED ($why, see $wd/output.txt)"
+        printf '%s\tfailed\t%s\n' "$fam" "$why" >> "$out/logs/status.tsv"
+        return 1
+    fi
 }
 export -f run_family
-export out exe timeout
-printf '%s\n' $families | xargs -P "$jobs" -I{} bash -c 'run_family {}'
+export out exe timeout TSPICE_ALL TSPICE_MAXPURE
+status=0
+printf '%s\n' $families | xargs -P "$jobs" -I{} bash -c 'run_family {}' || status=1
+[ "$status" = 0 ] || echo "some families failed: see $out/logs/status.tsv"
+exit "$status"

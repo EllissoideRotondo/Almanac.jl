@@ -8,7 +8,7 @@ The built-in (code, name) pairs of CSPICE N0067 `zzidmap.c`, in table order. Eve
 name maps to its code. When several names share one code, the last one in the table
 is the name that `body_name` returns for the code.
 """
-const BUILTIN_BODIES = Tuple{Int32,String}[
+const BUILTIN_BODIES = Tuple{Int32, String}[
     (0, "SOLAR_SYSTEM_BARYCENTER"),
     (0, "SSB"),
     (0, "SOLAR SYSTEM BARYCENTER"),
@@ -723,13 +723,13 @@ function normalize_name(s::AbstractString)::String
         end
     end
     clean && !(prevblank && !isempty(s)) && return String(s)
-    return uppercase(join(split(s, ' '; keepempty=false), ' '))
+    return uppercase(join(split(s, ' '; keepempty = false), ' '))
 end
 
 "Contract: builds the (name => code, code => name) dictionaries of a (code, name) table; a later entry overrides an earlier one in both directions."
 function _name_dicts(table)
-    name2code = Dict{String,Int32}()
-    code2name = Dict{Int32,String}()
+    name2code = Dict{String, Int32}()
+    code2name = Dict{Int32, String}()
     sizehint!(name2code, length(table))
     for (code, name) in table
         name2code[normalize_name(name)] = code
@@ -745,33 +745,43 @@ const (BUILTIN_NAME2CODE, BUILTIN_CODE2NAME) = _name_dicts(BUILTIN_BODIES)
 
 Contract: reads `NAIF_BODY_NAME` and `NAIF_BODY_CODE` from `pool`; returns
 `name2code::Dict{String,Int32}` keyed by normalized name and
-`code2name::Dict{Int32,String}` with the name as the kernel wrote it (blanks removed
-at both ends). A later element has priority over an earlier one. Both are empty if
-neither variable exists. Throws `SpiceError(:badpool)` if only one variable exists,
-if the sizes differ, or if a name is blank.
+`code2name::Dict{Int32,String}` with the name as the kernel wrote it (trailing blanks
+removed; leading blanks kept, as in CSPICE). A later element has priority over an
+earlier one. Both are empty if neither variable exists. Throws, with the kinds of
+`zzbodker`, `SpiceError(:missingkpv)` if only one variable exists or one has the wrong
+type, `SpiceError(:baddimensions)` if the sizes differ, and
+`SpiceError(:blanknameassigned)` if a name is blank.
 """
-function build_names(pool::AbstractDict{String,PoolValue})
-    name2code = Dict{String,Int32}()
-    code2name = Dict{Int32,String}()
+function build_names(pool::AbstractDict{String, PoolValue})
+    name2code = Dict{String, Int32}()
+    code2name = Dict{Int32, String}()
     names = get(pool, "NAIF_BODY_NAME", nothing)
     codes = get(pool, "NAIF_BODY_CODE", nothing)
     names === nothing && codes === nothing && return name2code, code2name
-    names isa Vector{String} && codes isa Vector{Float64} || throw(SpiceError(:badpool,
-        "NAIF_BODY_NAME (strings) and NAIF_BODY_CODE (numbers) must both be present"))
-    length(names) == length(codes) || throw(SpiceError(:badpool,
-        "NAIF_BODY_NAME has $(length(names)) elements and NAIF_BODY_CODE has " *
-        "$(length(codes))"))
+    names isa Vector{String} && codes isa Vector{Float64} || throw(
+        SpiceError(
+            :missingkpv,
+            "NAIF_BODY_NAME (strings) and NAIF_BODY_CODE (numbers) must both be present"
+        )
+    )
+    length(names) == length(codes) || throw(
+        SpiceError(
+            :baddimensions,
+            "NAIF_BODY_NAME has $(length(names)) elements and NAIF_BODY_CODE has " *
+                "$(length(codes))"
+        )
+    )
     normalized = map(normalize_name, names)
-    any(isempty, normalized) && throw(SpiceError(:badpool, "NAIF_BODY_NAME has a blank name"))
+    any(isempty, normalized) && throw(SpiceError(:blanknameassigned, "NAIF_BODY_NAME has a blank name"))
     # As `zzbodker` of CSPICE: of the entries with the same name only the last counts,
     # and the name of a code is that of its last entry that counts. A code whose name
     # was given again to another code later in the list has no name.
-    last = Dict{String,Int}(nn => i for (i, nn) in enumerate(normalized))
+    last = Dict{String, Int}(nn => i for (i, nn) in enumerate(normalized))
     for (i, (name, code)) in enumerate(zip(names, codes))
         last[normalized[i]] == i || continue
         c = round(Int32, code)
         name2code[normalized[i]] = c
-        code2name[c] = String(strip(name, ' '))
+        code2name[c] = String(rstrip(name, ' '))
     end
     return name2code, code2name
 end
@@ -786,7 +796,7 @@ function _parse_int_name(s::AbstractString)
 end
 
 "Contract: code of `name` from the pool-defined dictionary `name2code`, then from the built-in table, then as an integer string; `nothing` if none applies (the `bods2c` rule)."
-function _body_code_lookup(name2code::AbstractDict{String,Int32}, name::AbstractString)
+function _body_code_lookup(name2code::AbstractDict{String, Int32}, name::AbstractString)
     nn = normalize_name(name)
     c = get(name2code, nn, nothing)
     c === nothing || return c
@@ -805,8 +815,12 @@ returned as `Int32`. Reads `ks.name2code` only.
 """
 function body_code(ks::KernelSet, name::AbstractString)::Int32
     c = _body_code_lookup(ks.name2code, name)
-    c === nothing && throw(SpiceError(:idcodenotfound,
-        "the body name '$name' has no NAIF ID code"))
+    c === nothing && throw(
+        SpiceError(
+            :idcodenotfound,
+            "the body name '$name' has no NAIF ID code"
+        )
+    )
     return c
 end
 body_code(::KernelSet, id::Integer) = Int32(id)
@@ -818,7 +832,7 @@ Contract: name of the body with NAIF ID `code`: the pool-defined name first, the
 the built-in name (the last table entry for the code), or `nothing` if the code has
 no name. Reads `ks.code2name` only.
 """
-function body_name(ks::KernelSet, code::Integer)::Union{String,Nothing}
+function body_name(ks::KernelSet, code::Integer)::Union{String, Nothing}
     typemin(Int32) <= code <= typemax(Int32) || return nothing
     c = Int32(code)
     n = get(ks.code2name, c, nothing)

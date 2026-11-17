@@ -17,16 +17,16 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 cell_values(c) = Float64[c[i] for i in 1:SPICE.card(c)]
 
 "SPICE window (double cell of size `size`) with the valid endpoints `v`."
-function cell_window(v::AbstractVector{<:Real}; size::Integer=length(v) + 8)
+function cell_window(v::AbstractVector{<:Real}; size::Integer = length(v) + 8)
     c = SPICE.SpiceDoubleCell(size)
     for i in 1:2:length(v)
-        SPICE.wninsd!(c, v[i], v[i+1])
+        SPICE.wninsd!(c, v[i], v[i + 1])
     end
     return c
 end
 
 "Random pairs `left <= right` (not sorted, overlaps allowed) on a grid of halves in [0, `span`]."
-function random_pairs(rng::AbstractRNG, n::Integer; span::Integer=40)
+function random_pairs(rng::AbstractRNG, n::Integer; span::Integer = 40)
     out = Float64[]
     for _ in 1:n
         a = rand(rng, 0:2span) / 2
@@ -39,8 +39,8 @@ end
 "True if `d` holds sorted disjoint intervals (the invariant of a `Window`)."
 function valid_window(d::AbstractVector{Float64})
     iseven(length(d)) || return false
-    all(d[i] <= d[i+1] for i in 1:2:length(d)) || return false
-    return all(d[i] < d[i+1] for i in 2:2:length(d)-1)
+    all(d[i] <= d[i + 1] for i in 1:2:length(d)) || return false
+    return all(d[i] < d[i + 1] for i in 2:2:(length(d) - 1))
 end
 
 group("10. windows") do
@@ -54,8 +54,8 @@ group("10. windows") do
             w = Window()
             c = SPICE.SpiceDoubleCell(length(pairs) + 8)
             for i in 1:2:length(pairs)
-                @test wninsd!(w, pairs[i], pairs[i+1]) === w
-                SPICE.wninsd!(c, pairs[i], pairs[i+1])
+                @test wninsd!(w, pairs[i], pairs[i + 1]) === w
+                SPICE.wninsd!(c, pairs[i], pairs[i + 1])
             end
             bad += collect(w) != cell_values(c)
             bad += !valid_window(w.data)
@@ -94,7 +94,7 @@ group("10. windows") do
             bad[:wncomd] += collect(comp) != cell_values(SPICE.wncomd(ca, left, right))
             @test valid_window(comp.data)
         end
-        for (k, v) in sort!(collect(bad); by=first)
+        for (k, v) in sort!(collect(bad); by = first)
             @test v == 0
             measured(@sprintf("  %-58s trials=%d mismatches=%d", "windows: $k vs CSPICE", ntrial, v))
         end
@@ -144,16 +144,20 @@ group("10. windows") do
             end
             side = rand(rng, ('L', 'l', 'R', 'r'))
             bad[:wnextd!] += collect(wnextd!(copy(w), side)) !=
-                             cell_values(SPICE.wnextd!(cell_window(w.data), side))
+                cell_values(SPICE.wnextd!(cell_window(w.data), side))
             # A second window that is often equal to, inside, or around the first.
-            v = rand(rng, (copy(w), wnexpd!(copy(w), 0.5, 0.5), wncond!(copy(w), 0.5, 0),
-                Window(random_pairs(rng, rand(rng, 0:8)))))
+            v = rand(
+                rng, (
+                    copy(w), wnexpd!(copy(w), 0.5, 0.5), wncond!(copy(w), 0.5, 0),
+                    Window(random_pairs(rng, rand(rng, 0:8))),
+                )
+            )
             cw, cv = cell_window(w.data), cell_window(v.data)
             for op in ops
                 bad[:wnreld] += wnreld(w, op, v) != SPICE.wnreld(cw, op, cv)
             end
         end
-        for (k, v) in sort!(collect(bad); by=first)
+        for (k, v) in sort!(collect(bad); by = first)
             @test v == 0
             measured(@sprintf("  %-58s trials=%d mismatches=%d", "windows: $k vs CSPICE", ntrial, v))
         end

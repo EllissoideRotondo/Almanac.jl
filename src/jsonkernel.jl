@@ -19,11 +19,11 @@ mutable struct _JSONReader
     path::String
 end
 
-function _json_line(r::_JSONReader, at::Int=r.pos)
-    return 1 + count(==(UInt8('\n')), view(r.text, 1:min(at, length(r.text)) - 1))
+function _json_line(r::_JSONReader, at::Int = r.pos)
+    return 1 + count(==(UInt8('\n')), view(r.text, 1:(min(at, length(r.text)) - 1)))
 end
 
-@noinline _json_fail(r::_JSONReader, msg, at::Int=r.pos) =
+@noinline _json_fail(r::_JSONReader, msg, at::Int = r.pos) =
     throw(SpiceError(:badkernel, "JSON kernel: $msg (line $(_json_line(r, at)) of '$(r.path)')"))
 
 _json_eof(r::_JSONReader) = r.pos > length(r.text)
@@ -35,7 +35,7 @@ function _json_skip!(r::_JSONReader)
         c = t[r.pos]
         if c == UInt8(' ') || c == UInt8('\t') || c == UInt8('\n') || c == UInt8('\r')
             r.pos += 1
-        elseif c == UInt8('/') && r.pos < length(t) && t[r.pos+1] == UInt8('/')
+        elseif c == UInt8('/') && r.pos < length(t) && t[r.pos + 1] == UInt8('/')
             while r.pos <= length(t) && t[r.pos] != UInt8('\n')
                 r.pos += 1
             end
@@ -57,8 +57,8 @@ end
 
 function _json_hex4(r::_JSONReader)
     r.pos + 3 <= length(r.text) || _json_fail(r, "a '\\u' escape needs four hexadecimal digits")
-    s = String(r.text[r.pos:r.pos+3])
-    v = tryparse(UInt16, s; base=16)
+    s = String(r.text[r.pos:(r.pos + 3)])
+    v = tryparse(UInt16, s; base = 16)
     v === nothing && _json_fail(r, "'\\u$s' is not a valid escape")
     r.pos += 4
     return v
@@ -96,12 +96,12 @@ function _json_string!(r::_JSONReader)::String
             elseif e == UInt8('u')
                 u = _json_hex4(r)
                 if 0xd800 <= u <= 0xdbff       # a surrogate pair
-                    (r.pos + 1 <= length(t) && t[r.pos] == UInt8('\\') && t[r.pos+1] == UInt8('u')) ||
-                        _json_fail(r, "a high surrogate '\\u$(string(u; base=16))' is not followed by a low one")
+                    (r.pos + 1 <= length(t) && t[r.pos] == UInt8('\\') && t[r.pos + 1] == UInt8('u')) ||
+                        _json_fail(r, "a high surrogate '\\u$(string(u; base = 16))' is not followed by a low one")
                     r.pos += 2
                     lo = _json_hex4(r)
-                    0xdc00 <= lo <= 0xdfff || _json_fail(r, "'\\u$(string(lo; base=16))' is not a low surrogate")
-                    write(io, Char(0x10000 + ((UInt32(u) - 0xd800) << 10) + (UInt32(lo) - 0xdc00)))
+                    0xdc00 <= lo <= 0xdfff || _json_fail(r, "'\\u$(string(lo; base = 16))' is not a low surrogate")
+                    write(io, Char(0x00010000 + ((UInt32(u) - 0xd800) << 10) + (UInt32(lo) - 0xdc00)))
                 else
                     0xdc00 <= u <= 0xdfff && _json_fail(r, "a low surrogate without a high one")
                     write(io, Char(u))
@@ -131,23 +131,29 @@ function _json_number!(r::_JSONReader)::Float64
     if i <= length(t) && t[i] == UInt8('0')
         i += 1
     elseif isdig(i)
-        while isdig(i); i += 1; end
+        while isdig(i)
+            i += 1
+        end
     else
         _json_fail(r, "a value is not a number, a string, an array, true or false", start)
     end
     if i <= length(t) && t[i] == UInt8('.')
         i += 1
         isdig(i) || _json_fail(r, "a number has no digit after its '.'", start)
-        while isdig(i); i += 1; end
+        while isdig(i)
+            i += 1
+        end
     end
     if i <= length(t) && (t[i] == UInt8('e') || t[i] == UInt8('E'))
         i += 1
         i <= length(t) && (t[i] == UInt8('+') || t[i] == UInt8('-')) && (i += 1)
         isdig(i) || _json_fail(r, "a number has no digit in its exponent", start)
-        while isdig(i); i += 1; end
+        while isdig(i)
+            i += 1
+        end
     end
     r.pos = i
-    return parse(Float64, String(t[start:i-1]))
+    return parse(Float64, String(t[start:(i - 1)]))
 end
 
 """
@@ -164,7 +170,7 @@ function _json_scalar!(r::_JSONReader)
     elseif c == UInt8('t') || c == UInt8('f') || c == UInt8('n')
         for (word, v) in (("true", 1.0), ("false", 0.0), ("null", nothing))
             w = codeunits(word)
-            if r.pos + length(w) - 1 <= length(r.text) && view(r.text, r.pos:r.pos+length(w)-1) == w
+            if r.pos + length(w) - 1 <= length(r.text) && view(r.text, r.pos:(r.pos + length(w) - 1)) == w
                 v === nothing && _json_fail(r, "null is not a kernel value")
                 r.pos += length(w)
                 return (2, v)
@@ -220,9 +226,11 @@ an empty or mixed array, a variable name that a text kernel does not accept, or 
 string value that is empty or longer than 80 characters. Nothing of the file is
 returned on an error, so a load that fails changes nothing.
 """
-function parse_json_kernel(path::AbstractString, yearbound::Int=1969,
-        check::Bool=false)::TextKernel
-    isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
+function parse_json_kernel(
+        path::AbstractString, yearbound::Int = 1969,
+        check::Bool = false
+    )::TextKernel
+    _isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
     r = _JSONReader(read(path), 1, String(path))
     length(r.text) >= 3 && r.text[1:3] == [0xef, 0xbb, 0xbf] && (r.pos = 4)
     out = Assignment[]
@@ -254,7 +262,7 @@ function parse_json_kernel(path::AbstractString, yearbound::Int=1969,
         _json_expect!(r, UInt8(':'), "':' after the name '$key'")
         _json_skip!(r)
         valat = r.pos
-        items = Tuple{Int,Any}[]
+        items = Tuple{Int, Any}[]
         if !_json_eof(r) && r.text[r.pos] == UInt8('[')
             r.pos += 1
             while true
@@ -282,8 +290,12 @@ function parse_json_kernel(path::AbstractString, yearbound::Int=1969,
         0 < strings < length(items) &&
             _json_fail(r, "the array of '$key' mixes strings with numbers or times", valat)
         if strings > 0
-            push!(out, Assignment(name, append,
-                String[_json_string_value(r, it[2], valat) for it in items]))
+            push!(
+                out, Assignment(
+                    name, append,
+                    String[_json_string_value(r, it[2], valat) for it in items]
+                )
+            )
         else
             nums = Float64[]
             for (k, v) in items

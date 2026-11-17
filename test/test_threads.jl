@@ -25,8 +25,10 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 group("7. thread safety", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.PCK10) do
     if Threads.nthreads() < 2
-        skip_notice("7. thread safety", "Threads.nthreads() == 1; run with " *
-            "`julia --threads=8 --project=test test/runtests.jl`")
+        skip_notice(
+            "7. thread safety", "Threads.nthreads() == 1; run with " *
+                "`julia --threads=8 --project=test test/runtests.jl`"
+        )
         return
     end
     rng = MersenneTwister(SEED + 7)
@@ -35,14 +37,14 @@ group("7. thread safety", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.PCK1
     pairs = [(301, 399), (399, 10), (10, 301), (5, 399), (299, 199), (4, 0)]
     nq = length(epochs) * length(pairs)
     qstate(ctx, i) = begin
-        et = epochs[(i-1)%length(epochs)+1]
-        targ, obs = pairs[(i-1)÷length(epochs)+1]
+        et = epochs[(i - 1) % length(epochs) + 1]
+        targ, obs = pairs[(i - 1) ÷ length(epochs) + 1]
         spkezr(ctx, targ, et, "J2000", "NONE", obs)
     end
-    qrot(ctx, i) = pxform(ctx, "J2000", "IAU_NEPTUNE", epochs[(i-1)%length(epochs)+1])
+    qrot(ctx, i) = pxform(ctx, "J2000", "IAU_NEPTUNE", epochs[(i - 1) % length(epochs) + 1])
     qder(ctx, i) = begin
-        et = epochs[(i-1)%length(epochs)+1]
-        targ, obs = pairs[(i-1)÷length(epochs)+1]
+        et = epochs[(i - 1) % length(epochs) + 1]
+        targ, obs = pairs[(i - 1) ÷ length(epochs) + 1]
         spkder(ctx, targ, et, "IAU_EARTH", obs, Val(2))
     end
 
@@ -100,41 +102,45 @@ group("7. thread safety", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.PCK1
             Threads.@spawn begin
                 bad = 0; sawA = 0; sawB = 0; rA = 0; rB = 0; round = 0
                 while (cycles[] < target_cycles && time() < deadline) || round < 20
-                  round += 1
-                  for i in 1:nq
-                    # Spread the readers over the queries.
-                    j = (i + 37 * r + round - 1) % nq + 1
-                    s = qstate(ctx, j)
-                    if s == stateA[j]
-                        sawA += 1
-                    elseif s == stateB[j]
-                        sawB += 1
-                    else
-                        bad += 1
+                    round += 1
+                    for i in 1:nq
+                        # Spread the readers over the queries.
+                        j = (i + 37 * r + round - 1) % nq + 1
+                        s = qstate(ctx, j)
+                        if s == stateA[j]
+                            sawA += 1
+                        elseif s == stateB[j]
+                            sawB += 1
+                        else
+                            bad += 1
+                        end
+                        R = qrot(ctx, j)
+                        if R == rotA[j]
+                            rA += 1
+                        elseif R == rotB[j]
+                            rB += 1
+                        else
+                            bad += 1
+                        end
                     end
-                    R = qrot(ctx, j)
-                    if R == rotA[j]
-                        rA += 1
-                    elseif R == rotB[j]
-                        rB += 1
-                    else
-                        bad += 1
-                    end
-                  end
                 end
-                (; bad, sawA, sawB, rA, rB, n=round * nq)
+                (; bad, sawA, sawB, rA, rB, n = round * nq)
             end
         end
         results = fetch.(readers)                 # rethrows an exception of a reader
         stop[] = true
         fetch(writer)
-        total = (; bad=sum(r.bad for r in results), sawA=sum(r.sawA for r in results),
-            sawB=sum(r.sawB for r in results), rA=sum(r.rA for r in results),
-            rB=sum(r.rB for r in results))
-        measured("  $(nreaders) readers, $(cycles[]) writer cycles, " *
-            "$(2 * sum(r.n for r in results)) queries: states A/B = " *
-            "$(total.sawA)/$(total.sawB), rotations A/B = $(total.rA)/$(total.rB), " *
-            "invalid = $(total.bad)")
+        total = (;
+            bad = sum(r.bad for r in results), sawA = sum(r.sawA for r in results),
+            sawB = sum(r.sawB for r in results), rA = sum(r.rA for r in results),
+            rB = sum(r.rB for r in results),
+        )
+        measured(
+            "  $(nreaders) readers, $(cycles[]) writer cycles, " *
+                "$(2 * sum(r.n for r in results)) queries: states A/B = " *
+                "$(total.sawA)/$(total.sawB), rotations A/B = $(total.rA)/$(total.rB), " *
+                "invalid = $(total.bad)"
+        )
         @test total.bad == 0
         @test total.sawA + total.sawB == sum(r.n for r in results)
         @test total.rA + total.rB == sum(r.n for r in results)

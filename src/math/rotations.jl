@@ -50,26 +50,34 @@ julia> round.(m2eul(r, 3, 1, 3); digits=12)
 
 See also [`m2eul`](@ref), [`eul2xf`](@ref), [`rotate`](@ref).
 """
-function eul2m(angle3::Real, angle2::Real, angle1::Real, axis3::Integer, axis2::Integer,
-        axis1::Integer)
+function eul2m(
+        angle3::Real, angle2::Real, angle1::Real, axis3::Integer, axis2::Integer,
+        axis1::Integer
+    )
     a3, a2, a1 = promote(_m_f(angle3), _m_f(angle2), _m_f(angle1))
     return _m_eul2m(a3, a2, a1, axis3, axis2, axis1)
 end
 
 "Axis change of `m2eul_`: column `j` has the value `sj` in row `rj` and zeros elsewhere."
 @inline function _m_change(r1::Int, s1::Float64, r2::Int, s2::Float64, r3::Int, s3::Float64)
-    return SMatrix{3,3,Float64,9}(ntuple(Val(9)) do k
-        i, j = _m_rowcol(k)
-        j == 1 ? (i == r1 ? s1 : 0.0) : j == 2 ? (i == r2 ? s2 : 0.0) : (i == r3 ? s3 : 0.0)
-    end)
+    return SMatrix{3, 3, Float64, 9}(
+        ntuple(Val(9)) do k
+            i, j = _m_rowcol(k)
+            j == 1 ? (i == r1 ? s1 : 0.0) : j == 2 ? (i == r2 ? s2 : 0.0) : (i == r3 ? s3 : 0.0)
+        end
+    )
 end
 
 @inline _m_p0(x) = primal(x) == 0.0
 
-@inline function _m_m2eul(r::SMatrix{3,3}, axis3::Integer, axis2::Integer, axis1::Integer)
+@inline function _m_m2eul(r::SMatrix{3, 3}, axis3::Integer, axis2::Integer, axis1::Integer)
     (_m_axisok(axis3) && _m_axisok(axis2) && _m_axisok(axis1)) || _m_badaxes(axis3, axis2, axis1)
-    (axis3 == axis2 || axis1 == axis2) && throw(SpiceError(:badaxisnumbers,
-        "the middle axis matches a neighbor: $axis3 $axis2 $axis1"))
+    (axis3 == axis2 || axis1 == axis2) && throw(
+        SpiceError(
+            :badaxisnumbers,
+            "the middle axis matches a neighbor: $axis3 $axis2 $axis1"
+        )
+    )
     _m_isrot(r, 0.1, 0.1) || throw(SpiceError(:notarotation, "the input matrix is not a rotation"))
     t0 = _m_cols(_m_hat(_m_col(r, 1)), _m_hat(_m_col(r, 2)), _m_hat(_m_col(r, 3)))
     sign = axis2 == _m_next(axis3) ? 1.0 : -1.0
@@ -196,12 +204,14 @@ function eul2xf(eulang::AbstractVector, axisa::Integer, axisb::Integer, axisc::I
     w2 = (-d * ca) * d2 + (-sa * v) * d3
     w3 = sa * d2 + (-d * ca * v) * d3
     z = zero(w1)
-    drdtrt = SMatrix{3,3}(ntuple(Val(9)) do k
-        i, j = _m_rowcol(k)
-        (i == l && j == b) ? w1 : (i == b && j == l) ? -w1 :
-        (i == a && j == l) ? w2 : (i == l && j == a) ? -w2 :
-        (i == b && j == a) ? w3 : (i == a && j == b) ? -w3 : z
-    end)
+    drdtrt = SMatrix{3, 3}(
+        ntuple(Val(9)) do k
+            i, j = _m_rowcol(k)
+            (i == l && j == b) ? w1 : (i == b && j == l) ? -w1 :
+                (i == a && j == l) ? w2 : (i == l && j == a) ? -w2 :
+                (i == b && j == a) ? w3 : (i == a && j == b) ? -w3 : z
+        end
+    )
     return _m_xform(r, _m_mxm(drdtrt, r))
 end
 
@@ -279,11 +289,13 @@ See also [`raxisa`](@ref), [`vrotv`](@ref), [`rotate`](@ref).
 function axisar(axis::AbstractVector, angle::Real)
     ax = _m_v3(axis)
     th = _m_f(angle)
-    return _m_cols(_m_vrotv(SVector(1.0, 0.0, 0.0), ax, th), _m_vrotv(SVector(0.0, 1.0, 0.0), ax, th),
-        _m_vrotv(SVector(0.0, 0.0, 1.0), ax, th))
+    return _m_cols(
+        _m_vrotv(SVector(1.0, 0.0, 0.0), ax, th), _m_vrotv(SVector(0.0, 1.0, 0.0), ax, th),
+        _m_vrotv(SVector(0.0, 0.0, 1.0), ax, th)
+    )
 end
 
-@inline function _m_m2q(r::SMatrix{3,3})
+@inline function _m_m2q(r::SMatrix{3, 3})
     _m_isrot(r, 0.1, 0.1) || throw(SpiceError(:notarotation, "the input matrix is not a rotation"))
     trace = r[1] + r[5] + r[9]
     mtrace = 1.0 - trace
@@ -396,10 +408,11 @@ function q2m(q::AbstractVector)
         q2s *= sharpn
         q3s *= sharpn
     end
-    return SMatrix{3,3}(
+    return SMatrix{3, 3}(
         1.0 - (q2s + q3s) * 2.0, (q12 + q03) * 2.0, (q13 - q02) * 2.0,
         (q12 - q03) * 2.0, 1.0 - (q1s + q3s) * 2.0, (q23 + q01) * 2.0,
-        (q13 + q02) * 2.0, (q23 - q01) * 2.0, 1.0 - (q1s + q2s) * 2.0)
+        (q13 + q02) * 2.0, (q23 - q01) * 2.0, 1.0 - (q1s + q2s) * 2.0
+    )
 end
 
 @inline function _m_qxq(q1::SVector{4}, q2::SVector{4})
@@ -487,7 +500,7 @@ function rav2xf(rot::AbstractMatrix, av::AbstractVector)
     r = _m_m3(rot)
     w = _m_v3(av)
     z = zero(w[1])
-    omegat = SMatrix{3,3}(z, -w[3], w[2], w[3], z, -w[1], -w[2], w[1], z)
+    omegat = SMatrix{3, 3}(z, -w[3], w[2], w[3], z, -w[1], -w[2], w[1], z)
     return _m_xform(r, _m_mxm(r, omegat))
 end
 
