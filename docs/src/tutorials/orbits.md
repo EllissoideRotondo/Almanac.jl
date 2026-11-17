@@ -1,6 +1,6 @@
 # Orbits and relative motion
 
-An [`Orbit`](@ref) is a state about a central body, with the GM and the radii of that body. It gives the orbital elements, is built from elements, advances by two-body motion and gives the state of one orbit relative to another. CSPICE has the conversions (`oscltx`, `conics`, `prop2b`) but no such object; the definitions follow [ANISE](https://github.com/nyx-space/anise), with the deviations listed in [Beyond CSPICE](@ref). Lengths are in km, times in s, angles in rad.
+An [`Orbit`](@ref) is a state about a central body, with the GM and the radii of that body. It gives the orbital elements, is built from elements, advances by two-body motion and gives the state of one orbit relative to another. CSPICE has the conversions (`oscltx`, `conics`, `prop2b`) but no such object; the definitions follow [ANISE](https://github.com/nyx-space/anise), with the [deviations from ANISE](@ref "Deviations from ANISE"). Lengths are in km, times in s, angles in rad.
 
 ```@setup orbits
 using Almanac
@@ -102,5 +102,7 @@ using ForwardDiff
 v = ForwardDiff.derivative(t -> two_body(o, t).position, later)
 maximum(abs.(v - p.velocity))
 ```
+
+The derivative throws where the value throws, as for the anomalies at `ecc < 1e-11`. A dual state of exactly zero radius, velocity, angular momentum or eccentricity vector throws `SpiceError(:degeneratecase)`, where a `Float64` state gives the value 0. The derivative of `:ta`, and of the calls built on it, is NaN at an exact apsis, where the arc cosine has an infinite slope; the value is not NaN.
 
 The other AD packages differentiate the same calls; see [Other AD packages](@ref).

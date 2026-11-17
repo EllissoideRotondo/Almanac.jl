@@ -1,0 +1,58 @@
+# Contexts and threads
+
+Every call that reads kernels takes an optional [`SpiceContext`](@ref) as its first argument ([Conventions](@ref "Contexts") gives the rule). Pure functions such as `vnorm` take no context. A program with one set of kernels never needs to name a context; this page is for programs with several sets, or with several threads.
+
+```@setup ctx
+using Almanac
+include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
+kernels = DocKernels.write(mktempdir())
+```
+
+## Several kernel sets
+
+Contexts are independent of each other. Use one per version of an ephemeris, or one per mission.
+
+```@example ctx
+using Almanac
+
+mission = SpiceContext()
+foreach(k -> furnsh(mission, k), kernels)
+
+(ktotal(mission, "ALL"), ktotal("ALL"))     # the default context is still empty
+```
+
+## Queries from many threads
+
+A query reads an immutable snapshot of the context and takes no lock, so any number of threads can query one context at once:
+
+```@example ctx
+et = str2et(mission, "2025 MAR 01 12:00:00 UTC")
+epochs = et .+ range(0, 86400; length=10_000)
+distance = Vector{Float64}(undef, length(epochs))
+
+Threads.@threads for i in eachindex(epochs)
+    position, _ = spkpos(mission, "PROBE", epochs[i], "J2000", "LT+S", "EARTH")
+    distance[i] = vnorm(position)
+end
+
+extrema(distance)                           # km
+```
+
+[`furnsh`](@ref), [`unload`](@ref) and the calls that change the pool ([`pdpool`](@ref), [`ldpool`](@ref), ...) may run while other threads query. Each of them builds a new snapshot and swaps it in atomically, so a query sees the kernels before or after the change, never a mixture. Concurrent changes are serialized. A change can land between two consecutive queries, so they can see different kernels.
+
+## Resolve a query once
+
+[`state_query`](@ref) and [`rotation_query`](@ref) resolve the names, the frame and the correction once, on the current snapshot. Evaluating the query, as `q(t)` for the state or `spkpos(q, t)` for the position, gives the result of [`spkezr`](@ref) or [`spkpos`](@ref) bit for bit; a rotation query gives that of [`pxform`](@ref). The query skips the name lookup at each epoch, and keeps its snapshot even if another thread loads a kernel.
+
+```@example ctx
+q = state_query(mission, "PROBE", "J2000", "LT+S", "EARTH")
+
+positions = [spkpos(q, t)[1] for t in epochs]
+q(epochs[1]) == spkezr(mission, "PROBE", epochs[1], "J2000", "LT+S", "EARTH")
+```
+
+To see kernels loaded later, make a new query.
+
+## What must not be shared
+
+A file handle (from `dafopr`, `dasopr`, `spkopn`, ...) and a [`Window`](@ref) that is being changed must not be used from two threads at once. Queries ([`StateQuery`](@ref), [`RotationQuery`](@ref)) and tables ([`EphemerisTable`](@ref), [`RotationTable`](@ref)) are immutable, and safe to share.

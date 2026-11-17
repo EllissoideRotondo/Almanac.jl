@@ -23,7 +23,7 @@ tables that run on a GPU.
 written with AI coding assistants (Claude, by Anthropic), under the direction of the
 maintainer. Its correctness rests on the comparisons with CSPICE and with NAIF's test suite
 described [below](#features) and in the
-[manual](https://orbitology.github.io/Almanac.jl/dev/explanation/coverage/). For results
+[manual](https://orbitology.github.io/Almanac.jl/dev/manual/validation/). For results
 that matter to your work, check them against CSPICE, and please report any difference in
 the [issues](https://github.com/Orbitology/Almanac.jl/issues).
 
@@ -88,21 +88,21 @@ Beyond CSPICE:
   into Chebyshev coefficients, for inner loops and for code that runs on a GPU.
 - **Orbits.** Orbital elements, two-body propagation and relative motion in local frames,
   after [ANISE](https://github.com/nyx-space/anise)
-  ([how-to](https://orbitology.github.io/Almanac.jl/dev/howto/orbits/)).
+  ([how-to](https://orbitology.github.io/Almanac.jl/dev/tutorials/orbits/)).
 
 The test suite compares Almanac.jl with CSPICE through SPICE.jl and replays NAIF's own test
 suite against Almanac.jl. Results agree to within rounding error, apart from a few
-[documented differences](https://orbitology.github.io/Almanac.jl/dev/explanation/cspice/#Numerical-results).
+[documented differences](https://orbitology.github.io/Almanac.jl/dev/manual/numerics/).
 The package is under active development, and its interface may still change.
 
 ## Tutorials and Documentation
 
 For information on using the package, see the
-[documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a tutorial that
-goes from loading kernels to an event search, followed by how-to guides and the API
-reference. The docstring of each ported routine links to its NAIF page. If you are porting a
+[documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a getting-started
+page that goes from loading kernels to an event search, followed by tutorials, a manual
+on the relation to CSPICE, and the API reference. The docstring of each ported routine links to its NAIF page. If you are porting a
 program from CSPICE or SPICE.jl, start with the
-[differences from CSPICE](https://orbitology.github.io/Almanac.jl/dev/explanation/cspice/).
+[conventions](https://orbitology.github.io/Almanac.jl/dev/manual/conventions/).
 
 ## Citing
 
