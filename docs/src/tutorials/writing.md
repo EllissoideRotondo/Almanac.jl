@@ -1,12 +1,12 @@
 # Writing kernels
 
-Almanac.jl writes SPK, CK, binary PCK, DSK and EK files with the contents that the CSPICE writers produce from the same input in a [new process](@ref "No state between calls"): SPK, CK and binary PCK files byte for byte, DSK and EK files word for word in their data, since CSPICE fills the padding of a DAS record with what its buffers held before. All writers follow open, write, close; this page writes an SPK and reads it back.
+Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a file equals the one that CSPICE writes in a [new process](@ref "No state between calls"): SPK, CK and binary PCK files byte for byte, DSK and EK files word for word in their data. (CSPICE fills the padding of a DAS record with whatever its buffers held before.) Every writer follows the pattern open, write, close. This page writes an SPK and reads it back.
 
 ## Write an SPK
 
-[`spkopn`](@ref) creates a file (which must not exist) and returns a handle; each `spkwNN` adds a segment of type `NN`; [`spkcls`](@ref) closes the file. A file still open for write can be loaded, but a context sees only the segments written before it loaded the file.
+[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded; [Conventions](@ref "Files") says what a context then sees.
 
-Type 5 interpolates states with two-body motion, so a few states per revolution suffice. [`conics`](@ref) computes them from orbital elements.
+Type 5 interpolates states with two-body motion, so a few states per revolution are enough. [`conics`](@ref) computes them from orbital elements.
 
 ```@example write
 using Almanac
@@ -32,13 +32,13 @@ As in CSPICE, the file changes on disk at each write call, except for type 14, w
 
 ## Inspect a file
 
-[`spkobj`](@ref) and [`spkcov`](@ref) read the bodies and coverage of a file that need not be loaded.
+[`spkobj`](@ref) and [`spkcov`](@ref) read the bodies and the coverage of a file, which need not be loaded.
 
 ```@example write
 spkcov(path, -77)
 ```
 
-SPK, CK and binary PCK files are DAF (double precision array) files, and the DAF calls reach the segments directly. An SPK segment summary holds 2 doubles (coverage) and 6 integers (body, center, frame, type, two addresses).
+SPK, CK and binary PCK files are DAF (double precision array) files, and the DAF calls reach their segments directly. The summary of an SPK segment holds 2 doubles (the coverage) and 6 integers (body, center, frame, type and two addresses).
 
 ```@example write
 daf = dafopr(path)
@@ -52,7 +52,7 @@ dafcls(daf)
 
 ## Use the file
 
-A body without a name is given by its ID code, as an integer or a string. The epoch is a number, so no leap-seconds kernel is needed.
+A body without a name is given by its ID code, as an integer or as a string. The epoch is a number, so no leap-seconds kernel is needed.
 
 ```@example write
 furnsh(path)
@@ -73,4 +73,4 @@ state[1:3]                                   # km
 | EK | [`ekopn`](@ref), [`ekops`](@ref) | [`ekbseg`](@ref), [`ekappr`](@ref), `ekace*`, or whole columns with [`ekifld`](@ref) | [`ekcls`](@ref) |
 | Any DAF, or any DAS (the container of DSK and EK files) | [`dafonw`](@ref), [`dasonw`](@ref) | `dafada`, `dasadd` and related calls | [`dafcls`](@ref), [`dascls`](@ref) |
 
-A text kernel is plain text: write it with `write`, or set pool variables directly with [`pdpool`](@ref), [`pcpool`](@ref) and [`pipool`](@ref).
+A text kernel is plain text: write it with `write`, or set the pool variables directly with [`pdpool`](@ref), [`pcpool`](@ref) and [`pipool`](@ref).

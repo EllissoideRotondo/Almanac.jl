@@ -1,6 +1,6 @@
 # Orbits
 
-These calls have no CSPICE counterpart; they follow [ANISE](https://github.com/nyx-space/anise), and [Beyond CSPICE](@ref) gives their validation and the deviations from ANISE. Lengths are in km, times in s, angles in rad. [Orbits and relative motion](@ref) shows them in use.
+These calls have no CSPICE counterpart; they follow [ANISE](https://github.com/nyx-space/anise), and [Validation of the orbit calls](@ref) gives their validation and the [deviations from ANISE](@ref "Deviations from ANISE"). Lengths are in km, times in s, angles in rad. [Orbits and relative motion](@ref) shows them in use.
 
 ## Orbit objects
 
@@ -29,7 +29,7 @@ The table lists the names in the order of `elements()`, with the unit and the na
 - **Rates.** `:mean_motion` is `sqrt(gm / |sma|³)`, `:ta_dot` is `2π / period` (ANISE's definition: a mean rate).
 - **Altitudes** are a radius (`:rmag`, `:sma`, an apsis) minus the mean equatorial radius `(radii[1] + radii[2]) / 2`. `:latitude` (geodetic, in [-π/2, π/2]) and `:height` are on the spheroid with that equatorial radius and polar radius `radii[3]`, in the body-fixed frame of the center; `:longitude` is `atan(y, x)` in [-π, π).
 - **Equinoctial**: `:equinoctial_h`, `:equinoctial_k` are `ecc * sin(aop + raan)`, `ecc * cos(aop + raan)`; `:equinoctial_p`, `:equinoctial_q` are `sin(inc / 2) * sin(raan)`, `sin(inc / 2) * cos(raan)`; `:equinoctial_lambda` is `raan + aop + ma`, not wrapped; they throw where the elements they use throw.
-- **Brouwer mean elements** (short-period terms, the GMAT iteration that ANISE ports) use the J2 of the Earth. `:brouwer_inc` is in [0, π], the other angles in [0, 2π). They throw `SpiceError(:degeneratecase)` unless the center is body 399, the periapsis radius is above 3000 km and the orbit is elliptic, or if a Kepler equation has no solution. Above 175° of inclination `:brouwer_aop` has a [known error](@ref "Beyond CSPICE").
+- **Brouwer mean elements** (short-period terms, the GMAT iteration that ANISE ports) use the J2 of the Earth. `:brouwer_inc` is in [0, π], the other angles in [0, 2π). They throw `SpiceError(:degeneratecase)` unless the center is body 399, the periapsis radius is above 3000 km and the orbit is elliptic, or if a Kepler equation has no solution. Above 175° of inclination `:brouwer_aop` has a [known error](@ref "Deviations from ANISE").
 
 ### Fallback values
 

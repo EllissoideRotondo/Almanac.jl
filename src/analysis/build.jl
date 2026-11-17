@@ -182,7 +182,7 @@ end
 Return `o` at the epoch `et2` (seconds past J2000 TDB, earlier or later, a dual number
 too) by Kepler motion, without perturbations. The counterpart of
 [`prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html);
-`Orbit::at_epoch` of ANISE, except for some hyperbolas ([Beyond CSPICE](@ref)).
+`Orbit::at_epoch` of ANISE, except for some hyperbolas ([deviations from ANISE](@ref "Deviations from ANISE")).
 
 Throws `SpiceError(:degeneratecase)` for a circular orbit (`ecc < 1e-11`), which has no
 mean anomaly, where another equinoctial element of `o` is undefined, and where

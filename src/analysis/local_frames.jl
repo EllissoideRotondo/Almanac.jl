@@ -88,7 +88,7 @@ local_frame(o::Orbit, kind::Symbol) = _local_frame_pair(:local_frame, o, kind)[1
 Return the rotation of states from a local frame of the orbit `o` to the frame of `o`,
 `[R 0; Ṙ R]`, where `R` is [`local_frame`](@ref)`(o, kind)` and `Ṙ` (1/s) its exact rate
 along the two-body motion of `o`; `Orbit::dcm_from_ric_to_inertial` and its forms in
-ANISE, whose rate is a [difference quotient](@ref "Beyond CSPICE"). This call has no CSPICE
+ANISE, whose rate is a [difference quotient](@ref "Deviations from ANISE"). This call has no CSPICE
 counterpart.
 
 Throws what [`local_frame`](@ref) throws.

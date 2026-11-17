@@ -8,37 +8,54 @@ makedocs(;
     modules = [Almanac],
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",
+        collapselevel = 1,
         size_threshold = 600_000, size_threshold_warn = 300_000
     ),
     pages = [
         "Home" => "index.md",
-        "First session" => "tutorial.md",
-        "Tasks" => [
-            "howto/contexts.md",
-            "howto/derivatives.md",
-            "howto/tables.md",
-            "howto/providers.md",
-            "howto/events.md",
-            "howto/writing.md",
+        "Getting started" => "getting_started.md",
+        "Tutorials" => [
+            "tutorials/contexts.md",
+            "tutorials/derivatives.md",
+            "tutorials/tables.md",
+            "tutorials/providers.md",
+            "tutorials/events.md",
+            "tutorials/writing.md",
+            "tutorials/orbits.md",
         ],
-        "Explanation" => [
-            "explanation/cspice.md",
-            "explanation/coverage.md",
+        "Manual" => [
+            "Coming from CSPICE" => [
+                "manual/conventions.md",
+                "manual/numerics.md",
+                "manual/additions.md",
+            ],
+            "Coverage and validation" => [
+                "manual/coverage.md",
+                "manual/validation.md",
+                "manual/orbit_validation.md",
+            ],
         ],
-        "Beyond CSPICE" => [
-            "howto/orbits.md",
-            "reference/orbits.md",
-        ],
-        "Reference" => [
+        "API reference" => [
             "reference/kernels.md",
             "reference/time.md",
             "reference/states.md",
             "reference/frames.md",
             "reference/geometry.md",
             "reference/events.md",
-            "reference/math.md",
-            "reference/files.md",
-            "reference/ek.md",
+            "reference/orbits.md",
+            "Mathematics" => [
+                "reference/math/vectors.md",
+                "reference/math/rotations.md",
+                "reference/math/coordinates.md",
+                "reference/math/ellipsoids.md",
+                "reference/math/conics.md",
+            ],
+            "Files" => [
+                "reference/files/daf.md",
+                "reference/files/writers.md",
+                "reference/files/das.md",
+                "reference/files/ek.md",
+            ],
         ],
     ],
     checkdocs = :exports,
