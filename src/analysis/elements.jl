@@ -21,7 +21,7 @@ const ELEMENT_NAMES = (
     elements() -> NTuple{N,Symbol}
 
 Return the names that [`element`](@ref) accepts, in the order of
-[Element names](@ref). No CSPICE call has this interface.
+[Element names](@ref).
 """
 elements() = ELEMENT_NAMES
 
@@ -40,8 +40,8 @@ frame, the geodetic ones the body-fixed frame of the center.
 
 `element` never returns NaN. Where a quantity is undefined for the orbit (no true anomaly
 on a circular orbit, no angular momentum for a zero position or velocity) it throws
-`SpiceError(:degeneratecase)`. Not finite: `:sma` is `±Inf` on a parabola, and on an
-orbit that is not elliptic `:period` is 0 and `:ta_dot` is `Inf`.
+`SpiceError(:degeneratecase)`. Returned instead of throwing: the
+[fallback values](@ref "Fallback values").
 
 Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref) (the vectors
 `position`, `velocity`, `hvec` and `evec` are properties only), or if the quantity needs
@@ -498,11 +498,11 @@ end
 Return the periapsis radius (km) of a flyby of the center of `o` that turns the excess
 velocity of the hyperbola `o` by `turn_angle` (rad):
 `(1 / cos((π - turn_angle) / 2) - 1) μ / C3`, with `C3 = o.c3` (km²/s²) and `μ = o.gm`.
-The inverse of [`vinf_turn_angle`](@ref). No CSPICE call has this interface;
-`Orbit.vinf_periapsis_km` of ANISE, with the angle in rad.
+The inverse of [`vinf_turn_angle`](@ref); `Orbit.vinf_periapsis_km` of ANISE, with the
+angle in rad.
 
-`turn_angle` is meant to be in [0, π] (π gives 0); outside it the formula is evaluated
-without a check. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the result is NaN.
+`turn_angle` is meant to be in [0, π] (π gives 0); outside it the result may be
+negative. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the result is NaN.
 
 # Examples
 ```jldoctest
@@ -524,12 +524,12 @@ end
 Return the angle (rad) by which a flyby of the center of `o` with periapsis radius
 `periapsis` (km) turns the excess velocity of the hyperbola `o`:
 `π - 2 acos(1 / (1 + C3 periapsis / μ))`, with `C3 = o.c3` (km²/s²) and `μ = o.gm`. Only
-the excess speed of `o` matters. The inverse of [`vinf_periapsis`](@ref). No CSPICE call
-has this interface; `Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad.
+the excess speed of `o` matters. The inverse of [`vinf_periapsis`](@ref);
+`Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad.
 
-The result is in [0, π] for `periapsis >= 0` and wrapped into [0, 2π) for
-`periapsis <= -2μ / C3`. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the arc
-cosine has no value (`-2μ / C3 < periapsis < 0`; ANISE returns NaN).
+The result is in [0, π] for `periapsis >= 0`; for a negative `periapsis` it may be outside
+[0, π] or throw. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the arc cosine has
+no value.
 
 # Examples
 ```jldoctest

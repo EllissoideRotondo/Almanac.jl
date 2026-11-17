@@ -40,7 +40,7 @@ With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in:
 - `spkder`, `pxder` and the table queries;
 - surface calls: `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq`, `azlcpo`;
 - time conversions: `unitim`, `deltet`;
-- [orbits](@ref "Orbits and relative motion"): `orbit`, and an `Orbit` with a dual epoch or state through `element`, `keplerian_orbit`, `two_body`, the local frames and `relative_state`.
+- [orbits](@ref "Orbits and relative motion"): `orbit`, and an `Orbit` with a dual epoch or state through `element`, `keplerian`, `keplerian_orbit` (dual elements), `with_element`, `with_apsides`, `two_body`, `local_frame`, `local_frame_state`, `relative_state`, `vinf_periapsis` and `vinf_turn_angle`. Where the value throws, as the anomalies at `ecc < 1e-11`, the derivative throws too.
 
 Other calls (`limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg`, `et2lst`, ...) throw `SpiceError(:badarg)` for a `Dual`. Event searches take `Float64` windows.
 
@@ -67,7 +67,7 @@ DI.derivative(range_km, AutoEnzyme(), et)   # km/s
 DI.gradient(ts -> sum(range_km, ts), AutoZygote(), [et, et + 3600])
 ```
 
-The orbit calls differentiate with the same packages, with respect to the epoch through [`orbit`](@ref) and with respect to a state or to Keplerian elements:
+The orbit calls of the list above differentiate with the same packages, with respect to the epoch through [`orbit`](@ref) and with respect to a state or to Keplerian elements:
 
 ```julia
 x = [8000.0, 0.1, 0.5, 1.0, 2.0, 2.0]       # sma, ecc, inc, raan, aop, ma

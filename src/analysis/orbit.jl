@@ -7,23 +7,23 @@
     Orbit([ctx,] state, et, center, frame)
 
 The state `[x, y, z, vx, vy, vz]` (km, km/s) relative to `center` in `frame` at `et`
-(seconds past J2000 TDB), with the GM (km³/s²) and radii (km) of `center`. No CSPICE call
-has this interface; the `Orbit` of [ANISE](https://github.com/nyx-space/anise). No
-rotation is applied.
+(seconds past J2000 TDB), with the GM (km³/s²) and radii (km) of `center`; the `Orbit` of
+[ANISE](https://github.com/nyx-space/anise). The state is stored as given, in `frame`.
 
 With `gm`, no kernels are read and `center` and `frame` are NAIF IDs; `radii` defaults to
 NaN (unknown). Without `gm`, `center` and `frame` are names or IDs, and `BODYnnn_GM` and,
 when present, `BODYnnn_RADII` come from the kernel pool. [`orbit`](@ref) takes the state
 from the kernels too.
 
-The number type `T` is the promoted type of `state`, `et` and `Float64`, so a dual number
-in either reaches every element; `gm` and `radii` stay `Float64`. Fields: `state`, `et`,
+The number type `T` of every element is the promoted type of `state`, `et` and
+`Float64`; `gm` and `radii` stay `Float64`. Fields: `state`, `et`,
 `center`, `frame`, `gm`, `radii`. Properties: `position`, `velocity`, `hvec`, `evec` (the
 eccentricity vector), each an `SVector{3,T}`, and every name of [`elements`](@ref).
 
-Throws `SpiceError(:badarg)` if `state` does not have 6 elements or `radii` 3, and, in
-the form without `gm`, `SpiceError(:kernelvarnotfound)` if the pool has no GM for
-`center`.
+Throws `SpiceError(:badarg)` if the vector `state` does not have 6 elements or `radii` 3,
+and, in the form without `gm`, `SpiceError(:kernelvarnotfound)` if the pool has no GM for
+`center`. A degenerate state (zero position or velocity) is accepted; its elements throw
+when read.
 
 # Examples
 ```jldoctest
@@ -88,7 +88,7 @@ Orbit(state::AbstractVector{<:Real}, et::Real, center::NameOrID, frame::NameOrID
 
 Return the [`Orbit`](@ref) of `targ` about `obs`: the state that [`spkezr`](@ref) returns
 for the same arguments, at the epoch `et` of the observer, with the GM and radii of `obs`
-from the kernel pool. No CSPICE call has this interface.
+from the kernel pool.
 
 Throws the errors of [`spkezr`](@ref), and `SpiceError(:kernelvarnotfound)` if the pool
 has no GM for `obs`.

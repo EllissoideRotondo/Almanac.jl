@@ -34,19 +34,21 @@ function _apsides_to_sma_ecc(periapsis, apoapsis)
 end
 
 """
-    keplerian_orbit([ctx,] et, center, frame; sma, ecc, inc, raan, aop, ta[, gm]) -> Orbit
-    keplerian_orbit([ctx,] et, center, frame; periapsis, apoapsis, inc, raan, aop, ma[, gm]) -> Orbit
+    keplerian_orbit([ctx,] et, center, frame; shape..., inc, raan, aop, anomaly[, gm]) -> Orbit
 
 Return the [`Orbit`](@ref) of Keplerian elements about `center` in `frame` at `et`
 (seconds past J2000 TDB); lengths in km, angles in rad. The counterpart of
 [`conics_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/conics_c.html); `Orbit::try_keplerian`,
 `try_keplerian_apsis_radii` and `try_keplerian_mean_anomaly` of ANISE.
 
-Give the shape by `sma` and `ecc` or by the radii `periapsis` and `apoapsis`, and the
-position by `ta` or `ma`. As in ANISE, a negative `ecc` and a semi-major axis of the wrong
-sign for `ecc` change sign. `gm` (km³/s²) defaults to `BODYnnn_GM` of the kernel pool,
-with the radii of `center`; with `gm` given, the radii are NaN and no kernels are read if
-`center` and `frame` are NAIF IDs. The elements and the epoch may be dual numbers.
+- `shape`: `sma` and `ecc`, or the radii `periapsis` and `apoapsis`;
+- `anomaly`: `ta` (true) or `ma` (mean);
+- `gm` (km³/s²): defaults to `BODYnnn_GM` of the kernel pool, and then the radii are
+  `BODYnnn_RADII` when present; with `gm` given the radii are NaN, and only names of `center` and
+  `frame` are looked up in the kernels.
+
+As in ANISE, a negative `ecc` and a semi-major axis of the wrong sign for `ecc` change
+sign. The elements and the epoch may be dual numbers.
 
 Throws `SpiceError`:
 - `:badarg` unless exactly one shape pair and exactly one of `ta` and `ma` are given;
@@ -117,7 +119,7 @@ const _KEP_NAMES = (:sma, :ecc, :inc, :raan, :aop, :ta)
 
 Return a copy of `o` with the Keplerian element `name` (`:sma`, `:ecc`, `:inc`, `:raan`,
 `:aop` or `:ta`) set to `value` (km, dimensionless or rad) and the other five, the epoch,
-center, frame, GM and radii unchanged. No CSPICE call has this interface; `with_sma_km`,
+center, frame, GM and radii unchanged; `with_sma_km`,
 `with_ecc`, `with_inc_deg` and the like of the `Orbit` of ANISE.
 
 The orbit is rebuilt as by [`keplerian_orbit`](@ref), with its sign rules; the angles are
@@ -152,7 +154,7 @@ end
     with_apsides(o, periapsis, apoapsis) -> Orbit
 
 Return a copy of `o` with the apsis radii `periapsis` and `apoapsis` (km), and the
-inclination, `raan`, `aop` and true anomaly unchanged. No CSPICE call has this interface;
+inclination, `raan`, `aop` and true anomaly unchanged;
 `Orbit::with_apoapsis_periapsis_km` of ANISE, whose arguments come in the other order.
 
 Throws `SpiceError(:degeneratecase)` for a radius not above `eps(Float64)`, for a circular
@@ -176,13 +178,14 @@ end
 """
     two_body(o, et2) -> Orbit
 
-Return `o` advanced to `et2` (seconds past J2000 TDB, earlier or later, a dual number
-too) by two-body motion: the equinoctial mean longitude moves by the mean motion times
-`et2 - o.et`. The counterpart of [`prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html); `Orbit::at_epoch` of
-ANISE, from which it [deviates](@ref "Beyond CSPICE") for a hyperbola.
+Return `o` at the epoch `et2` (seconds past J2000 TDB, earlier or later, a dual number
+too) by Kepler motion, without perturbations. The counterpart of
+[`prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html);
+`Orbit::at_epoch` of ANISE, except for some hyperbolas ([Beyond CSPICE](@ref)).
 
-Throws `SpiceError(:degeneratecase)` where an equinoctial element of `o` is undefined (a
-circular orbit has no mean anomaly) and where [`keplerian_orbit`](@ref) does.
+Throws `SpiceError(:degeneratecase)` for a circular orbit (`ecc < 1e-11`), which has no
+mean anomaly, where another equinoctial element of `o` is undefined, and where
+[`keplerian_orbit`](@ref) does.
 
 # Examples
 ```jldoctest

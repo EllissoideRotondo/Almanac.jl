@@ -53,8 +53,8 @@ end
 """
     local_frame(o, kind) -> SMatrix{3,3}
 
-Return the rotation from a local frame of the orbit `o` to the frame of `o`. No CSPICE
-call has this interface; `Orbit::dcm3x3_from_ric_to_inertial` and its `vnc`, `rcn` and
+Return the rotation from a local frame of the orbit `o` to the frame of `o`;
+`Orbit::dcm3x3_from_ric_to_inertial` and its `vnc`, `rcn` and
 `tnw` forms in ANISE.
 
 `kind` is `:ric`, `:vnc`, `:rcn` or `:tnw`. With `r̂ = r/|r|`, `v̂ = v/|v|` and
@@ -87,8 +87,7 @@ local_frame(o::Orbit, kind::Symbol) = _local_frame_pair(:local_frame, o, kind)[1
 
 Return the rotation of states from a local frame of the orbit `o` to the frame of `o`,
 `[R 0; Ṙ R]`, where `R` is [`local_frame`](@ref)`(o, kind)` and `Ṙ` (1/s) its exact rate
-along the two-body motion of `o`. No CSPICE call has this interface;
-`Orbit::dcm_from_ric_to_inertial` and its forms in ANISE, whose rate is a
+along the two-body motion of `o`; `Orbit::dcm_from_ric_to_inertial` and its forms in ANISE, whose rate is a
 [difference quotient](@ref "Beyond CSPICE").
 
 Throws what [`local_frame`](@ref) throws.
@@ -97,8 +96,8 @@ Throws what [`local_frame`](@ref) throws.
 ```jldoctest
 julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 7.5, 0.0], 0.0, 399, 1, 398600.4415);
 
-julia> S = local_frame_state(o, :ric); S[5, 1], S[1, 4]
-(0.0010714285714285715, 0.0)
+julia> S = local_frame_state(o, :ric); round(S[5, 1]; digits=9), S[1, 4]
+(0.001071429, 0.0)
 ```
 """
 function local_frame_state(o::Orbit, kind::Symbol)
@@ -120,10 +119,12 @@ end
 
 Return the state (km, km/s) of the orbit `o` minus that of `chief`, in the local frame
 `kind` of `chief`: `Rᵀ dr` and `Ṙᵀ dr + Rᵀ dv`, with `dr` and `dv` the differences of
-position and velocity and `R` and `Ṙ` from [`local_frame_state`](@ref)`(chief, kind)`. The velocity is the rate of the offset seen in
-the rotating frame, so it is not zero for equal inertial velocities. No CSPICE call has
-this interface; `Orbit::ric_difference_unchecked` and its `vnc` and `tnw` forms in ANISE
-(`:rcn` uses the `ric` one). The frame is assumed inertial and is not checked.
+position and velocity and `R` and `Ṙ` from [`local_frame_state`](@ref)`(chief, kind)`;
+`Orbit::ric_difference_unchecked` and its `vnc` and `tnw` forms in ANISE. The frame is
+assumed inertial and is not checked.
+
+The velocity is the rate of the offset seen in the rotating frame: it is not zero for
+equal inertial velocities.
 
 Throws `SpiceError(:badarg)` if the epoch, the center or the frame differ, or `kind` is
 unknown, and `SpiceError(:degeneratecase)` where the angular momentum of `chief` is zero.
