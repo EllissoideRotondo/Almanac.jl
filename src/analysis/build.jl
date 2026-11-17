@@ -120,7 +120,8 @@ const _KEP_NAMES = (:sma, :ecc, :inc, :raan, :aop, :ta)
 Return a copy of `o` with the Keplerian element `name` (`:sma`, `:ecc`, `:inc`, `:raan`,
 `:aop` or `:ta`) set to `value` (km, dimensionless or rad) and the other five, the epoch,
 center, frame, GM and radii unchanged; `with_sma_km`,
-`with_ecc`, `with_inc_deg` and the like of the `Orbit` of ANISE.
+`with_ecc`, `with_inc_deg` and the like of the `Orbit` of ANISE. This call has no CSPICE
+counterpart.
 
 The orbit is rebuilt as by [`keplerian_orbit`](@ref), with its sign rules; the angles are
 not wrapped.
@@ -155,7 +156,7 @@ end
 
 Return a copy of `o` with the apsis radii `periapsis` and `apoapsis` (km), and the
 inclination, `raan`, `aop` and true anomaly unchanged;
-`Orbit::with_apoapsis_periapsis_km` of ANISE, whose arguments come in the other order.
+`Orbit::with_apoapsis_periapsis_km` of ANISE, whose arguments come in the other order. This call has no CSPICE counterpart.
 
 Throws `SpiceError(:degeneratecase)` for a radius not above `eps(Float64)`, for a circular
 `o`, and where [`keplerian_orbit`](@ref) does.

@@ -23,7 +23,6 @@
 - Random input from the seeded generator (`SEED` in `test/helpers.jl`); sample sizes through `nsample(fast, full)`.
 - Docstrings of new exports say "This call has no CSPICE counterpart." and name the ANISE function it matches.
 - New exports exactly: `Orbit, orbit, element, elements, keplerian, keplerian_orbit, with_element, with_apsides, two_body, vinf_periapsis, vinf_turn_angle, local_frame, local_frame_state, relative_state`.
-- Work in the worktree `/home/alex/GitHub/Almanac-analysis` on branch `analysis`. Never commit on `main` or in `/home/alex/GitHub/Almanac`.
 
 ## Review Focus
 

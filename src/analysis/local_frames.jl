@@ -55,7 +55,7 @@ end
 
 Return the rotation from a local frame of the orbit `o` to the frame of `o`;
 `Orbit::dcm3x3_from_ric_to_inertial` and its `vnc`, `rcn` and
-`tnw` forms in ANISE.
+`tnw` forms in ANISE. This call has no CSPICE counterpart.
 
 `kind` is `:ric`, `:vnc`, `:rcn` or `:tnw`. With `r̂ = r/|r|`, `v̂ = v/|v|` and
 `ĥ = r × v/|r × v|`, the columns are the axes of the local frame in the frame of `o`:
@@ -87,8 +87,9 @@ local_frame(o::Orbit, kind::Symbol) = _local_frame_pair(:local_frame, o, kind)[1
 
 Return the rotation of states from a local frame of the orbit `o` to the frame of `o`,
 `[R 0; Ṙ R]`, where `R` is [`local_frame`](@ref)`(o, kind)` and `Ṙ` (1/s) its exact rate
-along the two-body motion of `o`; `Orbit::dcm_from_ric_to_inertial` and its forms in ANISE, whose rate is a
-[difference quotient](@ref "Beyond CSPICE").
+along the two-body motion of `o`; `Orbit::dcm_from_ric_to_inertial` and its forms in
+ANISE, whose rate is a [difference quotient](@ref "Beyond CSPICE"). This call has no CSPICE
+counterpart.
 
 Throws what [`local_frame`](@ref) throws.
 
@@ -121,7 +122,7 @@ Return the state (km, km/s) of the orbit `o` minus that of `chief`, in the local
 `kind` of `chief`: `Rᵀ dr` and `Ṙᵀ dr + Rᵀ dv`, with `dr` and `dv` the differences of
 position and velocity and `R` and `Ṙ` from [`local_frame_state`](@ref)`(chief, kind)`;
 `Orbit::ric_difference_unchecked` and its `vnc` and `tnw` forms in ANISE. The frame is
-assumed inertial and is not checked.
+assumed inertial and is not checked. This call has no CSPICE counterpart.
 
 The velocity is the rate of the offset seen in the rotating frame: it is not zero for
 equal inertial velocities.

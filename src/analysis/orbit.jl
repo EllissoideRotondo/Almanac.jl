@@ -9,6 +9,7 @@
 The state `[x, y, z, vx, vy, vz]` (km, km/s) relative to `center` in `frame` at `et`
 (seconds past J2000 TDB), with the GM (km³/s²) and radii (km) of `center`; the `Orbit` of
 [ANISE](https://github.com/nyx-space/anise). The state is stored as given, in `frame`.
+This call has no CSPICE counterpart.
 
 With `gm`, no kernels are read and `center` and `frame` are NAIF IDs; `radii` defaults to
 NaN (unknown). Without `gm`, `center` and `frame` are names or IDs, and `BODYnnn_GM` and,
@@ -88,7 +89,7 @@ Orbit(state::AbstractVector{<:Real}, et::Real, center::NameOrID, frame::NameOrID
 
 Return the [`Orbit`](@ref) of `targ` about `obs`: the state that [`spkezr`](@ref) returns
 for the same arguments, at the epoch `et` of the observer, with the GM and radii of `obs`
-from the kernel pool.
+from the kernel pool. This call has no CSPICE counterpart.
 
 Throws the errors of [`spkezr`](@ref), and `SpiceError(:kernelvarnotfound)` if the pool
 has no GM for `obs`.

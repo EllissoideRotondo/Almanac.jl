@@ -39,8 +39,8 @@ CSPICE itself is the reference: the tests call each routine and its CSPICE count
 
 | Measure | Value |
 |---|---|
-| Tests passed in the default run (2026-11-15) | 58,254 |
-| Tests in the exhaustive run (`ALMANAC_TEST_FULL=1`), with larger samples, longer search spans and larger files | not measured since the orbit calls were added; the group `analysis_orbit` alone passes 371,971 |
+| Tests passed in the default run (2026-11-16, at commit 6fb27bd, before the `analysis_orbit` group grew from 16,470 to 18,633 tests) | 58,254 |
+| Tests in the exhaustive run (`ALMANAC_TEST_FULL=1`), with larger samples, longer search spans and larger files | not measured since the orbit calls were added; the group `analysis_orbit` alone passed 371,971 at commit 1665511 |
 | Line coverage of `src/` | 96.6 % (the coverage job of CI measures it on each push); `src/analysis/` alone, by the group `analysis_orbit`: 98.8 % |
 | Julia versions tested | 1.10 and 1.13 |
 

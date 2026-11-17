@@ -21,7 +21,7 @@ const ELEMENT_NAMES = (
     elements() -> NTuple{N,Symbol}
 
 Return the names that [`element`](@ref) accepts, in the order of
-[Element names](@ref).
+[Element names](@ref). This call has no CSPICE counterpart.
 """
 elements() = ELEMENT_NAMES
 
@@ -195,7 +195,7 @@ _el_hmag(o::Orbit) = _norm_for(:hmag, _hvec_for(:hmag, o))
 _el_hx(o::Orbit) = _hvec_for(:hx, o)[1]
 _el_hy(o::Orbit) = _hvec_for(:hy, o)[2]
 _el_hz(o::Orbit) = _hvec_for(:hz, o)[3]
-_el_light_time(o::Orbit) = _el_rmag(o) / clight()
+_el_light_time(o::Orbit) = _el_rmag(o, :light_time) / clight()
 
 # Keplerian elements: ANISE src/astro/orbit.rs (and orbit_hyperbolic.rs for :ha), angles in rad.
 
@@ -338,13 +338,13 @@ function _el_right_ascension(o::Orbit)
 end
 
 function _el_declination(o::Orbit)
-    primal(_el_rmag(o)) > eps(Float64) || _degenerate(:declination, "the radius is zero")
-    return asin(clamp(getfield(o, :state)[3] / _el_rmag(o), -1, 1))
+    primal(_el_rmag(o, :declination)) > eps(Float64) || _degenerate(:declination, "the radius is zero")
+    return asin(clamp(getfield(o, :state)[3] / _el_rmag(o, :declination), -1, 1))
 end
 
 function _el_velocity_declination(o::Orbit)
-    primal(_el_vmag(o)) > eps(Float64) || _degenerate(:velocity_declination, "the velocity is zero")
-    return asin(clamp(getfield(o, :state)[6] / _el_vmag(o), -1, 1))
+    primal(_el_vmag(o, :velocity_declination)) > eps(Float64) || _degenerate(:velocity_declination, "the velocity is zero")
+    return asin(clamp(getfield(o, :state)[6] / _el_vmag(o, :velocity_declination), -1, 1))
 end
 
 """
@@ -393,7 +393,7 @@ end
 _polar_radius(name::Symbol, o::Orbit) =
     isnan(getfield(o, :radii)[3]) ? _radii_missing(name, o) : getfield(o, :radii)[3]
 
-_el_altitude(o::Orbit) = _el_rmag(o) - _mean_eq_radius(:altitude, o)
+_el_altitude(o::Orbit) = _el_rmag(o, :altitude) - _mean_eq_radius(:altitude, o)
 _el_sma_altitude(o::Orbit) = _el_sma(o) - _mean_eq_radius(:sma_altitude, o)
 _el_periapsis_altitude(o::Orbit) = _el_periapsis(o) - _mean_eq_radius(:periapsis_altitude, o)
 _el_apoapsis_altitude(o::Orbit) = _el_apoapsis(o) - _mean_eq_radius(:apoapsis_altitude, o)
@@ -517,7 +517,7 @@ Return the periapsis radius (km) of a flyby of the center of `o` that turns the 
 velocity of the hyperbola `o` by `turn_angle` (rad):
 `(1 / cos((π - turn_angle) / 2) - 1) μ / C3`, with `C3 = o.c3` (km²/s²) and `μ = o.gm`.
 The inverse of [`vinf_turn_angle`](@ref); `Orbit.vinf_periapsis_km` of ANISE, with the
-angle in rad.
+angle in rad. This call has no CSPICE counterpart.
 
 `turn_angle` is meant to be in [0, π] (π gives 0); outside it the result may be
 negative. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the result is NaN.
@@ -543,7 +543,8 @@ Return the angle (rad) by which a flyby of the center of `o` with periapsis radi
 `periapsis` (km) turns the excess velocity of the hyperbola `o`:
 `π - 2 acos(1 / (1 + C3 periapsis / μ))`, with `C3 = o.c3` (km²/s²) and `μ = o.gm`. Only
 the excess speed of `o` matters. The inverse of [`vinf_periapsis`](@ref);
-`Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad.
+`Orbit.vinf_turn_angle_deg` of ANISE, with the angle in rad. This call has no CSPICE
+counterpart.
 
 The result is in [0, π] for `periapsis >= 0`; for a negative `periapsis` it may be outside
 [0, π] or throw. Throws `SpiceError(:degeneratecase)` if `ecc <= 1` or the arc cosine has

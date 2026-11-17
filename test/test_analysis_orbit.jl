@@ -465,6 +465,17 @@ group(
         for n in (:ecc, :ta, :ma, :semi_minor_axis, :equinoctial_h)
             @test throws_kind(() -> element(odc, n), :degeneratecase)
         end
+        # The message names the element that was asked for, not :rmag or :vmag.
+        for (s, n) in (((0.0, 0, 0, 0, 8.0, 0), :declination), ((0.0, 0, 0, 0, 8.0, 0), :altitude), ((7000.0, 0, 0, 0, 0, 0), :velocity_declination))
+            od = Orbit(dual(s, 1), 0.0, 399, 1, gm, VALLADO_RADII)
+            err = try
+                element(od, n)
+                nothing
+            catch e
+                e
+            end
+            @test err isa SpiceError && occursin(":" * string(n), sprint(showerror, err))
+        end
         for kind in (:ric, :vnc, :rcn, :tnw), s in dual_states
             od = Orbit(dual(s, 4), 0.0, 399, 1, gm, VALLADO_RADII)
             y = outcome(() -> local_frame(od, kind))
