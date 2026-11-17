@@ -25,6 +25,10 @@ makedocs(;
             "explanation/cspice.md",
             "explanation/coverage.md",
         ],
+        "Beyond CSPICE" => [
+            "howto/orbits.md",
+            "reference/orbits.md",
+        ],
         "Reference" => [
             "reference/kernels.md",
             "reference/time.md",

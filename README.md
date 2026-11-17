@@ -86,6 +86,9 @@ Beyond CSPICE:
   Enzyme.jl, Mooncake.jl, Zygote.jl, ReverseDiff.jl and Tracker.jl.
 - **Fast tables.** `ephemeris_table` and `rotation_table` compress a trajectory or a rotation
   into Chebyshev coefficients, for inner loops and for code that runs on a GPU.
+- **Orbits.** Orbital elements, two-body propagation and relative motion in local frames,
+  after [ANISE](https://github.com/nyx-space/anise)
+  ([how-to](https://orbitology.github.io/Almanac.jl/dev/howto/orbits/)).
 
 The test suite compares Almanac.jl with CSPICE through SPICE.jl and replays NAIF's own test
 suite against Almanac.jl. Results agree to within rounding error, apart from a few

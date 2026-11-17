@@ -11,13 +11,14 @@
 # it (measured), but compiling the ten one by one takes more than 4 GB. The default run
 # also leaves out the three cases that Enzyme differentiates without a rule (`subpnt`,
 # `unitim`, `table_position`: 9.5 min and 4.4 GB with them); each passes on its own, and
-# the exhaustive run takes them.
+# the exhaustive run takes them. Run time of the group (default tier, one process, 2
+# threads): 448 s and 3.6 GB, of which the Orbit cases about 50 s.
 isdefined(@__MODULE__, :ad_check) || include("adfixtures.jl")
 
 import Enzyme
 using ADTypes: AutoEnzyme
 
-group("ad enzyme", Kernels.FULL_SET_FILES...) do
+group("ad enzyme", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
     ctx, epochs, default, full = ad_setup()
     skip = ("subpnt", "unitim", "table_position")
     ad_check(
@@ -29,6 +30,8 @@ group("ad enzyme", Kernels.FULL_SET_FILES...) do
         "Enzyme reverse", rev, ctx, epochs, default, full;
         gradient = true, batched = false, nested = false, skip
     )
+    ad_orbit_check("Enzyme forward", AutoEnzyme(; mode = Enzyme.Forward, function_annotation = Enzyme.Const))
+    ad_orbit_check("Enzyme reverse", rev)
     @testset "Enzyme reverse refuses a Dual epoch" begin
         f(t) = norm(spkpos(ctx, "MOON", t, "IAU_EARTH", "LT+S", "EARTH")[1])
         @test_throws ArgumentError DI.second_derivative(

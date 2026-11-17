@@ -2,7 +2,7 @@ module AlmanacMooncakeExt
 
 using Almanac
 using Almanac: KernelSet, SpiceContext, Aberration, spk_jet, frame_rotation, frame_jet,
-    abcorr_jet, abcorr_position, abcorr_state, _ad_rule, _AD_CONSTANT, _ad_typeof
+    abcorr_jet, abcorr_position, abcorr_state, _ma_to_ta, _ad_rule, _AD_CONSTANT, _ad_typeof
 using Mooncake: Mooncake
 using Mooncake: DefaultCtx, CoDual, Dual, NoTangent, NoRData, RData, @is_primitive,
     @zero_derivative, zero_fcodual
@@ -52,6 +52,19 @@ for (f, sig, iet) in POINTS
             return zero_fcodual(y), pullback
         end
     end
+end
+
+# The Kepler solver of the Orbit layer: both arguments, the mean anomaly and the
+# eccentricity, have tangents (see `src/analysis/brouwer.jl`).
+@is_primitive DefaultCtx Tuple{typeof(_ma_to_ta), Float64, Float64}
+function Mooncake.frule!!(::Dual{typeof(_ma_to_ta)}, m::Dual, e::Dual)
+    y, (dm, de) = _ad_rule(_ma_to_ta, Mooncake.primal(m), Mooncake.primal(e))
+    return Dual(y, dm * Mooncake.tangent(m) + de * Mooncake.tangent(e))
+end
+function Mooncake.rrule!!(::CoDual{typeof(_ma_to_ta)}, m::CoDual, e::CoDual)
+    y, (dm, de) = _ad_rule(_ma_to_ta, Mooncake.primal(m), Mooncake.primal(e))
+    pullback(ȳ) = (NoRData(), ȳ * dm, ȳ * de)
+    return zero_fcodual(y), pullback
 end
 
 # The snapshot, the context and the correction are data without derivatives, and the

@@ -15,6 +15,11 @@
 #   plain epoch and assembles the result from it with `_ad_lift`, as the ForwardDiff
 #   extension does for a `Dual`.
 #
+# The Orbit layer adds one derivative point that is not a function of the epoch: the
+# Kepler solver `_ma_to_ta(M, e)` (`src/analysis/brouwer.jl`), with a method of `_ad_rule`
+# there that returns the true anomaly and its partials with respect to M and e. The rules
+# of ChainRulesCore, Enzyme and Mooncake take it; the tracked numbers do not need it.
+#
 # The derivative is that of the function that `spkder` and `pxder` differentiate. For an
 # SPK type with a separate velocity series (type 3), the derivative of the position is
 # the stored velocity. For a frame chain with a CK, dynamic or switch frame, the
@@ -23,13 +28,14 @@
 
 """
 Functions on the way from a public call to a derivative point whose results do not
-depend on the epoch: lookups by name or code, the snapshot of a context, and the parsing
-of corrections and method strings. The extensions mark them as constant, so that no AD
+depend on the epoch: lookups by name or code (`bodvcd` and `bodfnd` for the GM and the
+radii of an `Orbit`), the snapshot of a context, and the parsing of corrections and method
+strings. The extensions mark them as constant, so that no AD
 package looks into them (they hold strings, dictionaries, atomics and `try` blocks).
 """
 const _AD_CONSTANT = (
     body_code, frame_id, kernelset, timedefaults, dsktolerances,
-    default_context, Aberration,
+    default_context, Aberration, bodvcd, bodfnd,
     _spk_abcorr, _geo_method, _geo_abcorr, _geo_body, _geo_namfrm, _geo_frinfo,
     _geo_fixfid, _geo_radii, _geo_shape, _lsk, _unitim_code,
 )

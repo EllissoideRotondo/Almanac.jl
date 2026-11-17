@@ -82,6 +82,7 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
 | DAS, DSK, EK | `das.jl`, `dla.jl`, `dsk.jl`, `dsk_api.jl`, `surfaces.jl`, `ek/` |
 | Math, geometry, events | `math/`, `geometry/`, `gf/`, `windows.jl` |
 | Tables, AD, extensions | `table.jl`, `ad.jl`, `ext/` (Adapt, ForwardDiff, ChainRulesCore, EnzymeCore, Mooncake, ReverseDiff, Tracker) |
+| Orbit layer (ANISE-style analysis) | `analysis/`: `orbit.jl` (`Orbit`, `orbit`), `elements.jl` (`element`, `elements`), `brouwer.jl` (Brouwer mean elements, Kepler solver), `build.jl` (`keplerian_orbit`, `with_element`, `with_apsides`, `two_body`), `local_frames.jl` |
 
 ## Invariants that are easy to break
 
@@ -128,16 +129,22 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
 - **Automatic differentiation.** No AD package differentiates the evaluators. The
   derivative points are `spk_jet`, `frame_rotation`, `frame_jet`, `abcorr_jet`,
   `abcorr_position` and `abcorr_state`; the derivative of each is the next order of its
-  jet. `AlmanacForwardDiffExt` assembles `Dual` results from the jet at `primal(et)`;
-  `src/ad.jl` gives `_ad_rule` (value and derivative, for the rules of ChainRulesCore,
-  Enzyme and Mooncake) and `_ad_lift` (for the tracked numbers of ReverseDiff and
-  Tracker). A new derivative point, or a new path to the epoch that bypasses them, needs
-  a method in every extension. Lookups and string parsing on the way to a derivative
-  point go into `_AD_CONSTANT`. Enzyme compiles the bodies of the derivative points too,
-  and fails when two calls of different result types share a storage slot (see
-  `_ssbpos_still` in `aberration.jl`); the groups `ad_enzyme`,
-  `ad_mooncake`, `ad_zygote` and `ad_tracked` (fixture `test/adfixtures.jl`) cover
-  every backend.
+  jet. The Orbit layer has one more, the Kepler solver `_ma_to_ta(M, e)` of
+  `analysis/brouwer.jl`, whose rules take the partials of the implicit function at the
+  converged anomaly (ForwardDiff and the tracked numbers get them from the carried
+  Newton step `_carry`). `AlmanacForwardDiffExt` assembles `Dual` results from the jet
+  at `primal(et)`; `src/ad.jl` gives `_ad_rule` (value and derivative, for the rules of
+  ChainRulesCore, Enzyme and Mooncake) and `_ad_lift` (for the tracked numbers of
+  ReverseDiff and Tracker). A new derivative point, or a new path to the epoch that
+  bypasses them, needs a method in every extension. Lookups and string parsing on the
+  way to a derivative point go into `_AD_CONSTANT`. Enzyme compiles the bodies of the
+  derivative points too, and fails when two calls of different result types share a
+  storage slot (see `_ssbpos_still` in `aberration.jl`); the groups `ad_enzyme`,
+  `ad_mooncake`, `ad_zygote` and `ad_tracked` (fixture `test/adfixtures.jl`) cover every
+  backend. `element` and the properties of an `Orbit` take the name at run time:
+  `getproperty` stays `@inline` (so that Mooncake and Enzyme see one branch), and the
+  ChainRulesCore extension has rules for both (so that Zygote compiles one branch, not
+  all of `element`).
 
 ## Deliberate deviations from CSPICE
 

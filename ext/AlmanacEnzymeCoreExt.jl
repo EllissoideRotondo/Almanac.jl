@@ -2,7 +2,7 @@ module AlmanacEnzymeCoreExt
 
 using Almanac
 using Almanac: KernelSet, SpiceContext, Aberration, spk_jet, frame_rotation, frame_jet,
-    abcorr_jet, abcorr_position, abcorr_state, _ad_rule, _AD_CONSTANT, _ad_typeof
+    abcorr_jet, abcorr_position, abcorr_state, _ma_to_ta, _ad_rule, _AD_CONSTANT, _ad_typeof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const, Active, Duplicated,
     BatchDuplicated
 using EnzymeCore.EnzymeRules: FwdConfig, RevConfig, AugmentedReturn, needs_primal,
@@ -34,7 +34,12 @@ _lanes(et::Annotation, ::Val{W}) where {W} = ntuple(i -> et.dval[i], Val(W))
 function _forward(config::FwdConfig, f, iet::Int, args::Tuple)
     y, dy = _ad_rule(f, map(_val, args)...)
     W = width(config)
-    shadows = map(s -> _scale(dy, s), _lanes(args[iet], Val(W)))
+    return _fwd_return(config, y, map(s -> _scale(dy, s), _lanes(args[iet], Val(W))))
+end
+
+# The result of a forward rule with the value `y` and the shadows of each lane.
+function _fwd_return(config::FwdConfig, y, shadows)
+    W = width(config)
     if needs_primal(config) && needs_shadow(config)
         return W == 1 ? Duplicated(y, shadows[1]) : BatchDuplicated(y, shadows)
     elseif needs_shadow(config)
@@ -97,6 +102,34 @@ for (f, iet, n) in POINTS
         end
     end
 end
+
+# The Kepler solver of the Orbit layer: both arguments, the mean anomaly and the
+# eccentricity, can be active (see `src/analysis/brouwer.jl`).
+function EnzymeRules.forward(
+        config::FwdConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
+        m::Annotation{<:Real}, e::Annotation{<:Real}
+    )
+    y, (dm, de) = _ad_rule(_ma_to_ta, m.val, e.val)
+    W = width(config)
+    lm, le = _lanes(m, Val(W)), _lanes(e, Val(W))
+    return _fwd_return(config, y, ntuple(i -> dm * lm[i] + de * le[i], Val(W)))
+end
+EnzymeRules.augmented_primal(
+    ::RevConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
+    m::Annotation{<:Real}, e::Annotation{<:Real}
+) = _no_nested_reverse(m)
+function EnzymeRules.augmented_primal(
+        config::RevConfig, ::Const{typeof(_ma_to_ta)},
+        ::Type, m::Annotation{Float64}, e::Annotation{Float64}
+    )
+    y, dy = _ad_rule(_ma_to_ta, m.val, e.val)
+    return AugmentedReturn(needs_primal(config) ? y : nothing, nothing, dy)
+end
+EnzymeRules.reverse(
+    config::RevConfig, ::Const{typeof(_ma_to_ta)}, dret, dy,
+    m::Annotation{Float64}, e::Annotation{Float64}
+) =
+    (_epoch_cotangent(m, dret, dy[1]), _epoch_cotangent(e, dret, dy[2]))
 
 # The snapshot, the context and the correction are data without derivatives, and the
 # lookups and the parsing of strings have no derivative.

@@ -33,13 +33,14 @@ rate[1, 1]                                  # 1/s
 
 ## Dual-number epochs
 
-With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in:
+With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in the calls below, and the state or elements of an `Orbit` in the last bullet:
 
 - states: `spkezr`, `spkpos`, `spkgeo`, `spkssb`, the integer-ID forms, `spkltc`, `spkaps`, `spkapo`, `spkacs`, `spkcpo`, `spkcpt`, `spkcvo`, `spkcvt`;
 - rotations: `pxform`, `sxform`, `pxfrm2`;
 - `spkder`, `pxder` and the table queries;
 - surface calls: `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq`, `azlcpo`;
-- time conversions: `unitim`, `deltet`.
+- time conversions: `unitim`, `deltet`;
+- [orbits](@ref "Orbits and relative motion"): `orbit`, and an `Orbit` with a dual epoch or state through `element`, `keplerian`, `keplerian_orbit` (dual elements), `with_element`, `with_apsides`, `two_body`, `local_frame`, `local_frame_state`, `relative_state`, `vinf_periapsis` and `vinf_turn_angle`. Where the value throws, as the anomalies at `ecc < 1e-11`, the derivative throws too. A dual state of exactly zero radius, velocity, angular momentum or eccentricity vector throws `SpiceError(:degeneratecase)` where a `Float64` state gives 0. The derivative of `:ta` (and of the calls built on it) is NaN at an exact apsis, where the arc cosine has an infinite slope; the value is not.
 
 Other calls (`limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg`, `et2lst`, ...) throw `SpiceError(:badarg)` for a `Dual`. Event searches take `Float64` windows.
 
@@ -64,6 +65,15 @@ import Enzyme, Zygote
 range_km(t) = sum(abs2, spkpos("MOON", t, "J2000", "LT+S", "EARTH")[1]) |> sqrt
 DI.derivative(range_km, AutoEnzyme(), et)   # km/s
 DI.gradient(ts -> sum(range_km, ts), AutoZygote(), [et, et + 3600])
+```
+
+The orbit calls of the list above differentiate with the same packages, with respect to the epoch through [`orbit`](@ref) and with respect to a state or to Keplerian elements:
+
+```julia
+x = [8000.0, 0.1, 0.5, 1.0, 2.0, 2.0]       # sma, ecc, inc, raan, aop, ma
+radius(x) = sum(abs2, keplerian_orbit(0.0, 399, 1; sma=x[1], ecc=x[2], inc=x[3], raan=x[4],
+    aop=x[5], ma=x[6], gm=398600.4415).position) |> sqrt
+DI.gradient(radius, AutoZygote(), x)        # km per element unit
 ```
 
 Reverse mode pays off when one number depends on many epochs, as the gradient above. For a second derivative, run ForwardDiff over Zygote, ReverseDiff or Enzyme in forward mode: `DI.SecondOrder(AutoForwardDiff(), AutoZygote())`. Mooncake and Tracker do not take dual numbers, and Enzyme in reverse mode refuses them. ReverseDiff must run without a compiled tape (`AutoReverseDiff(compile=false)`, the default), because a compiled tape keeps the segment and the record of its first epoch.
