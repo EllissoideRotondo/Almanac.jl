@@ -93,4 +93,4 @@ v = ForwardDiff.derivative(t -> two_body(o, t).position, later)
 maximum(abs.(v - p.velocity))
 ```
 
-See [Time derivatives](@ref) for the other derivative calls.
+Enzyme, Mooncake, Zygote, ReverseDiff and Tracker differentiate the same calls; see [Other AD packages](@ref) in [Time derivatives](@ref), which also lists the other derivative calls.

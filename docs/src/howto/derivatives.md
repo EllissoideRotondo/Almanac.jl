@@ -40,6 +40,7 @@ With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in:
 - `spkder`, `pxder` and the table queries;
 - surface calls: `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq`, `azlcpo`;
 - time conversions: `unitim`, `deltet`.
+- the Orbit layer: `orbit`, and an `Orbit` built with a dual epoch or state, through `element`, `keplerian_orbit`, `two_body`, the local frames and `relative_state` (see [Orbits](@ref "Orbits and relative motion")).
 
 Other calls (`limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg`, `et2lst`, ...) throw `SpiceError(:badarg)` for a `Dual`. Event searches take `Float64` windows.
 
@@ -64,6 +65,15 @@ import Enzyme, Zygote
 range_km(t) = sum(abs2, spkpos("MOON", t, "J2000", "LT+S", "EARTH")[1]) |> sqrt
 DI.derivative(range_km, AutoEnzyme(), et)   # km/s
 DI.gradient(ts -> sum(range_km, ts), AutoZygote(), [et, et + 3600])
+```
+
+The calls of the Orbit layer differentiate with the same packages, with respect to the epoch through [`orbit`](@ref) and with respect to a state or to Keplerian elements: [`Orbit`](@ref), [`element`](@ref), [`keplerian_orbit`](@ref), [`two_body`](@ref), [`local_frame`](@ref), [`relative_state`](@ref) and the others. The Kepler solver of `keplerian_orbit` and `two_body` gives each package the exact derivative of the true anomaly, at E = π as well, where ANISE returns the eccentric anomaly for it.
+
+```julia
+x = [8000.0, 0.1, 0.5, 1.0, 2.0, 2.0]       # sma, ecc, inc, raan, aop, ma
+radius(x) = sum(abs2, keplerian_orbit(0.0, 399, 1; sma=x[1], ecc=x[2], inc=x[3], raan=x[4],
+    aop=x[5], ma=x[6], gm=398600.4415).position) |> sqrt
+DI.gradient(radius, AutoZygote(), x)        # km per element unit
 ```
 
 Reverse mode pays off when one number depends on many epochs, as the gradient above. For a second derivative, run ForwardDiff over Zygote, ReverseDiff or Enzyme in forward mode: `DI.SecondOrder(AutoForwardDiff(), AutoZygote())`. Mooncake and Tracker do not take dual numbers, and Enzyme in reverse mode refuses them. ReverseDiff must run without a compiled tape (`AutoReverseDiff(compile=false)`, the default), because a compiled tape keeps the segment and the record of its first epoch.
