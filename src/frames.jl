@@ -259,7 +259,9 @@ function _builtin_frame_dicts()
     return frames, name2id
 end
 
-const (BUILTIN_FRAMES, BUILTIN_FRAMENAME2ID) = _builtin_frame_dicts()
+const (BUILTIN_FRAMES, BUILTIN_FRAMENAME2ID) = let (frames, name2id) = _builtin_frame_dicts()
+    frames, NameTable(name2id)
+end
 
 # ---------------------------------------------------------------------------------
 # Frames defined in the kernel pool
@@ -374,10 +376,9 @@ built-in frame first, then a pool-defined frame (the order of `namfrm`). Throws 
 otherwise. An integer argument is returned as `Int32`. Reads `ks.framename2id` only.
 """
 function frame_id(ks::KernelSet, name::AbstractString)::Int32
-    nn = normalize_name(name)
-    id = get(BUILTIN_FRAMENAME2ID, nn, nothing)
+    id = name_lookup(BUILTIN_FRAMENAME2ID, name)
     id === nothing || return id
-    id = get(ks.framename2id, nn, nothing)
+    id = name_lookup(ks.framename2id, name)
     id === nothing || return id
     throw(SpiceError(:unknownframe, "the frame name '$name' is not known"))
 end

@@ -50,6 +50,12 @@ let
         precompile(namfrm, (head..., S))
         precompile(frmnam, (head..., I))
     end
+    # `st, lt = spkezr(...)` at top level unpacks the result with `indexed_iterate`,
+    # which nothing else compiles for these tuple types.
+    for T in (Tuple{SVector{6, F}, F}, Tuple{SVector{3, F}, F}, Tuple{SVector{6, F}, F, F})
+        precompile(Base.indexed_iterate, (T, I))
+        precompile(Base.indexed_iterate, (T, I, I))
+    end
 end
 
 # Geometry calls and geometry finder searches with names as strings, for a context and

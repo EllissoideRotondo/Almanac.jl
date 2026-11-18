@@ -25,6 +25,8 @@ alloc_sxform(ctx, from, to, et) = @allocated sxform(ctx, from, to, et)
 alloc_pxder(ctx, from, to, et, ::Val{N}) where {N} = @allocated pxder(ctx, from, to, et, Val(N))
 alloc_names(ctx, et) = @allocated spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")
 alloc_pxform_names(ctx, et) = @allocated pxform(ctx, "J2000", "IAU_EARTH", et)
+nalloc_mixed_names(ctx, et) = @allocations spkezr(ctx, "Moon", et, "J2000", "NONE", "Earth")
+nalloc_normalize(s) = @allocations Almanac.normalize_name(s)
 
 "Allocation of the second call of `f(args...)` (the first call compiles)."
 function warm(f, args...)
@@ -77,6 +79,43 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
                 "$(warm(alloc_pxform_names, ctx, et)) bytes"
         )
         @test true
+    end
+
+    @apart @testset "names in mixed case: the ljucrs rule, no allocation" begin
+        nn = Almanac.normalize_name
+        for (s, want) in (
+                ("Earth", "EARTH"), (" solar  System   barycenter ", "SOLAR SYSTEM BARYCENTER"),
+                ("j2000", "J2000"), ("  ", ""), ("", ""), ("MOON", "MOON"), ("Moon ", "MOON"),
+            )
+            @test nn(s) == want
+            @test nn(nn(s)) == want
+        end
+        @test nn("Étoile  x") == "ÉTOILE X"
+        @test bodn2c(ctx, " earth ") == bodn2c(ctx, "Earth") == 399
+        @test warm(nalloc_normalize, "Earth") == 1
+        # The lookup reads the name as given (it cost 14 allocations per name before).
+        @test warm(nalloc_mixed_names, ctx, et) == 0
+        # Names defined in the pool go through the same table.
+        pctx = SpiceContext()
+        lmpool(
+            pctx, [
+                "NAIF_BODY_NAME = ( ' My  Probe ', 'Étoile' )", "NAIF_BODY_CODE = ( -77, -78 )",
+                "FRAME_MY_FRAME = -77001", "FRAME_-77001_NAME = 'My  Frame'",
+                "FRAME_-77001_CLASS = 4", "FRAME_-77001_CLASS_ID = -77001",
+                "FRAME_-77001_CENTER = 'my  probe'",
+            ]
+        )
+        # A body name in a frame definition is resolved while the snapshot is built.
+        @test frinfo(pctx, -77001) == (-77, 4, -77001)
+        # The table of the snapshot holds the pairs of the pool, and no other.
+        @test Dict(Almanac.kernelset(pctx).name2code) == Dict("MY PROBE" => -77, "ÉTOILE" => -78)
+        @test get(Almanac.kernelset(pctx).name2code, :MY_PROBE, 0) == 0
+        @test !haskey(Almanac.kernelset(pctx).name2code, :MY_PROBE)
+        @test bodn2c(pctx, "my probe") == bodn2c(pctx, "  MY PROBE") == -77
+        @test bodn2c(pctx, "MY  PROBEX") === nothing && bodn2c(pctx, "MY") === nothing
+        @test bodn2c(pctx, "étoile") == bodn2c(pctx, " ÉTOILE") == -78   # not ASCII: `uppercase`
+        @test namfrm(pctx, " my frame ") == -77001 && namfrm(pctx, "MYFRAME") == 0
+        @test Almanac.name_lookup(Almanac.NameTable(), "EARTH") === nothing
     end
 
     @apart @testset "inferred return types" begin
