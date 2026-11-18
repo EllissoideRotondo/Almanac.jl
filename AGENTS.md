@@ -192,7 +192,8 @@ update that page in the same change.
   sets the random seed. `ALMANAC_TEST_EXCLUDE` (group names separated by spaces) leaves
   groups out of a run without group names; CI runs the AD groups and `static` on the
   coverage job (and two AD groups on Julia 1.10) only, and every group on a tag or a
-  manual run.
+  manual run. The job `ad-lower-bounds` runs `ad_mooncake` and `ad_enzyme` on Julia
+  1.10 with EnzymeCore and Mooncake pinned to the lower bounds of `[compat]`.
 - Kernels are downloaded into `test/data/` by `test/kernels.jl` (`SOURCES` lists the
   URLs and SHA-256 sums). `ALMANAC_KERNEL_DIR` overrides the location,
   `ALMANAC_DOWNLOAD_KERNELS=0` turns the download off, and `ALMANAC_REQUIRE_KERNELS=1`
