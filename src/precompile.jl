@@ -156,3 +156,43 @@ let
     unitim(ctx, 0.0, "TDB", "JDTDB")
     deltet(ctx, 0.0, "ET")
 end
+
+# The Orbit layer. `getproperty` of an `Orbit` takes the name at run time, so its first
+# call compiled all of `element`, 0.7 s. The workload reads no kernel file: the GM and the
+# radii are given, or put in the pool of a context of its own by `lmpool`. The directives
+# cover `orbit`, which needs an SPK.
+let
+    S, F, I = String, Float64, Int
+    for head in ((), (SpiceContext,), (KernelSet,)), (B, R) in ((S, S), (I, I))
+        precompile(orbit, (head..., B, F, R, S, B))
+        precompile(Orbit, (head..., SVector{6, F}, F, B, R))
+    end
+    ctx = SpiceContext()
+    lmpool(ctx, ["BODY399_GM = 398600.4415", "BODY399_RADII = ( 6378.1366 6378.1366 6356.7519 )"])
+    state = [7000.0, 100.0, 1300.0, -0.5, 7.4, 1.0]
+    o = Orbit(ctx, state, 0.0, 399, 1)
+    Orbit(ctx, state, 0.0, "EARTH", "J2000")
+    h = Orbit([7000.0, 0.0, 0.0, 0.0, 12.0, 1.0], 0.0, 399, 1, 398600.4415, o.radii)
+    for orb in (o, h), s in (fieldnames(Orbit)..., :position, :velocity, :hvec, :evec, elements()...)
+        try
+            getproperty(orb, s)
+        catch
+        end
+    end
+    # The keywords in the order of the manual; another order changes only the wrapper of
+    # the keywords.
+    for (c, f) in ((399, 1), ("EARTH", "J2000"))
+        keplerian_orbit(ctx, 0.0, c, f; sma = 7000.0, ecc = 0.01, inc = 1.0, raan = 0.0, aop = 0.0, ta = 0.0)
+        keplerian_orbit(ctx, 0.0, c, f; sma = 7000.0, ecc = 0.01, inc = 1.0, raan = 0.0, aop = 0.0, ma = 0.0)
+        keplerian_orbit(ctx, 0.0, c, f; periapsis = 7000.0, apoapsis = 9000.0, inc = 1.0, raan = 0.0, aop = 0.0, ta = 0.0)
+        keplerian_orbit(ctx, 0.0, c, f; sma = 7000.0, ecc = 0.01, inc = 1.0, raan = 0.0, aop = 0.0, ta = 0.0, gm = 398600.4415)
+    end
+    two_body(o, 3600.0)
+    q = with_element(o, :sma, 8000.0)
+    with_apsides(o, 7000.0, 9000.0)
+    for lf in (:ric, :vnc, :rcn, :tnw)
+        local_frame(o, lf)
+        local_frame_state(o, lf)
+        relative_state(q, o, lf)
+    end
+end
