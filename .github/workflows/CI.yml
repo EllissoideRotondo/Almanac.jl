@@ -91,6 +91,7 @@ jobs:
       - uses: codecov/codecov-action@v5
         with:
           files: lcov.info
+          disable_search: true
           use_oidc: true
           # A pull request from a fork gets no OIDC token and uploads without one;
           # a failed upload does not fail the job.
