@@ -274,6 +274,22 @@ struct SclkType1
 end
 
 """
+    NameTable <: AbstractDict{String,Int32}
+
+Table of names normalized with `normalize_name` and their codes, for the body and frame
+names of `KernelSet` and of the built-in tables. Open addressing: `slots` (length a power
+of two, at most half full) holds 0 or an index into `keys`, `vals` and `hashes`. A
+lookup normalizes the name while it hashes and compares it (`names.jl`), so it allocates
+nothing for an ASCII name. Built once and never modified.
+"""
+struct NameTable <: AbstractDict{String, Int32}
+    keys::Vector{String}
+    vals::Vector{Int32}
+    hashes::Vector{UInt64}
+    slots::Vector{Int32}
+end
+
+"""
     KernelSet
 
 Immutable snapshot of everything loaded. Built by `build_kernelset` from the load
@@ -319,10 +335,10 @@ mutable struct KernelSet
     const spk::Dict{Int32, Vector{Segment}}
     const pck::Dict{Int32, Vector{Segment}}
     const pool::Dict{String, PoolValue}
-    const name2code::Dict{String, Int32}
+    const name2code::NameTable
     const code2name::Dict{Int32, String}
     const frames::Dict{Int32, FrameDef}
-    const framename2id::Dict{String, Int32}
+    const framename2id::NameTable
     const tk::Dict{Int32, TKFrame}
     const bodyrot::Dict{Int32, BodyRot}
     const lsk::Union{Nothing, LeapSeconds}

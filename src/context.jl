@@ -92,8 +92,8 @@ function build_kernelset(
     lsk = build_lsk(pool)
     return _dyn_levels(
         KernelSet(
-            copy(loaded), daf, spk, pck, pool, name2code, code2name, frames,
-            framename2id, tk, bodyrot, lsk, ck, build_sclk(pool), build_ckmeta(pool),
+            copy(loaded), daf, spk, pck, pool, NameTable(name2code), code2name, frames,
+            NameTable(framename2id), tk, bodyrot, lsk, ck, build_sclk(pool), build_ckmeta(pool),
             Dict{Int32, DynFrame}(), Dict{Int32, SwitchFrame}(), nothing, false,
             Tuple{String, Int32}[], dskfiles, _dsk_segment_table(dskfiles), ekfiles,
             _ek_build_tables(ekfiles)

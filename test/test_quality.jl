@@ -81,7 +81,7 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
         @test true
     end
 
-    @apart @testset "names in mixed case: the ljucrs rule, one String per name" begin
+    @apart @testset "names in mixed case: the ljucrs rule, no allocation" begin
         nn = Almanac.normalize_name
         for (s, want) in (
                 ("Earth", "EARTH"), (" solar  System   barycenter ", "SOLAR SYSTEM BARYCENTER"),
@@ -93,8 +93,23 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
         @test nn("Étoile  x") == "ÉTOILE X"
         @test bodn2c(ctx, " earth ") == bodn2c(ctx, "Earth") == 399
         @test warm(nalloc_normalize, "Earth") == 1
-        # Mixed case cost 14 allocations per name before; the normalized names remain.
-        @test warm(nalloc_mixed_names, ctx, et) == 2
+        # The lookup reads the name as given (it cost 14 allocations per name before).
+        @test warm(nalloc_mixed_names, ctx, et) == 0
+        # Names defined in the pool go through the same table.
+        pctx = SpiceContext()
+        lmpool(
+            pctx, [
+                "NAIF_BODY_NAME = ( ' My  Probe ', 'Étoile' )", "NAIF_BODY_CODE = ( -77, -78 )",
+                "FRAME_MY_FRAME = -77001", "FRAME_-77001_NAME = 'My  Frame'",
+                "FRAME_-77001_CLASS = 4", "FRAME_-77001_CLASS_ID = -77001",
+                "FRAME_-77001_CENTER = -77",
+            ]
+        )
+        @test bodn2c(pctx, "my probe") == bodn2c(pctx, "  MY PROBE") == -77
+        @test bodn2c(pctx, "MY  PROBEX") === nothing && bodn2c(pctx, "MY") === nothing
+        @test bodn2c(pctx, "étoile") == bodn2c(pctx, " ÉTOILE") == -78   # not ASCII: `uppercase`
+        @test namfrm(pctx, " my frame ") == -77001 && namfrm(pctx, "MYFRAME") == 0
+        @test Almanac.name_lookup(Almanac.NameTable(), "EARTH") === nothing
     end
 
     @apart @testset "inferred return types" begin

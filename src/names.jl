@@ -711,6 +711,7 @@ each inner run of blanks compressed to one blank (the `ljucrs` rule of CSPICE). 
 result is a fixed point of the function.
 """
 function normalize_name(s::AbstractString)::String
+    s isa Union{String, SubString{String}} && isascii(s) && return _normalize_ascii(s)
     clean = true
     prevblank = true
     for c in s
@@ -723,15 +724,29 @@ function normalize_name(s::AbstractString)::String
         end
     end
     clean && !(prevblank && !isempty(s)) && return String(s)
-    isascii(s) || return uppercase(join(split(s, ' '; keepempty = false), ' '))
-    # ASCII: one pass to size the result and one to fill it, so that a name in mixed
-    # case (the usual "Earth") costs one allocation, the result.
+    return uppercase(join(split(s, ' '; keepempty = false), ' '))
+end
+
+"Contract: `normalize_name` of the ASCII string `s`: `s` itself (as a `String`) if it is already normalized, else one new `String`."
+function _normalize_ascii(s::Union{String, SubString{String}})::String
     cu = codeunits(s)
-    n, gap = 0, false
-    for b in cu
-        b == UInt8(' ') ? (gap = n > 0) : (n += 1 + gap; gap = false)
+    n, gap, clean = 0, false, true
+    # invariant: `n` bytes of the result so far; `gap` if a blank follows them
+    @inbounds for b in cu
+        if b == UInt8(' ')
+            gap && (clean = false)
+            gap = n > 0
+            n == 0 && (clean = false)
+        else
+            UInt8('a') <= b <= UInt8('z') && (clean = false)
+            n += 1 + gap
+            gap = false
+        end
     end
-    out = Base._string_n(n)
+    (clean && !gap) && return String(s)
+    # A new String of `n` bytes, filled below before it is returned (`Base._string_n`,
+    # which is not public).
+    out = ccall(:jl_alloc_string, Ref{String}, (Csize_t,), n)
     p = pointer(out)
     i, gap = 0, false
     GC.@preserve out for b in cu
@@ -746,6 +761,129 @@ function normalize_name(s::AbstractString)::String
     return out
 end
 
+# --- NameTable: lookup of a name without building its normalized form ------------------
+#
+# The hash and the comparison read the bytes that `normalize_name` would make (upper
+# case, blanks trimmed and compressed) from the bytes of the name as given. A key is
+# normalized, so it reads as itself; a name that is not ASCII is normalized first.
+
+"Contract: byte `b` in upper case if it is an ASCII lower-case letter, else `b`."
+@inline _upper_byte(b::UInt8) = UInt8('a') <= b <= UInt8('z') ? b - 0x20 : b
+
+"""
+    _name_hash(cu) -> (h::UInt64, ascii::Bool)
+
+Contract: hash of the bytes of the normalized form of the bytes `cu` (upper case for
+ASCII letters, blanks trimmed and compressed; other bytes as they are), equal for two
+byte strings with the same normalized form (FNV-1a with a final mix), and whether every
+byte of `cu` is ASCII.
+"""
+@inline function _name_hash(cu)
+    h = 0xcbf29ce484222325
+    started, gap, high = false, false, 0x00
+    # invariant: `h` is the hash of the normalized bytes before the current one
+    @inbounds for b in cu
+        high |= b
+        if b == UInt8(' ')
+            gap = started
+        else
+            gap && (h = (h ⊻ UInt64(' ')) * 0x00000100000001b3)
+            h = (h ⊻ UInt64(_upper_byte(b))) * 0x00000100000001b3
+            started, gap = true, false
+        end
+    end
+    return h ⊻ (h >> 32), high < 0x80
+end
+
+"Contract: true if the normalized key `key` equals the normalized form of the bytes `cu` (as for `_name_hash`)."
+@inline function _name_equal(key::String, cu)
+    kc = codeunits(key)
+    m = length(kc)
+    i, gap = 0, false
+    # invariant: the first `i` bytes of the normalized form of `cu` equal `kc[1:i]`
+    @inbounds for b in cu
+        if b == UInt8(' ')
+            gap = i > 0
+        else
+            if gap
+                i += 1
+                (i <= m && kc[i] == UInt8(' ')) || return false
+            end
+            i += 1
+            (i <= m && kc[i] == _upper_byte(b)) || return false
+            gap = false
+        end
+    end
+    return i == m
+end
+
+"""
+    NameTable(d::AbstractDict{String,Int32}) -> NameTable
+
+Contract: the table of the pairs of `d`, whose keys are normalized (fixed points of
+`normalize_name`).
+"""
+function NameTable(d::AbstractDict{String, Int32})
+    keys_ = collect(String, keys(d))
+    vals = Int32[d[k] for k in keys_]
+    hashes = UInt64[first(_name_hash(codeunits(k))) for k in keys_]
+    slots = zeros(Int32, max(4, nextpow(2, max(1, 2 * length(keys_)))))
+    mask = length(slots) - 1
+    for (j, h) in enumerate(hashes)
+        i = Int(h & mask)
+        while slots[i + 1] != 0     # invariant: slots before `i` on the probe path are taken
+            i = (i + 1) & mask
+        end
+        slots[i + 1] = j
+    end
+    return NameTable(keys_, vals, hashes, slots)
+end
+NameTable() = NameTable(String[], Int32[], UInt64[], zeros(Int32, 4))
+
+"Contract: index in `t.keys` of the key equal to the normalized form of the bytes `cu`, whose hash is `h`, or 0."
+@inline function _name_probe(t::NameTable, cu, h::UInt64)
+    mask = length(t.slots) - 1
+    i = Int(h & mask)
+    # invariant: no slot before `i` on the probe path holds the key
+    return @inbounds while true
+        j = t.slots[i + 1]
+        j == 0 && return 0
+        t.hashes[j] == h && _name_equal(t.keys[j], cu) && return Int(j)
+        i = (i + 1) & mask
+    end
+end
+
+"""
+    name_lookup(t::NameTable, name) -> Union{Int32,Nothing}
+
+Contract: the code of `name` in `t` after normalization (`normalize_name`), or
+`nothing`. No allocation for an ASCII `String` or `SubString{String}`.
+"""
+@inline function name_lookup(t::NameTable, name::AbstractString)
+    isempty(t.keys) && return nothing
+    if name isa Union{String, SubString{String}}
+        h, ascii = _name_hash(codeunits(name))
+        ascii && return _name_value(t, _name_probe(t, codeunits(name), h))
+    end
+    # Not ASCII: the rule of `normalize_name` for other characters, then the bytes.
+    nn = normalize_name(name)
+    return _name_value(t, _name_probe(t, codeunits(nn), first(_name_hash(codeunits(nn)))))
+end
+
+"Contract: the code at index `j` of `t`, or `nothing` for `j == 0`."
+@inline _name_value(t::NameTable, j::Int) = j == 0 ? nothing : @inbounds t.vals[j]
+
+Base.length(t::NameTable) = length(t.keys)
+Base.iterate(t::NameTable, i::Int = 1) =
+    i > length(t.keys) ? nothing : (t.keys[i] => t.vals[i], i + 1)
+function Base.get(t::NameTable, key::AbstractString, default)
+    c = name_lookup(t, key)
+    return c === nothing ? default : c
+end
+Base.get(::NameTable, key, default) = default
+Base.haskey(t::NameTable, key::AbstractString) = name_lookup(t, key) !== nothing
+Base.haskey(::NameTable, key) = false
+
 "Contract: builds the (name => code, code => name) dictionaries of a (code, name) table; a later entry overrides an earlier one in both directions."
 function _name_dicts(table)
     name2code = Dict{String, Int32}()
@@ -758,7 +896,9 @@ function _name_dicts(table)
     return name2code, code2name
 end
 
-const (BUILTIN_NAME2CODE, BUILTIN_CODE2NAME) = _name_dicts(BUILTIN_BODIES)
+const (BUILTIN_NAME2CODE, BUILTIN_CODE2NAME) = let (n2c, c2n) = _name_dicts(BUILTIN_BODIES)
+    NameTable(n2c), c2n
+end
 
 """
     build_names(pool) -> (name2code, code2name)
@@ -817,13 +957,17 @@ end
 
 "Contract: code of `name` from the pool-defined dictionary `name2code`, then from the built-in table, then as an integer string; `nothing` if none applies (the `bods2c` rule)."
 function _body_code_lookup(name2code::AbstractDict{String, Int32}, name::AbstractString)
-    nn = normalize_name(name)
-    c = get(name2code, nn, nothing)
+    c = _pool_name_lookup(name2code, name)
     c === nothing || return c
-    c = get(BUILTIN_NAME2CODE, nn, nothing)
+    c = name_lookup(BUILTIN_NAME2CODE, name)
     c === nothing || return c
     return _parse_int_name(name)
 end
+
+"Contract: code of `name` in a pool-defined name table: a `NameTable` of a snapshot, or the `Dict` (keys normalized) of a snapshot being built; `nothing` if absent."
+_pool_name_lookup(t::NameTable, name::AbstractString) = name_lookup(t, name)
+_pool_name_lookup(d::AbstractDict{String, Int32}, name::AbstractString) =
+    isempty(d) ? nothing : get(d, normalize_name(name), nothing)
 
 """
     body_code(ks, name) -> Int32
