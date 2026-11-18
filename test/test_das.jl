@@ -146,12 +146,14 @@ group("11. DAS files and DLA segment lists") do
         @test lastc == 0 && lastd > 0 && lasti > 0
         @test dasrdi(h, 1, lasti) == c_dasrdi(ch, 1, lasti)
         @test bits_equal(dasrdd(h, 1, lastd), c_dasrdd(ch, 1, lastd))
+        fails = Failures()
         for _ in 1:200
             a = rand(rng, 1:lasti); b = rand(rng, a:min(lasti, a + 700))
-            @test dasrdi(h, a, b) == c_dasrdi(ch, a, b)
+            check!(fails, dasrdi(h, a, b) == c_dasrdi(ch, a, b), "dasrdi", a, b)
             a = rand(rng, 1:lastd); b = rand(rng, a:min(lastd, a + 700))
-            @test bits_equal(dasrdd(h, a, b), c_dasrdd(ch, a, b))
+            check!(fails, bits_equal(dasrdd(h, a, b), c_dasrdd(ch, a, b)), "dasrdd", a, b)
         end
+        @test isempty(fails)
         @test dasrdi(h, 5, 4) == Int[] && dasrdd(h, 5, 4) == Float64[] && dasrdc(h, 5, 4) == ""
         c_dascls(ch)
         dascls(h)
@@ -335,12 +337,13 @@ group("11. DAS files and DLA segment lists") do
         furnsh(ctx, swapped)
         ref = SpiceContext()
         furnsh(ref, cfile)
+        fails = Failures()
         for _ in 1:500
             v = V3(randn(rng, 3)) * 8
             d = V3(randn(rng, 3)) * 2 - v
-            @test dskxsi(ctx, false, 499, (), 0.0, "IAU_MARS", v, d) ==
-                dskxsi(ref, false, 499, (), 0.0, "IAU_MARS", v, d)
+            check!(fails, dskxsi(ctx, false, 499, (), 0.0, "IAU_MARS", v, d) == dskxsi(ref, false, 499, (), 0.0, "IAU_MARS", v, d), "dskxsi", v, d)
         end
+        @test isempty(fails)
     end
 
     @apart @testset "(f) the DLA segment list" begin

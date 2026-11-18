@@ -997,21 +997,23 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
                 ("CALENDAR", "JULIAN"), ("ZONE", "UTC-3"), ("CALENDAR", "MIXED"), ("SYSTEM", "TDB"),
                 ("SYSTEM", "UTC"), ("CALENDAR", "gregorian"), ("ZONE", "UTC+0"),
             ]
+            fails = Failures()
             for (item, value) in settings
                 SPICE.timdef("SET", item, value)
                 timdef(ctx, "SET", item, value)
                 for it in ("CALENDAR", "SYSTEM", "ZONE")
-                    @test timdef(ctx, "GET", it) == SPICE.timdef("GET", it)
+                    check!(fails, timdef(ctx, "GET", it) == SPICE.timdef("GET", it), "timdef GET", item, value, it)
                 end
                 label = string(item, '=', value, ", ", timdef(ctx, "GET", "CALENDAR"))
                 r = compare_outcomes("str2et with " * label, strings, SPICE.str2et, s -> str2et(ctx, s))
-                @test r.mixed == 0 && r.unequal == 0 && r.both > 100
+                check!(fails, r.mixed == 0 && r.unequal == 0 && r.both > 100, "str2et outcomes", label)
                 r = compare_outcomes(
                     "timout with " * label, cases, c -> SPICE.timout(c[1], c[2], 256),
                     c -> timout(ctx, c...)
                 )
-                @test r.mixed == 0 && r.unequal == 0 && r.both == length(cases)
+                check!(fails, r.mixed == 0 && r.unequal == 0 && r.both == length(cases), "timout outcomes", label)
             end
+            @test isempty(fails)
             for (item, value) in (
                     ("SYSTEM", "TAI"), ("ZONE", "XYZ"), ("ZONE", "UTC+13"), ("ZONE", "UTC"),
                     ("CALENDAR", "ROMAN"), ("EPOCH", "J2000"), ("SYSTEM", ""),
@@ -1034,16 +1036,18 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             # `tsetyr`: the interval of the years of two digits, for one context only.
             yctx = neo_context([Kernels.LSK])
             try
+                fails = Failures()
                 for bound in (1969, 1980, 2000, 1950, 2101, 1)
                     SPICE.tsetyr(bound)
                     tsetyr(yctx, bound)
                     for yy in (0, 1, 49, 50, 68, 69, 79, 80, 99)
                         str = "$(lpad(yy, 2, '0')) Mar 4 05:06:07"
-                        @test str2et(yctx, str) == SPICE.str2et(str)
-                        @test utc2et(yctx, str) == SPICE.utc2et(str)
+                        check!(fails, str2et(yctx, str) == SPICE.str2et(str), "str2et", bound, str)
+                        check!(fails, utc2et(yctx, str) == SPICE.utc2et(str), "utc2et", bound, str)
                     end
-                    @test str2et(yctx, "105 A.D. Jan 1") == SPICE.str2et("105 A.D. Jan 1")    # not abbreviated
+                    check!(fails, str2et(yctx, "105 A.D. Jan 1") == SPICE.str2et("105 A.D. Jan 1"), "str2et not abbreviated", bound)
                 end
+                @test isempty(fails)
                 # The `@` dates of a text kernel loaded afterwards take the same interval,
                 # and the reader accepts and rejects the strings that `tparse_` does.
                 kdates = [
@@ -1057,13 +1061,15 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
                 catch
                     :rejected
                 end
+                fails = Failures()
                 for bound in (1969, 1950, 2000), s in kdates
                     SPICE.tsetyr(bound)
                     tsetyr(yctx, bound)
                     line = ["YB_DATE = @$s"]
                     want = kdate(() -> (oracle_unchecked(SPICE.lmpool, line); SPICE.gdpool("YB_DATE")))
-                    @test kdate(() -> (lmpool(yctx, line); gdpool(yctx, "YB_DATE"))) == want
+                    check!(fails, kdate(() -> (lmpool(yctx, line); gdpool(yctx, "YB_DATE"))) == want, "@ date", bound, s)
                 end
+                @test isempty(fails)
                 mktempdir() do dir
                     tk = joinpath(dir, "yb.tk")
                     write(tk, "\\begindata\nYB_FILE = ( @60-JAN-1, @7-JUL-68 )\n\\begintext\n")

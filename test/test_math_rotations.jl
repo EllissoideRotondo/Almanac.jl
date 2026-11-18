@@ -72,6 +72,7 @@ group("13. math: rotations") do
     end
 
     @apart @testset "Euler angles" begin
+        fails = Failures()
         for _ in 1:n
             a3, a2, a1 = rang(), rang(), rang()
             rand(rng) < 0.15 && (a2 = rand(rng, (0.0, pi, -pi, pi / 2, -pi / 2)))
@@ -85,7 +86,7 @@ group("13. math: rotations") do
                 r2 = CS.eul2m(a3, a2, a1, ax...)
                 versus!(t, :m2eul, () -> m2eul(r2, ax...), () -> CS.m2eul(r2, ax...))
                 back = eul2m(m2eul(r2, ax...)..., ax...)
-                @test maximum(abs, back - r2) <= euler_roundtrip_limit(a2, ax)
+                within!(fails, maximum(abs, back - r2), euler_roundtrip_limit(a2, ax), "eul2m(m2eul(r)) = r", a3, a2, a1, ax)
             end
             e = SVector(a3, a2, a1, randn(rng), randn(rng), randn(rng))
             # `eul2xf_` reads a table with an axis number outside 1:3 before its
@@ -97,11 +98,12 @@ group("13. math: rotations") do
             if axv[2] != axv[1] && axv[2] != axv[3]
                 versus!(t, :xf2eul, () -> xf2eul(x, axv...), () -> CS.xf2eul(x, axv...))
                 e2, unique = xf2eul(x, axv...)
-                @test !unique || maximum(abs, eul2xf(e2, axv...) - x) < 1.0e-9 * max(1.0, maximum(abs, x))
+                check!(fails, !unique || maximum(abs, eul2xf(e2, axv...) - x) < 1.0e-9 * max(1.0, maximum(abs, x)), "eul2xf(xf2eul(x)) = x", e, axv)
             end
             xr = Matrix(CS.rav2xf(rmat(), randn(rng, 3)))
             versus!(t, :xf2eul, () -> xf2eul(xr, ax...), () -> CS.xf2eul(xr, ax...))
         end
+        @test isempty(fails)
         # Fixed cases of the round trip near the degenerate middle angle (see
         # `euler_roundtrip_limit`): the error is far above rounding, it is inside the
         # limit, and CSPICE has the same error.
@@ -129,6 +131,7 @@ group("13. math: rotations") do
     end
 
     @apart @testset "axis and angle, quaternions" begin
+        fails = Failures()
         for _ in 1:n
             ax = rvec(rng)
             th = 20 * rand(rng) - 10
@@ -150,17 +153,18 @@ group("13. math: rotations") do
             versus!(t, :xf2rav, () -> xf2rav(x), () -> CS.xf2rav(x))
             # round trips on a true rotation
             rr = Matrix(rrot(rng))
-            @test maximum(abs, q2m(m2q(rr)) - rr) < 1.0e-14
+            check!(fails, maximum(abs, q2m(m2q(rr)) - rr) < 1.0e-14, "q2m(m2q(r)) = r", rr)
             axis, angle = raxisa(rr)
-            @test maximum(abs, axisar(axis, angle) - rr) < 1.0e-14
-            @test 0.0 <= angle <= pi
+            check!(fails, maximum(abs, axisar(axis, angle) - rr) < 1.0e-14, "axisar(raxisa(r)) = r", rr)
+            check!(fails, 0.0 <= angle <= pi, "raxisa angle in [0, pi]", rr)
             w = randn(rng, 3)
             r2, w2 = xf2rav(rav2xf(rr, w))
-            @test r2 == rr && maximum(abs, w2 - w) < 1.0e-14
-            @test abs(vnormg(m2q(rr)) - 1.0) < 4eps() && m2q(rr)[1] >= 0.0
+            check!(fails, r2 == rr && maximum(abs, w2 - w) < 1.0e-14, "xf2rav(rav2xf(r, w)) = (r, w)", rr, w)
+            check!(fails, abs(vnormg(m2q(rr)) - 1.0) < 4eps() && m2q(rr)[1] >= 0.0, "m2q unit, scalar part >= 0", rr)
             qa, qb = m2q(rr), m2q(rrot(rng))
-            @test maximum(abs, q2m(qxq(qa, qb)) - q2m(qa) * q2m(qb)) < 1.0e-14
+            check!(fails, maximum(abs, q2m(qxq(qa, qb)) - q2m(qa) * q2m(qb)) < 1.0e-14, "q2m(qxq(a, b)) = q2m(a) q2m(b)", qa, qb)
         end
+        @test isempty(fails)
         for r in specials
             versus!(t, :m2q, () -> m2q(r), () -> CS.m2q(r))
             versus!(t, :raxisa, () -> raxisa(r), () -> CS.raxisa(r))

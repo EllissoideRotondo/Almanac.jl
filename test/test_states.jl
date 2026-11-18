@@ -67,33 +67,35 @@ group("1. states against CSPICE", Kernels.FULL_SET_FILES...) do
             ("SUN", 10, "MOON", 301), ("EARTH BARYCENTER", 3, "SOLAR SYSTEM BARYCENTER", 0),
             ("JUPITER BARYCENTER", 5, "VENUS", 299), ("MERCURY", 199, "EMB", 3),
         ]
+        fails = Failures()
         for (tn, ti, on, oi) in named, et in epochs
             byid = spkezr(ctx, ti, et, "J2000", "NONE", oi)
             # Name form, integer-ID form, integer-string form, integer frame ID and a
             # name with other case and blanks: one and the same answer, bit for bit.
-            @test spkezr(ctx, tn, et, "J2000", "NONE", on) == byid
-            @test spkezr(ctx, string(ti), et, "J2000", "NONE", string(oi)) == byid
-            @test spkezr(ctx, ti, et, 1, "NONE", oi) == byid
-            @test spkezr(ctx, "  " * lowercase(tn) * " ", et, "j2000", "NONE", on) == byid
+            check!(fails, spkezr(ctx, tn, et, "J2000", "NONE", on) == byid, "spkezr by name", tn, on, et)
+            check!(fails, spkezr(ctx, string(ti), et, "J2000", "NONE", string(oi)) == byid, "spkezr by integer string", tn, on, et)
+            check!(fails, spkezr(ctx, ti, et, 1, "NONE", oi) == byid, "spkezr by frame ID", tn, on, et)
+            check!(fails, spkezr(ctx, "  " * lowercase(tn) * " ", et, "j2000", "NONE", on) == byid, "spkezr lower case", tn, on, et)
             # spkpos is the position part with the same light time.
             pos, lt = spkpos(ctx, tn, et, "J2000", "NONE", on)
-            @test pos == byid[1][SOneTo(3)]
-            @test lt == byid[2]
-            @test spkpos(ctx, ti, et, 1, "NONE", oi) == (pos, lt)
+            check!(fails, pos == byid[1][SOneTo(3)], "spkpos position", tn, on, et)
+            check!(fails, lt == byid[2], "spkpos light time", tn, on, et)
+            check!(fails, spkpos(ctx, ti, et, 1, "NONE", oi) == (pos, lt), "spkpos by ID", tn, on, et)
             # spkgeo is the same geometric state.
-            @test spkgeo(ctx, ti, et, "J2000", oi) == byid
+            check!(fails, spkgeo(ctx, ti, et, "J2000", oi) == byid, "spkgeo", tn, on, et)
             # CSPICE answers for the name form and for spkpos and spkgeo.
             cstate, clt = SPICE.spkezr(tn, et, "J2000", "NONE", on)
-            @test isapprox(byid[1], cstate; rtol = 1.0e-13)
-            @test isapprox(lt, clt; rtol = 1.0e-13)
+            check!(fails, isapprox(byid[1], cstate; rtol = 1.0e-13), "CSPICE spkezr state", tn, on, et)
+            check!(fails, isapprox(lt, clt; rtol = 1.0e-13), "CSPICE spkezr light time", tn, on, et)
             cpos, cplt = SPICE.spkpos(tn, et, "J2000", "NONE", on)
-            @test isapprox(pos, cpos; rtol = 1.0e-13)
+            check!(fails, isapprox(pos, cpos; rtol = 1.0e-13), "CSPICE spkpos", tn, on, et)
             cgeo, cglt = SPICE.spkgeo(ti, et, "J2000", oi)
-            @test isapprox(spkgeo(ctx, ti, et, "J2000", oi)[1], cgeo; rtol = 1.0e-13)
-            @test isapprox(lt, cglt; rtol = 1.0e-13)
+            check!(fails, isapprox(spkgeo(ctx, ti, et, "J2000", oi)[1], cgeo; rtol = 1.0e-13), "CSPICE spkgeo", tn, on, et)
+            check!(fails, isapprox(lt, cglt; rtol = 1.0e-13), "CSPICE spkgeo light time", tn, on, et)
             # Light time is the one-way time |r|/c.
-            @test isapprox(lt, norm(pos) / 299792.458; rtol = 4eps())
+            check!(fails, isapprox(lt, norm(pos) / 299792.458; rtol = 4eps()), "lt = |r| / c", tn, on, et)
         end
+        @test isempty(fails)
         # The result types are the ones the contract gives.
         state, lt = spkezr(ctx, 301, 0.0, "J2000", "NONE", 399)
         @test state isa SVector{6, Float64}
@@ -106,31 +108,33 @@ group("1. states against CSPICE", Kernels.FULL_SET_FILES...) do
     @apart @testset "default context" begin
         kclear()
         foreach(furnsh, set)
+        fails = Failures()
         for et in random_epochs(rng, 10, DE440S_COVERAGE...)
-            @test spkezr("MOON", et, "J2000", "NONE", "EARTH") ==
-                spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")
-            @test spkpos(301, et, "IAU_EARTH", "NONE", 399) ==
-                spkpos(ctx, 301, et, "IAU_EARTH", "NONE", 399)
+            check!(fails, spkezr("MOON", et, "J2000", "NONE", "EARTH") == spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH"), "spkezr default context", et)
+            check!(fails, spkpos(301, et, "IAU_EARTH", "NONE", 399) == spkpos(ctx, 301, et, "IAU_EARTH", "NONE", 399), "spkpos default context", et)
         end
+        @test isempty(fails)
         kclear()
     end
 
     @apart @testset "spkez, spkezp and spkgps against CSPICE" begin
         # spkez and spkezp are spkezr and spkpos with integer IDs; spkgps is the position
         # of spkgeo. The frames and corrections are those of the test sets above.
+        fails = Failures()
         for et in random_epochs(rng, nsample(2, 20), DE440S_COVERAGE...),
                 (t, o, ref, abcorr) in ((301, 399, "IAU_EARTH", "LT+S"), (5, 3, "ECLIPJ2000", "XCN+S"))
             s, lt = spkez(ctx, t, et, ref, abcorr, o)
-            @test (s, lt) == spkezr(ctx, t, et, ref, abcorr, o)
-            @test spkezp(ctx, t, et, ref, abcorr, o) == spkpos(ctx, t, et, ref, abcorr, o)
+            check!(fails, (s, lt) == spkezr(ctx, t, et, ref, abcorr, o), "spkez == spkezr", t, o, et)
+            check!(fails, spkezp(ctx, t, et, ref, abcorr, o) == spkpos(ctx, t, et, ref, abcorr, o), "spkezp == spkpos", t, o, et)
             cs, clt = SPICE.spkez(t, et, ref, abcorr, o)
-            @test isapprox(s, cs; rtol = 1.0e-13) && isapprox(lt, clt; rtol = 1.0e-13)
+            check!(fails, isapprox(s, cs; rtol = 1.0e-13) && isapprox(lt, clt; rtol = 1.0e-13), "CSPICE spkez", t, o, et)
             p, plt = spkgps(ctx, t, et, ref, o)
             g, glt = spkgeo(ctx, t, et, ref, o)
-            @test p == g[SOneTo(3)] && plt == glt
+            check!(fails, p == g[SOneTo(3)] && plt == glt, "spkgps == spkgeo", t, o, et)
             cp, cplt = SPICE.spkgps(t, et, ref, o)
-            @test isapprox(p, cp; rtol = 1.0e-13) && isapprox(plt, cplt; rtol = 1.0e-13)
+            check!(fails, isapprox(p, cp; rtol = 1.0e-13) && isapprox(plt, cplt; rtol = 1.0e-13), "CSPICE spkgps", t, o, et)
         end
+        @test isempty(fails)
         # A body relative to itself: zero before the frame is checked, as in CSPICE.
         @test spkgps(ctx, 399, 0.0, "NOSUCH", 399) == (zero(SVector{3, Float64}), 0.0)
         @test SPICE.spkgps(399, 0.0, "NOSUCH", 399) == ([0.0, 0.0, 0.0], 0.0)

@@ -51,6 +51,7 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
     end
 
     @testset "gftfov: the Moon in a camera fixed in J2000" begin
+        fails = Failures()
         camera_base!("J2000")
         n = 0
         i = 0
@@ -71,9 +72,10 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
                 () -> GFO.gftfov(inst, "MOON", tshape, tframe, corr, "EARTH", step, collect(cn))
             )
             ok || @info "gftfov case" inst corr tshape t0 step cn
-            @test all(t -> wnelmd(cn, t), w)
+            check!(fails, all(t -> wnelmd(cn, t), w), "gftfov inside the confinement window", inst, corr, tshape, t0, step)
             n += 1
         end
+        @test isempty(fails)
         @test n == gf_npick(7 * 9 * 2, 3)
         # two searches in three find the Moon
         @test length(found) == 2 && all(found[k] >= (40 * n) ÷ 126 for k in keys(found))
@@ -136,6 +138,7 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
     end
 
     @testset "gfrfov: a ray fixed to the Earth, a camera fixed in J2000" begin
+        fails = Failures()
         camera_base!("J2000")
         i = 0
         n = 0
@@ -154,8 +157,9 @@ isdefined(@__MODULE__, :GEOLIB) || include("geomfixtures.jl")
                 () -> GFO.gfrfov(inst, ray, "IAU_EARTH", corr, "EARTH", 60.0, collect(cn))
             )
             ok || @info "gfrfov case" inst corr ray t0 cn
-            @test all(t -> wnelmd(cn, t), w)
+            check!(fails, all(t -> wnelmd(cn, t), w), "gfrfov inside the confinement window", inst, corr, ray, t0)
         end
+        @test isempty(fails)
         @test n == gf_npick(42, 4)
         @test found["gfrfov Earth-fixed ray, J2000 camera"] >= n
         measured(

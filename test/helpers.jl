@@ -149,6 +149,51 @@ function measured(line::AbstractString)
 end
 
 """
+    Failures()
+
+The failed checks of a sampling loop. The loop calls `check!` or `within!` for each
+sample, and one `@test isempty(f)` after the loop takes the place of an assertion per
+sample; when it fails, the test prints the count and the first failures with their
+inputs.
+"""
+struct Failures
+    list::Vector{String}
+    count::Base.RefValue{Int}
+end
+Failures() = Failures(String[], Ref(0))
+Base.isempty(f::Failures) = f.count[] == 0
+function Base.show(io::IO, f::Failures)
+    print(io, "Failures(", f.count[], ")")
+    for line in f.list
+        print(io, "\n  ", line)
+    end
+    return nothing
+end
+
+"""
+    check!(f::Failures, ok, label, inputs...) -> ok
+
+Record `label` with `inputs` in `f` unless `ok` is `true`. The first 10 failures are kept.
+"""
+function check!(f::Failures, ok::Bool, label, inputs...)
+    if !ok
+        f.count[] += 1
+        length(f.list) < 10 && push!(f.list, string(label, isempty(inputs) ? "" : ": ", join(inputs, ", ")))
+    end
+    return ok
+end
+
+"""
+    within!(f::Failures, x, tol, label, inputs...) -> x
+
+`check!` of `x <= tol` (a NaN fails); the value `x` is returned for a running maximum.
+"""
+function within!(f::Failures, x::Real, tol::Real, label, inputs...)
+    check!(f, x <= tol, label, "$x > $tol", inputs...)
+    return x
+end
+
+"""
     group(body, name, kernels...)
 
 Run `body()` inside `@testset name`, or print a skip notice if one of `kernels` is not

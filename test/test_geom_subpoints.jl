@@ -47,6 +47,7 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
     @testset "subpnt and subslr on ellipsoids, 600 random cases" begin
         st = GeoStats()
         nslr = 0
+        fails = Failures()
         for k in 1:600
             t = rand(rng, GEO_BODIES)
             o = rand(rng, setdiff(GEO_BODIES, [t]))
@@ -62,7 +63,7 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
             if k % 10 == 0
                 # The forms with IDs and a parsed correction give the same values.
                 c = subpnt(ctx, m, GEO_IDS[t], et, namfrm(ctx, fix), Aberration(cor), GEO_IDS[o])
-                @test c == a
+                check!(fails, c == a, "subpnt by id and Aberration", k, m, t, et, fix, cor, o)
             end
             (t == "SUN" || startswith(cor, "X")) && continue
             nslr += 1
@@ -72,6 +73,7 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
             gput!(st, "subslr trgepc (s)", abs(a[2] - b[2]))
             gput!(st, "subslr srfvec", grel(a[3], b[3]))
         end
+        @test isempty(fails)
         greport("ellipsoid", st)
         @test nslr > 200
         @test gget(st, "subpnt spoint") < SUB_TOL.point
@@ -334,14 +336,16 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
         ks = Almanac.kernelset(ctx)
         et = 2.5e8
         dv = SVector{3, Float64}(spkpos(ctx, 301, et, 1, "LT+S", 399)[1])
+        fails = Failures()
         for c in ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT+S", "XCN")
-            @test gwarm(sub_alloc_pnt, ks, "NEAR POINT/ELLIPSOID", et, c) == 0
-            @test gwarm(sub_alloc_pnt, ks, "INTERCEPT/ELLIPSOID", et, c) == 0
-            @test gwarm(sub_alloc_int, ks, et, c, dv) == 0
+            check!(fails, gwarm(sub_alloc_pnt, ks, "NEAR POINT/ELLIPSOID", et, c) == 0, "subpnt near point allocates", c)
+            check!(fails, gwarm(sub_alloc_pnt, ks, "INTERCEPT/ELLIPSOID", et, c) == 0, "subpnt intercept allocates", c)
+            check!(fails, gwarm(sub_alloc_int, ks, et, c, dv) == 0, "sincpt allocates", c)
             startswith(c, "X") && continue
-            @test gwarm(sub_alloc_slr, ks, "NEAR POINT/ELLIPSOID", et, c) == 0
-            @test gwarm(sub_alloc_slr, ks, "INTERCEPT/ELLIPSOID", et, c) == 0
+            check!(fails, gwarm(sub_alloc_slr, ks, "NEAR POINT/ELLIPSOID", et, c) == 0, "subslr near point allocates", c)
+            check!(fails, gwarm(sub_alloc_slr, ks, "INTERCEPT/ELLIPSOID", et, c) == 0, "subslr intercept allocates", c)
         end
+        @test isempty(fails)
         @test gwarm(sub_alloc_rec, ks) == 0
         T3 = Tuple{SVector{3, Float64}, Float64, SVector{3, Float64}}
         @test (@inferred subpnt(ks, "NEAR POINT/ELLIPSOID", 301, et, 10020, "CN+S", 399)) isa T3
@@ -356,6 +360,7 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
         ks = Almanac.kernelset(ctx)
         st = GeoStats()
         h = 20.0
+        fails = Failures()
         for et in record_safe_epochs(rng, nsample(6, 24))
             for cor in ("NONE", "LT", "LT+S", "CN+S", "XCN+S")
                 dv = SVector{3, Float64}(spkpos(ctx, 301, et, 1, cor, 399)[1]) + SVector(300.0, -200.0, 100.0)
@@ -371,15 +376,16 @@ sub_alloc_rec(ks) = @allocated srfrec(ks, 301, 0.1, 0.2)
                 )
                 for (name, f) in fs
                     d = f(ForwardDiff.Dual(et, 1.0))
-                    @test isapprox(ForwardDiff.value.(d), f(et); rtol = 1.0e-12)
+                    check!(fails, isapprox(ForwardDiff.value.(d), f(et); rtol = 1.0e-12), "dual value", name, et, cor)
                     fd = geo_fd(f, et, h)
                     gput!(st, name, norm(ForwardDiff.partials.(d, 1) .- fd) / norm(fd))
                 end
                 # The epoch at the point follows the light time.
                 te = subpnt(ks, "NEAR POINT/ELLIPSOID", 301, ForwardDiff.Dual(et, 1.0), 10020, cor, 399)[2]
-                @test abs(ForwardDiff.partials(te, 1) - 1.0) < 1.0e-5
+                check!(fails, abs(ForwardDiff.partials(te, 1) - 1.0) < 1.0e-5, "d(trgepc)/dt = 1", et, cor)
             end
         end
+        @test isempty(fails)
         greport("dual epoch against central difference", st)
         for k in keys(st.d)
             @test st.d[k] < 1.0e-4

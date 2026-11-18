@@ -149,16 +149,17 @@ function ekw_read_check(path, segs::Vector{EKSegSpec})
     bad = 0
     try
         @test eknseg(hn) == c_eknseg(hc) == length(segs)
+        fails = Failures()
         for (segno, seg) in enumerate(segs)
             sc = c_ekssum(hc, segno)
             sn = ekssum(hn, segno)
-            @test sn.tabnam == sc.tabnam == seg.table
-            @test sn.nrows == sc.nrows == length(seg.rows)
-            @test sn.cnames == sc.cnames == [c.name for c in seg.cols]
-            @test sc.dtypes == [c.dtype for c in seg.cols]
-            @test sc.sizes == [c.size for c in seg.cols]
-            @test sc.indexd == [c.indexed for c in seg.cols]
-            @test sc.nullok == [c.nullok for c in seg.cols]
+            check!(fails, sn.tabnam == sc.tabnam == seg.table, "ekssum table name", segno)
+            check!(fails, sn.nrows == sc.nrows == length(seg.rows), "ekssum row count", segno)
+            check!(fails, sn.cnames == sc.cnames == [c.name for c in seg.cols], "ekssum column names", segno)
+            check!(fails, sc.dtypes == [c.dtype for c in seg.cols], "ekssum data types", segno)
+            check!(fails, sc.sizes == [c.size for c in seg.cols], "ekssum sizes", segno)
+            check!(fails, sc.indexd == [c.indexed for c in seg.cols], "ekssum indexed", segno)
+            check!(fails, sc.nullok == [c.nullok for c in seg.cols], "ekssum null flags", segno)
             for (c, col) in enumerate(seg.cols), (r, row) in enumerate(seg.rows)
                 got, ref = if col.dtype === :CHR
                     ekrcec(hn, segno, r, col.name), c_ekrcec(
@@ -175,6 +176,7 @@ function ekw_read_check(path, segs::Vector{EKSegSpec})
                 (got == ref && ek_entry_equal(col, row[c], ref)) || (bad += 1)
             end
         end
+        @test isempty(fails)
     finally
         c_ekcls(hc)
         ekcls(hn)
@@ -537,6 +539,7 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
     # The index searches of the write layer (`zzekillt`, `zzekille`) count as the model does.
     h = ekopr(path)
     searches = 0
+    fails = Failures()
     for (segno, seg) in enumerate((k1, k2, fx)), (c, key) in (
                 (1, 150), (1, 0), (1, 301), (3, -3.0),
                 (3, 2.5e3), (2, "beta"), (2, "a"), (2, "~"), (4, 0.0),
@@ -547,10 +550,11 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
         vals = [r[c][1] for r in seg.rows if r[c] !== nothing]
         nnull = length(seg.rows) - length(vals)
         key isa String && (vals = [String(rstrip(v)) for v in vals])
-        @test Almanac._ekw_illt(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<(key), vals)
-        @test Almanac._ekw_ille(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<=(key), vals)
+        check!(fails, Almanac._ekw_illt(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<(key), vals), "_ekw_illt", segno, c, key)
+        check!(fails, Almanac._ekw_ille(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<=(key), vals), "_ekw_ille", segno, c, key)
         searches += 2
     end
+    @test isempty(fails)
     @test neo_kind(() -> Almanac._ekw_illt(h, h.ints[1:24], h.ints[1:11], 0, 1)) === :invalidsize
     ekcls(h)
     SPICE.kclear()
@@ -984,9 +988,7 @@ group("EK write: input checks give the errors of CSPICE") do
         kc = oracle ? c_kind(EKWCall(EKW_C[fname], handle ? (hc, args...) : args)) : expect
         kn = neo_kind(EKWCall(EKW_N[fname], handle ? (hn, args...) : args))
         (kc == kn && kc !== nothing) || push!(mismatch, "$name: CSPICE $kc, Almanac $kn")
-        @test kc == kn
-        @test kc !== nothing
-        expect === nothing || @test kn === expect
+        @test kc == kn && kc !== nothing && (expect === nothing || kn === expect)
         return checked += 1
     end
     one = ["DATATYPE = INTEGER"]

@@ -43,15 +43,18 @@ using ForwardDiff, LinearAlgebra, StaticArrays
         # in position and 4e-12 km/s in velocity measured; the bounds are twice that.
         ap, av, al = 4 * eps(1.6e8), 1.0e-11, 4 * eps(1.6e8) / Almanac.CLIGHT
         ets = range(t0 + 1000, t1 - 1000; length = 7)
+        fails = Failures()
         for corr in ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT", "XLT+S", "XCN+S"),
                 ref in ("J2000", "ECLIPJ2000", "IAU_EARTH"), (targ, obs) in ((-1000, 399), (399, -1000))
             for et in ets
                 a, la = spkezr(file, targ, et, ref, corr, obs)
                 b, lb = spkezr(prov, targ, et, ref, corr, obs)
-                @test maximum(abs, b[1:3] - a[1:3]) <= ap && maximum(abs, b[4:6] - a[4:6]) <= av &&
+                agree = maximum(abs, b[1:3] - a[1:3]) <= ap && maximum(abs, b[4:6] - a[4:6]) <= av &&
                     abs(lb - la) <= al
+                check!(fails, agree, "provider state", corr, ref, targ, obs, et)
             end
         end
+        @test isempty(fails)
         @test spkpos(prov, -1000, 10.0, "J2000", "NONE", 399)[1] ≈ probe(10.0)[1:3] rtol = 1.0e-15
         @test spkgeo(prov, -1000, 10.0, "J2000", 0)[1] ≈ probe(10.0) + earth(10.0) rtol = 1.0e-15
         # order 2 and 3 through Taylor numbers: the velocity is constant

@@ -848,32 +848,35 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
     end
 
     ek_part("hand-written queries against CSPICE") do
+        fails = Failures()
         for q in EK_HAND_QUERIES
             r = ek_compare_query(ctx, q)
             record(r.cerr ? "hand-written, invalid" : "hand-written, valid", q, r)
-            @test r.compat
-            @test r.cerr == r.nerr
-            @test r.msgsame
-            r.compat && !r.default && @test ek_defect_possible(q)
+            check!(fails, r.compat, "differs in compatibility mode", q)
+            check!(fails, r.cerr == r.nerr, "error in one engine only", q)
+            check!(fails, r.msgsame, "other error message", q)
+            r.compat && !r.default && check!(fails, ek_defect_possible(q), "differs, and no defect applies", q)
         end
+        @test isempty(fails)
     end
 
     ek_part("generated queries against CSPICE and against the model") do
         badmodel = 0
+        fails = Failures()
         for g in generated
             r = ek_compare_query(ctx, g.text)
             if r.signal !== nothing
                 # A query that CSPICE cannot encode (seen: NOT over a BETWEEN with times
                 # fills its buffer of numbers); both engines raise the same error.
                 record("generated, error signalled", g.text, r)
-                @test r.compat
+                check!(fails, r.compat, "signalled error differs", g.text)
                 continue
             end
             record("generated, " * g.kind, g.text, r)
-            @test r.compat
-            @test !r.nerr
+            check!(fails, r.compat, "differs in compatibility mode", g.text)
+            check!(fails, !r.nerr, "Almanac error", g.text)
             r.nerr && (println("  unexpected error: ", g.text, "\n     ", r.nmsg); continue)
-            r.compat && !r.default && @test ek_defect_possible(g.text)
+            r.compat && !r.default && check!(fails, ek_defect_possible(g.text), "differs, and no defect applies", g.text)
             expect = ekq_expected(g)
             ok = ekq_rowkeys(expect) == ekq_rowkeys(r.values)
             if !ok
@@ -884,6 +887,7 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
                 )
             end
         end
+        @test isempty(fails)
         @test badmodel == 0
     end
 
@@ -999,10 +1003,12 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         # An element after the last one is "not found" in both engines (for a scalar column
         # CSPICE does not look at the element number).
         @test ekgi(res, 1, 1, 2) == c_ekgi(1, 1, 2)
+        fails = Failures()
         for row in 1:n
             k = eknelt(res, 5, row)
-            @test ekgi(res, 5, row, k + 1)[2:3] == c_ekgi(5, row, k + 1)[2:3]
+            check!(fails, ekgi(res, 5, row, k + 1)[2:3] == c_ekgi(5, row, k + 1)[2:3], "ekgi after the last element", row)
         end
+        @test isempty(fails)
         # A time column is read with ekgd.
         @test ekgd(res, 4, 1) == c_ekgd(4, 1)
         # The whole column in one call.

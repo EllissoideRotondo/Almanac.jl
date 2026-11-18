@@ -75,13 +75,15 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         )
         with_objects || @testset "frinfo" begin
             nfound = 0
+            fails = Failures()
             for id in frames
                 want = SPICE.frinfo(id)
                 got = frinfo(ctx, id)
                 got == want || @info "frinfo" id got want
-                @test got == want
+                check!(fails, got == want, "frinfo", id)
                 want === nothing || (nfound += 1)
             end
+            @test isempty(fails)
             println("  frinfo: ", length(frames), " frame IDs, ", nfound, " found")
             @test nfound > 150
             @test (@inferred Union{Nothing, NTuple{3, Int}} frinfo(ctx, 13000)) == SPICE.frinfo(13000)
@@ -96,11 +98,12 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 ]
             )
             nfound = 0
+            fails = Failures()
             for b in bodies
                 want = SPICE.cidfrm(b)
                 got = cidfrm(ctx, b)
                 got == want || @info "cidfrm" b got want
-                @test got == want
+                check!(fails, got == want, "cidfrm", b)
                 want === nothing || (nfound += 1)
             end
             println("  cidfrm: ", length(bodies), " bodies, ", nfound, " found")
@@ -114,19 +117,21 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 want = SPICE.cnmfrm(n)
                 got = cnmfrm(ctx, n)
                 got == want || @info "cnmfrm" n got want
-                @test got == want
+                check!(fails, got == want, "cnmfrm", n)
             end
+            @test isempty(fails)
         end
 
         with_objects || @testset "ccifrm" begin
             n = 0
+            fails = Failures()
             for id in frames
                 info = SPICE.frinfo(id)
                 info === nothing && continue
                 want = SPICE.ccifrm(info[2], info[3])
                 got = ccifrm(ctx, info[2], info[3])
                 got == want || @info "ccifrm" id info got want
-                @test got == want
+                check!(fails, got == want, "ccifrm", id)
                 n += 1
             end
             for (c, k) in (
@@ -136,8 +141,9 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 want = SPICE.ccifrm(c, k)
                 got = ccifrm(ctx, c, k)
                 got == want || @info "ccifrm" c k got want
-                @test got == want
+                check!(fails, got == want, "ccifrm by class", c, k)
             end
+            @test isempty(fails)
             println("  ccifrm: ", n, " (class, class ID) pairs of loaded frames")
         end
 
@@ -332,17 +338,19 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
 
     @apart @testset "bodfnd and bodvcd" begin
         n = 0
+        fails = Failures()
         for body in (399, 301, 499, 10, 599, 1, 3, 9, -77, 2000004, 606),
                 item in (
                     "RADII", "PM", "POLE_RA", "POLE_DEC", "GM", "NUT_PREC_RA", "LONG_AXIS",
                     "radii", "NOTHING", "NUT_PREC_ANGLES", "MAX_PHASE_DEGREE",
                 )
             want = SPICE.bodfnd(body, item)
-            @test bodfnd(ctx, body, item) == want
+            check!(fails, bodfnd(ctx, body, item) == want, "bodfnd", body, item)
             want || continue
-            @test bodvcd(ctx, body, item) == SPICE.bodvcd(body, item)
+            check!(fails, bodvcd(ctx, body, item) == SPICE.bodvcd(body, item), "bodvcd", body, item)
             n += 1
         end
+        @test isempty(fails)
         println("  bodvcd: ", n, " items equal to CSPICE")
         @test n > 30
         @test throws_kind(() -> bodvcd(ctx, 399, "NOTHING"), :kernelvarnotfound)
