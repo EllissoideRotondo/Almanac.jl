@@ -300,6 +300,16 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
         @test isempty(inside[])
     end
 
+    @testset "surface names of the back target" begin
+        # CSPICE translates the surface names of the back target with the ID of the front
+        # target (`zzgfocin`); Almanac uses the ID of the back target.
+        hctx = halfway_context(paths)
+        cn = Window([0.0, 30 * 86400.0])
+        a = gfoclt(hctx, "ANY", "-999123", "POINT", " ", "MOON", "DSK/UNPRIORITIZED/SURFACES = 2", "IAU_MOON", "NONE", "EARTH", 3600.0, cn)
+        @test wncard(a) >= 2
+        @test gfoclt(hctx, "ANY", "-999123", "POINT", " ", "MOON", "DSK/UNPRIORITIZED/SURFACES = \"GEO MOON TWO\"", "IAU_MOON", "NONE", "EARTH", 3600.0, cn) == a
+    end
+
     @testset "gfocce: step function and refinement" begin
         t0 = SPICE.str2et("2010 JAN 01")
         cn = Window([t0, t0 + 12 * year])

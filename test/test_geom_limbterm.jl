@@ -188,6 +188,17 @@ end
         total = sum(limbpt(ctx, "TANGENT" * m3, "MOON", et, "IAU_MOON", "NONE", "CENTER", "EARTH", ref, 0.01, 4, 1.0e-4, 1.0e-9, 400)[1])
         @test total >= 2
         @test neo_kind(() -> limbpt(ctx, "TANGENT" * m3, "MOON", et, "IAU_MOON", "NONE", "CENTER", "EARTH", ref, 0.01, 4, 1.0e-4, 1.0e-9, total - 1)) == :outofroom
+        # `termpt_c` takes n² of the room for a half plane of n points; Almanac takes n, so
+        # a `maxn` equal to the number of points is enough. The light source is the Earth:
+        # with the Sun, whose rays are almost parallel, each half plane has one point.
+        um = "UMBRAL/TANGENT" * m3
+        r = termpt(ctx, um, "EARTH", "MOON", et, "IAU_MOON", "NONE", "CENTER", "SUN", ref, 0.01, 4, 1.0e-4, 1.0e-9, 400)
+        n = sum(r[1])
+        @test maximum(r[1]) >= 2
+        @test r[1] == g_termpt(um, "EARTH", "MOON", et, "IAU_MOON", "NONE", "CENTER", "SUN", ref, 0.01, 4, 1.0e-4, 1.0e-9, 400)[1]
+        @test termpt(ctx, um, "EARTH", "MOON", et, "IAU_MOON", "NONE", "CENTER", "SUN", ref, 0.01, 4, 1.0e-4, 1.0e-9, n) == r
+        @test neo_kind(() -> termpt(ctx, um, "EARTH", "MOON", et, "IAU_MOON", "NONE", "CENTER", "SUN", ref, 0.01, 4, 1.0e-4, 1.0e-9, n - 1)) === :outofroom
+        @test c_kind(() -> g_termpt(um, "EARTH", "MOON", et, "IAU_MOON", "NONE", "CENTER", "SUN", ref, 0.01, 4, 1.0e-4, 1.0e-9, n)) === :outofroom
     end
 
     @testset "tangpt, 800 random rays" begin

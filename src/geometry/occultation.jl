@@ -430,15 +430,16 @@ end
     )
     front.kind == 0x00 && _geo_occ_bad_shape(fshape)
     back.kind == 0x00 && _geo_occ_bad_shape(bshape)
-    return _geo_occ_roles(ks, tols, front, fshape, fframe, back, bshape, bframe, obs, abcorr, et)
+    return _geo_occ_roles(ks, tols, front, fframe, back, bframe, obs, abcorr, et)
 end
 
 function _geo_occ_roles(
-        ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fshape,
-        fframe, back::_GeoOccBody, bshape, bframe, obs::Int32, abcorr, et::Float64
+        ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fframe,
+        back::_GeoOccBody, bframe, obs::Int32, abcorr, et::Float64
     )
-    bsrf = (back.kind == _GEO_OCC_DSK && !isempty(back.m.srflst)) ?
-        _geo_method(ks, front.id, _geo_occ_upper(bshape)).srflst : back.m.srflst
+    # CSPICE translates the surface names of the back target with the ID of the front
+    # target; the surfaces here are those of the back target.
+    bsrf = back.m.srflst
     (front.kind == _GEO_OCC_POINT && back.kind == _GEO_OCC_POINT) && throw(
         SpiceError(
             :invalidshapecombo, "both targets are points; one target must be extended"
@@ -478,7 +479,9 @@ J2000 TDB), as
 `shape1` and `shape2` are `"ELLIPSOID"`, `"POINT"` or `"DSK/UNPRIORITIZED"`; the DSK
 form can end with `"/SURFACES = <list>"`. At least one target must be extended, and a
 DSK target needs a point as the other target. With a point and an extended target, the
-only codes are 0, ±2 (the point is in front) and ±3 (the point is behind).
+only codes are 0, ±2 (the point is in front) and ±3 (the point is behind). Surface
+names in `shape2` are surfaces of `targ2`; `occult_c` of CSPICE N0067 looks them up as
+surfaces of `targ1`.
 
 `frame1` and `frame2` are the body-fixed frames of the extended targets, each centered
 on its target. The frame of a point target is not used; pass `" "`.

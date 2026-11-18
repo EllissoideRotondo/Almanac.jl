@@ -139,6 +139,22 @@ occ_alloc_ep(ks, et, c) = @allocated occult(ks, 301, "ELLIPSOID", 10020, 10, "PO
         @test codes_dsk == Set([-3, 0, 3])
     end
 
+    @testset "surface names of the back target" begin
+        # CSPICE translates the surface names of the back target with the ID of the front
+        # target (`zzgfocin`, `occult`); Almanac uses the ID of the back target.
+        hctx = halfway_context(paths)
+        byname = "DSK/UNPRIORITIZED/SURFACES = \"GEO MOON TWO\""
+        bynum = "DSK/UNPRIORITIZED/SURFACES = 2"
+        codes = Int[]
+        for k in 0:30
+            et = k * 86400.0
+            a = occult(hctx, "-999123", "POINT", " ", "MOON", bynum, "IAU_MOON", "NONE", "EARTH", et)
+            @test occult(hctx, "-999123", "POINT", " ", "MOON", byname, "IAU_MOON", "NONE", "EARTH", et) == a
+            push!(codes, a)
+        end
+        @test length(unique(codes)) == 2
+    end
+
     @testset "all codes and contacts" begin
         measured("  occult: epochs on a contact where the code differs: $ncontact")
         @test seen == Set(-3:3)

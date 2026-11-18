@@ -741,3 +741,22 @@ function geo_occult_kernels()
     GEO_OCC_PATHS[] = (spk, tk)
     return GEO_OCC_PATHS[]
 end
+
+"""
+    halfway_context(paths) -> SpiceContext
+
+A context with the kernels `paths` and two additions for the surface names of the back
+target of `occult` and `gfoclt`: the body -999123, halfway between the Earth and the
+Moon and 1000 km off along the J2000 x axis, so that from the Earth it crosses the limb
+of the Moon twice a month; and the name `GEO MOON TWO` of surface 2 of the Moon.
+"""
+function halfway_context(paths)
+    ctx = neo_context(paths)
+    add_ephemeris!(ctx, -999123, "EARTH", "J2000", -1.0e8, 1.0e8) do et
+        return 0.5 .* spkgeo(ctx, 301, et, "J2000", 399)[1] .+ SVector(1000.0, 0, 0, 0, 0, 0)
+    end
+    pcpool(ctx, "NAIF_SURFACE_NAME", ["GEO MOON TWO"])
+    pdpool(ctx, "NAIF_SURFACE_CODE", [2.0])
+    pdpool(ctx, "NAIF_SURFACE_BODY", [301.0])
+    return ctx
+end
