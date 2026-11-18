@@ -25,6 +25,8 @@ alloc_sxform(ctx, from, to, et) = @allocated sxform(ctx, from, to, et)
 alloc_pxder(ctx, from, to, et, ::Val{N}) where {N} = @allocated pxder(ctx, from, to, et, Val(N))
 alloc_names(ctx, et) = @allocated spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")
 alloc_pxform_names(ctx, et) = @allocated pxform(ctx, "J2000", "IAU_EARTH", et)
+nalloc_mixed_names(ctx, et) = @allocations spkezr(ctx, "Moon", et, "J2000", "NONE", "Earth")
+nalloc_normalize(s) = @allocations Almanac.normalize_name(s)
 
 "Allocation of the second call of `f(args...)` (the first call compiles)."
 function warm(f, args...)
@@ -77,6 +79,22 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
                 "$(warm(alloc_pxform_names, ctx, et)) bytes"
         )
         @test true
+    end
+
+    @apart @testset "names in mixed case: the ljucrs rule, one String per name" begin
+        nn = Almanac.normalize_name
+        for (s, want) in (
+                ("Earth", "EARTH"), (" solar  System   barycenter ", "SOLAR SYSTEM BARYCENTER"),
+                ("j2000", "J2000"), ("  ", ""), ("", ""), ("MOON", "MOON"), ("Moon ", "MOON"),
+            )
+            @test nn(s) == want
+            @test nn(nn(s)) == want
+        end
+        @test nn("Étoile  x") == "ÉTOILE X"
+        @test bodn2c(ctx, " earth ") == bodn2c(ctx, "Earth") == 399
+        @test warm(nalloc_normalize, "Earth") == 1
+        # Mixed case cost 14 allocations per name before; the normalized names remain.
+        @test warm(nalloc_mixed_names, ctx, et) == 2
     end
 
     @apart @testset "inferred return types" begin

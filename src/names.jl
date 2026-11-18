@@ -723,7 +723,27 @@ function normalize_name(s::AbstractString)::String
         end
     end
     clean && !(prevblank && !isempty(s)) && return String(s)
-    return uppercase(join(split(s, ' '; keepempty = false), ' '))
+    isascii(s) || return uppercase(join(split(s, ' '; keepempty = false), ' '))
+    # ASCII: one pass to size the result and one to fill it, so that a name in mixed
+    # case (the usual "Earth") costs one allocation, the result.
+    cu = codeunits(s)
+    n, gap = 0, false
+    for b in cu
+        b == UInt8(' ') ? (gap = n > 0) : (n += 1 + gap; gap = false)
+    end
+    out = Base._string_n(n)
+    p = pointer(out)
+    i, gap = 0, false
+    GC.@preserve out for b in cu
+        if b == UInt8(' ')
+            gap = i > 0
+        else
+            gap && unsafe_store!(p, UInt8(' '), i += 1)
+            unsafe_store!(p, UInt8('a') <= b <= UInt8('z') ? b - 0x20 : b, i += 1)
+            gap = false
+        end
+    end
+    return out
 end
 
 "Contract: builds the (name => code, code => name) dictionaries of a (code, name) table; a later entry overrides an earlier one in both directions."
