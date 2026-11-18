@@ -37,22 +37,19 @@ using Pkg
 Pkg.add(url="https://github.com/Orbitology/Almanac.jl")
 ```
 
+The Quickstart below also uses
+[SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels)
+(`Pkg.add("SPICEKernels")`) to download the kernels.
+
 ## Quickstart
 
 ```julia
 using Almanac
-using Downloads: download
-
-const LSK = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/lsk/naif0012.tls"
-const SPK = "https://naif.jpl.nasa.gov/pub/naif/generic_kernels/spk/planets/de440s.bsp"
-
-# Download kernels
-download(LSK, "naif0012.tls")
-download(SPK, "de440s.bsp")
+using SPICEKernels  # downloads the NAIF generic kernels and returns their paths
 
 # Load the leap seconds kernel and a planetary ephemeris
-furnsh("naif0012.tls")
-furnsh("de440s.bsp")
+furnsh(naif0012_tls())
+furnsh(de440s())
 
 # Convert the calendar date to ephemeris seconds past J2000
 et = utc2et("2025-03-01T12:00:00")
