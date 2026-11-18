@@ -203,6 +203,7 @@ end
         unload(ctx, "k")
         @test bodn2c(ctx, "MYSAT") === nothing
         @test throws_kind(() -> furnsh(ctx, spkops(); name = "x", bodies = [" " => 1]), :badarg)
+        @test throws_kind(() -> furnsh(ctx, spkops(); name = "x", bodies = ["BIG" => 2^40]), :badarg)
     end
 
     @testset "order: pool, later kernel, earlier kernel, boddef" begin

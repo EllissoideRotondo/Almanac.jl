@@ -74,7 +74,7 @@ definition in this order holds again.
 Throws `SpiceError`:
 
 - `:emptystring` or `:blankfilename` if `name` is empty or blank, `:badarg` if a name of
-  `bodies` is blank;
+  `bodies` is blank or its code is not a 32-bit integer;
 - `:dafnosuchhandle` if `handle` is closed;
 - `:dafinvalidaccess` if `handle` has a file (load the file by its path);
 - `:dafnewconflict` if an array is being added (`dafbna` without `dafena`);
@@ -184,7 +184,8 @@ Throws `SpiceError`:
 
 - `:emptystring` or `:blankfilename` if `path` is empty or blank;
 - `:dafnosuchhandle` if `handle` is closed, `:dafinvalidaccess` if it has a file;
-- `:fileopenfailed` if the file exists or cannot be created.
+- `:fileopenfailed` if the file exists or cannot be created, `:dafwritefail` if the write
+  fails (the file is then removed).
 
 See also [`furnsh`](@ref).
 """
@@ -198,21 +199,29 @@ function save_kernel(h::DAFHandle, path::AbstractString)
         )
     )
     bytes = _daf_bytes(h)
-    try
-        fd = Base.Filesystem.open(
+    fd = try
+        Base.Filesystem.open(
             path, Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL |
                 Base.Filesystem.JL_O_WRONLY, 0o644
         )
-        try
-            write(fd, bytes)
-        finally
-            close(fd)
-        end
     catch e
         throw(
             SpiceError(
                 :fileopenfailed,
                 "save_kernel: attempt to create the new file $path failed: $(sprint(showerror, e))"
+            )
+        )
+    end
+    try
+        write(fd, bytes)
+        close(fd)
+    catch e
+        close(fd)
+        rm(path; force = true)           # no partial file stays behind
+        throw(
+            SpiceError(
+                :dafwritefail,
+                "save_kernel: the write to $path failed: $(sprint(showerror, e))"
             )
         )
     end

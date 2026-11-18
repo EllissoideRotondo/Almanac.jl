@@ -55,14 +55,18 @@ end
 
 Contract: the pairs `name => code` of the iterable `bodies` as a vector of name and code,
 with the blanks around each name removed. Throws `SpiceError(:badarg)` for a blank name,
-as [`boddef`](@ref) does.
+as [`boddef`](@ref) does, and for a code that is not a 32-bit integer.
 """
 function _kernel_bodies(who::AbstractString, bodies)
     out = Tuple{String, Int32}[]
     for p in bodies
         nm = String(strip(first(p)))
         isempty(nm) && throw(SpiceError(:badarg, "$who: a body name of `bodies` is blank"))
-        push!(out, (nm, Int32(last(p))))
+        code = last(p)
+        (code isa Integer && typemin(Int32) <= code <= typemax(Int32)) || throw(
+            SpiceError(:badarg, "$who: the code $(repr(code)) of $(repr(nm)) is not a 32-bit integer")
+        )
+        push!(out, (nm, Int32(code)))
     end
     return out
 end
