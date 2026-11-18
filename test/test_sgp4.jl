@@ -423,24 +423,28 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         # The text kernel reader of both engines gives J3 one unit in the last place
         # away from the Julia literal.
         @test geophs ≈ SGP4_GEOPHS rtol = 1.0e-15
+        fails = Failures()
         for name in SGP4_GEOPHS_NAMES
-            @test length(bodvrd(ctx0, "EARTH", name)) == 1
+            check!(fails, length(bodvrd(ctx0, "EARTH", name)) == 1, "one value", name)
         end
+        @test isempty(fails)
     end
 
     # Element sets of both engines.
     parsed = Dict{Int, Tuple{Float64, Vector{Float64}}}()
 
     @apart @testset "getelm against CSPICE" begin
+        fails = Failures()
         for t in SGP4_TLES
             pair = [t[2], t[3]]
             ep, el = getelm(ctx0, 1957, pair)
             epc, elc = SPICE.getelm(1957, pair)
-            @test ep == epc
-            @test collect(el) == elc
-            @test el[10] == ep
+            check!(fails, ep == epc, "epoch", sgp4_id(t))
+            check!(fails, collect(el) == elc, "elements", sgp4_id(t))
+            check!(fails, el[10] == ep, "el[10] = epoch", sgp4_id(t))
             parsed[sgp4_id(t)] = (ep, collect(el))
         end
+        @test isempty(fails)
         pair = [SGP4_TLES[1][2], SGP4_TLES[1][3]]
         @test (@inferred getelm(ctx0, 1957, pair)) isa Tuple{Float64, SVector{10, Float64}}
         # A tuple of lines and lines without the checksum column are accepted.
@@ -449,12 +453,14 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         @test getelm(ctx0, 1957, short)[1] == SPICE.getelm(1957, short)[1]
         @test collect(getelm(ctx0, 1957, short)[2]) == SPICE.getelm(1957, short)[2]
         # The first year sets the century of the two-digit year.
+        fails = Failures()
         for frstyr in (1950, 1957, 1990, 2001, 2050)
             for t in SGP4_TLES[[1, 7, 15]]
                 p = [t[2], t[3]]
-                @test getelm(ctx0, frstyr, p)[1] == SPICE.getelm(frstyr, p)[1]
+                check!(fails, getelm(ctx0, frstyr, p)[1] == SPICE.getelm(frstyr, p)[1], "epoch", frstyr, sgp4_id(t))
             end
         end
+        @test isempty(fails)
         # CSPICE N0067 does not read the checksum (column 69): a wrong one is accepted.
         wrong = [pair[1][1:68] * "0", pair[2][1:68] * "0"]
         @test wrong != pair
@@ -504,6 +510,7 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
 
     @apart @testset "evsgp4 against CSPICE" begin
         kinds = Set{Symbol}()
+        fails = Failures()
         for t in SGP4_TLES
             id, class = sgp4_id(t), t[1]
             ep, el = parsed[id]
@@ -529,12 +536,13 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
                 valid += 1
                 worst = max(worst, sgp4_reldiff(sn, sc))
             end
-            @test mismatch == 0
-            @test worst <= sgp4_tol(id)
-            id == 28872 || @test valid > 0
+            check!(fails, mismatch == 0, "no mismatch", id)
+            within!(fails, worst, sgp4_tol(id), "relative difference", id)
+            id == 28872 || check!(fails, valid > 0, "valid samples", id)
             worst_ev[class] = max(worst_ev[class], worst)
             count_ev[class] += valid
         end
+        @test isempty(fails)
         # The decaying sets reach the errors of the propagator in both engines.
         @test :orbitdecay in kinds
         @test :suborbital in kinds
@@ -558,23 +566,25 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
     @apart @testset "operation mode 2 (improved sidereal time) against CSPICE" begin
         l = Almanac._lsk(Almanac.kernelset(ctx0))
         worst = 0.0
+        fails = Failures()
         for t in SGP4_TLES
             id = sgp4_id(t)
             id in (22312, 28350, 28872, 29141) && continue
             ep, el = parsed[id]
             for opmode in (1, 2)
                 r = Almanac._sgp4_init(Tuple(geophs), Tuple(el), Almanac._t10_epoch(l, ep), opmode)
-                @test isbits(r)
+                check!(fails, isbits(r), "isbits", id, opmode)
                 for dt in (0.0, 13.0, -211.0, 733.0, 1500.0)
                     id == SGP4_E97 && dt < 0 && continue
                     sc = sgp4_c_mode(geophs, el, opmode, dt)
                     p, v = Almanac._sgp4_eval(r, dt)
                     d = sgp4_reldiff(vcat(p, v), sc)
                     worst = max(worst, id == SGP4_E97 ? 0.0 : d)
-                    @test d <= sgp4_tol(id)
+                    within!(fails, d, sgp4_tol(id), "relative difference", id, opmode, dt)
                 end
             end
         end
+        @test isempty(fails)
         measured(@sprintf("  operation modes 1 and 2, all classes: max relative difference %.2e", worst))
         @test throws_kind(
             () -> Almanac._sgp4_init(Tuple(geophs), Tuple(parsed[5][2]), 18000.0, 3),
@@ -608,6 +618,7 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
     ctxn = neo_context(vcat(base, pn))
 
     @apart @testset "type 10 segments against CSPICE" begin
+        fails = Failures()
         for t in SGP4_TLES
             id, class, body = sgp4_id(t), t[1], sgp4_body(t)
             s = segs[id]
@@ -636,14 +647,15 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
                 bn = spkezr(ctx, body, et, iau_earth, "NONE", 399)[1]
                 wb = max(wb, sgp4_reldiff(bn, bc, speed))
             end
-            @test mismatch == 0
-            @test w2 <= sgp4_tol(id)
-            @test wb <= 2 * sgp4_tol(id)
-            id == 28872 || @test valid > 0
+            check!(fails, mismatch == 0, "no mismatch", id)
+            within!(fails, w2, sgp4_tol(id), "J2000 relative difference", id)
+            within!(fails, wb, 2 * sgp4_tol(id), "IAU_EARTH relative difference", id)
+            id == 28872 || check!(fails, valid > 0, "valid samples", id)
             worst_j2[class] = max(worst_j2[class], w2)
             worst_bf[class] = max(worst_bf[class], wb)
             count_seg[class] += valid
         end
+        @test isempty(fails)
         # The other calls read the same segment.
         body = sgp4_body(SGP4_TLES[1])
         et = segs[5].epochs[1] + 12345.0
@@ -668,6 +680,7 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
                 "evsgp4", "segment samples", "J2000", "IAU_EARTH"
             )
         )
+        fails = Failures()
         for c in SGP4_CLASSES
             measured(
                 @sprintf(
@@ -676,8 +689,9 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
                     "$(count_seg[c]) ($(errors_seg[c]))", worst_j2[c], worst_bf[c]
                 )
             )
-            @test count_ev[c] > 0 && count_seg[c] > 0
+            check!(fails, count_ev[c] > 0 && count_seg[c] > 0, "samples", c)
         end
+        @test isempty(fails)
     end
 
     @apart @testset "spkw10 against CSPICE, word for word" begin
@@ -696,6 +710,7 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         @test worst <= 1.0e-9
         # More than 100 sets: the segment has a directory of every 100th epoch.
         ep, el = parsed[5]
+        fails = Failures()
         for n in (1, 2, 100, 101, 250)
             elems, epochs = sgp4_sets(el, ep, n, 600.0)
             t0, t1 = epochs[1] - 100.0, epochs[end] + 100.0
@@ -711,8 +726,8 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
             )
             spkcls(h)
             count, worst = sgp4_word_diff(qn, qc)
-            @test 0 <= count <= 4 * n
-            @test worst <= 1.0e-9
+            check!(fails, 0 <= count <= 4 * n, "words that differ", n, count)
+            within!(fails, worst, 1.0e-9, "word relative difference", n)
             n == 250 && measured(
                 @sprintf(
                     "  spkw10, 1 segment of 250 sets: %d of %d words differ, max relative %.1e",
@@ -731,12 +746,13 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
             n > 1 && append!(ets, [(epochs[i] + epochs[i + 1]) / 2 for i in (1, n - 1)])
             for et in ets
                 sa = spkgeo(ca, -77, et, 1, 399)[1]
-                @test spkgeo(cb, -77, et, 1, 399)[1] == sa
+                check!(fails, spkgeo(cb, -77, et, 1, 399)[1] == sa, "file of Almanac = file of CSPICE", n, et)
                 w = max(w, sgp4_reldiff(sa, SPICE.spkgeo(-77, et, "J2000", 399)[1]))
             end
             SPICE.unload(qn)
-            @test w <= SGP4_RTOL
+            within!(fails, w, SGP4_RTOL, "relative difference from CSPICE", n)
         end
+        @test isempty(fails)
     end
 
     @apart @testset "segment in the old layout" begin
@@ -761,12 +777,14 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         co = neo_context(vcat(base, po))
         SPICE.furnsh(po)
         w = 0.0
+        fails = Failures()
         for et in vcat(t0, t1, epochs, random_epochs(rng, 100, t0, t1))
             so = spkgeo(co, -78, et, 1, 399)[1]
             # The same sets in the present layout give the same state.
-            @test so == spkgeo(ctx, sgp4_body(SGP4_TLES[4]), et, 1, 399)[1]
+            check!(fails, so == spkgeo(ctx, sgp4_body(SGP4_TLES[4]), et, 1, 399)[1], "old layout = present layout", et)
             w = max(w, sgp4_reldiff(so, SPICE.spkgeo(-78, et, "J2000", 399)[1]))
         end
+        @test isempty(fails)
         SPICE.unload(po)
         measured(@sprintf("  old layout (10 numbers a packet, 15 meta items): max relative difference %.2e", w))
         @test w <= SGP4_RTOL
@@ -774,6 +792,7 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
 
     @apart @testset "spkder: higher orders against ForwardDiff and differences" begin
         tv = Almanac.taylor_var
+        fails = Failures()
         for id in (5, 28057, 8195, 28129, 24208, 23177, 4632)
             body = -100000 - id
             s = segs[id]
@@ -789,12 +808,12 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
                 et = s.epochs[1] + u * (s.epochs[2] - s.epochs[1])
                 jet = spkder(ctx, body, et, 1, 399, Val(3))
                 state = spkgeo(ctx, body, et, 1, 399)[1]
-                @test jet[1] == state[SOneTo(3)]
-                @test jet[2] == state[SVector(4, 5, 6)]
-                @test spkder(ctx, body, et, 1, 399, Val(2))[3] ≈ jet[3] rtol = 1.0e-12
-                @test spkder(ctx, body, et, 1, 399, Val(0))[1] == jet[1]
+                check!(fails, jet[1] == state[SOneTo(3)], "order 0 = position", id, et)
+                check!(fails, jet[2] == state[SVector(4, 5, 6)], "order 1 = velocity", id, et)
+                check!(fails, isapprox(spkder(ctx, body, et, 1, 399, Val(2))[3], jet[3]; rtol = 1.0e-12), "order 2 of Val(2) = of Val(3)", id, et)
+                check!(fails, spkder(ctx, body, et, 1, 399, Val(0))[1] == jet[1], "order 0 of Val(0) = of Val(3)", id, et)
                 dstate = spkgeo(ctx, body, ForwardDiff.Dual(et, 1.0), 1, 399)[1]
-                @test ForwardDiff.value.(dstate) ≈ state rtol = 1.0e-14
+                check!(fails, isapprox(ForwardDiff.value.(dstate), state; rtol = 1.0e-14), "value of the Dual state", id, et)
                 h = 0.5
                 fd = (vel(et + h) - vel(et - h)) / (2h)
                 worst .= max.(
@@ -810,8 +829,8 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
                 # body-fixed velocity to that level and not to rounding.
                 jb = spkder(ctx, body, et, iau_earth, 399, Val(2))
                 velb(t) = spkezr(ctx, body, t, iau_earth, "NONE", 399)[1][SVector(4, 5, 6)]
-                @test jb[1] == spkezr(ctx, body, et, iau_earth, "NONE", 399)[1][SOneTo(3)]
-                @test sgp4_vecdiff(jb[3], (velb(et + h) - velb(et - h)) / (2h)) <= 5.0e-3
+                check!(fails, jb[1] == spkezr(ctx, body, et, iau_earth, "NONE", 399)[1][SOneTo(3)], "IAU_EARTH order 0 = position", id, et)
+                within!(fails, sgp4_vecdiff(jb[3], (velb(et + h) - velb(et - h)) / (2h)), 5.0e-3, "IAU_EARTH order 2 against differences", id, et)
             end
             measured(
                 @sprintf(
@@ -819,9 +838,9 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
                     id, worst...
                 )
             )
-            @test worst[1] <= SGP4_AD_RTOL[1]
-            @test worst[2] <= SGP4_AD_RTOL[2]
-            @test worst[3] <= SGP4_FD_RTOL
+            within!(fails, worst[1], SGP4_AD_RTOL[1], "AD order 2", id)
+            within!(fails, worst[2], SGP4_AD_RTOL[2], "AD order 3", id)
+            within!(fails, worst[3], SGP4_FD_RTOL, "FD order 2", id)
             # evsgp4 with a series epoch against the nested derivative of evsgp4.
             ep, el = parsed[id]
             et = ep + 7000.0
@@ -830,39 +849,42 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
             d1(t) = ForwardDiff.derivative(f, t)
             d2(t) = ForwardDiff.derivative(d1, t)
             der = Almanac.derivatives
-            @test SVector{6}(ntuple(i -> der(ser[i])[1], 6)) == f(et)
-            @test sgp4_vecdiff(SVector{6}(ntuple(i -> der(ser[i])[2], 6)), d1(et)) <= SGP4_AD_RTOL[1]
-            @test sgp4_vecdiff(SVector{6}(ntuple(i -> der(ser[i])[3], 6)), d2(et)) <= SGP4_AD_RTOL[2]
+            check!(fails, SVector{6}(ntuple(i -> der(ser[i])[1], 6)) == f(et), "evsgp4 series order 0", id)
+            within!(fails, sgp4_vecdiff(SVector{6}(ntuple(i -> der(ser[i])[2], 6)), d1(et)), SGP4_AD_RTOL[1], "evsgp4 series order 1", id)
+            within!(fails, sgp4_vecdiff(SVector{6}(ntuple(i -> der(ser[i])[3], 6)), d2(et)), SGP4_AD_RTOL[2], "evsgp4 series order 2", id)
             # The derivative of the position against a central difference of the
             # CSPICE position. The SGP4 velocity is not this derivative: the model
             # computes it from the rates of some terms only, so the two agree to
             # about 1e-4 (reported, with a loose bound).
             hc = 1.0
             fdc = (sgp4_c_evsgp4(et + hc, geophs, el)[1:3] - sgp4_c_evsgp4(et - hc, geophs, el)[1:3]) / (2hc)
-            @test sgp4_vecdiff(d1(et)[SOneTo(3)], fdc) <= SGP4_FD_RTOL
+            within!(fails, sgp4_vecdiff(d1(et)[SOneTo(3)], fdc), SGP4_FD_RTOL, "evsgp4 derivative against CSPICE differences", id)
             gap = sgp4_vecdiff(d1(et)[SOneTo(3)], f(et)[SVector(4, 5, 6)])
             measured(@sprintf("  evsgp4, object %05d: |d(position)/dt - velocity| / |velocity| = %.1e", id, gap))
-            @test gap <= 2.0e-3
+            within!(fails, gap, 2.0e-3, "derivative of the position against the velocity", id)
         end
+        @test isempty(fails)
     end
 
     @apart @testset "zero allocation and inferred types" begin
+        fails = Failures()
         for id in (5, 8195, 24208, 23177)
             body = -100000 - id
             s = segs[id]
             for et in (s.epochs[1] + 5000.0, s.epochs[2], s.t0, s.epochs[3] + 100.0)
-                @test sgp4_warm(alloc_sgp4_geo, ctx, body, et) == 0
-                @test sgp4_warm(alloc_sgp4_pos, ctx, body, et) == 0
-                @test sgp4_warm(alloc_sgp4_ezr, ctx, body, et, iau_earth) == 0
+                check!(fails, sgp4_warm(alloc_sgp4_geo, ctx, body, et) == 0, "spkgeo", id, et)
+                check!(fails, sgp4_warm(alloc_sgp4_pos, ctx, body, et) == 0, "spkpos", id, et)
+                check!(fails, sgp4_warm(alloc_sgp4_ezr, ctx, body, et, iau_earth) == 0, "spkezr", id, et)
                 for N in 0:3
-                    @test sgp4_warm(alloc_sgp4_der, ctx, body, et, Val(N)) == 0
+                    check!(fails, sgp4_warm(alloc_sgp4_der, ctx, body, et, Val(N)) == 0, "spkder", id, et, N)
                 end
             end
             ep, el = parsed[id]
-            @test sgp4_warm(alloc_sgp4_ev, ctx0, ep + 100.0, geophs, el) == 0
-            @test sgp4_warm(alloc_sgp4_ev, ctx0, ep + 100.0, Tuple(geophs), Tuple(el)) == 0
-            @test sgp4_warm(alloc_sgp4_ev, ctx0, ep + 100.0, SVector{8}(geophs), SVector{10}(el)) == 0
+            check!(fails, sgp4_warm(alloc_sgp4_ev, ctx0, ep + 100.0, geophs, el) == 0, "evsgp4 vectors", id)
+            check!(fails, sgp4_warm(alloc_sgp4_ev, ctx0, ep + 100.0, Tuple(geophs), Tuple(el)) == 0, "evsgp4 tuples", id)
+            check!(fails, sgp4_warm(alloc_sgp4_ev, ctx0, ep + 100.0, SVector{8}(geophs), SVector{10}(el)) == 0, "evsgp4 SVectors", id)
         end
+        @test isempty(fails)
         body = -100005
         et = segs[5].epochs[1] + 5000.0
         @test (@inferred spkgeo(ctx, body, et, 1, 399)) isa Tuple{SVector{6, Float64}, Float64}
@@ -1015,6 +1037,7 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         # windows end on a set epoch, between two sets and before the first set, so the
         # subset takes the set before the start and the set after the stop.
         rng10 = MersenneTwister(SEED + 1710)
+        fails = Failures()
         for n in (1, 250)
             src = joinpath(dir, "many_c_$n.bsp")
             hn = dafopr(src)
@@ -1026,8 +1049,8 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
             windows = [(t0, t1), (t0 + 10.0, ref), (max(t0, ref - 900.0), min(t1, ref + 1300.0)), (t0, t0 + 50.0)]
             for (i, (a, b)) in enumerate(windows)
                 pc, kc, pn, kn = spksub_both(src, dir, "t10_$(n)_$i", "TLE SUBSET", a, b)
-                @test kn === kc === :none
-                @test read(pn) == read(pc)
+                check!(fails, kn === kc === :none, "spksub no error", n, i)
+                check!(fails, read(pn) == read(pc), "spksub same bytes", n, i)
             end
             hc = SPICE.dafopr(src)
             SPICE.dafbfs(hc)
@@ -1036,14 +1059,15 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
             for et in random_epochs(rng10, 5, t0, t1)
                 rc = SPICE.spkpvn(hc, SPICE.dafgs(5), et)
                 rn = spkpvn(ctx0, hn, d, et)
-                @test rn[1] == rc[1] && rn[3] == rc[3]
+                check!(fails, rn[1] == rc[1] && rn[3] == rc[3], "spkpvn frame and center", n, et)
                 w = max(w, sgp4_reldiff(rn[2], rc[2]))
             end
-            @test w <= SGP4_RTOL
+            within!(fails, w, SGP4_RTOL, "spkpvn relative difference", n)
             @test throws_kind(() -> spkpvn(SpiceContext(), hn, d, t0), :noleapseconds)
             SPICE.dafcls(hc)
             dafcls(hn)
         end
+        @test isempty(fails)
     end
 
     SPICE.kclear()
