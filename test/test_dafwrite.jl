@@ -2654,6 +2654,56 @@ group("9. DAF access, SPK and CK writers") do
         GC.gc()
         rm.(files)
     end
+
+    # Regression for a defect of CSPICE N0067 (`dafarr`): the records that extend the
+    # file are written from a buffer that is never set. A character record (comment or
+    # name record) that lands on one of them holds 1000 characters, so its bytes 1001 to
+    # 1024 keep that buffer: "DAF/SPK " or other bytes in the files of CSPICE. Almanac
+    # writes zeros. Only the file of Almanac is read.
+    @apart @testset "dafac: the records that extend the file are zeros" begin
+        p = joinpath(dir, "dafarr_zeros.bsp")
+        dafcls(spkopn(p, "DAFARR", 0))
+        h = dafopw(p)
+        dafac(h, ["y"^3500])     # 4 comment records: the summary and name records move by 4
+        dafcls(h)
+        h = dafopr(p)
+        fward = dafrfr(h)[4]
+        dafcls(h)
+        @test fward == 6
+        b = read(p)
+        @test length(b) == 8 * 1024
+        # Records 2 to 5 hold the comments and record 7 the names; 5 to 8 are new.
+        @test all(r -> all(iszero, b[((r - 1) * 1024 + 1001):(r * 1024)]), [2:5; 7])
+    end
+
+    # CSPICE N0067 cuts a path to 255 characters (`zzddhopn`, `rdker`, `rdtext`), so two
+    # files whose paths have the same first 255 characters are confused. Almanac keeps
+    # the whole path. CSPICE is not called.
+    @apart @testset "paths longer than 255 characters" begin
+        if Sys.iswindows()
+            skip_notice("9. paths longer than 255 characters", "Windows limits a path to 260 characters")
+        else
+            long = joinpath(dir, "l"^120, "m"^120)
+            mkpath(long)
+            spks = [joinpath(long, "kernel_$k.bsp") for k in 1:2]
+            tpcs = [joinpath(long, "vars_$k.tpc") for k in 1:2]
+            @test all(p -> length(p) > 255 && p[1:255] == spks[1][1:255], [spks; tpcs])
+            for (k, p) in enumerate(spks)
+                h = spkopn(p, "LONG PATH", 0)
+                states = [k * [1.0, 2.0, 3.0, 0.0, 0.0, 0.0] for _ in 1:4]
+                spkw08(h, -800 - k, 399, "J2000", 0.0, 300.0, "LONG PATH", 1, states, 0.0, 100.0)
+                spkcls(h)
+                write(tpcs[k], "KPL/PCK\n\\begindata\nLONG_PATH_VALUE = $k\n\\begintext\n")
+            end
+            c = neo_context([spks; tpcs])
+            @test ktotal(c, "SPK") == 2 && ktotal(c, "TEXT") == 2
+            @test spkgeo(c, -801, 150.0, 1, 399)[1] == [1.0, 2.0, 3.0, 0.0, 0.0, 0.0]
+            @test spkgeo(c, -802, 150.0, 1, 399)[1] == [2.0, 4.0, 6.0, 0.0, 0.0, 0.0]
+            @test gdpool(c, "LONG_PATH_VALUE") == [2.0]
+            unload(c, spks[1])
+            @test ktotal(c, "SPK") == 1 && spkgeo(c, -802, 150.0, 1, 399)[1][1] == 2.0
+        end
+    end
 end
 
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

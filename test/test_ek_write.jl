@@ -1366,4 +1366,23 @@ group("EK write: a scratch EK (ekops) holds what the file of ekopn holds") do
     measured("ek_write: scratch EK, $words words equal to the files")
 end
 
+# Regression for a defect of CSPICE N0067 (`zzekpage`): the unused bytes of the character
+# pages that a file gets after `ekopw` are NUL in CSPICE until an `ekopn` runs in the same
+# process. Almanac writes blanks, as after `ekopn`. Only the file of Almanac is read.
+group("EK write: the character pages added after ekopw are blank where unused") do
+    col = [EKColSpec("S", :CHR; strlen = -1)]
+    seg(table, value) = EKSegSpec(table, col, Vector{Any}[Any[Any[value]]], false)
+    path = ekw_write(EKW_N, joinpath(mktempdir(), "pages.bes"), [seg("T", "abcde")])
+    chars() = (hd = dasopr(path); c = codeunits(dasrdc(hd, 1, daslla(hd)[1])); dascls(hd); c)
+    old = chars()
+    h = Almanac.ekopw(path)
+    ekw_write_segment(EKW_N, h, seg("U", "vwxyz"))
+    ekcls(h)
+    grown = chars()
+    # The second segment has the layout of the first, so its pages hold as many blanks
+    # as those that ekopn wrote (more than 2000 of 2048 bytes).
+    @test grown[1:length(old)] == old && length(grown) == 2 * length(old)
+    @test count(==(UInt8(' ')), grown[(length(old) + 1):end]) == count(==(UInt8(' ')), old)
+end
+
 Base.Experimental.@optlevel -1

@@ -97,3 +97,11 @@ places:
   `nintvls` of `gfdist`, `maxn` of `bodvrd`.
 - A call that must return a value throws where SPICE.jl returns `nothing`, as `gdpool`
   for a missing variable.
+- Where a wrapper of SPICE.jl 0.2.5 has a defect, Almanac.jl gives the result of
+  CSPICE: [`ckw02`](@ref) and [`ckw03`](@ref) write every record (SPICE.jl passes one
+  fewer); [`pckw02`](@ref) has no degree argument and takes the degree from the record
+  length (SPICE.jl passes one three times too large); [`spkw02`](@ref) and
+  [`spkw03`](@ref) count the records from the right dimension; [`dskv02`](@ref) and
+  [`dskp02`](@ref) count `start` from 1, as the routines they port; [`termpt`](@ref)
+  returns only the points found; [`et2utc`](@ref) returns the whole string, which
+  SPICE.jl can cut when `prec` is small.

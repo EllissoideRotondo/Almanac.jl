@@ -148,6 +148,11 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
 
 ## Deliberate deviations from CSPICE
 
+Every known defect of CSPICE N0067 in a ported routine is listed in
+`docs/src/manual/cspice_defects.md`, with what Almanac does (copies or fixes) and the
+test group that covers it. When you find a defect, or change how Almanac treats one,
+update that page in the same change.
+
 - `SpiceContext` objects are independent. Each one has its own pool watchers
   (`swpool`/`cvpool`), time defaults, DSK tolerances and GF tolerance.
 - Windows have no size limit, and searches return a new `Window`, so there are no

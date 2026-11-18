@@ -230,6 +230,22 @@ end
         @test wnsumd(wnintd(lt, gt))[1] < 1.0e-3
     end
 
+    @testset "ABSMIN and ABSMAX of longitude with adjust and no extremum" begin
+        # Regression for a defect of CSPICE N0067 (`zzgflong`): when no region holds an
+        # extremum, CSPICE reads the first interval of the empty window to apply the
+        # adjust value, so it is not called. At this epoch (a root of y found by bisection)
+        # the Moon seen from the Earth is on the negative x axis of J2000 to 1e-14 rad, so
+        # the epoch is in none of the regions where the extrema are searched (a sine
+        # above sin(1e-11) or below its negative, or a positive cosine).
+        t = 1.0125953371533352e8
+        p = spkpos(ctx, "MOON", t, "J2000", "NONE", "EARTH")[1]
+        @test p[1] < 0 && abs(p[2] / p[1]) < 1.0e-12
+        for rel in ("ABSMIN", "ABSMAX")
+            w = gfposc(ctx, "MOON", "J2000", "NONE", "EARTH", "LATITUDINAL", "LONGITUDE", rel, 0.0, 0.1, 3600.0, Window([t, t]))
+            @test isempty(w)
+        end
+    end
+
     @testset "errors, with the kinds of CSPICE" begin
         cn = Window([0.0, 30 * day])
         c = collect(cn)

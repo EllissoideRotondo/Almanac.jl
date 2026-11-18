@@ -784,6 +784,20 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         tparch(cctx, "Y")                                         # only "YES" turns it on
         @test tparse(cctx, "1996-02-30") == tparse("1996-03-01")
         @test throws_kind(() -> tparch(cctx, ""), :emptystring)
+
+        # Regression for a defect of CSPICE N0067: `str2et` of a second 60 in a time zone
+        # turns on the range check of `tparch` for the rest of the process (see
+        # `oracle_unchecked`). In Almanac a conversion does not change the setting.
+        lctx = neo_context([Kernels.LSK])
+        leap = "1990-12-31 15:59:60 PST"            # the leap second at the end of 1990
+        @test utc2et(lctx, "1996-02-30") == utc2et(lctx, "1996-03-01")
+        @test str2et(lctx, leap) == SPICE.str2et(leap)
+        @test utc2et(lctx, "1996-02-30") == utc2et(lctx, "1996-03-01")   # still unchecked
+        try
+            @test_throws SPICE.SpiceError SPICE.utc2et("1996-02-30")     # checked now
+        finally
+            c_tparch("NO")
+        end
     end
 
     # Epochs: several thousand years, and a dense set around every leap second.
@@ -944,6 +958,40 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         g(a, b) = Almanac._ttrans(a, Almanac._TT_YMD, Almanac._TT_TDB, b)
         g(l, tv0)
         @test (@allocated g(l, tv0)) == 0
+        # A year-month-weekday vector with a month outside 1 to 12: CSPICE N0067 aborts
+        # on a subscript out of range, so it is not called.
+        for month in (0.0, 13.0)
+            tv = (2000.0, month, 1.0, 1.0, 0.0, 0.0, 0.0)
+            @test throws_kind(() -> Almanac.ttrans(ctx, "YMWD", "TDB", tv), :badsubscript)
+        end
+    end
+
+    # CSPICE N0067 (`ttrans`) uses the first 140 leap seconds of a leap-seconds kernel
+    # and ignores the others without an error; Almanac uses all of them.
+    @apart @testset "a leap-seconds kernel with more than 140 leap seconds" begin
+        # One leap second on each January 1 and July 1 from 1972 to 2046: entry 141 is
+        # 2042 January 1, and entries 141 to 150 add 10 s.
+        dates = ["@$y-$m-1" for y in 1972:2046 for m in ("JAN", "JUL")]
+        head = [
+            "DELTET/DELTA_T_A = 32.184", "DELTET/K = 1.657D-3", "DELTET/EB = 1.671D-2",
+            "DELTET/M = ( 6.239996D0 1.99096871D-7 )",
+        ]
+        lsk(n) = [head; "DELTET/DELTA_AT = ("; ["$(9 + k), $(dates[k])" for k in 1:n]; ")"]
+        c150 = SpiceContext()
+        lmpool(c150, lsk(150))
+        c140 = SpiceContext()
+        lmpool(c140, lsk(140))
+        # In 10 s the periodic term of ET - TAI changes by less than 1e-8 s.
+        @test str2et(c150, "2041-12-31") == str2et(c140, "2041-12-31")
+        @test abs(str2et(c150, "2046-07-02") - str2et(c140, "2046-07-02") - 10.0) < 1.0e-6
+        @test et2utc(c150, str2et(c150, "2046-07-02"), "ISOC", 0) == "2046-07-02T00:00:00"
+        try
+            SPICE.kclear()
+            SPICE.lmpool(lsk(150))
+            @test SPICE.str2et("2046-07-02") == str2et(c140, "2046-07-02")
+        finally
+            oracle_load([Kernels.LSK])
+        end
     end
 
     @apart @testset "jul2gr, gr2jul and the constants" begin

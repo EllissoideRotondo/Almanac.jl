@@ -1264,11 +1264,14 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             @test ekq_compare(fx, nums) == (:signal, "buffertoosmall")
             # A qualified order-by column before FROM, WHERE or SELECT: CSPICE writes no
             # sense, the SELECT columns are shifted, and name resolution signals a bug.
+            # `ekfind` of Almanac throws the error before the search.
+            ectx = neo_context([ekpath])
             for query in (
                     "SELECT ICOL FROM ALPHA ORDER BY ALPHA.ICOL WHERE ICOL > 1",
                     "FROM ALPHA ORDER BY ALPHA.ICOL SELECT ICOL",
                 )
                 @test ekq_compare(fx, query) == (:signal, "bug")
+                @test throws_kind(() -> ekfind(ectx, query), :bug)
             end
             # More than 1000 conjunctions: CSPICE stops the program (array bound check of
             # f2c), so only Almanac is called.
