@@ -2,6 +2,7 @@
 
 [![Dev](https://img.shields.io/badge/docs-dev-blue.svg)](https://orbitology.github.io/Almanac.jl/dev/)
 [![CI](https://github.com/Orbitology/Almanac.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/Orbitology/Almanac.jl/actions/workflows/CI.yml)
+[![Coverage](https://codecov.io/gh/Orbitology/Almanac.jl/graph/badge.svg)](https://codecov.io/gh/Orbitology/Almanac.jl)
 
 *NASA NAIF's SPICE toolkit, in native Julia*
 
