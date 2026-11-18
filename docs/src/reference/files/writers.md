@@ -10,6 +10,7 @@ the flag `avflag`. An input of the wrong shape throws `SpiceError(:badarg)`.
 
 ```@docs
 spkopn
+spkops
 spkopa
 spkcls
 spkpds
@@ -47,6 +48,7 @@ evsgp4
 
 ```@docs
 ckopn
+ckops
 ckcls
 ckw01
 ckw02
@@ -59,6 +61,7 @@ ckw06
 
 ```@docs
 pckopn
+pckops
 pckw02
 pckw20
 pckcls

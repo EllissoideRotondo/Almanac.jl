@@ -52,6 +52,8 @@ StateQuery
 
 ```@docs
 add_ephemeris!
+load_samples!
+load_function!
 ```
 
 ## Tables for inner loops

@@ -330,7 +330,8 @@ end
 Open a new SPK file that lives in memory, for writing: [`spkopn`](@ref) without the
 path. No file is made. The writers (such as [`spkw02`](@ref)) take the handle as they take
 one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
-and [`save_kernel`](@ref) writes them to a file; [`spkcls`](@ref) discards them. This call
+and [`save_kernel`](@ref) writes them to a file; [`spkcls`](@ref) discards them, so load or
+save before the close. This call
 has no CSPICE counterpart; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
@@ -398,7 +399,9 @@ Close the SPK file of `handle`, as
 closed already. The close writes no data: every write call puts its bytes on disk before it
 returns, except [`spk14b`](@ref) and [`spk14a`](@ref), so a type 14 segment that
 [`spk14e`](@ref) did not end is not in the file. Load the file with [`furnsh`](@ref) after
-the close.
+the close. For a handle in memory
+(from [`spkops`](@ref)), the close discards the bytes: load it with [`furnsh`](@ref) or
+save it with [`save_kernel`](@ref) before the close.
 
 Throws `SpiceError(:nosegmentsfound)` if the file is open for writing and holds no
 segment. The handle then stays open; close it with [`dafcls`](@ref).
@@ -497,7 +500,7 @@ equal length) to the file of `handle`, as
 `ctx`, `handle`, `body`, `center`, `frame`, `first`, `last` and `segid` have the same
 meaning in every `spkwNN` writer.
 - `ctx`: the context in which a frame name is resolved (default: the default context).
-- `handle`: a [`DAFHandle`](@ref) from [`spkopn`](@ref) or [`spkopa`](@ref).
+- `handle`: a [`DAFHandle`](@ref) from [`spkopn`](@ref), [`spkopa`](@ref) or [`spkops`](@ref).
 - `body`, `center`: NAIF IDs of the body and of its center of motion.
 - `frame`: the reference frame, a name or a frame ID. A name is resolved in `ctx`;
   built-in frames need no kernel.

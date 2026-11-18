@@ -302,8 +302,10 @@ Return the CK IDs of the instruments and structures that have a segment in the C
 `ck`, sorted and without duplicates, as
 [`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html).
 
-The file is read from disk and need not be loaded. A [`DAFHandle`](@ref) in place of the
-path (in memory, or of a file) gives the segments that the handle holds now.
+The file is read from disk and need not be loaded. An open [`DAFHandle`](@ref)
+(in memory, or of a file) can take the place of the path: the call then reads the
+segments that the handle holds now, without an array that `dafbna` began and `dafena`
+did not end, and throws `SpiceError(:dafnosuchhandle)` if the handle is closed.
 
 Throws `SpiceError`:
 - `:filenotfound` if the file does not exist;
@@ -509,8 +511,10 @@ interval `i` as `(start, stop)`.
 - `timsys`: `"SCLK"` gives encoded clock ticks; `"TDB"` gives seconds past J2000 TDB.
   `"TDB"` needs the SCLK kernel of the spacecraft in `ctx`.
 
-The CK file is read from disk and need not be loaded. A [`DAFHandle`](@ref) in place of the
-path (in memory, or of a file) gives the segments that the handle holds now.
+The CK file is read from disk and need not be loaded. An open [`DAFHandle`](@ref)
+(in memory, or of a file) can take the place of the path: the call then reads the
+segments that the handle holds now, without an array that `dafbna` began and `dafena`
+did not end, and throws `SpiceError(:dafnosuchhandle)` if the handle is closed.
 
 Throws `SpiceError(:valueoutofrange)` if `tol < 0`, `SpiceError(:invalidoption)` if
 `level` is not one of the two, `SpiceError(:notsupported)` if `timsys` is not one of

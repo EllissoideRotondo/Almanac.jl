@@ -60,7 +60,8 @@ binary PCK kernel, with no file. This method has no CSPICE counterpart.
 The kernel enters the load list under `name`, with the rules of a file: it has priority
 over the kernels loaded before it, [`kdata`](@ref) lists `name` with its type,
 [`unload`](@ref) with `name` and [`kclear`](@ref) remove it, and loading the same name
-twice makes two entries. The call copies the segments: writing to `handle` afterwards
+twice makes two entries, of which `unload` removes the later. The type is the file type
+of the handle (`"SPK"` for [`spkops`](@ref)). The call copies the segments: writing to `handle` afterwards
 does not change the loaded kernel, and `handle` stays open, so it can take more segments
 and be loaded again.
 
@@ -77,6 +78,7 @@ Throws `SpiceError`:
 - `:dafnosuchhandle` if `handle` is closed;
 - `:dafinvalidaccess` if `handle` has a file (load the file by its path);
 - `:dafnewconflict` if an array is being added (`dafbna` without `dafena`);
+- `:baddaf` if `handle` is not an SPK, CK or binary PCK (see [`dafops`](@ref));
 - `:nosegmentsfound` if `handle` holds no segment.
 
 A load that throws leaves `ctx` unchanged.
@@ -245,16 +247,19 @@ end
 
 Load the states `states` (km, km/s) of `body` relative to `center` in `frame` at the epochs
 `ets` (seconds past J2000 TDB, increasing) into `ctx` as a kernel named `name`, with no
-file. This call has no CSPICE counterpart.
+file; queries interpolate between them. This call has no CSPICE counterpart.
 
 The kernel holds one SPK segment from `ets[1]` to `ets[end]`: type 13 (Hermite
 interpolation, which uses the velocities) for `method = :hermite`, type 9 (Lagrange
-interpolation) for `:lagrange`, with polynomials of degree `degree`. `states` is a 6 by n
+interpolation) for `:lagrange`, with polynomials of degree `degree`. Type 13 needs an odd
+`degree` in `1:27` and at least `(degree + 1) ÷ 2` states; type 9 a `degree` in `1:27` and
+more than `degree` states. `states` is a 6 by n
 matrix, a vector of 6-vectors, or a flat vector, as for [`spkw13`](@ref). The kernel is the
 one that [`spkw13`](@ref) or [`spkw09`](@ref) would write to a file, so queries give the
-same results as on that file. `segid` is cut to its first 40 characters. `body`, `center`
-and the names `bodies` are as for [`furnsh`](@ref) of a handle, and the rules of the load
-list are those of a file. A trajectory with jumps (burns) needs one call per arc, or
+same results as on that file. `segid` is cut to its first 40 characters. `bodies` are body
+names of the kernel, as for [`furnsh`](@ref) of a handle; `body` and `center` are NAIF
+codes or names, and may be names of `bodies`. The rules of the load list are those of a
+file. A trajectory with jumps (burns) needs one call per arc, or
 several segments through [`spkops`](@ref).
 
 Throws `SpiceError`:
@@ -324,15 +329,14 @@ query of an SPK file costs, whatever `f` costs. This call has no CSPICE counterp
 only. With six the kernel has an SPK segment of type 3 (a series for the position and one
 for the velocity); with three, of type 2 (the velocity is the derivative of the position).
 The fit takes `ncoef` coefficients on each of `n` intervals of equal length and doubles `n`
-until the position error is at most `tol` (km), with the rule of
-[`ephemeris_table`](@ref) when `tol` is `nothing`. The result is the measured largest
+until the position error is at most `tol` (km). Without `tol` the goal is `1e-12` times the
+largest distance, with the early stop of [`ephemeris_table`](@ref). `f` is called with
+`Float64` epochs, on the calling task, during the call only. The result is the measured largest
 position error (km) and velocity error (km/s, `NaN` for three numbers). `body`, `center`,
 `segid` and `bodies` are as for [`load_samples!`](@ref).
 
-An `ODESolution` of DifferentialEquations.jl is a function of time and can be passed
-through a closure that maps the epoch to its time variable and keeps the six components of
-the state, in km and km/s: `et -> sol(et - et0)[1:6]` for a solution in seconds from the
-epoch `et0`.
+An `ODESolution` goes in through a closure; see
+[Load states as a kernel, with no file](@ref).
 
 Throws `SpiceError`:
 

@@ -17,6 +17,8 @@ DAFHandle
 dafopr
 dafopw
 dafonw
+dafops
+save_kernel
 dafcls
 dafhsf
 dafrfr

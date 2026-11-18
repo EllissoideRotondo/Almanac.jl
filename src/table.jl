@@ -457,7 +457,7 @@ Add the ephemeris table `tab` to the SPK file `handle` as one segment of type 2.
 
 The records of the table are the records of the segment. [`spkpos`](@ref) on the new
 file therefore gives the position of the table to rounding, and the velocity is its
-derivative. `handle` comes from [`spkopn`](@ref) or [`spkopa`](@ref); `segid` is the
+derivative. `handle` comes from [`spkopn`](@ref), [`spkopa`](@ref) or [`spkops`](@ref); `segid` is the
 segment identifier; `first` and `last` are the bounds of the segment in seconds past
 J2000 TDB. The segment is for `tab.target` relative to `tab.observer` in the frame
 `tab.frame`, which must be a frame known in `ctx` (default: the default context; see

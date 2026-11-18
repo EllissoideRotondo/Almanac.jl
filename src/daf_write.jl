@@ -256,9 +256,9 @@ Open a new DAF that lives in memory, for writing: [`dafonw`](@ref) without the p
 No file is made at any time. The handle takes every write call and every read call of a
 DAF handle, and [`furnsh`](@ref) loads its contents as a kernel. Its bytes are those that
 `dafonw` and the same write calls put in a file, so [`save_kernel`](@ref) can write them
-to one. [`dafcls`](@ref) discards them; a kernel that `furnsh` loaded from the handle
-stays loaded. This call has no CSPICE counterpart; its name follows
-[`dasops`](@ref), which opens a scratch DAS file.
+to one. [`dafcls`](@ref) discards them. `furnsh` loads a handle of the type `"SPK"`,
+`"CK"` or `"PCK"` (with `nd = 2` and `ni = 6`, `6`, `5`); [`spkops`](@ref), [`ckops`](@ref)
+and [`pckops`](@ref) make those. This call has no CSPICE counterpart.
 
 Throws the errors of [`dafonw`](@ref) other than those on the path.
 

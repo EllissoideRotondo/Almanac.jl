@@ -381,3 +381,13 @@ end
         @test ktotal(ctx) == 0
     end
 end
+
+@testset "handles of other types, closed handles" begin
+    ctx = SpiceContext()
+    @test throws_kind(() -> furnsh(ctx, dafops("XYZ", 2, 6, "x", 0); name = "x"), :baddaf)
+    @test ktotal(ctx) == 0
+    h = mem_spk!(spkops())
+    spkcls(h)
+    @test throws_kind(() -> spkobj(h), :dafnosuchhandle)
+    @test throws_kind(() -> pckcov(h, 3000), :dafnosuchhandle)
+end

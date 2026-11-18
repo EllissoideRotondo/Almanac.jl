@@ -94,9 +94,9 @@ A call on a closed handle throws `SpiceError(:dafnosuchhandle)`; the close calls
 nothing instead. A write call on a handle that is open for reading throws
 `SpiceError(:dafinvalidaccess)`.
 
-A write call puts its bytes on disk before it returns, except [`spk14b`](@ref) and
-[`spk14a`](@ref), whose data [`spk14e`](@ref) writes. A write call that throws for an
-invalid input does not change the file.
+A write call puts its bytes on disk (in memory, for a handle without a file) before it
+returns, except [`spk14b`](@ref) and [`spk14a`](@ref), whose data [`spk14e`](@ref)
+writes. A write call that throws for an invalid input does not change the file.
 """
 mutable struct DAFHandle
     const path::String
@@ -433,7 +433,7 @@ except [`spk14b`](@ref) and [`spk14a`](@ref) (see [`DAFHandle`](@ref)). An array
 `dafbna` began and `dafena` did not end has no summary in the file, so a search does not
 find it. The call does nothing if the handle is closed already. After the call the
 handle keeps the file neither open nor memory-mapped, so that Windows can delete or
-replace it.
+replace it. For a handle in memory (from [`dafops`](@ref)) the close discards the bytes.
 """
 function dafcls(h::DAFHandle)
     h.isopen || return nothing

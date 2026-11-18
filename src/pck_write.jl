@@ -72,7 +72,8 @@ end
 Open a new PCK file that lives in memory, for writing: [`pckopn`](@ref) without the
 path. No file is made. The writers (such as [`pckw02`](@ref)) take the handle as they take
 one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
-and [`save_kernel`](@ref) writes them to a file; [`pckcls`](@ref) discards them. This call
+and [`save_kernel`](@ref) writes them to a file; [`pckcls`](@ref) discards them, so load or
+save before the close. This call
 has no CSPICE counterpart; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
@@ -89,7 +90,7 @@ Write a binary PCK segment of type 2 (Chebyshev polynomials for three Euler angl
 intervals of equal length) to the file of `handle`, as
 [`pckw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckw02_c.html).
 
-- `handle`: a [`DAFHandle`](@ref) from [`pckopn`](@ref).
+- `handle`: a [`DAFHandle`](@ref) from [`pckopn`](@ref) or [`pckops`](@ref).
 - `clssid`: the frame class ID of the body-fixed frame, the `classid` of
   [`frinfo`](@ref), for example 301 for IAU_MOON.
 - `frame`: the base frame, a built-in inertial frame given by name or by frame ID (1 to
@@ -283,7 +284,9 @@ pckw20(
 Close the binary PCK file of `handle`, as
 [`pckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcls_c.html). The call does nothing if the handle
 is closed already. The close writes no data: every write call puts its bytes on disk
-before it returns. Load the file with [`furnsh`](@ref) after the close.
+before it returns. Load the file with [`furnsh`](@ref) after the close. For a handle in memory
+(from [`pckops`](@ref)), the close discards the bytes: load it with [`furnsh`](@ref) or
+save it with [`save_kernel`](@ref) before the close.
 
 Throws `SpiceError(:nosegmentsfound)` if the file is open for writing and holds no
 segment. The handle then stays open; close it with [`dafcls`](@ref).
