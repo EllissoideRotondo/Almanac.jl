@@ -880,9 +880,8 @@ function Base.get(t::NameTable, key::AbstractString, default)
     c = name_lookup(t, key)
     return c === nothing ? default : c
 end
-Base.get(::NameTable, key, default) = default
+Base.get(::NameTable, key, default) = default     # no key that is not a string, as for a Dict{String}
 Base.haskey(t::NameTable, key::AbstractString) = name_lookup(t, key) !== nothing
-Base.haskey(::NameTable, key) = false
 
 "Contract: builds the (name => code, code => name) dictionaries of a (code, name) table; a later entry overrides an earlier one in both directions."
 function _name_dicts(table)

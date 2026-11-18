@@ -102,9 +102,15 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
                 "NAIF_BODY_NAME = ( ' My  Probe ', 'Étoile' )", "NAIF_BODY_CODE = ( -77, -78 )",
                 "FRAME_MY_FRAME = -77001", "FRAME_-77001_NAME = 'My  Frame'",
                 "FRAME_-77001_CLASS = 4", "FRAME_-77001_CLASS_ID = -77001",
-                "FRAME_-77001_CENTER = -77",
+                "FRAME_-77001_CENTER = 'my  probe'",
             ]
         )
+        # A body name in a frame definition is resolved while the snapshot is built.
+        @test frinfo(pctx, -77001) == (-77, 4, -77001)
+        # The table of the snapshot holds the pairs of the pool, and no other.
+        @test Dict(Almanac.kernelset(pctx).name2code) == Dict("MY PROBE" => -77, "ÉTOILE" => -78)
+        @test get(Almanac.kernelset(pctx).name2code, :MY_PROBE, 0) == 0
+        @test !haskey(Almanac.kernelset(pctx).name2code, :MY_PROBE)
         @test bodn2c(pctx, "my probe") == bodn2c(pctx, "  MY PROBE") == -77
         @test bodn2c(pctx, "MY  PROBEX") === nothing && bodn2c(pctx, "MY") === nothing
         @test bodn2c(pctx, "étoile") == bodn2c(pctx, " ÉTOILE") == -78   # not ASCII: `uppercase`
