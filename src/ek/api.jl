@@ -487,13 +487,17 @@ ekfind(ctx::SpiceContext, query::AbstractString) =
     ekfind(kernelset(ctx), timedefaults(ctx), query)
 ekfind(query::AbstractString) = ekfind(default_context(), query)
 
-@inline function _ek_result_entry(res::EKResult, selidx::Integer, row::Integer)
+# The checks are in the order of CSPICE: the row, the element, the SELECT column.
+@inline function _ek_result_entry(
+        res::EKResult, selidx::Integer, row::Integer, elment::Integer = 1
+    )
     (1 <= row <= res.nmrows) || throw(
         SpiceError(
             :invalidindex, "Row indices for query " *
                 "result range from 1 to $(res.nmrows); requested row index was $row."
         )
     )
+    elment >= 1 || throw(SpiceError(:invalidindex, "ELMENT must be positive but was $elment."))
     (1 <= selidx <= length(res.seltab)) || throw(
         SpiceError(
             :invalidindex,
@@ -527,8 +531,7 @@ function eknelt(res::EKResult, selidx::Integer, row::Integer)
     return _ek_nelt(f, col, recptr)
 end
 
-@inline function _ek_fetch_check(col::_EKColumn, elment::Integer, types)
-    elment >= 1 || throw(SpiceError(:invalidindex, "ELMENT must be positive but was $elment."))
+@inline function _ek_fetch_check(col::_EKColumn, types)
     col.dtype in types || throw(
         SpiceError(
             :invalidtype,
@@ -551,8 +554,9 @@ array entry has fewer than `elment` elements. For a scalar column `elment` is no
 used, and `found` is true. The three results keep the form of CSPICE because a null
 entry and a missing element are two different cases.
 
-Throws `SpiceError(:invalidindex)` unless `1 <= row <= result.nmrows`, `selidx` is the
-position of a SELECT column and `elment >= 1`, `SpiceError(:invalidtype)` if the
+Throws `SpiceError(:invalidindex)` unless `1 <= row <= result.nmrows`, `elment >= 1`
+and `selidx` is the position of a SELECT column (checked in this order, as in CSPICE),
+`SpiceError(:invalidtype)` if the
 column does not have character type, and `SpiceError(:uninitialized)` if the entry was
 never written.
 
@@ -560,8 +564,8 @@ See [`ekfind`](@ref) for an example. See also [`ekgd`](@ref), [`ekgi`](@ref),
 [`eknelt`](@ref), [`ekcolumn`](@ref).
 """
 function ekgc(res::EKResult, selidx::Integer, row::Integer, elment::Integer = 1)
-    f, col, recptr = _ek_result_entry(res, selidx, row)
-    _ek_fetch_check(col, elment, (_EK_CHR,))
+    f, col, recptr = _ek_result_entry(res, selidx, row, elment)
+    _ek_fetch_check(col, (_EK_CHR,))
     v, isnull, found = _ek_elt_c(f, col, recptr, elment)
     return String(rstrip(v, ' ')), isnull, found
 end
@@ -581,8 +585,8 @@ Throws `SpiceError(:invalidindex)` for a bad index, as [`ekgc`](@ref),
 `SpiceError(:uninitializedvalue)` if the entry was never written.
 """
 function ekgd(res::EKResult, selidx::Integer, row::Integer, elment::Integer = 1)
-    f, col, recptr = _ek_result_entry(res, selidx, row)
-    _ek_fetch_check(col, elment, (_EK_DP, _EK_TIME))
+    f, col, recptr = _ek_result_entry(res, selidx, row, elment)
+    _ek_fetch_check(col, (_EK_DP, _EK_TIME))
     return _ek_elt_d(f, col, recptr, elment)
 end
 
@@ -601,8 +605,8 @@ Throws `SpiceError(:invalidindex)` for a bad index, as [`ekgc`](@ref),
 `SpiceError(:uninitializedvalue)` if the entry was never written.
 """
 function ekgi(res::EKResult, selidx::Integer, row::Integer, elment::Integer = 1)
-    f, col, recptr = _ek_result_entry(res, selidx, row)
-    _ek_fetch_check(col, elment, (_EK_INT,))
+    f, col, recptr = _ek_result_entry(res, selidx, row, elment)
+    _ek_fetch_check(col, (_EK_INT,))
     return _ek_elt_i(f, col, recptr, elment)
 end
 

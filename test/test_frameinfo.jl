@@ -274,6 +274,34 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         end
     end
 
+    # Regression for a defect of CSPICE N0067: `ccifrm_` finds the name variable by
+    # replacing the first `_CLASS` of the key `FRAME_<name>_CLASS`, so for the frame
+    # A_CLASS_B it reads FRAME_A_NAME_B_CLASS and signals INVALIDFRAMEDEF. Almanac
+    # replaces the trailing `_CLASS`.
+    @apart @testset "ccifrm: a frame name that contains _CLASS" begin
+        lines = [
+            "FRAME_A_CLASS_B = -1500001", "FRAME_-1500001_NAME = 'A_CLASS_B'",
+            "FRAME_A_CLASS_B_NAME = 'A_CLASS_B'", "FRAME_A_CLASS_B_CLASS = 4",
+            "FRAME_A_CLASS_B_CLASS_ID = -1500001", "FRAME_-1500001_CENTER = 399",
+        ]
+        c2 = SpiceContext()
+        lmpool(c2, lines)
+        @test ccifrm(c2, 4, -1500001) == (-1500001, "A_CLASS_B", 399)
+        try
+            SPICE.lmpool(lines)
+            ccall(
+                (:ccifrm_c, SPICE.libcspice), Cvoid, (
+                    Cint, Cint, Cint, Ref{Cint}, Ptr{UInt8},
+                    Ref{Cint}, Ref{Cint},
+                ), 4, -1500001, 33, Ref{Cint}(0), zeros(UInt8, 33), Ref{Cint}(0),
+                Ref{Cint}(0)
+            )
+            @test cspice_kind() === :invalidframedef
+        finally
+            foreach(l -> SPICE.dvpool(first(split(l, " = "))), lines)
+        end
+    end
+
     @apart @testset "tipbod and tisbod" begin
         dp = Float64[]; ds = Float64[]; dd = Float64[]
         structure_ok = true
@@ -309,6 +337,78 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         pdpool(c2, "BODY123456_PM", [10.0, 1.0])
         pdpool(c2, "BODY123456_POLE_DEC", [80.0])
         @test throws_kind(() -> tisbod(c2, "J2000", 123456, 0.0), :kernelvarnotfound)
+    end
+
+    # Regression for a defect of CSPICE N0067: for cubic angles
+    # (`BODY<sys>_MAX_PHASE_DEGREE = 3`), `tisbod_` divides the rate of the cubic term by
+    # the square of the seconds per century, so its derivative block misses that term.
+    @apart @testset "tisbod: the derivative block of cubic nutation angles" begin
+        # The Moon of pck00011.tpc as body 1301, which is its own system, with the 13
+        # angles of the system made cubic: no quadratic term, 100 degrees per century
+        # cubed.
+        angles = [
+            125.045, -1935.5364525, 250.089, -3871.072905, 260.008, 475263.3328725,
+            176.625, 487269.629985, 357.529, 35999.0509575, 311.589, 964468.49931,
+            134.963, 477198.869325, 276.617, 12006.300765, 34.226, 63863.5132425,
+            15.134, -5806.6093575, 119.743, 131.84064, 239.961, 6003.1503825,
+            25.053, 473327.79642,
+        ]
+        pool = [
+            "BODY1301_POLE_RA" => [269.9949, 0.0031, 0.0],
+            "BODY1301_POLE_DEC" => [66.5392, 0.013, 0.0],
+            "BODY1301_PM" => [38.3213, 13.17635815, -1.4e-12],
+            "BODY1301_NUT_PREC_RA" => [
+                -3.8787, -0.1204, 0.07, -0.0172, 0.0, 0.0072, 0.0, 0.0, 0.0, -0.0052, 0.0, 0.0, 0.0043,
+            ],
+            "BODY1301_NUT_PREC_DEC" => [
+                1.5419, 0.0239, -0.0278, 0.0068, 0.0, -0.0029, 0.0009, 0.0, 0.0, 0.0008, 0.0, 0.0, -0.0009,
+            ],
+            "BODY1301_NUT_PREC_PM" => [
+                3.561, 0.1208, -0.0642, 0.0158, 0.0252, -0.0066, -0.0047, -0.0046, 0.0028, 0.0052,
+                0.004, 0.0019, -0.0044,
+            ],
+            "BODY1301_NUT_PREC_ANGLES" => reduce(vcat, [[angles[2i - 1], angles[2i], 0.0, 100.0] for i in 1:13]),
+            "BODY1301_MAX_PHASE_DEGREE" => [3.0],
+        ]
+        c2 = SpiceContext()
+        foreach(kv -> pdpool(c2, kv[1], kv[2]), pool)
+        # Five-point central difference of tipbod. At this epoch the prime meridian angle
+        # is about 2700 rad, so each element of the matrix carries a rounding of about
+        # 6e-13, and the difference with h = 1000 s about 1e-15; its truncation error is
+        # below 1e-17. Measured: Almanac 6.8e-17, CSPICE 3.7e-12.
+        et, h = 1.0e9, 1000.0
+        r(t) = tipbod(c2, "J2000", 1301, t)
+        fd = (8 * (r(et + h) - r(et - h)) - (r(et + 2h) - r(et - 2h))) / (12h)
+        @test maximum(abs.(tisbod(c2, "J2000", 1301, et)[4:6, 1:3] - fd)) <= 1.0e-15
+        try
+            foreach(kv -> SPICE.pdpool(kv[1], kv[2]), pool)
+            @test maximum(abs.(SPICE.tisbod("J2000", 1301, et)[4:6, 1:3] - fd)) >= 1.0e-12
+        finally
+            foreach(kv -> SPICE.dvpool(kv[1]), pool)
+        end
+    end
+
+    # CSPICE N0067 (`framex`) signals HASHISFULL past 5209 frames defined in kernels;
+    # Almanac has no limit. CSPICE is not called.
+    @apart @testset "more frames than CSPICE can hold" begin
+        n = 5300
+        lines = String[]
+        for i in 1:n
+            id = 1_400_000 + i
+            append!(
+                lines, [
+                    "FRAME_TKF$i = $id", "FRAME_$(id)_NAME = 'TKF$i'", "FRAME_$(id)_CLASS = 4",
+                    "FRAME_$(id)_CLASS_ID = $id", "FRAME_$(id)_CENTER = 399",
+                ]
+            )
+        end
+        c2 = SpiceContext()
+        lmpool(c2, lines)
+        for i in (1, 5210, n)
+            @test namfrm(c2, "TKF$i") == 1_400_000 + i
+            @test frmnam(c2, 1_400_000 + i) == "TKF$i"
+        end
+        @test frinfo(c2, 1_400_000 + n) == (399, 4, 1_400_000 + n)
     end
 
     @apart @testset "pckfrm and pckcov" begin
@@ -406,6 +506,31 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             dvpool(ctx, "BODY299_PGR_POSITIVE_LON")
         end
         @test throws_kind(() -> et2lst(ctx, 0.0, 1234567, 0.0, "PLANETOCENTRIC"), :cantfindframe)
+        # Without `BODY<id>_PM` the sense of rotation is unknown. CSPICE N0067 signals the
+        # short message cut to `SPICE(CANTGETROTATIONTYPE`, without its parenthesis.
+        c2 = neo_context([Kernels.LSK, Kernels.DE440S])
+        pcpool(c2, "OBJECT_301_FRAME", ["J2000"])
+        @test throws_kind(() -> et2lst(c2, 1.0e8, 301, 0.3, "PLANETOCENTRIC"), :cantgetrotationtype)
+        pm = SPICE.gdpool("BODY301_PM")
+        try
+            SPICE.pcpool("OBJECT_301_FRAME", ["J2000"])
+            SPICE.dvpool("BODY301_PM")
+            hr, mn, sc = Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0)
+            ccall(
+                (:et2lst_c, SPICE.libcspice), Cvoid, (
+                    Cdouble, Cint, Cdouble, Cstring, Cint, Cint,
+                    Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Ptr{UInt8},
+                ), 1.0e8, 301, 0.3, "PLANETOCENTRIC", 51, 51, hr, mn, sc, zeros(UInt8, 51),
+                zeros(UInt8, 51)
+            )
+            buf = zeros(UInt8, 64)
+            ccall((:getmsg_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ptr{UInt8}), "SHORT", 64, buf)
+            @test unsafe_string(pointer(buf)) == "SPICE(CANTGETROTATIONTYPE"
+        finally
+            ccall((:reset_c, SPICE.libcspice), Cvoid, ())
+            SPICE.dvpool("OBJECT_301_FRAME")
+            SPICE.pdpool("BODY301_PM", pm)
+        end
         r = @inferred et2lst(ctx, 1.0e8, 399, 0.3, "PLANETOCENTRIC")
         @test r isa Tuple{Int, Int, Int, String, String}
     end

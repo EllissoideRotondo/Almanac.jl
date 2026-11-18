@@ -926,6 +926,11 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         neg[9] = -neg[9]
         @test all(isnan, evsgp4(ctx0, et, geophs, neg))
         @test all(isnan, sgp4_c_evsgp4(et, geophs, neg))
+        # An eccentricity above 1: CSPICE N0067 (`zzsgp4`) signals no error and keeps the
+        # constants of the element set before, so it is not called.
+        hyp = copy(parsed[5][2])
+        hyp[6] = 1.5
+        @test throws_kind(() -> evsgp4(ctx0, et, geophs, hyp), :invalidelements)
         # Meta data that are not the ones of a type 10 segment.
         e = seg.eaddr
         function refuses(change)

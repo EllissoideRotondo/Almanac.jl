@@ -28,6 +28,7 @@ makedocs(;
                 "manual/conventions.md",
                 "manual/numerics.md",
                 "manual/additions.md",
+                "manual/cspice_defects.md",
             ],
             "Coverage and validation" => [
                 "manual/coverage.md",

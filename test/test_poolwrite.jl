@@ -444,6 +444,14 @@ group(
         @test bodn2c(ctx, "PW_BODDEF_ONE") == 7654323
         @test throws_kind(() -> boddef(ctx, "   ", 5), :badarg)
         @test bodn2c(SpiceContext(), "PW_BODDEF_ONE") === nothing
+        # CSPICE N0067 (`zzboddef`) signals TOOMANYPAIRS past 161 pairs; Almanac has no
+        # limit. CSPICE is not called: it would keep the pairs for the whole process.
+        many = SpiceContext()
+        for i in 1:200
+            boddef(many, "PW_MANY_$i", 7_600_000 + i)
+        end
+        @test all(i -> bodn2c(many, "PW_MANY_$i") == 7_600_000 + i, 1:200)
+        @test all(i -> bodc2n(many, 7_600_000 + i) == "PW_MANY_$i", 1:200)
     end
 
     @apart @testset "watchers" begin
@@ -537,6 +545,12 @@ group(
         @test !expool(ctx, "PW_EMPTY")
         pcpool(ctx, "PW_CUT", ["a"^100])
         @test gcpool(ctx, "PW_CUT") == ["a"^80]
+        # `lmpool` of a string over 80 characters: CSPICE N0067 (`zzrvbf`) writes past the
+        # slot of the value, so it is not called. Almanac keeps the first 80 characters,
+        # and the next value and the next variable are intact.
+        lmpool(ctx, ["PW_LONGSTR = ( '" * "a"^100 * "', 'b' )", "PW_NEXT = 'c'"])
+        @test gcpool(ctx, "PW_LONGSTR") == ["a"^80, "b"]
+        @test gcpool(ctx, "PW_NEXT") == ["c"]
         @test throws_kind(() -> ldpool(ctx, "/no/such/file.tpc"), :fileopenfailed)
         @test throws_kind(() -> gnpool(ctx, "*", 1, -1), :badarraysize)
     end

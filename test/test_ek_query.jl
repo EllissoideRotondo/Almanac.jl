@@ -1000,6 +1000,28 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
             @test kind !== nothing
             @test neo_kind(f) == kind
         end
+        # Two bad indices: CSPICE checks the row, then the element, then the SELECT column.
+        function c_long_msg()
+            buf = zeros(UInt8, 1841)
+            ccall((:getmsg_c, EKLIB), Cvoid, (Cstring, Cint, Ptr{UInt8}), "LONG", 1841, buf)
+            return unsafe_string(pointer(buf))
+        end
+        for (f, cf) in (
+                (() -> ekgi(res, 7, 1, 0), directi(7, 1, 0)),
+                (() -> ekgd(res, 7, 1, 0), directd(7, 1, 0)),
+                (() -> ekgc(res, 7, 1, 0), directc(7, 1, 0)),
+            )
+            cf()
+            cmsg = c_long_msg()
+            @test c_pending_kind() === :invalidindex
+            e = try
+                f()
+            catch err
+                err
+            end
+            @test e isa Almanac.SpiceError && e.kind === :invalidindex
+            @test e.msg == cmsg == "ELMENT must be positive but was 0."
+        end
         # An element after the last one is "not found" in both engines (for a scalar column
         # CSPICE does not look at the element number).
         @test ekgi(res, 1, 1, 2) == c_ekgi(1, 1, 2)
@@ -1091,6 +1113,31 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
             @test ekntab(c) == 1 && ktotal(c, "EK") == 1
         end
         SPICE.kclear()
+    end
+
+    ek_part("ORDER BY and a join on a fixed-count string column of 40 characters") do
+        # Regression for a defect of CSPICE N0067 (`zzekjsrt`): on a fixed-count (class 9)
+        # string column longer than 32 characters, a join fails in `ekfind` and an
+        # ORDER BY in the first fetch, with STRINGTRUNCATED. Almanac returns the rows.
+        cols = [EKColSpec("ID", :INT; fixed = true), EKColSpec("S", :CHR; strlen = 40, fixed = true)]
+        strs = ["Z" * "a"^38 * "1", "B" * "b"^38 * "2", "M" * "c"^38 * "3", "A" * "d"^38 * "4"]
+        rows = Vector{Any}[Any[Any[i], Any[s]] for (i, s) in enumerate(strs)]
+        path = c_ek_write(joinpath(mktempdir(), "longstr.bes"), [EKSegSpec("LONGSTR", cols, rows, true)])
+        order = "SELECT ID FROM LONGSTR ORDER BY S"
+        joined = "SELECT A.ID FROM LONGSTR A, LONGSTR B WHERE A.S = B.S"
+        c = neo_context([path])
+        ids(q) = (r = ekfind(c, q); r[2] ? r[3] : [ekgi(r[1], 1, k)[1] for k in 1:r[1].nmrows])
+        @test ids(order) == [4, 2, 3, 1]
+        @test ids(order * " DESC") == [1, 3, 2, 4]
+        @test sort(ids(joined)) == [1, 2, 3, 4]
+        try
+            SPICE.furnsh(path)
+            @test c_kind(() -> c_ekfind(joined)) === :stringtruncated
+            @test c_ekfind(order) == (4, false, "")
+            @test c_kind(() -> c_ekgi(1, 1)) === :stringtruncated
+        finally
+            SPICE.unload(path)
+        end
     end
 end
 

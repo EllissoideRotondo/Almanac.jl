@@ -695,8 +695,8 @@ function _geo_termpt(
                 push!(trmvcs, pntbuf[j] + trgpos)
                 push!(epochs, trgepc)
             end
-            # As in CSPICE, the room goes down by the count for each point of the cut.
-            room -= n * n
+            # CSPICE takes n * n of the room here; a cut of n points needs n places.
+            room -= n
         end
         return npts, points, epochs, trmvcs
     end
@@ -759,7 +759,7 @@ function _geo_termpt(
             push!(trmvcs, corr.stellar ? (pntbuf[j] + trgpos) + stloff : pntbuf[j] + trgpos)
             push!(epochs, epoch)
         end
-        room -= n * n
+        room -= n
     end
     return npts, points, epochs, trmvcs
 end
@@ -907,9 +907,9 @@ meaning it has in [`limbpt`](@ref). `abcorr` is `"NONE"` or a reception correcti
 `schstp`, `soltol`, `maxn`, `et` and the [`dskstl`](@ref) tolerances are as in
 [`limbpt`](@ref).
 
-As in CSPICE, a half plane with `n` points takes `n^2` of the `maxn` places, not `n`.
-With an ellipsoid `n` is 1. With a DSK method, `:outofroom` can occur before `maxn`
-points are found, so give `maxn` a margin.
+`maxn` bounds the total number of points. `termpt_c` of CSPICE N0067 takes `n^2` of
+the `maxn` places for a half plane with `n` points, so with a DSK method it can signal
+`SPICE(OUTOFROOM)` where this call returns the points.
 
 Throws the kinds of [`limbpt`](@ref) for `et`, the bodies, the frame, `refvec`, `rolstp`
 and `maxn < 1`, and `SpiceError` with the kind

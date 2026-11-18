@@ -74,9 +74,9 @@ function _gf_occultation(
     pb.kind == 0x00 && _geo_occ_bad_shape(bshape)
     fb = _GeoOccBody(idf, pf.kind, pf.m, Int32(0))
     bb = _GeoOccBody(idb, pb.kind, pb.m, Int32(0))
-    # CSPICE reads the surface list of the back target with the ID of the front target.
-    bsrf = (bb.kind == _GEO_OCC_DSK && !isempty(bb.m.srflst)) ?
-        _geo_method(ks, idf, _geo_occ_upper(bshape)).srflst : bb.m.srflst
+    # CSPICE translates the surface names of the back target with the ID of the front
+    # target; the surfaces here are those of the back target.
+    bsrf = bb.m.srflst
     (
         (fb.kind == _GEO_OCC_DSK && bb.kind != _GEO_OCC_POINT) ||
             (bb.kind == _GEO_OCC_DSK && fb.kind != _GEO_OCC_POINT)
@@ -173,7 +173,9 @@ The result is a new `Window` that is a subset of the confinement window `cnfine`
 - `front`, `back`, `obsrvr`: names or IDs of three different bodies.
 - `fshape`, `bshape`: `"ELLIPSOID"`, `"POINT"` or
   `"DSK/UNPRIORITIZED[/SURFACES = <list>]"`. At least one target must be extended, and
-  a target with a DSK shape needs a point as the other target.
+  a target with a DSK shape needs a point as the other target. Surface names in
+  `bshape` are surfaces of `back`; `gfoclt_c` of CSPICE N0067 looks them up as
+  surfaces of `front`.
 - `fframe`, `bframe`: body-fixed frames of the extended targets. The frame of a point
   target is not read; a blank string is enough.
 - `abcorr`: `"NONE"` or a light time correction. Stellar aberration is not applied, as
