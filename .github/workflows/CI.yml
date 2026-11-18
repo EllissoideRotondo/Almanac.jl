@@ -52,8 +52,8 @@ jobs:
         with:
           coverage: false
   coverage:
-    # Line coverage of src/ in one job, kept as an artifact (lcov.info); the manual
-    # quotes the figure of this job.
+    # Line coverage of src/ and ext/ in one job, sent to Codecov and kept as an
+    # artifact (lcov.info); the manual quotes the figure of this job.
     name: Coverage (Julia 1, ubuntu-latest)
     if: github.event.repository.private == false
     runs-on: ubuntu-latest
@@ -61,6 +61,7 @@ jobs:
     permissions:
       actions: write
       contents: read
+      id-token: write  # Codecov authenticates the upload by OIDC, with no token
     env:
       JULIA_NUM_THREADS: 4
       ALMANAC_REQUIRE_KERNELS: 1
@@ -87,6 +88,13 @@ jobs:
       - name: Line coverage
         run: |
           awk -F'[:,]' '/^LH:/ {h += $2} /^LF:/ {f += $2} END {printf "lines hit %d of %d: %.1f %%\n", h, f, 100 * h / f}' lcov.info | tee -a "$GITHUB_STEP_SUMMARY"
+      - uses: codecov/codecov-action@v5
+        with:
+          files: lcov.info
+          use_oidc: true
+          # A pull request from a fork gets no OIDC token and uploads without one;
+          # a failed upload does not fail the job.
+          fail_ci_if_error: false
       - uses: actions/upload-artifact@v4
         with:
           name: lcov
