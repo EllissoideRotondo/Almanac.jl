@@ -294,57 +294,61 @@ function dsk_part_2(env)
     @test dsksrf!([7, -1], p, 499) == sort!(unique!([7; -1; dsksrf(p, 499)]))
     # The two files of a pair hold the same integers and doubles (part a), so the default
     # run reads the CSPICE file of each pair and the Almanac file of the first pair only.
+    fails = Failures()
     for name in (:a, :b, :c), path in (FULL || name === :a ? files[name] : files[name][1:1])
-        @test dskobj(path) == collect(SPICE.dskobj!(SPICE.SpiceIntCell(10), path))
+        check!(fails, dskobj(path) == collect(SPICE.dskobj!(SPICE.SpiceIntCell(10), path)), "dskobj", path)
         for body in (499, 401, 5)
-            @test dsksrf(path, body) == collect(SPICE.dsksrf!(SPICE.SpiceIntCell(10), path, body))
+            check!(fails, dsksrf(path, body) == collect(SPICE.dsksrf!(SPICE.SpiceIntCell(10), path, body)), "dsksrf", path, body)
         end
         h = dasopr(path)
         ch = c_dasopr(path)
         d = dlabfs(h)
         cd = SPICE.dlabfs(ch)
+        seg = 1
         while d !== nothing
-            @test dsk_tuple(dskgd(h, d)) == dsk_tuple(SPICE.dskgd(ch, cd))
+            check!(fails, dsk_tuple(dskgd(h, d)) == dsk_tuple(SPICE.dskgd(ch, cd)), "dskgd", path, seg)
             nb = dskb02(h, d)
             cb = c_dskb02(ch, cd)
-            @test nb[1:3] == cb[1:3] && nb[8:11] == cb[8:11]
-            @test nb[4] == cb[4] && nb[5] === cb[5] && nb[6] == cb[6] && nb[7] == cb[7]
+            check!(fails, nb[1:3] == cb[1:3] && nb[8:11] == cb[8:11], "dskb02 counts and voxel grid", path, seg)
+            check!(fails, nb[4] == cb[4] && nb[5] === cb[5] && nb[6] == cb[6] && nb[7] == cb[7], "dskb02 bounds and scale", path, seg)
             nv, np = dskz02(h, d)
-            @test (nv, np) == SPICE.dskz02(ch, cd)
-            @test dskv02(h, d, 1, nv) == c_dskv02(ch, cd, 1, nv)
-            @test dskp02(h, d, 1, np) == c_dskp02(ch, cd, 1, np)
+            check!(fails, (nv, np) == SPICE.dskz02(ch, cd), "dskz02", path, seg)
+            check!(fails, dskv02(h, d, 1, nv) == c_dskv02(ch, cd, 1, nv), "dskv02 all", path, seg)
+            check!(fails, dskp02(h, d, 1, np) == c_dskp02(ch, cd, 1, np), "dskp02 all", path, seg)
             for _ in 1:20
                 a = rand(rng, 1:nv); r = rand(rng, 1:50)
-                @test dskv02(h, d, a, r) == c_dskv02(ch, cd, a, r)
+                check!(fails, dskv02(h, d, a, r) == c_dskv02(ch, cd, a, r), "dskv02", path, seg, a, r)
                 a = rand(rng, 1:np); r = rand(rng, 1:50)
-                @test dskp02(h, d, a, r) == c_dskp02(ch, cd, a, r)
+                check!(fails, dskp02(h, d, a, r) == c_dskp02(ch, cd, a, r), "dskp02", path, seg, a, r)
             end
             # Every plate in the exhaustive run, every tenth plate in the default run.
-            @test all(dskn02(h, d, k) == c_dskn02(ch, cd, k) for k in 1:(FULL ? 1 : 10):np)
+            check!(fails, all(dskn02(h, d, k) == c_dskn02(ch, cd, k) for k in 1:(FULL ? 1 : 10):np), "dskn02", path, seg)
             for item in 1:14
                 full = dski02(h, d, item, 1, 10_000_000)
-                @test full == c_dski02(ch, cd, item, 1, 2_000_000)
+                check!(fails, full == c_dski02(ch, cd, item, 1, 2_000_000), "dski02 all", path, seg, item)
                 n = length(full)
                 for _ in 1:(n > 1 ? 5 : 0)
                     a = rand(rng, 1:n); r = rand(rng, 1:100)
-                    @test dski02(h, d, item, a, r) == c_dski02(ch, cd, item, a, r)
+                    check!(fails, dski02(h, d, item, a, r) == c_dski02(ch, cd, item, a, r), "dski02", path, seg, item, a, r)
                 end
             end
             for item in 15:19
                 full = dskd02(h, d, item, 1, 10_000_000)
-                @test bits_equal(full, c_dskd02(ch, cd, item, 1, 2_000_000))
+                check!(fails, bits_equal(full, c_dskd02(ch, cd, item, 1, 2_000_000)), "dskd02 all", path, seg, item)
                 n = length(full)
                 for _ in 1:(n > 1 ? 5 : 0)
                     a = rand(rng, 1:n); r = rand(rng, 1:100)
-                    @test bits_equal(dskd02(h, d, item, a, r), c_dskd02(ch, cd, item, a, r))
+                    check!(fails, bits_equal(dskd02(h, d, item, a, r), c_dskd02(ch, cd, item, a, r)), "dskd02", path, seg, item, a, r)
                 end
             end
             d = dlafns(h, d)
             cd = SPICE.dlafns(ch, cd)
+            seg += 1
         end
         c_dascls(ch)
         dascls(h)
     end
+    @test isempty(fails)
     return nothing
 end
 
@@ -543,6 +547,7 @@ function dsk_part_6(env)
     (; rng, dir, tk, spk, specs_a, specs_b, specs_c, files, wctx, comments) = env
     (; loadlist, ctx, ks, shape_e, shape_r, shape_w) = env
     maxd = 0.0
+    fails = Failures()
     for _ in 1:nsample(200, 2000)
         p = V3(randn(rng, 3)) * 3
         a, b, c = V3(randn(rng, 3)), V3(randn(rng, 3)), V3(randn(rng, 3))
@@ -551,11 +556,12 @@ function dsk_part_6(env)
         np_, nd = pltnp(p, a, b, c)
         cp_, cd = SPICE.pltnp(collect(p), collect(a), collect(b), collect(c))
         maxd = max(maxd, norm(np_ - cp_), abs(nd - cd))
-        @test pltnrm(a, b, c) == SPICE.pltnrm(collect(a), collect(b), collect(c))
+        check!(fails, pltnrm(a, b, c) == SPICE.pltnrm(collect(a), collect(b), collect(c)), "pltnrm", a, b, c)
         delta = randn(rng)
-        @test collect(pltexp([a, b, c], delta)) == SPICE.pltexp([collect(a), collect(b), collect(c)], delta)
-        @test pltexp(hcat(a, b, c), delta) == pltexp((a, b, c) |> collect, delta)
+        check!(fails, collect(pltexp([a, b, c], delta)) == SPICE.pltexp([collect(a), collect(b), collect(c)], delta), "pltexp", a, b, c, delta)
+        check!(fails, pltexp(hcat(a, b, c), delta) == pltexp((a, b, c) |> collect, delta), "pltexp matrix form", a, b, c, delta)
     end
+    @test isempty(fails)
     # Fixed cases: three vertices exactly on one line, with the longest edge first, second
     # and third. A random plate reaches these branches about once in a thousand.
     for (a, b, c) in (
@@ -570,11 +576,13 @@ function dsk_part_6(env)
         maxd = max(maxd, norm(np_ - cp_), abs(nd - cd))
     end
     @test maxd == 0.0
-    for s in (specs_a..., specs_b..., specs_c...)
-        @test pltar(s.verts, s.plates) === c_pltar(s.verts, s.plates)
-        @test pltar(reduce(hcat, s.verts), reduce(hcat, s.plates)) === pltar(s.verts, s.plates)
-        length(s.plates) >= 4 && @test pltvol(s.verts, s.plates) === c_pltvol(s.verts, s.plates)
+    fails = Failures()
+    for (k, s) in enumerate((specs_a..., specs_b..., specs_c...))
+        check!(fails, pltar(s.verts, s.plates) === c_pltar(s.verts, s.plates), "pltar", k)
+        check!(fails, pltar(reduce(hcat, s.verts), reduce(hcat, s.plates)) === pltar(s.verts, s.plates), "pltar matrix form", k)
+        length(s.plates) >= 4 && check!(fails, pltvol(s.verts, s.plates) === c_pltvol(s.verts, s.plates), "pltvol", k)
     end
+    @test isempty(fails)
     ev, ep = shape_e
     @test isapprox(pltvol(ev, ep), 4 / 3 * pi * 3.0 * 2.5 * 2.0; rtol = 2.0e-2)
     @test pltvol(cube_shape(1.0)...) ≈ 8.0 && pltar(cube_shape(1.0)...) ≈ 24.0
@@ -593,29 +601,31 @@ end
 function dsk_part_7(env)
     (; rng, dir, tk, spk, specs_a, specs_b, specs_c, files, wctx, comments) = env
     (; loadlist, ctx, ks, shape_e, shape_r, shape_w) = env
+    fails = Failures()
     for (code, body) in (
             (1, 499), (2, 499), (3, 499), (22, 499), (5, 499), (6, 499), (1, 401),
             (7, 499), (1, 5), (-3, 499),
         )
-        @test srfc2s(ctx, code, body) == SPICE.srfc2s(code, body)
+        check!(fails, srfc2s(ctx, code, body) == SPICE.srfc2s(code, body), "srfc2s", code, body)
     end
     for (code, body) in (
             (1, "MARS"), (22, "499"), (1, "phobos"), (6, "Mars"), (5, "MARS"),
             (1, "NO SUCH BODY"), (9, "MARS"),
         )
-        @test srfcss(ctx, code, body) == SPICE.srfcss(code, body)
+        check!(fails, srfcss(ctx, code, body) == SPICE.srfcss(code, body), "srfcss", code, body)
     end
     for name in (
             "Ellipsoid One", "ellipsoid   one", " ROUGH ", "rough", "tilted cube",
             "old name", "OLD NAME", "p shape", "12", " -7 ", "nothing", " ", "1.5", "-1.5", "2e1", "x1",
         )
         for body in (499, 401, 5)
-            @test srfscc(ctx, name, body) == SPICE.srfscc(name, body)
+            check!(fails, srfscc(ctx, name, body) == SPICE.srfscc(name, body), "srfscc", repr(name), body)
         end
         for body in ("MARS", "401", "NO SUCH BODY")
-            @test srfs2c(ctx, name, body) == SPICE.srfs2c(name, body)
+            check!(fails, srfs2c(ctx, name, body) == SPICE.srfs2c(name, body), "srfs2c", repr(name), body)
         end
     end
+    @test isempty(fails)
     # An empty string is an error of the C interface of CSPICE.
     c_empty = c_kind(
         () -> ccall(
@@ -664,6 +674,7 @@ function dsk_part_8(env)
     (; loadlist, ctx, ks, shape_e, shape_r, shape_w) = env
     lonlat = [[2pi * rand(rng) - pi, pi * rand(rng) - pi / 2] for _ in 1:nsample(100, 400)]
     push!(lonlat, [0.0, pi / 2], [0.0, -pi / 2], [pi, 0.0], [-pi, 0.0])
+    fails = Failures()
     for (method, target, fixref, tol) in (
             ("ELLIPSOID", "MARS", "IAU_MARS", 1.0e-13),
             ("ellipsoid", "499", "MARS_TILT", 1.0e-13),
@@ -678,15 +689,16 @@ function dsk_part_8(env)
         for et in (0.0, 75.0)
             cpts = c_latsrf(method, target, et, fixref, lonlat)
             npts = latsrf(ctx, method, target, et, fixref, lonlat)
-            @test maximum(norm(cpts[i] - npts[i]) for i in eachindex(cpts)) <= tol
-            @test latsrf(ctx, method, target, et, fixref, reduce(hcat, lonlat)) == npts
+            within!(fails, maximum(norm(cpts[i] - npts[i]) for i in eachindex(cpts)), tol, "latsrf", method, target, fixref, et)
+            check!(fails, latsrf(ctx, method, target, et, fixref, reduce(hcat, lonlat)) == npts, "latsrf matrix form", method, target, fixref, et)
             cn = c_srfnrm(method, target, et, fixref, cpts)
             nn = srfnrm(ctx, method, target, et, fixref, cpts)
-            @test maximum(norm(cn[i] - nn[i]) for i in eachindex(cn)) <= max(tol, 0.0) * 1.0e3
-            @test all(abs(norm(v) - 1) <= 4eps() for v in nn)
-            @test srfnrm(ctx, method, target, et, fixref, reduce(hcat, cpts)) == nn
+            within!(fails, maximum(norm(cn[i] - nn[i]) for i in eachindex(cn)), max(tol, 0.0) * 1.0e3, "srfnrm", method, target, fixref, et)
+            check!(fails, all(abs(norm(v) - 1) <= 4eps() for v in nn), "srfnrm unit length", method, target, fixref, et)
+            check!(fails, srfnrm(ctx, method, target, et, fixref, reduce(hcat, cpts)) == nn, "srfnrm matrix form", method, target, fixref, et)
         end
     end
+    @test isempty(fails)
     # Error kinds of the method string, the target and the frame, as CSPICE.
     c_latsrf_kind(method, target, fixref) = c_kind(
         () -> ccall(

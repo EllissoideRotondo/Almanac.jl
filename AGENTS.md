@@ -175,7 +175,10 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
   and SPICE.jl is never called from a spawned task.
 - The default run of all groups has a budget of 120 s. Large samples go in the
   exhaustive tier (`ALMANAC_TEST_FULL=1`, `nsample(fast, full)`). `ALMANAC_TEST_SEED`
-  sets the random seed.
+  sets the random seed. `ALMANAC_TEST_EXCLUDE` (group names separated by spaces) leaves
+  groups out of a run without group names; CI runs the AD groups and `static` on the
+  coverage job (and two AD groups on Julia 1.10) only, and every group on a tag or a
+  manual run.
 - Kernels are downloaded into `test/data/` by `test/kernels.jl` (`SOURCES` lists the
   URLs and SHA-256 sums). `ALMANAC_KERNEL_DIR` overrides the location,
   `ALMANAC_DOWNLOAD_KERNELS=0` turns the download off, and `ALMANAC_REQUIRE_KERNELS=1`

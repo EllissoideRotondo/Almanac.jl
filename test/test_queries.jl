@@ -25,27 +25,31 @@ using ForwardDiff
     ets = range(t0 + 1000, t1 - 1000; length = 5)
 
     @testset "the results of spkezr and spkpos, bit for bit" begin
+        fails = Failures()
         for corr in ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT", "XLT+S", "XCN", "XCN+S"),
                 ref in ("J2000", "ECLIPJ2000", "IAU_EARTH"),
                 (targ, obs) in (("PROBE", "EARTH"), (399, -1000), ("EARTH", "SSB"))
             q = state_query(ctx, targ, ref, corr, obs)
             for et in ets
-                @test q(et) === spkezr(ctx, targ, et, ref, corr, obs)
-                @test spkpos(q, et) === spkpos(ctx, targ, et, ref, corr, obs)
+                check!(fails, q(et) === spkezr(ctx, targ, et, ref, corr, obs), "state_query", corr, ref, targ, obs, et)
+                check!(fails, spkpos(q, et) === spkpos(ctx, targ, et, ref, corr, obs), "spkpos of query", corr, ref, targ, obs, et)
             end
         end
+        @test isempty(fails)
         q = state_query(ctx, "PROBE", "J2000", Aberration("LT+S"), "EARTH")
         @test spkezr.(q, ets) == [spkezr(ctx, "PROBE", et, "J2000", "LT+S", "EARTH") for et in ets]
     end
 
     @testset "the results of pxform and sxform, bit for bit" begin
+        fails = Failures()
         for (from, to) in (("J2000", "IAU_EARTH"), ("IAU_EARTH", "ECLIPJ2000"), (1, 17))
             q = rotation_query(ctx, from, to)
             for et in ets
-                @test q(et) === pxform(ctx, from, to, et)
-                @test sxform(q, et) === sxform(ctx, from, to, et)
+                check!(fails, q(et) === pxform(ctx, from, to, et), "rotation_query", from, to, et)
+                check!(fails, sxform(q, et) === sxform(ctx, from, to, et), "sxform of query", from, to, et)
             end
         end
+        @test isempty(fails)
     end
 
     @testset "the kernels of the query" begin

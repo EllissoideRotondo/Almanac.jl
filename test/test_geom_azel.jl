@@ -26,6 +26,7 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
 
     @testset "coordinates and Jacobians, 1000 random cases" begin
         st = GeoStats()
+        fails = Failures()
         for k in 1:1000
             ccw = rand(rng, Bool)
             plsz = rand(rng, Bool)
@@ -39,7 +40,7 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
             a = recazl(v, ccw, plsz)
             b = g_recazl(v, ccw, plsz)
             gput!(st, "recazl", max(abs(a[1] - b[1]) / b[1], abs(a[2] - b[2]), abs(a[3] - b[3])))
-            @test 0.0 <= a[2] < 2pi && abs(a[3]) <= pi / 2
+            check!(fails, 0.0 <= a[2] < 2pi && abs(a[3]) <= pi / 2, "recazl range of the angles", k, v, ccw, plsz)
             gput!(st, "azlrec of recazl", grel(azlrec(a..., ccw, plsz), v))
             a = dazldr(v..., ccw, plsz)
             b = g_dazldr(v..., ccw, plsz)
@@ -48,15 +49,15 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
             b = g_drdazl(range, az, el, ccw, plsz)
             gput!(st, "drdazl", maximum(abs.(a .- b)) / maximum(abs.(b)))
             if k % 20 == 0
-                @test azlrec(range, az, el; azccw = ccw, elplsz = plsz) == azlrec(range, az, el, ccw, plsz)
-                @test recazl(v; azccw = ccw, elplsz = plsz) == recazl(v, ccw, plsz)
-                @test dazldr(v...; azccw = ccw, elplsz = plsz) == dazldr(v..., ccw, plsz)
-                @test drdazl(range, az, el; azccw = ccw, elplsz = plsz) == drdazl(range, az, el, ccw, plsz)
+                check!(fails, azlrec(range, az, el; azccw = ccw, elplsz = plsz) == azlrec(range, az, el, ccw, plsz), "azlrec keywords", k)
+                check!(fails, recazl(v; azccw = ccw, elplsz = plsz) == recazl(v, ccw, plsz), "recazl keywords", k)
+                check!(fails, dazldr(v...; azccw = ccw, elplsz = plsz) == dazldr(v..., ccw, plsz), "dazldr keywords", k)
+                check!(fails, drdazl(range, az, el; azccw = ccw, elplsz = plsz) == drdazl(range, az, el, ccw, plsz), "drdazl keywords", k)
                 # The two Jacobians are inverses, and they are the derivatives.
                 p = azlrec(range, az, el, ccw, plsz)
-                @test isapprox(dazldr(p..., ccw, plsz) * drdazl(range, az, el, ccw, plsz), I; atol = 1.0e-9)
+                check!(fails, isapprox(dazldr(p..., ccw, plsz) * drdazl(range, az, el, ccw, plsz), I; atol = 1.0e-9), "dazldr * drdazl = I", k, range, az, el, ccw, plsz)
                 jf = ForwardDiff.jacobian(x -> azlrec(x[1], x[2], x[3], ccw, plsz), SVector(range, az, el))
-                @test isapprox(jf, drdazl(range, az, el, ccw, plsz); rtol = 1.0e-12)
+                check!(fails, isapprox(jf, drdazl(range, az, el, ccw, plsz); rtol = 1.0e-12), "drdazl = ForwardDiff", k, range, az, el, ccw, plsz)
             end
         end
         # Special points: the axes, zero angles with each sense, the origin.
@@ -68,11 +69,12 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
 
             a = recazl(v, ccw, plsz)
             b = g_recazl(v, ccw, plsz)
-            @test a[1] == b[1] && a[2] == b[2] && a[3] == b[3]
+            check!(fails, a[1] == b[1] && a[2] == b[2] && a[3] == b[3], "recazl special point", v, ccw, plsz)
             # Equal to the last bit where the C library of CSPICE is accurate; on Windows
             # its cos(π/2) is off by 2e-21 (see `ORACLE_LIBM_EXACT`).
-            @test oracle_equal(azlrec(a..., ccw, plsz), g_azlrec(b..., ccw, plsz), a[1])
+            check!(fails, oracle_equal(azlrec(a..., ccw, plsz), g_azlrec(b..., ccw, plsz), a[1]), "azlrec special point", v, ccw, plsz)
         end
+        @test isempty(fails)
         greport("azimuth and elevation", st)
         for k in keys(st.d)
             @test st.d[k] < AZ_TOL.coord
@@ -83,6 +85,7 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
 
     @testset "azlcpo, 600 random cases" begin
         st = GeoStats()
+        fails = Failures()
         for k in 1:600
             ctr = rand(rng, ["EARTH", "MOON", "VENUS"])
             t = rand(rng, setdiff(GEO_BODIES, [ctr]))
@@ -109,9 +112,10 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
             gput!(st, "light time", abs(a[2] - b[2]) / b[2])
             if k % 10 == 0
                 c = azlcpo(ctx, "ellipsoid", GEO_IDS[t], et, Aberration(cor), ccw, plsz, SVector{3}(pos), GEO_IDS[ctr], namfrm(ctx, cref))
-                @test c == a
+                check!(fails, c == a, "azlcpo by id and Aberration", k, t, et, cor, ctr, cref)
             end
         end
+        @test isempty(fails)
         greport("azlcpo", st)
         @test gget(st, "range") < AZ_TOL.range
         @test gget(st, "azimuth and elevation (rad)") < AZ_TOL.angle
@@ -144,9 +148,11 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
     @testset "no allocation and inferred types" begin
         et = 2.5e8
         p = SVector(6378.0 * cos(0.5), 0.0, 6378.0 * sin(0.5))
+        fails = Failures()
         for c in GEO_CORRS, ccw in (true, false)
-            @test gwarm(az_alloc_cpo, ks, et, c, p, ccw, !ccw) == 0
+            check!(fails, gwarm(az_alloc_cpo, ks, et, c, p, ccw, !ccw) == 0, "azlcpo allocates", c, ccw)
         end
+        @test isempty(fails)
         @test gwarm(az_alloc_cpo, ks, et, "LT+S", SVector(0.0, 0.0, 6356.0), true, true) == 0
         @test gwarm(az_alloc_rec, 2.0, 0.3, 0.4) == 0
         @test gwarm(az_alloc_azl, p) == 0
@@ -161,18 +167,20 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
 
     @testset "azlcpo: epoch as a dual number" begin
         st = GeoStats()
+        fails = Failures()
         p = SVector(6378.0 * cos(0.5), 0.0, 6378.0 * sin(0.5))
         for et in record_safe_epochs(rng, nsample(6, 24)), cor in GEO_CORRS
             f = t -> azlcpo(ks, "ELLIPSOID", 301, t, cor, true, true, p, 399, 10013)[1]
             d = f(ForwardDiff.Dual(et, 1.0))
             v = f(et)
-            @test isapprox(ForwardDiff.value.(d), v; rtol = 1.0e-12)
+            check!(fails, isapprox(ForwardDiff.value.(d), v; rtol = 1.0e-12), "dual value", et, cor)
             dp = ForwardDiff.partials.(d, 1)[SOneTo(3)]
             fd = geo_fd(t -> f(t)[SOneTo(3)], et, 20.0)
             w = SVector(1.0 / v[1], 1.0, 1.0)          # range in units of itself, angles in radians
             gput!(st, "d(range, az, el)/dt against central difference", norm(w .* (dp .- fd)) / norm(w .* fd))
             gput!(st, "d(range, az, el)/dt against the returned rates", norm(w .* (dp .- v[SVector(4, 5, 6)])) / norm(w .* v[SVector(4, 5, 6)]))
         end
+        @test isempty(fails)
         greport("azlcpo, dual epoch", st)
         @test gget(st, "d(range, az, el)/dt against central difference") < 1.0e-4
         @test gget(st, "d(range, az, el)/dt against the returned rates") < 1.0e-3

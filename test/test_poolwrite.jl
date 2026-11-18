@@ -315,6 +315,7 @@ group(
             @test szpool(name) == SPICE.szpool(name)
         end
 
+        fails = Failures()
         for (item, contin) in (
                     ("PW_LONG", "//"), ("PW_MARK", "-"), ("PW_LONG", "-"),
                     ("PW_MARK", "//"), ("FRAME_31008_NAME", "//"),
@@ -322,11 +323,12 @@ group(
             got = stpool(ctx, item, nth, contin)
             want = SPICE.stpool(item, nth, contin)
             if got === nothing
-                @test isempty(want)
+                check!(fails, isempty(want), "stpool nothing", item, nth, contin)
             else
-                @test got == want
+                check!(fails, got == want, "stpool", item, nth, contin)
             end
         end
+        @test isempty(fails)
         @test stpool(ctx, "PW_LONG", 1, "//") == "first part second part end."
         @test stpool(ctx, "PW_LONG", 2, "//") == "alone"
         @test stpool(ctx, "PW_LONG", 3, "//") == "x y"
@@ -419,14 +421,17 @@ group(
             "PW_ALIAS_AGAIN", "EARTH", "PW_SECOND_NAME", "PW_NOTHING", "MOON",
         )
         codes = (7654321, -7654322, 7654323, 7654324, 399, 301, 5)
-        compare() = (
+        function compare()
+            fails = Failures()
             for n in names
-                @test bodn2c(ctx, n) == SPICE.bodn2c(n)
-            end;
-            for c in codes
-                @test bodc2n(ctx, c) == SPICE.bodc2n(c)
+                check!(fails, bodn2c(ctx, n) == SPICE.bodn2c(n), "bodn2c", n)
             end
-        )
+            for c in codes
+                check!(fails, bodc2n(ctx, c) == SPICE.bodc2n(c), "bodc2n", c)
+            end
+            @test isempty(fails)
+            return nothing
+        end
         compare()
         @test bodn2c(ctx, "PW_BODDEF_ONE") == 7654323
         # The pairs stay through furnsh, unload and kclear, as in CSPICE.

@@ -189,31 +189,33 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "forms of the call" begin
         # The forms do not depend on the epoch: one epoch in the default run.
+        fails = Failures()
         for et in random_epochs(rng, nsample(1, 5), span...), ab in AB_CORRECTIONS, ref in ("J2000", "IAU_EARTH")
             byid = spkezr(ctx, 301, et, ref, ab, 10)
-            @test byid[1] isa SVector{6, Float64} && byid[2] isa Float64
-            @test spkezr(ctx, "MOON", et, ref, ab, "SUN") == byid
-            @test spkezr(ctx, 301, et, ref, Aberration(ab), 10) == byid
-            @test spkezr(ctx, 301, et, ref, " " * lowercase(ab), 10) == byid
-            @test spkezr(Almanac.kernelset(ctx), 301, et, ref, ab, 10) == byid
+            check!(fails, byid[1] isa SVector{6, Float64} && byid[2] isa Float64, "spkezr types", et, ab, ref)
+            check!(fails, spkezr(ctx, "MOON", et, ref, ab, "SUN") == byid, "spkezr by name", et, ab, ref)
+            check!(fails, spkezr(ctx, 301, et, ref, Aberration(ab), 10) == byid, "spkezr Aberration", et, ab, ref)
+            check!(fails, spkezr(ctx, 301, et, ref, " " * lowercase(ab), 10) == byid, "spkezr lower case", et, ab, ref)
+            check!(fails, spkezr(Almanac.kernelset(ctx), 301, et, ref, ab, 10) == byid, "spkezr KernelSet", et, ab, ref)
             pos, lt = spkpos(ctx, 301, et, ref, ab, 10)
-            @test pos isa SVector{3, Float64}
-            @test spkpos(ctx, "MOON", et, ref, Aberration(ab), "SUN") == (pos, lt)
+            check!(fails, pos isa SVector{3, Float64}, "spkpos type", et, ab, ref)
+            check!(fails, spkpos(ctx, "MOON", et, ref, Aberration(ab), "SUN") == (pos, lt), "spkpos by name", et, ab, ref)
             # spkpos follows `spkapo` and spkezr follows `spkltc`: rounding apart.
-            @test isapprox(pos, byid[1][SOneTo(3)]; rtol = 1.0e-12)
-            @test isapprox(lt, byid[2]; rtol = 1.0e-12)
+            check!(fails, isapprox(pos, byid[1][SOneTo(3)]; rtol = 1.0e-12), "spkpos ≈ spkezr", et, ab, ref)
+            check!(fails, isapprox(lt, byid[2]; rtol = 1.0e-12), "spkpos lt ≈ spkezr lt", et, ab, ref)
             # The light time is the norm of the position without stellar aberration,
             # and stellar aberration keeps the norm.
-            @test isapprox(lt, norm(pos) / 299792.458; rtol = 1.0e-13)
+            check!(fails, isapprox(lt, norm(pos) / 299792.458; rtol = 1.0e-13), "lt = |r| / c", et, ab, ref)
         end
         # A body relative to itself: zero state and zero light time, as CSPICE.
         for ab in AB_CORRECTIONS, ref in ("J2000", "IAU_MOON")
             state, lt = spkezr(ctx, 399, 1.0e8, ref, ab, 399)
-            @test all(iszero, state) && lt == 0
-            @test all(iszero, SPICE.spkezr("399", 1.0e8, ref, ab, "399")[1])
-            @test all(iszero, spkpos(ctx, 399, 1.0e8, ref, ab, 399)[1])
-            @test all(all(iszero, d) for d in spkder(ctx, 399, 1.0e8, ref, ab, 399, Val(2)))
+            check!(fails, all(iszero, state) && lt == 0, "spkezr self", ab, ref)
+            check!(fails, all(iszero, SPICE.spkezr("399", 1.0e8, ref, ab, "399")[1]), "CSPICE spkezr self", ab, ref)
+            check!(fails, all(iszero, spkpos(ctx, 399, 1.0e8, ref, ab, 399)[1]), "spkpos self", ab, ref)
+            check!(fails, all(all(iszero, d) for d in spkder(ctx, 399, 1.0e8, ref, ab, 399, Val(2))), "spkder self", ab, ref)
         end
+        @test isempty(fails)
         # Reception and transmission differ, and the correction has the expected size:
         # the Sun seen from the Earth moves by about 20 arc seconds of aberration.
         geo = spkpos(ctx, 10, 0.0, "J2000", "NONE", 399)[1]
@@ -239,55 +241,60 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "low-level calls against CSPICE" begin
         # Each epoch runs every correction through every low-level call for two frames and
-        # four pairs of bodies (about 1100 assertions): three epochs in the default run.
+        # four pairs of bodies (about 1100 checks, which `fails` collects): three epochs in
+        # the default run.
         epochs = random_epochs(rng, nsample(3, 15), span...)
         worst = Dict{String, Float64}()
-        note(name, x) = (worst[name] = max(get(worst, name, 0.0), x); x)
+        fails = Failures()
+        function note(name, x, tol, inputs...)
+            worst[name] = max(get(worst, name, 0.0), x)
+            return within!(fails, x, tol, name, inputs...)
+        end
         tol = 1.0e-11
         for et in epochs, ref in ("J2000", "ECLIPJ2000"), (targ, obs) in ((301, 399), (5, 301), (399, 10), (10, 0))
             cssb = SPICE.spkssb(obs, et, ref)
             ssb = spkssb(ctx, obs, et, ref)
-            @test ssb isa SVector{6, Float64}
-            @test note("spkssb", ab_reldiff(ssb, cssb)) <= 1.0e-13
-            @test ssb == spkgeo(ctx, obs, et, ref, 0)[1]
+            check!(fails, ssb isa SVector{6, Float64}, "spkssb type", et, ref, obs)
+            note("spkssb", ab_reldiff(ssb, cssb), 1.0e-13, et, ref, obs)
+            check!(fails, ssb == spkgeo(ctx, obs, et, ref, 0)[1], "spkssb == spkgeo", et, ref, obs)
             acc = SVector(1.0e-6, -2.0e-6, 5.0e-7)
             for ab in ("NONE", AB_CORRECTIONS...)
                 cs, cl, cd = SPICE.spkltc(targ, et, ref, ab, cssb)
                 s, l, d = spkltc(ctx, targ, et, ref, ab, cssb)
-                @test note("spkltc state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6])) <= tol
-                @test note("spkltc lt", abs(l - cl) / cl) <= tol
-                @test note("spkltc dlt", abs(d - cd) / max(abs(cd), 1.0e-9)) <= 1.0e-8
-                @test spkltc(ctx, targ, et, ref, Aberration(ab), ssb) == spkltc(ctx, targ, et, ref, ab, ssb)
+                note("spkltc state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6]), tol, et, ref, targ, obs, ab)
+                note("spkltc lt", abs(l - cl) / cl, tol, et, ref, targ, obs, ab)
+                note("spkltc dlt", abs(d - cd) / max(abs(cd), 1.0e-9), 1.0e-8, et, ref, targ, obs, ab)
+                check!(fails, spkltc(ctx, targ, et, ref, Aberration(ab), ssb) == spkltc(ctx, targ, et, ref, ab, ssb), "spkltc Aberration form", et, ref, targ, obs, ab)
 
                 cs, cl, cd = SPICE.spkaps(targ, et, ref, ab, cssb, vcat(acc, zeros(3)))   # SPICE.jl wants 6
                 s, l, d = spkaps(ctx, targ, et, ref, ab, cssb, acc)
-                @test note("spkaps state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6])) <= tol
-                @test note("spkaps lt", abs(l - cl) / cl) <= tol
-                @test note("spkaps dlt", abs(d - cd) / max(abs(cd), 1.0e-9)) <= 1.0e-8
+                note("spkaps state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6]), tol, et, ref, targ, obs, ab)
+                note("spkaps lt", abs(l - cl) / cl, tol, et, ref, targ, obs, ab)
+                note("spkaps dlt", abs(d - cd) / max(abs(cd), 1.0e-9), 1.0e-8, et, ref, targ, obs, ab)
 
                 cs, cl, cd = SPICE.spkacs(targ, et, ref, ab, obs)
                 s, l, d = spkacs(ctx, targ, et, ref, ab, obs)
-                @test note("spkacs state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6])) <= tol
-                @test note("spkacs lt", abs(l - cl) / cl) <= tol
-                @test note("spkacs dlt", abs(d - cd) / max(abs(cd), 1.0e-9)) <= 1.0e-8
+                note("spkacs state", ab_reldiff(s[SOneTo(3)], cs[1:3]) + ab_reldiff(s[SVector(4, 5, 6)], cs[4:6]), tol, et, ref, targ, obs, ab)
+                note("spkacs lt", abs(l - cl) / cl, tol, et, ref, targ, obs, ab)
+                note("spkacs dlt", abs(d - cd) / max(abs(cd), 1.0e-9), 1.0e-8, et, ref, targ, obs, ab)
                 # spkacs in an inertial frame is the state of spkezr. (With NONE, spkacs
                 # takes the difference of two barycentric states and spkezr does not.)
-                ab == "NONE" || @test (s, l) == spkezr(ctx, targ, et, ref, ab, obs)
+                ab == "NONE" || check!(fails, (s, l) == spkezr(ctx, targ, et, ref, ab, obs), "spkacs == spkezr", et, ref, targ, obs, ab)
 
                 cp, cpl = SPICE.spkapo(targ, et, ref, cssb, ab)
                 p, pl = spkapo(ctx, targ, et, ref, cssb, ab)
-                @test note("spkapo position", ab_reldiff(p, cp)) <= tol
-                @test note("spkapo lt", abs(pl - cpl) / cpl) <= tol
+                note("spkapo position", ab_reldiff(p, cp), tol, et, ref, targ, obs, ab)
+                note("spkapo lt", abs(pl - cpl) / cpl, tol, et, ref, targ, obs, ab)
                 if ab != "NONE"
                     q, ql = spkpos(ctx, targ, et, ref, ab, obs)
-                    @test isapprox(p, q; rtol = 1.0e-12) && isapprox(pl, ql; rtol = 1.0e-12)
+                    check!(fails, isapprox(p, q; rtol = 1.0e-12) && isapprox(pl, ql; rtol = 1.0e-12), "spkapo ≈ spkpos", et, ref, targ, obs, ab)
                 end
             end
             for dir in ("->", "<-")
                 cet, cel = SPICE.ltime(et, obs, dir, targ)
                 tt, el = ltime(ctx, et, obs, dir, targ)
-                @test note("ltime elapsed", abs(el - cel) / cel) <= tol
-                @test abs(tt - cet) <= 4 * eps(abs(et)) + tol * cel
+                note("ltime elapsed", abs(el - cel) / cel, tol, et, ref, targ, obs, dir)
+                check!(fails, abs(tt - cet) <= 4 * eps(abs(et)) + tol * cel, "ltime target epoch", et, ref, targ, obs, dir)
             end
             # Stellar aberration of a position, with the true observer velocity and with
             # a velocity near the limit.
@@ -295,12 +302,13 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             for v in (ssb[SVector(4, 5, 6)], SVector(1.0e5, -2.0e5, 3.0e4), SVector(0.0, 0.0, 0.0))
                 capp = SPICE.stelab(collect(p0), collect(v))
                 app = stelab(p0, v)
-                @test app isa SVector{3, Float64}
-                @test note("stelab", ab_reldiff(app, capp)) <= 1.0e-14
-                @test isapprox(norm(app), norm(p0); rtol = 1.0e-14)
-                @test note("stlabx", ab_reldiff(stlabx(p0, v), SPICE.stelab(collect(p0), collect(-v)))) <= 1.0e-14
+                check!(fails, app isa SVector{3, Float64}, "stelab type", et, ref, targ, obs, v)
+                note("stelab", ab_reldiff(app, capp), 1.0e-14, et, ref, targ, obs, v)
+                check!(fails, isapprox(norm(app), norm(p0); rtol = 1.0e-14), "stelab keeps the length", et, ref, targ, obs, v)
+                note("stlabx", ab_reldiff(stlabx(p0, v), SPICE.stelab(collect(p0), collect(-v))), 1.0e-14, et, ref, targ, obs, v)
             end
         end
+        @test isempty(fails)
         for name in sort!(collect(keys(worst)))
             measured(@sprintf("  %-58s max=%.3e", name * ", relative", worst[name]))
         end
@@ -342,13 +350,14 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "spkder: order 0 and the CSPICE velocity" begin
         measured("  spkder order 1 against the velocity of CSPICE spkezr, largest relative difference")
+        fails = Failures()
         for ab in AB_CORRECTIONS
             w0 = 0.0
             w1i = 0.0
             w1b = 0.0
             for (targ, obs, ref, _) in cases, et in depochs[1:nsample(2, 6)]
                 jet = spkder(ctx, targ, et, ref, ab, obs, Val(1))
-                @test jet isa NTuple{2, SVector{3, Float64}}
+                check!(fails, jet isa NTuple{2, SVector{3, Float64}}, "spkder type", ab, targ, obs, ref, et)
                 state, _ = spkezr(ctx, targ, et, ref, ab, obs)
                 cstate, _ = SPICE.spkezr(string(targ), et, ref, ab, string(obs))
                 w0 = max(w0, ab_reldiff(jet[1], state[SOneTo(3)]))
@@ -356,8 +365,8 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
                 ref in ("J2000", "ECLIPJ2000") ? (w1i = max(w1i, d)) : (w1b = max(w1b, d))
                 # A lower order is a prefix of a higher order.
                 full = spkder(ctx, targ, et, ref, ab, obs, Val(3))
-                @test all(isapprox(jet[k], full[k]; rtol = 1.0e-12) for k in 1:2)
-                @test isapprox(spkder(ctx, targ, et, ref, ab, obs, Val(0))[1], full[1]; rtol = 1.0e-13)
+                check!(fails, all(isapprox(jet[k], full[k]; rtol = 1.0e-12) for k in 1:2), "order 1 prefix of 3", ab, targ, obs, ref, et)
+                check!(fails, isapprox(spkder(ctx, targ, et, ref, ab, obs, Val(0))[1], full[1]; rtol = 1.0e-13), "order 0 prefix of 3", ab, targ, obs, ref, et)
             end
             measured(
                 @sprintf(
@@ -372,6 +381,7 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             @test w1i <= (occursin("CN", ab) ? 5.0e-12 : 1.0e-6)
             @test w1b <= (occursin("CN", ab) ? 5.0e-11 : 1.0e-5)
         end
+        @test isempty(fails)
         # NONE through the corrected form is the geometric form.
         @test spkder(ctx, 301, depochs[1], "IAU_EARTH", "NONE", 399, Val(3)) ==
             spkder(ctx, 301, depochs[1], "IAU_EARTH", 399, Val(3))
@@ -449,14 +459,16 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
             1, 17, Int(namfrm(ctx, "IAU_EARTH")), Int(namfrm(ctx, "MOON_PA_DE440")),
             Int(namfrm(ctx, "MOON_ME")),
         )
+        fails = Failures()
         for ref in refs, ab in ("NONE", AB_CORRECTIONS...)
-            @test ab_warm(ab_alloc_ezr, ctx, et, ref, ab) == 0
-            @test ab_warm(ab_alloc_pos, ctx, et, ref, ab) == 0
-            @test ab_warm(ab_alloc_ezr, ctx, et, ref, Aberration(ab)) == 0
+            check!(fails, ab_warm(ab_alloc_ezr, ctx, et, ref, ab) == 0, "spkezr", ref, ab)
+            check!(fails, ab_warm(ab_alloc_pos, ctx, et, ref, ab) == 0, "spkpos", ref, ab)
+            check!(fails, ab_warm(ab_alloc_ezr, ctx, et, ref, Aberration(ab)) == 0, "spkezr Aberration", ref, ab)
             for N in 0:3
-                @test ab_warm(ab_alloc_der, ctx, et, ref, ab, Val(N)) == 0
+                check!(fails, ab_warm(ab_alloc_der, ctx, et, ref, ab, Val(N)) == 0, "spkder", ref, ab, N)
             end
         end
+        @test isempty(fails)
         st = spkssb(ctx, 399, et, 1)
         acc = SVector(1.0e-6, 2.0e-6, 3.0e-6)
         @test ab_warm(ab_alloc_ssb, ctx, et) == 0

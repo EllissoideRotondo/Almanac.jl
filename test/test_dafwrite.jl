@@ -1475,6 +1475,7 @@ group("9. DAF access, SPK and CK writers") do
             bytes = true
             nread = 0
             readok = true
+            fails = Failures()
             for trial in 1:ntrial
                 segs = [c.gen(rng, k) for k in 1:rand(rng, 1:3)]
                 pc, pn = write_both(c, dir, "$(c.name)_$trial", segs)
@@ -1485,7 +1486,7 @@ group("9. DAF access, SPK and CK writers") do
                 descr &= r.sums && r.record
                 names &= r.names
                 bytes &= r.bytes
-                @test r.nseg == length(segs)
+                check!(fails, r.nseg == length(segs), "segment count", trial)
                 if c.kind === :spk
                     ets = [spk_probe_epochs(rng, a) for a in segs]
                     rc = c_read_spk(pc, segs, ets)
@@ -1503,6 +1504,7 @@ group("9. DAF access, SPK and CK writers") do
                 nread += count(x -> c.kind !== :ck ? x !== :error : (x[2] !== :error && x[2] !== nothing), rc)
             end
             @testset "$(c.name)" begin
+                @test isempty(fails)
                 @test badwords == 0
                 @test descr
                 @test names
@@ -2003,12 +2005,14 @@ group("9. DAF access, SPK and CK writers") do
         end
         @test reinterpret(UInt64, reduce(vcat, cback)) == reinterpret(UInt64, reduce(vcat, bwd))
         # dafps and dafus against CSPICE.
-        for s in fwd
+        fails = Failures()
+        for (k, s) in enumerate(fwd)
             dc, ic = dafus(s, 2, 6)
             cdc, cic = SPICE.dafus(s, 2, 6)
-            @test dc == cdc && ic == cic
-            @test reinterpret(UInt64, dafps(dc, ic)) == reinterpret(UInt64, SPICE.dafps(dc, ic)) == reinterpret(UInt64, s)
+            check!(fails, dc == cdc && ic == cic, "dafus", k)
+            check!(fails, reinterpret(UInt64, dafps(dc, ic)) == reinterpret(UInt64, SPICE.dafps(dc, ic)) == reinterpret(UInt64, s), "dafps", k)
         end
+        @test isempty(fails)
         @test dafus(dafps([1.5], [7, -8, 9]), 1, 3) == ([1.5], [7, -8, 9])        # odd integer count
         @test SPICE.dafus(dafps([1.5], [7, -8, 9]), 1, 3) == ([1.5], [7, -8, 9])
         @test throws_kind(() -> dafps([1.0], [2^40]), :dafinvalidparams)
@@ -2170,13 +2174,15 @@ group("9. DAF access, SPK and CK writers") do
         ids = spkobj(pn)
         @test ids == spk_bodies(pn) == spk_bodies(pc) == sort!(unique!([a.body for a in segs]))
         @test ids isa Vector{Int}
+        fails = Failures()
         for body in [ids; 999]
             w = spkcov(pn, body)
             cw = SPICE.spkcov!(SPICE.SpiceDoubleCell(400), pn, body)
-            @test w isa Window
-            @test collect(w) == Float64[cw[i] for i in 1:SPICE.card(cw)]
-            @test card(w) == SPICE.card(cw)
+            check!(fails, w isa Window, "spkcov type", body)
+            check!(fails, collect(w) == Float64[cw[i] for i in 1:SPICE.card(cw)], "spkcov", body)
+            check!(fails, card(w) == SPICE.card(cw), "spkcov card", body)
         end
+        @test isempty(fails)
         # The mutating forms take the union with the old content.
         pc2, pn2 = write_both(c, dir, "coverage2", [merge(c.gen(rng, k), (body = -41,)) for k in 1:3])
         w = spkcov(pn, -41)
@@ -2276,24 +2282,28 @@ group("9. DAF access, SPK and CK writers") do
             "ALL", "all", "SPK", "spk", "CK", "PCK", "EK", "TEXT", "META", "SPK TEXT", "text  meta ",
             "SPK PCK CK EK TEXT META", "FOO", "SPK FOO", " ",
         )
+        fails = Failures()
         for kind in kinds
             n = ktotal(ctx, kind)
-            @test n == SPICE.ktotal(kind)
+            check!(fails, n == SPICE.ktotal(kind), "ktotal", repr(kind))
             for which in 0:(n + 1)
                 got = kdata(ctx, which, kind)
                 want = which == 0 ? nothing : SPICE.kdata(which, kind)
-                @test (got === nothing) == (want === nothing)
-                got === nothing || @test got[1:3] == want[1:3]
+                check!(fails, (got === nothing) == (want === nothing), "kdata found", repr(kind), which)
+                got === nothing || check!(fails, got[1:3] == want[1:3], "kdata", repr(kind), which)
             end
         end
+        @test isempty(fails)
         @test ktotal(ctx) == ktotal(ctx, "ALL") == length(order) + 2
         @test ktotal(Almanac.kernelset(ctx), "META") == 1
+        fails = Failures()
         for file in [order; tk2; spk2; joinpath(dir, "not_loaded.bsp")]
             got = kinfo(ctx, file)
             want = SPICE.kinfo(file)
-            @test (got === nothing) == (want === nothing)
-            got === nothing || @test got[1:2] == want[1:2]
+            check!(fails, (got === nothing) == (want === nothing), "kinfo found", file)
+            got === nothing || check!(fails, got[1:2] == want[1:2], "kinfo", file)
         end
+        @test isempty(fails)
         @test kinfo(ctx, spk2) == ("SPK", mk, 0)
         @test kdata(ctx, 1, "META") == (mk, "META", "", 0)
         # The same calls on the default context.
@@ -2464,12 +2474,14 @@ group("9. DAF access, SPK and CK writers") do
                 # arguments (type 5: 2.2e-16 relative; type 15: 4.1e-16, two ulps, on the
                 # stream of Julia 1.10 with the default seed).
                 rtol = c.name == "spkw17" ? 1.0e-14 : c.name in ("spkw05", "spkw15") ? 1.0e-15 : 0.0
+                fails = Failures()
                 for et in (a.first, a.last, x)
                     rc = SPICE.spkpvn(hc, dc, et)
                     rn = spkpvn(ctxs, hn, dn, et)
-                    @test rn[1] == rc[1] && rn[3] == rc[3] && isapprox(rn[2], rc[2]; rtol)
-                    @test spkpvn(ctxs, src, dn, et) == rn
+                    check!(fails, rn[1] == rc[1] && rn[3] == rc[3] && isapprox(rn[2], rc[2]; rtol), "spkpvn", et)
+                    check!(fails, spkpvn(ctxs, src, dn, et) == rn, "spkpvn by path", et)
                 end
+                @test isempty(fails)
                 @test throws_kind(() -> spkpvn(ctxs, hn, dn, a.last + w), :timeoutofbounds)
                 SPICE.dafcls(hc)
                 dafcls(hn)

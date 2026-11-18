@@ -80,6 +80,7 @@ end
     @testset "every system, coordinate and relation against CSPICE" begin
         nerr = 0
         i = 0
+        fails = Failures()
         for (targ, obs, frame, abcorrs, steps, span, hasradii) in cases,
                 (sys, crds) in GF_SYSTEMS, crd in crds, (rel, wadj) in GF_VARIANTS
 
@@ -119,11 +120,12 @@ end
             ok = gf_compare(label, w, ref; value = t -> Almanac._gf_value(q, t), vtol = 64 * eps(scale))
             ok || @info "gfposc case" targ obs frame abcorr sys crd rel refval adjust step cn
             @test ok
-            @test all(t -> wnelmd(cn, t), w)
+            check!(fails, all(t -> wnelmd(cn, t), w), "gfposc inside the confinement window", targ, obs, frame, abcorr, sys, crd, rel, refval, adjust)
             if rel in ("<", ">")
-                @test gf_inequality_holds(rng, q, w, cn, rel, refval)
+                check!(fails, gf_inequality_holds(rng, q, w, cn, rel, refval), "gfposc inequality holds", targ, obs, frame, abcorr, sys, crd, rel, refval)
             end
         end
+        @test isempty(fails)
         @test nerr == 2 * 6
     end
 
@@ -133,6 +135,7 @@ end
             -pi + 1.0e-3, 1.0e-3, 2pi - 1.0e-3, 4.0, -2.0, 7.0,
         )
         i = 0
+        fails = Failures()
         for (targ, obs, frame, abcorrs, steps, span, hasradii) in cases, (sys, crd) in GF_ANGULAR
             (!hasradii && sys in ("GEODETIC", "PLANETOGRAPHIC")) && continue
             abcorr = first(abcorrs)
@@ -151,7 +154,7 @@ end
                 # 2 pi by the proxy functions, so the direct check is for values in range.
                 lo, hi = sys in ("LATITUDINAL", "SPHERICAL", "GEODETIC") ? (-pi, pi) : (0.0, 2pi)
                 if rel != "=" && lo < refval < hi
-                    @test gf_inequality_holds(rng, q, w, cn, rel, refval)
+                    check!(fails, gf_inequality_holds(rng, q, w, cn, rel, refval), "gfposc branch cut: inequality holds", targ, obs, frame, abcorr, sys, crd, rel, refval)
                 end
             end
             for (rel, adjust) in (
@@ -166,6 +169,7 @@ end
                 @test ok
             end
         end
+        @test isempty(fails)
     end
 
     @testset "a right ascension that crosses 0 gives no false event" begin

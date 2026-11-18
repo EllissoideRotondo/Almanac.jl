@@ -174,6 +174,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
         n = 0
         nconst = 0
         i = 0
+        fails = Failures()
         for (targ, fix, obs, steps, span) in cases, (sys, crds) in GF_SYSTEMS, crd in crds,
                 (rel, wadj) in GF_VARIANTS
 
@@ -186,7 +187,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
             refval, adjust = gf_reference(rng, q, cn, rel, wadj)
             w = gfsubc(ctx, targ, fix, meth, corr, obs, sys, crd, rel, refval, adjust, step, cn)
             ref = GFO.gfsubc(targ, fix, meth, corr, obs, sys, crd, rel, refval, adjust, step, collect(cn))
-            @test all(t -> wnelmd(cn, t), w)
+            check!(fails, all(t -> wnelmd(cn, t), w), "gfsubc inside the confinement window", targ, fix, obs, meth, corr, sys, crd, rel, refval, adjust)
             if gfs_constant(targ, sys, crd)
                 nconst += 1
                 continue
@@ -201,6 +202,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
             @test ok
             n += 1
         end
+        @test isempty(fails)
         @test n + nconst == gf_npick(3 * 21 * 9, 16) && n > 0
         @test FULL ? nconst == (2 * 3 + 3) * 9 : nconst > 0
         measured(@sprintf("  gfsubc: %d searches compared, %d on a constant coordinate not compared", n, nconst))
@@ -209,6 +211,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
     @testset "gfsubc: a root is a root, without CSPICE" begin
         # The coordinate crosses the reference value at each end point of an equality
         # search (radius of the sub-Moon point on the Earth, which has no branch cut).
+        fails = Failures()
         for meth in methods, corr in ("NONE", "LT+S", "XCN")
             cn = Window([0.0, 60 * day])
             q = subq("EARTH", "IAU_EARTH", meth, corr, "MOON", "LATITUDINAL", "LATITUDE")
@@ -220,10 +223,11 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
             @test wncard(w) >= 2
             for i in 1:wncard(w)
                 t = w[2i - 1]
-                @test w[2i] == t
-                @test (Almanac._gf_value(q, t - 1.0) - refval) * (Almanac._gf_value(q, t + 1.0) - refval) < 0
+                check!(fails, w[2i] == t, "gfsubc '=': a point interval", meth, corr, t)
+                check!(fails, (Almanac._gf_value(q, t - 1.0) - refval) * (Almanac._gf_value(q, t + 1.0) - refval) < 0, "gfsubc '=': a root", meth, corr, t)
             end
         end
+        @test isempty(fails)
     end
 
     @testset "gfsntc: a ray that follows the target" begin
@@ -231,6 +235,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
         n = 0
         nconst = 0
         i = 0
+        fails = Failures()
         for (sys, crds) in GF_SYSTEMS, crd in crds, (rel, wadj) in GF_VARIANTS
             corr = rand(rng, GF_ABCORRS)
             dvec = [1.0, 0.012 * (rand(rng) - 0.5), 0.012 * (rand(rng) - 0.5)]
@@ -250,7 +255,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
                 "EARTH", "IAU_EARTH", "Ellipsoid", corr, "MOON", "GF_TRACK", dvec, sys,
                 crd, rel, refval, adjust, step, collect(cn)
             )
-            @test all(t -> wnelmd(exist, t), w)
+            check!(fails, all(t -> wnelmd(exist, t), w), "gfsntc inside the existence window", corr, dvec, sys, crd, rel, refval, adjust)
             if gfs_constant("EARTH", sys, crd)
                 nconst += 1
                 continue
@@ -266,6 +271,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
             @test ok
             n += 1
         end
+        @test isempty(fails)
         @test n + nconst == gf_npick(21 * 9, 12) && n > 0
         @test FULL ? nconst == 2 * 9 : nconst > 0
     end
@@ -280,6 +286,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
         nexist = 0
         i = 0
         nrel = Set{Tuple{String, Bool}}()
+        fails = Failures()
         for (sys, crd) in (
                     ("LATITUDINAL", "LATITUDE"), ("RECTANGULAR", "Z"), ("RECTANGULAR", "X"),
                     ("GEODETIC", "LONGITUDE"),
@@ -318,8 +325,9 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
             )
             ok || @info "gfsntc grazing case" corr sys crd rel refval adjust cn
             @test ok
-            @test all(t -> wnelmd(exist, t), w)
+            check!(fails, all(t -> wnelmd(exist, t), w), "gfsntc grazing ray inside the existence window", corr, sys, crd, rel, refval, adjust)
         end
+        @test isempty(fails)
         @test length(nrel) == length(GF_VARIANTS)
         measured(@sprintf("  gfsntc grazing ray: largest number of intervals of the existence window %d", nexist))
     end
@@ -363,6 +371,7 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
         # A coordinate that is less than the reference value wherever the intercept
         # exists: the result is the existence window, contracted as in CSPICE.
         worst = 0.0
+        fails = Failures()
         # (the default run: each ray once for each correction, 30 days of the ray near the
         # limb, which hold a part of one interval at least)
         for corr in GF_ABCORRS, k in 1:4
@@ -394,12 +403,13 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
                 min(abs(t - cn[1]), abs(t - cn[2])) < 2.0 && continue
                 te = t + (isodd(i) ? dt : -dt)
                 nfound = sincpt(ctx, a[3], a[1], te, a[2], corr, a[5], a[6], a[7]) !== nothing
-                @test nfound == (g_sincpt(a[3], a[1], te, a[2], corr, a[5], a[6], a[7]) !== nothing)
+                check!(fails, nfound == (g_sincpt(a[3], a[1], te, a[2], corr, a[5], a[6], a[7]) !== nothing), "sincpt found flag = CSPICE", corr, k, te)
                 # (the ray that stays near the limb can meet the target again after
                 # the end of an interval, so the side is checked for the other ray)
-                iseven(k) && @test nfound == (dt > -1.0)
+                iseven(k) && check!(fails, nfound == (dt > -1.0), "sincpt found on the inner side", corr, k, te)
             end
         end
+        @test isempty(fails)
     end
 
     @testset "gfevnt: the surface vector definitions" begin

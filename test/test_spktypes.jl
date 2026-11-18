@@ -611,10 +611,11 @@ group("9. SPK data types against CSPICE") do
     @apart @testset "a chain in a frame other than J2000: the CSPICE state to the bit" begin
         a, b = (only(c for c in cases if c.label == "type $t, degree 3, ECLIPJ2000") for t in (9, 13))
         lo, hi = max(a.t0, b.t0), min(a.t1, b.t1)
+        fails = Failures()
         for et in random_epochs(MersenneTwister(SEED + 90), 20, lo, hi)   # own stream
-            @test spkgeo(ctx, a.body, et, "J2000", b.body)[1] ==
-                SPICE.spkgeo(a.body, et, "J2000", b.body)[1]
+            check!(fails, spkgeo(ctx, a.body, et, "J2000", b.body)[1] == SPICE.spkgeo(a.body, et, "J2000", b.body)[1], "spkgeo", et)
         end
+        @test isempty(fails)
     end
 
     # `spke15` splits the mean anomaly with the rounded `d_mod` of f2c. The exact `rem`
@@ -657,20 +658,25 @@ group("9. SPK data types against CSPICE") do
     end
 
     @apart @testset "zero allocation and inferred types" begin
+        # `skip` does not evaluate the expression, so the allocations are not measured
+        # when STACK_BUFFERS_ESCAPE is set.
+        fails = Failures()
         for c in cases
             et = c.t0 + 0.37 * (c.t1 - c.t0)
             @testset "$(c.label)" begin
-                @test warm_alloc(alloc_type_geo, ctx, c.body, et) == 0 skip = STACK_BUFFERS_ESCAPE
+                STACK_BUFFERS_ESCAPE || check!(fails, warm_alloc(alloc_type_geo, ctx, c.body, et) == 0, "spkgeo allocates", c.label)
                 for N in 0:3
-                    @test warm_alloc(alloc_type_der, ctx, c.body, et, Val(N)) == 0 skip = STACK_BUFFERS_ESCAPE
+                    STACK_BUFFERS_ESCAPE || check!(fails, warm_alloc(alloc_type_der, ctx, c.body, et, Val(N)) == 0, "spkder allocates", c.label, N)
                 end
                 @test (@inferred spkgeo(ctx, c.body, et, 1, EARTH)) isa Tuple{SVector{6, Float64}, Float64}
                 @test (@inferred spkder(ctx, c.body, et, 1, EARTH, Val(3))) isa NTuple{4, SVector{3, Float64}}
             end
         end
+        @test isempty(fails) skip = STACK_BUFFERS_ESCAPE
     end
 
     @apart @testset "spkder: lower orders, and higher orders against ForwardDiff and differences" begin
+        fails = Failures()
         for c in cases
             vel(t) = spkgeo(ctx, c.body, t, 1, EARTH)[1][SVector(4, 5, 6)]
             acc(t) = ForwardDiff.derivative(vel, t)
@@ -681,12 +687,12 @@ group("9. SPK data types against CSPICE") do
                 state, _ = spkgeo(ctx, c.body, et, 1, EARTH)
                 # Equal to the last bit in a normal run; with coverage instrumentation the
                 # compiler arranges the sums differently, so one rounding is allowed.
-                @test jet[1] ≈ state[SOneTo(3)] rtol = 4eps()
-                @test jet[2] ≈ state[SVector(4, 5, 6)] rtol = 4eps()
-                @test spkder(ctx, c.body, et, 1, EARTH, Val(2))[3] ≈ jet[3] rtol = 1.0e-12
+                check!(fails, isapprox(jet[1], state[SOneTo(3)]; rtol = 4eps()), "spkder order 0", c.label, et)
+                check!(fails, isapprox(jet[2], state[SVector(4, 5, 6)]; rtol = 4eps()), "spkder order 1", c.label, et)
+                check!(fails, isapprox(spkder(ctx, c.body, et, 1, EARTH, Val(2))[3], jet[3]; rtol = 1.0e-12), "spkder Val(2) order 2", c.label, et)
                 # The dual path gives the same plain values.
                 dstate = spkgeo(ctx, c.body, ForwardDiff.Dual(et, 1.0), 1, EARTH)[1]
-                @test ForwardDiff.value.(dstate) ≈ state rtol = 1.0e-14
+                check!(fails, isapprox(ForwardDiff.value.(dstate), state; rtol = 1.0e-14), "dual spkgeo value", c.label, et)
                 fd = (vel(et + c.h) - vel(et - c.h)) / (2 * c.h)
                 worst .= max.(
                     worst, (
@@ -700,9 +706,11 @@ group("9. SPK data types against CSPICE") do
             @test worst[2] <= AD_VEL_RTOL[2]
             @test worst[3] <= FD_VEL_RTOL
         end
+        @test isempty(fails)
     end
 
     @apart @testset "epoch number types: Taylor epoch, and the Kepler solutions at their special epochs" begin
+        fails = Failures()
         for c in cases
             seg = ks.spk[Int32(c.body)][1]
             data = ks.daf[seg.file]
@@ -711,9 +719,9 @@ group("9. SPK data types against CSPICE") do
             # A Taylor epoch of order 1 with Val(2): series of series. The plain parts
             # are the jet of order 2 and the first-order parts the next orders.
             nested = Almanac.spk_eval(data, seg, Almanac.taylor_var(et, Val(1)), Val(2))
-            @test all(map(x -> x.v, nested[k]) ≈ jet[k] for k in 1:3)
-            @test map(x -> x.d[1], nested[2]) ≈ jet[3] rtol = 1.0e-9
-            @test map(x -> x.d[1], nested[3]) ≈ jet[4] rtol = 1.0e-7
+            check!(fails, all(map(x -> x.v, nested[k]) ≈ jet[k] for k in 1:3), "nested Taylor values", c.label)
+            check!(fails, isapprox(map(x -> x.d[1], nested[2]), jet[3]; rtol = 1.0e-9), "nested Taylor order 2", c.label)
+            check!(fails, isapprox(map(x -> x.d[1], nested[3]), jet[4]; rtol = 1.0e-7), "nested Taylor order 3", c.label)
         end
         # Type 15 at the periapsis epoch (true anomaly zero, time interval zero) and type
         # 5 at a state epoch: the derivatives are finite and agree with the differences.
@@ -722,13 +730,14 @@ group("9. SPK data types against CSPICE") do
             et = c.dtype == 5 ? c.epochs[2] : c.epochs[1]
             vel(t) = spkgeo(ctx, c.body, t, 1, EARTH)[1][SVector(4, 5, 6)]
             jet = spkder(ctx, c.body, et, 1, EARTH, Val(3))
-            @test all(all(isfinite, j) for j in jet)
+            check!(fails, all(all(isfinite, j) for j in jet), "finite jet", c.label)
             if c.dtype != 5       # at a type 5 state epoch the pair of states changes
                 fd = (vel(et + c.h) - vel(et - c.h)) / (2 * c.h)
-                @test type_reldiff(jet[3], fd) <= FD_VEL_RTOL
+                within!(fails, type_reldiff(jet[3], fd), FD_VEL_RTOL, "order 2 against FD", c.label)
             end
-            @test type_reldiff(jet[3], ForwardDiff.derivative(vel, et)) <= AD_VEL_RTOL[1]
+            within!(fails, type_reldiff(jet[3], ForwardDiff.derivative(vel, et)), AD_VEL_RTOL[1], "order 2 against AD", c.label)
         end
+        @test isempty(fails)
     end
 
     @apart @testset "numeric helpers" begin

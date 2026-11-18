@@ -29,15 +29,17 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
     funcs = ((f1, d1, "sin"), (f2, d2, "two sines"), (f3, d3, "cubic"))
 
     @testset "gfrefn, uddf, uddc" begin
+        fails = Failures()
         for _ in 1:nsample(20, 200)
             a, b = 100 * randn(rng), 100 * randn(rng)
-            @test gfrefn(a, b, true, false) === SPICE.gfrefn(a, b, true, false)
+            check!(fails, gfrefn(a, b, true, false) === SPICE.gfrefn(a, b, true, false), "gfrefn = CSPICE", a, b)
             lo, hi = minmax(a, b)
-            @test lo <= gfrefn(a, b, false, true) <= hi
+            check!(fails, lo <= gfrefn(a, b, false, true) <= hi, "gfrefn inside the bracket", a, b)
             x, dx = 10 * randn(rng), 10.0^rand(rng, -6:1)
-            @test uddf(f2, x, dx) === GFO.uddf(f2, x, dx)
-            @test uddc(f2, x, dx) === (GFO.uddf(f2, x, dx) < 0)
+            check!(fails, uddf(f2, x, dx) === GFO.uddf(f2, x, dx), "uddf = CSPICE", x, dx)
+            check!(fails, uddc(f2, x, dx) === (GFO.uddf(f2, x, dx) < 0), "uddc = CSPICE", x, dx)
         end
+        @test isempty(fails)
         @test throws_kind(() -> uddf(f1, 1.0, 0.0), :dividebyzero)
         @test GFO.kind(() -> GFO.uddf(f1, 1.0, 0.0)) === :dividebyzero
         # the zero step is refused before the function runs (CSPICE calls it twice first)
@@ -48,6 +50,7 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
 
     @testset "gfuds: every relation, bit for bit" begin
         n = 0
+        fails = Failures()
         for (f, d, name) in funcs, rel in relations, trial in 1:6
             nint = rand(rng, (1, 1, 2, 4))
             cn = gf_random_window(rng, nint, 0.0, 25.0)
@@ -60,11 +63,12 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             qdec = gf_decreasing(d)
             w = gfuds(f, qdec, rel, refval, adjust, step, cn)
             ref = GFO.gfuds(f, qdec, rel, refval, adjust, step, collect(cn))
-            @test collect(w) == ref
+            check!(fails, collect(w) == ref, "gfuds = CSPICE", name, rel, trial, refval, adjust, step, collect(cn))
             gf_compare("uds " * gf_family(rel, adjust), w, ref; atol = 0.0)
-            @test all(t -> wnelmd(cn, t), w)
+            check!(fails, all(t -> wnelmd(cn, t), w), "gfuds inside the confinement window", name, rel, trial)
             n += 1
         end
+        @test isempty(fails)
         @test n == 3 * 7 * 6
     end
 
@@ -120,6 +124,7 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
     end
 
     @testset "gfudb: bit for bit" begin
+        fails = Failures()
         for trial in 1:40
             cn = gf_random_window(rng, rand(rng, (1, 2, 5)), -10.0, 30.0)
             step = rand(rng, (0.05, 0.3, 0.9))
@@ -127,9 +132,10 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             b = GFState(t -> f2(t) > c)
             w = gfudb(b, step, cn)
             ref = GFO.gfudb(b, step, collect(cn))
-            @test collect(w) == ref
+            check!(fails, collect(w) == ref, "gfudb = CSPICE", trial, step, c, collect(cn))
             gf_compare("udb state", w, ref; atol = 0.0)
         end
+        @test isempty(fails)
         @test collect(gfudb(GFState(t -> true), 1.0, Window([0.0, 3.0, 5.0, 5.0]))) == [0.0, 3.0, 5.0, 5.0]
         @test isempty(gfudb(GFState(t -> false), 1.0, Window([0.0, 3.0])))
         @test isempty(gfudb(GFState(t -> true), 1.0, Window()))
@@ -280,13 +286,15 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
     end
 
     @testset "window helpers of the solver" begin
+        fails = Failures()
         for _ in 1:nsample(10, 100)
             w = gf_random_window(rng, rand(rng, 1:6), 0.0, 10.0)
             amount = rand(rng, (0.0, 0.5, 2.0))
             c = GFO.cell(collect(w))
             SPICE.wnexpd!(c, amount, amount)
-            @test collect(Almanac._gf_wnexpd(w, amount, amount)) == collect(Float64, c)
+            check!(fails, collect(Almanac._gf_wnexpd(w, amount, amount)) == collect(Float64, c), "_gf_wnexpd = wnexpd", collect(w), amount)
         end
+        @test isempty(fails)
         @test isempty(Almanac._gf_wnexpd(Window(), 0.5, 0.5))
         inner = Window([1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 7.0, 7.0])
         @test collect(Almanac._gf_wsts(inner, Window([1.0, 3.0, 5.0, 8.0]))) == [2.0, 2.0, 7.0, 7.0]

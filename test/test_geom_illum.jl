@@ -31,6 +31,7 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
         st = GeoStats()
         nvis = 0
         nlit = 0
+        fails = Failures()
         for k in 1:600
             t = rand(rng, GEO_BODIES)
             o = rand(rng, setdiff(GEO_BODIES, [t]))
@@ -64,9 +65,10 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
             nlit += b[7]
             if k % 10 == 0
                 c = illumf(ctx, m, GEO_IDS[t], GEO_IDS[src], et, namfrm(ctx, fix), Aberration(cor), GEO_IDS[o], SVector{3}(sp))
-                @test c == a
+                check!(fails, c == a, "illumf by id and Aberration", k, m, t, src, et, fix, cor, o)
             end
         end
+        @test isempty(fails)
         greport("ellipsoid", st)
         @test 150 < nvis < 450 && 150 < nlit < 450
         for name in ("ilumin", "illumg", "illumf")
@@ -121,14 +123,16 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
 
     @testset "phaseq, 600 random cases" begin
         worst = 0.0
+        fails = Failures()
         for k in 1:600
             t, src, o = shuffle(rng, GEO_BODIES)[1:3]
             cor = rand(rng, reception)
             et = geo_epoch(rng)
             a = phaseq(ctx, et, t, src, o, cor)
             worst = max(worst, abs(a - g_phaseq(et, t, src, o, cor)))
-            k % 10 == 0 && @test phaseq(ctx, et, GEO_IDS[t], GEO_IDS[src], GEO_IDS[o], Aberration(cor)) == a
+            k % 10 == 0 && check!(fails, phaseq(ctx, et, GEO_IDS[t], GEO_IDS[src], GEO_IDS[o], Aberration(cor)) == a, "phaseq by id and Aberration", k, et, t, src, o, cor)
         end
+        @test isempty(fails)
         measured(@sprintf("  %-64s max=%.3e", "phaseq (rad)", worst))
         @test worst < ILL_TOL.angle
     end
@@ -139,6 +143,7 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
             "SUN" => "IAU_SUN", "MERCURY" => "IAU_MERCURY", "VENUS" => "IAU_VENUS",
             "EARTH" => "IAU_EARTH", "MOON" => "IAU_MOON"
         )
+        fails = Failures()
         for k in 1:300
             t1, t2, o = shuffle(rng, GEO_BODIES)[1:3]
             s1, s2 = rand(rng, ("POINT", "SPHERE")), rand(rng, ("POINT", "SPHERE"))
@@ -146,11 +151,14 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
             et = geo_epoch(rng)
             a = trgsep(ctx, et, t1, s1, frames[t1], t2, s2, frames[t2], o, cor)
             worst = max(worst, abs(a - g_trgsep(et, t1, s1, frames[t1], t2, s2, frames[t2], o, cor)))
-            k % 10 == 0 && @test trgsep(
-                ctx, et, GEO_IDS[t1], s1, frames[t1], GEO_IDS[t2], s2, frames[t2],
-                GEO_IDS[o], Aberration(cor)
-            ) == a
+            k % 10 == 0 && check!(
+                fails, trgsep(
+                    ctx, et, GEO_IDS[t1], s1, frames[t1], GEO_IDS[t2], s2, frames[t2],
+                    GEO_IDS[o], Aberration(cor)
+                ) == a, "trgsep by id and Aberration", k, et, t1, s1, t2, s2, o, cor
+            )
         end
+        @test isempty(fails)
         measured(@sprintf("  %-64s max=%.3e", "trgsep (rad)", worst))
         @test worst < ILL_TOL.angle
     end
@@ -222,14 +230,16 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
     @testset "no allocation and inferred types on ellipsoids" begin
         et = 2.5e8
         sp = srfrec(ks, 301, 0.3, 0.2)
+        fails = Failures()
         for c in ("NONE", "LT", "LT+S", "CN", "CN+S", "XLT+S", "XCN")
-            @test gwarm(ill_alloc_min, ks, et, c, sp) == 0
-            @test gwarm(ill_alloc_g, ks, et, c, sp) == 0
-            @test gwarm(ill_alloc_f, ks, et, c, sp) == 0
+            check!(fails, gwarm(ill_alloc_min, ks, et, c, sp) == 0, "ilumin allocates", c)
+            check!(fails, gwarm(ill_alloc_g, ks, et, c, sp) == 0, "illumg allocates", c)
+            check!(fails, gwarm(ill_alloc_f, ks, et, c, sp) == 0, "illumf allocates", c)
             startswith(c, "X") && continue          # phaseq takes reception corrections only
-            @test gwarm(ill_alloc_ph, ks, et, c) == 0
-            @test gwarm(ill_alloc_sep, ks, et, c) == 0
+            check!(fails, gwarm(ill_alloc_ph, ks, et, c) == 0, "phaseq allocates", c)
+            check!(fails, gwarm(ill_alloc_sep, ks, et, c) == 0, "trgsep allocates", c)
         end
+        @test isempty(fails)
         T5 = Tuple{Float64, SVector{3, Float64}, Float64, Float64, Float64}
         @test (@inferred ilumin(ks, "ELLIPSOID", 301, et, 10020, "CN+S", 399, sp)) isa T5
         @test (@inferred illumg(ks, "ELLIPSOID", 301, 399, et, 10020, "LT+S", 10, sp)) isa T5
@@ -245,6 +255,7 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
         h = 20.0
         sp = srfrec(ks, 301, 0.3, 0.2)
         spe = srfrec(ks, 399, -1.0, 0.5)
+        fails = Failures()
         for et in record_safe_epochs(rng, nsample(6, 24)), cor in ("NONE", "LT", "LT+S", "CN", "CN+S")
             fs = Pair{String, Function}[
                 "ilumin angles" => t -> SVector(ilumin(ks, "ELLIPSOID", 301, t, 10020, cor, 399, sp)[3:5]...),
@@ -255,11 +266,12 @@ ill_alloc_sep(ks, et, c) = @allocated trgsep(ks, et, 301, "SPHERE", 10020, 10, "
             ]
             for (name, f) in fs
                 d = f(ForwardDiff.Dual(et, 1.0))
-                @test isapprox(ForwardDiff.value.(d), f(et); rtol = 1.0e-12)
+                check!(fails, isapprox(ForwardDiff.value.(d), f(et); rtol = 1.0e-12), "dual value", name, et, cor)
                 fd = geo_fd(f, et, h)
                 gput!(st, name, norm(ForwardDiff.partials.(d, 1) .- fd) / norm(fd))
             end
         end
+        @test isempty(fails)
         greport("dual epoch against central difference", st)
         for k in keys(st.d)
             @test st.d[k] < 1.0e-4

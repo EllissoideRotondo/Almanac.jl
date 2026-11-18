@@ -31,6 +31,14 @@ jobs:
     env:
       JULIA_NUM_THREADS: 4
       ALMANAC_REQUIRE_KERNELS: 1
+      # The AD groups take 11 to 19 minutes of each job, compiling the AD backends, and
+      # `static` checks the source, which is the same on every job. The coverage job runs
+      # all of them on Julia 1; Julia 1.10 keeps Zygote (ChainRulesCore) and the tracked
+      # numbers. A tag or a manual run tests every group on every job.
+      ALMANAC_TEST_EXCLUDE: >-
+        ${{ !(startsWith(github.ref, 'refs/tags/') || github.event_name == 'workflow_dispatch')
+        && (matrix.version == '1.10' && 'ad_enzyme ad_mooncake static'
+        || 'ad_enzyme ad_mooncake ad_zygote ad_tracked static') || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: julia-actions/setup-julia@v2
@@ -53,7 +61,8 @@ jobs:
           coverage: false
   coverage:
     # Line coverage of src/ and ext/ in one job, sent to Codecov and kept as an
-    # artifact (lcov.info); the manual quotes the figure of this job.
+    # artifact (lcov.info); the manual quotes the figure of this job. It runs every
+    # group, the AD groups included.
     name: Coverage (Julia 1, ubuntu-latest)
     if: github.event.repository.private == false
     runs-on: ubuntu-latest

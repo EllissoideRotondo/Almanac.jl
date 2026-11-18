@@ -116,6 +116,7 @@ group("16. math: conics") do
     end
 
     @apart @testset "propagation of a state" begin
+        fails = Failures()
         for _ in 1:2n
             mu = rmu()
             rand(rng) < 0.03 && (mu = rand(rng, (0.0, -1.0)))
@@ -135,12 +136,13 @@ group("16. math: conics") do
                 p1, v1 = q[SVector(1, 2, 3)], q[SVector(4, 5, 6)]
                 h0 = vcrss(p0, v0)
                 if abs(dt) < 10 * period && vnorm(h0) > 1.0e-3 * vnorm(p0) * vnorm(v0)
-                    @test vdist(vcrss(p1, v1), h0) <= 1.0e-8 * vnorm(h0)
+                    within!(fails, vdist(vcrss(p1, v1), h0), 1.0e-8 * vnorm(h0), "prop2b angular momentum", mu, s, dt)
                     e0 = (v0 ⋅ v0) / 2 - mu / vnorm(p0)
-                    @test abs((v1 ⋅ v1) / 2 - mu / vnorm(p1) - e0) <= 1.0e-8 * ((v0 ⋅ v0) / 2 + mu / vnorm(p0))
+                    within!(fails, abs((v1 ⋅ v1) / 2 - mu / vnorm(p1) - e0), 1.0e-8 * ((v0 ⋅ v0) / 2 + mu / vnorm(p0)), "prop2b energy", mu, s, dt)
                 end
             end
         end
+        @test isempty(fails)
         # Fixed cases of the bracket search: for this circular orbit the first value of the
         # Kepler function is on the wrong side of the time interval by rounding, so the
         # bound of the bracket is doubled (forward and backward in time). A random state
@@ -206,6 +208,7 @@ group("16. math: conics") do
     end
 
     @apart @testset "elements from a state" begin
+        fails = Failures()
         for _ in 1:2n
             mu = rmu()
             rand(rng) < 0.03 && (mu = rand(rng, (0.0, -1.0)))
@@ -215,19 +218,20 @@ group("16. math: conics") do
             versus!(t, :oscltx, () -> oscltx(s, et, mu), () -> CS.oscltx(s, et, mu))
             el = outcome(() -> oscelt(s, et, mu))
             if !(el isa Symbol)
-                @test el[1] > 0.0 && el[2] >= 0.0 && 0.0 <= el[3] <= pi
-                @test 0.0 <= el[4] < 2pi + 1.0e-12 && 0.0 <= el[5] < 2pi + 1.0e-12
-                @test el[7] == et && el[8] == mu
+                check!(fails, el[1] > 0.0 && el[2] >= 0.0 && 0.0 <= el[3] <= pi, "oscelt rp, ecc, inc in range", s, et, mu)
+                check!(fails, 0.0 <= el[4] < 2pi + 1.0e-12 && 0.0 <= el[5] < 2pi + 1.0e-12, "oscelt lnode, argp in range", s, et, mu)
+                check!(fails, el[7] == et && el[8] == mu, "oscelt epoch and mu", s, et, mu)
                 # the round trip; not for an orbit that is almost rectilinear or parabolic,
                 # where the elements do not fix the state to full precision
                 p0, v0 = s[SVector(1, 2, 3)], s[SVector(4, 5, 6)]
                 if vnorm(vcrss(p0, v0)) > 0.05 * vnorm(p0) * vnorm(v0) && abs(el[2] - 1.0) > 1.0e-3
                     back = conics(el, et)
-                    @test vdist(back[SVector(1, 2, 3)], p0) <= 1.0e-7 * vnorm(p0)
-                    @test vdist(back[SVector(4, 5, 6)], v0) <= 1.0e-7 * vnorm(v0)
+                    within!(fails, vdist(back[SVector(1, 2, 3)], p0), 1.0e-7 * vnorm(p0), "conics of oscelt: position", s, et, mu)
+                    within!(fails, vdist(back[SVector(4, 5, 6)], v0), 1.0e-7 * vnorm(v0), "conics of oscelt: velocity", s, et, mu)
                 end
             end
         end
+        @test isempty(fails)
         mu = 398600.4418
         s = SVector(7000.0, 100.0, -300.0, 0.3, 7.2, 1.9)
         el = oscelt(s, 50.0, mu)

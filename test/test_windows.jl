@@ -54,7 +54,7 @@ group("10. windows") do
             w = Window()
             c = SPICE.SpiceDoubleCell(length(pairs) + 8)
             for i in 1:2:length(pairs)
-                @test wninsd!(w, pairs[i], pairs[i + 1]) === w
+                bad += wninsd!(w, pairs[i], pairs[i + 1]) !== w
                 SPICE.wninsd!(c, pairs[i], pairs[i + 1])
             end
             bad += collect(w) != cell_values(c)
@@ -74,6 +74,7 @@ group("10. windows") do
 
     @apart @testset "set operations are equal to CSPICE" begin
         bad = Dict(k => 0 for k in (:wnunid, :wnintd, :wndifd, :wncomd))
+        nbad = 0  # results that are not valid windows, or changed inputs
         for _ in 1:ntrial
             a = Window(random_pairs(rng, rand(rng, 0:8)))
             b = Window(random_pairs(rng, rand(rng, 0:8)))
@@ -85,15 +86,16 @@ group("10. windows") do
             bad[:wnunid] += collect(u) != cell_values(SPICE.wnunid(ca, cb))
             bad[:wnintd] += collect(x) != cell_values(SPICE.wnintd(ca, cb))
             bad[:wndifd] += collect(d) != cell_values(SPICE.wndifd(ca, cb))
-            @test valid_window(u.data) && valid_window(x.data) && valid_window(d.data)
+            nbad += !(valid_window(u.data) && valid_window(x.data) && valid_window(d.data))
             # The inputs are not changed.
-            @test collect(a) == cell_values(ca) && collect(b) == cell_values(cb)
+            nbad += !(collect(a) == cell_values(ca) && collect(b) == cell_values(cb))
             left = rand(rng, -4:60) / 2
             right = left + rand(rng, 0:60) / 2
             comp = wncomd(a, left, right)
             bad[:wncomd] += collect(comp) != cell_values(SPICE.wncomd(ca, left, right))
-            @test valid_window(comp.data)
+            nbad += !valid_window(comp.data)
         end
+        @test nbad == 0
         for (k, v) in sort!(collect(bad); by = first)
             @test v == 0
             measured(@sprintf("  %-58s trials=%d mismatches=%d", "windows: $k vs CSPICE", ntrial, v))
