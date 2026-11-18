@@ -17,7 +17,7 @@ ekrcei	2	0	0	documented	a null entry has no element (ekrcec)
 furnsh	0	1	0	documented	:badvarname past 32 characters, as CSPICE (ldpool); PEPPER accepts the name
 gcpool	0	1	0	documented	:typemismatch for a variable of the other type (gcpool)
 gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool)
-gipool	0	2	0	documented	:typemismatch for a variable of the other type (gipool)
+gipool	0	1	0	documented	:typemismatch for a variable of the other type (gipool)
 inedpl	0	1	0	cspice	CSPICE N0067 takes a zero normal; PEPPER signals INVALIDPLANE
 limbpt	63	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
 lmpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool); PEPPER accepts the name
