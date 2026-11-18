@@ -8,8 +8,8 @@
 #
 #     julia --startup-file=no --threads=8 --project=test test/runtests.jl states threads
 #
-# Run the groups in several processes, which is the fast way to run the whole suite
-# (about 35 s against 160 s on the development machine):
+# Run the groups in several processes, which is faster but needs several GB of memory for
+# each process that compiles an AD backend:
 #
 #     julia --startup-file=no --threads=8 test/parallel.jl
 #
@@ -64,7 +64,7 @@ finally
     kclear()
     println("\nMeasured values (for tightening the thresholds):")
     foreach(println, MEASURED)
-    println("\nTime of each group (s), longest first; the whole suite has a budget of 120 s:")
+    println("\nTime of each group (s), longest first:")
     for (g, t) in sort(GROUP_SECONDS; by = last, rev = true)
         println("  ", rpad(g, 18), lpad(round(t; digits = 1), 7))
     end

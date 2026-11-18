@@ -20,7 +20,7 @@ Write the behaviour-to-test table of the global skill `julia-tests` first. Layer
 - A reader loop in a concurrency test calls `yield()`.
 - A count threshold that goes with a random sample (`nhit > 800`) is a fraction of the sample size, so that it holds in both tiers.
 - The cases of a fixture share one random stream: add a new case after the existing ones, so that the earlier cases keep their data.
-- Each group has a time budget; a group that grows states its new time. The default suite stays under 120 s in one process.
+- Each group has a time budget; a group that grows states its new time. Without the AD groups and `static` (what the CI test jobs run) the default suite takes about 4.5 min in one process on CI; the time `AGENTS.md` gives is the reference.
 
 ## Trimming existing tests
 
