@@ -325,6 +325,22 @@ function spkopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 
 end
 
 """
+    spkops(ifname="", ncomch=0) -> DAFHandle
+
+Open a new SPK file that lives in memory, for writing: [`spkopn`](@ref) without the
+path. No file is made. The writers (such as [`spkw02`](@ref)) take the handle as they take
+one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
+and [`save_kernel`](@ref) writes them to a file; [`spkcls`](@ref) discards them. This call
+has no CSPICE counterpart; see [`dafops`](@ref).
+
+Throws the errors of [`dafops`](@ref).
+"""
+function spkops(ifname::AbstractString = "", ncomch::Integer = 0)
+    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
+    return dafops("SPK", 2, 6, ifname, ncomr)
+end
+
+"""
     spkopa(path) -> DAFHandle
 
 Open the existing SPK file `path` for writing, to append segments, as

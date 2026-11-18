@@ -54,6 +54,22 @@ function ckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0
 end
 
 """
+    ckops(ifname="", ncomch=0) -> DAFHandle
+
+Open a new CK file that lives in memory, for writing: [`ckopn`](@ref) without the
+path. No file is made. The writers (such as [`ckw03`](@ref)) take the handle as they take
+one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
+and [`save_kernel`](@ref) writes them to a file; [`ckcls`](@ref) discards them. This call
+has no CSPICE counterpart; see [`dafops`](@ref).
+
+Throws the errors of [`dafops`](@ref).
+"""
+function ckops(ifname::AbstractString = "", ncomch::Integer = 0)
+    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
+    return dafops("CK", 2, 6, ifname, ncomr)
+end
+
+"""
     ckcls(handle) -> Nothing
 
 Close the CK file of `handle`, as

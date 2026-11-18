@@ -26,7 +26,7 @@ function _daf_write_at!(
         offset::Integer
     )
     try
-        size = filesize(h.io)
+        size = _daf_size(h)
         if offset > size
             seek(h.io, size)
             write(h.io, zeros(UInt8, offset - size))
@@ -70,7 +70,7 @@ Postcondition: the file length is a whole number of records.
 function _daf_write_data!(h::DAFHandle, addr::Integer, data::Vector{Float64})
     isempty(data) && return nothing
     _daf_write_at!(h, data, 8 * (Int(addr) - 1))
-    size = filesize(h.io)
+    size = _daf_size(h)
     rest = mod(-size, _DAF_RECLEN)
     rest == 0 || _daf_write_at!(h, zeros(UInt8, rest), size)
     return nothing
@@ -155,28 +155,7 @@ function dafonw(
         ifname::AbstractString, resv::Integer
     )
     isempty(strip(path)) && throw(SpiceError(:blankfilename, "dafonw: the file name is blank"))
-    isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "dafonw: the file type is blank"))
-    ttype = String(strip(ftype, ' '))
-    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
-        SpiceError(
-            :illegalcharacter,
-            "dafonw: the file type contains nonprinting characters"
-        )
-    )
-    (0 <= nd <= 124) || throw(SpiceError(:dafinvalidparams, "dafonw: ND was $nd, should be in range [0,124]"))
-    (2 <= ni <= 250) || throw(SpiceError(:dafinvalidparams, "dafonw: NI was $ni, should be in range [2,250]"))
-    _daf_sumsize(nd, ni) <= 125 || throw(
-        SpiceError(
-            :dafinvalidparams,
-            "dafonw: summary size was $(_daf_sumsize(nd, ni)), should not exceed 125"
-        )
-    )
-    resv < 0 && throw(
-        SpiceError(
-            :dafnoresv,
-            "dafonw: an attempt was made to reserve a negative number ($resv) of records"
-        )
-    )
+    ttype = _daf_new_checks("dafonw", ftype, nd, ni, resv)
     # Exclusive creation: the call fails if the path exists, so no file is ever truncated.
     io = try
         fd = Base.Filesystem.open(
@@ -196,6 +175,55 @@ function dafonw(
     h = _open_register!(
         _daf_handle(path, io, true, false, Int(nd), Int(ni)), path, true,
         "dafonw"; check = false
+    )
+    _daf_init!(h, ttype, nd, ni, ifname, resv)
+    return h
+end
+
+"""
+    _daf_new_checks(who, ftype, nd, ni, resv) -> String
+
+Contract: the checks of `dafonw` on its inputs other than the path, in the order of
+SPICELIB; returns the file type without its blanks.
+"""
+function _daf_new_checks(
+        who::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer, resv::Integer
+    )
+    isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "$who: the file type is blank"))
+    ttype = String(strip(ftype, ' '))
+    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
+        SpiceError(
+            :illegalcharacter,
+            "$who: the file type contains nonprinting characters"
+        )
+    )
+    (0 <= nd <= 124) || throw(SpiceError(:dafinvalidparams, "$who: ND was $nd, should be in range [0,124]"))
+    (2 <= ni <= 250) || throw(SpiceError(:dafinvalidparams, "$who: NI was $ni, should be in range [2,250]"))
+    _daf_sumsize(nd, ni) <= 125 || throw(
+        SpiceError(
+            :dafinvalidparams,
+            "$who: summary size was $(_daf_sumsize(nd, ni)), should not exceed 125"
+        )
+    )
+    resv < 0 && throw(
+        SpiceError(
+            :dafnoresv,
+            "$who: an attempt was made to reserve a negative number ($resv) of records"
+        )
+    )
+    return ttype
+end
+
+"""
+    _daf_init!(h, ttype, nd, ni, ifname, resv) -> Nothing
+
+Contract: write the records of a new DAF into the empty handle `h` as `dafonw` of
+SPICELIB does: the file record, `resv` reserved (comment) records, the first summary
+record and the first name record.
+"""
+function _daf_init!(
+        h::DAFHandle, ttype::AbstractString, nd::Integer, ni::Integer,
+        ifname::AbstractString, resv::Integer
     )
     fward = Int(resv) + 2
     free = _daf_rwa(fward + 2)
@@ -218,6 +246,30 @@ function dafonw(
     end
     _daf_write_drec!(h, fward, zeros(Float64, _DAF_RECWORDS))
     _daf_write_crec!(h, fward + 1, crec)
+    return nothing
+end
+
+"""
+    dafops(ftype, nd, ni, ifname, resv) -> DAFHandle
+
+Open a new DAF that lives in memory, for writing: [`dafonw`](@ref) without the path.
+No file is made at any time. The handle takes every write call and every read call of a
+DAF handle, and [`furnsh`](@ref) loads its contents as a kernel. Its bytes are those that
+`dafonw` and the same write calls put in a file, so [`save_kernel`](@ref) can write them
+to one. [`dafcls`](@ref) discards them; a kernel that `furnsh` loaded from the handle
+stays loaded. This call has no CSPICE counterpart; its name follows
+[`dasops`](@ref), which opens a scratch DAS file.
+
+Throws the errors of [`dafonw`](@ref) other than those on the path.
+
+See also [`spkops`](@ref), [`ckops`](@ref), [`pckops`](@ref).
+"""
+function dafops(
+        ftype::AbstractString, nd::Integer, ni::Integer, ifname::AbstractString, resv::Integer
+    )
+    ttype = _daf_new_checks("dafops", ftype, nd, ni, resv)
+    h = _daf_handle("", IOBuffer(), true, false, Int(nd), Int(ni))
+    _daf_init!(h, ttype, nd, ni, ifname, resv)
     return h
 end
 

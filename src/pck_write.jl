@@ -67,6 +67,22 @@ function pckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 
 end
 
 """
+    pckops(ifname="", ncomch=0) -> DAFHandle
+
+Open a new PCK file that lives in memory, for writing: [`pckopn`](@ref) without the
+path. No file is made. The writers (such as [`pckw02`](@ref)) take the handle as they take
+one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
+and [`save_kernel`](@ref) writes them to a file; [`pckcls`](@ref) discards them. This call
+has no CSPICE counterpart; see [`dafops`](@ref).
+
+Throws the errors of [`dafops`](@ref).
+"""
+function pckops(ifname::AbstractString = "", ncomch::Integer = 0)
+    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
+    return dafops("PCK", 2, 5, ifname, ncomr)
+end
+
+"""
     pckw02(handle, clssid, frame, first, last, segid, intlen, cdata, btime) -> Nothing
 
 Write a binary PCK segment of type 2 (Chebyshev polynomials for three Euler angles, on
