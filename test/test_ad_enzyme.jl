@@ -26,9 +26,12 @@ group("ad enzyme", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
         gradient = false, batched = true, nested = true, skip
     )
     rev = AutoEnzyme(; mode = Enzyme.Reverse, function_annotation = Enzyme.Const)
+    # No gradient over many epochs: the reverse rule takes one scalar epoch, as in "first
+    # derivatives", and the sum over a vector is Enzyme's own (Zygote, Mooncake and the
+    # tracked numbers check the gradient).
     ad_check(
         "Enzyme reverse", rev, ctx, epochs, default, full;
-        gradient = true, batched = false, nested = false, skip
+        gradient = false, batched = false, nested = false, skip
     )
     ad_orbit_check("Enzyme forward", AutoEnzyme(; mode = Enzyme.Forward, function_annotation = Enzyme.Const))
     ad_orbit_check("Enzyme reverse", rev)

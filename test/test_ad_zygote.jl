@@ -12,6 +12,6 @@ group("ad zygote", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
         "Zygote", AutoZygote(), ctx, epochs, default, full;
         gradient = true, batched = false, nested = true
     )
-    ad_orbit_check("Zygote", AutoZygote())
+    ad_orbit_check("Zygote", AutoZygote(); rules = true)
     return nothing
 end
