@@ -12,10 +12,8 @@
 #   first derivative of every derivative point, through   invariant  "first derivatives"
 #     public calls, equals the ForwardDiff derivative
 #   the value of a call is not changed by a backend       invariant  "first derivatives"
-#   batched forward rule (two tangents at once; Enzyme,   invariant  "batched forward"
-#     the only backend whose rule has a batched path)
-#   gradient over many epochs (reverse mode: Zygote,      invariant  "gradient"
-#     Mooncake, ReverseDiff, Tracker)
+#   batched forward rule (two tangents at once)           invariant  "batched forward"
+#   gradient over many epochs (reverse mode)              invariant  "gradient"
 #   second derivative with ForwardDiff over a backend     invariant  "second derivative"
 #     (not Mooncake or Tracker, which take no `Dual`)
 #   a refused epoch type throws (Enzyme reverse with a    error      group file

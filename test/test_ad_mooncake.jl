@@ -11,8 +11,7 @@ group("ad mooncake", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
     ctx, epochs, default, full = ad_setup()
     ad_check(
         "Mooncake forward", AutoMooncakeForward(), ctx, epochs, default, full;
-        # No batched pushforward: the rules of the Mooncake extension take one tangent.
-        gradient = false, batched = false, nested = false
+        gradient = false, batched = true, nested = false
     )
     ad_check(
         "Mooncake reverse", AutoMooncake(), ctx, epochs, default, full;
