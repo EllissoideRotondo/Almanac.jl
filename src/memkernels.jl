@@ -309,3 +309,111 @@ function load_samples!(
 end
 load_samples!(name::AbstractString, body::NameOrID, center::NameOrID, frame::NameOrID, ets::AbstractVector{<:Real}, states; kw...) =
     load_samples!(default_context(), name, body, center, frame, ets, states; kw...)
+
+"""
+    load_function!([ctx,] name, f, body, center, frame, t0, t1;
+                   tol=nothing, ncoef=16, maxintervals=65536, segid=name, bodies=())
+        -> (poserr, velerr)
+
+Fit the trajectory `f(et)` of `body` relative to `center` in `frame` on `t0 <= et <= t1`
+(seconds past J2000 TDB) with Chebyshev polynomials, and load the fit into `ctx` as a kernel
+named `name`, with no file. `f` is called only during the call: a query then costs what a
+query of an SPK file costs, whatever `f` costs. This call has no CSPICE counterpart.
+
+`f` returns six numbers, the position (km) and the velocity (km/s), or three, the position
+only. With six the kernel has an SPK segment of type 3 (a series for the position and one
+for the velocity); with three, of type 2 (the velocity is the derivative of the position).
+The fit takes `ncoef` coefficients on each of `n` intervals of equal length and doubles `n`
+until the position error is at most `tol` (km), with the rule of
+[`ephemeris_table`](@ref) when `tol` is `nothing`. The result is the measured largest
+position error (km) and velocity error (km/s, `NaN` for three numbers). `body`, `center`,
+`segid` and `bodies` are as for [`load_samples!`](@ref).
+
+An `ODESolution` of DifferentialEquations.jl is a function of time and can be passed
+through a closure that maps the epoch to its time variable and keeps the six components of
+the state, in km and km/s: `et -> sol(et - et0)[1:6]` for a solution in seconds from the
+epoch `et0`.
+
+Throws `SpiceError`:
+
+- `:emptystring` or `:blankfilename` if `name` is empty or blank;
+- `:badarg` unless `t0 < t1` are finite, `2 <= ncoef <= 28`, `tol > 0` and
+  `maxintervals >= 1`;
+- `:badarraysize` if `f` returns something other than three or six numbers;
+- `:noconvergence` if `maxintervals` intervals do not reach the tolerance;
+- `:idcodenotfound` for an unknown body name, and the errors of `f`.
+
+A call that throws leaves `ctx` unchanged.
+
+# Examples
+```jldoctest
+julia> ctx = SpiceContext();
+
+julia> gm, pv0 = 398600.4418, [7000.0, 0, 0, 0, 7.5, 1.0];
+
+julia> poserr, velerr = load_function!(ctx, "orbit", et -> prop2b(gm, pv0, et), -1000, 399,
+                                        "J2000", 0.0, 86400.0; tol = 1e-6);
+
+julia> poserr <= 1e-6
+true
+
+julia> vnorm(spkpos(ctx, -1000, 5000.0, "J2000", "NONE", 399)[1] - prop2b(gm, pv0, 5000.0)[1:3]) <= 1e-6
+true
+```
+
+See also [`load_samples!`](@ref), [`ephemeris_table`](@ref), [`add_ephemeris!`](@ref).
+"""
+function load_function!(
+        ctx::SpiceContext, name::AbstractString, f, body::NameOrID, center::NameOrID,
+        frame::NameOrID, t0::Real, t1::Real; tol::Union{Nothing, Real} = nothing,
+        ncoef::Integer = 16, maxintervals::Integer = 65536, segid::AbstractString = name,
+        bodies = ()
+    )
+    who = "load_function!"
+    _chk_filename(who, name)
+    a, b = Float64(t0), Float64(t1)
+    (isfinite(a) && isfinite(b) && a < b) ||
+        throw(SpiceError(:badarg, "$who: the epochs must be finite, with t0 < t1"))
+    2 <= ncoef <= 28 || throw(SpiceError(:badarg, "$who: ncoef is $ncoef; it must be in 2:28"))
+    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "$who: tol must be positive"))
+    maxintervals >= 1 || throw(SpiceError(:badarg, "$who: maxintervals must be at least 1"))
+    kb = _kernel_bodies(who, bodies)
+    ks = kernelset(ctx)
+    bc, cc = _resolve_body(ks, body, kb), _resolve_body(ks, center, kb)
+    n = length(f(a))
+    function checked(et, ::Val{N}) where {N}
+        r = f(et)
+        length(r) == N || throw(
+            SpiceError(
+                :badarraysize,
+                "$who: the function returned $(length(r)) numbers at ET $et s; it must return $n"
+            )
+        )
+        return SVector{N, Float64}(ntuple(k -> Float64(r[k]), Val(N)))
+    end
+    if n == 6
+        coef, dt, nint, poserr, velerr = _tab_refine(
+            et -> checked(et, Val(6)), a, b, tol, Int(ncoef), maxintervals, Val(2), who,
+            " km"; split = true
+        )
+    elseif n == 3
+        coef, dt, nint, poserr, velerr = _tab_refine(
+            et -> checked(et, Val(3)), a, b, tol, Int(ncoef), maxintervals, Val(1), who, " km"
+        )
+    else
+        throw(
+            SpiceError(
+                :badarraysize,
+                "$who: the function returned $n numbers at ET $a s; it must return 3 or 6"
+            )
+        )
+    end
+    cdata = reshape(coef, n * Int(ncoef), nint)
+    writer = n == 6 ? spkw03 : spkw02
+    _load_segment!(ctx, name, segid, kb, who) do h, id
+        writer(ctx, h, bc, cc, frame, a, b, id, dt, cdata, a)
+    end
+    return poserr, velerr
+end
+load_function!(name::AbstractString, f, body::NameOrID, center::NameOrID, frame::NameOrID, t0::Real, t1::Real; kw...) =
+    load_function!(default_context(), name, f, body, center, frame, t0, t1; kw...)

@@ -239,7 +239,7 @@ function _tab_native_grid(ks::KernelSet, targ::Int32, ref::Int32, obs::Int32, t0
 end
 
 """
-    _tab_fit(f, start, dt, nint, ncoef) -> (coef::Vector{Float64}, maxerr, scale)
+    _tab_fit(f, start, dt, nint, ncoef) -> (coef::Vector{Float64}, maxerr, scale, velerr)
 
 Chebyshev coefficients of `f(et)::SVector{3}` on `nint` intervals of length `dt` from
 `start`: interpolation at the `ncoef` zeros of the Chebyshev polynomial of degree
@@ -261,13 +261,20 @@ _tab_fit(f::F, start::Float64, dt::Float64, nint::Int, ncoef::Int) where {F} =
 end
 
 """
-    _tab_fit(f, start, dt, nint, ncoef, Val(C)) -> (coef, maxerr, scale)
+    _tab_fit(f, start, dt, nint, ncoef, Val(C); split=false) -> (coef, maxerr, scale, velerr)
 
 The fit above for a function `f(et)` of `3C` components (for `C = 3`, the columns of a
 matrix one after the other): a record holds `ncoef` coefficients for each component,
 in the order of the components, and the two norms are norms of all `3C` components.
+With `split` (`C = 2`, a position and a velocity), `maxerr` and `scale` are norms of the
+first three components and `velerr` is the error of the last three; else `velerr` is
+`NaN`.
 """
-function _tab_fit(f::F, start::Float64, dt::Float64, nint::Int, ncoef::Int, vc::Val{C}) where {F, C}
+function _tab_fit(
+        f::F, start::Float64, dt::Float64, nint::Int, ncoef::Int, vc::Val{C};
+        split::Bool = false
+    ) where {F, C}
+    @assert !split || C == 2
     @assert dt > 0 && nint >= 1 && ncoef >= 2
     n = ncoef
     x = [cospi((j - 0.5) / n) for j in 1:n]
@@ -285,7 +292,7 @@ function _tab_fit(f::F, start::Float64, dt::Float64, nint::Int, ncoef::Int, vc::
             s = (et - mid) / radius
             r = f(et)
             vals[j, :] .= r
-            scale = max(scale, norm(r))
+            scale = max(scale, split ? norm(view(r, 1:3)) : norm(r))
             basis[j, 1] = 1.0
             basis[j, 2] = s
             for k in 3:n       # invariant: basis[j, m] is the polynomial of degree m - 1 at s
@@ -295,36 +302,46 @@ function _tab_fit(f::F, start::Float64, dt::Float64, nint::Int, ncoef::Int, vc::
         coef[(w * i + 1):(w * (i + 1))] .= vec(basis \ vals)
     end
     maxerr = 0.0
+    velerr = split ? 0.0 : NaN
     for i in 0:(nint - 1), sc in xc
         mid = start + (2i + 1) * radius
         et = mid + radius * sc
-        fit = _tab_value(coef, w * i + 1, n, (et - mid) / radius, radius, vc)
-        maxerr = max(maxerr, norm(fit - f(et)))
+        d = _tab_value(coef, w * i + 1, n, (et - mid) / radius, radius, vc) - f(et)
+        if split
+            maxerr = max(maxerr, norm(view(d, 1:3)))
+            velerr = max(velerr, norm(view(d, 4:6)))
+        else
+            maxerr = max(maxerr, norm(d))
+        end
     end
     @assert length(coef) == w * nint
-    return coef, maxerr, scale
+    return coef, maxerr, scale, velerr
 end
 
 """
-    _tab_refine(f, a, b, tol, ncoef, maxintervals, Val(C), who, unit) -> (coef, dt, nint, maxerr)
+    _tab_refine(f, a, b, tol, ncoef, maxintervals, Val(C), who, unit; split=false)
+        -> (coef, dt, nint, maxerr, velerr)
 
 Fit `f` on `a` to `b` with `_tab_fit` and double the number of intervals until the
 measured error is at most `tol`. Without `tol` (`nothing`) the goal is `1e-12` times
 the largest norm of `f`, and the loop stops also when the error is small and one more
-doubling did not divide it by four: the source then limits the accuracy. Throws
-`SpiceError(:noconvergence)` if `maxintervals` intervals do not reach the goal.
+doubling did not divide it by four: the source then limits the accuracy. `split` is that
+of `_tab_fit`: the goal is then on the position, and `velerr` is the velocity error of
+the accepted fit. Throws `SpiceError(:noconvergence)` if `maxintervals` intervals do not
+reach the goal.
 """
 function _tab_refine(
         f::F, a::Float64, b::Float64, tol::Union{Nothing, Real}, ncoef::Int,
-        maxintervals::Integer, vc::Val{C}, who::AbstractString, unit::AbstractString
+        maxintervals::Integer, vc::Val{C}, who::AbstractString, unit::AbstractString;
+        split::Bool = false
     ) where {F, C}
     nint, previous = 1, Inf
     while true     # invariant: no number of intervals below `nint` was accepted
         dt = (b - a) / nint
-        coef, maxerr, scale = _tab_fit(f, a, dt, nint, ncoef, vc)
+        coef, maxerr, scale, velerr = _tab_fit(f, a, dt, nint, ncoef, vc; split = split)
         goal = tol === nothing ? 1.0e-12 * scale : Float64(tol)
         floor_reached = tol === nothing && maxerr <= 1.0e-6 * scale && maxerr > previous / 4
-        (maxerr <= goal || floor_reached) && return coef, dt, nint, maxerr
+        (maxerr <= goal || floor_reached) && return coef, dt, nint, maxerr, velerr
         2 * nint > maxintervals && throw(
             SpiceError(
                 :noconvergence,

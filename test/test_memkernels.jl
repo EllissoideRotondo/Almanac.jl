@@ -342,3 +342,42 @@ end
         @test ktotal(ctx) == 1
     end
 end
+
+@testset "load_function!" begin
+    f(et) = prop2b(MEM_GM, MEM_PV0, et)
+    probe = rand(MersenneTwister(SEED + 92), nsample(200, 20_000)) .* 86400.0
+    # The fit measures its error at the n - 1 inner extremes of each interval, which bound
+    # the interpolation error to a small factor: 2 is the bound checked here.
+    @testset "position and velocity (type 3)" begin
+        ctx = SpiceContext()
+        poserr, velerr = load_function!(ctx, "orbit", f, -1000, 399, "J2000", 0.0, 86400.0; tol = 1.0e-6)
+        @test poserr <= 1.0e-6 && 0 < velerr < 1.0e-6
+        @test spkuds(spksfs(ctx, -1000, 10.0)[2])[4] == 3
+        dp = maximum(et -> vnorm(spkezr(ctx, -1000, et, "J2000", "NONE", 399)[1][1:3] - f(et)[1:3]), probe)
+        dv = maximum(et -> vnorm(spkezr(ctx, -1000, et, "J2000", "NONE", 399)[1][4:6] - f(et)[4:6]), probe)
+        @test dp <= 2poserr && dv <= 2velerr
+        measured("load_function! type 3: poserr=$poserr dp=$dp velerr=$velerr dv=$dv")
+    end
+    @testset "position only (type 2)" begin
+        ctx = SpiceContext()
+        poserr, velerr = load_function!(ctx, "orbit", et -> f(et)[1:3], -1000, 399, "J2000", 0.0, 86400.0; tol = 1.0e-6)
+        @test poserr <= 1.0e-6 && isnan(velerr)
+        @test spkuds(spksfs(ctx, -1000, 10.0)[2])[4] == 2
+        @test maximum(et -> vnorm(spkpos(ctx, -1000, et, "J2000", "NONE", 399)[1] - f(et)[1:3]), probe) <= 2poserr
+    end
+    @testset "errors" begin
+        ctx = SpiceContext()
+        cases = (
+            (et -> f(et)[1:5], :badarraysize), (et -> et > 100 ? zeros(2) : f(et), :badarraysize),
+            (et -> throw(SpiceError(:notcomputable, "no")), :notcomputable),
+        )
+        for (g, kind) in cases
+            @test throws_kind(() -> load_function!(ctx, "bad", g, -1000, 399, "J2000", 0.0, 86400.0), kind)
+        end
+        for kw in ((; ncoef = 29), (; ncoef = 1), (; tol = 0.0), (; maxintervals = 0))
+            @test throws_kind(() -> load_function!(ctx, "bad", f, -1000, 399, "J2000", 0.0, 86400.0; kw...), :badarg)
+        end
+        @test throws_kind(() -> load_function!(ctx, "bad", f, -1000, 399, "J2000", 0.0, 86400.0; tol = 1.0e-12, maxintervals = 2), :noconvergence)
+        @test ktotal(ctx) == 0
+    end
+end
