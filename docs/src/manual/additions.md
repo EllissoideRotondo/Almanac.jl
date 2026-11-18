@@ -17,6 +17,9 @@ These features have no counterpart in CSPICE:
   [`add_frame!`](@ref). See [Bodies and frames from your own functions](@ref).
 - **Orbital elements, two-body propagation and relative motion**: [`Orbit`](@ref). See
   [Orbits and relative motion](@ref).
+- **Kernels built in memory**, with no file: [`load_samples!`](@ref),
+  [`load_function!`](@ref), and [`spkops`](@ref), [`ckops`](@ref), [`pckops`](@ref) with
+  [`furnsh`](@ref) of the handle. See [Load states as a kernel, with no file](@ref).
 - **Scratch files kept in memory**: [`dasops`](@ref), [`ekops`](@ref). CSPICE writes a
   temporary file instead.
 - **Text kernels in JSON**, described below.

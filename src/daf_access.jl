@@ -74,7 +74,9 @@ _open_unregister!(h) = lock(() -> delete!(_OPEN_FILES, h), _OPEN_FILES_LOCK)
 An open DAF file. It replaces the integer handle of CSPICE.
 
 [`dafopr`](@ref), [`dafopw`](@ref), [`dafonw`](@ref), [`spkopn`](@ref), [`spkopa`](@ref),
-[`ckopn`](@ref) and [`pckopn`](@ref) return a handle. Close it with [`dafcls`](@ref),
+[`ckopn`](@ref) and [`pckopn`](@ref) return a handle of a file. [`dafops`](@ref),
+[`spkops`](@ref), [`ckops`](@ref) and [`pckops`](@ref) return a handle that keeps the
+bytes in memory, with no file; [`furnsh`](@ref) loads it. Close it with [`dafcls`](@ref),
 [`spkcls`](@ref), [`ckcls`](@ref), [`pckcls`](@ref) or `close`; `isopen(handle)` tells
 whether it is open.
 
@@ -92,13 +94,13 @@ A call on a closed handle throws `SpiceError(:dafnosuchhandle)`; the close calls
 nothing instead. A write call on a handle that is open for reading throws
 `SpiceError(:dafinvalidaccess)`.
 
-A write call puts its bytes on disk before it returns, except [`spk14b`](@ref) and
-[`spk14a`](@ref), whose data [`spk14e`](@ref) writes. A write call that throws for an
-invalid input does not change the file.
+A write call puts its bytes on disk (in memory, for a handle without a file) before it
+returns, except [`spk14b`](@ref) and [`spk14a`](@ref), whose data [`spk14e`](@ref)
+writes. A write call that throws for an invalid input does not change the file.
 """
 mutable struct DAFHandle
     const path::String
-    const io::IOStream
+    const io::Union{IOStream, IOBuffer}  # an `IOBuffer` for a handle in memory (`dafops`)
     const writable::Bool
     const swap::Bool                 # the file has the other byte order (read only)
     const nd::Int
@@ -128,6 +130,25 @@ function Base.show(io::IO, h::DAFHandle)
 end
 Base.isopen(h::DAFHandle) = h.isopen
 Base.close(h::DAFHandle) = dafcls(h)
+
+"Whether `h` keeps its bytes in memory (a handle of [`dafops`](@ref)) and has no file."
+_daf_inmemory(h::DAFHandle) = h.io isa IOBuffer
+
+"The number of bytes of the file of `h`, or of the buffer of an in-memory handle."
+function _daf_size(h::DAFHandle)
+    h.io isa IOStream && return Int(filesize(h.io))
+    p = position(h.io)
+    n = position(seekend(h.io))
+    seek(h.io, p)
+    return Int(n)
+end
+
+"A copy of the bytes of the in-memory handle `h`, as a file would hold them."
+function _daf_bytes(h::DAFHandle)
+    @assert _daf_inmemory(h)
+    seekstart(h.io)
+    return read(h.io)
+end
 
 "Doubles in one summary of a DAF with the format `nd`, `ni`."
 _daf_sumsize(nd::Integer, ni::Integer) = Int(nd) + (Int(ni) + 1) ÷ 2
@@ -159,7 +180,7 @@ Read up to `length(buf)` bytes of the file of `h` from the 0-based byte `offset`
 `buf` and return the number of bytes read (less than `length(buf)` at the end of file).
 """
 function _daf_read_at!(h::DAFHandle, buf::Vector{UInt8}, offset::Integer)
-    offset >= filesize(h.io) && return 0
+    offset >= _daf_size(h) && return 0
     seek(h.io, offset)
     return readbytes!(h.io, buf)
 end
@@ -320,7 +341,7 @@ function _daf_probe(path::AbstractString, who::AbstractString)
 end
 
 function _daf_handle(
-        path::AbstractString, io::IOStream, writable::Bool, swap::Bool,
+        path::AbstractString, io::Union{IOStream, IOBuffer}, writable::Bool, swap::Bool,
         nd::Int, ni::Int
     )
     return DAFHandle(
@@ -412,14 +433,18 @@ except [`spk14b`](@ref) and [`spk14a`](@ref) (see [`DAFHandle`](@ref)). An array
 `dafbna` began and `dafena` did not end has no summary in the file, so a search does not
 find it. The call does nothing if the handle is closed already. After the call the
 handle keeps the file neither open nor memory-mapped, so that Windows can delete or
-replace it.
+replace it. For a handle in memory (from [`dafops`](@ref)) the close discards the bytes.
 """
 function dafcls(h::DAFHandle)
     h.isopen || return nothing
     h.isopen = false
     h.searching = false
     h.adding = false
-    _open_unregister!(h)
+    if _daf_inmemory(h)
+        truncate(h.io, 0)                # the bytes of a handle in memory are discarded
+    else
+        _open_unregister!(h)
+    end
     close(h.io)
     return nothing
 end
@@ -723,7 +748,7 @@ function daffna(h::DAFHandle)
     while h.scurr > h.snsum && h.snext != 0
         # invariant: every summary record before `snext` in the chain is exhausted
         steps += 1
-        steps <= 1 + filesize(h.io) ÷ _DAF_RECLEN || throw(
+        steps <= 1 + _daf_size(h) ÷ _DAF_RECLEN || throw(
             SpiceError(
                 :baddaf,
                 "daffna: the chain of summary records has a cycle in $(h.path)"
@@ -758,7 +783,7 @@ function daffpa(h::DAFHandle)
     while h.scurr <= 0 && h.sprev != 0
         # invariant: every summary record after `sprev` in the chain is exhausted
         steps += 1
-        steps <= 1 + filesize(h.io) ÷ _DAF_RECLEN || throw(
+        steps <= 1 + _daf_size(h) ÷ _DAF_RECLEN || throw(
             SpiceError(
                 :baddaf,
                 "daffpa: the chain of summary records has a cycle in $(h.path)"
@@ -860,7 +885,7 @@ function dafgda(h::DAFHandle, first::Integer, last::Integer)
     )
     n = Int(last) - Int(first) + 1
     data = Vector{Float64}(undef, n)
-    8 * Int(last) <= filesize(h.io) || throw(
+    8 * Int(last) <= _daf_size(h) || throw(
         SpiceError(
             :filereadfailed,
             "dafgda: the addresses $first:$last are not inside the file $(h.path)"

@@ -71,7 +71,7 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
 
 | Area | Files |
 |---|---|
-| Binary kernels (DAF) | `daf.jl` (read), `daf_access.jl`, `daf_write.jl` |
+| Binary kernels (DAF) | `daf.jl` (read), `daf_access.jl`, `daf_write.jl`, `memkernels.jl` (kernels built in memory: `furnsh` of a handle, `load_samples!`, `load_function!`) |
 | SPK evaluation | `spk_eval.jl` (types 2, 3), `spk_more.jl`, `spk_types/`, `conic.jl`, `interp.jl`, `mda.jl` |
 | Text and JSON kernels, pool | `textkernel.jl`, `jsonkernel.jl`, `pool_api.jl`, `pool_write.jl` |
 | Names, frames, rotations | `names.jl`, `frames.jl`, `rotations.jl`, `dynframes.jl`, `switchframes.jl`, `frame_info.jl` |
@@ -110,6 +110,12 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
   first for chains that contain class 3, 5 or 6 frames.
 - **SPK type 3** (separate velocity series): order k >= 1 of the jet is derivative k-1
   of the velocity series, as in `spkder`.
+- **Kernels in memory.** A handle of `dafops` (`spkops`, `ckops`, `pckops`) has an
+  `IOBuffer` and `path == ""`, and is never in the table of open files. `furnsh` of a
+  handle copies its bytes and parses them with `_daf_parse`, as `open_daf` does a file,
+  so writing to the handle later never changes a loaded kernel. The body names of a
+  kernel (`bodies`, on a `DAF` or an `EphemerisProvider`) rank below the pool and above
+  `boddef`, the later kernel first.
 - **Memory maps on Windows.** Windows cannot delete or replace a mapped file, so a map
   that is needed only temporarily is released with `_unmap!` (or `_das_release!`), not
   left to the garbage collector. The maps of a `KernelSet` stay mapped.

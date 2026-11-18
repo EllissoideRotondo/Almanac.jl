@@ -236,10 +236,31 @@ function open_daf(path::AbstractString)
         )
     )
     nwords = Int(nbytes ÷ 8)
-    nrecords = Int(nbytes ÷ _DAF_RECLEN)
-
     return open(path, "r") do io
         raw = Mmap.mmap(io, Vector{UInt8}, (8 * nwords,))
+        _daf_parse(io, raw, path, () -> Mmap.mmap(io, Vector{Float64}, (nwords,), 0))
+    end
+end
+
+"""
+    _daf_parse(io, raw, path, native) -> DAF
+
+Contract: the `DAF` of the bytes `raw` of a DAF, with the checks and the result of
+[`open_daf`](@ref); `io` reads the same bytes (for `_daf_little`), and `native()` returns
+the words of `raw` as a `Vector{Float64}` when they have the native byte order. `raw` is
+unmapped on return if it is a memory map; the result never refers to it. `path` is the
+name of the result and of the messages.
+"""
+function _daf_parse(io::IO, raw::Vector{UInt8}, path::AbstractString, native)
+    nwords = length(raw) ÷ 8
+    nrecords = length(raw) ÷ _DAF_RECLEN
+    nrecords >= 2 || throw(
+        SpiceError(
+            :baddaf,
+            "file of $(length(raw)) bytes is too short to be a DAF: $path"
+        )
+    )
+    return let
         data = Float64[]
         done = false
         try
@@ -288,7 +309,7 @@ function open_daf(path::AbstractString)
                 end
                 d
             else
-                Mmap.mmap(io, Vector{Float64}, (nwords,), 0)
+                native()
             end
 
             # --- summary records ------------------------------------------------------

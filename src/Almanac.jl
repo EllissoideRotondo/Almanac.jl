@@ -18,16 +18,16 @@ export j1900, j1950, j2000, j2100, jyear, tyear, spd, b1900, b1950, clight
 export halfpi, twopi, rpd, dpr
 export sct2e, sce2c, sce2t, sce2s, scs2e, scencd, scdecd, sctiks, scfmt, scpart, sctype
 export ckgp, ckgpav, ckcov, ckcov!, ckobj, ckobj!, ckmeta, ckfrot, ckfxfm, cknr02, ckgr02, cknr03, ckgr03
-export DAFHandle, dafopr, dafopw, dafonw, dafcls, dafhsf, dafrfr, getfat
+export DAFHandle, dafopr, dafopw, dafonw, dafops, save_kernel, load_samples!, load_function!, dafcls, dafhsf, dafrfr, getfat
 export dafbfs, dafbbs, daffna, daffpa, dafgs, dafgn, dafps, dafus, dafgda, dafgsr
 export dafbna, dafada, dafena, dafws, dafrs, dafrn, dafac, dafec, dafdc
-export spkopn, spkopa, spkcls, spkpds, spkw01, spkw02, spkw03, spkw05, spkw08, spkw09
+export spkopn, spkops, spkopa, spkcls, spkpds, spkw01, spkw02, spkw03, spkw05, spkw08, spkw09
 export spkw12, spkw13, spkw15, spkw17, spkw18, spkw19, spkw20, spkw21
 export spk14b, spk14a, spk14e, SPK14Writer
 export spksfs, spkpvn, spkuds, spksub
 export getelm, evsgp4, spkw10
-export ckopn, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
-export pckopn, pckw02, pckw20, pckcls
+export ckopn, ckops, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
+export pckopn, pckops, pckw02, pckw20, pckcls
 export spkobj, spkobj!, spkcov, spkcov!, kinfo, kdata, tkvrsn
 export Window, card, wncard, wninsd!, wnvald!, wnunid, wnintd, wndifd, wncomd
 export wnelmd, wnincd, wnfetd, wnsumd, wnreld, wncond!, wnexpd!, wnextd!, wnfild!, wnfltd!
@@ -155,6 +155,7 @@ include("gf/fov.jl")         # gftfov, gfrfov, gffove: visibility in a field of 
 include("providers.jl")     # EphemerisProvider evaluation, add_ephemeris!
 include("queries.jl")       # StateQuery, state_query, RotationQuery, rotation_query
 include("table.jl")         # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
+include("memkernels.jl")    # furnsh of a DAF in memory, load_samples!, load_function!
 include("ad.jl")            # derivative rules for the AD package extensions
 include("analysis/orbit.jl")     # Orbit, orbit: a state about a central body
 include("analysis/elements.jl")  # element, elements: the scalar quantities of an Orbit
