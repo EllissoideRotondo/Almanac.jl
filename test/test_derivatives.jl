@@ -62,7 +62,7 @@ const AD_PUBLIC_ORDER = nsample(2, MAXORDER)
 const EPOCHS_EXACT = nsample(2, 12)
 
 "Relative difference `|a - b| / |b|`; for `b == 0` the absolute difference."
-function reldiff(a, b)
+function der_reldiff(a, b)
     nb = norm(b)
     return nb == 0 ? norm(a - b) : norm(a - b) / nb
 end
@@ -77,7 +77,7 @@ function fd_errors(jet, et::Float64, h::Float64, N::Int)
     @assert h > 0 && N >= 1
     j0 = jet(et); jp = jet(et + h); jm = jet(et - h)
     @assert length(j0) == N + 1
-    return [reldiff((jp[k + 1] - jm[k + 1]) / (2h), j0[k + 2]) for k in 0:(N - 1)]
+    return [der_reldiff((jp[k + 1] - jm[k + 1]) / (2h), j0[k + 2]) for k in 0:(N - 1)]
 end
 
 "The function `t -> d^N f / dt^N` by nested forward mode; `f` itself for `N == 0`."
@@ -160,7 +160,7 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
             @test v == state[SVector(4, 5, 6)]
             (r0,) = spkder(ctx, targ, et, ref, obs, Val(0))
             @test isapprox(r0, r; rtol = 1.0e-14)
-            worst = max(worst, reldiff(r, cstate[1:3]), reldiff(v, cstate[4:6]))
+            worst = max(worst, der_reldiff(r, cstate[1:3]), der_reldiff(v, cstate[4:6]))
         end
         measured(@sprintf("  %-58s max=%.3e", "spkder orders 0, 1 against CSPICE, relative", worst))
         @test worst <= 1.0e-9
@@ -201,7 +201,7 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
                     ad = label == "generic" ? collect(ad_jet(generic, et, Val(AD_GENERIC_ORDER))) :
                         collect(ad_jet(public, et, Val(AD_PUBLIC_ORDER)))
                     jet = spkder(ctx, targ, et, ref, obs, Val(MAXORDER))
-                    worst .= max.(worst, [reldiff(jet[k], ad[k]) for k in 1:(order + 1)])
+                    worst .= max.(worst, [der_reldiff(jet[k], ad[k]) for k in 1:(order + 1)])
                 end
                 measured(
                     @sprintf(
@@ -236,7 +236,7 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
             @test isapprox(R, pxform(ctx, from, to, et); atol = 4eps())
             @test dR == X[SVector(4, 5, 6), SOneTo(3)]
             Xc = SPICE.sxform(from, to, et)
-            worst = max(worst, reldiff(dR, Xc[4:6, 1:3]))
+            worst = max(worst, der_reldiff(dR, Xc[4:6, 1:3]))
         end
         measured(@sprintf("  %-58s max=%.3e", "pxder order 1 against CSPICE sxform, relative", worst))
         @test worst <= 1.0e-7
@@ -272,7 +272,7 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
                     ad = label == "generic" ? collect(ad_jet(generic, et, Val(AD_GENERIC_ORDER))) :
                         collect(ad_jet(public, et, Val(AD_PUBLIC_ORDER)))
                     jet = pxder(ctx, from, to, et, Val(MAXORDER))
-                    worst .= max.(worst, [reldiff(jet[k], ad[k]) for k in 1:(order + 1)])
+                    worst .= max.(worst, [der_reldiff(jet[k], ad[k]) for k in 1:(order + 1)])
                 end
                 measured(
                     @sprintf(
