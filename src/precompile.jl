@@ -190,9 +190,9 @@ let
     two_body(o, 3600.0)
     q = with_element(o, :sma, 8000.0)
     with_apsides(o, 7000.0, 9000.0)
-    for kind in (:ric, :vnc, :rcn, :tnw)
-        local_frame(o, kind)
-        local_frame_state(o, kind)
-        relative_state(q, o, kind)
+    for lf in (:ric, :vnc, :rcn, :tnw)
+        local_frame(o, lf)
+        local_frame_state(o, lf)
+        relative_state(q, o, lf)
     end
 end
