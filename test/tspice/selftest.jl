@@ -5,8 +5,9 @@
 # DIR is a recording of run.jl (default ~/.cache/almanac-tspice) with the families
 # F_LTIME and F_POOL. Each case runs run.jl on those families in a scratch copy of the
 # recording and checks its exit status: 0 for the recording as it is, 1 for a mismatch
-# that the baseline lacks, 2 for a family without a log, a family that failed to record,
-# and a family whose log cannot be replayed. The baseline files are copied, changed and
+# that the baseline lacks and for a fault injected into Almanac's results (TSPICE_FAULT),
+# 2 for a family without a log, a family that failed to record, and a family whose log
+# cannot be replayed. The baseline files are copied, changed and
 # restored; the scratch directory is removed at the end.
 
 const HERE = @__DIR__
@@ -62,6 +63,13 @@ function main(args)
         run_status(dir, FAMS)
     end
     check("a mismatch that the baseline lacks", got, 1)
+
+    # faults of Almanac that the comparison must find: an output off by 1e-10 relative,
+    # which CSPICE does not share, and an error of another kind
+    for (fault, what) in ("value" => "an output off by 1e-10", "kind" => "an error of another kind")
+        got = withenv(() -> run_status(dir, FAMS), "TSPICE_FAULT" => fault)
+        check(what, got, 1)
+    end
 
     rm(joinpath(dir, "logs", "F_LTIME.log.gz"))
     check("a family without a log", run_status(dir, FAMS), 2)

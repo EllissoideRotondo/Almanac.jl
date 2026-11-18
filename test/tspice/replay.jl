@@ -10,7 +10,8 @@
 #
 # - `match`: Almanac gives the outputs of SPICELIB within `RTOL`, or throws the
 #   `SpiceError` whose kind is the short message that SPICELIB signaled;
-# - `cspice`: Almanac differs from SPICELIB and agrees with CSPICE (TSPICE_ORACLE=1);
+# - `cspice`: Almanac differs from SPICELIB, and so does CSPICE, which Almanac agrees with
+#   (TSPICE_ORACLE=1);
 # - `near`: the outputs differ by more than `RTOL` and less than `NEAR` relative (to the
 #   largest magnitude in each group of three numbers);
 # - `spread`: the outputs differ by more, SPICELIB and CSPICE differ from each other, and
@@ -799,21 +800,30 @@ function cspice_call(c::Call)
     name == "pcpool" && (args = Any[args[1], String.(v)])
     name == "lmpool" && (args = Any[String.(c.inputs[1].values)])
     try
-        return in_snapshot(() -> f(args...), c)
+        r = in_snapshot(() -> f(args...), c)
+        # some wrappers of SPICE.jl (ltime, polyds, chbder, szpool, ...) do not check for
+        # an error: it would return garbage, and leave CSPICE in the error state, in
+        # which the next call, a load mirrored into CSPICE among them, does nothing
+        SPICE.handleerror()
+        return r
     catch e
         return e
     end
 end
 
 function cspice_reset()
+    ccall((:reset_c, SPICE.libcspice), Cvoid, ())
     SPICE.kclear()
     SPICE.timdef("SET", "CALENDAR", "GREGORIAN")
     return SPICE.timdef("SET", "SYSTEM", "UTC")
 end
 
 """
-True if CSPICE gives for `c` what Almanac gave: the same error kind, or outputs that
-agree within `NEAR` with `got`, the outputs of Almanac paired with SPICELIB's.
+True if CSPICE gives for `c` what Almanac gave and SPICELIB did not: the same error kind,
+or outputs that agree within `NEAR` with `almanac_result`, the outputs of Almanac paired
+with SPICELIB's, where CSPICE also differs from SPICELIB in each output that Almanac
+differs in. Without that last condition a fault of Almanac below `NEAR` would pass as
+`cspice` wherever CSPICE and SPICELIB agree.
 """
 function agrees_with_cspice(c::Call, almanac_result)
     r = cspice_call(c)
@@ -829,10 +839,15 @@ function agrees_with_cspice(c::Call, almanac_result)
     vals = r isa Tuple ? collect(r) : Any[r]
     oracle = output_pairs(name, outs, vals)
     length(oracle) == length(almanac_result) || return false
-    for ((_, _, a), (_, _, o)) in zip(almanac_result, oracle)
-        (a === nothing || o === nothing) && return a === o
+    for ((_, e, a), (_, _, o)) in zip(almanac_result, oracle)
+        if a === nothing || o === nothing
+            a === o || return false
+            continue
+        end
         length(a) == length(o) || return false
         near_output(a, o) || return false
+        length(e) == length(a) && all(close_enough.(e, a)) && continue
+        length(e) == length(o) && all(close_enough.(e, o)) && return false
     end
     return true
 end
@@ -879,10 +894,16 @@ function within_spread(c::Call, pairs)
     length(oracle) == length(pairs) || return false
     for ((_, e, g), (_, _, o)) in zip(pairs, oracle)
         (g === nothing || o === nothing || length(g) != length(o) || length(e) != length(o)) && return false
-        all(x -> x isa Real, Iterators.flatten((e, g, o))) || return near_output(g, o)
-        dac = maximum(abs.(Float64.(g) .- Float64.(o)); init = 0.0)
-        dsc = maximum(abs.(Float64.(e) .- Float64.(o)); init = 0.0)
-        dac <= 2dsc || near_output(g, o) || return false
+        all(close_enough.(e, g)) && continue
+        # an output where CSPICE agrees with SPICELIB has no scatter to be within
+        all(close_enough.(e, o)) && return false
+        if all(x -> x isa Real, Iterators.flatten((e, g, o)))
+            dac = maximum(abs.(Float64.(g) .- Float64.(o)); init = 0.0)
+            dsc = maximum(abs.(Float64.(e) .- Float64.(o)); init = 0.0)
+            dac <= 2dsc || near_output(g, o) || return false
+        else
+            near_output(g, o) || return false
+        end
     end
     return true
 end
@@ -1123,6 +1144,48 @@ in_snapshot(f, c::Call) = isempty(c.snapshot) ? f() : cd(f, c.snapshot)
 
 # --- replay ------------------------------------------------------------------------------
 
+# TSPICE_AUDIT=1 writes audit.tsv: per routine, the matches, those that compared no
+# value, those that compared fewer values than SPICELIB's outputs hold (`found` and the
+# outputs of NOTOUT aside), and the outputs that those left out. A routine with many of
+# either is a routine whose matches say little.
+const AUDIT = get(ENV, "TSPICE_AUDIT", "0") == "1"
+const AUDITS = Dict{String, Vector{Int}}()
+
+const AUDIT_MISSING = Dict{String, Dict{String, Int}}()
+
+function audit!(name, c, result)
+    ncmp = sum((length(e) for (_, e, _) in result); init = 0)
+    notout = get(NOTOUT, name, String[])
+    outs = filter(o -> o.name != "found" && !(o.name in notout), c.outputs)
+    nlog = sum((length(o.values) for o in outs); init = 0)
+    a = get!(() -> [0, 0, 0], AUDITS, name)
+    a[1] += 1
+    ncmp == 0 && (a[2] += 1)
+    if 0 < ncmp < nlog
+        a[3] += 1
+        seen = Set(Iterators.flatten(split(n, '+') for (n, _, _) in result))
+        m = get!(() -> Dict{String, Int}(), AUDIT_MISSING, name)
+        for o in outs
+            o.name in seen || (m[o.name] = get(m, o.name, 0) + 1)
+        end
+    end
+    return
+end
+
+# For selftest.jl: TSPICE_FAULT=value scales each floating-point output of Almanac by
+# 1 + 1e-10, below `NEAR`; TSPICE_FAULT=kind changes the kind of each SpiceError.
+const FAULT = get(ENV, "TSPICE_FAULT", "")
+
+function inject_fault(result)
+    if FAULT == "value" && result isa AbstractVector
+        scale(g) = g === nothing ? g : Any[x isa AbstractFloat ? x * (1 + 1.0e-10) : x for x in g]
+        return [(n, e, scale(g)) for (n, e, g) in result]
+    elseif FAULT == "kind" && result isa SpiceError
+        return SpiceError(result.kind === :invalidoption ? :badframe : :invalidoption, "injected")
+    end
+    return result
+end
+
 mutable struct Tally
     match::Int
     cspice::Int
@@ -1176,6 +1239,7 @@ function replay_family(path, tallies, mismatches)
         catch e
             e
         end
+        FAULT == "" || (result = inject_fault(result))
         ORACLE && name in STATEFUL && cspice_call(c)
         oracle_ok() = ORACLE && !(name in STATEFUL) && !(result isa Exception && !(result isa SpiceError)) &&
             agrees_with_cspice(c, result)
@@ -1187,6 +1251,7 @@ function replay_family(path, tallies, mismatches)
                 t.match += 1
             elseif oracle_ok()
                 t.cspice += 1
+                record!(mismatches, (family, c, "cspice", "SPICELIB: $(c.failed ? c.short : "no error"); Almanac and CSPICE: $(result.kind)"))
             else
                 t.error += 1
                 record!(
@@ -1201,6 +1266,7 @@ function replay_family(path, tallies, mismatches)
             record!(mismatches, (family, c, "adapter", first(sprint(showerror, result), 200)))
         elseif c.failed && oracle_ok()
             t.cspice += 1
+            record!(mismatches, (family, c, "cspice", "SPICELIB: $(c.short); Almanac and CSPICE: no error"))
         elseif c.failed
             t.error += 1
             record!(mismatches, (family, c, "error", "SPICELIB: $(c.short); Almanac: no error"))
@@ -1211,8 +1277,11 @@ function replay_family(path, tallies, mismatches)
             ]
             if isempty(bad)
                 t.match += 1
+                AUDIT && audit!(name, c, result)
             elseif oracle_ok()
                 t.cspice += 1
+                n, e, g = bad[1]
+                record!(mismatches, (family, c, "cspice", "$n: SPICELIB $(e) Almanac and CSPICE $(first(string(g), 300))"))
             else
                 n, e, g = bad[1]
                 near = all(((n, e, g),) -> g !== nothing && length(e) == length(g) && near_output(e, g), bad)
@@ -1232,8 +1301,8 @@ end
 
 """
 The mismatches go to `replay.tsv` as they are found, the first `MAXROWS` of each routine
-and kind; the others are only counted. Every mismatch of a gated kind (value, error,
-adapter) also goes to `ids.tsv` with its identity: family, routine, kind and a hash of
+and kind; the others are only counted. Every mismatch (each kind but `match` and
+`skipped`) also goes to `ids.tsv` with its identity: family, routine, kind and a hash of
 all its inputs, which does not depend on the line of the log. run.jl compares these
 identities with the baseline, so that a new mismatch fails even when another one went
 away.
@@ -1245,7 +1314,7 @@ mutable struct Mismatches
 end
 Mismatches(io::IO, rows) = Mismatches(io, rows, nothing)
 const MAXROWS = 200
-const GATED_KINDS = ("value", "error", "adapter")
+const GATED_KINDS = ("cspice", "near", "spread", "value", "error", "adapter")
 
 "FNV-1a hash of a string, 64 bits: stable across Julia versions, unlike `hash`."
 function fnv64(s::AbstractString)
@@ -1346,6 +1415,13 @@ function main(args)
     println(rpad("all", 10), lpad(tot.match, 10), lpad(tot.cspice, 8), lpad(tot.near, 8), lpad(tot.spread, 8), lpad(tot.value, 8), lpad(tot.error, 8), lpad(tot.adapter, 10), lpad(tot.skipped, 10))
     close(mismatches.io)
     write_tallies(joinpath(outdir, "tally.tsv"), tallies)
+    AUDIT && open(joinpath(outdir, "audit.tsv"), "w") do io
+        println(io, "routine\tmatch\tnone_compared\tfewer_compared\tnot_compared")
+        for (r, v) in sort(collect(AUDITS); by = first)
+            m = get(AUDIT_MISSING, r, Dict{String, Int}())
+            println(io, r, '\t', join(v, '\t'), '\t', join(["$k=$n" for (k, n) in sort(collect(m))], ' '))
+        end
+    end
     return failed
 end
 
