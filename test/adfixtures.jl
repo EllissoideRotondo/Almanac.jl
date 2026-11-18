@@ -214,6 +214,8 @@ ad_kep(x) = keplerian_orbit(
     0.0, 399, 1; sma = x[1], ecc = x[2], inc = x[3], raan = x[4], aop = x[5],
     ma = x[6], gm = AD_GM
 ).state
+"The weighted state of `ad_kep`: one function, so that a backend compiles it once for the three points."
+ad_kep_w(x) = dot(W6, ad_kep(x))
 
 """
     ad_orbit_cases() -> (default, full)
@@ -224,7 +226,8 @@ defined), a hyperbolic state, and Keplerian elements with the mean anomaly. The 
 cases are those of `keplerian_orbit`, which reach every path of the Kepler solver
 `_ma_to_ta`, the one derivative point of the Orbit layer: the ellipse, the hyperbola, and
 the branch at E = pi (the mean anomaly pi, where ANISE returns E for the true anomaly and
-the derivative is that of the true anomaly). The full cases add `two_body`, the elements,
+the derivative is that of the true anomaly). The three are one function (`ad_kep_w`) at
+three points, so that a backend compiles it once. The full cases add `two_body`, the elements,
 the local frames and the relative state, which the backends differentiate as plain
 arithmetic. They are left out of the default run for their compilation: `two_body` takes
 Mooncake 8 s for each mode, and a backend other than Zygote compiles every branch of
@@ -250,9 +253,9 @@ function ad_orbit_cases()
     xe, xh = [8000.0, 0.1, 0.5, 1.0, 2.0, 2.0], [-20000.0, 1.5, 0.7, 0.4, 1.1, 0.3]
     element_case(q, s0) = "element $q" => (s -> element(ad_orbit(s), q), s0)
     default = [
-        "keplerian_orbit ellipse" => (x -> dot(W6, ad_kep(x)), xe),
-        "keplerian_orbit ma = pi" => (x -> dot(W6, ad_kep(x)), xpi),
-        "keplerian_orbit hyperbola" => (x -> dot(W6, ad_kep(x)), xh),
+        "keplerian_orbit ellipse" => (ad_kep_w, xe),
+        "keplerian_orbit ma = pi" => (ad_kep_w, xpi),
+        "keplerian_orbit hyperbola" => (ad_kep_w, xh),
     ]
     full = vcat(
         [
@@ -280,16 +283,27 @@ function ad_orbit_cases()
 end
 
 """
-    ad_orbit_check(bname, backend)
+    ad_orbit_check(bname, backend; rules=false)
 
 The gradients of the Orbit cases with `backend` against ForwardDiff, each case on its
 own: Zygote compiles the sum of the cases as one function much more slowly than the cases
 one by one (measured 70 s against 50 s, before the rules for `element` and `getproperty`
-of the ChainRulesCore extension).
+of the ChainRulesCore extension). With `rules = true` the default run adds an element
+and a computed property, which reach those two rules (for Zygote; the exhaustive run has
+them for every backend).
 """
-function ad_orbit_check(bname, backend)
+function ad_orbit_check(bname, backend; rules::Bool = false)
     default, full = ad_orbit_cases()
     cases = FULL ? vcat(default, full) : default
+    if rules && !FULL
+        se = [7000.0, 500.0, 1200.0, -1.0, 7.0, 0.5]
+        cases = vcat(
+            cases, [
+                "element sma" => (s -> element(ad_orbit(s), :sma) / 8000.0, se),
+                "property ecc" => (s -> ad_orbit(s).ecc, se),
+            ]
+        )
+    end
     @testset "$bname: Orbit gradients" begin
         worst = 0.0
         for (cname, (f, x)) in cases
