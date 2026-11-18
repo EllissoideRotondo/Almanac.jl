@@ -43,8 +43,9 @@ end
 """
     _ma_to_ea(rm, ecc) -> anomaly
 
-The eccentric anomaly in [0, 2pi) of the mean anomaly `rm` (ecc <= 1), or the hyperbolic
-anomaly (ecc > 1): the Newton iteration of `_ma_to_ta`, with the derivative carried.
+The eccentric anomaly of the mean anomaly `rm` (ecc <= 1), or the hyperbolic anomaly
+(ecc > 1): the Newton iteration of `_ma_to_ta`, with the derivative carried. The eccentric
+anomaly is near `rm`, with 2pi added when it is negative; it is not reduced to [0, 2pi).
 """
 function _ma_to_ea(rm::T, ecc::T) where {T}
     fail(what) = _conv_fail("the mean to true anomaly conversion $what")
@@ -82,24 +83,35 @@ function _ma_to_ea(rm::T, ecc::T) where {T}
     return _carry(f2, (rm - (ecc * sinh(f2) - f2) - r0) / (ecc * cosh(f2) - 1))
 end
 
-"The true anomaly of the eccentric (ecc <= 1) or hyperbolic anomaly `e`, as ANISE takes it."
+"""
+    _ea_to_ta(e, ecc) -> anomaly
+
+The true anomaly of the eccentric (ecc <= 1) or hyperbolic anomaly `e`, as ANISE takes it.
+
+On an ellipse the plain value is that of ANISE, `2 atan(sqrt((1 + e)/(1 - e)) tan(E/2))`
+wrapped to [0, 2pi), or `E` itself where |E - pi| < 1e-8. Its derivatives are taken from
+`2 atan(sqrt(1 + e) sin(E/2), sqrt(1 - e) cos(E/2))`, the same function without the pole
+of `tan` at every odd multiple of pi: near it the derivatives of ANISE's formula lose up
+to 1e-8 of d2 nu/dM2 relative to its bound, and at an odd multiple other than pi (`E` is
+not reduced) they are wrong by O(1).
+"""
 function _ea_to_ta(e::S, ecc::U) where {S, U}
     T = promote_type(S, U)
     fail(what) = _conv_fail("the mean to true anomaly conversion $what")
     if primal(ecc) <= 1
-        ta = if abs(primal(e) - π) >= 1.0e-8
-            normalized = 1 - ecc
-            abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
-            ratio = (1 + ecc) / normalized
-            primal(ratio) < 0 && fail("has a negative eccentricity ratio")
-            2 * atan(sqrt(ratio) * tan(e / 2))
+        ep, eccp = primal(e), primal(ecc)
+        ta = if abs(ep - π) >= 1.0e-8
+            normalized = 1 - eccp
+            abs(normalized) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
+            ratio = (1 + eccp) / normalized
+            ratio < 0 && fail("has a negative eccentricity ratio")
+            2 * atan(sqrt(ratio) * tan(ep / 2))
         else
-            # nu = E at E = pi, where the true anomaly is nu = pi + c (E - pi) with
-            # c = sqrt((1 - e) / (1 + e)): the primal value stays E, the derivative is that of nu
-            c = sqrt((1 - ecc) / (1 + ecc))
-            e + (c - 1) * (e - primal(e)) + (c - primal(c)) * (primal(e) - π)
+            ep      # ANISE: nu = E at E = pi
         end
-        return primal(ta) < 0 ? ta + 2 * T(π) : ta
+        ta = ta < 0 ? ta + 2 * Float64(π) : ta
+        S === Float64 && U === Float64 && return ta
+        return _with_primal(2 * atan(sqrt(1 + ecc) * sin(e / 2), sqrt(1 - ecc) * cos(e / 2)), ta)
     end
     normalized = ecc - 1
     abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")

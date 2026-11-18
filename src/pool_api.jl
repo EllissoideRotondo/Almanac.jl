@@ -46,15 +46,28 @@ end
     gipool([ctx,] name) -> Vector{Int}
 
 Return the values of the numeric kernel-pool variable `name` rounded to the nearest
-integers, as
+integers, a tie away from zero, as
 [`gipool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gipool_c.html).
 
 The result holds every value; there is no `found` flag (see [`gdpool`](@ref)).
 
-Throws `SpiceError(:kernelvarnotfound)` if the variable is not in the pool and
-`SpiceError(:typemismatch)` if it holds character values.
+Throws `SpiceError(:kernelvarnotfound)` if the variable is not in the pool,
+`SpiceError(:typemismatch)` if it holds character values, and
+`SpiceError(:intoutofrange)` if a value is outside the 32-bit integers or NaN.
 """
-gipool(ks::KernelSet, name::AbstractString) = Int[round(Int, x) for x in gdpool(ks, name)]
+function gipool(ks::KernelSet, name::AbstractString)
+    v = gdpool(ks, name)
+    for (i, x) in enumerate(v)
+        # `gipool` of CSPICE: DBLE(INTMIN()) <= x <= DBLE(INTMAX()), then NINT
+        -2147483648.0 <= x <= 2147483647.0 || throw(
+            SpiceError(
+                :intoutofrange, "the value associated with index $i of the kernel " *
+                    "variable $name is outside the range of integers; the value stored was $x"
+            )
+        )
+    end
+    return Int[_nint(x) for x in v]
+end
 
 """
     gcpool([ctx,] name) -> Vector{String}

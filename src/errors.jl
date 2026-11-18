@@ -48,7 +48,7 @@ const ERROR_KINDS = (
     :idcodenotfound, :idstringtoolong, :illegalcharacter, :immutablevalue,
     :incompatiblescale, :incompatibleunits, :incompleteframe, :indexoutofrange,
     :inputoutofbounds, :inputstoolarge, :insidebody, :insufficientangles, :intindextoosmall,
-    :intlennotpos, :invalidaddress, :invalidangle, :invalidarchtype, :invalidargument,
+    :intlennotpos, :intoutofrange, :invalidaddress, :invalidangle, :invalidarchtype, :invalidargument,
     :invalidaxis, :invalidaxislength, :invalidconststep, :invalidcount, :invaliddatatype,
     :invaliddegree, :invaliddescrtime, :invalidelements, :invalidellipse,
     :invalidendpntspec, :invalidfiletype, :invalidfixref, :invalidformat, :invalidfov,

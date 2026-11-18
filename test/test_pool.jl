@@ -96,6 +96,22 @@ group(
             )
             @test gipool(ctx, name) == SPICE.gipool(name)
         end
+        # `NINT` rounds a tie away from zero, inside the 32-bit range (ends included);
+        # outside it, NaN included, CSPICE signals SPICE(INTOUTOFRANGE). Found 2026-11-17:
+        # `round(Int, x)` gave 2 for 2.5, and 3000000000 for 3.0e9.
+        ties = [2.5, -2.5, 0.5, -0.5, 2147483646.5, -2147483647.5, 2147483647.0, -2147483648.0]
+        try
+            pdpool(ctx, "GI_TIES", ties); SPICE.pdpool("GI_TIES", ties)
+            @test gipool(ctx, "GI_TIES") == [3, -3, 1, -1, 2147483647, -2147483648, 2147483647, -2147483648]
+            @test gipool(ctx, "GI_TIES") == SPICE.gipool("GI_TIES")
+            for (k, x) in enumerate((2147483647.4, -2147483648.3, 3.0e9, NaN))
+                pdpool(ctx, "GI_BIG$k", [1.0, x])
+                @test throws_kind(() -> gipool(ctx, "GI_BIG$k"), :intoutofrange)
+            end
+        finally
+            SPICE.dvpool("GI_TIES")
+            foreach(n -> dvpool(ctx, n), ("GI_TIES", "GI_BIG1", "GI_BIG2", "GI_BIG3", "GI_BIG4"))
+        end
         # The result is a copy: changing it does not change the pool.
         v = gdpool(ctx, "BODY399_RADII"); v[1] = -1.0
         @test gdpool(ctx, "BODY399_RADII")[1] == 6378.1366
