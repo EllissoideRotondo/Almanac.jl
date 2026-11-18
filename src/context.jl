@@ -79,6 +79,14 @@ function build_kernelset(
     end
     npool = _pool_x_namepool(pool, edited !== nothing)
     name2code, code2name = build_names(npool)
+    # The names of loaded kernels, below those of the pool and above those of `boddef`;
+    # the pairs are in load order, so that a later kernel wins.
+    kbodies = Tuple{String, Int32}[]
+    for entry in loaded
+        c = entry.content
+        (c isa DAF || c isa EphemerisProvider) && append!(kbodies, c.bodies)
+    end
+    _pool_x_bodydefs!(name2code, code2name, kbodies)
     _pool_x_bodydefs!(name2code, code2name, bodydefs)
     frames, framename2id = build_frames(npool)
     for (i, entry) in enumerate(loaded)     # frames of add_frame!, later ones first

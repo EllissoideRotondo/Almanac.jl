@@ -51,7 +51,40 @@ _tderivs(::Type{T}, x, ::Val{M}) where {T, M} = ntuple(k -> k == 1 ? _tc(T, x) :
 end
 
 """
-    add_ephemeris!(f, [ctx,] body, center, frame, t0, t1; name) -> Nothing
+    _kernel_bodies(who, bodies) -> Vector{Tuple{String,Int32}}
+
+Contract: the pairs `name => code` of the iterable `bodies` as a vector of name and code,
+with the blanks around each name removed. Throws `SpiceError(:badarg)` for a blank name,
+as [`boddef`](@ref) does.
+"""
+function _kernel_bodies(who::AbstractString, bodies)
+    out = Tuple{String, Int32}[]
+    for p in bodies
+        nm = String(strip(first(p)))
+        isempty(nm) && throw(SpiceError(:badarg, "$who: a body name of `bodies` is blank"))
+        push!(out, (nm, Int32(last(p))))
+    end
+    return out
+end
+
+"""
+    _resolve_body(ks, x, bodies) -> Int32
+
+Contract: the code of the body `x`: a name of the pairs `bodies` (the later pair first),
+else the code that [`body_code`](@ref) gives in `ks`.
+"""
+function _resolve_body(ks::KernelSet, x::NameOrID, bodies::Vector{Tuple{String, Int32}})
+    if x isa AbstractString
+        n = normalize_name(x)
+        for i in length(bodies):-1:1
+            normalize_name(bodies[i][1]) == n && return bodies[i][2]
+        end
+    end
+    return body_code(ks, x)
+end
+
+"""
+    add_ephemeris!(f, [ctx,] body, center, frame, t0, t1; name, bodies) -> Nothing
 
 Make `body` a body whose state relative to `center` in `frame` is `f(et)` for
 `t0 <= et <= t1` (ET, seconds past J2000 TDB). `f` returns six numbers: the position
@@ -64,6 +97,10 @@ segment, so the rules of a file hold: it has priority over the files loaded befo
 and not over those loaded after it, outside `[t0, t1]` the files that cover the body
 apply, [`unload`](@ref) with `name` removes it and [`kclear`](@ref) removes it with
 the rest. [`kdata`](@ref) lists it with the type `"SPK"`.
+
+`bodies`, pairs such as `["MYSAT" => -1001]`, are body names that hold while the
+provider is loaded, as for [`furnsh`](@ref) of a handle; `body` and `center` may be
+one of them.
 
 `f` is called from any thread that makes a query, so it must not change shared data. It
 receives the epoch type of the query: `Float64`, a `ForwardDiff.Dual` for a dual-number
@@ -101,7 +138,7 @@ See also [`unload`](@ref), [`ephemeris_table`](@ref).
 """
 function add_ephemeris!(
         f, ctx::SpiceContext, body::NameOrID, center::NameOrID,
-        frame::NameOrID, t0::Real, t1::Real; name::AbstractString = ""
+        frame::NameOrID, t0::Real, t1::Real; name::AbstractString = "", bodies = ()
     )
     t0 <= t1 || throw(
         SpiceError(
@@ -109,9 +146,11 @@ function add_ephemeris!(
             "add_ephemeris!: the interval [$t0, $t1] ends before it starts"
         )
     )
+    kb = _kernel_bodies("add_ephemeris!", bodies)
     lock(ctx.lock) do
         ks = kernelset(ctx)
-        b, c, fr = body_code(ks, body), body_code(ks, center), frame_id(ks, frame)
+        b, c = _resolve_body(ks, body, kb), _resolve_body(ks, center, kb)
+        fr = frame_id(ks, frame)
         b == c && throw(
             SpiceError(
                 :barycenterephem,
@@ -119,7 +158,7 @@ function add_ephemeris!(
             )
         )
         n = isempty(name) ? "ephemeris of body $b" : String(name)
-        p = EphemerisProvider(n, b, c, fr, Float64(t0), Float64(t1), f, :SPK)
+        p = EphemerisProvider(n, b, c, fr, Float64(t0), Float64(t1), f, :SPK, kb)
         list = copy(ks.loaded)
         push!(list, Loaded(n, "", p))
         _pool_x_swap_loaded!(ctx, list, Loaded[])

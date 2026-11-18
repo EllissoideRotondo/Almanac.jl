@@ -184,3 +184,72 @@ end
         pckcls(hp)
     end
 end
+
+@testset "names of a kernel" begin
+    # A context with the kernel of `mem_spk!` loaded under `name` with `bodies`.
+    function named!(ctx, name, bodies)
+        h = mem_spk!(spkops())
+        furnsh(ctx, h; name = name, bodies = bodies)
+        spkcls(h)
+        return ctx
+    end
+
+    @testset "the name comes and goes with the kernel" begin
+        ctx = named!(SpiceContext(), "k", ["MySat" => -1001])
+        @test bodn2c(ctx, "MYSAT") == -1001
+        @test bodc2n(ctx, -1001) == "MySat"
+        @test spkezr(ctx, "mysat", 0.0, "J2000", "NONE", "EARTH")[1] ==
+            spkezr(ctx, -1001, 0.0, "J2000", "NONE", 399)[1]
+        unload(ctx, "k")
+        @test bodn2c(ctx, "MYSAT") === nothing
+        @test throws_kind(() -> furnsh(ctx, spkops(); name = "x", bodies = [" " => 1]), :badarg)
+    end
+
+    @testset "order: pool, later kernel, earlier kernel, boddef" begin
+        ctx = SpiceContext()
+        boddef(ctx, "MYSAT", -3000)
+        named!(ctx, "early", ["MYSAT" => -1001])
+        @test bodn2c(ctx, "MYSAT") == -1001                  # a kernel over boddef
+        named!(ctx, "late", ["MYSAT" => -1002])
+        @test bodn2c(ctx, "MYSAT") == -1002                  # the later kernel wins
+        pcpool(ctx, "NAIF_BODY_NAME", ["MYSAT"])
+        pipool(ctx, "NAIF_BODY_CODE", [-2000])
+        @test bodn2c(ctx, "MYSAT") == -2000                  # the pool over the kernels
+        dvpool(ctx, "NAIF_BODY_NAME")
+        dvpool(ctx, "NAIF_BODY_CODE")
+        unload(ctx, "late")
+        @test bodn2c(ctx, "MYSAT") == -1001                  # the earlier kernel again
+        unload(ctx, "early")
+        @test bodn2c(ctx, "MYSAT") == -3000                  # boddef again
+    end
+
+    @testset "add_ephemeris! with names" begin
+        ctx = SpiceContext()
+        add_ephemeris!(et -> [7000.0, 0.001et, 0, 0, 0.001, 0], ctx, "PROBE", "EARTH", "J2000", 0.0, 10.0; name = "p", bodies = ["PROBE" => -1003])
+        @test spkpos(ctx, "PROBE", 5.0, "J2000", "NONE", "EARTH")[1] == [7000.0, 0.005, 0.0]
+        unload(ctx, "p")
+        @test bodn2c(ctx, "PROBE") === nothing
+    end
+
+    @testset "a dynamic frame that names the body" begin
+        ctx = SpiceContext()
+        lmpool(
+            ctx, [
+                "FRAME_MYSAT_RTN = 1850009", "FRAME_1850009_NAME = 'MYSAT_RTN'",
+                "FRAME_1850009_CLASS = 5", "FRAME_1850009_CLASS_ID = 1850009",
+                "FRAME_1850009_CENTER = 399", "FRAME_1850009_RELATIVE = 'J2000'",
+                "FRAME_1850009_DEF_STYLE = 'PARAMETERIZED'", "FRAME_1850009_FAMILY = 'TWO-VECTOR'",
+                "FRAME_1850009_PRI_AXIS = 'X'",
+                "FRAME_1850009_PRI_VECTOR_DEF = 'OBSERVER_TARGET_POSITION'",
+                "FRAME_1850009_PRI_OBSERVER = 'EARTH'", "FRAME_1850009_PRI_TARGET = 'MYSAT'",
+                "FRAME_1850009_PRI_ABCORR = 'NONE'", "FRAME_1850009_SEC_AXIS = 'Y'",
+                "FRAME_1850009_SEC_VECTOR_DEF = 'OBSERVER_TARGET_VELOCITY'",
+                "FRAME_1850009_SEC_OBSERVER = 'EARTH'", "FRAME_1850009_SEC_TARGET = 'MYSAT'",
+                "FRAME_1850009_SEC_ABCORR = 'NONE'", "FRAME_1850009_SEC_FRAME = 'J2000'",
+            ]
+        )
+        named!(ctx, "k", ["MYSAT" => -1001])
+        s = spkezr(ctx, -1001, 100.0, "J2000", "NONE", 399)[1]
+        @test pxform(ctx, "J2000", "MYSAT_RTN", 100.0) ≈ twovec(s[1:3], 1, s[4:6], 2) rtol = 1.0e-14
+    end
+end
