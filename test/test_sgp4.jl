@@ -38,9 +38,12 @@
 # bound is `SGP4_RTOL` except for the orbit with e = 0.97 (`SGP4_RTOL_E97`). Measured in
 # both tiers: 4.3e-15 and 4.5e-14 (e = 0.97). The bounds were 1e-12 and 5e-11 until
 # 2026-11-17, when the remainders of `d_mod` (`f2c_dmod`) replaced the exact `rem`; with
-# `rem` the difference was 1.4e-12. In a
-# body-fixed frame the velocity of a geosynchronous object is near zero, so a velocity
-# difference is divided by the inertial speed and not by the body-fixed speed.
+# `rem` the difference was 1.4e-12. On Windows the C library under CSPICE computes `sin`
+# and `cos` with x87 instructions (see `ORACLE_LIBM_EXACT`), and the bounds are
+# `ORACLE_LIBM_FACTOR` (64) times larger: measured there 1.6e-13 (high eccentricity) and
+# 4.0e-14 (decaying). In a body-fixed frame the velocity of a geosynchronous object is near
+# zero, so a velocity difference is divided by the inertial speed and not by the
+# body-fixed speed.
 
 # Compile time. In the default run the test code of this group is compiled without
 # optimization (`@optlevel 0` for `Main`, until the end of this file), because the
@@ -52,8 +55,8 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 import ForwardDiff
 
-const SGP4_RTOL = 1.0e-14
-const SGP4_RTOL_E97 = 1.0e-13
+const SGP4_RTOL = 1.0e-14 * ORACLE_LIBM_FACTOR
+const SGP4_RTOL_E97 = 1.0e-13 * ORACLE_LIBM_FACTOR
 const SGP4_AD_RTOL = (1.0e-9, 1.0e-7)      # orders 2 and 3 of spkder against ForwardDiff
 const SGP4_FD_RTOL = 1.0e-5
 "Object whose eccentricity is 0.97 (the looser bound applies)."
