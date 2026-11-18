@@ -15,13 +15,15 @@ const MEM_PV0 = [7000.0, 0.0, 0.0, 0.0, 7.5, 1.0]
 "States of the Kepler orbit at `ets` (km, km/s)."
 mem_states(ets) = [prop2b(MEM_GM, MEM_PV0, et) for et in ets]
 
-"Write SPK segments of types 2, 9 and 13 into `h`."
+"Write SPK segments of types 2, 9 and 13 into `h`, and the Earth relative to the barycenter."
 function mem_spk!(h)
     ets = collect(range(-3600.0, 3600.0; length = 25))
     states = mem_states(ets)
     spkw02(h, 499, 4, "J2000", 0.0, 100.0, "type 2", 100.0, [[1.0, 0.5, 2.0, 0.0, 3.0, 0.0]], 0.0)
     spkw09(h, -1000, 399, "J2000", ets[1], ets[end], "type 9", 7, states, ets)
     spkw13(h, -1001, 399, "J2000", ets[1], ets[end], "type 13", 7, states, ets)
+    earth = [[1.5e8 - 30.0 * et, 30.0 * et, 0.0, -30.0, 30.0, 0.0] for et in (ets[1], ets[end])]
+    spkw09(h, 399, 0, "J2000", ets[1], ets[end], "earth", 1, earth, [ets[1], ets[end]])
     return h
 end
 
@@ -70,7 +72,7 @@ end
             @test dafgda(m, ic[5], ic[6]) == dafgda(r, ic[5], ic[6])
             n += 1
         end
-        @test n == 3 && !daffna(m)
+        @test n == 4 && !daffna(m)
         @test dafec(m) == dafec(r)
         dafcls(r)
         spkcls(m)
@@ -85,5 +87,100 @@ end
         spkcls(b)
         @test !isopen(b)
         @test throws_kind(() -> dafgda(b, 1, 1), :dafnosuchhandle)
+    end
+end
+
+@testset "furnsh of a handle" begin
+    dir = mktempdir()
+    path = joinpath(dir, "same.bsp")
+    spkcls(mem_spk!(spkopn(path, "same")))
+    oracle_load([path])
+    ets = collect(range(-3500.0, 3500.0; length = 50))
+
+    @testset "queries equal the file and CSPICE" begin
+        h = mem_spk!(spkops("same"))
+        mem, file = SpiceContext(), neo_context([path])
+        furnsh(mem, h; name = "same")
+        spkcls(h)
+        for body in (-1000, -1001), corr in ("NONE", "LT+S"), et in ets
+            s, lt = spkezr(mem, body, et, "J2000", corr, 399)
+            @test (s, lt) == spkezr(file, body, et, "J2000", corr, 399)
+            @test s == SPICE.spkezr(string(body), et, "J2000", corr, "399")[1]
+        end
+        @test spkpos(mem, 499, 50.0, "J2000", "NONE", 4)[1] == spkpos(file, 499, 50.0, "J2000", "NONE", 4)[1]
+    end
+
+    @testset "load list" begin
+        h = mem_spk!(spkops())
+        ctx = SpiceContext()
+        furnsh(ctx, h; name = "mine")
+        @test kdata(ctx, 1) == ("mine", "SPK", "", 0)
+        # A file loaded later has priority; the kernel in memory has priority over an
+        # earlier one. The file `line.bsp` puts body -1000 on a straight line.
+        line = joinpath(dir, "line.bsp")
+        let f = spkopn(line, "line")
+            spkw09(f, -1000, 399, "J2000", -3600.0, 3600.0, "line", 1, [zeros(6), [1.0, 0, 0, 0, 0, 0]], [-3600.0, 3600.0])
+            spkcls(f)
+        end
+        furnsh(ctx, line)
+        @test spkpos(ctx, -1000, 0.0, "J2000", "NONE", 399)[1] == [0.5, 0.0, 0.0]
+        furnsh(ctx, h; name = "mine")
+        @test ktotal(ctx) == 3
+        @test spkpos(ctx, -1000, 0.0, "J2000", "NONE", 399)[1] != [0.5, 0.0, 0.0]
+        unload(ctx, "mine")
+        @test ktotal(ctx) == 2
+        @test spkpos(ctx, -1000, 0.0, "J2000", "NONE", 399)[1] == [0.5, 0.0, 0.0]
+        kclear(ctx)
+        @test ktotal(ctx) == 0
+        spkcls(h)
+    end
+
+    @testset "a load copies the segments" begin
+        h = spkops()
+        spkw09(h, -1000, 399, "J2000", -10.0, 10.0, "one", 1, [zeros(6), [1.0, 0, 0, 0, 0, 0]], [-10.0, 10.0])
+        ctx = SpiceContext()
+        furnsh(ctx, h; name = "k")
+        spkw09(h, -1000, 399, "J2000", -10.0, 10.0, "two", 1, [zeros(6), [3.0, 0, 0, 0, 0, 0]], [-10.0, 10.0])
+        @test spkpos(ctx, -1000, 0.0, "J2000", "NONE", 399)[1] == [0.5, 0.0, 0.0]
+        furnsh(ctx, h; name = "k")
+        @test spkpos(ctx, -1000, 0.0, "J2000", "NONE", 399)[1] == [1.5, 0.0, 0.0]
+        spkcls(h)
+    end
+
+    @testset "errors" begin
+        ctx = SpiceContext()
+        closed = mem_spk!(spkops())
+        spkcls(closed)
+        onfile = spkopn(joinpath(dir, "open.bsp"), "x")
+        adding = spkops()
+        dafbna(adding, dafps([0.0, 1.0], [1, 2, 3, 4, 0, 0]), "open array")
+        empty = spkops()
+        cases = (
+            (closed, "a", :dafnosuchhandle), (onfile, "a", :dafinvalidaccess),
+            (adding, "a", :dafnewconflict), (empty, "a", :nosegmentsfound),
+            (mem_spk!(spkops()), "", :emptystring),
+        )
+        for (h, name, kind) in cases
+            @test throws_kind(() -> furnsh(ctx, h; name = name), kind)
+            @test ktotal(ctx) == 0
+        end
+        close(onfile)
+    end
+
+    @testset "CK and binary PCK" begin
+        ck, pck = joinpath(dir, "same.bc"), joinpath(dir, "same.bpc")
+        ckcls(mem_ck!(ckopn(ck, "x")))
+        pckcls(mem_pck!(pckopn(pck, "x")))
+        mem, file = SpiceContext(), neo_context([ck, pck])
+        hc, hp = mem_ck!(ckops()), mem_pck!(pckops())
+        furnsh(mem, hc; name = "ck")
+        furnsh(mem, hp; name = "pck")
+        @test kdata(mem, 1)[2] == "CK" && kdata(mem, 2)[2] == "PCK"
+        for t in (0.0, 2.5, 7.0)
+            @test ckgp(mem, -77000, t, 0.0, "J2000") == ckgp(file, -77000, t, 0.0, "J2000")
+            @test sxform(mem, "ITRF93", "J2000", 10t) == sxform(file, "ITRF93", "J2000", 10t)
+        end
+        ckcls(hc)
+        pckcls(hp)
     end
 end
