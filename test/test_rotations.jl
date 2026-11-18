@@ -108,6 +108,25 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
         @test n.max <= 2.0e-15
     end
 
+    @apart @testset "built-in inertial pairs: one matrix on every path" begin
+        # The pairs of the 21 built-in inertial frames skip the chain lookups; the value
+        # is the same for a plain epoch, a series epoch and the jet, and the derivatives
+        # are exact zeros.
+        ks = Almanac.kernelset(ctx)
+        et = 1.2345e8
+        same = true; zeroder = true
+        for i in Int32(1):Int32(21), j in Int32(1):Int32(21)
+            R = Almanac.frame_rotation(ks, i, j, et)
+            jet = Almanac.rotation_jet(ks, i, j, et, Val(2))
+            tay = Almanac.frame_rotation(ks, i, j, Almanac.taylor_var(et, Val(2)))
+            same &= jet[1] == R && map(x -> Almanac.primal(x), tay) == R
+            zeroder &= all(m -> all(iszero, m), jet[2:3]) &&
+                all(x -> all(iszero, Almanac.derivatives(x)[2:3]), tay)
+        end
+        @test same
+        @test zeroder
+    end
+
     @apart @testset "pxfrm2: rotation between two epochs" begin
         d = Float64[]
         for _ in 1:200

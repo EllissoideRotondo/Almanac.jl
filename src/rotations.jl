@@ -684,6 +684,7 @@ see `dynframes.jl` and `switchframes.jl`.
 """
 function frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
     from == to && return one(Mat3{T})
+    _both_inertial(from, to) && return _inertial_pair(T, from, to)
     # The chain of `to`, without evaluation: to, parent(to), ..., J2000.
     chain = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
     cur = to
@@ -713,6 +714,25 @@ end
 frame_rotation(ks::KernelSet, from::Integer, to::Integer, et::Real) =
     frame_rotation(ks, Int32(from), Int32(to), et)
 
+"True if `from` and `to` are built-in inertial frames (IDs 1 to 21), which no kernel redefines."
+@inline _both_inertial(from::Int32, to::Int32) =
+    1 <= from <= N_INERTIAL_FRAMES && 1 <= to <= N_INERTIAL_FRAMES
+
+"""
+    _inertial_pair(T, from, to) -> Mat3{T}
+
+Contract: `frame_rotation` from the built-in inertial frame `from` to the built-in
+inertial frame `to != from`, without the lookups of the chains: both chains are one link
+to J2000, so the operations are those of the general path (`_frame_step` gives the
+transposed `inertial_rotation`, and the two links meet at J2000).
+"""
+@inline function _inertial_pair(::Type{T}, from::Int32, to::Int32) where {T}
+    from == _J2000_FRAME && return Mat3{T}(inertial_rotation(to))
+    up = Mat3{T}(transpose(inertial_rotation(from)))
+    to == _J2000_FRAME && return up
+    return Mat3{T}(_m_mtxm(Mat3{T}(transpose(inertial_rotation(to))), up))
+end
+
 "True if `id` is one of the first `len` entries of `chain`."
 @inline function _in_chain(chain::NTuple{M, Int32}, len::Int, id::Int32) where {M}
     for k in 1:len
@@ -732,6 +752,9 @@ of orders 1 to N (element `k+1` is the derivative of order `k`, per second^k).
 
 function rotation_jet(ks::KernelSet, from::Integer, to::Integer, et::Real, v::Val{N}) where {N}
     N isa Integer && N >= 0 || throw(SpiceError(:badarg, "the derivative order must be an integer >= 0"))
+    # Two built-in inertial frames: a constant matrix, whose derivatives are zero.
+    et isa Float64 && from != to && _both_inertial(Int32(from), Int32(to)) &&
+        return (_inertial_pair(Float64, Int32(from), Int32(to)), ntuple(_ -> zero(Mat3{Float64}), Val(N))...)
     r = frame_rotation(ks, Int32(from), Int32(to), taylor_var(et, v))
     d = map(derivatives, r)
     return ntuple(k -> map(x -> x[k], d), Val(N + 1))
