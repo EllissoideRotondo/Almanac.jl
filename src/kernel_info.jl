@@ -242,7 +242,8 @@ Return the ID codes of the bodies that have data in the SPK file `path`, sorted 
 without duplicates, as
 [`spkobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkobj_c.html).
 
-The file is read from disk and need not be loaded.
+The file is read from disk and need not be loaded. A [`DAFHandle`](@ref) in place of the
+path (in memory, or of a file) gives the segments that the handle holds now.
 
 Throws `SpiceError(:filenotfound)` if the file does not exist, `SpiceError(:invalidformat)`
 if it is a transfer file (a binary kernel in text form), `SpiceError(:invalidarchtype)` if
@@ -288,7 +289,8 @@ Return the coverage [`Window`](@ref) of the body `idcode` in the SPK file `path`
 The window is the union of the intervals `[start, stop]` of the segments of that
 body, in seconds past J2000 TDB, as sorted disjoint intervals. `collect(w)` gives the
 endpoints as a `Vector{Float64}`. The window is empty if the body has no data. The
-file is read from disk and need not be loaded.
+file is read from disk and need not be loaded. A [`DAFHandle`](@ref) in place of the
+path (in memory, or of a file) gives the segments that the handle holds now.
 
 Throws the errors of [`spkobj`](@ref).
 

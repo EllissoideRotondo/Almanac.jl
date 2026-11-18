@@ -7,12 +7,31 @@
 # never changes it (the snapshot rule of `KernelSet`).
 
 """
+    _daf_of_handle(h, name, who) -> DAF
+
+Contract: the `DAF`, named `name`, of the bytes that the open handle `h` holds now (in
+memory or in its file), with the checks of `open_daf`. An array that is being added has
+no summary yet and is not in the result. Throws `SpiceError(:dafnosuchhandle)` if `h` is
+closed.
+"""
+function _daf_of_handle(h::DAFHandle, name::AbstractString, who::AbstractString)
+    _daf_check_open(h, who)
+    bytes = if _daf_inmemory(h)
+        _daf_bytes(h)
+    else
+        seekstart(h.io)
+        read(h.io)
+    end
+    native() = copy(reinterpret(Float64, view(bytes, 1:(8 * (length(bytes) ÷ 8)))))
+    return _daf_parse(IOBuffer(bytes), bytes, name, native)
+end
+
+"""
     _daf_from_handle(h, name, who) -> DAF
 
-Contract: the `DAF` of the current bytes of the open in-memory handle `h`, named `name`,
-with the checks of `open_daf`. Throws `SpiceError` with kind `:dafnosuchhandle` if `h` is
-closed, `:dafinvalidaccess` if it has a file, and `:dafnewconflict` if an array is being
-added (`dafbna` without `dafena`).
+Contract: `_daf_of_handle` for the load of an in-memory handle. Throws `SpiceError` with
+kind `:dafnosuchhandle` if `h` is closed, `:dafinvalidaccess` if it has a file, and
+`:dafnewconflict` if an array is being added (`dafbna` without `dafena`).
 """
 function _daf_from_handle(h::DAFHandle, name::AbstractString, who::AbstractString)
     _daf_check_open(h, who)
@@ -28,9 +47,7 @@ function _daf_from_handle(h::DAFHandle, name::AbstractString, who::AbstractStrin
             "$who: an array is being added to the DAF in memory; end it with dafena first"
         )
     )
-    bytes = _daf_bytes(h)
-    native() = copy(reinterpret(Float64, view(bytes, 1:(8 * (length(bytes) ÷ 8)))))
-    return _daf_parse(IOBuffer(bytes), bytes, name, native)
+    return _daf_of_handle(h, name, who)
 end
 
 """
@@ -102,3 +119,100 @@ function furnsh(ctx::SpiceContext, h::DAFHandle; name::AbstractString, bodies = 
     return nothing
 end
 furnsh(h::DAFHandle; kw...) = furnsh(default_context(), h; kw...)
+
+# ---------------------------------------------------------------------------------------
+# Coverage of a handle, and saving
+# ---------------------------------------------------------------------------------------
+
+"The DAF of the handle `h` for the coverage call `who`, which needs the kind `kind`."
+function _cov_daf(h::DAFHandle, who::AbstractString, kind::Symbol)
+    name = _daf_inmemory(h) ? "(DAF in memory)" : h.path
+    daf = _daf_of_handle(h, name, who)
+    daf.kind === kind || throw(
+        SpiceError(
+            :invalidfiletype,
+            "$who: the DAF $name is a binary $(daf.kind) kernel; the file must be a binary $kind file"
+        )
+    )
+    return daf
+end
+
+function spkobj!(ids::AbstractVector{<:Integer}, h::DAFHandle)
+    daf = _cov_daf(h, "spkobj", :SPK)
+    return _add_ids!(ids, Int[s.target for s in daf.segments])
+end
+spkobj(h::DAFHandle) = spkobj!(Int[], h)
+
+function spkcov!(cover::Window, h::DAFHandle, idcode::Integer)
+    for s in _cov_daf(h, "spkcov", :SPK).segments   # in file order, as the summaries
+        s.target == idcode && wninsd!(cover, s.t0, s.t1)
+    end
+    return cover
+end
+spkcov(h::DAFHandle, idcode::Integer) = spkcov!(Window(), h, idcode)
+
+function pckfrm!(ids::AbstractVector{<:Integer}, h::DAFHandle)
+    daf = _cov_daf(h, "pckfrm", :PCK)
+    return _add_ids!(ids, Int[s.target for s in daf.segments])
+end
+pckfrm(h::DAFHandle) = pckfrm!(Int[], h)
+
+function pckcov!(cover::Window, h::DAFHandle, idcode::Integer)
+    for s in _cov_daf(h, "pckcov", :PCK).segments
+        s.target == idcode && wninsd!(cover, s.t0, s.t1)
+    end
+    return cover
+end
+pckcov(h::DAFHandle, idcode::Integer) = pckcov!(Window(), h, idcode)
+
+# `ckobj`, `ckobj!`, `ckcov` and `ckcov!` of `ck_api.jl` reach a handle through this method.
+_ck_open(f, h::DAFHandle, who::AbstractString) = f(_cov_daf(h, who, :CK))
+
+"""
+    save_kernel(handle, path) -> Nothing
+
+Write the in-memory DAF `handle` (from [`spkops`](@ref), [`ckops`](@ref),
+[`pckops`](@ref) or [`dafops`](@ref)) to the new file `path`: the bytes that the same
+write calls would have put in a file made by [`spkopn`](@ref) (or `ckopn`, `pckopn`,
+`dafonw`). The file is a valid kernel; an array that is being added (`dafbna` without
+`dafena`) is not in it. An existing file is never replaced. The handle stays open. This
+call has no CSPICE counterpart.
+
+Throws `SpiceError`:
+
+- `:emptystring` or `:blankfilename` if `path` is empty or blank;
+- `:dafnosuchhandle` if `handle` is closed, `:dafinvalidaccess` if it has a file;
+- `:fileopenfailed` if the file exists or cannot be created.
+
+See also [`furnsh`](@ref).
+"""
+function save_kernel(h::DAFHandle, path::AbstractString)
+    _chk_filename("save_kernel", path)
+    _daf_check_open(h, "save_kernel")
+    _daf_inmemory(h) || throw(
+        SpiceError(
+            :dafinvalidaccess,
+            "save_kernel: the DAF $(h.path) is a file, not a DAF in memory"
+        )
+    )
+    bytes = _daf_bytes(h)
+    try
+        fd = Base.Filesystem.open(
+            path, Base.Filesystem.JL_O_CREAT | Base.Filesystem.JL_O_EXCL |
+                Base.Filesystem.JL_O_WRONLY, 0o644
+        )
+        try
+            write(fd, bytes)
+        finally
+            close(fd)
+        end
+    catch e
+        throw(
+            SpiceError(
+                :fileopenfailed,
+                "save_kernel: attempt to create the new file $path failed: $(sprint(showerror, e))"
+            )
+        )
+    end
+    return nothing
+end

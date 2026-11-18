@@ -302,7 +302,8 @@ Return the CK IDs of the instruments and structures that have a segment in the C
 `ck`, sorted and without duplicates, as
 [`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html).
 
-The file is read from disk and need not be loaded.
+The file is read from disk and need not be loaded. A [`DAFHandle`](@ref) in place of the
+path (in memory, or of a file) gives the segments that the handle holds now.
 
 Throws `SpiceError`:
 - `:filenotfound` if the file does not exist;
@@ -313,7 +314,7 @@ Throws `SpiceError`:
 
 See also [`ckcov`](@ref), [`ckobj!`](@ref).
 """
-ckobj(ck::AbstractString) =
+ckobj(ck) =
     _ck_open(daf -> sort!(unique!(Int[s.inst for s in daf.cksegments])), ck, "ckobj")
 
 """
@@ -326,7 +327,7 @@ Insert the CK IDs that have a segment in the CK file `ck` into the vector `ids`,
 comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
 unchanged. Throws the errors of [`ckobj`](@ref).
 """
-ckobj!(ids::AbstractVector{<:Integer}, ck::AbstractString) = _add_ids!(ids, ckobj(ck))
+ckobj!(ids::AbstractVector{<:Integer}, ck) = _add_ids!(ids, ckobj(ck))
 
 """
     _ck_intervals!(out, data, seg) -> out
@@ -444,7 +445,7 @@ have it last. See [`ckcov`](@ref) for the arguments, the intervals and the error
 call that throws for an argument or for the file leaves `cover` unchanged.
 """
 function ckcov!(
-        cover::Window, ks::KernelSet, ck::AbstractString, idcode::Integer,
+        cover::Window, ks::KernelSet, ck, idcode::Integer,
         needav::Bool, level::AbstractString, tol::Real, timsys::AbstractString
     )
     tolf = _ck_check_tol(tol)
@@ -508,7 +509,8 @@ interval `i` as `(start, stop)`.
 - `timsys`: `"SCLK"` gives encoded clock ticks; `"TDB"` gives seconds past J2000 TDB.
   `"TDB"` needs the SCLK kernel of the spacecraft in `ctx`.
 
-The CK file is read from disk and need not be loaded.
+The CK file is read from disk and need not be loaded. A [`DAFHandle`](@ref) in place of the
+path (in memory, or of a file) gives the segments that the handle holds now.
 
 Throws `SpiceError(:valueoutofrange)` if `tol < 0`, `SpiceError(:invalidoption)` if
 `level` is not one of the two, `SpiceError(:notsupported)` if `timsys` is not one of
@@ -530,7 +532,7 @@ end
 See also [`ckcov!`](@ref), [`spkcov`](@ref), [`pckcov`](@ref).
 """
 ckcov(
-    ks::KernelSet, ck::AbstractString, idcode::Integer, needav::Bool,
+    ks::KernelSet, ck, idcode::Integer, needav::Bool,
     level::AbstractString, tol::Real, timsys::AbstractString
 ) =
     ckcov!(Window(), ks, ck, idcode, needav, level, tol, timsys)
@@ -549,21 +551,21 @@ ckmeta(ctx::SpiceContext, ckid::Integer, meta::AbstractString) =
     ckmeta(kernelset(ctx), ckid, meta)
 ckmeta(ckid::Integer, meta::AbstractString) = ckmeta(default_context(), ckid, meta)
 ckcov(
-    ctx::SpiceContext, ck::AbstractString, idcode::Integer, needav::Bool,
+    ctx::SpiceContext, ck, idcode::Integer, needav::Bool,
     level::AbstractString, tol::Real, timsys::AbstractString
 ) =
     ckcov(kernelset(ctx), ck, idcode, needav, level, tol, timsys)
 ckcov(
-    ck::AbstractString, idcode::Integer, needav::Bool, level::AbstractString, tol::Real,
+    ck, idcode::Integer, needav::Bool, level::AbstractString, tol::Real,
     timsys::AbstractString
 ) = ckcov(default_context(), ck, idcode, needav, level, tol, timsys)
 ckcov!(
-    cover::Window, ctx::SpiceContext, ck::AbstractString, idcode::Integer, needav::Bool,
+    cover::Window, ctx::SpiceContext, ck, idcode::Integer, needav::Bool,
     level::AbstractString, tol::Real, timsys::AbstractString
 ) =
     ckcov!(cover, kernelset(ctx), ck, idcode, needav, level, tol, timsys)
 ckcov!(
-    cover::Window, ck::AbstractString, idcode::Integer, needav::Bool,
+    cover::Window, ck, idcode::Integer, needav::Bool,
     level::AbstractString, tol::Real, timsys::AbstractString
 ) =
     ckcov!(cover, default_context(), ck, idcode, needav, level, tol, timsys)

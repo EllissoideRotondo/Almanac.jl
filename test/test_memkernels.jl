@@ -253,3 +253,53 @@ end
         @test pxform(ctx, "J2000", "MYSAT_RTN", 100.0) ≈ twovec(s[1:3], 1, s[4:6], 2) rtol = 1.0e-14
     end
 end
+
+@testset "coverage of a handle, save_kernel" begin
+    dir = mktempdir()
+    spk, ck, pck = joinpath(dir, "c.bsp"), joinpath(dir, "c.bc"), joinpath(dir, "c.bpc")
+    spkcls(mem_spk!(spkopn(spk, "c")))
+    ckcls(mem_ck!(ckopn(ck, "c")))
+    pckcls(mem_pck!(pckopn(pck, "c")))
+    hs, hc, hp = mem_spk!(spkops("c")), mem_ck!(ckops("c")), mem_pck!(pckops("c"))
+
+    @testset "the same as the file" begin
+        @test spkobj(hs) == spkobj(spk)
+        for id in spkobj(spk)
+            @test collect(spkcov(hs, id)) == collect(spkcov(spk, id))
+        end
+        @test ckobj(hc) == ckobj(ck)
+        for level in ("SEGMENT", "INTERVAL")
+            @test collect(ckcov(hc, -77000, false, level, 0.0, "SCLK")) ==
+                collect(ckcov(ck, -77000, false, level, 0.0, "SCLK"))
+        end
+        @test pckfrm(hp) == pckfrm(pck)
+        @test collect(pckcov(hp, 3000)) == collect(pckcov(pck, 3000))
+        let r = dafopr(spk)                 # a handle of a file works too
+            @test spkobj(r) == spkobj(spk)
+            dafcls(r)
+        end
+        @test throws_kind(() -> spkobj(hc), :invalidfiletype)
+    end
+
+    @testset "a search under way goes on" begin
+        dafbfs(hs)
+        @test daffna(hs)
+        first_name = dafgn(hs)
+        spkcov(hs, -1000)
+        @test dafgn(hs) == first_name
+        @test daffna(hs) && dafgn(hs) != first_name
+    end
+
+    @testset "save_kernel" begin
+        out = joinpath(dir, "saved.bsp")
+        save_kernel(hs, out)
+        @test read(out) == read(spk)
+        @test throws_kind(() -> save_kernel(hs, out), :fileopenfailed)
+        r = dafopr(spk)
+        @test throws_kind(() -> save_kernel(r, joinpath(dir, "x.bsp")), :dafinvalidaccess)
+        dafcls(r)
+    end
+    spkcls(hs)
+    ckcls(hc)
+    pckcls(hp)
+end

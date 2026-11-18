@@ -18,7 +18,7 @@ export j1900, j1950, j2000, j2100, jyear, tyear, spd, b1900, b1950, clight
 export halfpi, twopi, rpd, dpr
 export sct2e, sce2c, sce2t, sce2s, scs2e, scencd, scdecd, sctiks, scfmt, scpart, sctype
 export ckgp, ckgpav, ckcov, ckcov!, ckobj, ckobj!, ckmeta, ckfrot, ckfxfm, cknr02, ckgr02, cknr03, ckgr03
-export DAFHandle, dafopr, dafopw, dafonw, dafops, dafcls, dafhsf, dafrfr, getfat
+export DAFHandle, dafopr, dafopw, dafonw, dafops, save_kernel, dafcls, dafhsf, dafrfr, getfat
 export dafbfs, dafbbs, daffna, daffpa, dafgs, dafgn, dafps, dafus, dafgda, dafgsr
 export dafbna, dafada, dafena, dafws, dafrs, dafrn, dafac, dafec, dafdc
 export spkopn, spkops, spkopa, spkcls, spkpds, spkw01, spkw02, spkw03, spkw05, spkw08, spkw09

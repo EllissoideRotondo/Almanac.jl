@@ -507,7 +507,8 @@ Return the frame class IDs of the frames that have data in the binary PCK file `
 sorted and without duplicates, as
 [`pckfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckfrm_c.html).
 
-The file is read from disk and need not be loaded.
+The file is read from disk and need not be loaded. A [`DAFHandle`](@ref) in place of the
+path (in memory, or of a file) gives the segments that the handle holds now.
 
 Throws `SpiceError(:filenotfound)` if the file does not exist, `SpiceError(:invalidformat)`
 if it is a transfer file (a binary kernel in text form), `SpiceError(:invalidarchtype)` if
@@ -545,7 +546,8 @@ binary PCK file `pck`, as
 
 The window is the union of the intervals of the segments of that frame, in seconds
 past J2000 TDB. It is empty if the frame has no data. The file is read from disk and
-need not be loaded.
+need not be loaded. A [`DAFHandle`](@ref) in place of the
+path (in memory, or of a file) gives the segments that the handle holds now.
 
 Throws the errors of [`pckfrm`](@ref).
 
