@@ -216,3 +216,96 @@ function save_kernel(h::DAFHandle, path::AbstractString)
     end
     return nothing
 end
+
+# ---------------------------------------------------------------------------------------
+# Shortcuts
+# ---------------------------------------------------------------------------------------
+
+"""
+    _load_segment!(write!, ctx, name, segid, bodies, who) -> Nothing
+
+Contract: write one segment with `write!(h, segid)` into a new in-memory SPK and load it
+into `ctx` under `name` with the names `bodies`. The handle is closed on return. A call
+that throws leaves `ctx` unchanged.
+"""
+function _load_segment!(write!, ctx::SpiceContext, name::AbstractString, segid::AbstractString, bodies, who::AbstractString)
+    h = spkops(name)
+    try
+        write!(h, first(segid, 40))
+        furnsh(ctx, h; name = name, bodies = bodies)
+    finally
+        dafcls(h)
+    end
+    return nothing
+end
+
+"""
+    load_samples!([ctx,] name, body, center, frame, ets, states;
+                  method=:hermite, degree=7, segid=name, bodies=()) -> Nothing
+
+Load the states `states` (km, km/s) of `body` relative to `center` in `frame` at the epochs
+`ets` (seconds past J2000 TDB, increasing) into `ctx` as a kernel named `name`, with no
+file. This call has no CSPICE counterpart.
+
+The kernel holds one SPK segment from `ets[1]` to `ets[end]`: type 13 (Hermite
+interpolation, which uses the velocities) for `method = :hermite`, type 9 (Lagrange
+interpolation) for `:lagrange`, with polynomials of degree `degree`. `states` is a 6 by n
+matrix, a vector of 6-vectors, or a flat vector, as for [`spkw13`](@ref). The kernel is the
+one that [`spkw13`](@ref) or [`spkw09`](@ref) would write to a file, so queries give the
+same results as on that file. `segid` is cut to its first 40 characters. `body`, `center`
+and the names `bodies` are as for [`furnsh`](@ref) of a handle, and the rules of the load
+list are those of a file. A trajectory with jumps (burns) needs one call per arc, or
+several segments through [`spkops`](@ref).
+
+Throws `SpiceError`:
+
+- `:emptystring` or `:blankfilename` if `name` is empty or blank;
+- `:invalidargument` if `method` is not `:hermite` or `:lagrange`;
+- `:toofewstates` if `ets` is empty;
+- `:idcodenotfound` for an unknown body name;
+- the errors of [`spkw13`](@ref) or [`spkw09`](@ref) (degree, order of the epochs, ...).
+
+A call that throws leaves `ctx` unchanged.
+
+# Examples
+```jldoctest
+julia> ctx = SpiceContext();
+
+julia> ets = [0.0, 60.0, 120.0];
+
+julia> states = [[7000.0 + 0.5t, 0, 0, 0.5, 0, 0] for t in ets];
+
+julia> load_samples!(ctx, "probe", "PROBE", 399, "J2000", ets, states; degree = 3,
+                     bodies = ["PROBE" => -1000])
+
+julia> spkpos(ctx, "PROBE", 30.0, "J2000", "NONE", "EARTH")[1] ≈ [7015.0, 0, 0]
+true
+```
+
+See also [`load_function!`](@ref), [`furnsh`](@ref), [`spkops`](@ref).
+"""
+function load_samples!(
+        ctx::SpiceContext, name::AbstractString, body::NameOrID, center::NameOrID,
+        frame::NameOrID, ets::AbstractVector{<:Real}, states; method::Symbol = :hermite,
+        degree::Integer = 7, segid::AbstractString = name, bodies = ()
+    )
+    who = "load_samples!"
+    _chk_filename(who, name)
+    method in (:hermite, :lagrange) || throw(
+        SpiceError(
+            :invalidargument,
+            "$who: the method is $(repr(method)); it must be :hermite or :lagrange"
+        )
+    )
+    isempty(ets) && throw(SpiceError(:toofewstates, "$who: there are no epochs"))
+    kb = _kernel_bodies(who, bodies)
+    ks = kernelset(ctx)
+    b, c = _resolve_body(ks, body, kb), _resolve_body(ks, center, kb)
+    writer = method === :hermite ? spkw13 : spkw09
+    _load_segment!(ctx, name, segid, kb, who) do h, id
+        writer(ctx, h, b, c, frame, ets[1], ets[end], id, degree, states, ets)
+    end
+    return nothing
+end
+load_samples!(name::AbstractString, body::NameOrID, center::NameOrID, frame::NameOrID, ets::AbstractVector{<:Real}, states; kw...) =
+    load_samples!(default_context(), name, body, center, frame, ets, states; kw...)

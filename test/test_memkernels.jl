@@ -303,3 +303,42 @@ end
     ckcls(hc)
     pckcls(hp)
 end
+
+@testset "load_samples!" begin
+    dir = mktempdir()
+    n = nsample(200, 100_000)
+    ets = collect(range(-3600.0, 3600.0; length = n))
+    states = mem_states(ets)
+    probe = sort!(rand(MersenneTwister(SEED + 91), n ÷ 4) .* 7200.0 .- 3600.0)
+    for (method, writer) in ((:hermite, spkw13), (:lagrange, spkw09))
+        path = joinpath(dir, "$method.bsp")
+        let f = spkopn(path, "x")
+            writer(f, -1000, 399, "J2000", ets[1], ets[end], "samples", 7, states, ets)
+            spkcls(f)
+        end
+        file = neo_context([path])
+        for form in (states, reduce(hcat, states), reduce(vcat, states))
+            ctx = SpiceContext()
+            load_samples!(ctx, "samples", -1000, 399, "J2000", ets, form; method = method)
+            @test all(et -> spkezr(ctx, -1000, et, "J2000", "NONE", 399) == spkezr(file, -1000, et, "J2000", "NONE", 399), probe)
+        end
+    end
+
+    @testset "segment name, names, errors" begin
+        ctx = SpiceContext()
+        load_samples!(ctx, "x"^50, "PROBE", "EARTH", "J2000", ets, states; bodies = ["PROBE" => -1000])
+        @test bodn2c(ctx, "PROBE") == -1000
+        @test kdata(ctx, 1)[1] == "x"^50
+        cases = (
+            ((; method = :spline), :invalidargument), ((; degree = 6), :invaliddegree),
+            ((; segid = "a\tb"), :nonprintablechars),
+        )
+        for (kw, kind) in cases
+            @test throws_kind(() -> load_samples!(ctx, "bad", -1000, 399, "J2000", ets, states; kw...), kind)
+            @test ktotal(ctx) == 1
+        end
+        @test throws_kind(() -> load_samples!(ctx, "bad", -1000, 399, "J2000", Float64[], states), :toofewstates)
+        @test throws_kind(() -> load_samples!(ctx, "bad", "NOBODY", 399, "J2000", ets, states), :idcodenotfound)
+        @test ktotal(ctx) == 1
+    end
+end
