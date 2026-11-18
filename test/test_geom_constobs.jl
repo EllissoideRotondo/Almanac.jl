@@ -40,6 +40,7 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
             gput!(st, "$name velocity", grel(a[1][4:6], b[1][4:6]))
             gput!(st, "$name light time", abs(a[2] - b[2]) / b[2])
         end
+        fails = Failures()
         for k in 1:600
             ctr = rand(rng, ["EARTH", "MOON", "VENUS"])
             other = rand(rng, setdiff(GEO_BODIES, [ctr]))
@@ -61,7 +62,7 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
                     ctx, GEO_IDS[other], et, namfrm(ctx, outref), lowercase(loc), Aberration(cor),
                     SVector{3}(pos), GEO_IDS[ctr], namfrm(ctx, cref)
                 )
-                @test c == spkcpo(ctx, other, et, outref, loc, cor, pos, ctr, cref)
+                check!(fails, c == spkcpo(ctx, other, et, outref, loc, cor, pos, ctr, cref), "spkcpo by id and Aberration", k, other, et, outref, loc, cor, ctr, cref)
             end
             # A constant velocity, in a body-fixed frame or in an inertial frame.
             sref = rand(rng, [cref, "J2000", "ECLIPJ2000"])
@@ -74,6 +75,7 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
             b = g_spkcvt(sta, epc, ctr, sref, et, outref, loc, cor, other)
             cmp!("spkcvt", a, b)
         end
+        @test isempty(fails)
         greport("constant position and velocity", st)
         for name in ("spkcpo", "spkcpt", "spkcvo", "spkcvt")
             @test gget(st, "$name position") < CO_TOL.pos
@@ -128,12 +130,14 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
         et = 2.5e8
         p = SVector(6378.0 * cos(0.5), 0.0, 6378.0 * sin(0.5))
         s = SVector(p..., 0.0, 0.01, 0.0)
+        fails = Failures()
         for c in GEO_CORRS
-            @test gwarm(co_alloc_cpo, ks, et, c, p) == 0
-            @test gwarm(co_alloc_cpt, ks, et, c, p) == 0
-            @test gwarm(co_alloc_cvo, ks, et, c, s) == 0
-            @test gwarm(co_alloc_cvt, ks, et, c, s) == 0
+            check!(fails, gwarm(co_alloc_cpo, ks, et, c, p) == 0, "spkcpo allocates", c)
+            check!(fails, gwarm(co_alloc_cpt, ks, et, c, p) == 0, "spkcpt allocates", c)
+            check!(fails, gwarm(co_alloc_cvo, ks, et, c, s) == 0, "spkcvo allocates", c)
+            check!(fails, gwarm(co_alloc_cvt, ks, et, c, s) == 0, "spkcvt allocates", c)
         end
+        @test isempty(fails)
         T = Tuple{SVector{6, Float64}, Float64}
         @test (@inferred spkcpo(ks, 301, et, 10013, "OBSERVER", "CN+S", p, 399, 10013)) isa T
         @test (@inferred spkcpt(ks, p, 399, 10013, et, 1, "TARGET", "LT+S", 301)) isa T
@@ -147,6 +151,7 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
         h = 20.0
         p = SVector(6378.0 * cos(0.5), 0.0, 6378.0 * sin(0.5))
         s = SVector(p..., 0.0, 0.01, 0.0)
+        fails = Failures()
         for et in record_safe_epochs(rng, nsample(6, 24)), cor in GEO_CORRS, loc in CO_LOCI
             fs = Pair{String, Function}[
                 "spkcpo" => t -> spkcpo(ks, 301, t, 10013, loc, cor, p, 399, 10013)[1],
@@ -157,7 +162,7 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
             for (name, f) in fs
                 d = f(ForwardDiff.Dual(et, 1.0))
                 v = f(et)
-                @test isapprox(ForwardDiff.value.(d), v; rtol = 1.0e-12)
+                check!(fails, isapprox(ForwardDiff.value.(d), v; rtol = 1.0e-12), "dual value", name, et, cor, loc)
                 dp = ForwardDiff.partials.(d, 1)[SOneTo(3)]
                 fd = geo_fd(t -> f(t)[SOneTo(3)], et, h)
                 gput!(st, "$name, d(position)/dt against central difference", norm(dp .- fd) / norm(fd))
@@ -166,6 +171,7 @@ co_alloc_cvt(ks, et, c, s) = @allocated spkcvt(ks, s, 1.0e8, 399, 1, et, 10013, 
                 gput!(st, "$name, d(position)/dt against the returned velocity", norm(dp .- v[SVector(4, 5, 6)]) / norm(v[SVector(4, 5, 6)]))
             end
         end
+        @test isempty(fails)
         greport("dual epoch", st)
         for name in ("spkcpo", "spkcpt", "spkcvo", "spkcvt")
             @test gget(st, "$name, d(position)/dt against central difference") < 1.0e-4

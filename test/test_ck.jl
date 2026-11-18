@@ -243,12 +243,14 @@ group(
     end
 
     @apart @testset "ckmeta" begin
+        fails = Failures()
         for id in (
                     -77001, -77003, -77053, -78100, -99001, -77099, -5, 0, 12, -1000, -999,
                     -2147483000,
                 ), item in ("SCLK", "SPK", " sclk ")
-            @test ckmeta(ctx, id, item) == oracle_ckmeta(id, item)
+            check!(fails, ckmeta(ctx, id, item) == oracle_ckmeta(id, item), "ckmeta", id, repr(item))
         end
+        @test isempty(fails)
         @test ckmeta(ctx, -99001, "SCLK") == CKFix.SC_TDB
         @test ckmeta(ctx, -77003, "SCLK") == -77           # the default rule
         @test throws_kind(() -> ckmeta(ctx, -77001, "CLOCK"), :unknownckmeta)
@@ -586,15 +588,17 @@ group(
 
     @apart @testset "ckcov" begin
         nwindows = 0
+        fails = Failures()
         for p in ckpaths, id in ckobj(p), needav in (false, true),
                 level in ("SEGMENT", "INTERVAL"), tol in (0.0, 700.0), timsys in ("SCLK", "TDB")
             c = Float64[x for x in SPICE.ckcov(p, id, needav, level, tol, timsys)]
             n = ckcov(ctx, p, id, needav, level, tol, timsys)
             same = n isa Window && length(c) == length(n) && all(abs.(c .- n) .<= 1.0e-6)
             same || @info "ckcov differs" p id needav level tol timsys length(c) length(n)
-            @test same
+            check!(fails, same, "ckcov", basename(p), id, needav, level, tol, timsys)
             nwindows += !isempty(n)
         end
+        @test isempty(fails)
         @test nwindows > 100
         p = ckpaths[1]
         @test ckcov(ctx, p, -77003, false, "segment", 0.0, "sclk") ==

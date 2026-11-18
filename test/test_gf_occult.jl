@@ -51,6 +51,7 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
     E = "ELLIPSOID"
     P = "POINT"
     found = Dict{String, Int}()
+    inside = Ref(Failures())     # the containment checks of `check` in the current testset
     """
     Confinement window of the default run: some days about the event `k` (modulo the
     length) of `dates`, which starts in the UTC day of its date. An even `k` gives two
@@ -70,7 +71,7 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
         ok = gf_compare("gfoclt " * label, w, ref; atol)
         ok || @info "gfoclt case" label a cn
         @test ok
-        @test all(t -> wnelmd(cn, t), w)
+        check!(inside[], all(t -> wnelmd(cn, t), w), "gfoclt inside the confinement window", label, collect(cn))
         found[label] = get(found, label, 0) + wncard(w)
         return w
     end
@@ -84,6 +85,7 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
     pick_step(steps) = FULL ? rand(rng, steps) : rand(rng, (1200.0, 1800.0))
 
     @testset "eclipses: the Sun, the Earth and the Moon" begin
+        inside[] = Failures()
         # (label, front, front frame, back, back frame, observer, steps)
         cases = (
             (
@@ -154,10 +156,12 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
         )
         @test found["Earth in front of the Sun, from the Moon, FULL"] > 0
         @test found["Earth in front of the Moon, from the Sun, FULL"] > 0
+        @test isempty(inside[])
     end
 
     @testset "transits of Mercury and Venus, and Venus behind the Sun" begin
         empty!(found)
+        inside[] = Failures()
         transits = (
             ("MERCURY", "IAU_MERCURY", "2003 MAY 07"), ("MERCURY", "IAU_MERCURY", "2006 NOV 08"),
             ("MERCURY", "IAU_MERCURY", "2016 MAY 09"), ("MERCURY", "IAU_MERCURY", "2019 NOV 11"),
@@ -214,10 +218,12 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
             )
         end
         @test found["Venus behind the Sun, FULL"] >= 5 && found["Venus as a point behind the Sun"] >= 5
+        @test isempty(inside[])
     end
 
     @testset "synthetic ellipsoids: every type has events" begin
         empty!(found)
+        inside[] = Failures()
         T = GEO_OCC_SPAN - 100.0
         cn = Window([-T, T])
         i = 0
@@ -260,10 +266,12 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
                 )
             )
         )
+        @test isempty(inside[])
     end
 
     @testset "a DSK shape and a point" begin
         empty!(found)
+        inside[] = Failures()
         T = GEO_OCC_SPAN - 100.0
         cn = Window([-T, T])
         for (ic, corr) in enumerate(GFOC_CORRS), (im, m) in enumerate(
@@ -289,6 +297,7 @@ const GFOC_VENUS = ("2000 JUN 10", "2008 JUN 08", "2016 JUN 05")
             @test isempty(w)
         end
         @test found["DSK Moon in front of a point"] == nsample(5, 20)
+        @test isempty(inside[])
     end
 
     @testset "gfocce: step function and refinement" begin

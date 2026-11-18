@@ -183,15 +183,17 @@ group(
     nepoch = nsample(30, 150)
 
     @apart @testset "frame definitions are read" begin
+        fails = Failures()
         for (name, family, center) in DynFix.FRAMES
             id = namfrm(ctx, name)
-            @test id == SPICE.namfrm(name) != 0
-            @test frinfo(ctx, id) == SPICE.frinfo(id)
-            @test frinfo(ctx, id)[1] == center
+            check!(fails, id == SPICE.namfrm(name) != 0, "namfrm", name)
+            check!(fails, frinfo(ctx, id) == SPICE.frinfo(id), "frinfo", name)
+            check!(fails, frinfo(ctx, id)[1] == center, "center", name)
             class = frinfo(ctx, id)[2]
-            @test class in (5, 6)
-            @test haskey(class == 5 ? ks.dyn : ks.switch, Int32(id))
+            check!(fails, class in (5, 6), "class", name, class)
+            check!(fails, haskey(class == 5 ? ks.dyn : ks.switch, Int32(id)), "in the snapshot", name)
         end
+        @test isempty(fails)
         @test length(ks.dyn) + length(ks.switch) == length(DynFix.FRAMES)
         @test all(d -> d.errkind === :none, values(ks.dyn))
         @test all(d -> d.errkind === :none, values(ks.switch))
@@ -205,6 +207,7 @@ group(
 
     rows = String[]
     @apart @testset "pxform, sxform and spkezr for each frame" begin
+        fails = Failures()
         for (name, family, center) in DynFix.FRAMES
             tol = get(DF_TOL, name, DF_DEFAULT_TOL)
             dp = 0.0; ds = 0.0; dr = 0.0; dv = 0.0; dra = 0.0; dva = 0.0
@@ -225,7 +228,7 @@ group(
                     t, lu = SPICE.spkezr(targ, et, name, "LT+S", obs)
                     dra = max(dra, norm(s[1:3] .- t[1:3]) / norm(t[1:3]))
                     dva = max(dva, norm(s[4:6] .- t[4:6]) / norm(t[4:6]))
-                    @test abs(lt - lu) <= 1.0e-12 * lu
+                    check!(fails, abs(lt - lu) <= 1.0e-12 * lu, "LT+S light time", name, targ, obs, et)
                 end
             end
             push!(
@@ -241,6 +244,7 @@ group(
             @test max(dr, dra) <= tol[3]
             @test max(dv, dva) <= tol[4]
         end
+        @test isempty(fails)
         measured(
             "  largest difference from CSPICE, $nepoch epochs per frame (px: element of the " *
                 "matrix; sx: derivative block, relative; ezr: relative)"
@@ -289,6 +293,7 @@ group(
 
     @apart @testset "pxder against finite differences and sxform" begin
         lines = String[]
+        fails = Failures()
         for (name, family, center) in DynFix.FRAMES
             id = namfrm(ctx, name)
             def = get(ks.dyn, Int32(id), nothing)
@@ -303,10 +308,10 @@ group(
                 switch && any(e -> abs(et - e) < 200, DynFix.SWITCH_EDGES) && continue
                 R, dR, ddR = pxder(ctx, "J2000", name, et, Val(DF_ORDER))
                 # Order 0 is the rotation of `pxform`, computed with series arithmetic.
-                @test maximum(abs.(R .- pxform(ctx, "J2000", name, et))) <= (loose ? 1.0e-9 : 1.0e-13)
+                within!(fails, maximum(abs.(R .- pxform(ctx, "J2000", name, et))), loose ? 1.0e-9 : 1.0e-13, "order 0 vs pxform", name, et)
                 if frozen
-                    @test iszero(dR) && iszero(ddR)
-                    @test iszero(sxform(ctx, "J2000", name, et)[4:6, 1:3])
+                    check!(fails, iszero(dR) && iszero(ddR), "frozen: zero derivatives", name, et)
+                    check!(fails, iszero(sxform(ctx, "J2000", name, et)[4:6, 1:3]), "frozen: zero sxform rate", name, et)
                     continue
                 end
                 h = 16.0
@@ -318,8 +323,8 @@ group(
                 e2 = max(e2, df_rel(ddR, fd2, 1.0e-15))
                 sx = sxform(ctx, "J2000", name, et)[4:6, 1:3]
                 if inertial
-                    @test iszero(sx)
-                    @test !iszero(dR)
+                    check!(fails, iszero(sx), "inertial: zero sxform rate", name, et)
+                    check!(fails, !iszero(dR), "inertial: nonzero derivative", name, et)
                 else
                     # The floor is 1e-12 rad/s. The derivative of a true-of-date frame
                     # passes near zero where the rate of the nutation cancels the rate
@@ -345,6 +350,7 @@ group(
             # every definition (see the docstring of `sxform`); the difference is small.
             @test es <= (loose ? 1.0e-3 : 5.0e-5)
         end
+        @test isempty(fails)
         measured("  pxder of the rotation from J2000 to each frame (relative to the largest element)")
         foreach(measured, lines)
         # Orders 0 to 3 are consistent with each other (orders 0 and 2 in the default run).
@@ -364,6 +370,7 @@ group(
     end
 
     @apart @testset "frozen frames and inertial rotation state" begin
+        fails = Failures()
         for (frozen, live, t0) in (
                 ("DT_GSE_FROZEN", "DT_GSE", "2015-MAR-03 01:02:03 TDB"),
                 ("DT_ETE_FROZEN", "DT_ETE_OF_DATE", "1995-JUN-15 00:00:00 TDB"),
@@ -371,20 +378,22 @@ group(
             et0 = str2et(ctx, t0)
             fixed = pxform(ctx, "J2000", live, et0)
             for et in random_epochs(rng, 20, -span, span)
-                @test pxform(ctx, "J2000", frozen, et) == fixed
+                check!(fails, pxform(ctx, "J2000", frozen, et) == fixed, "frozen", frozen, et)
             end
         end
         for (inert, live) in (("DT_ETE_INERTIAL", "DT_ETE_OF_DATE"), ("DT_GSE_INERTIAL", "DT_GSE"))
             for et in random_epochs(rng, 20, -span, span)
-                @test pxform(ctx, "J2000", inert, et) == pxform(ctx, "J2000", live, et)
-                @test iszero(sxform(ctx, "J2000", inert, et)[4:6, 1:3])
-                @test iszero(SPICE.sxform("J2000", inert, et)[4:6, 1:3])
-                @test pxder(ctx, "J2000", inert, et, Val(DF_LOW))[2] == pxder(ctx, "J2000", live, et, Val(DF_LOW))[2]
+                check!(fails, pxform(ctx, "J2000", inert, et) == pxform(ctx, "J2000", live, et), "inertial: pxform", inert, et)
+                check!(fails, iszero(sxform(ctx, "J2000", inert, et)[4:6, 1:3]), "inertial: zero rate", inert, et)
+                check!(fails, iszero(SPICE.sxform("J2000", inert, et)[4:6, 1:3]), "inertial: zero CSPICE rate", inert, et)
+                check!(fails, pxder(ctx, "J2000", inert, et, Val(DF_LOW))[2] == pxder(ctx, "J2000", live, et, Val(DF_LOW))[2], "inertial: pxder", inert, et)
             end
         end
+        @test isempty(fails)
     end
 
     @apart @testset "switch frames at the ends of the intervals" begin
+        fails = Failures()
         worst = 0.0
         n = 0
         for edge in DynFix.SWITCH_EDGES, delta in (-1.0, -1.0e-3, 0.0, 1.0e-3, 1.0),
@@ -392,12 +401,12 @@ group(
             et = edge + delta
             want = df_oracle_kind(:pxform_c, "J2000", name, et)
             got = df_neo_kind(() -> pxform(ctx, "J2000", name, et))
-            want == got || @info "switch frame" name et want got
-            @test got == want
+            check!(fails, got == want, "error kind", name, et, want, got)
             got === :none || continue
             worst = max(worst, maximum(abs.(pxform(ctx, "J2000", name, et) .- SPICE.pxform("J2000", name, et))))
             n += 1
         end
+        @test isempty(fails)
         measured(@sprintf("  %-58s n=%-7d max=%.3e", "switch frames at interval ends: pxform element", n, worst))
         @test worst <= 5.0e-14
         @test n >= 40
@@ -609,6 +618,7 @@ group(
             i -> (@assert SPICE.ckgp(i, 1.0e11, 0.0, "J2000") === nothing),
             (-77001, -77002, -77003, -77013)
         )
+        fails = Failures()
         for name in ("DT_SWITCH_CK", "DT_SWITCH_CK_NOAV")
             dp = Float64[]; ds = Float64[]
             bases = name == "DT_SWITCH_CK" ? ("IAU_EARTH", "TESTSC_T3", "TESTSC_T2") :
@@ -619,7 +629,7 @@ group(
                 reset()
                 want = df_oracle_kind(:pxform_c, "J2000", name, et)
                 got = df_neo_kind(() -> pxform(c, "J2000", name, et))
-                @test got == want
+                check!(fails, got == want, "pxform error kind", name, et, want, got)
                 got === :none || (nerr += 1; continue)
                 a = pxform(c, "J2000", name, et)
                 reset()
@@ -631,7 +641,7 @@ group(
                 reset()
                 wants = df_oracle_kind(:sxform_c, "J2000", name, et)
                 gots = df_neo_kind(() -> sxform(c, "J2000", name, et))
-                @test gots == wants
+                check!(fails, gots == wants, "sxform error kind", name, et, wants, gots)
                 gots === :none || continue
                 reset()
                 push!(ds, maximum(abs.(sxform(c, "J2000", name, et) .- SPICE.sxform("J2000", name, et))))
@@ -643,6 +653,7 @@ group(
             @test s2.max <= 1.0e-12
             @test count(>(0), used) >= 2
         end
+        @test isempty(fails)
     end
 end
 

@@ -104,11 +104,13 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         first440 = neo_context([Kernels.DE440S, Kernels.DE430])     # de430 wins
         only440 = neo_context([Kernels.DE440S])
         only430 = neo_context([Kernels.DE430])
+        fails = Failures()
         for et in epochs
-            @test query(first430, et) == query(only440, et)
-            @test query(first440, et) == query(only430, et)
-            @test query(first430, et) != query(first440, et)
+            check!(fails, query(first430, et) == query(only440, et), "de440s loaded last wins", et)
+            check!(fails, query(first440, et) == query(only430, et), "de430 loaded last wins", et)
+            check!(fails, query(first430, et) != query(first440, et), "the orders differ", et)
         end
+        @test isempty(fails)
         # Outside the coverage of the later file the earlier file answers.
         late = DE430_COVERAGE[2] - 86400.0 * 100          # year 2649: only in de430
         @test late > DE440S_COVERAGE[2]
@@ -160,15 +162,16 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             @test SPICE.gcpool("KERNELS_TO_LOAD") === nothing
             @test throws_kind(() -> gcpool(ctx, "KERNELS_TO_LOAD"), :kernelvarnotfound)
             @test throws_kind(() -> gcpool(ctx, "PATH_VALUES"), :kernelvarnotfound)
+            fails = Failures()
             for et in epochs[1:5]
-                @test spkezr(ctx, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH") ==
+                equal = spkezr(ctx, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH") ==
                     spkezr(direct, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH")
+                check!(fails, equal, "meta-kernel == direct", et)
                 cs, _ = SPICE.spkezr("MOON", et, "MOON_PA_DE440", "NONE", "EARTH")
-                @test isapprox(
-                    spkezr(ctx, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH")[1],
-                    cs; rtol = 1.0e-9
-                )
+                near = isapprox(spkezr(ctx, "MOON", et, "MOON_PA_DE440", "NONE", "EARTH")[1], cs; rtol = 1.0e-9)
+                check!(fails, near, "meta-kernel against CSPICE", et)
             end
+            @test isempty(fails)
             @test utc2et(ctx, "2020-01-01T00:00:00") ≈ SPICE.utc2et("2020-01-01T00:00:00") atol = 1.0e-6
             @test bodvrd(ctx, "EARTH", "RADII") == SPICE.bodvrd("EARTH", "RADII")
             # Unloading the meta-kernel unloads everything that it loaded.

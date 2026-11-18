@@ -37,6 +37,7 @@ group("14. math: coordinates", Kernels.PCK11) do
     rrad() = rand(rng) < 0.05 ? 0.0 : rmag(rng)
 
     @apart @testset "rectangular to and from the angular systems" begin
+        fails = Failures()
         for _ in 1:n
             p = rpt()
             r, a1, a2, z = rrad(), rang(), rang(), rmag(rng) * randn(rng)
@@ -59,17 +60,18 @@ group("14. math: coordinates", Kernels.PCK11) do
             versus!(t, :cylsph, () -> cylsph(r, a1, z), () -> CS.cylsph(r, a1, z))
             # round trips
             tol = 4eps() * max(vnorm(p), floatmin())
-            @test vdist(latrec(reclat(p)...), p) <= tol
-            @test vdist(radrec(recrad(p)...), p) <= tol
-            @test vdist(sphrec(recsph(p)...), p) <= tol
-            @test vdist(cylrec(reccyl(p)...), p) <= tol
-            @test vdist(latrec(sphlat(recsph(p)...)...), p) <= 2tol
-            @test vdist(cylrec(latcyl(reclat(p)...)...), p) <= 2tol
-            @test vdist(sphrec(cylsph(reccyl(p)...)...), p) <= 2tol
-            @test vdist(latrec(cyllat(reccyl(p)...)...), p) <= 2tol
-            @test vdist(cylrec(sphcyl(recsph(p)...)...), p) <= 2tol
-            @test vdist(sphrec(latsph(reclat(p)...)...), p) <= 2tol
+            within!(fails, vdist(latrec(reclat(p)...), p), tol, "latrec of reclat = p", p)
+            within!(fails, vdist(radrec(recrad(p)...), p), tol, "radrec of recrad = p", p)
+            within!(fails, vdist(sphrec(recsph(p)...), p), tol, "sphrec of recsph = p", p)
+            within!(fails, vdist(cylrec(reccyl(p)...), p), tol, "cylrec of reccyl = p", p)
+            within!(fails, vdist(latrec(sphlat(recsph(p)...)...), p), 2tol, "latrec of sphlat of recsph = p", p)
+            within!(fails, vdist(cylrec(latcyl(reclat(p)...)...), p), 2tol, "cylrec of latcyl of reclat = p", p)
+            within!(fails, vdist(sphrec(cylsph(reccyl(p)...)...), p), 2tol, "sphrec of cylsph of reccyl = p", p)
+            within!(fails, vdist(latrec(cyllat(reccyl(p)...)...), p), 2tol, "latrec of cyllat of reccyl = p", p)
+            within!(fails, vdist(cylrec(sphcyl(recsph(p)...)...), p), 2tol, "cylrec of sphcyl of recsph = p", p)
+            within!(fails, vdist(sphrec(latsph(reclat(p)...)...), p), 2tol, "sphrec of latsph of reclat = p", p)
         end
+        @test isempty(fails)
         # ranges and branch cuts
         @test reclat([0.0, 0.0, 0.0]) == (0.0, 0.0, 0.0)
         @test reclat([0.0, 0.0, 2.0]) == (2.0, 0.0, pi / 2)
@@ -89,6 +91,7 @@ group("14. math: coordinates", Kernels.PCK11) do
             (1.0e-3, 0.3), (1.0e8, 0.5),
         )
         bodies = ("EARTH", "MARS", "MOON", "SUN", "JUPITER", "VENUS", "399", "PHOBOS", "NOSUCHBODY", "MERCURY")
+        fails = Failures()
         for _ in 1:n
             re, f = rand(rng, shapes)
             rand(rng) < 0.03 && (re = -re)
@@ -114,9 +117,10 @@ group("14. math: coordinates", Kernels.PCK11) do
             versus!(t, deep ? :dpgrdr_deep : :dpgrdr, () -> dpgrdr(ctx, b, p..., re, f), () -> CS.dpgrdr(b, p..., re, f))
             if re > 0 && f < 1 && abs(f) < 0.95
                 g = recgeo(p, re, f)
-                @test vdist(georec(g..., re, f), p) <= 1.0e-9 * max(vnorm(p), re)
+                within!(fails, vdist(georec(g..., re, f), p), 1.0e-9 * max(vnorm(p), re), "georec of recgeo = p", p, re, f)
             end
         end
+        @test isempty(fails)
         # Fixed case: the centre of the spheroid, where the near point is not unique.
         versus!(
             t, :recgeo, () -> recgeo([0.0, 0.0, 0.0], 6378.1366, 1 / 298.25642),

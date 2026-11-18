@@ -90,6 +90,7 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "surface normal, ray intercept, nearest point" begin
         nover = 0
+        fails = Failures()
         for _ in 1:2n
             a, b, c = raxes()
             p = rpoint(a, b, c)
@@ -111,18 +112,19 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
                 m = max(a, b, c)
                 np, alt = nearpt(p, a, b, c)
                 level = (np[1] / a)^2 + (np[2] / b)^2 + (np[3] / c)^2
-                @test abs(level - 1.0) <= 1.0e-12                 # on the ellipsoid
+                within!(fails, abs(level - 1.0), 1.0e-12, "nearpt on the ellipsoid", p, a, b, c)
                 inside = (p[1] / a)^2 + (p[2] / b)^2 + (p[3] / c)^2 < 1.0
-                @test inside ? alt <= 0.0 : alt >= 0.0
-                @test abs(abs(alt) - vdist(p, np)) <= 1.0e-13 * max(m, vnorm(p))
+                check!(fails, inside ? alt <= 0.0 : alt >= 0.0, "nearpt sign of alt", p, a, b, c)
+                within!(fails, abs(abs(alt) - vdist(p, np)), 1.0e-13 * max(m, vnorm(p)), "nearpt |alt| = |p - np|", p, a, b, c)
                 # A zero direction is not a ray: `surfpt` throws `zerovector` for it, and
                 # the comparison with CSPICE above has that case.
                 x = (iszero(u) || over) ? nothing : surfpt(p, u, a, b, c)
                 if x !== nothing
-                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1.0e-9
+                    within!(fails, abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0), 1.0e-9, "surfpt on the ellipsoid", p, u, a, b, c)
                 end
             end
         end
+        @test isempty(fails)
         measured("  surfpt, surfpv: $nover of $(2n) inputs not compared (scaled direction not finite in CSPICE)")
         # Fixed case of the guard: the direction divided by a semi-axis is infinite.
         xo = surfpt([0.0, 0.0, 1.0e-7], [1.0e300, 1.0e300, 1.0e300], 2.0e-9, 2.0e-9, 5.0e-8)
@@ -155,6 +157,7 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "derivatives" begin
         a, b, c = 6378.0, 6300.0, 6356.0
+        fails = Failures()
         for _ in 1:40
             p = (0.2 + 3 * rand(rng)) * 6378.0 * normalize(r3())
             abs((p[1] / a)^2 + (p[2] / b)^2 + (p[3] / c)^2 - 1.0) < 0.05 && continue
@@ -163,17 +166,17 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             jac = ForwardDiff.jacobian(x -> nearpt(x, a, b, c)[1], p)
             dalt = ForwardDiff.gradient(x -> nearpt(x, a, b, c)[2], p)
             dn = dnearp(vcat(p, v), a, b, c)
-            @test dn !== nothing
-            @test dn[1][SVector(4, 5, 6)] ≈ jac * v rtol = 1.0e-9
-            @test dn[2][2] ≈ dalt ⋅ v rtol = 1.0e-9 atol = 1.0e-12
+            check!(fails, dn !== nothing, "dnearp found", p, v)
+            check!(fails, isapprox(dn[1][SVector(4, 5, 6)], jac * v; rtol = 1.0e-9), "dnearp velocity = Jacobian * v", p, v)
+            check!(fails, isapprox(dn[2][2], dalt ⋅ v; rtol = 1.0e-9, atol = 1.0e-12), "dnearp alt rate = gradient * v", p, v)
             # a central difference of the plain iteration
             h = 1.0e-3
             fd = (nearpt(p + h * v, a, b, c)[1] - nearpt(p - h * v, a, b, c)[1]) / 2h
-            @test jac * v ≈ fd rtol = 1.0e-6 atol = 1.0e-8
+            check!(fails, isapprox(jac * v, fd; rtol = 1.0e-6, atol = 1.0e-8), "nearpt Jacobian against central difference", p, v)
             # the derivative with respect to the semi-axes
             da = ForwardDiff.derivative(s -> nearpt(p, a + s, b, c)[1], 0.0)
             fda = (nearpt(p, a + h, b, c)[1] - nearpt(p, a - h, b, c)[1]) / 2h
-            @test da ≈ fda rtol = 1.0e-6 atol = 1.0e-8
+            check!(fails, isapprox(da, fda; rtol = 1.0e-6, atol = 1.0e-8), "nearpt d/da against central difference", p)
             # the velocity of a ray intercept is the time derivative of `surfpt`
             po = 3 * 6378.0 * normalize(r3())
             u = -po + 3000.0 * r3()
@@ -181,19 +184,21 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             sv = surfpv(vcat(po, v), vcat(u, du), a, b, c)
             sv === nothing && continue
             d = ForwardDiff.derivative(τ -> surfpt(po + τ * v, u + τ * du, a, b, c), 0.0)
-            @test sv[SVector(4, 5, 6)] ≈ d rtol = 1.0e-9
+            check!(fails, isapprox(sv[SVector(4, 5, 6)], d; rtol = 1.0e-9), "surfpv velocity = ForwardDiff", po, v, u, du)
             g = ForwardDiff.jacobian(x -> surfnm(a, b, c, x), p)
-            @test norm(g * p) <= 1.0e-12            # the normal does not change along the ray from the center
+            within!(fails, norm(g * p), 1.0e-12, "surfnm constant along the ray from the center", p)
             tt = Almanac.taylor_var(0.0, Val(2))
             x = surfpt(po .+ tt .* v, u .+ tt .* du, a, b, c)
-            @test map(q -> Almanac.derivatives(q)[2], x) ≈ d rtol = 1.0e-9
+            check!(fails, isapprox(map(q -> Almanac.derivatives(q)[2], x), d; rtol = 1.0e-9), "surfpt Taylor rate", po, v, u, du)
             y = nearpt(p .+ tt .* v, a, b, c)[1]
-            @test map(q -> Almanac.derivatives(q)[1], y) ≈ nearpt(p, a, b, c)[1] rtol = 1.0e-15
-            @test map(q -> Almanac.derivatives(q)[2], y) ≈ jac * v rtol = 1.0e-9
+            check!(fails, isapprox(map(q -> Almanac.derivatives(q)[1], y), nearpt(p, a, b, c)[1]; rtol = 1.0e-15), "nearpt Taylor value", p, v)
+            check!(fails, isapprox(map(q -> Almanac.derivatives(q)[2], y), jac * v; rtol = 1.0e-9), "nearpt Taylor rate", p, v)
         end
+        @test isempty(fails)
     end
 
     @apart @testset "planes" begin
+        fails = Failures()
         for _ in 1:n
             nrm, pnt = rvec(rng), rvec(rng; special = 0.2)
             k = rand(rng) < 0.1 ? 0.0 : rmag(rng) * randn(rng)
@@ -214,13 +219,14 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             versus!(t, :inrypl, () -> pts(inrypl(vtx, dir, pl), 1), () -> pts(CS.inrypl(vtx, dir, raw), 1))
             versus!(t, :nplnpt, () -> nplnpt(pnt, dir, vtx), () -> CS.nplnpt(pnt, dir, vtx))
             # invariants: unit normal, constant not negative, the spanning vectors
-            @test abs(vnorm(pl.normal) - 1.0) <= 4eps() && pl.constant >= 0.0
+            check!(fails, abs(vnorm(pl.normal) - 1.0) <= 4eps() && pl.constant >= 0.0, "plane: unit normal, constant >= 0", pl)
             pt, u1, u2 = pl2psv(pl)
-            @test abs(u1 ⋅ u2) <= 4eps() && abs(u1 ⋅ pl.normal) <= 4eps() && abs(u2 ⋅ pl.normal) <= 4eps()
-            @test abs(pt ⋅ pl.normal - pl.constant) <= 4eps() * max(1.0, pl.constant)
+            check!(fails, abs(u1 ⋅ u2) <= 4eps() && abs(u1 ⋅ pl.normal) <= 4eps() && abs(u2 ⋅ pl.normal) <= 4eps(), "pl2psv orthogonal vectors", pl)
+            within!(fails, abs(pt ⋅ pl.normal - pl.constant), 4eps() * max(1.0, pl.constant), "pl2psv point on the plane", pl)
             pr = vprjp(pnt, pl)
-            isfinite(vnorm(pr)) && @test abs(pr ⋅ pl.normal - pl.constant) <= 1.0e-13 * max(vnorm(pnt), pl.constant, floatmin())
+            isfinite(vnorm(pr)) && within!(fails, abs(pr ⋅ pl.normal - pl.constant), 1.0e-13 * max(vnorm(pnt), pl.constant, floatmin()), "vprjp on the plane", pnt, pl)
         end
+        @test isempty(fails)
         @test flat(nvc2pl([0.0, 0, 2.0], -6.0)) == [0.0, 0.0, -1.0, 3.0]
         @test throws_kind(() -> nvc2pl([0.0, 0, 0], 1.0), :zerovector)
         @test throws_kind(() -> nvp2pl([0.0, 0, 0], [1.0, 2, 3]), :zerovector)
@@ -234,6 +240,7 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
     end
 
     @apart @testset "ellipses" begin
+        fails = Failures()
         for _ in 1:n
             ctr = rvec(rng)
             v1, v2 = rpair(rng)
@@ -265,27 +272,28 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             # invariants of an ellipse: orthogonal semi-axes, the major one is not shorter
             sma, smi = saelgv(v1, v2)
             if isfinite(vnorm(sma)) && vnorm(sma) < 1.0e150
-                @test abs(sma ⋅ smi) <= 1.0e-13 * max(vnorm(sma)^2, floatmin())
-                @test vnorm(sma) >= vnorm(smi)
+                within!(fails, abs(sma ⋅ smi), 1.0e-13 * max(vnorm(sma)^2, floatmin()), "saelgv orthogonal semi-axes", v1, v2)
+                check!(fails, vnorm(sma) >= vnorm(smi), "saelgv major >= minor", v1, v2)
             end
             e = (a > 0 && b > 0 && c > 0) ? inedpl(a, b, c, pe) : nothing
             if e !== nothing
                 for th in (0.3, 2.0, 4.4)
                     x = e.center + cos(th) * e.semimajor + sin(th) * e.semiminor
-                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1.0e-10
-                    @test abs(x ⋅ pe.normal - pe.constant) <= 1.0e-12 * m
+                    within!(fails, abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0), 1.0e-10, "inedpl on the ellipsoid", a, b, c, pe, th)
+                    within!(fails, abs(x ⋅ pe.normal - pe.constant), 1.0e-12 * m, "inedpl on the plane", a, b, c, pe, th)
                 end
             end
             if a > 0 && b > 0 && c > 0 && (vp[1] / a)^2 + (vp[2] / b)^2 + (vp[3] / c)^2 > 1.0 + 1.0e-6
                 lb = edlimb(a, b, c, vp)
                 for th in (0.3, 2.0, 4.4)
                     x = lb.center + cos(th) * lb.semimajor + sin(th) * lb.semiminor
-                    @test abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0) <= 1.0e-9
+                    within!(fails, abs((x[1] / a)^2 + (x[2] / b)^2 + (x[3] / c)^2 - 1.0), 1.0e-9, "edlimb on the ellipsoid", a, b, c, vp, th)
                     # the line of sight is tangent to the surface at a limb point
-                    @test abs(x[1] * vp[1] / a^2 + x[2] * vp[2] / b^2 + x[3] * vp[3] / c^2 - 1.0) <= 1.0e-9
+                    within!(fails, abs(x[1] * vp[1] / a^2 + x[2] * vp[2] / b^2 + x[3] * vp[3] / c^2 - 1.0), 1.0e-9, "edlimb line of sight tangent", a, b, c, vp, th)
                 end
             end
         end
+        @test isempty(fails)
         # a plane that is not valid, an ellipse with semi-axes that are not orthogonal
         el = cgv2el([0.0, 0, 0], [2.0, 0, 0], [0.0, 1, 0])
         bad = SpicePlane(SVector(0.0, 0.0, 1.0), -1.0)

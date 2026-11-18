@@ -64,6 +64,7 @@ end
         st = GeoStats()
         ncount = 0
         nterm = 0
+        fails = Failures()
         for k in 1:400
             t = rand(rng, GEO_BODIES)
             o = rand(rng, setdiff(GEO_BODIES, [t]))
@@ -79,10 +80,10 @@ end
             a = limbpt(ctx, m, t, et, fix, cor, loc, o, ref, rol, nc, 1.0e-4, 1.0e-7, 20)
             b = g_limbpt(m, t, et, fix, cor, loc, o, ref, rol, nc, 1.0e-4, 1.0e-7, 20)
             lt_compare!(st, "limbpt", a, b) || (ncount += 1)
-            @test all(==(1), a[1]) && length(a[2]) == nc
+            check!(fails, all(==(1), a[1]) && length(a[2]) == nc, "limbpt one point per cut", k, m, t, et, fix, cor, loc, o, nc)
             if k % 10 == 0
                 c = limbpt(ctx, m, GEO_IDS[t], et, namfrm(ctx, fix), Aberration(cor), loc, GEO_IDS[o], SVector{3}(ref), rol, nc, 1.0e-4, 1.0e-7, 20)
-                @test c == a
+                check!(fails, c == a, "limbpt by id and Aberration", k, m, t, et, fix, cor, loc, o)
             end
             (t == "SUN" || startswith(cor, "X")) && continue
             nterm += 1
@@ -94,6 +95,7 @@ end
             b = g_termpt(m, src, t, et, fix, cor, loc, o, ref, rol, nc, 1.0e-4, 1.0e-7, 100)
             lt_compare!(st, "termpt", a, b) || (ncount += 1)
         end
+        @test isempty(fails)
         greport("ellipsoid", st)
         @test ncount == 0
         @test nterm > 120
@@ -191,6 +193,7 @@ end
     @testset "tangpt, 800 random rays" begin
         st = GeoStats()
         nbehind = 0
+        fails = Failures()
         for k in 1:800
             t = rand(rng, GEO_BODIES)
             o = rand(rng, setdiff(GEO_BODIES, [t]))
@@ -222,7 +225,7 @@ end
                 # through code that the compiler can arrange in two ways (it does so
                 # with code coverage), so the results can differ by rounding: each
                 # output agrees within 1e-12 of its size.
-                @test lt_same_tangpt(c, a, 1.0e-12)
+                check!(fails, lt_same_tangpt(c, a, 1.0e-12), "tangpt by id and Aberration", k, t, et, fix, cor, loc, o, dref)
             end
             # The conditioning of `npedln_c`: one unit in the last place of the direction.
             if cor == "NONE" && dref == "J2000"
@@ -234,6 +237,7 @@ end
                 gput!(st, "(npedln_c: change of the output for one unit in the last place)", norm(y - z) / rad)
             end
         end
+        @test isempty(fails)
         greport("tangpt", st)
         @test nbehind == 40
         for k in ("tanpt", "alt over the radius", "srfpt")
@@ -402,10 +406,12 @@ end
     @testset "tangpt: no allocation and inferred type" begin
         et = 2.5e8
         dv = SVector{3, Float64}(spkpos(ctx, 301, et, 1, "LT+S", 399)[1]) + SVector(3000.0, -2000.0, 1000.0)
+        fails = Failures()
         for c in GEO_CORRS, loc in ("TANGENT POINT", "SURFACE POINT")
-            @test gwarm(lt_alloc_tang, ks, et, c, loc, dv) == 0
-            @test gwarm(lt_alloc_tang, ks, et, c, loc, -dv) == 0
+            check!(fails, gwarm(lt_alloc_tang, ks, et, c, loc, dv) == 0, "tangpt allocates", c, loc)
+            check!(fails, gwarm(lt_alloc_tang, ks, et, c, loc, -dv) == 0, "tangpt allocates, reversed ray", c, loc)
         end
+        @test isempty(fails)
         @test (@inferred tangpt(ks, "ELLIPSOID", 301, et, 10020, "CN+S", "TANGENT POINT", 399, 1, dv)) isa
             Tuple{SVector{3, Float64}, Float64, Float64, SVector{3, Float64}, Float64, SVector{3, Float64}}
         @test (@inferred limbpt(ks, "TANGENT/ELLIPSOID", 301, et, 10020, "LT", "CENTER", 399, dv, 0.1, 3, 1.0e-4, 1.0e-7, 10)) isa

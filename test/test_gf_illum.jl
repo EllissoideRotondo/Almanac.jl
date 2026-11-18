@@ -48,6 +48,7 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
         )
         n = 0
         i = 0
+        fails = Failures()
         for (targ, fix, src, obs, steps, span) in cases, _ in 1:2, ang in GFI_ANGLES,
                 (rel, wadj) in GF_VARIANTS
 
@@ -69,24 +70,26 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
             )
             ok || @info "gfilum case" targ src obs ang corr sp rel refval adjust step cn
             @test ok
-            @test all(t -> wnelmd(cn, t), w)
+            check!(fails, all(t -> wnelmd(cn, t), w), "gfilum inside the confinement window", targ, src, obs, ang, corr, rel, refval, adjust)
             n += 1
         end
+        @test isempty(fails)
         @test n == gf_npick(3 * 2 * 3 * 9, 4)
     end
 
     @testset "the value is the angle of illumg, and a root is a root" begin
         sp = g_srfrec(301, 0.3, 0.2)
         cn = Window([0.0, 60 * day])
+        fails = Failures()
         for (i, ang) in enumerate(GFI_ANGLES), corr in ("NONE", "CN+S")
             q = Almanac.GFIllumination(ks, "ELLIPSOID", ang, "MOON", "SUN", "IAU_MOON", corr, "EARTH", sp)
             for t in (1.0e5, 2.0e6, 4.0e6)
                 angles = g_illumg("ELLIPSOID", "MOON", "SUN", t, "IAU_MOON", corr, "EARTH", sp)[3:5]
-                @test Almanac._gf_value(q, t) ≈ angles[i] atol = 1.0e-11
+                check!(fails, isapprox(Almanac._gf_value(q, t), angles[i]; atol = 1.0e-11), "value = illumg angle", ang, corr, t)
                 # the rate of `zzilusta` against a central difference of the value
                 h = 30.0
                 fd = (Almanac._gf_value(q, t + h) - Almanac._gf_value(q, t - h)) / (2h)
-                @test Almanac._gf_ilurate(q, t) ≈ fd rtol = 1.0e-4 atol = 1.0e-11
+                check!(fails, isapprox(Almanac._gf_ilurate(q, t), fd; rtol = 1.0e-4, atol = 1.0e-11), "rate against central difference", ang, corr, t)
             end
             vals = [Almanac._gf_value(q, t) for t in range(cn[1], cn[2]; length = 200)]
             refval = (minimum(vals) + maximum(vals)) / 2
@@ -97,9 +100,10 @@ const GFI_ANGLES = ("PHASE", "INCIDENCE", "EMISSION")
             @test wncard(w) >= 2
             for k in 1:wncard(w)
                 t = w[2k - 1]
-                @test (Almanac._gf_value(q, t - 5.0) - refval) * (Almanac._gf_value(q, t + 5.0) - refval) < 0
+                check!(fails, (Almanac._gf_value(q, t - 5.0) - refval) * (Almanac._gf_value(q, t + 5.0) - refval) < 0, "gfilum '=': a root", ang, corr, t)
             end
         end
+        @test isempty(fails)
     end
 
     @testset "gfevnt: ILLUMINATION ANGLE" begin
