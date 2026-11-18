@@ -192,13 +192,13 @@ const TOL_TWOBODY = (25, 25, 3.0e-14)
 # 1000 orbits (the derivative of the Kepler solver is exact; it was 3e-12 with the old lag).
 const TOL_DUALDT = 4.0e-14
 # The derivatives of the true anomaly from the Kepler solver against the closed forms, relative
-# (exhaustive tier, seeds SEED and 1, 50000 samples each): d nu/dM 1.5e-14 (rounding), d nu/de on
-# ellipses 3.9e-15, d2 nu/dM2 (nested ForwardDiff, relative to its bound) 7.7e-12: the error is the
-# rounding of atan(k tan(E/2)) near E = pi (the second derivative of that expression
-# amplifies the rounding of its argument) and the normalisation of small bounds, not the
-# tolerance of the solver. With one Newton step the second derivative
+# (exhaustive tier, seeds SEED and 777001, 50000 samples each): d nu/dM 1.5e-14 (rounding), d nu/de on
+# ellipses 4.2e-15, d2 nu/dM2 (nested ForwardDiff, relative to its bound, in the band at E = pi too)
+# 7.6e-14. Until 2026-11-17 the derivatives were those of atan(k tan(E/2)), whose pole at E = pi
+# made d2 nu/dM2 lose up to 2e-8 near it (7.7e-12 in a sample that avoided it) and gave O(1) errors
+# at the other odd multiples of pi. With one Newton step the second derivative
 # was 0.5 off, with the residual not taken out d nu/de was 4.7e-12. Limits at least four times the largest.
-const TOL_KEPLER_D = (6.0e-14, 1.7e-14, 7.0e-11)
+const TOL_KEPLER_D = (6.0e-14, 1.7e-14, 3.0e-13)
 # Local frames: the largest |R'R - I| and |det R - 1| are 8.9e-16 and 6.7e-16 in 5000 orbits (a
 # few roundings of unit vectors, limit 3e-15). The rate of the frame of `two_body` by ForwardDiff
 # against the exact rate at the state that `two_body` returns (the state of `o` differs from it
@@ -1006,16 +1006,15 @@ group(
             worst[1] = max(worst[1], e1)
             @test e1 < TOL_KEPLER_D[1]
             # the second derivative (nested ForwardDiff, as a Hessian through `two_body` does):
-            # d2 nu / dM2 = -2 e sin nu (1 + e cos nu)^3 / |1 - e^2|^3, scaled by its bound
-            if abs(ta - π) >= 1.0e-8
-                d2 = ForwardDiff.derivative(
-                    y -> ForwardDiff.derivative(x -> Almanac._ma_to_ta(promote(x, ecc)...), y), m
-                )
-                bound = 2 * ecc * (1 + ecc * cos(nu))^3 / abs(1 - ecc^2)^3
-                e3 = abs(d2 + bound * sin(nu)) / bound
-                worst[3] = max(worst[3], e3)
-                @test e3 < TOL_KEPLER_D[3]
-            end
+            # d2 nu / dM2 = -2 e sin nu (1 + e cos nu)^3 / |1 - e^2|^3, scaled by its bound,
+            # in the branch at E = pi too (its derivatives come from the form without the pole)
+            d2 = ForwardDiff.derivative(
+                y -> ForwardDiff.derivative(x -> Almanac._ma_to_ta(promote(x, ecc)...), y), m
+            )
+            bound = 2 * ecc * (1 + ecc * cos(nu))^3 / abs(1 - ecc^2)^3
+            e3 = abs(d2 + bound * sin(nu)) / bound
+            worst[3] = max(worst[3], e3)
+            @test e3 < TOL_KEPLER_D[3]
             if !hyp
                 dte = ForwardDiff.derivative(x -> Almanac._ma_to_ta(promote(m, x)...), ecc)
                 wante = sin(nu) * (2 + ecc * cos(nu)) / (1 - ecc^2)
@@ -1025,6 +1024,23 @@ group(
             end
         end
         measured(@sprintf("  Kepler solver: d nu/dM relative error %.2e, d nu/de (ellipses) %.2e, d2 nu/dM2 (to its bound) %.2e", worst...))
+        # Near the other odd multiples of pi: the eccentric anomaly is not reduced to [0, 2pi),
+        # and nu, d nu/dM and d2 nu/dM2 are periodic in M, so each must equal its value at
+        # pi + dm. Found 2026-11-17 by the exhaustive run: the branch at E = pi was taken only
+        # near pi itself, and d2 nu/dM2 was 2, -1, -0.5 at M = -3pi, 3pi, 5pi (e = 0.1), where
+        # it is 0.
+        nu(m, ecc) = Almanac._ma_to_ta(promote(m, ecc)...)
+        d1(m, ecc) = ForwardDiff.derivative(x -> nu(x, ecc), m)
+        d2(m, ecc) = ForwardDiff.derivative(y -> ForwardDiff.derivative(x -> nu(x, ecc), y), m)
+        for ecc in (0.1, 0.5, 0.786), k in (-5, -3, 3, 5), dm in (0.0, 3.0e-9, -6.4e-8, 1.0e-6, -1.0e-4)
+            m, m1 = k * π + dm, π + dm
+            bound = 2 * ecc * (1 + ecc * cos(nu(m1, ecc)))^3 / abs(1 - ecc^2)^3
+            # the value only outside the band |E - pi| < 1e-8, where ANISE returns E itself
+            # as nu, near pi and not near the other multiples (E is not reduced)
+            abs(dm) > 1.0e-8 && @test abs(nu(m, ecc) - nu(m1, ecc)) < 1.0e-14
+            @test abs(d1(m, ecc) - d1(m1, ecc)) / d1(m1, ecc) < TOL_KEPLER_D[1]
+            @test abs(d2(m, ecc) - d2(m1, ecc)) / bound < TOL_KEPLER_D[3]
+        end
     end
 
     @testset "two_body" begin

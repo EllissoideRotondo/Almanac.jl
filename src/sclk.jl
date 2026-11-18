@@ -499,7 +499,9 @@ function scfmt(ks::KernelSet, sc::Integer, ticks::Real)
     for i in 1:nfield       # invariant: fields 1:i-1 are written, rem is what they leave
         value = if i < nfield
             v = trunc(rem / cmptks[i]) + clock.offsets[i]
-            rem = Base.rem(rem, cmptks[i])
+            # `DMOD`: where rem / cmptks rounds up to a whole number, this is negative,
+            # and its magnitude is printed, as by `scfm01`; the exact remainder is not
+            rem = f2c_dmod(rem, cmptks[i])
             v
         else
             rem + clock.offsets[i]

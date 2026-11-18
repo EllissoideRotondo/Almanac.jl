@@ -45,9 +45,11 @@ end
     _sgp4_mod(x::T, m::Float64) -> T
 
 Remainder of `x` divided by `m` with the sign of `x` (`d_mod` of f2c). The plain value
-is `rem(primal(x), m)`; the derivative parts of `x` do not change.
+is `f2c_dmod(primal(x), m)`, `x - m trunc(x / m)`, not the exact remainder `rem`, which
+moved the state by up to 1.4e-12 relative from that of CSPICE; the derivative parts of `x`
+do not change.
 """
-@inline _sgp4_mod(x::Real, m::Float64) = _with_primal(x, rem(primal(x), m))
+@inline _sgp4_mod(x::Real, m::Float64) = _with_primal(x, f2c_dmod(primal(x), m))
 
 """
     _sgp4_lsterms(zcosg, zsing, zcosi, zsini, zcosh, zsinh, cc, c) -> NamedTuple
@@ -145,7 +147,7 @@ function _sgp4_dscom(
     rtemsq = sqrt(betasq)
     # EPOCH + 18261.5 is the count of days from 1899 December 31 12:00.
     day = epoch + 18261.5 + 0.0 / 1440.0
-    xnodce = rem(4.523602 - day * 9.2422029e-4, _SGP4_TWOPI)
+    xnodce = f2c_dmod(4.523602 - day * 9.2422029e-4, _SGP4_TWOPI)
     stem, ctem = sincos(xnodce)
     zcosil = 0.91375164 - ctem * 0.03568096
     zsinil = sqrt(1.0 - zcosil * zcosil)
@@ -163,8 +165,8 @@ function _sgp4_dscom(
         zcosgl, zsingl, zcosil, zsinil, zcoshl * cnodm + zsinhl * snodm,
         snodm * zcoshl - cnodm * zsinhl, c1l, c
     )
-    zmol = rem(day * 0.2299715 + 4.7199672 - gam, _SGP4_TWOPI)
-    zmos = rem(day * 0.017201977 + 6.2565837, _SGP4_TWOPI)
+    zmol = f2c_dmod(day * 0.2299715 + 4.7199672 - gam, _SGP4_TWOPI)
+    zmos = f2c_dmod(day * 0.017201977 + 6.2565837, _SGP4_TWOPI)
     # Solar terms.
     se2 = sun.s1 * 2.0 * sun.s6
     se3 = sun.s1 * 2.0 * sun.s7
@@ -259,7 +261,7 @@ function _sgp4_dsinit(
         dnodt += shl / sinim
     end
     # Resonance. With T = 0 the mean elements of the epoch do not change.
-    theta = rem(gsto + 0.0 * rptim, _SGP4_TWOPI)
+    theta = f2c_dmod(gsto + 0.0 * rptim, _SGP4_TWOPI)
     eccm += dedt * 0.0
     emsq = eccm * eccm
     d2201 = d2211 = d3210 = d3222 = d4410 = d4422 = 0.0
@@ -342,7 +344,7 @@ function _sgp4_dsinit(
             temp = temp1 * 2.0 * root54
             d5421 = temp * f542 * g521
             d5433 = temp * f543 * g533
-            xlamo = rem(mo + nodeo + nodeo - theta - theta, _SGP4_TWOPI)
+            xlamo = f2c_dmod(mo + nodeo + nodeo - theta - theta, _SGP4_TWOPI)
             xfact = mdot + dmdt + (nodedot + dnodt - rptim) * 2.0 - no
         else
             # Resonance of the one-day orbits.
@@ -357,7 +359,7 @@ function _sgp4_dsinit(
             del2 = del1 * 2.0 * f220 * g200 * q22
             del3 = del1 * 3.0 * f330 * g300 * q33 * aonv
             del1 = del1 * f311 * g310 * q31 * aonv
-            xlamo = rem(mo + nodeo + argpo - theta, _SGP4_TWOPI)
+            xlamo = f2c_dmod(mo + nodeo + argpo - theta, _SGP4_TWOPI)
             xfact = mdot + xpidot - rptim + dmdt + domdt + dnodt - no
         end
     end
@@ -394,7 +396,7 @@ function _sgp4_gsto(epoch::Float64, opmode::Int)
     else
         _sgp4_error(:unknownmode, "the SGP4 operation mode $opmode is not 1 or 2")
     end
-    gsto = rem(gsto, _SGP4_TWOPI)
+    gsto = f2c_dmod(gsto, _SGP4_TWOPI)
     return gsto < 0.0 ? gsto + _SGP4_TWOPI : gsto
 end
 

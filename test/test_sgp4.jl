@@ -35,7 +35,10 @@
 # Tolerance of (b) and (d). The two engines make the same operations in the same order,
 # but the sine and cosine of Julia and of the C library differ in the last bit for some
 # arguments. The Kepler equation amplifies this difference by about 1/(1 - e)^2, so the
-# bound is `SGP4_RTOL` except for the orbit with e = 0.97 (`SGP4_RTOL_E97`). In a
+# bound is `SGP4_RTOL` except for the orbit with e = 0.97 (`SGP4_RTOL_E97`). Measured in
+# both tiers: 4.3e-15 and 4.5e-14 (e = 0.97). The bounds were 1e-12 and 5e-11 until
+# 2026-11-17, when the remainders of `d_mod` (`f2c_dmod`) replaced the exact `rem`; with
+# `rem` the difference was 1.4e-12. In a
 # body-fixed frame the velocity of a geosynchronous object is near zero, so a velocity
 # difference is divided by the inertial speed and not by the body-fixed speed.
 
@@ -49,8 +52,8 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 import ForwardDiff
 
-const SGP4_RTOL = 1.0e-12
-const SGP4_RTOL_E97 = 5.0e-11
+const SGP4_RTOL = 1.0e-14
+const SGP4_RTOL_E97 = 1.0e-13
 const SGP4_AD_RTOL = (1.0e-9, 1.0e-7)      # orders 2 and 3 of spkder against ForwardDiff
 const SGP4_FD_RTOL = 1.0e-5
 "Object whose eccentricity is 0.97 (the looser bound applies)."

@@ -195,6 +195,37 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         @test sct2e(bare, sc, 1000.0) == sct2e(ctx, sc, 1000.0)
     end
 
+    @apart @testset "scfmt where ticks / modulus rounds up to a whole number" begin
+        # A field of 1e9 (nanoseconds). Above about 9e18 ticks the quotient x / 1e9 can
+        # round up to k, so that `DMOD` of f2c (x - y trunc(x / y)) is negative and its
+        # magnitude is printed; the exact remainder counts y - 1024 ticks twice. Found
+        # 2026-11-17: Almanac wrote "999999488" where CSPICE writes "000001024".
+        lines = [
+            "SCLK_KERNEL_ID = ( @2000-01-01 )", "SCLK_DATA_TYPE_91 = ( 1 )",
+            "SCLK01_TIME_SYSTEM_91 = ( 1 )", "SCLK01_N_FIELDS_91 = ( 2 )",
+            "SCLK01_MODULI_91 = ( 100000000000 1000000000 )", "SCLK01_OFFSETS_91 = ( 0 0 )",
+            "SCLK01_OUTPUT_DELIM_91 = ( 2 )", "SCLK_PARTITION_START_91 = ( 0.0 )",
+            "SCLK_PARTITION_END_91 = ( 1.0E20 )", "SCLK01_COEFFICIENTS_91 = ( 0.0 0.0 1.0 )",
+        ]
+        names = [String(strip(first(split(l, '=')))) for l in lines[2:end]]
+        nano = neo_context(String[])
+        lmpool(nano, lines)
+        try
+            SPICE.lmpool(lines)
+            cases = Float64[]
+            for k in 9_000_000_000:9_000_100_000
+                x = prevfloat(k * 1.0e9)
+                trunc(x / 1.0e9) * 1.0e9 > x && push!(cases, x)
+                length(cases) == 20 && break
+            end
+            @test length(cases) == 20
+            @test all(x -> scfmt(nano, -91, x) == SPICE.scfmt(-91, x), cases)
+            @test scfmt(nano, -91, 8.723322218999999e18) == "08723322219:000001024"
+        finally
+            foreach(SPICE.dvpool, names)
+        end
+    end
+
     @apart @testset "derivatives pass through the conversions" begin
         for (sc, _, _, coef) in clocks
             tikmsc = sc == CKFix.SC_TDB ? 256.0 : CKFix.TDT_TIKMSC
