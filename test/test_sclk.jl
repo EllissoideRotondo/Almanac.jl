@@ -62,17 +62,20 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
     )
 
     @apart @testset "clock data" begin
+        fails = Failures()
         for (sc, pstart, pstop, _) in clocks
             # CSPICE has no C wrapper of `sctype_`; the Fortran-style function is called.
-            @test sctype(ctx, sc) == ccall((:sctype_, SPICE.libcspice), Cint, (Ref{Cint},), sc) == 1
+            check!(fails, sctype(ctx, sc) == ccall((:sctype_, SPICE.libcspice), Cint, (Ref{Cint},), sc) == 1, "sctype", sc)
             ps, pe = scpart(ctx, sc)
             cs, ce = SPICE.scpart(sc)
-            @test ps == cs == pstart
-            @test pe == ce == pstop
+            check!(fails, ps == cs == pstart, "partition starts", sc)
+            check!(fails, pe == ce == pstop, "partition ends", sc)
         end
+        @test isempty(fails)
         @test sort(collect(keys(ks.sclk))) == [CKFix.SC_TDT, CKFix.SC_TDB]
     end
 
+    fails = Failures()
     for (sc, pstart, pstop, coef) in clocks
         mx = sclk_mxtick(pstart, pstop)
         # Random ticks over the whole range and over the part with the coefficient
@@ -107,14 +110,15 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         b = report_quantiles("clock $sc: sce2c, ticks", dc)
         c = report_quantiles("clock $sc: sce2t, ticks", dt)
         r = report_quantiles("clock $sc: sce2c(sct2e(t)) - t, ticks", rt)
-        @test a.max <= SCLK_TOL_ET
-        @test b.max <= SCLK_TOL_TICKS
-        @test c.max == 0.0
+        within!(fails, a.max, SCLK_TOL_ET, "sct2e", sc)
+        within!(fails, b.max, SCLK_TOL_TICKS, "sce2c", sc)
+        check!(fails, c.max == 0.0, "sce2t", sc)
         # The round trip is exact to rounding, except in the 50 s jump of the parallel
         # time of clock -77 at its partition boundary, where two tick values share an ET.
-        @test r.q50 <= SCLK_TOL_TICKS
-        @test strings_ok
+        within!(fails, r.q50, SCLK_TOL_TICKS, "sce2c(sct2e(t)) - t, median", sc)
+        check!(fails, strings_ok, "strings", sc)
     end
+    @test isempty(fails)
 
     @apart @testset "clock strings as a user writes them" begin
         cases = (
@@ -132,12 +136,14 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
                 ],
             ),
         )
+        fails = Failures()
         for (sc, list) in cases, s in list
-            @test agree(==, () -> scencd(ctx, sc, s), () -> SPICE.scencd(sc, s))
-            @test agree(==, () -> scs2e(ctx, sc, s), () -> SPICE.scs2e(sc, s))
+            check!(fails, agree(==, () -> scencd(ctx, sc, s), () -> SPICE.scencd(sc, s)), "scencd", sc, repr(s))
+            check!(fails, agree(==, () -> scs2e(ctx, sc, s), () -> SPICE.scs2e(sc, s)), "scs2e", sc, repr(s))
             f = String(last(split(s, '/')))
-            @test agree(==, () -> sctiks(ctx, sc, f), () -> SPICE.sctiks(sc, f))
+            check!(fails, agree(==, () -> sctiks(ctx, sc, f), () -> SPICE.sctiks(sc, f)), "sctiks", sc, repr(f))
         end
+        @test isempty(fails)
         # At least one string of each clock is valid, so the comparison is not vacuous.
         @test scencd(ctx, CKFix.SC_TDB, "2/2000.001") == SPICE.scencd(CKFix.SC_TDB, "2/2000.001")
         @test scencd(ctx, CKFix.SC_TDT, "1/1:0:0") == 0.0
@@ -227,25 +233,27 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
     end
 
     @apart @testset "derivatives pass through the conversions" begin
+        fails = Failures()
         for (sc, _, _, coef) in clocks
             tikmsc = sc == CKFix.SC_TDB ? 256.0 : CKFix.TDT_TIKMSC
             for k in 1:(size(coef, 1) - 1)
                 t = coef[k, 1] + (coef[k + 1, 1] - coef[k, 1]) * (0.2 + 0.6 * rand(rng))
                 x = sct2e(ctx, sc, Almanac.taylor_var(t, Val(2)))
                 e0, e1, e2 = Almanac.derivatives(x)
-                @test e0 == sct2e(ctx, sc, t)
+                check!(fails, e0 == sct2e(ctx, sc, t), "sct2e value", sc, t)
                 h = 64.0
                 fd = (sct2e(ctx, sc, t + h) - sct2e(ctx, sc, t - h)) / 2h
-                @test isapprox(e1, fd; rtol = 1.0e-9)
+                check!(fails, isapprox(e1, fd; rtol = 1.0e-9), "sct2e derivative against differences", sc, t)
                 # seconds per tick: the record rate (per count) over the ticks in a count
-                @test isapprox(e1, coef[k, 3] / tikmsc; rtol = sc == CKFix.SC_TDB ? 1.0e-15 : 1.0e-7)
-                sc == CKFix.SC_TDB && @test e2 == 0.0
+                check!(fails, isapprox(e1, coef[k, 3] / tikmsc; rtol = sc == CKFix.SC_TDB ? 1.0e-15 : 1.0e-7), "sct2e derivative = record rate", sc, t)
+                sc == CKFix.SC_TDB && check!(fails, e2 == 0.0, "sct2e second derivative", sc, t)
                 y = sce2c(ctx, sc, Almanac.taylor_var(e0, Val(2)))
                 c0, c1, _ = Almanac.derivatives(y)
-                @test isapprox(c0, t; atol = 1.0e-6)
-                @test isapprox(c1 * e1, 1.0; rtol = 1.0e-12)
+                check!(fails, isapprox(c0, t; atol = 1.0e-6), "sce2c(sct2e(t)) = t", sc, t)
+                check!(fails, isapprox(c1 * e1, 1.0; rtol = 1.0e-12), "sce2c derivative = 1 / sct2e derivative", sc, t)
             end
         end
+        @test isempty(fails)
         # A dual number passes as well, with the derivative of the Taylor number.
         sc, coef = clocks[1][1], clocks[1][4]
         t = (coef[1, 1] + coef[2, 1]) / 2
@@ -254,16 +262,17 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
     end
 
     @apart @testset "no allocation, inferred types" begin
+        fails = Failures()
         for (sc, _, _, coef) in clocks
             t = coef[2, 1] * 0.7
             et = sct2e(ks, sc, t)
             tv = Almanac.taylor_var(t, Val(2))
             ev = Almanac.taylor_var(et, Val(2))
-            @test CKFix.warm(alloc_sct2e, ks, sc, t) == 0
-            @test CKFix.warm(alloc_sce2c, ks, sc, et) == 0
-            @test CKFix.warm(alloc_sce2t, ks, sc, et) == 0
-            @test CKFix.warm(alloc_sct2e, ks, sc, tv) == 0
-            @test CKFix.warm(alloc_sce2c, ks, sc, ev) == 0
+            check!(fails, CKFix.warm(alloc_sct2e, ks, sc, t) == 0, "sct2e", sc)
+            check!(fails, CKFix.warm(alloc_sce2c, ks, sc, et) == 0, "sce2c", sc)
+            check!(fails, CKFix.warm(alloc_sce2t, ks, sc, et) == 0, "sce2t", sc)
+            check!(fails, CKFix.warm(alloc_sct2e, ks, sc, tv) == 0, "sct2e Taylor", sc)
+            check!(fails, CKFix.warm(alloc_sce2c, ks, sc, ev) == 0, "sce2c Taylor", sc)
             @test (@inferred sct2e(ks, sc, t)) isa Float64
             @test (@inferred sce2c(ks, sc, et)) isa Float64
             @test (@inferred sce2t(ks, sc, et)) isa Float64
@@ -271,6 +280,7 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
             @test (@inferred sce2c(ks, sc, ev)) isa Almanac.Taylor{2, Float64}
             @test (@inferred sct2e(ctx, sc, 1000)) isa Float64
         end
+        @test isempty(fails)
     end
 
     @apart @testset "forms on the default context" begin

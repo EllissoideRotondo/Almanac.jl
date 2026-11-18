@@ -303,14 +303,18 @@ group(
     @testset "Keplerian elements: GMAT cases ($(c.name))" for c in GMAT_CASES
         o = Orbit(c.state, 0.0, 399, 1, c.gm)
         worst = 0.0
+        fails = Failures()
         for (k, v) in c.expected
             x = element(o, k)
-            @test isapprox(
-                k in GMAT_ANGLES ? v + rem2pi(x - v, RoundNearest) : x, v;
-                rtol = RTOL_GMAT, atol = ATOL_GMAT
+            check!(
+                fails, isapprox(
+                    k in GMAT_ANGLES ? v + rem2pi(x - v, RoundNearest) : x, v;
+                    rtol = RTOL_GMAT, atol = ATOL_GMAT
+                ), "isapprox( k in GMAT_ANGLES ? v + rem2pi(x - v, ...", c.name, k
             )
             worst = max(worst, k in GMAT_ANGLES ? angdiff(x, v) : abs(x - v) / max(abs(v), 1))
         end
+        @test isempty(fails)
         measured(@sprintf("  gmat %-24s max scaled difference %.3e", c.name, worst))
     end
 
@@ -322,49 +326,57 @@ group(
         )
         worst = Dict(k => 0.0 for k in names)
         note(k, d) = (worst[k] = max(worst[k], d); d)
-        for _ in 1:nsample(200, 5000)
+        fails = Failures()
+        for isample in 1:nsample(200, 5000)
             o = random_orbit(rng)
             el = oscltx(o.state, o.et, o.gm)
-            @test note(:rp, abs(o.periapsis - el[1]) / el[1] / cond_shape(o)) < TOL_OSC[:rp]
-            @test note(:ecc, abs(o.ecc - el[2]) / cond_shape(o)) < TOL_OSC[:ecc]
-            @test note(:inc, angdiff(o.inc, el[3]) / cond_angle(o, :inc)) < TOL_OSC[:inc]
-            @test note(:raan, angdiff(o.raan, el[4]) / cond_angle(o, :raan)) < TOL_OSC[:raan]
-            @test note(:aop, angdiff(o.aop, el[5]) / cond_angle(o, :aop)) < TOL_OSC[:aop]
-            @test note(:ta, angdiff(o.ta, el[9]) / cond_angle(o, :ta)) < TOL_OSC[:ta]
+            check!(fails, note(:rp, abs(o.periapsis - el[1]) / el[1] / cond_shape(o)) < TOL_OSC[:rp], "note(:rp, abs(o.periapsis - el[1]) / el[1] / co...", isample)
+            check!(fails, note(:ecc, abs(o.ecc - el[2]) / cond_shape(o)) < TOL_OSC[:ecc], "note(:ecc, abs(o.ecc - el[2]) / cond_shape(o)) ...", isample)
+            check!(fails, note(:inc, angdiff(o.inc, el[3]) / cond_angle(o, :inc)) < TOL_OSC[:inc], "note(:inc, angdiff(o.inc, el[3]) / cond_angle(o...", isample)
+            check!(fails, note(:raan, angdiff(o.raan, el[4]) / cond_angle(o, :raan)) < TOL_OSC[:raan], "note(:raan, angdiff(o.raan, el[4]) / cond_angle...", isample)
+            check!(fails, note(:aop, angdiff(o.aop, el[5]) / cond_angle(o, :aop)) < TOL_OSC[:aop], "note(:aop, angdiff(o.aop, el[5]) / cond_angle(o...", isample)
+            check!(fails, note(:ta, angdiff(o.ta, el[9]) / cond_angle(o, :ta)) < TOL_OSC[:ta], "note(:ta, angdiff(o.ta, el[9]) / cond_angle(o, ...", isample)
             if o.ecc < 1
-                @test note(:ma, angdiff(o.ma, el[6]) / cond_angle(o, :ma)) < TOL_OSC[:ma]
-                @test note(
-                    :sma_period, max(
-                        abs(o.sma - el[10]) / el[10],
-                        abs(o.period - el[11]) / el[11]
-                    ) / cond_shape(o)
-                ) < TOL_OSC[:sma_period]
-                @test note(:mean_motion, abs(o.mean_motion * o.period - 2π) / 2π) < TOL_ID
-                @test note(:ta_dot, abs(o.ta_dot - o.mean_motion) / o.mean_motion) < TOL_ID
+                check!(fails, note(:ma, angdiff(o.ma, el[6]) / cond_angle(o, :ma)) < TOL_OSC[:ma], "note(:ma, angdiff(o.ma, el[6]) / cond_angle(o, ...", isample)
+                check!(
+                    fails, note(
+                        :sma_period, max(
+                            abs(o.sma - el[10]) / el[10],
+                            abs(o.period - el[11]) / el[11]
+                        ) / cond_shape(o)
+                    ) < TOL_OSC[:sma_period], "note( :sma_period, max( abs(o.sma - el[10]) / e...", isample
+                )
+                check!(fails, note(:mean_motion, abs(o.mean_motion * o.period - 2π) / 2π) < TOL_ID, "note(:mean_motion, abs(o.mean_motion * o.period...", isample)
+                check!(fails, note(:ta_dot, abs(o.ta_dot - o.mean_motion) / o.mean_motion) < TOL_ID, "note(:ta_dot, abs(o.ta_dot - o.mean_motion) / o...", isample)
             else
-                @test note(:mean_motion, abs(o.mean_motion - sqrt(o.gm / abs(o.sma)^3)) / o.mean_motion) < TOL_ID
-                @test o.period == 0.0 && o.ta_dot == Inf
+                check!(fails, note(:mean_motion, abs(o.mean_motion - sqrt(o.gm / abs(o.sma)^3)) / o.mean_motion) < TOL_ID, "note(:mean_motion, abs(o.mean_motion - sqrt(o.g...", isample)
+                check!(fails, o.period == 0.0 && o.ta_dot == Inf, "o.period == 0.0 && o.ta_dot == Inf", isample)
                 # the hyperbolic anomaly H of its defining relations with ecc and ta
                 H = rem2pi(o.ha, RoundNearest)
                 c, s = cos(o.ta), sin(o.ta)
-                @test note(
-                    :ha, max(
-                        abs(cosh(H) - (o.ecc + c) / (1 + o.ecc * c)) / cosh(H),
-                        abs(sinh(H) - sqrt(o.ecc^2 - 1) * s / (1 + o.ecc * c)) / max(abs(sinh(H)), 1)
-                    )
-                ) < TOL_ID
+                check!(
+                    fails, note(
+                        :ha, max(
+                            abs(cosh(H) - (o.ecc + c) / (1 + o.ecc * c)) / cosh(H),
+                            abs(sinh(H) - sqrt(o.ecc^2 - 1) * s / (1 + o.ecc * c)) / max(abs(sinh(H)), 1)
+                        )
+                    ) < TOL_ID, "note( :ha, max( abs(cosh(H) - (o.ecc + c) / (1 ...", isample
+                )
             end
-            @test note(:aol, angdiff(o.aol, o.aop + o.ta) / cond_angle(o, :aol)) < TOL_AOL
-            @test note(:c3, abs(o.c3 - 2 * o.energy) / abs(o.c3)) < TOL_ID
-            @test note(
-                :semi_minor, abs(o.semi_minor_axis^2 - abs(o.sma * o.semi_parameter)) /
-                    o.semi_minor_axis^2 / cond_semiminor(o)
-            ) < TOL_SEMIMINOR
+            check!(fails, note(:aol, angdiff(o.aol, o.aop + o.ta) / cond_angle(o, :aol)) < TOL_AOL, "note(:aol, angdiff(o.aol, o.aop + o.ta) / cond_...", isample)
+            check!(fails, note(:c3, abs(o.c3 - 2 * o.energy) / abs(o.c3)) < TOL_ID, "note(:c3, abs(o.c3 - 2 * o.energy) / abs(o.c3))...", isample)
+            check!(
+                fails, note(
+                    :semi_minor, abs(o.semi_minor_axis^2 - abs(o.sma * o.semi_parameter)) /
+                        o.semi_minor_axis^2 / cond_semiminor(o)
+                ) < TOL_SEMIMINOR, "note( :semi_minor, abs(o.semi_minor_axis^2 - ab...", isample
+            )
             _, ra, dec = recrad(o.position)
-            @test note(:ra, angdiff(o.right_ascension, ra)) < TOL_ID
-            @test note(:dec, abs(o.declination - dec)) < TOL_ID
-            @test note(:vdec, abs(o.velocity_declination - recrad(o.velocity)[3])) < TOL_ID
+            check!(fails, note(:ra, angdiff(o.right_ascension, ra)) < TOL_ID, "note(:ra, angdiff(o.right_ascension, ra)) < TOL_ID", isample)
+            check!(fails, note(:dec, abs(o.declination - dec)) < TOL_ID, "note(:dec, abs(o.declination - dec)) < TOL_ID", isample)
+            check!(fails, note(:vdec, abs(o.velocity_declination - recrad(o.velocity)[3])) < TOL_ID, "note(:vdec, abs(o.velocity_declination - recrad...", isample)
         end
+        @test isempty(fails)
         measured(
             "  oscltx and identities, largest differences: " *
                 join((@sprintf("%s %.1e", k, worst[k]) for k in names), ", ") *
@@ -436,10 +448,12 @@ group(
         for n in (:ea, :fpa)                                      # ta = pi at ecc = 1: 0/0
             @test throws_kind(() -> element(zv, n), :degeneratecase)
         end
+        fails = Failures()
         for o in (circ, pro, retro, para, zr, zv, rect, zvh), n in elements()   # no NaN escapes
             y = outcome(() -> element(o, n))
-            @test y isa Symbol || !isnan(y)
+            check!(fails, y isa Symbol || !isnan(y), "y isa Symbol || !isnan(y)", o.state, n)
         end
+        @test isempty(fails)
         # The same states with a ForwardDiff.Dual state (every component carries a derivative):
         # ForwardDiff's norm of a zero vector is 0/0, so a value of NaN would escape at an
         # exactly circular orbit (ecc), a zero radius or velocity, and a rectilinear orbit
@@ -456,11 +470,13 @@ group(
             (7000.0, 0, 0, 0, 0, 0), (7000.0, 0, 0, 5.0, 0, 0),
             (7000.0, 0, 0, 0, 0, 1.0e-10),
         )
+        fails = Failures()
         for s in dual_states, seed in 1:6, n in elements()
             od = Orbit(dual(s, seed), 0.0, 399, 1, gm, VALLADO_RADII)
             y = outcome(() -> element(od, n))
-            y isa Symbol || @test !any(v -> isnan(ForwardDiff.value(v)), y)
+            y isa Symbol || check!(fails, !any(v -> isnan(ForwardDiff.value(v)), y), "!any(v -> isnan(ForwardDiff.value(v)), y)", s, seed, n)
         end
+        @test isempty(fails)
         odc = Orbit(dual(dual_states[1], 1), 0.0, 399, 1, gm, VALLADO_RADII)
         for n in (:ecc, :ta, :ma, :semi_minor_axis, :equinoctial_h)
             @test throws_kind(() -> element(odc, n), :degeneratecase)
@@ -476,13 +492,15 @@ group(
             end
             @test err isa SpiceError && occursin(":" * string(n), sprint(showerror, err))
         end
+        fails = Failures()
         for kind in (:ric, :vnc, :rcn, :tnw), s in dual_states
             od = Orbit(dual(s, 4), 0.0, 399, 1, gm, VALLADO_RADII)
             y = outcome(() -> local_frame(od, kind))
-            y isa Symbol || @test !any(v -> isnan(ForwardDiff.value(v)), y)
+            y isa Symbol || check!(fails, !any(v -> isnan(ForwardDiff.value(v)), y), "!any(v -> isnan(ForwardDiff.value(v)), y)", kind, s)
             y = outcome(() -> relative_state(od, od, kind))
-            y isa Symbol || @test !any(v -> isnan(ForwardDiff.value(v)), y)
+            y isa Symbol || check!(fails, !any(v -> isnan(ForwardDiff.value(v)), y), "!any(v -> isnan(ForwardDiff.value(v)), y)", kind, s)
         end
+        @test isempty(fails)
         @test keplerian(pro) == (
             sma = pro.sma, ecc = pro.ecc, inc = pro.inc, raan = pro.raan,
             aop = pro.aop, ta = pro.ta,
@@ -567,24 +585,26 @@ group(
         worst = Dict(k => 0.0 for k in names)
         note(k, d) = (worst[k] = max(worst[k], d); d)
         nhyp = ninbound = 0
-        for _ in 1:nsample(200, 5000)
+        fails = Failures()
+        for isample in 1:nsample(200, 5000)
             o = random_orbit(rng)
             o.ecc > 1 || continue
             nhyp += 1
-            @test note(:mag, abs(o.bplane_mag - hypot(o.bplane_bt, o.bplane_br)) / o.bplane_mag) < TOL_ID
-            @test note(:angle, angdiff(o.bplane_angle, atan(o.bplane_br, o.bplane_bt))) < TOL_ID
-            @test -Float64(π) <= o.bplane_angle < Float64(π)
-            @test note(:bmag, abs(o.bplane_mag - o.semi_minor_axis) / o.semi_minor_axis) < TOL_BMAG
-            @test note(:turn, abs(vinf_turn_angle(o, o.periapsis) - 2 * asin(1 / o.ecc))) < TOL_VINF
+            check!(fails, note(:mag, abs(o.bplane_mag - hypot(o.bplane_bt, o.bplane_br)) / o.bplane_mag) < TOL_ID, "note(:mag, abs(o.bplane_mag - hypot(o.bplane_bt...", isample)
+            check!(fails, note(:angle, angdiff(o.bplane_angle, atan(o.bplane_br, o.bplane_bt))) < TOL_ID, "note(:angle, angdiff(o.bplane_angle, atan(o.bpl...", isample)
+            check!(fails, -Float64(π) <= o.bplane_angle < Float64(π), "-Float64(π) <= o.bplane_angle < Float64(π)", isample)
+            check!(fails, note(:bmag, abs(o.bplane_mag - o.semi_minor_axis) / o.semi_minor_axis) < TOL_BMAG, "note(:bmag, abs(o.bplane_mag - o.semi_minor_axi...", isample)
+            check!(fails, note(:turn, abs(vinf_turn_angle(o, o.periapsis) - 2 * asin(1 / o.ecc))) < TOL_VINF, "note(:turn, abs(vinf_turn_angle(o, o.periapsis)...", isample)
             rp = 7000.0 + 30000.0 * rand(rng)
-            @test note(:periapsis, abs(vinf_periapsis(o, vinf_turn_angle(o, rp)) - rp) / rp) < TOL_VINF_RP
+            check!(fails, note(:periapsis, abs(vinf_periapsis(o, vinf_turn_angle(o, rp)) - rp) / rp) < TOL_VINF_RP, "note(:periapsis, abs(vinf_periapsis(o, vinf_tur...", isample)
             if dot(o.position, o.velocity) < 0            # inbound leg: Review Focus 1
                 ninbound += 1
-                @test π < o.ta < 2π && o.ma < 0
+                check!(fails, π < o.ta < 2π && o.ma < 0, "π < o.ta < 2π && o.ma < 0", isample)
             else
-                @test 0 < o.ta < π && o.ma > 0
+                check!(fails, 0 < o.ta < π && o.ma > 0, "0 < o.ta < π && o.ma > 0", isample)
             end
         end
+        @test isempty(fails)
         @test ninbound > nsample(200, 5000) / 10 && nhyp > nsample(200, 5000) / 4
         measured(
             "  b-plane and v-infinity identities, largest differences: " *
@@ -655,6 +675,7 @@ group(
             (1000.0, 1000.0, 900.0),
         )                       # the last is flattened far beyond any planet
         worst = zeros(3)
+        fails = Failures()
         for radii in bodies
             re = radii[1]
             f = (radii[1] - radii[3]) / radii[1]
@@ -665,9 +686,10 @@ group(
                 lon, lat, alt = recgeo(p, re, f)
                 d = (angdiff(o.latitude, lat), angdiff(o.longitude, lon), abs(o.height - alt) / re)
                 worst .= max.(worst, d)
-                @test d[1] < TOL_RECGEO[1] && d[2] < TOL_RECGEO[2] && d[3] < TOL_RECGEO[3]
+                check!(fails, d[1] < TOL_RECGEO[1] && d[2] < TOL_RECGEO[2] && d[3] < TOL_RECGEO[3], "d[1] < TOL_RECGEO[1] && d[2] < TOL_RECGEO[2] &&...", radii)
             end
         end
+        @test isempty(fails)
         measured(
             @sprintf(
                 "  geodetic against recgeo, largest differences: latitude %.1e rad, longitude %.1e rad, height %.1e radii",
@@ -685,7 +707,8 @@ group(
     @testset "Equinoctial elements" begin
         rng = Xoshiro(SEED + 42)
         worst = [0.0, 0.0]
-        for _ in 1:nsample(200, 5000)
+        fails = Failures()
+        for isample in 1:nsample(200, 5000)
             o = random_orbit(rng)
             o.ecc < 1 || continue
             d = max(
@@ -705,8 +728,9 @@ group(
                 angdiff(ma, o.ma)
             ) / (eps() * (16 + 1 / sin(o.inc)))
             worst .= max.(worst, (d, b))
-            @test d < TOL_ID && o.equinoctial_a == o.sma && sma == o.sma && b < TOL_EQ_BACK
+            check!(fails, d < TOL_ID && o.equinoctial_a == o.sma && sma == o.sma && b < TOL_EQ_BACK, "d < TOL_ID && o.equinoctial_a == o.sma && sma =...", isample)
         end
+        @test isempty(fails)
         measured(@sprintf("  equinoctial identities %.1e, conversion back to Keplerian %.1e (units of eps (16 + 1/sin inc))", worst...))
         hyp = Orbit(gmat_kep_state(-20000.0, 1.5, _d(28.5), _d(10), _d(20), _d(30)), 0.0, 399, 1, GMAT_GM)
         @test hyp.equinoctial_h ≈ 1.5 * sin(hyp.aop + hyp.raan) && hyp.equinoctial_lambda ≈ hyp.raan + hyp.aop + hyp.ma
@@ -779,7 +803,8 @@ group(
         rng = Xoshiro(SEED + 51)
         gm = 398600.4415
         worst = zeros(6)
-        for _ in 1:nsample(200, 5000)
+        fails = Failures()
+        for isample in 1:nsample(200, 5000)
             ecc = rand(rng) < 0.5 ? 0.005 + 0.945 * rand(rng) : 1.05 + 3.95 * rand(rng)
             rp = 6500.0 + 43500.0 * rand(rng)
             inc = 0.02 + (π - 0.04) * rand(rng)
@@ -803,9 +828,9 @@ group(
             ck = cond_kepler(ecc)
             dk = maximum(x -> norm(x.state - o.state) / norm(o.state), (o2, o3, o4)) / cond_state(o)
             worst[1:3] .= max.(worst[1:3], (dr / ck, dv / ck, dk))
-            @test dr / ck < TOL_BUILD[1] && dv / ck < TOL_BUILD[2] && dk < TOL_BUILD[3]
-            @test o.et === 0.0 && o.gm == gm && o.center === Int32(399) && o.frame === Int32(1)
-            @test all(isnan, o.radii)
+            check!(fails, dr / ck < TOL_BUILD[1] && dv / ck < TOL_BUILD[2] && dk < TOL_BUILD[3], "dr / ck < TOL_BUILD[1] && dv / ck < TOL_BUILD[2...", isample)
+            check!(fails, o.et === 0.0 && o.gm == gm && o.center === Int32(399) && o.frame === Int32(1), "o.et === 0.0 && o.gm == gm && o.center === Int3...", isample)
+            check!(fails, all(isnan, o.radii), "all(isnan, o.radii)", isample)
             kk = keplerian(o4)
             de = max(abs(kk.sma - k.sma) / abs(k.sma), abs(kk.ecc - k.ecc))
             da = max(
@@ -815,8 +840,9 @@ group(
             )
             worst[4] = max(worst[4], de)
             worst[5] = max(worst[5], da)
-            @test de < TOL_BUILD[4] && da < TOL_BUILD[5]
+            check!(fails, de < TOL_BUILD[4] && da < TOL_BUILD[5], "de < TOL_BUILD[4] && da < TOL_BUILD[5]", isample)
         end
+        @test isempty(fails)
         measured(@sprintf("  keplerian_orbit against conics, relative, in units of cond_kepler: position %.2e,
     velocity %.2e; round trip of the state %.2e (units of cond_state), of sma and ecc %.2e,
     of the angles %.2e (units of cond_angle)", worst[1:5]...))
@@ -888,7 +914,8 @@ group(
     @testset "with_element and with_apsides" begin
         rng = Xoshiro(SEED + 52)
         worst = zeros(4)
-        for _ in 1:nsample(100, 2000), name in (:sma, :ecc, :inc, :raan, :aop, :ta)
+        fails = Failures()
+        for isample in 1:nsample(100, 2000), name in (:sma, :ecc, :inc, :raan, :aop, :ta)
             o = random_orbit(rng)
             hyp = o.ecc > 1
             lim = hyp ? π - acos(1 / o.ecc) : π
@@ -918,7 +945,7 @@ group(
                 name === :ecc ? abs(got - new) / cond_shape(p) : angdiff(got, new) / cond_angle(p, name)
             ia = name in (:sma, :ecc) ? 1 : 2
             worst[ia] = max(worst[ia], d)
-            @test d < TOL_WITH[ia]
+            check!(fails, d < TOL_WITH[ia], "d < TOL_WITH[ia]", name, isample)
             for n in _KEP6
                 n === name && continue
                 x = n === :sma ? abs(after.sma - before.sma) / abs(before.sma) :
@@ -927,10 +954,11 @@ group(
                     max(cond_angle(o, n), cond_angle(p, n))
                 j = n in (:sma, :ecc) ? 3 : 4
                 worst[j] = max(worst[j], x)
-                @test x < TOL_WITH[j]
+                check!(fails, x < TOL_WITH[j], "x < TOL_WITH[j]", name, isample)
             end
-            @test isequal((p.et, p.center, p.frame, p.gm, p.radii), (o.et, o.center, o.frame, o.gm, o.radii))
+            check!(fails, isequal((p.et, p.center, p.frame, p.gm, p.radii), (o.et, o.center, o.frame, o.gm, o.radii)), "isequal((p.et, p.center, p.frame, p.gm, p.radii...", name, isample)
         end
+        @test isempty(fails)
         measured(@sprintf("  with_element: asked sma (relative) or ecc (absolute) %.2e (units of cond_shape), angle %.2e;
     the others sma (relative) or ecc (absolute) %.2e, angles %.2e (units of cond_angle)", worst...))
         # ANISE verif_with_init (tests/astro/orbit.rs): the same loops, in rad
@@ -993,6 +1021,7 @@ group(
         @test Almanac._ma_to_ta(1.0, 0.5) isa Float64
         rng = Xoshiro(SEED + 56)
         worst = zeros(3)
+        fails = Failures()
         for i in 1:nsample(2000, 50000)
             hyp = rand(rng) < 0.4
             ecc = hyp ? 1.05 + 3.95 * rand(rng) : 0.001 + 0.949 * rand(rng)
@@ -1004,7 +1033,7 @@ group(
             want = (1 + ecc * cos(nu))^2 / abs(1 - ecc^2)^1.5
             e1 = abs(dta - want) / want
             worst[1] = max(worst[1], e1)
-            @test e1 < TOL_KEPLER_D[1]
+            check!(fails, e1 < TOL_KEPLER_D[1], "e1 < TOL_KEPLER_D[1]", i, m, ecc)
             # the second derivative (nested ForwardDiff, as a Hessian through `two_body` does):
             # d2 nu / dM2 = -2 e sin nu (1 + e cos nu)^3 / |1 - e^2|^3, scaled by its bound,
             # in the branch at E = pi too (its derivatives come from the form without the pole)
@@ -1014,15 +1043,16 @@ group(
             bound = 2 * ecc * (1 + ecc * cos(nu))^3 / abs(1 - ecc^2)^3
             e3 = abs(d2 + bound * sin(nu)) / bound
             worst[3] = max(worst[3], e3)
-            @test e3 < TOL_KEPLER_D[3]
+            check!(fails, e3 < TOL_KEPLER_D[3], "e3 < TOL_KEPLER_D[3]", i, m, ecc)
             if !hyp
                 dte = ForwardDiff.derivative(x -> Almanac._ma_to_ta(promote(m, x)...), ecc)
                 wante = sin(nu) * (2 + ecc * cos(nu)) / (1 - ecc^2)
                 e2 = abs(dte - wante) / max(abs(wante), 1 / (1 - ecc^2))
                 worst[2] = max(worst[2], e2)
-                @test e2 < TOL_KEPLER_D[2]
+                check!(fails, e2 < TOL_KEPLER_D[2], "e2 < TOL_KEPLER_D[2]", i, m, ecc)
             end
         end
+        @test isempty(fails)
         measured(@sprintf("  Kepler solver: d nu/dM relative error %.2e, d nu/de (ellipses) %.2e, d2 nu/dM2 (to its bound) %.2e", worst...))
         # Near the other odd multiples of pi: the eccentric anomaly is not reduced to [0, 2pi),
         # and nu, d nu/dM and d2 nu/dM2 are periodic in M, so each must equal its value at
@@ -1032,22 +1062,25 @@ group(
         nu(m, ecc) = Almanac._ma_to_ta(promote(m, ecc)...)
         d1(m, ecc) = ForwardDiff.derivative(x -> nu(x, ecc), m)
         d2(m, ecc) = ForwardDiff.derivative(y -> ForwardDiff.derivative(x -> nu(x, ecc), y), m)
+        fails = Failures()
         for ecc in (0.1, 0.5, 0.786), k in (-5, -3, 3, 5), dm in (0.0, 3.0e-9, -6.4e-8, 1.0e-6, -1.0e-4)
             m, m1 = k * π + dm, π + dm
             bound = 2 * ecc * (1 + ecc * cos(nu(m1, ecc)))^3 / abs(1 - ecc^2)^3
             # the value only outside the band |E - pi| < 1e-8, where ANISE returns E itself
             # as nu, near pi and not near the other multiples (E is not reduced)
-            abs(dm) > 1.0e-8 && @test abs(nu(m, ecc) - nu(m1, ecc)) < 1.0e-14
-            @test abs(d1(m, ecc) - d1(m1, ecc)) / d1(m1, ecc) < TOL_KEPLER_D[1]
-            @test abs(d2(m, ecc) - d2(m1, ecc)) / bound < TOL_KEPLER_D[3]
+            abs(dm) > 1.0e-8 && check!(fails, abs(nu(m, ecc) - nu(m1, ecc)) < 1.0e-14, "abs(nu(m, ecc) - nu(m1, ecc)) < 1.0e-14", ecc, k, dm)
+            check!(fails, abs(d1(m, ecc) - d1(m1, ecc)) / d1(m1, ecc) < TOL_KEPLER_D[1], "abs(d1(m, ecc) - d1(m1, ecc)) / d1(m1, ecc) < T...", ecc, k, dm)
+            check!(fails, abs(d2(m, ecc) - d2(m1, ecc)) / bound < TOL_KEPLER_D[3], "abs(d2(m, ecc) - d2(m1, ecc)) / bound < TOL_KEP...", ecc, k, dm)
         end
+        @test isempty(fails)
     end
 
     @testset "two_body" begin
         rng = Xoshiro(SEED + 53)
         gm = 398600.4415
         worst = zeros(3)
-        for _ in 1:nsample(200, 5000)
+        fails = Failures()
+        for isample in 1:nsample(200, 5000)
             o = random_orbit(rng)
             n = o.mean_motion
             dt = o.ecc < 1 ? 20 * (rand(rng) - 0.5) * 2π / n : (2rand(rng) - 1) * 3 / n
@@ -1062,9 +1095,10 @@ group(
             # with |n dt| < 60, is 20 times smaller)
             cond = cond_kepler(o.ecc)
             worst .= max.(worst, (dr / cond, dv / cond, ds))
-            @test dr / cond < TOL_TWOBODY[1] && dv / cond < TOL_TWOBODY[2] && ds < TOL_TWOBODY[3]
-            @test t.et == o.et + dt && isequal((t.center, t.frame, t.gm, t.radii), (o.center, o.frame, o.gm, o.radii))
+            check!(fails, dr / cond < TOL_TWOBODY[1] && dv / cond < TOL_TWOBODY[2] && ds < TOL_TWOBODY[3], "dr / cond < TOL_TWOBODY[1] && dv / cond < TOL_T...", isample)
+            check!(fails, t.et == o.et + dt && isequal((t.center, t.frame, t.gm, t.radii), (o.center, o.frame, o.gm, o.radii)), "t.et == o.et + dt && isequal((t.center, t.frame...", isample)
         end
+        @test isempty(fails)
         measured(@sprintf("  two_body against prop2b, relative: position %.2e, velocity %.2e (units of 1e-12 max(1, 1/sqrt(|1 - e^2|))); sma %.2e", worst...))
         # the same epoch: the orbit itself
         o = random_orbit(rng)
@@ -1105,7 +1139,8 @@ group(
         @test two_body(circ, 0.0) === circ
         # a dual epoch: the derivative of the state is the velocity and the acceleration
         dd = zeros(2)
-        for _ in 1:nsample(20, 1000)
+        fails = Failures()
+        for isample in 1:nsample(20, 1000)
             o = random_orbit(rng)
             t0 = 1000.0 * (2rand(rng) - 1)
             s = ForwardDiff.derivative(t -> Vector(two_body(o, t).state), t0)
@@ -1113,8 +1148,9 @@ group(
             r = norm(st[1:3])
             d = (norm(s[1:3] - st[4:6]) / norm(st[4:6]), norm(s[4:6] + gm * st[1:3] / r^3) / (gm / r^2))
             dd .= max.(dd, d)
-            @test all(<(TOL_DUALDT), d)
+            check!(fails, all(<(TOL_DUALDT), d), "all(<(TOL_DUALDT), d)", isample)
         end
+        @test isempty(fails)
         measured(@sprintf("  two_body with a dual epoch, relative: dr/dt - v %.2e, dv/dt + gm r/r^3 %.2e", dd...))
         o = random_orbit(rng)
         od = Orbit(o.state, ForwardDiff.Dual(0.0, 1.0), 399, 1, gm)
@@ -1126,22 +1162,23 @@ group(
         rng = Xoshiro(SEED + 54)
         kinds = (:ric, :vnc, :rcn, :tnw)
         w = zeros(3)
-        for _ in 1:nsample(6, 200)
+        fails = Failures()
+        for isample in 1:nsample(6, 200)
             o = random_orbit(rng)
             r, v, h = o.position, o.velocity, o.hvec
             rh, vh, hh = r / norm(r), v / norm(v), h / norm(h)
             firsts = (:ric => rh, :vnc => vh, :rcn => rh, :tnw => vh)
             for (k, c1) in firsts
                 R = local_frame(o, k)
-                @test R isa SMatrix{3, 3, Float64, 9}
+                check!(fails, R isa SMatrix{3, 3, Float64, 9}, "R isa SMatrix{3, 3, Float64, 9}", isample)
                 w[1] = max(w[1], maximum(abs, R' * R - I))
                 w[2] = max(w[2], abs(det(R) - 1))
-                @test R[:, 1] ≈ c1 atol = 1.0e-15
-                @test R[:, 3] ≈ (k in (:ric, :rcn, :tnw) ? hh : cross(vh, hh)) atol = 1.0e-15
+                check!(fails, isapprox(R[:, 1], c1; atol = 1.0e-15), "R[:, 1] ≈ c1 atol = 1.0e-15", isample)
+                check!(fails, isapprox(R[:, 3], k in (:ric, :rcn, :tnw) ? hh : cross(vh, hh); atol = 1.0e-15), "R[:, 3] ≈ (k in (:ric, :rcn, :tnw) ? hh : cross...", isample)
                 # the exact rate against the derivative of the frame of the propagated orbit
                 S = local_frame_state(o, k)
-                @test S isa SMatrix{6, 6, Float64, 36}
-                @test S[1:3, 1:3] == R && S[4:6, 4:6] == R && all(iszero, S[1:3, 4:6])
+                check!(fails, S isa SMatrix{6, 6, Float64, 36}, "S isa SMatrix{6, 6, Float64, 36}", isample)
+                check!(fails, S[1:3, 1:3] == R && S[4:6, 4:6] == R && all(iszero, S[1:3, 4:6]), "S[1:3, 1:3] == R && S[4:6, 4:6] == R && all(isz...", isample)
                 D = ForwardDiff.derivative(t -> local_frame(two_body(o, t), k), o.et)
                 # two_body returns the state of `o` only up to the rounding of its element
                 # conversions (cond_state, up to 1e-12), so the rate is compared at the state that
@@ -1152,6 +1189,7 @@ group(
                 w[3] = max(w[3], maximum(abs, Sq[4:6, 1:3] - D) / (norm(h) / norm(r)^2) / eps())
             end
         end
+        @test isempty(fails)
         measured(@sprintf("  local frames: |R'R - I| %.1e, |det R - 1| %.1e, rate against ForwardDiff %.1f (units of eps |h|/r^2, the angular rate of the frame)", w...))
         @test w[1] < TOL_LF[1] && w[2] < TOL_LF[2] && w[3] < TOL_LF[3]
         o = random_orbit(rng)
@@ -1171,12 +1209,14 @@ group(
         @test relative_state(radial, o, :ric)[1:3] ≈ SVector(1, 0, 0) atol = 1.0e-10
         # the inverse of the 6 by 6 matrix: it maps the relative state back to the difference
         # (ANISE ric_difference_unchecked), also for a difference that has a velocity part
-        for _ in 1:nsample(5, 50), k in kinds
+        fails = Failures()
+        for isample in 1:nsample(5, 50), k in kinds
             c = random_orbit(rng)
             q = Orbit(c.state + SVector(1.5, -2.0, 0.7, 2.0e-3, -1.0e-3, 3.0e-3), c.et, 399, 1, c.gm)
             rs = relative_state(q, c, k)
-            @test local_frame_state(c, k) * rs ≈ q.state - c.state rtol = 1.0e-12
+            check!(fails, isapprox(local_frame_state(c, k) * rs, q.state - c.state; rtol = 1.0e-12), "local_frame_state(c, k) * rs ≈ q.state - c.stat...", k, isample)
         end
+        @test isempty(fails)
         # a pure position offset has a relative velocity: Rdot' dr, which is not zero
         S = local_frame_state(o, :ric)
         R, Rd = S[1:3, 1:3], S[4:6, 1:3]

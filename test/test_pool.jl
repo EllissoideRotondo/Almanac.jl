@@ -77,25 +77,27 @@ group(
     @apart @testset "gdpool, gcpool, gipool samples" begin
         @test gdpool(ctx, "BODY399_RADII") == [6378.1366, 6378.1366, 6356.7519]
         @test gdpool(ctx, "BODY399_RADII") isa Vector{Float64}
+        fails = Failures()
         for name in (
                 "BODY301_PM", "BODY499_POLE_RA", "BODY5_NUT_PREC_ANGLES",
                 "DELTET/DELTA_AT", "DELTET/DELTA_T_A", "TKFRAME_31009_ANGLES",
                 "BODY399_N_GEOMAG_CTR_DIPOLE_LAT",
             )
-            @test gdpool(ctx, name) == SPICE.gdpool(name; room = 1000)
+            check!(fails, gdpool(ctx, name) == SPICE.gdpool(name; room = 1000), "gdpool", name)
         end
         for name in (
                 "FRAME_31008_NAME", "TKFRAME_31009_SPEC", "TKFRAME_31009_UNITS",
                 "TKFRAME_31009_RELATIVE", "TKFRAME_31000_RELATIVE", "FRAME_31006_NAME",
             )
-            @test gcpool(ctx, name) == SPICE.gcpool(name)
+            check!(fails, gcpool(ctx, name) == SPICE.gcpool(name), "gcpool", name)
         end
         for name in (
                 "FRAME_MOON_PA_DE440", "TKFRAME_31009_AXES", "FRAME_31008_CLASS",
                 "BODY399_RADII",
             )
-            @test gipool(ctx, name) == SPICE.gipool(name)
+            check!(fails, gipool(ctx, name) == SPICE.gipool(name), "gipool", name)
         end
+        @test isempty(fails)
         # `NINT` rounds a tie away from zero, inside the 32-bit range (ends included);
         # outside it, NaN included, CSPICE signals SPICE(INTOUTOFRANGE). Found 2026-11-17:
         # `round(Int, x)` gave 2 for 2.5, and 3000000000 for 3.0e9.
@@ -125,22 +127,24 @@ group(
     end
 
     @apart @testset "bodvrd" begin
+        fails = Failures()
         for body in ("EARTH", "MOON", "SUN", "MARS", "JUPITER", "399", "earth")
-            @test bodvrd(ctx, body, "RADII") == SPICE.bodvrd(body, "RADII")
+            check!(fails, bodvrd(ctx, body, "RADII") == SPICE.bodvrd(body, "RADII"), "RADII", body)
         end
         @test bodvrd(ctx, 399, "RADII") == SPICE.bodvrd("399", "RADII")
         for (body, item) in (
                 ("EARTH", "POLE_RA"), ("MOON", "NUT_PREC_PM"), ("MARS", "PM"),
                 ("JUPITER", "NUT_PREC_RA"), ("SATURN", "POLE_DEC"),
             )
-            @test bodvrd(ctx, body, item) == SPICE.bodvrd(body, item, 100)
+            check!(fails, bodvrd(ctx, body, item) == SPICE.bodvrd(body, item, 100), "bodvrd", body, item)
         end
         if have_gm
             for body in ("EARTH", "MOON", "SUN", "EARTH BARYCENTER", "JUPITER BARYCENTER", "3")
-                @test bodvrd(ctx, body, "GM") == SPICE.bodvrd(body, "GM")
+                check!(fails, bodvrd(ctx, body, "GM") == SPICE.bodvrd(body, "GM"), "GM", body)
             end
             @test bodvrd(ctx, "EARTH", "GM") isa Vector{Float64}
         end
+        @test isempty(fails)
         @test_throws SPICE.SpiceError SPICE.bodvrd("EARTH", "NO_SUCH_ITEM")
         # A blank name is an error in CSPICE; Almanac reports "not found".
         @test bodn2c(ctx, "") === nothing
@@ -156,25 +160,29 @@ group(
             "JUPITER BARYCENTER", "PLUTO", "CHARON", "CERES", "CASSINI", "VOYAGER 1", "MRO",
             "JUICE", "DSS-14", "TEMPEL 1", "NO_SUCH_BODY", "399", "-82",
         ]
+        fails = Failures()
         for name in names
-            @test bodn2c(ctx, name) == SPICE.bodn2c(name)
-            @test bods2c(ctx, name) == SPICE.bods2c(name)
+            check!(fails, bodn2c(ctx, name) == SPICE.bodn2c(name), "bodn2c", repr(name))
+            check!(fails, bods2c(ctx, name) == SPICE.bods2c(name), "bods2c", repr(name))
         end
         codes = [
             0, 1, 3, 10, 199, 299, 301, 399, 401, 499, 501, 599, 699, 799, 899, 999, 901,
             2000001, -82, -31, -32, -74, 399014, 1000005, 123456789, -99999,
         ]
         for code in codes
-            @test bodc2n(ctx, code) == SPICE.bodc2n(code)
-            @test bodc2s(ctx, code) == SPICE.bodc2s(code)
+            check!(fails, bodc2n(ctx, code) == SPICE.bodc2n(code), "bodc2n", code)
+            check!(fails, bodc2s(ctx, code) == SPICE.bodc2s(code), "bodc2s", code)
         end
+        @test isempty(fails)
         @test bodc2s(ctx, typemin(Int32)) == SPICE.bodc2s(typemin(Int32)) == "-2147483648"
         # Round trip for a random sample of the built-in codes.
+        fails = Failures()
         for code in rand(rng, 1:999, 200)
             name = SPICE.bodc2n(code)
-            @test bodc2n(ctx, code) == name
-            name === nothing || @test bodn2c(ctx, name) == SPICE.bodn2c(name)
+            check!(fails, bodc2n(ctx, code) == name, "bodc2n", code)
+            name === nothing || check!(fails, bodn2c(ctx, name) == SPICE.bodn2c(name), "bodn2c", code, repr(name))
         end
+        @test isempty(fails)
     end
 
     @apart @testset "namfrm, frmnam" begin
@@ -185,15 +193,17 @@ group(
             "MOON_PA_DE440", "MOON_ME_DE440_ME421", "MOON_PA_DE421", "MOON_ME_DE421",
             "NO_SUCH_FRAME",
         ]
+        fails = Failures()
         for name in names
-            @test namfrm(ctx, name) == SPICE.namfrm(name)
+            check!(fails, namfrm(ctx, name) == SPICE.namfrm(name), "namfrm", name)
         end
         for id in [
                 1:21..., 10001:10020..., 10081, 13000, 31000, 31001, 31006, 31007, 31008,
                 31009, 0, -5, 123456,
             ]
-            @test frmnam(ctx, id) == SPICE.frmnam(id)
+            check!(fails, frmnam(ctx, id) == SPICE.frmnam(id), "frmnam", id)
         end
+        @test isempty(fails)
     end
 
     @apart @testset "no leap-second kernel" begin
@@ -215,8 +225,9 @@ group("5b. body names that later pool entries take over, against CSPICE") do
         # leading blanks of a name are kept (F_ZZBDTRN)
         ["NAIF_BODY_CODE = ( 1013 )", "NAIF_BODY_NAME = ( '   A' )"],
     ]
+    fails = Failures()
     try
-        for cv in cases
+        for (k, cv) in enumerate(cases)
             SPICE.clpool()
             SPICE.lmpool(cv)
             ctx = SpiceContext()
@@ -227,12 +238,13 @@ group("5b. body names that later pool entries take over, against CSPICE") do
                 catch
                     nothing
                 end
-                @test Almanac.bodc2n(ctx, code) == expected
+                check!(fails, Almanac.bodc2n(ctx, code) == expected, "bodc2n", k, code)
             end
             for name in ("F_X", "F_Y", "A", "B", "EARTH")
-                @test Almanac.bodn2c(ctx, name) == SPICE.bodn2c(name)
+                check!(fails, Almanac.bodn2c(ctx, name) == SPICE.bodn2c(name), "bodn2c", k, name)
             end
         end
+        @test isempty(fails)
     finally
         SPICE.clpool()
     end
