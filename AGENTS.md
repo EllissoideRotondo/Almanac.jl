@@ -173,7 +173,10 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
   `isdefined(@__MODULE__, :NAME) || include(...)`.
 - CSPICE has global state and is not thread safe. Each group calls `oracle_load` once,
   and SPICE.jl is never called from a spawned task.
-- The default run of all groups has a budget of 120 s. Large samples go in the
+- Time, measured on CI (ubuntu, Julia 1, one process): every group takes about 17 min,
+  of which the AD groups take about 12 min (compiling the backends; `ad_enzyme` alone
+  8 min) and `static` 40 s; the other groups, which the CI test jobs run, take about
+  4.5 min. A group that grows states its new time in its header. Large samples go in the
   exhaustive tier (`ALMANAC_TEST_FULL=1`, `nsample(fast, full)`). `ALMANAC_TEST_SEED`
   sets the random seed. `ALMANAC_TEST_EXCLUDE` (group names separated by spaces) leaves
   groups out of a run without group names; CI runs the AD groups and `static` on the
