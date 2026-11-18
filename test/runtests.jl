@@ -14,6 +14,8 @@
 #     julia --startup-file=no --threads=8 test/parallel.jl
 #
 # ALMANAC_TEST_FULL=1 selects the exhaustive run (large samples, all derivative orders).
+# ALMANAC_TEST_EXCLUDE lists groups, separated by spaces, that a run without group names
+# leaves out (CI runs the AD and static groups on one or two jobs only).
 #
 # The kernels are downloaded into `test/data/` on the first run (about 110 MB); the
 # environment variables of `test/kernels.jl` change their paths and the download. A
@@ -39,9 +41,11 @@ const GROUPS = [
 "Wall time of each group of this run, in the order of the run."
 const GROUP_SECONDS = Pair{String, Float64}[]
 
-selected = isempty(ARGS) ? GROUPS : ARGS
-unknown = setdiff(selected, GROUPS)
+excluded = split(get(ENV, "ALMANAC_TEST_EXCLUDE", ""))
+selected = isempty(ARGS) ? setdiff(GROUPS, excluded) : ARGS
+unknown = setdiff(union(selected, excluded), GROUPS)
 isempty(unknown) || error("unknown test group(s) $(unknown); the groups are $(GROUPS)")
+isempty(ARGS) && foreach(g -> push!(SKIPPED, (g, "left out by ALMANAC_TEST_EXCLUDE")), intersect(GROUPS, excluded))
 
 println("Almanac tests: Julia ", VERSION, ", ", Threads.nthreads(), " thread(s), seed ", SEED)
 Threads.nthreads() == 1 && printstyled(
