@@ -60,7 +60,7 @@ cvpool
 poolversion
 ```
 
-## Names and codes
+## Body and frame names
 
 ```@docs
 bodn2c

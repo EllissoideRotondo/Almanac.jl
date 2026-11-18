@@ -59,7 +59,7 @@ leo = keplerian_orbit(et, 399, 1; sma=r, ecc=0.001, inc=deg2rad(98.0), raan=0.0,
 round(leo.period / 60; digits=2)
 ```
 
-## Propagate
+## Propagate by two-body motion
 
 [`two_body`](@ref) moves an orbit to a new epoch (not by a step), forward or back, by Kepler motion without perturbations. The kernels of the manual hold two-body motion, so the result matches the SPK six hours later, here to a few µm (km, km/s):
 
@@ -70,7 +70,7 @@ q = orbit("PROBE", later, "J2000", "NONE", "EARTH")
 maximum(abs.(p.state - q.state))
 ```
 
-## Relative motion
+## Compute a relative state
 
 [`relative_state`](@ref) gives the state of one orbit minus a chief orbit, in a local frame of the chief: `:ric` (radial, in-track, cross-track), `:vnc`, `:rcn` or `:tnw`, whose axes [`local_frame`](@ref) lists. Both orbits must have the same epoch, center and frame, so advance both:
 
@@ -81,20 +81,20 @@ rel = relative_state(deputy, chief, :ric)
 (radial = rel[1], in_track = rel[2], cross_track = rel[3])
 ```
 
-## Limits
+## Limits of the orbit calls
 
 - The frame is not checked. Keplerian, B-plane and local-frame results assume an inertial frame and are wrong, without an error, in a rotating one such as `IAU_EARTH`.
 - The velocity of `relative_state` (`rel[4:6]`) is the rate of the offset seen in the rotating local frame, not the difference of the inertial velocities; it is not zero when those are equal. Orbits of different epoch, center or frame throw `SpiceError(:badarg)`.
 - A circular orbit (`ecc < 1e-11`) has no true anomaly: `:ta`, `:ma`, `:ea`, `:fpa`, `:tlong`, `:equinoctial_lambda`, the Brouwer elements, `keplerian`, [`with_element`](@ref) (except for `:ta`), [`with_apsides`](@ref) and `two_body` throw. The state, `:sma`, `:ecc`, `:inc`, `:raan` and `:aop` (0 for an exactly circular state), `:aol` (if not equatorial), `:period`, the altitudes, the local frames and `relative_state` still work. A `ForwardDiff.Dual` state on an exactly circular orbit throws for `:ecc` too.
 - Brouwer mean elements need an elliptic orbit about the Earth (399) with a periapsis radius above 3000 km; the B-plane elements need a hyperbola.
 
-## More calls
+## Apsides, flybys and other elements
 
 [`with_apsides`](@ref) sets the apsis radii, [`vinf_periapsis`](@ref) and [`vinf_turn_angle`](@ref) give the flyby geometry of a hyperbola, and `element` also returns B-plane, equinoctial and Brouwer mean elements.
 
-## Dual numbers
+## Differentiate an orbit
 
-A `ForwardDiff.Dual` epoch, state or element passes through [these calls](@ref "Dual-number epochs"). The derivative of the position of `two_body` with respect to the epoch is the velocity:
+A `ForwardDiff.Dual` epoch, state or element passes through [these calls](@ref "Differentiate with ForwardDiff"). The derivative of the position of `two_body` with respect to the epoch is the velocity:
 
 ```@example orbits
 using ForwardDiff
@@ -105,4 +105,4 @@ maximum(abs.(v - p.velocity))
 
 The derivative throws where the value throws, as for the anomalies at `ecc < 1e-11`. A dual state of exactly zero radius, velocity, angular momentum or eccentricity vector throws `SpiceError(:degeneratecase)`, where a `Float64` state gives the value 0. The derivative of `:ta`, and of the calls built on it, is NaN at an exact apsis, where the arc cosine has an infinite slope; the value is not NaN.
 
-The other AD packages differentiate the same calls; see [Other AD packages](@ref).
+The other AD packages differentiate the same calls; see [Differentiate with other AD packages](@ref).

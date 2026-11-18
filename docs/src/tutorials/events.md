@@ -8,7 +8,7 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
-## Windows
+## Define the search window
 
 A [`Window`](@ref) is a sorted list of disjoint intervals. [`wninsd!`](@ref) adds an interval, [`wncard`](@ref) counts the intervals, and [`wnfetd`](@ref) returns one of them, counting from 1.
 
@@ -21,7 +21,7 @@ wninsd!(search, start, start + 2 * 86400.0)
 wncard(search)
 ```
 
-## The step
+## Choose the step
 
 A search samples its quantity at the given step, then refines each change to the
 tolerance `tol` (s), whose default comes from [`gfstol`](@ref) and is 1 µs unless
@@ -34,7 +34,7 @@ shorter than:
 - for an extremum (`"LOCMIN"`, `"LOCMAX"`, `"ABSMIN"`, `"ABSMAX"`): the shortest
   interval on which the quantity is monotone.
 
-## Eclipses
+## Find eclipses
 
 [`gfoclt`](@ref) finds when one body hides another from an observer. `PROBE` is in the shadow of the Earth when the Earth occults the Sun as seen from `PROBE`. The arguments are the occultation type (`"ANY"` for partial or full), the name, shape and body-fixed frame of the front body, the same for the back body, the correction, the observer, the step and the window. The first eclipse lasts less than two minutes, hence the step of 60 s; a step of 300 s can miss it.
 
@@ -48,7 +48,7 @@ for i in 1:wncard(eclipses)
 end
 ```
 
-## A condition on a coordinate
+## Search on a coordinate
 
 [`gfposc`](@ref) searches on one coordinate of a position, here a latitude above 20°. After the relation come the reference value, the adjustment (used only for absolute extrema) and the step. [`wnsumd`](@ref)`[1]` is the total duration.
 

@@ -5,16 +5,22 @@ This page loads kernels, converts a time, computes a state and a rotation, finds
 ```@setup first
 using Almanac
 include(joinpath(@__DIR__, "..", "fixture.jl"))
-kernels = DocKernels.write(mktempdir())
 ```
 
 ## Load kernels
 
-[`furnsh`](@ref) loads a kernel of any kind, including a meta-kernel, and [`ktotal`](@ref) counts the loaded kernels. Here `kernels` holds three paths: leap seconds, constants of the Sun and the Earth, and an SPK.
+This page runs on [the example kernels](@ref "The example kernels") of the manual. `DocKernels.write`, defined in [`docs/fixture.jl`](https://github.com/Orbitology/Almanac.jl/blob/main/docs/fixture.jl), writes them into a directory and returns their three paths: leap seconds, constants of the Sun and the Earth, and an SPK with the Earth and the spacecraft `PROBE`.
 
 ```@example first
 using Almanac
 
+kernels = DocKernels.write(mktempdir())
+basename.(kernels)
+```
+
+[`furnsh`](@ref) loads a kernel of any kind, including a meta-kernel, and [`ktotal`](@ref) counts the loaded kernels:
+
+```@example first
 foreach(furnsh, kernels)
 ktotal("ALL")
 ```
@@ -82,7 +88,7 @@ radius, lon, lat = reclat(point)
 
 ## Search for an event
 
-The `gf` calls search a [`Window`](@ref) of time for the epochs where a quantity meets a condition, and return a `Window`. The search below finds the local minima of the distance over one day, with the relation `"LOCMIN"`. After the relation come the reference value and the adjustment, both unused for `"LOCMIN"`, and the step of 600 s; [The step](@ref) explains how to choose it.
+The `gf` calls search a [`Window`](@ref) of time for the epochs where a quantity meets a condition, and return a `Window`. The search below finds the local minima of the distance over one day, with the relation `"LOCMIN"`. After the relation come the reference value and the adjustment, both unused for `"LOCMIN"`, and the step of 600 s; [Choose the step](@ref) explains how to pick it.
 
 ```@example first
 search = Window()
@@ -119,7 +125,7 @@ catch err
 end
 ```
 
-Missing SPK data throw the subtype [`SpkInsufficientDataError`](@ref), whose fields name the bodies and the epoch, and say whether the missing body has data at other epochs. [Conventions](@ref "Errors") gives the other rules for errors.
+Missing SPK data throw the subtype [`SpkInsufficientDataError`](@ref), whose fields name the bodies and the epoch, and say whether the missing body has data at other epochs. [Conventions](@ref "Errors and `found` flags") gives the other rules for errors.
 
 ## Next steps
 

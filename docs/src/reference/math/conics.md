@@ -2,7 +2,7 @@
 
 The [rules for all mathematics calls](@ref "Rules for all mathematics calls") hold on this page.
 
-## Conic orbits
+## Conic elements and two-body propagation
 
 ```@docs
 conics
@@ -37,7 +37,7 @@ rquad
 diags2
 ```
 
-## Hexadecimal strings
+## Doubles as hexadecimal strings
 
 A double is written as hexadecimal digits of a mantissa in [1/16, 1) and an exponent of
 16.
@@ -47,7 +47,7 @@ dp2hx
 hx2dp
 ```
 
-## Constants
+## Mathematical and physical constants
 
 ```@docs
 clight

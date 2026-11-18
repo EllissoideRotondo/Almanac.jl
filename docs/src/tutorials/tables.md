@@ -8,7 +8,7 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
-## Build and evaluate
+## Build and evaluate an ephemeris table
 
 ```@example tab
 using Almanac
@@ -37,11 +37,11 @@ An epoch outside the table throws `SpiceError(:spkinsuffdata)`, not the [`SpkIns
 
 ## How the table is built
 
-For a geometric position in an inertial frame from SPK type 2 data, as in the planetary ephemerides, the table copies the [records](@ref "Smoothness") of the kernel and agrees with `spkpos` to rounding. Otherwise (a rotating frame, an aberration correction, other SPK types) it interpolates, doubling the number of intervals until the measured error is below `tol`, and `maxerr` records that error. [`ephemeris_table`](@ref) gives the exact conditions.
+For a geometric position in an inertial frame from SPK type 2 data, as in the planetary ephemerides, the table copies the [records](@ref "Smoothness at record boundaries") of the kernel and agrees with `spkpos` to rounding. Otherwise (a rotating frame, an aberration correction, other SPK types) it interpolates, doubling the number of intervals until the measured error is below `tol`, and `maxerr` records that error. [`ephemeris_table`](@ref) gives the exact conditions.
 
 The velocity of a table is always the derivative of its position, so it can differ from the velocity of `spkezr` with an `LT` correction, or for SPK types that store the velocity separately.
 
-## Rotations
+## Rotation tables
 
 [`rotation_table`](@ref) does for `pxform` what `ephemeris_table` does for `spkpos`, by interpolating the nine elements of the matrix. [`table_rotation`](@ref) returns the matrix, and [`table_rotation_jet`](@ref) the matrix and its derivatives.
 
@@ -89,7 +89,7 @@ spkcls(handle)
 spkobj(path)
 ```
 
-## On a GPU
+## Evaluate on a GPU
 
 The table is parametric in its array type, so Adapt.jl moves it to a device, and its evaluation is plain arithmetic that compiles in a GPU kernel. Epochs and bounds stay `Float64` even with `Float32` coefficients, because a `Float32` count of seconds past J2000 resolves only about a minute. Below, `epochs` is a vector of `Float64`.
 
@@ -100,7 +100,7 @@ gpu = adapt(CuArray, tab)                   # `cu(tab)` gives Float32 coefficien
 states = map(et -> @inbounds(table_state(gpu, et)), CuArray(epochs))
 ```
 
-## In a CasADi model
+## Use a table in a CasADi model
 
 [CasADiCodegen.jl](https://github.com/EllissoideRotondo/CasADiCodegen.jl) generates Julia code from a CasADi model; its `callback` embeds a Julia function with the derivatives CasADi needs. Since [`table_jet`](@ref) returns static vectors, a table gives the position of a body to generated code without allocation, and its derivatives to the Jacobian. A sketch (not a complete program) for an Earth satellite perturbed by the Moon, where `t0`, `t1`, `GM_EARTH` and `GM_MOON` come from the application:
 

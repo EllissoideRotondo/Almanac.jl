@@ -42,7 +42,7 @@ must be bit-identical to the CSPICE library on every platform.
   [orbits](@ref "Orbits and relative motion").
 - The **Manual** explains how Almanac.jl relates to CSPICE, and how it was checked.
   Read [Conventions](@ref) before porting a CSPICE or SPICE.jl program.
-  [Coverage](@ref), [Validation](@ref) and [Validation of the orbit calls](@ref) say
+  [Coverage of CSPICE](@ref), [Validation](@ref) and [Validation of the orbit calls](@ref) say
   what is available and how it was tested.
 - The **API reference** documents every exported call, grouped by subject.
 
@@ -52,7 +52,7 @@ The examples run on three small kernels that the manual writes itself: leap seco
 constants of the Sun and the Earth with a spacecraft named `PROBE`, and two-body orbits
 of the Earth and of `PROBE`. The positions are therefore not those of the real bodies.
 
-## Contributing
+## Reporting issues
 
 Report defects and ask questions in the
 [issues](https://github.com/Orbitology/Almanac.jl/issues). Almanac.jl is not developed

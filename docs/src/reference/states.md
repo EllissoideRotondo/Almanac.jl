@@ -1,6 +1,6 @@
 # States and aberration
 
-## States
+## Positions and states
 
 ```@docs
 spkezr
@@ -12,7 +12,7 @@ spkezp
 spkgps
 ```
 
-## Derivatives
+## Derivatives of any order
 
 ```@docs
 spkder
@@ -41,20 +41,20 @@ spkcvo
 spkcvt
 ```
 
-## Prepared queries
+## Prepared state queries
 
 ```@docs
 state_query
 StateQuery
 ```
 
-## Bodies from functions of the program
+## Bodies defined by Julia functions
 
 ```@docs
 add_ephemeris!
 ```
 
-## Tables
+## Tables for inner loops
 
 ```@docs
 EphemerisTable

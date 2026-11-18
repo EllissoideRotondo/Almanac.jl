@@ -8,7 +8,7 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
-## A body
+## Define a body
 
 The function takes an epoch (ET) and returns the position (km) and the velocity (km/s) relative to the center, in the given frame. Here, a circular orbit of radius 8000 km around the Earth:
 
@@ -33,7 +33,7 @@ The body acts as if it were a file loaded at the time of the call. It takes prio
 kinfo("my orbit")                           # (type, meta-kernel, handle)
 ```
 
-## A frame
+## Define a frame
 
 The function returns the rotation from the new frame to its relative frame, the matrix of [`pxform`](@ref)`(new, relative, et)`. The other arguments are the name and the ID code of the new frame, its center and its relative frame:
 
@@ -46,7 +46,7 @@ spkpos(-1000, t0 + 600.0, "ORBIT_FIXED", "NONE", "EARTH")[1]
 
 In that frame the spacecraft stays on the X axis.
 
-## Requirements on the function
+## Epoch types and thread safety
 
 The epoch passed to the function is not always a `Float64`. It is a `ForwardDiff.Dual` when the caller differentiates, and an internal Taylor number when a call needs derivatives of order 2 or more (an `LT+S` state of an observer, [`sxform`](@ref) of a frame). Plain arithmetic and the functions of `Base` (`sin`, `cos`, `sqrt`, ...) work with all of them. A function that branches on the epoch, or calls code that accepts only `Float64`, works only in the calls that need no derivative of order 2, such as geometric states and [`pxform`](@ref), and only with a `Float64` epoch.
 

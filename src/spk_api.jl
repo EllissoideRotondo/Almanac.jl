@@ -399,7 +399,7 @@ light time, as
 The call does not allocate when each body and the frame is an integer ID or a name in
 upper case with single blanks, such as `"MARS BARYCENTER"`; a name in another form is
 converted first, which allocates. With ForwardDiff loaded, `et` can be a dual number
-(see [Dual-number epochs](@ref)).
+(see [Differentiate with ForwardDiff](@ref)).
 
 The SPK segments connect a body to its center, and that center to the next one. The
 call needs such a chain from `targ` and from `obs` to a common body.

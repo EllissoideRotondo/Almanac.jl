@@ -28,7 +28,7 @@ ephemerides, this is the exact derivative. For the types that store the velocity
 separately, such as type 9, order 1 of a geometric position is the stored velocity, as
 in `spkezr`, and so is the derivative that ForwardDiff returns for a dual-number epoch.
 
-### Positions
+### Derivatives of positions
 
 With `s = -1` for reception and `s = +1` for transmission, `spkder` differentiates, in
 the barycentric inertial frame,
@@ -60,7 +60,7 @@ The velocity of `spkezr` differs from order 1 for two reasons:
 - For `+S`, CSPICE takes the acceleration of the observer from a difference of
   velocities ±1 s apart, which gives about 1e-13 relative.
 
-### Rotations
+### Derivatives of rotations
 
 | Frame | `pxder` differentiates | Derivative block of `sxform` |
 |---|---|---|
@@ -82,7 +82,7 @@ the seconds per century, so its rate block misses that term. [`tisbod`](@ref),
 constants of the NAIF test suite, CSPICE differs from a central difference of `tipbod`
 by 1.1e-9, and Almanac.jl by 1.6e-13. Degrees 1 and 2 agree to rounding.
 
-### Smoothness
+### Smoothness at record boundaries
 
 For polynomial data (SPK types 2, 3, 8, 9, 12, 13, 14, 18, 20 and binary PCK), every
 order is the exact derivative of the polynomial. For other types and for frames defined
@@ -107,7 +107,7 @@ from the method of CSPICE:
 - The rotation angle of the Earth in `IAU_EARTH` grows to about 50,000 rad this
   century. Its rounding alone moves the Sun by some meters in that frame.
 - An aberration-corrected position has millimeter steps at the boundaries between SPK
-  [records](@ref "Smoothness"), because target and
+  [records](@ref "Smoothness at record boundaries"), because target and
   observer are evaluated at different epochs and cross a boundary at different times.
 - `spkezr` and `spkpos` differ by up to 2e-11 relative with the converged corrections
   (`CN`, `CN+S`), because they stop iterating by different rules.

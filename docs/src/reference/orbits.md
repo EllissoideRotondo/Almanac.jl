@@ -9,7 +9,7 @@ Orbit
 orbit
 ```
 
-## Elements
+## Reading elements
 
 ```@docs
 element
@@ -40,7 +40,7 @@ These are returned instead of an error:
 - `:period` is 0 and `:ta_dot` is `Inf` on an orbit that is not elliptic.
 - [`keplerian_orbit`](@ref) changes the sign of a negative `ecc`, and of an `sma` of the wrong sign for `ecc`.
 
-### Table
+### Units and ANISE names
 
 ```@eval
 using Almanac, Markdown
@@ -88,7 +88,7 @@ rows = ["| `:$n` | $(info[n][1]) | `$(info[n][2])` |" for n in elements()]
 Markdown.parse(join(["| Name | Unit | ANISE |", "|:--|:--|:--|", rows...], "\n"))
 ```
 
-## Building and editing
+## Building and changing orbits
 
 ```@docs
 keplerian_orbit
@@ -96,7 +96,7 @@ with_element
 with_apsides
 ```
 
-## Propagation
+## Two-body propagation
 
 ```@docs
 two_body

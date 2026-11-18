@@ -24,7 +24,7 @@ makedocs(;
             "tutorials/orbits.md",
         ],
         "Manual" => [
-            "Coming from CSPICE" => [
+            "Relation to CSPICE" => [
                 "manual/conventions.md",
                 "manual/numerics.md",
                 "manual/additions.md",

@@ -8,7 +8,7 @@ counts from 0. Sibling calls can throw different kinds for one condition, such a
 wrong data type or an entry that was never written, because each kind is the one of the
 CSPICE routine that the call ports; see [`SpiceError`](@ref).
 
-## Reading a file
+## Reading EK files
 
 ```@docs
 EKColumnAttr
@@ -22,7 +22,7 @@ ekrced
 ekrcei
 ```
 
-## Writing
+## Writing EK files
 
 ```@docs
 EKFastLoad
@@ -46,7 +46,7 @@ ekacli
 ekffld
 ```
 
-## Queries
+## EK queries
 
 ```@docs
 EKResult

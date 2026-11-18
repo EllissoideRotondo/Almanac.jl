@@ -6,7 +6,7 @@ result, and the calls of the second section combine windows. Sibling calls can t
 different kinds for one condition, because each kind is the one of the CSPICE routine
 that the call ports; see [`SpiceError`](@ref).
 
-## Searches
+## Geometry finder searches
 
 ```@docs
 gfdist
@@ -31,7 +31,7 @@ gfocce
 gffove
 ```
 
-## Windows
+## Window operations
 
 ```@docs
 Window

@@ -4,7 +4,7 @@ Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a 
 
 ## Write an SPK
 
-[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded; [Conventions](@ref "Files") says what a context then sees.
+[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded; [Conventions](@ref "File handles and files open for write") says what a context then sees.
 
 Type 5 interpolates states with two-body motion, so a few states per revolution are enough. [`conics`](@ref) computes them from orbital elements.
 
@@ -30,7 +30,7 @@ spkobj(path)                                 # the bodies in the file
 
 As in CSPICE, the file changes on disk at each write call, except for type 14, whose writer ([`spk14b`](@ref), [`spk14a`](@ref), [`spk14e`](@ref)) collects records and writes the segment at the end.
 
-## Inspect a file
+## Inspect the file
 
 [`spkobj`](@ref) and [`spkcov`](@ref) read the bodies and the coverage of a file, which need not be loaded.
 
@@ -50,7 +50,7 @@ end
 dafcls(daf)
 ```
 
-## Use the file
+## Load the file
 
 A body without a name is given by its ID code, as an integer or as a string. The epoch is a number, so no leap-seconds kernel is needed.
 
@@ -61,7 +61,7 @@ kclear()
 state[1:3]                                   # km
 ```
 
-## Other writers
+## Writers for each kind of kernel
 
 | Kernel | Open | Write | Close |
 |---|---|---|---|

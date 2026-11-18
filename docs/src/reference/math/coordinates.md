@@ -2,7 +2,7 @@
 
 The [rules for all mathematics calls](@ref "Rules for all mathematics calls") hold on this page.
 
-## Coordinates
+## Coordinate conversions
 
 ```@docs
 reclat

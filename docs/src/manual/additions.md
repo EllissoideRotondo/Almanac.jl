@@ -5,8 +5,8 @@ These features have no counterpart in CSPICE:
 - **Derivatives of any order** of states and rotations: [`spkder`](@ref),
   [`pxder`](@ref). See [Time derivatives](@ref).
 - **Automatic differentiation** through ForwardDiff.jl ([dual-number
-  epochs](@ref "Dual-number epochs")) and through Enzyme.jl, Mooncake.jl, Zygote.jl,
-  ReverseDiff.jl and Tracker.jl ([other AD packages](@ref "Other AD packages")).
+  epochs](@ref "Differentiate with ForwardDiff")) and through Enzyme.jl, Mooncake.jl, Zygote.jl,
+  ReverseDiff.jl and Tracker.jl ([other AD packages](@ref "Differentiate with other AD packages")).
 - **Queries resolved once**, for many epochs: [`state_query`](@ref),
   [`rotation_query`](@ref). See [Contexts and threads](@ref).
 - **An aberration correction parsed once**: [`Aberration`](@ref). After

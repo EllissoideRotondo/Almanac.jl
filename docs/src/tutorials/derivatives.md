@@ -8,7 +8,7 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
-## Direct calls
+## Derivatives from `spkder` and `pxder`
 
 [`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and, with upper-case names, the call does not allocate.
 
@@ -31,7 +31,7 @@ rotation, rate = pxder("J2000", "IAU_EARTH", et, Val(1))
 rate[1, 1]                                  # 1/s
 ```
 
-## Dual-number epochs
+## Differentiate with ForwardDiff
 
 With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in these calls:
 
@@ -43,7 +43,7 @@ With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in these calls
 - [orbits](@ref "Orbits and relative motion"): `orbit`, and `keplerian_orbit` with dual elements;
 - an `Orbit` with a dual epoch or state, in `element`, `keplerian`, `with_element`, `with_apsides`, `two_body`, `local_frame`, `local_frame_state`, `relative_state`, `vinf_periapsis` and `vinf_turn_angle`.
 
-The orbit calls have [limits of their own](@ref "Dual numbers").
+The orbit calls have [limits of their own](@ref "Differentiate an orbit").
 
 The other calls (`limbpt`, `termpt`, `tangpt`, `occult`, `fovtrg`, `et2lst`, ...) throw `SpiceError(:badarg)` for a `Dual`. Event searches take windows of `Float64` epochs.
 
@@ -56,7 +56,7 @@ apparent(t) = spkpos("PROBE", t, "IAU_EARTH", "LT+S", "EARTH")[1]
 ForwardDiff.derivative(apparent, et)        # km/s in the rotating frame
 ```
 
-## Other AD packages
+## Differentiate with other AD packages
 
 The same calls can be differentiated with Enzyme.jl, Mooncake.jl, Zygote.jl (and other users of ChainRulesCore.jl), ReverseDiff.jl and Tracker.jl. Loading the package is enough: an extension gives it the analytical derivatives, so no package has to differentiate the evaluators, and every package returns the derivative that ForwardDiff returns. [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) selects a package by its backend type:
 
@@ -81,6 +81,6 @@ DI.gradient(radius, AutoZygote(), x)        # km per element unit
 
 Reverse mode pays off when one number depends on many epochs, as in the gradient over two epochs above. For a second derivative, run ForwardDiff over one of Zygote, ReverseDiff, or Enzyme in forward mode: `DI.SecondOrder(AutoForwardDiff(), AutoZygote())`. Mooncake and Tracker do not take dual numbers, and Enzyme in reverse mode refuses them. ReverseDiff must run without a compiled tape (`AutoReverseDiff(compile=false)`, the default), because a compiled tape keeps the segment and the record of its first epoch.
 
-## Order 1 and the velocity of `spkezr`
+## Where order 1 differs from the velocity of `spkezr`
 
 For a geometric position, order 1 is the velocity of `spkezr`. With the `LT` corrections, CSPICE approximates the rate of the light time, so the two differ by about 1e-8 relative for the Moon seen from the Earth. For some frames, `pxder` likewise differs from the rate block of `sxform`. [Exact derivatives and the rates of CSPICE](@ref) gives each case.

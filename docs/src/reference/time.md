@@ -6,7 +6,7 @@ message of the CSPICE routine that the call ports: `:kernelvarnotfound` from
 `:missingtimeinfo` from [`et2utc`](@ref), [`timout`](@ref), [`unitim`](@ref) and the
 spacecraft clock calls such as [`sct2e`](@ref).
 
-## Conversion
+## Conversion and formatting
 
 ```@docs
 deltet
@@ -41,14 +41,14 @@ scpart
 sctype
 ```
 
-## Local time
+## Local solar time
 
 ```@docs
 et2lst
 lspcn
 ```
 
-## Constants
+## Epochs and time constants
 
 ```@docs
 j1900

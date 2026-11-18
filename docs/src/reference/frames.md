@@ -8,14 +8,14 @@ pxfrm2
 sxform
 ```
 
-## Prepared rotations
+## Prepared rotation queries
 
 ```@docs
 rotation_query
 RotationQuery
 ```
 
-## Frames from functions of the program
+## Frames defined by Julia functions
 
 ```@docs
 add_frame!
@@ -39,7 +39,7 @@ bltfrm
 kplfrm
 ```
 
-## Orientation from C-kernels
+## Orientation from CK files
 
 ```@docs
 ckgp
@@ -53,7 +53,7 @@ ckfrot
 ckfxfm
 ```
 
-## Records of C-kernel segments
+## Records of CK segments
 
 These calls read one segment of an open CK file, given by its descriptor from a DAF
 search ([`dafbfs`](@ref), [`daffna`](@ref), [`dafgs`](@ref)).

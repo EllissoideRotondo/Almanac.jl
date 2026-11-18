@@ -30,7 +30,7 @@ what differs.
   [`dsksrf!`](@ref)) take it as the first argument; CSPICE takes it last. SPICE.jl
   also puts it first, except in `ckobj!` and `ckcov!`.
 
-## Contexts
+## Contexts in place of global state
 
 Loaded kernels, the kernel pool and settings such as [`timdef`](@ref) belong to a
 [`SpiceContext`](@ref), not to the process. A call that needs them takes a context as
@@ -39,7 +39,7 @@ an optional first argument, written `[ctx,]` in the reference, and uses
 `KernelSet`, the immutable snapshot of a context that `Almanac.kernelset(ctx)` returns.
 [Contexts and threads](@ref) shows contexts in use.
 
-## Errors
+## Errors and `found` flags
 
 - A call that fails throws a [`SpiceError`](@ref), in place of setting the error flag
   of CSPICE. Its `kind` is the CSPICE short message as a lower-case symbol
@@ -52,7 +52,7 @@ an optional first argument, written `[ctx,]` in the reference, and uses
   [`bodn2c`](@ref) for an unknown name, [`ckgp`](@ref) without pointing data. A call
   that must return a value throws instead, as [`gdpool`](@ref) for a missing variable.
 
-## Files
+## File handles and files open for write
 
 - A file handle is an object, a [`DAFHandle`](@ref) or a [`DASHandle`](@ref), passed
   to every call. No call acts on a hidden "current" file.
