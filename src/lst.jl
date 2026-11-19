@@ -100,7 +100,7 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     system = uppercase(strip(type))
     if system == "PLANETOGRAPHIC"
         g = _lst_sense(ks, body) * Float64(lon)
-        x, y = cos(g), sin(g)
+        y, x = sincos(g)
         mylong = (x == 0.0 && y == 0.0) ? 0.0 : atan(y, x)
     elseif system == "PLANETOCENTRIC"
         mylong = Float64(lon)

@@ -209,6 +209,38 @@ function main(args)
     end
     write_counts(joinpath(results, "tally.tsv"), total, COUNTS)
     write_ids(joinpath(results, "ids.tsv"), ids)
+    # the calls for which CSPICE could not be called: their mismatches are not checked
+    # against CSPICE, so a fault of a mapping shows here and not as a disagreement
+    nof = 0
+    open(joinpath(results, "oracle_failures.tsv"), "w") do io
+        for k in 1:length(groups)
+            f = joinpath(results, "worker$k", "oracle_failures.tsv")
+            isfile(f) || continue
+            for l in eachline(f)
+                println(io, l)
+                nof += parse(Int, split(l, '\t')[2])
+            end
+        end
+    end
+    nof > 0 && println("the oracle failed for $nof calls: see $(joinpath(results, "oracle_failures.tsv"))")
+    # the skipped calls by reason, merged over the workers
+    reasons = ["nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle", "no_counterpart"]
+    skips = Dict{String, Dict{String, Int}}()
+    for k in 1:length(groups)
+        f = joinpath(results, "worker$k", "skips.tsv")
+        isfile(f) || continue
+        lines = readlines(f)
+        head = split(lines[1], '\t')
+        for l in lines[2:end]
+            p = split(l, '\t')
+            d = get!(skips, String(p[1]), Dict{String, Int}())
+            for j in 2:length(p)
+                d[String(head[j])] = get(d, String(head[j]), 0) + parse(Int, p[j])
+            end
+        end
+    end
+    write_counts(joinpath(results, "skips.tsv"), skips, reasons)
+    println("skipped by reason: ", join(["$r $(sum((get(d, r, 0) for d in values(skips)); init = 0))" for r in reasons], ", "))
     sums = Dict(k => sum(get(c, k, 0) for c in values(total)) for k in COUNTS)
     println(join(["$k $(sums[k])" for k in COUNTS], ", "))
     baseline_path = joinpath(HERE, "baseline.tsv")

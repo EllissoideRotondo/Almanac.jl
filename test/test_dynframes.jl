@@ -194,7 +194,7 @@ group(
             check!(fails, haskey(class == 5 ? ks.dyn : ks.switch, Int32(id)), "in the snapshot", name)
         end
         @test isempty(fails)
-        @test length(ks.dyn) + length(ks.switch) == length(DynFix.FRAMES)
+        @test length(ks.dyn) + length(ks.switch) == length(DynFix.FRAMES) + length(DynFix.BASE_FRAMES)
         @test all(d -> d.errkind === :none, values(ks.dyn))
         @test all(d -> d.errkind === :none, values(ks.switch))
         # A snapshot without a dynamic frame has no inner snapshot.
@@ -250,6 +250,95 @@ group(
                 "matrix; sx: derivative block, relative; ezr: relative)"
         )
         foreach(measured, rows)
+    end
+
+    # Regression: `zzdynfrm_` builds a two-vector frame with `vhat_`, `dvhat_` and
+    # `ducrss_`, `frmchg_` joins the links with `zzmsxf_`, and `spkgeo_` applies the
+    # state transformation with `mxvg_`. With the same arithmetic the results are those
+    # of CSPICE to the last bit for these frames, whose vectors come from the Chebyshev
+    # segments of de440s.bsp and need no sine or cosine (which differ in the last bit
+    # between Julia and the C library). The old arithmetic differed by about 1e-16
+    # relative in the matrix and by up to 5e-9 in the derivative block. Own random
+    # stream, so that the cases after this one keep their data.
+    @apart @testset "two-vector frames and spkezr to the last bit" begin
+        r2 = MersenneTwister(SEED + 1701)
+        fails = Failures()
+        for name in ("DT_GSE", "DT_GSE_LTS", "DT_GSE_INERTIAL"), et in random_epochs(r2, 10, -span, span)
+            check!(fails, pxform(ctx, name, "J2000", et) == SPICE.pxform(name, "J2000", et), "pxform", name, et)
+            check!(fails, sxform(ctx, "J2000", name, et) == SPICE.sxform("J2000", name, et), "sxform", name, et)
+            for (targ, obs) in (("MOON", "EARTH"), ("SUN", "MOON"))
+                s = spkezr(ctx, targ, et, name, "NONE", obs)[1]
+                check!(fails, s == SPICE.spkezr(targ, et, name, "NONE", obs)[1], "spkezr", name, targ, et)
+            end
+        end
+        @test isempty(fails)
+    end
+
+    # An of-date frame and a frame with the inertial rotation state whose base is a PCK
+    # frame: `zzdynfrm_` builds both relative to J2000 and goes to the base and back
+    # with the state transformation of the base. In the derivative block the rotation
+    # rate of the Earth (7.3e-5 rad/s) then cancels, in both engines, down to the rate
+    # of the precession (8e-12 rad/s) or to zero, so the difference is measured relative
+    # to that rate. Measured on 600 epochs for each frame and start frame: matrix
+    # elements within 1.4e-15 of CSPICE, derivative block within 5.6e-16 of the rate
+    # (4.1e-20 rad/s), from the last bit of a sine or cosine. Own random stream.
+    @apart @testset "of-date and inertial-state frames on a PCK base frame" begin
+        r4 = MersenneTwister(SEED + 1703)
+        rate = 7.292115e-5
+        dp = 0.0; ds = 0.0
+        for (name, family, center) in DynFix.BASE_FRAMES, from in ("J2000", "IAU_MOON")
+            for et in random_epochs(r4, nepoch, -span, span)
+                dp = max(dp, maximum(abs.(pxform(ctx, from, name, et) .- SPICE.pxform(from, name, et))))
+                a6 = sxform(ctx, from, name, et)
+                b6 = SPICE.sxform(from, name, et)
+                dp = max(dp, maximum(abs.(a6[1:3, 1:3] .- b6[1:3, 1:3])))
+                ds = max(ds, df_rel(a6[4:6, 1:3], b6[4:6, 1:3], rate))
+            end
+        end
+        measured(@sprintf("  frames on a PCK base: px=%.1e sx=%.1e of the rotation rate of the base", dp, ds))
+        @test dp <= DF_DEFAULT_TOL[1]
+        @test ds <= 5.0e-15
+    end
+
+    # Regression: the state transformations of the of-date frames come, as in
+    # `zzdynfrm_`, from the angles and their analytic rates of `zzeprc76_`, `zzenut80_`
+    # and `zzmobliq_` through `eul2xf_`; they were the derivative of a `Taylor`
+    # evaluation, which differed in the last bits of every derivative block. The f2c
+    # routines are called directly. `zzmobliq_` has no sine or cosine and is compared
+    # to the last bit. The others use `sin` and `cos`, which differ in the last bit
+    # between Julia and the C library on some arguments; with the C library swapped in
+    # all of them agree to the last bit. Measured with Julia's functions (500 epochs):
+    # derivative block equal to the last bit for precession 500 (old arithmetic 1),
+    # for nutation 386 (old 0). Own random stream.
+    @apart @testset "of-date rates as zzeprc76_, zzenut80_, zzmobliq_" begin
+        r3 = MersenneTwister(SEED + 1702)
+        n = 200
+        nprec = 0
+        nnut = 0
+        fails = Failures()
+        for et in random_epochs(r3, n, -span, span)
+            mob = Ref(0.0); dmob = Ref(0.0)
+            ccall((:zzmobliq_, SPICE.libcspice), Cint, (Ref{Float64}, Ref{Float64}, Ref{Float64}), et, mob, dmob)
+            check!(fails, Almanac._dyn_mobliq_state(et) == (mob[], dmob[]), "zzmobliq_", et)
+            for (sym, f) in ((:zzeprc76_, Almanac._dyn_prec_state), (:zzenut80_, Almanac._dyn_enut80_state))
+                x = zeros(36)
+                if sym === :zzeprc76_
+                    ccall((:zzeprc76_, SPICE.libcspice), Cint, (Ref{Float64}, Ptr{Float64}), et, x)
+                else
+                    ccall((:zzenut80_, SPICE.libcspice), Cint, (Ref{Float64}, Ptr{Float64}), et, x)
+                end
+                x = reshape(x, 6, 6)       # column major, as Fortran stores it
+                m = f(et)
+                d = [m[i, j].d[1] for i in 1:3, j in 1:3]
+                exact = d == x[4:6, 1:3]
+                sym === :zzeprc76_ ? (nprec += exact) : (nnut += exact)
+                rel = maximum(abs.(d .- x[4:6, 1:3])) / maximum(abs, x[4:6, 1:3])
+                check!(fails, rel <= 1.0e-14, "rate block", sym, et, rel)
+            end
+        end
+        @test isempty(fails)
+        @test nprec >= 0.9 * n
+        @test nnut >= 0.5 * n
     end
 
     @apart @testset "other corrections, spkpos, and frame to frame" begin
@@ -476,8 +565,11 @@ group(
             got == want || @info "error kind" name got want
             @test got == want
             @test got == kind
-            @test df_neo_kind(() -> sxform(ctx2, "J2000", name, et)) == kind
-            @test df_neo_kind(() -> spkezr(ctx2, 301, et, name, "LT+S", 399)) == kind
+            # a state transformation checks the correction with `zzprscor_` in CSPICE
+            skind = kind === :spkinvalidoption ? :invalidoption : kind
+            @test df_neo_kind(() -> sxform(ctx2, "J2000", name, et)) ==
+                df_oracle_kind(:sxform_c, "J2000", name, et) == skind
+            @test df_neo_kind(() -> spkezr(ctx2, 301, et, name, "LT+S", 399)) == skind
             if kind === :none
                 @test maximum(abs.(pxform(ctx2, "J2000", name, et) .- SPICE.pxform("J2000", name, et))) <= 5.0e-10
             end

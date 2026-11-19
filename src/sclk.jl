@@ -111,6 +111,16 @@ end
 @noinline function _sclk_missing(ks::KernelSet, sc::Integer)
     t = sctype(ks, sc)
     t == 1 || throw(SpiceError(:notsupported, "clock type $t of the clock $sc is not supported"))
+    suffix = "_$(-Int(sc))"
+    ps = _pool_numbers(ks.pool, "SCLK_PARTITION_START" * suffix)
+    pe = _pool_numbers(ks.pool, "SCLK_PARTITION_END" * suffix)
+    # `zzscup01` signals NUMPARTSUNEQUAL for start and stop lists of different lengths
+    (ps !== nothing && pe !== nothing && length(ps) != length(pe)) && throw(
+        SpiceError(
+            :numpartsunequal, "the clock $sc has $(length(ps)) partition start " *
+                "times and $(length(pe)) partition end times"
+        )
+    )
     throw(
         SpiceError(
             :kernelvarnotfound, "the SCLK01_* or SCLK_PARTITION_* kernel " *
@@ -123,7 +133,8 @@ end
     _sclk(ks, sc) -> SclkType1
 
 Data of the type 1 clock `sc`. Throws `SpiceError` with kind `:kernelvarnotfound` (no or
-incomplete data) or `:notsupported` (a clock type other than 1).
+incomplete data), `:numpartsunequal` (partition start and end lists of different
+lengths) or `:notsupported` (a clock type other than 1).
 """
 @inline function _sclk(ks::KernelSet, sc::Integer)
     clock = get(ks.sclk, Int32(sc), nothing)
@@ -284,7 +295,8 @@ ticks, is TDT (`SCLK01_TIME_SYSTEM_<-sc> = 2`). The result has the number type o
 does not allocate.
 
 Throws `SpiceError(:kernelvarnotfound)` if no SCLK kernel for `sc` is loaded or its
-data are incomplete, and `SpiceError(:notsupported)` if the clock is not of type 1.
+data are incomplete, `SpiceError(:numpartsunequal)` if its partition start and end
+lists differ in length, and `SpiceError(:notsupported)` if the clock is not of type 1.
 Throws `SpiceError(:valueoutofrange)` if `sclkdp` is outside the range of the
 kernel and `SpiceError(:missingtimeinfo)` if a leap-second kernel is needed and not
 loaded.

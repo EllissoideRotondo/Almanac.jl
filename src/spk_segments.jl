@@ -195,7 +195,9 @@ function _spkpvn(ks::KernelSet, data::Vector{Float64}, seg::Segment, et::Real)
     e = check_epoch(et)
     # The readers of CSPICE for the types 8, 9, 12, 13, 14, 18 and 19 make this check; for
     # the others CSPICE extrapolates, reads outside the segment or stops the process.
-    seg.t0 <= primal(e) <= seg.t1 || throw(
+    # Types 15 and 17 hold one set of elements, which CSPICE propagates to any epoch:
+    # those are evaluated as CSPICE does.
+    (seg.dtype == Int32(15) || seg.dtype == Int32(17) || seg.t0 <= primal(e) <= seg.t1) || throw(
         SpiceError(
             :timeoutofbounds, "spkpvn: request " *
                 "time $(primal(e)) is outside of descriptor bounds $(seg.t0) : $(seg.t1)"
@@ -239,7 +241,8 @@ The context gives the leap seconds that a segment of type 10 needs; the form wit
 handle reads nothing else from it.
 
 Throws `SpiceError`:
-- `:timeoutofbounds` if `et` is outside the coverage of `descr`, for every type. CSPICE
+- `:timeoutofbounds` if `et` is outside the coverage of `descr`, for every type but 15
+  and 17, whose single set of elements is propagated to `et` as CSPICE does. CSPICE
   signals this for the types 8, 9, 12, 13, 14, 18 and 19 only; for the other types it
   extrapolates, reads data outside the segment, or stops the process (type 1);
 - `:spktypenotsupp` if the data type is not one of CSPICE version N0067;

@@ -126,20 +126,13 @@ Matrix that rotates vectors by `angle` radians about `axis`, as `axisar_` (each 
 is `vrotv_` of a unit vector); the identity for a zero axis. Generic over the angle type.
 """
 @inline function _ck_axisar(axis::Vec3{Float64}, angle::T) where {T <: Real}
-    n = _ck_vnorm(axis)
-    n == 0.0 && return one(Mat3{T})
-    x = axis / n
-    s, c = sincos(angle)
-    xx = dot(x, x)
-    col(e::Vec3{Float64}) = begin
-        p = (dot(e, x) / xx) * x          # component of e along the axis
-        v1 = e - p
-        v2 = cross(x, v1)
-        c * v1 + s * v2 + p
-    end
-    return hcat(
-        col(Vec3{Float64}(1.0, 0.0, 0.0)), col(Vec3{Float64}(0.0, 1.0, 0.0)),
-        col(Vec3{Float64}(0.0, 0.0, 1.0))
+    _ck_vnorm(axis) == 0.0 && return one(Mat3{T})
+    return Mat3{T}(
+        hcat(
+            _m_vrotv(Vec3{Float64}(1.0, 0.0, 0.0), axis, angle),
+            _m_vrotv(Vec3{Float64}(0.0, 1.0, 0.0), axis, angle),
+            _m_vrotv(Vec3{Float64}(0.0, 0.0, 1.0), axis, angle)
+        )
     )
 end
 
@@ -901,30 +894,99 @@ segment (`rav2xf_`, `invstm_`).
 
 Throws `SpiceError(:noframeconnect)` if no segment gives a pointing. Does not allocate.
 """
-@inline function _ck_frame_step(::_CKExact, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
-    ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
-    found, cmat, _, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, false)
-    found || _ck_noconnect(fd, et, "no CK segment covers this epoch")
-    return ref, Mat3{T}(transpose(cmat))
+@inline function _ck_frame_step(mode, ks::KernelSet, fd::FrameDef, et::Real)
+    found, ref, rot = _ck_frame_step_found(mode, ks, fd, et)
+    found || _ck_noconnect(
+        fd, et, mode isa _CKState ? "no CK segment with angular velocity covers this epoch" :
+            "no CK segment covers this epoch"
+    )
+    return ref, rot
 end
 
-@inline function _ck_frame_step(::_CKState, ks::KernelSet, fd::FrameDef, et::Float64)
+"`_ck_frame_step` with `found` first: false (and the identity) where it throws."
+@inline function _ck_frame_step_found(::_CKExact, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
+    ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
+    found, cmat, _, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, false)
+    found || return false, fd.id, one(Mat3{T})
+    return true, ref, Mat3{T}(transpose(cmat))
+end
+
+@inline function _ck_frame_step_found(::_CKState, ks::KernelSet, fd::FrameDef, et::Float64)
     ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
     found, cmat, av, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, true)
-    found || _ck_noconnect(fd, et, "no CK segment with angular velocity covers this epoch")
+    found || return false, fd.id, one(Mat3{Taylor{1, Float64}})
     r = Mat3{Float64}(transpose(cmat))
     dr = _m_mxm(_ck_skew(av), r)
-    return ref, map((a, b) -> Taylor((a, b)), r, dr)
+    return true, ref, map((a, b) -> Taylor((a, b)), r, dr)
 end
 
 "Cross-product matrix `[v]ₓ`, so that `[v]ₓ w = v × w`."
 @inline _ck_skew(v::Vec3{T}) where {T} =
     Mat3{T}(zero(T), v[3], -v[2], -v[3], zero(T), v[1], v[2], -v[1], zero(T))
 
+"""
+    _sx_mxm(a, b) -> Mat3{Taylor{1,Float64}}
+
+Contract: the product `a * b` of two rotations with their derivatives, with the
+arithmetic of the 6 by 6 product of their state transformations in `zzmsxf_` and
+`mxmg_`: the value is the three products of `a.v` and `b.v` summed from left to right;
+the derivative is `a.d * b.v` and then `a.v * b.d`, the six products summed from left to
+right. The product of `Taylor` numbers sums the terms in another order, which changes
+the last bit.
+"""
+@inline function _sx_mxm(a::Mat3{Taylor{1, Float64}}, b::Mat3{Taylor{1, Float64}})
+    return Mat3{Taylor{1, Float64}}(
+        ntuple(Val(9)) do k
+            i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
+            v = a[i, 1].v * b[1, j].v + a[i, 2].v * b[2, j].v + a[i, 3].v * b[3, j].v
+            d = a[i, 1].d[1] * b[1, j].v + a[i, 2].d[1] * b[2, j].v + a[i, 3].d[1] * b[3, j].v +
+                a[i, 1].v * b[1, j].d[1] + a[i, 2].v * b[2, j].d[1] + a[i, 3].v * b[3, j].d[1]
+            Taylor((v, d))
+        end
+    )
+end
+
+"""
+    _sx_mxv(m, s) -> Vec3{Taylor{1,Float64}}
+
+Contract: the product of the rotation `m` with its derivative and the vector `s` with
+its derivative, with the arithmetic of `mxvg_` applied to the 6 by 6 state
+transformation and the state: the value is the three products of `m.v` and `s.v`, the
+derivative `m.d * s.v` and then `m.v * s.d`, each sum from left to right.
+"""
+@inline function _sx_mxv(m::Mat3{Taylor{1, Float64}}, s::Vec3{Taylor{1, Float64}})
+    return Vec3{Taylor{1, Float64}}(
+        ntuple(Val(3)) do i
+            v = m[i, 1].v * s[1].v + m[i, 2].v * s[2].v + m[i, 3].v * s[3].v
+            d = m[i, 1].d[1] * s[1].v + m[i, 2].d[1] * s[2].v + m[i, 3].d[1] * s[3].v +
+                m[i, 1].v * s[1].d[1] + m[i, 2].v * s[2].d[1] + m[i, 3].v * s[3].d[1]
+            Taylor((v, d))
+        end
+    )
+end
+
+"`_sx_mxm(transpose(a), b)`: the product with the inverse of `a`, as `invstm_` and `zzmsxf_`."
+@inline _sx_mtxm(a::Mat3{Taylor{1, Float64}}, b::Mat3{Taylor{1, Float64}}) =
+    _sx_mxm(Mat3{Taylor{1, Float64}}(transpose(a)), b)
+
+"Matrix product of two links of a chain: `_sx_mxm` in the state mode, `_m_mxm` in the exact mode."
+@inline _ck_mxm(::_CKState, a, b) = _sx_mxm(a, b)
+@inline _ck_mxm(::_CKExact, a, b) = _m_mxm(a, b)
+
 @inline _ck_epoch(::_CKExact, et) = et
 @inline _ck_epoch(::_CKState, et::Float64) = taylor_var(et, Val(1))
 @inline _ck_numtype(::_CKExact, ::Type{T}) where {T} = T
 @inline _ck_numtype(::_CKState, ::Type{Float64}) = Taylor{1, Float64}
+
+"""
+    _ck_pck_step(mode, ks, fd, et) -> (J2000, Mat3)
+
+One link of a frame chain for the PCK frame `fd`: the matrix to J2000, in the state mode
+with the derivative of `tisbod_` (`_body_state`), in the exact mode as `_frame_step`.
+"""
+@inline _ck_pck_step(::_CKExact, ks::KernelSet, fd::FrameDef, et) = _frame_step(ks, fd.id, et)
+@inline _ck_pck_step(::_CKState, ks::KernelSet, fd::FrameDef, et::Float64) =
+    (_J2000_FRAME, Mat3{Taylor{1, Float64}}(transpose(_body_state(ks, fd.classid, et))))
 
 """
     _ck_chain_to(mode, ks, id, stop, et) -> Mat3
@@ -944,34 +1006,126 @@ function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where 
     while cur != stop       # invariant: rot takes vectors from frame id to frame cur
         n += 1
         n > MAX_FRAME_CHAIN && _chain_too_long(id)
-        fd = frame_def(ks, cur)
-        if fd.class == 3
-            cur, step = _ck_frame_step(mode, ks, fd, et)
-        elseif fd.class == 5 || fd.class == 6     # dynamic and switch frames, `dynframes.jl`
-            cur, step = _dyn_chain_step(mode, ks, fd, et)
-        else
-            cur, step = _frame_step(ks, cur, _ck_epoch(mode, et))
-        end
-        rot = _m_mxm(step, rot)
+        cur, step = _chain_step(mode, ks, cur, et)
+        rot = n == 1 ? step : _ck_mxm(mode, step, rot)
     end
     return rot
 end
 
 """
-    _ck_in_chain(ks, id) -> Bool
+    _chain_step(mode, ks, id, et) -> (parent, Mat3)
+
+One link of a frame chain as `zzrotgt0_` (exact mode) and `zzfrmgt0_` (state mode) give
+it: a CK frame is linked to the reference frame of its segment for `et`, a switch frame
+as `_sw_frame_step` links it, every other frame as `_frame_step` links it.
+"""
+@inline function _chain_step(mode, ks::KernelSet, id::Int32, et::T) where {T <: Real}
+    fd = frame_def(ks, id)
+    if fd.class == 3
+        return _ck_frame_step(mode, ks, fd, et)
+    elseif fd.class == 5 || fd.class == 6     # dynamic and switch frames, `dynframes.jl`
+        return _dyn_chain_step(mode, ks, fd, et)
+    elseif fd.class == 2
+        return _ck_pck_step(mode, ks, fd, et)
+    end
+    return _frame_step(ks, id, _ck_epoch(mode, et))
+end
+
+"""
+    _chain_step_found(mode, ks, id, et) -> (found, parent, Mat3)
+
+`_chain_step`, but a CK frame without a segment for `et` gives `found` false instead of
+the error, as `zzrotgt0_` and `zzfrmgt0_` report it (`id` and the identity).
+"""
+@inline function _chain_step_found(mode, ks::KernelSet, id::Int32, et::T) where {T <: Real}
+    fd = frame_def(ks, id)
+    fd.class == 3 && return _ck_frame_step_found(mode, ks, fd, et)
+    parent, rot = _chain_step(mode, ks, id, et)
+    return true, parent, rot
+end
+
+"`transpose(a) * b` in the mode: `_sx_mtxm` in the state mode, `_m_mtxm` in the exact mode."
+@inline _ck_mtxm(::_CKState, a, b) = _sx_mtxm(a, b)
+@inline _ck_mtxm(::_CKExact, a, b) = _m_mtxm(a, b)
+
+"`(k, rots[k])` for the first `k <= len` with `nodes[k] == id`, or `(0, rots[1])`."
+@inline function _chain_find(nodes::NTuple{M, Int32}, rots, len::Int, id::Int32) where {M}
+    for k in 1:len
+        @inbounds nodes[k] == id && return k, rots[k]
+    end
+    return 0, rots[1]
+end
+
+"""
+    _chain_rotation(mode, ks, from, to, et) -> Mat3
+
+Matrix from frame `from` to frame `to` at `et` as `zzrefch0_` (exact mode) and
+`zzfrmch0_` (state mode) compute it: the chain of `from` is evaluated link by link, so
+that a CK or switch frame is followed through the frame its segment or base gives for
+`et`, until it reaches `to` or J2000; the chain of `to` is then evaluated until it meets
+a frame of that chain, and the two parts are joined there. The first frame met can be
+other than J2000 only when it is the frame of a CK segment or of a switch base (the
+static parents of those frames are J2000). At most `MAX_FRAME_CHAIN` links each. Does not
+allocate.
+"""
+function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
+    S = _ck_numtype(mode, T)
+    from == to && return one(Mat3{S})
+    nodes = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
+    rots = ntuple(_ -> one(Mat3{S}), Val(MAX_FRAME_CHAIN + 1))
+    nodes = Base.setindex(nodes, from, 1)
+    len = 1
+    cur = from
+    rot = one(Mat3{S})
+    found = true
+    # invariant: nodes[1:len] is the chain of `from` to cur, rots[k] the matrix from
+    # `from` to nodes[k], and rot = rots[len]; the chain ends at a CK frame without
+    # a segment for `et` (found false), as in `zzrefch0_`
+    while cur != _J2000_FRAME && cur != to
+        len > MAX_FRAME_CHAIN && _chain_too_long(from)
+        found, cur, step = _chain_step_found(mode, ks, cur, et)
+        found || break
+        rot = len == 1 ? step : _ck_mxm(mode, step, rot)
+        len += 1
+        nodes = Base.setindex(nodes, cur, len)
+        rots = Base.setindex(rots, rot, len)
+    end
+    cur == to && return rot::Mat3{S}
+    down = one(Mat3{S})
+    cur = to
+    n = 0
+    k, up = _chain_find(nodes, rots, len, cur)
+    # invariant: down is the matrix from `to` to cur, and no frame of the chain of `to`
+    # before cur is on the chain of `from`
+    while k == 0
+        # no common frame: the error of the link where the chain of `from` ended
+        cur == _J2000_FRAME && _chain_step(mode, ks, nodes[len], et)
+        n += 1
+        n > MAX_FRAME_CHAIN && _chain_too_long(to)
+        cur, step = _chain_step(mode, ks, cur, et)
+        down = n == 1 ? step : _ck_mxm(mode, step, down)
+        k, up = _chain_find(nodes, rots, len, cur)
+    end
+    k == 1 && return Mat3{S}(transpose(down))
+    return Mat3{S}(_ck_mtxm(mode, down, up))
+end
+
+"""
+    _ck_in_chain(ks, id, pck = false) -> Bool
 
 True if the chain of frame `id` towards J2000 holds a frame of class 3, 5 or 6 (the
-classes whose CSPICE state transformation is not the time derivative of the rotation)
+classes whose CSPICE state transformation is not the time derivative of the rotation),
+or with `pck` of class 2 (whose derivative `tisbod_` computes with other arithmetic),
 before any other link needs an evaluation. Throws as `_frame_parent` does.
 """
-function _ck_in_chain(ks::KernelSet, id::Int32)
+function _ck_in_chain(ks::KernelSet, id::Int32, pck::Bool = false)
     cur = id
     n = 0
     while cur != _J2000_FRAME       # invariant: no frame from id to before cur is class 3
         n += 1
         n > MAX_FRAME_CHAIN && _chain_too_long(id)
         class = frame_def(ks, cur).class
-        (class == 3 || class == 5 || class == 6) && return true
+        (class == 3 || class == 5 || class == 6 || (pck && class == 2)) && return true
         cur = _frame_parent(ks, cur)
     end
     return false
@@ -987,26 +1141,5 @@ velocity of its segment, and needs a segment that has one. The two chains are fo
 to their first common frame, as in `frame_rotation`.
 """
 function _ck_state_rotation(ks::KernelSet, from::Int32, to::Int32, et::Float64)
-    from == to && return one(Mat3{Taylor{1, Float64}})
-    chain = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
-    cur = to
-    len = 1
-    chain = Base.setindex(chain, cur, 1)
-    while cur != _J2000_FRAME    # invariant: chain[1:len] is the chain of `to` down to cur
-        len > MAX_FRAME_CHAIN && _chain_too_long(to)
-        cur = _frame_parent(ks, cur)
-        len += 1
-        chain = Base.setindex(chain, cur, len)
-    end
-    node = from
-    n = 0
-    while !_in_chain(chain, len, node)   # invariant: no frame from `from` to before node is in the chain
-        n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(from)
-        node = _frame_parent(ks, node)
-    end
-    up = _ck_chain_to(_CKState(), ks, from, node, et)
-    node == to && return up
-    down = _ck_chain_to(_CKState(), ks, to, node, et)
-    return Mat3{Taylor{1, Float64}}(_m_mtxm(down, up))
+    return _chain_rotation(_CKState(), ks, from, to, et)
 end

@@ -48,7 +48,7 @@ error or the correct result.
 
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
-| `spkpvn` (types 1, 2, 3, 5, 10, 15, 17, 20, 21) | No check of the time bounds: the reader extrapolates, reads outside the segment, or stops the process (type 1) | `:timeoutofbounds` for every type | `dafwrite` |
+| `spkpvn` (types 1, 2, 3, 5, 10, 20, 21) | No check of the time bounds: the reader extrapolates, reads outside the segment, or stops the process (type 1) | `:timeoutofbounds`. Types 15 and 17 hold one set of elements and are evaluated at any epoch, as in CSPICE | `dafwrite` |
 | `spks19` (`spksub` of type 19) | Reads `data[0]` and aborts when the last group of 100 epochs in the epoch directory starts after the `stop` epoch given to `spksub` | `:spkstructureerror` | `dafwrite` |
 | `spkgeo` | An SPK chain with a cycle never returns | `SpkInsufficientDataError`, kind `:spkinsuffdata` | `management` |
 | `ckr06` | On moving to the next mini-segment, rounds its clock rate to a whole number and keeps it, so later derivatives are wrong | The stored rate | `ck` |

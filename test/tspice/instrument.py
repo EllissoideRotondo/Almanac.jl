@@ -67,37 +67,48 @@ FILE_ROUTINES = {"furnsh", "ldpool", "spkcov", "spkobj", "ckcov", "ckobj", "pckc
 # Almanac's copy misses writes. Only the one file: a family such as F_ZZDSKBSR opens each
 # of thousands of files in its directory.
 OPEN_ROUTINES = {"dafopr", "dafopw", "dasopr", "dasopw", "ekopr", "ekopw", "spkopa", "dskopa"}
-
-# Array summaries whose length, ND + (NI+1)/2, is that of the DAF and no argument gives:
-# the routine and the argument that holds the handle (None: the DAF of the current
-# search, from DAFGH). After a successful call the summary is logged with ND and NI from
-# DAFHSF; both are called through the context, so the log shows no nested call, and
-# neither can fail once the call succeeded. After a failed call the summary is logged
-# as truncated, without reading it. The parser takes the arguments of a call in any
-# order, so an input logged after the call is still an input.
-DAF_SUMMARY = {"dafbna": "handle", "dafgs": None, "dafrs": None, "dafws": None}
-
-# The column writers of a fast load (EKACLC, EKACLD, EKACLI) and their array of values.
-# The lengths of the values, entry sizes and null flags come from the segment, which no
-# argument gives: the rows that EKIFLD set, and the entry size and the null flag of the
-# column. After a successful call EKSSUM, through the context (no nested call in the
-# log), gives them; the entry sizes are logged only for a column of variable size and
-# the null flags only for one that allows nulls, the arrays that the call reads. A
-# failed call, or a failed EKSSUM (the error is reset), logs them as truncated.
-EK_COLUMN = {"ekaclc": "cvals", "ekacld": "dvals", "ekacli": "ivals"}
-
-# Arguments that are not logged: the record pointers of a fast load, which Almanac keeps
-# in the EKFastLoad that EKIFLD returns, and the work space of the column writers.
-NOT_LOGGED = {
-    "ekifld": {"rcptrs"}, "ekffld": {"rcptrs"},
-    "ekaclc": {"rcptrs", "wkindx"}, "ekacld": {"rcptrs", "wkindx"}, "ekacli": {"rcptrs", "wkindx"},
+# Closes: the file that a close from the test program (not from inside SPICELIB) leaves,
+# if it was open for write, is copied after the close, so that the replay can compare
+# the file that Almanac wrote with SPICELIB's.
+CLOSE_ROUTINES = {"dafcls", "dascls", "spkcls", "ckcls", "pckcls", "ekcls", "dskcls"}
+# Routines that write to an open file and are not recorded (no replay, or the length of
+# an array is not known): a call is logged with a `W` line and its handle only, so that
+# the replay knows that its copy of the file misses the write. Without the mark the file
+# that Almanac closes would differ from SPICELIB's for a reason that is not Almanac's.
+WRITE_MARKS = set("""
+ckw04a ckw04b ckw04e ckw06 spkw19 spk14a pckw20 pck03a pck03b pck03e
+dafarr dafra dafwda dafwdr dafwfr dafwcr dafws dafrs
+daswfr dasacr dasrcr dasufs dasurc dasurd dasuri daswbr daswrc daswrd daswri dascud dassdr dasacu
+sgbwfs sgbwvs sgwes sgwfpk sgwvpk ekacli ekacld ekaclc ekifld ekffld
+spks01 spks02 spks03 spks05 spks08 spks09 spks10 spks12 spks13 spks14 spks15 spks17
+spks18 spks19 spks20 spks21
+""".split())
+# Arguments logged by a routine of tspice_log instead of as an array: the summary of
+# DAFBNA packs its integers into doubles, which the decimal log cannot carry; it is
+# logged unpacked, as `<dc` and `<ic`.
+# None: the argument is not logged (a workspace, or the record pointers of an EK fast load,
+# which the replay keeps as the state that Almanac's EKIFLD returns).
+CUSTOM_ARGS = {
+    "dafbna": {"sum": "call tlog_dafsum(handle, sum)"},
+    "dafws": {"sum": "call tlog_dafsum_cur(sum)"},
+    "dafrs": {"sum": "call tlog_dafsum_cur(sum)"},
+    "dskmi2": {"work": None},
+    "ekaclc": {"rcptrs": None, "wkindx": None},
+    "ekacld": {"rcptrs": None, "wkindx": None},
+    "ekacli": {"rcptrs": None, "wkindx": None},
+    "ekffld": {"rcptrs": None},
 }
-
-# Code after the call: SPK14B keeps the degree of the segment it begins, from which
-# SPK14A takes the size of a coefficient set (see tlog_n14).
-EXTRA_POST = {
-    "spk14b": ["      if (.not. ctx%failed()) call tlog_set14(handle, chbdeg)"],
-    "spk14e": ["      call tlog_set14(handle, -1_ip)"],
+# Output arguments logged by a routine of tspice_log, after the call: the summary that
+# DAFGS returns, unpacked as `>dc` and `>ic` like the inputs above (its length is that of
+# the DAF of the current search, which no argument gives).
+CUSTOM_OUT = {
+    "dafgs": {"sum": "call tlog_dafsum_cur(sum, '>')"},
+}
+# Calls after the call, before its outputs: the notes from which later calls take their
+# lengths (the rows and column declarations of an EK fast load, the degree of SPK14B).
+CUSTOM_POST = {
+    "ekifld": "call tlog_ek_note(handle, segno, ncols, nrows, cnames, decls)",
+    "spk14b": "call tlog_spk14_note(handle, chbdeg)",
 }
 
 
@@ -113,6 +124,7 @@ FIXED_LENGTHS = {
     "dasudc": {"data": "tlog_nsub(last - first + 1, bpos, epos, len(data))"},
     "spkw10": {"consts": "8", "elems": "max(0, 10*n)"},
     "pckw02": {"cdata": "max(0, 3*(polydg+1)*n)"},
+    "pckw20": {"cdata": "max(0, 3*(polydg+2)*n)"},
     "spkw18": {"packts": "max(0, n*merge(12, 6, subtyp == 0))"},
     # arrays of assumed size whose length another argument gives
     "dafps": {"dc": "max(0, nd)", "ic": "max(0, ni)", "sum": "max(0, nd + (ni + 1)/2)"},
@@ -152,7 +164,11 @@ FIXED_LENGTHS = {
               "avvs": "max(0, 3*nrec)", "rates": "max(0, nrec)"},
     "ckw03": {"sclkdp": "max(0, nrec)", "quats": "max(0, 4*nrec)", "avvs": "max(0, 3*nrec)",
               "starts": "max(0, nints)"},
-    "dskw02": {"corpar": "10", "spaixd": "10", "spaixi": "huge(0_ip)"},
+    # the integer spatial index: SICGRD - 1 + MAXCGR + the voxel pointers, the voxel-plate
+    # list, the vertex pointers (NV) and the vertex-plate list (dsk02.inc)
+    "dskw02": {"corpar": "10", "spaixd": "10", "spaixi":
+               "merge(7 + 100000 + spaixi(5) + spaixi(6) + max(0, nv) + spaixi(7), huge(0_ip), "
+               "min(spaixi(5), spaixi(6), spaixi(7)) >= 0 .and. max(spaixi(5), spaixi(6), spaixi(7), nv) < 50000000)"},
     "ekbseg": {"cnames": "max(0, ncols)", "decls": "max(0, ncols)"},
     "chbint": {"cp": "max(0, degp + 1)"},
     "chbval": {"cp": "max(0, degp + 1)"},
@@ -167,21 +183,25 @@ FIXED_LENGTHS = {
     "vrelg": {"v1": "max(0, ndim)", "v2": "max(0, ndim)"},
     "vsepg": {"v1": "max(0, ndim)", "v2": "max(0, ndim)"},
     "vzerog": {"v": "max(0, ndim)"},
-    # a coefficient set of the segment that SPK14B began on HANDLE, 2 + 6*(CHBDEG+1)
-    "spk14a": {"coeffs": "tlog_n14(handle, ncsets)", "epochs": "max(0, ncsets)"},
-    "ekifld": {"cnames": "max(0, ncols)", "decls": "max(0, ncols)"},
-    "ckw05": {"packts": "max(0, n*merge(8, merge(4, merge(14, 7, subtyp == 2), subtyp == 1), subtyp == 0))"},
-    # mini-segment writers: one count, packet count, subtype and degree per mini-segment,
-    # one epoch per packet, and packets whose size the subtype gives (S19PSn, C06PSn)
+    # mini-segments: the packet size of each subtype (spk19.inc, ck06.inc)
     "spkw19": {"npkts": "max(0, nintvl)", "subtps": "max(0, nintvl)", "degres": "max(0, nintvl)",
-               "ivlbds": "max(0, nintvl + 1)", "epochs": "max(0, sum(npkts(1:max(0, nintvl))))",
-               "packts": "max(0, sum(npkts(1:max(0, nintvl))*merge(12, 6, subtps(1:max(0, nintvl)) == 0)))"},
+               "ivlbds": "merge(nintvl + 1, 0, nintvl > 0)", "epochs": "tlog_psum(npkts, subtps, nintvl, 1, 1, 1, 1)",
+               "packts": "tlog_psum(npkts, subtps, nintvl, 12, 6, 6, 0)"},
     "ckw06": {"npkts": "max(0, nmini)", "subtps": "max(0, nmini)", "degres": "max(0, nmini)",
-              "rates": "max(0, nmini)", "ivlbds": "max(0, nmini + 1)",
-              "sclkdp": "max(0, sum(npkts(1:max(0, nmini))))",
-              "packts": "max(0, sum(npkts(1:max(0, nmini))*merge(8, merge(4, merge(14, 7, "
-                        "subtps(1:max(0, nmini)) == 2), subtps(1:max(0, nmini)) == 1), "
-                        "subtps(1:max(0, nmini)) == 0)))"},
+              "rates": "max(0, nmini)", "ivlbds": "merge(nmini + 1, 0, nmini > 0)",
+              "sclkdp": "tlog_psum(npkts, subtps, nmini, 1, 1, 1, 1)",
+              "packts": "tlog_psum(npkts, subtps, nmini, 8, 4, 14, 7)"},
+    # the EK fast load: the rows and the declarations that EKIFLD noted
+    "ekifld": {"cnames": "max(0, ncols)", "decls": "max(0, ncols)", "rcptrs": "max(0, nrows)"},
+    "ekaclc": {"cvals": "tlog_ek_nvals(handle, segno, column, entszs)",
+               "entszs": "tlog_ek_nent(handle, segno, column)", "nlflgs": "tlog_ek_nnul(handle, segno, column)"},
+    "ekacld": {"dvals": "tlog_ek_nvals(handle, segno, column, entszs)",
+               "entszs": "tlog_ek_nent(handle, segno, column)", "nlflgs": "tlog_ek_nnul(handle, segno, column)"},
+    "ekacli": {"ivals": "tlog_ek_nvals(handle, segno, column, entszs)",
+               "entszs": "tlog_ek_nent(handle, segno, column)", "nlflgs": "tlog_ek_nnul(handle, segno, column)"},
+    # records of 2 + 6 (CHBDEG + 1) doubles, the degree of SPK14B
+    "spk14a": {"coeffs": "tlog_spk14_len(handle, ncsets)", "epochs": "max(0, ncsets)"},
+    "ckw05": {"packts": "max(0, n*merge(8, merge(4, merge(14, 7, subtyp == 2), subtyp == 1), subtyp == 0))"},
 }
 
 
@@ -297,6 +317,35 @@ def length_expr(dims, args, decls, arg=None):
     return "*".join(f"({p})" for p in parts)
 
 
+# The GF searches whose windows are logged (cell_args). The other GF entry points take
+# callbacks (GFEVNT, GFFOVE, GFOCCE, GFUDB, GFUDS), which the log cannot carry.
+CELL_ROUTINES = set("gfdist gfilum gfoclt gfpa gfposc gfrfov gfrr gfsep gfsntc gfsubc gftfov".split())
+
+
+def cell_args(name, args, decls):
+    """{arg: record} for the cell arguments of a routine of CELL_ROUTINES: a window
+    `(lbcell:*)` is logged as its size, its cardinality and its elements (CELL(-1),
+    CELL(0) and the CARD elements that follow, at most 10**6), `record` being the call
+    with `{label}` for the label; a workspace of windows `(lbcell:mw, nw)` is not logged
+    (record None)."""
+    if name not in CELL_ROUTINES:
+        return {}
+    cells = {}
+    for a in args:
+        k, dims = decls[a]
+        if dims is None or not dims.strip().lower().startswith("lbcell"):
+            continue
+        if dims.replace(" ", "").lower() != "lbcell:*":
+            cells[a] = None
+        elif k == "d":
+            cells[a] = (f"tlog_d('{{label}}', {a}(-1), "
+                        f"2_ip + nint(max(0.0_wp, min({a}(0), {a}(-1), 1.0e6_wp)), ip))")
+        elif k == "i":
+            cells[a] = (f"tlog_i('{{label}}', {a}(-1), "
+                        f"2_ip + max(0_ip, min({a}(0), {a}(-1), 1000000_ip)))")
+    return cells
+
+
 def instrument_file(path, wanted, intents, done):
     text = open(path, encoding="latin-1").read()
     lines = text.split("\n")
@@ -304,7 +353,7 @@ def instrument_file(path, wanted, intents, done):
     while i < len(lines):
         line = lines[i]
         h = HEAD.match(line.split("!", 1)[0])
-        if not h or re.match(r"^\s*end\b", line, re.I) or h.group("name").lower() not in wanted:
+        if not h or re.match(r"^\s*end\b", line, re.I) or h.group("name").lower() not in wanted | WRITE_MARKS:
             out.append(line)
             i += 1
             continue
@@ -314,7 +363,11 @@ def instrument_file(path, wanted, intents, done):
         while not re.match(rf"^\s*end\s+(subroutine|function)\s+{name}\b", lines[j], re.I):
             j += 1
         body = lines[i:j + 1]
-        res = instrument_routine(name, h, body, intents.get(name, []))
+        res = (instrument_routine(name, h, body, intents.get(name, [])) if name in wanted
+               else "not in the routines file")
+        if isinstance(res, str) and name in WRITE_MARKS:
+            print(f"mark {name}: {res}", file=sys.stderr)
+            res = mark_routine(name, h, body)
         if isinstance(res, str):
             print(f"skip {name}: {res}", file=sys.stderr)
             out.extend(body)
@@ -348,16 +401,15 @@ def instrument_routine(name, h, body, cands):
         return "the wrapper has a RETURN, GO TO or ENTRY"
     lens = {}
     fixed = FIXED_LENGTHS.get(name, {})
-    summary = name in DAF_SUMMARY and "sum" in args
-    skip = NOT_LOGGED.get(name, set())
-    ekvals = EK_COLUMN.get(name)
-    if ekvals:                           # logged after the call, with the segment's lengths
-        skip = skip | {ekvals, "entszs", "nlflgs"}
+    custom = CUSTOM_ARGS.get(name, {})
+    custom_out = CUSTOM_OUT.get(name, {})
+    cells = cell_args(name, args, decls)
     for a in args:
+        if a in custom or a in custom_out or a in cells:
+            lens[a] = None
+            continue
         if a in fixed:
             lens[a] = fixed[a]
-            continue
-        if (summary and a == "sum") or a in skip:
             continue
         k, dims = decls[a]
         n = length_expr(dims, args, decls, a)
@@ -374,28 +426,33 @@ def instrument_routine(name, h, body, cands):
                 s.startswith("parameter") or s.startswith("&") or body[k - 1].rstrip().endswith("&")):
             last_decl = k
     pre = ["      call tlog_begin('" + name.upper() + "')"]
-    if summary:
-        pre.insert(0, "      integer(ip) :: tlog_h, tlog_nd, tlog_ni")
-    if ekvals:
-        pre[0:0] = [
-            "      integer(ip) :: tlog_nr, tlog_nc, tlog_k, tlog_nv, tlog_ne, tlog_nn",
-            "      integer(ip) :: tlog_sz(100), tlog_sl(100)",
-            "      character(64) :: tlog_tn",
-            "      character(32) :: tlog_cn(100)",
-            "      character(4) :: tlog_dt(100)",
-            "      logical :: tlog_ix(100), tlog_nk(100)",
-        ]
     if name in FILE_ROUTINES:
         pre.append("      call tlog_snapshot()")
     elif name in OPEN_ROUTINES:
         pre.append(f"      call tlog_snapshot_file({args[0]})")
+    elif name in CLOSE_ROUTINES:
+        pre.append(f"      call tlog_close_name({args[0]})")
     post = ["      call tlog_mark()"]
+    if name in CLOSE_ROUTINES:
+        post.append("      call tlog_close_snapshot()")
+    if name in CUSTOM_POST:
+        post.append("      " + CUSTOM_POST[name])
     for a in args:
-        if (summary and a == "sum") or a in skip:
-            continue
         k, _ = decls[a]
         it = intent[a]
         n = lens[a]
+        if a in custom:
+            custom[a] is None or pre.append("      " + custom[a])
+            continue
+        if a in custom_out:
+            post.append("      " + custom_out[a])
+            continue
+        if a in cells:
+            if cells[a] is not None and it in ("in", "inout"):
+                pre.append("      call " + cells[a].format(label="<" + a))
+            if cells[a] is not None and it in ("out", "inout"):
+                post.append("      call " + cells[a].format(label=">" + a))
+            continue
         rec = f"tlog_{k}('{a}', {a}, {n})" if n != "1" else f"tlog_{k}1('{a}', {a})"
         if it in ("in", "inout"):
             pre.append(f"      call {rec.replace(chr(39) + a + chr(39), chr(39) + '<' + a + chr(39), 1)}")
@@ -404,52 +461,6 @@ def instrument_routine(name, h, body, cands):
     if head.group("kind").lower() == "function":
         fk = kind_of(head.group("ftype") or "real(wp)")
         post.append(f"      call tlog_{fk}1('>result', {name})")
-    if summary:
-        label = ("<" if intent["sum"] in ("in", "inout") else ">") + "sum"
-        h = DAF_SUMMARY[name]
-        post += [
-            "      if (.not. ctx%failed()) then",
-            f"         tlog_h = {h}" if h else "         call ctx%dafgh(tlog_h)",
-            "         call ctx%dafhsf(tlog_h, tlog_nd, tlog_ni)",
-            f"         call tlog_d('{label}', sum, max(0_ip, tlog_nd + (tlog_ni + 1)/2))",
-            "      else",
-            f"         call tlog_d('{label}', sum, huge(0_ip))",
-            "      end if",
-        ]
-    if ekvals:
-        # MXCLSG (100) columns of a segment, column names of CNAMSZ (32) characters
-        vk = decls[ekvals][0]
-        post += [
-            "      tlog_nv = huge(0_ip)",
-            "      tlog_ne = huge(0_ip)",
-            "      tlog_nn = huge(0_ip)",
-            "      if (.not. ctx%failed()) then",
-            "         call ctx%ekssum(handle, segno, tlog_tn, tlog_nr, tlog_nc, tlog_cn, tlog_dt, &",
-            "                         tlog_sz, tlog_sl, tlog_ix, tlog_nk)",
-            "         if (ctx%failed()) then",
-            "            call ctx%reset()",
-            "         else",
-            "            do tlog_k = 1, min(tlog_nc, 100_ip)",
-            "               if (tlog_upper(tlog_cn(tlog_k)) == tlog_upper(column)) exit",
-            "            end do",
-            "            if (tlog_k <= min(tlog_nc, 100_ip) .and. tlog_nr >= 0) then",
-            "               tlog_ne = 0",
-            "               tlog_nn = 0",
-            "               if (tlog_sz(tlog_k) < 0) then",
-            "                  tlog_ne = tlog_nr",
-            "                  tlog_nv = max(0_ip, sum(entszs(1:tlog_nr)))",
-            "               else",
-            "                  tlog_nv = tlog_nr*tlog_sz(tlog_k)",
-            "               end if",
-            "               if (tlog_nk(tlog_k)) tlog_nn = tlog_nr",
-            "            end if",
-            "         end if",
-            "      end if",
-            f"      call tlog_{vk}('<{ekvals}', {ekvals}, tlog_nv)",
-            "      call tlog_i('<entszs', entszs, tlog_ne)",
-            "      call tlog_l('<nlflgs', nlflgs, tlog_nn)",
-        ]
-    post += EXTRA_POST.get(name, [])
     post.append("      call tlog_end()")
     # `use tspice_log` goes after the first `use` line.
     new = list(body)
@@ -462,6 +473,46 @@ def instrument_routine(name, h, body, cands):
     return new
 
 
+# Integer arguments of a marked writer that the replay maps to its files.
+MARK_HANDLES = {"handle", "inhan", "han", "handl", "newh"}
+
+
+def mark_routine(name, h, body):
+    """The wrapper of a writer that is not recorded, with a mark: the call, a `W` line and
+    the handles that it takes, with no other argument."""
+    code = joined_lines("\n".join(body))
+    head = HEAD.match(code[0])
+    args = [a.strip().lower() for a in (head.group("args") or "").split(",") if a.strip()]
+    decls = {}
+    for line in code[1:]:
+        d = DECL.match(line)
+        if d:
+            for arg, dims in split_names(d.group("rest")):
+                decls[arg] = (kind_of(d.group("type")), dims)
+    if any(re.match(r"^\s*(return|go\s*to|entry)\b", l, re.I) for l in code[1:]):
+        return "the wrapper has a RETURN, GO TO or ENTRY"
+    last_decl = 0
+    for k, line in enumerate(body):
+        s = line.split("!", 1)[0].strip().lower()
+        if k == 0 or not s:
+            continue
+        if ("::" in s or s.startswith("use ") or s.startswith("implicit") or
+                s.startswith("parameter") or s.startswith("&") or body[k - 1].rstrip().endswith("&")):
+            last_decl = k
+    pre = ["      call tlog_begin('" + name.upper() + "')", "      call tlog_writer()"]
+    for a in args:
+        if a in MARK_HANDLES and decls.get(a) == ("i", None):
+            pre.append(f"      call tlog_i1('<{a}', {a})")
+    post = ["      call tlog_mark()", "      call tlog_end()"]
+    new = list(body)
+    for k, line in enumerate(new):
+        if re.match(r"^\s*(use|implicit)\b", line, re.I):
+            new.insert(k, "      use tspice_log")
+            last_decl += 1
+            break
+    return new[:last_decl + 1] + pre + new[last_decl + 1:-1] + post + [new[-1]]
+
+
 LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspice/instrument.py).
 !> The log goes to the file named by the environment variable TSPICE_LOG (a file or a
 !> FIFO that record.sh compresses); without it nothing is written. Format, one item per
@@ -471,7 +522,15 @@ LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspic
 !>                         (N = -1: more than 2000, not logged),
 !>                         one per following line (strings: their text, trailing blanks
 !>                         removed, after a `|`)
-!>   S DIR                 the files of the working directory, linked into DIR
+!>   S DIR                 the files of the working directory, linked into DIR (a load),
+!>                         or the file of an open (before it) or of a close (after it),
+!>                         copied into DIR; for a close DIR has no file past the cap
+!>   B PATH                the values of the next argument, of N = -1, of a call
+!>                         from the test program, in the binary file PATH (gzip; doubles
+!>                         or 4-byte integers, native order; strings of length L: `cL`);
+!>                         an input or output, within TSPICE_MAXBIN bytes
+!>   W                     a call of a writer that is not recorded: only its handles
+!>                         follow (WRITE_MARKS of instrument.py)
 !>   ! FAILED SHORT        the end of the call: the error status and short message
 !> A call is kept in memory until it ends. A call of a routine without state (the list
 !> PURE of instrument.py) is not written if its name, error status before the call and
@@ -483,13 +542,14 @@ LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspic
 module tspice_log
    use, intrinsic :: iso_fortran_env, only: int64
    use pepper_kinds, only: ip, wp
-   use pepper_instance_module, only: pepper_context
+   use pepper_instance_module, only: pepper_context, pepper_zzddhnfo => zzddhnfo
    use pepper_legacy_context, only: legacy_context
    implicit none
    private
    public :: tlog_nsub, tlog_begin, tlog_end, tlog_mark, tlog_snapshot, tlog_snapshot_file, tlog_d, tlog_d1, &
-      tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1, tlog_set14, tlog_n14, tlog_upper
-   integer(ip), save :: h14(64) = 0, deg14(64) = -1   ! SPK type 14 segments begun, by handle
+      tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1, tlog_close_name, tlog_close_snapshot, tlog_writer, &
+      tlog_dafsum, tlog_dafsum_cur, tlog_psum, tlog_ek_note, tlog_ek_nvals, tlog_ek_nent, tlog_ek_nnul, &
+      tlog_spk14_note, tlog_spk14_len
    integer, save :: unit = 0
    logical, save :: opened = .false.
    logical, save :: checked = .false.
@@ -499,6 +559,14 @@ module tspice_log
    integer, save :: nwritten = 0
    integer, parameter :: maxlog = 2000   ! longer arrays are logged as N = -1, not replayed
    character(1024), save :: logpath = ' '
+   character(1024), save :: closename = ' '   ! the file of a close, if open for write
+   logical, save :: bincheck = .false.
+   integer(ip), save :: ekh(4000) = 0, eks(4000) = 0, eksz(4000) = 0, ekrows(4000) = 0
+   logical, save :: eknul(4000) = .false.
+   character(32), save :: ekcol(4000) = ' '
+   integer, save :: nek = 0
+   integer(ip), save :: s14h(64) = 0, s14d(64) = 0
+   integer(int64), save :: binbytes = 0, maxbin = 268435456   ! binary files of long inputs
    character(32), save :: callname = ' '
    character(len=:), allocatable, save :: buf
    integer, save :: blen = 0, inend = 0
@@ -687,6 +755,82 @@ contains
       call emit('S ' // trim(dir))
    end subroutine tlog_snapshot_file
 
+   !> Note the file of HANDLE before a close from the test program, if the file is open
+   !> for write (or new): tlog_close_snapshot copies it after the close.
+   subroutine tlog_close_name(handle)
+      integer(ip), intent(in) :: handle
+      type(pepper_context), pointer :: ctx
+      character(1024) :: fname
+      integer(ip) :: arc, bff, amh
+      logical :: found
+      closename = ' '
+      if (.not. on() .or. depth /= 1) return
+      ctx => legacy_context()
+      if (ctx%failed()) return
+      found = .false.
+      call pepper_zzddhnfo(ctx, handle, fname, arc, bff, amh, found)
+      if (found .and. (amh == 2 .or. amh == 4)) closename = fname
+   end subroutine tlog_close_name
+
+   !> Copy the file of the close into a new snapshot directory, as tlog_snapshot_file
+   !> does, but past the cap of 256 MB of copies nothing is copied or linked (the
+   !> directory stays empty): a family may write, close and delete thousands of files,
+   !> and a link would keep each of them on the disk.
+   subroutine tlog_close_snapshot()
+      character(1100) :: dir
+      if (.not. on() .or. depth /= 1) return
+      if (closename == ' ') return
+      nsnap = nsnap + 1
+      write(dir, '(a,a,i0)') trim(logpath), '.files/', nsnap
+      call execute_command_line('d="' // trim(dir) // '"; f="' // trim(closename) // '"; ' // &
+         'l="' // trim(logpath) // '.files/latest"; mkdir -p "$d" "$l"; b=$(basename "$f"); ' // &
+         'if [ -f "$f" ]; then if cmp -s "$f" "$l/$b"; then ln "$l/$b" "$d/"; ' // &
+         'else t=$(cat "$l/.bytes" 2>/dev/null || echo 0); if [ "$t" -le 268435456 ]; then ' // &
+         'cp "$f" "$d/" && ln -f "$d/$b" "$l/$b" && ' // &
+         'echo $((t + $(stat -c %s "$f"))) > "$l/.bytes"; fi; fi; fi 2>/dev/null; true')
+      call emit('S ' // trim(dir))
+      closename = ' '
+   end subroutine tlog_close_snapshot
+
+   !> The mark of a writer that is not recorded (WRITE_MARKS of instrument.py).
+   subroutine tlog_writer()
+      if (.not. on()) return
+      call emit('W')
+   end subroutine tlog_writer
+
+   !> The summary SUM of DAFBNA as its double and integer components, `<dc` and `<ic`:
+   !> the integers are packed into doubles, whose bits the decimal log does not keep.
+   !> No components for a handle that is not of a DAF (DAFBNA then signals the error).
+   !> DIR = '>' logs them as outputs, `>dc` and `>ic` (the summary that DAFGS returns).
+   subroutine tlog_dafsum(handle, sum, dir)
+      integer(ip), intent(in) :: handle
+      real(wp), intent(in) :: sum(*)
+      character(1), intent(in), optional :: dir
+      character(1) :: d
+      type(pepper_context), pointer :: ctx
+      character(1024) :: fname
+      integer(ip) :: arc, bff, amh, nd, ni
+      logical :: found
+      real(wp) :: dc(125)
+      integer(ip) :: ic(250)
+      if (.not. on()) return
+      ctx => legacy_context()
+      nd = 0
+      ni = 0
+      found = .false.
+      if (.not. ctx%failed()) call pepper_zzddhnfo(ctx, handle, fname, arc, bff, amh, found)
+      if (found .and. arc == 1) call ctx%dafhsf(handle, nd, ni)
+      if (ctx%failed() .or. nd < 0 .or. nd > 124 .or. ni < 2 .or. ni > 250) then
+         nd = 0
+         ni = 0
+      end if
+      if (nd + ni > 0) call ctx%dafus(sum, nd, ni, dc, ic)
+      d = '<'
+      if (present(dir)) d = dir
+      call tlog_d(d // 'dc', dc, nd)
+      call tlog_i(d // 'ic', ic, ni)
+   end subroutine tlog_dafsum
+
    subroutine head(label, kind, n)
       character(*), intent(in) :: label
       character(1), intent(in) :: kind
@@ -696,6 +840,306 @@ contains
       call emit(trim(ln))
    end subroutine head
 
+   !> True if the array LABEL of N values of SIZE bytes, too long for the log, goes
+   !> to a binary file: an argument of a call from the test program, of at most 50 million
+   !> values and 2 GB, while the family has written at most TSPICE_MAXBIN bytes (default
+   !> 256 MB) of such files, compressed.
+   logical function bin_ok(label, n, size)
+      character(*), intent(in) :: label
+      integer(ip), intent(in) :: n
+      integer, intent(in) :: size
+      integer :: l, stat
+      character(24) :: v
+      if (.not. bincheck) then
+         bincheck = .true.
+         call get_environment_variable('TSPICE_MAXBIN', v, l, stat)
+         if (stat == 0 .and. l > 0) read(v, *) maxbin
+         call execute_command_line('mkdir -p "' // trim(logpath) // '.files/bin"')
+      end if
+      bin_ok = depth == 1 .and. n <= 50000000 .and. int(size, int64) * n <= 2000000000_int64 .and. &
+         binbytes <= maxbin
+   end function bin_ok
+
+   !> Add the size of the compressed file PATH.gz to the bytes of binary files: the
+   !> budget counts the disk, and the index arrays of DSKMI2 (20 million integers, mostly
+   !> zeros) compress to a few hundred kilobytes.
+   subroutine bin_count(path)
+      character(*), intent(in) :: path
+      integer(int64) :: sz
+      inquire(file=trim(path) // '.gz', size=sz)
+      if (sz > 0) binbytes = binbytes + sz
+   end subroutine bin_count
+
+   !> The path of the binary file of values whose hash is H, of kind K; true if it exists.
+   logical function bin_path(h, k, path)
+      integer(int64), intent(in) :: h
+      character(*), intent(in) :: k
+      character(*), intent(out) :: path
+      write(path, '(a,a,z16.16,a,a)') trim(logpath), '.files/bin/', h, '.', k
+      inquire(file=trim(path) // '.gz', exist=bin_path)
+   end function bin_path
+
+   !> FNV-1a of the NB low bytes of W, added to the hash H. Byte by byte: a hash of whole
+   !> words would keep a change of the sign bit in the sign bit alone, and two sign
+   !> changes (a quaternion and its negative) would cancel.
+   subroutine fnv_word(h, w, nb)
+      integer(int64), intent(inout) :: h
+      integer(int64), intent(in) :: w
+      integer, intent(in) :: nb
+      integer :: b
+      do b = 0, nb - 1
+         h = ieor(h, iand(ishft(w, -8*b), 255_int64)) * 1099511628211_int64
+      end do
+   end subroutine fnv_word
+
+   !> Write the values to a binary file (native byte order, gzip), named by their hash so
+   !> that a repeat is stored once, and log its path in a `B` line before the argument.
+   subroutine bin_d(x, n)
+      real(wp), intent(in) :: x(*)
+      integer(ip), intent(in) :: n
+      character(1200) :: path
+      integer(int64) :: h
+      integer :: k, u
+      h = -3750763034362895579_int64
+      do k = 1, n
+         call fnv_word(h, transfer(x(k), 0_int64), 8)
+      end do
+      if (.not. bin_path(h, 'd', path)) then
+         open(newunit=u, file=trim(path), access='stream', form='unformatted', status='replace')
+         write(u) x(1:n)
+         close(u)
+         call execute_command_line('gzip -1 -f "' // trim(path) // '"')
+         call bin_count(path)
+      end if
+      call emit('B ' // trim(path) // '.gz')
+   end subroutine bin_d
+   subroutine bin_i(x, n)
+      integer(ip), intent(in) :: x(*)
+      integer(ip), intent(in) :: n
+      character(1200) :: path
+      integer(int64) :: h
+      integer :: k, u
+      h = -3750763034362895579_int64
+      do k = 1, n
+         call fnv_word(h, int(x(k), int64), 4)
+      end do
+      if (.not. bin_path(h, 'i4', path)) then
+         open(newunit=u, file=trim(path), access='stream', form='unformatted', status='replace')
+         write(u) x(1:n)
+         close(u)
+         call execute_command_line('gzip -1 -f "' // trim(path) // '"')
+         call bin_count(path)
+      end if
+      call emit('B ' // trim(path) // '.gz')
+   end subroutine bin_i
+
+   !> The strings to a binary file: N strings of their declared length L, the kind `cL`.
+   subroutine bin_c(x, n)
+      character(*), intent(in) :: x(*)
+      integer(ip), intent(in) :: n
+      character(1200) :: path
+      character(16) :: kind
+      integer(int64) :: h
+      integer :: k, j, u
+      h = -3750763034362895579_int64
+      do k = 1, n
+         do j = 1, len(x(1))
+            call fnv_word(h, int(iachar(x(k)(j:j)), int64), 1)
+         end do
+      end do
+      write(kind, '(a,i0)') 'c', len(x(1))
+      if (.not. bin_path(h, trim(kind), path)) then
+         open(newunit=u, file=trim(path), access='stream', form='unformatted', status='replace')
+         write(u) x(1:n)
+         close(u)
+         call execute_command_line('gzip -1 -f "' // trim(path) // '"')
+         call bin_count(path)
+      end if
+      call emit('B ' // trim(path) // '.gz')
+   end subroutine bin_c
+
+   !> Sum over the K = 1:N mini-segments of NPKTS(K) times the size of the subtype
+   !> SUBTPS(K) (subtypes 0 to 3: S0 to S3); huge, which logs the array as not held, for
+   !> a subtype outside or a count past a million.
+   integer(ip) function tlog_psum(npkts, subtps, n, s0, s1, s2, s3)
+      integer(ip), intent(in) :: npkts(*), subtps(*), n
+      integer, intent(in) :: s0, s1, s2, s3
+      integer :: k, sz
+      integer(int64) :: t
+      tlog_psum = huge(0_ip)
+      if (n > 1000000) return
+      t = 0
+      do k = 1, n
+         select case (subtps(k))
+         case (0); sz = s0
+         case (1); sz = s1
+         case (2); sz = s2
+         case (3); sz = s3
+         case default; sz = 0
+         end select
+         if (sz == 0) return
+         t = t + int(max(0_ip, npkts(k)), int64) * sz
+      end do
+      if (t < huge(0_ip)) tlog_psum = int(t, ip)
+   end function tlog_psum
+
+   !> The columns of the EK segments that EKIFLD began: handle, segment, column name, entry
+   !> size (-1: variable), whether nulls are allowed, and the rows of the segment.
+   subroutine tlog_ek_note(handle, segno, ncols, nrows, cnames, decls)
+      integer(ip), intent(in) :: handle, segno, ncols, nrows
+      character(*), intent(in) :: cnames(*), decls(*)
+      type(pepper_context), pointer :: ctx
+      character(512) :: u
+      integer :: k, j, i, l, ios, sz
+      if (.not. on()) return
+      ctx => legacy_context()
+      if (ctx%failed()) return
+      do k = 1, ncols
+         u = ' '
+         l = 0
+         do j = 1, len_trim(decls(k))
+            if (decls(k)(j:j) == ' ' .or. l >= len(u)) cycle
+            l = l + 1
+            u(l:l) = decls(k)(j:j)
+            if (u(l:l) >= 'a' .and. u(l:l) <= 'z') u(l:l) = achar(iachar(u(l:l)) - 32)
+         end do
+         sz = 1
+         i = index(u, 'SIZE=')
+         if (i > 0) then
+            j = index(u(i+5:), ',')
+            if (j == 0) j = len_trim(u(i+5:)) + 1
+            if (u(i+5:i+4+j-1) == 'VARIABLE') then
+               sz = -1
+            else
+               read(u(i+5:i+4+j-1), *, iostat=ios) sz
+               if (ios /= 0) sz = 1
+            end if
+         end if
+         nek = mod(nek, size(ekh)) + 1
+         ekh(nek) = handle
+         eks(nek) = segno
+         ekcol(nek) = upper32(cnames(k))
+         eksz(nek) = sz
+         eknul(nek) = index(u, 'NULLS_OK=TRUE') > 0
+         ekrows(nek) = nrows
+      end do
+   end subroutine tlog_ek_note
+
+   function upper32(x) result(u)
+      character(*), intent(in) :: x
+      character(32) :: u
+      integer :: j
+      u = adjustl(x)
+      do j = 1, 32
+         if (u(j:j) >= 'a' .and. u(j:j) <= 'z') u(j:j) = achar(iachar(u(j:j)) - 32)
+      end do
+   end function upper32
+
+   !> The note of a column of an EK fast load, or 0.
+   integer function ek_find(handle, segno, column)
+      integer(ip), intent(in) :: handle, segno
+      character(*), intent(in) :: column
+      character(32) :: c
+      integer :: j, k
+      c = upper32(column)
+      ek_find = 0
+      do j = 0, size(ekh) - 1             ! the latest note first
+         k = modulo(nek - 1 - j, size(ekh)) + 1
+         if (ekh(k) == handle .and. eks(k) == segno .and. ekcol(k) == c .and. ekrows(k) > 0) then
+            ek_find = k
+            return
+         end if
+      end do
+   end function ek_find
+
+   !> The lengths of the arrays of EKACLC, EKACLD, EKACLI: the values (the entry sizes of
+   !> the rows of a variable column, else rows times size), the entry sizes (variable
+   !> columns), the null flags (columns with nulls); huge for a column without a note.
+   integer(ip) function tlog_ek_nvals(handle, segno, column, entszs)
+      integer(ip), intent(in) :: handle, segno, entszs(*)
+      character(*), intent(in) :: column
+      integer :: k, r
+      integer(int64) :: t
+      tlog_ek_nvals = huge(0_ip)
+      k = ek_find(handle, segno, column)
+      if (k == 0) return
+      if (eksz(k) >= 0) then
+         t = int(eksz(k), int64) * ekrows(k)
+      else
+         t = 0
+         do r = 1, ekrows(k)
+            t = t + max(0_ip, entszs(r))
+         end do
+      end if
+      if (t < huge(0_ip)) tlog_ek_nvals = int(t, ip)
+   end function tlog_ek_nvals
+   integer(ip) function tlog_ek_nent(handle, segno, column)
+      integer(ip), intent(in) :: handle, segno
+      character(*), intent(in) :: column
+      integer :: k
+      tlog_ek_nent = huge(0_ip)
+      k = ek_find(handle, segno, column)
+      if (k == 0) return
+      tlog_ek_nent = merge(ekrows(k), 0_ip, eksz(k) < 0)
+   end function tlog_ek_nent
+   integer(ip) function tlog_ek_nnul(handle, segno, column)
+      integer(ip), intent(in) :: handle, segno
+      character(*), intent(in) :: column
+      integer :: k
+      tlog_ek_nnul = huge(0_ip)
+      k = ek_find(handle, segno, column)
+      if (k == 0) return
+      tlog_ek_nnul = merge(ekrows(k), 0_ip, eknul(k))
+   end function tlog_ek_nnul
+
+   !> The degree of the type 14 segment that SPK14B began on HANDLE, for SPK14A.
+   subroutine tlog_spk14_note(handle, chbdeg)
+      integer(ip), intent(in) :: handle, chbdeg
+      type(pepper_context), pointer :: ctx
+      integer :: k
+      if (.not. on()) return
+      ctx => legacy_context()
+      if (ctx%failed()) return
+      do k = 1, size(s14h)
+         if (s14h(k) == handle .or. s14h(k) == 0) exit
+      end do
+      if (k > size(s14h)) k = 1
+      s14h(k) = handle
+      s14d(k) = chbdeg
+   end subroutine tlog_spk14_note
+   integer(ip) function tlog_spk14_len(handle, ncsets)
+      integer(ip), intent(in) :: handle, ncsets
+      integer :: k
+      tlog_spk14_len = huge(0_ip)
+      do k = 1, size(s14h)
+         if (s14h(k) == handle .and. handle /= 0) then
+            if (s14d(k) >= 0 .and. ncsets < 1000000) tlog_spk14_len = max(0_ip, ncsets) * (2 + 6*(s14d(k) + 1))
+            return
+         end if
+      end do
+   end function tlog_spk14_len
+
+   !> The summary of DAFWS or DAFRS, or with DIR = '>' the one that DAFGS returned, for
+   !> the DAF of the current search (DAFGH).
+   subroutine tlog_dafsum_cur(sum, dir)
+      real(wp), intent(in) :: sum(*)
+      character(1), intent(in), optional :: dir
+      type(pepper_context), pointer :: ctx
+      integer(ip) :: h
+      if (.not. on()) return
+      ctx => legacy_context()
+      h = 0
+      if (.not. ctx%failed()) then
+         call ctx%dafgh(h)
+         ! no search: the call itself signals; this lookup leaves no error behind
+         if (ctx%failed()) then
+            call ctx%reset()
+            h = 0
+         end if
+      end if
+      call tlog_dafsum(h, sum, dir)
+   end subroutine tlog_dafsum_cur
+
    subroutine tlog_d(label, x, n)
       character(*), intent(in) :: label
       real(wp), intent(in) :: x(*)
@@ -704,6 +1148,7 @@ contains
       character(32) :: ln
       if (.not. on()) return
       if (n > maxlog) then
+         if (bin_ok(label, n, 8)) call bin_d(x, n)
          call head(label, 'd', -1)
          return
       end if
@@ -729,6 +1174,7 @@ contains
       character(24) :: ln
       if (.not. on()) return
       if (n > maxlog) then
+         if (bin_ok(label, n, 4)) call bin_i(x, n)
          call head(label, 'i', -1)
          return
       end if
@@ -776,12 +1222,13 @@ contains
       integer :: k
       if (.not. on()) return
       if (n > maxlog) then
+         if (bin_ok(label, n, len(x(1)))) call bin_c(x, n)
          call head(label, 'c', -1)
          return
       end if
       call head(label, 'c', int(n))
       do k = 1, n
-         call emit('|' // trim(x(k)))
+         call emit(tlog_str(x(k)))
       end do
    end subroutine tlog_c
    subroutine tlog_c1(label, x)
@@ -789,8 +1236,29 @@ contains
       character(*), intent(in) :: x
       if (.not. on()) return
       call head(label, 'c', 1)
-      call emit('|' // trim(x))
+      call emit(tlog_str(x))
    end subroutine tlog_c1
+   !> A string as one line of the log: `|` and the string without its trailing blanks, or,
+   !> if it holds a character outside printable ASCII (a line feed would end the line),
+   !> `%` and the hexadecimal codes of its characters.
+   function tlog_str(x) result(line)
+      character(*), intent(in) :: x
+      character(len=:), allocatable :: line
+      character(len=*), parameter :: hexd = '0123456789abcdef'
+      integer :: k, c, n
+      n = len_trim(x)
+      if (all([(iachar(x(k:k)) >= 32 .and. iachar(x(k:k)) <= 126, k = 1, n)])) then
+         line = '|' // x(1:n)
+         return
+      end if
+      allocate(character(len=1 + 2*n) :: line)
+      line(1:1) = '%'
+      do k = 1, n
+         c = iachar(x(k:k))
+         line(2*k:2*k) = hexd(c/16 + 1:c/16 + 1)
+         line(2*k + 1:2*k + 1) = hexd(mod(c, 16) + 1:mod(c, 16) + 1)
+      end do
+   end function tlog_str
    !> Number of strings that NCHARS characters fill at the positions BPOS:EPOS of strings
    !> of length SLEN; huge(0), which logs the array as not held, for positions outside.
    integer(ip) function tlog_nsub(nchars, bpos, epos, slen)
@@ -804,50 +1272,6 @@ contains
          tlog_nsub = (nchars + epos - bpos) / (epos - bpos + 1)
       end if
    end function tlog_nsub
-   !> Record the Chebyshev degree of the SPK type 14 segment that SPK14B began on HANDLE;
-   !> a negative degree (SPK14E) forgets it.
-   subroutine tlog_set14(handle, deg)
-      integer(ip), intent(in) :: handle, deg
-      integer :: k
-      do k = 1, size(h14)
-         if (h14(k) == handle) then
-            h14(k) = 0
-            deg14(k) = -1
-         end if
-      end do
-      if (deg < 0) return
-      do k = 1, size(h14)
-         if (h14(k) == 0) then
-            h14(k) = handle
-            deg14(k) = deg
-            return
-         end if
-      end do
-   end subroutine tlog_set14
-   !> Number of doubles of NCSETS coefficient sets of the type 14 segment open on HANDLE,
-   !> NCSETS*(2 + 6*(CHBDEG+1)); huge(0), which logs the array as not held, without one.
-   integer(ip) function tlog_n14(handle, ncsets)
-      integer(ip), intent(in) :: handle, ncsets
-      integer :: k
-      tlog_n14 = huge(0_ip)
-      do k = 1, size(h14)
-         if (h14(k) == handle .and. handle /= 0) then
-            if (ncsets <= 2000) tlog_n14 = max(0_ip, ncsets)*(2 + 6*(deg14(k) + 1))
-            return
-         end if
-      end do
-   end function tlog_n14
-   !> S in upper case, without trailing blanks.
-   function tlog_upper(s) result(u)
-      character(*), intent(in) :: s
-      character(len_trim(s)) :: u
-      integer :: k, c
-      u = s(1:len_trim(s))
-      do k = 1, len(u)
-         c = iachar(u(k:k))
-         if (c >= 97 .and. c <= 122) u(k:k) = achar(c - 32)
-      end do
-   end function tlog_upper
 @PURE@
 end module tspice_log
 '''

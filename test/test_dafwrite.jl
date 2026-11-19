@@ -2044,7 +2044,28 @@ group("9. DAF access, SPK and CK writers") do
         @test throws_kind(() -> dafgsr(h, fward, 0, 128), :dafinvalidparams)
         # A read handle cannot write.
         @test throws_kind(() -> dafbna(h, fwd[1], "X"), :dafinvalidaccess)
-        @test throws_kind(() -> dafws(h, fwd[1]), :dafinvalidaccess)
+        # dafws finds the current array, then refuses the write with the kind of CSPICE's
+        # dafws_; dafrs checks the access first (dafrs_c)
+        dafbfs(h)
+        daffna(h)
+        ccall((:dafbfs_c, LIBCSPICE), Cvoid, (Cint,), hc)
+        ccall((:daffna_c, LIBCSPICE), Cvoid, (Ref{Cint},), Ref{Cint}(0))
+        function cspice_short()
+            buf = zeros(UInt8, 100)
+            try
+                ccall((:getmsg_c, LIBCSPICE), Cvoid, (Cstring, Cint, Ptr{UInt8}), "SHORT", 100, buf)
+            finally
+                ccall((:reset_c, LIBCSPICE), Cvoid, ())
+            end
+            return String(buf[1:(findfirst(iszero, buf) - 1)])
+        end
+        for (f, cf) in ((dafws, :dafws_), (dafrs, :dafrs_))
+            cf === :dafws_ ? ccall((:dafws_, LIBCSPICE), Cint, (Ptr{Cdouble},), fwd[1]) :
+                ccall((:dafrs_, LIBCSPICE), Cint, (Ptr{Cdouble},), fwd[1])
+            kind = cspice_short()
+            @test kind in ("SPICE(DAFILLEGWRITE)", "SPICE(DAFINVALIDACCESS)")
+            @test throws_kind(() -> f(h, fwd[1]), Symbol(lowercase(kind[7:(end - 1)])))
+        end
         dafcls(h)
         SPICE.dafcls(hc)
         @test throws_kind(() -> dafbfs(h), :dafnosuchhandle)
@@ -2482,7 +2503,14 @@ group("9. DAF access, SPK and CK writers") do
                     check!(fails, spkpvn(ctxs, src, dn, et) == rn, "spkpvn by path", et)
                 end
                 @test isempty(fails)
-                @test throws_kind(() -> spkpvn(ctxs, hn, dn, a.last + w), :timeoutofbounds)
+                if c.name in ("spkw15", "spkw17")
+                    # one set of elements: CSPICE propagates it outside the coverage too
+                    rc = SPICE.spkpvn(hc, dc, a.last + w)
+                    rn = spkpvn(ctxs, hn, dn, a.last + w)
+                    @test rn[1] == rc[1] && rn[3] == rc[3] && isapprox(rn[2], rc[2]; rtol)
+                else
+                    @test throws_kind(() -> spkpvn(ctxs, hn, dn, a.last + w), :timeoutofbounds)
+                end
                 SPICE.dafcls(hc)
                 dafcls(hn)
             end

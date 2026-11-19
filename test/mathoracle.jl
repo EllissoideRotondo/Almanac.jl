@@ -332,6 +332,8 @@ module CS
     c(:pl2nvc, V, :pl, :o3, :od); c(:pl2nvp, V, :pl, :o3, :o3); c(:pl2psv, V, :pl, :o3, :o3, :o3)
     c(:pjelpl, V, :el, :pl, :oel); c(:ednmpt, V, :d, :d, :d, :v3, :o3); c(:edpnt, V, :v3, :d, :d, :d, :o3)
     c(:vprjp, V, :v3, :pl, :o3); c(:vprjpi, V, :v3, :pl, :pl, :o3, :ob)
+    # the Fortran routines that the SPICELIB routines call (`tangpt_`, `zzraynp_`, `zzsfxcor_`)
+    f(:npedln, I, :rd, :rd, :rd, :v3, :v3, :o3, :od); f(:nplnpt, I, :v3, :v3, :v3, :o3, :od)
 
     "`edterm_c`: the epoch, the observer position and the terminator points as rows."
     function edterm(trmtyp, source, target, et, fixref, abcorr, obsrvr, npts)

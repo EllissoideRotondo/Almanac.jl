@@ -11,10 +11,12 @@
 # differ by one unit in the last place. The tolerance on these points is
 # `soltol` times the distance to the observer over the radius.
 #
-# `tangpt`: the tangent point comes from `npedln`, which finds the near point of an
-# ellipse in a plane normal to the ray. One unit in the last place of the ray direction
-# changes the result of `npedln_c` itself by 1e-10 of the radius (measured in the test),
-# and the two libraries give the same output for the same input.
+# `tangpt`: the tangent point comes from the Fortran `npedln_` and `nplnpt_` of
+# `tangpt_` (not `npedln_c` and `nplnpt_c`, whose projections multiply by a reciprocal),
+# which find the near point of an ellipse in a plane normal to the ray. One unit in the
+# last place of the ray direction changes the result of `npedln_` itself by 1e-10 of the
+# radius (measured in the test), and the two libraries give the same output for the same
+# input.
 #
 # The default run has 20 random cases on the DSK surface of two parts; the exhaustive
 # run (`ALMANAC_TEST_FULL=1`) has 40. The other samples are the same in the two runs.

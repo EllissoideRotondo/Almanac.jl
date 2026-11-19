@@ -388,6 +388,41 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         end
     end
 
+    # Regression: Almanac took the first of two forms of the epoch or frame variable, and
+    # checked the degree of the phase angles only for a body with terms that use them;
+    # `tisbod_` signals COMPETINGEPOCHSPEC, COMPETINGFRAMESPEC and DEGREEOUTOFRANGE.
+    @apart @testset "tisbod: competing specifications and the phase degree, as CSPICE" begin
+        base = [
+            "BODY1399_POLE_RA" => [10.0, 0.1, 0.0], "BODY1399_POLE_DEC" => [80.0, 0.0, 0.0],
+            "BODY1399_PM" => [5.0, 300.0, 0.0],
+        ]
+        cases = [
+            :competingepochspec => ["BODY1399_CONSTANTS_JED_EPOCH" => [2451545.0], "BODY1399_CONSTS_JED_EPOCH" => [2451545.0]],
+            :competingframespec => ["BODY1399_CONSTANTS_REF_FRAME" => [1.0], "BODY1399_CONSTS_REF_FRAME" => [1.0]],
+            :degreeoutofrange => ["BODY1399_NUT_PREC_ANGLES" => [1.0, 2.0, 3.0, 4.0, 5.0], "BODY1399_MAX_PHASE_DEGREE" => [4.0]],
+            :none => ["BODY1399_NUT_PREC_ANGLES" => [1.0, 2.0, 3.0], "BODY1399_MAX_PHASE_DEGREE" => [2.0]],
+        ]
+        for (want, extra) in cases
+            pool = vcat(base, extra)
+            c2 = SpiceContext()
+            foreach(kv -> pdpool(c2, kv[1], kv[2]), pool)
+            try
+                foreach(kv -> SPICE.pdpool(kv[1], kv[2]), pool)
+                ccall(
+                    (:tisbod_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Cdouble, Ptr{Float64}),
+                    "J2000", 1399, 0.0, zeros(36)
+                )
+                @test cspice_kind() === want
+            finally
+                foreach(kv -> SPICE.dvpool(kv[1]), pool)
+            end
+            for f in (tisbod, tipbod)
+                @test throws_kind(() -> f(c2, "J2000", 1399, 0.0), want) || want === :none
+            end
+            want === :none && @test tisbod(c2, "J2000", 1399, 0.0) isa AbstractMatrix
+        end
+    end
+
     # CSPICE N0067 (`framex`) signals HASHISFULL past 5209 frames defined in kernels;
     # Almanac has no limit. CSPICE is not called.
     @apart @testset "more frames than CSPICE can hold" begin

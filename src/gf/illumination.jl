@@ -147,7 +147,8 @@ function _gf_ilurate(q::GFIllumination, et::Float64)
         sv = (1.0 - dlt) * sv
     end
     n = Vec3{Float64}(vhat(q.normal))
-    nrmsta = vcat(_m_mxv(R, n), _m_mxv(dR, n))
+    nr, nv = rotate_jet((R, dR), (n, _GF_ZERO3))     # `mxvg_` of the state of the normal
+    nrmsta = vcat(nr, nv)
     obssta = vcat(-tr, -tv)
     src = vcat(sr, sv)
     q.idx == 1 && return Float64(dvsep(obssta, src))

@@ -79,7 +79,8 @@ function _geo_asryel(
     diff = zero(Vec3{Float64})
     for i in 0:(npt - 1)                     # invariant: extidx, extprx are the extreme of the points 0 .. i-1
         theta = i * delta
-        diff = -1.0 * v2 + cos(theta) * smajor + sin(theta) * sminor
+        st, ct = sincos(theta)
+        diff = -1.0 * v2 + ct * smajor + st * sminor
         proxy = _m_norm(_m_hat(diff) - udir)
         if domin ? proxy < extprx : proxy > extprx
             extidx = i
@@ -96,7 +97,8 @@ function _geo_asryel(
     while nitr <= 100 && upper - lower > 1.0e-9
         newpt = btween - lower > upper - btween ? lower + gr * (btween - lower) :
             btween + gr * (upper - btween)
-        diff = -1.0 * v2 + cos(newpt) * smajor + sin(newpt) * sminor
+        sn, cn = sincos(newpt)
+        diff = -1.0 * v2 + cn * smajor + sn * sminor
         proxy = _m_norm(_m_hat(diff) - udir)
         if newpt > btween
             btween, newpt = newpt, btween
@@ -245,7 +247,8 @@ function _geo_occed(
         _geo_occ_maxang(xview, smlctr, smlmaj, smlmin)
     tilt = vsep(_m_ucrss(smlmaj, smlmin), xsmlvu)
     tilt > _M_HALFPI && (tilt = Float64(pi) - tilt)
-    minang = atan(cos(tilt) * minlen, sin(tilt) * minlen + xdist)
+    stilt, ctilt = sincos(tilt)
+    minang = atan(ctilt * minlen, stilt * minlen + xdist)
     xasep = vsep(raydir, smlctr - xview)
     xasep + maxang <= uasize && return sfront ? 2s : 3s
     xasep + minang > uasize && return s

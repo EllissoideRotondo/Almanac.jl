@@ -125,6 +125,49 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
         end
         @test same
         @test zeroder
+        # The table of the 21 matrices is made when the package is precompiled; made
+        # again now, it is the same.
+        @test Almanac._build_inertial_rotations() == [Almanac.inertial_rotation(i) for i in 1:21]
+    end
+
+    @apart @testset "TK frames: MATRIX and QUATERNION as tkfram_" begin
+        # A MATRIX that is not quite orthonormal and a QUATERNION that is not a unit:
+        # `sharpr_` and `vhatg_` take norms scaled by the largest component, and the
+        # result has no sine or cosine, so it is equal to CSPICE's to the last bit.
+        defs = [
+            (-1977101, "TKTEST_MATRIX", "MATRIX", "MATRIX", [0.48, 0.6, 0.64, -0.8, 0.0, 0.6, 0.36, -0.8, 0.48]),
+            (-1977102, "TKTEST_QUAT", "QUATERNION", "Q", [0.3, -1.7, 2.2, 0.9]),
+        ]
+        vars = String[]
+        try
+            for (id, name, spec, key, vals) in defs
+                for (setc, seti, setd) in (
+                        (SPICE.pcpool, SPICE.pipool, SPICE.pdpool),
+                        ((k, v) -> pcpool(ctx, k, v), (k, v) -> pipool(ctx, k, v), (k, v) -> pdpool(ctx, k, v)),
+                    )
+                    seti("FRAME_$name", [id])
+                    setc("FRAME_$(id)_NAME", [name])
+                    seti("FRAME_$(id)_CLASS", [4])
+                    seti("FRAME_$(id)_CLASS_ID", [id])
+                    seti("FRAME_$(id)_CENTER", [399])
+                    setc("TKFRAME_$(id)_SPEC", [spec])
+                    setc("TKFRAME_$(id)_RELATIVE", ["J2000"])
+                    setd("TKFRAME_$(id)_$key", vals)
+                end
+                append!(
+                    vars, [
+                        "FRAME_$name", "FRAME_$(id)_NAME", "FRAME_$(id)_CLASS", "FRAME_$(id)_CLASS_ID",
+                        "FRAME_$(id)_CENTER", "TKFRAME_$(id)_SPEC", "TKFRAME_$(id)_RELATIVE", "TKFRAME_$(id)_$key",
+                    ]
+                )
+            end
+            for d in defs
+                @test Matrix(pxform(ctx, "J2000", d[2], 0.0)) == SPICE.pxform("J2000", d[2], 0.0)
+            end
+        finally
+            foreach(SPICE.dvpool, vars)
+            foreach(v -> dvpool(ctx, v), vars)
+        end
     end
 
     @apart @testset "pxfrm2: rotation between two epochs" begin
@@ -149,6 +192,23 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
         # measured: SPICE(UNKNOWNFRAME) for either name
         @test throws_kind(() -> pxfrm2(ctx, "NO_SUCH_FRAME", "J2000", et, et), :unknownframe)
         @test throws_kind(() -> pxfrm2(ctx, "J2000", "NO_SUCH_FRAME", et, et), :unknownframe)
+    end
+
+    # Regression: the rate of a binary PCK frame is that of `pckmat_` and `tisbod_`:
+    # the angles and their rates from `chbint_` go to `eul2xf_`; it was the derivative
+    # of a `Taylor` evaluation, which differed in the last bits of every derivative
+    # block. `eul2xf_` uses `sin` and `cos`, which differ in the last bit between Julia
+    # and the C library on some arguments; with the C library swapped in all agree to
+    # the last bit. Measured with Julia's functions (500 epochs): 430 equal to the last
+    # bit (old arithmetic 0). Own random stream.
+    @apart @testset "binary PCK rates as tisbod_" begin
+        r2 = MersenneTwister(SEED + 201)
+        n = 200
+        nexact = 0
+        for et in random_epochs(r2, n, DE440S_COVERAGE...), from in ("J2000", "ECLIPJ2000")
+            nexact += sxform(ctx, from, "MOON_PA", et) == SPICE.sxform(from, "MOON_PA", et)
+        end
+        @test nexact >= 0.6 * 2n
     end
 end
 

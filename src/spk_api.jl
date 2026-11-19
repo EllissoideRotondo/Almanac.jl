@@ -24,6 +24,21 @@ derivatives, orders 0 to M-1), by the Leibniz rule.
     end
 end
 
+# Order 1: each velocity component sums its six products from left to right, those of
+# the derivative block first, as `mxvg_` applies the state transformation of `frmchg_`
+# in `spkgeo_` and `spkez_`; the sum of the general method above rounds differently.
+@inline function rotate_jet(Rjet::NTuple{2, Any}, rjet::NTuple{2, Any})
+    R, dR = Rjet
+    r, v = rjet
+    w = SVector(
+        ntuple(Val(3)) do i
+            dR[i, 1] * r[1] + dR[i, 2] * r[2] + dR[i, 3] * r[3] +
+                R[i, 1] * v[1] + R[i, 2] * v[2] + R[i, 3] * v[3]
+        end
+    )
+    return (_m_mxv(R, r), w)
+end
+
 """
     frame_jet(ks, from::Int32, to::Int32, et, ::Val{N}) -> NTuple{N+1,Mat3}
 
@@ -348,7 +363,7 @@ function spkgeo(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, obs::Inte
     # As in CSPICE, a body relative to itself is zero before `ref` and `et` are checked.
     targ == obs && return zero(SVector{6, typeof(float(et))}), zero(float(et))
     r, v = spk_jet(ks, Int32(targ), check_epoch(et), frame_id(ks, ref), Int32(obs), Val(1))
-    return vcat(r, v), norm(r) / CLIGHT
+    return vcat(r, v), _m_norm(r) / CLIGHT
 end
 spkgeo(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkgeo(kernelset(ctx), targ, et, ref, obs)
@@ -371,7 +386,7 @@ See also [`spkezp`](@ref), [`spkpos`](@ref).
 function spkgps(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, obs::Integer)
     targ == obs && return zero(Vec3{typeof(float(et))}), zero(float(et))
     (r,) = spk_jet(ks, Int32(targ), check_epoch(et), frame_id(ks, ref), Int32(obs), Val(0))
-    return r, norm(r) / CLIGHT
+    return r, _m_norm(r) / CLIGHT
 end
 spkgps(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkgps(kernelset(ctx), targ, et, ref, obs)

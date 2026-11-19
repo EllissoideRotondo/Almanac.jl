@@ -430,7 +430,9 @@ constant rotation from `ref` to J2000.
 """
 function _tis_jet(ks::KernelSet, ref::NameOrID, body::Integer, et::Real)
     req = _irf_id(ref)
-    m = _body_rotation(ks, Int32(body), taylor_var(check_epoch(et), Val(1)))
+    t = check_epoch(et)
+    m = t isa Float64 ? _body_state(ks, Int32(body), t) :
+        _body_rotation(ks, Int32(body), taylor_var(t, Val(1)))
     r, dr = map(x -> x.v, m), map(x -> x.d[1], m)
     req == _J2000_FRAME && return r, dr
     c = transpose(inertial_rotation(req))
@@ -454,7 +456,12 @@ Throws `SpiceError`:
 - `:badarg` if `et` is not finite;
 - `:framedatanotfound` if no PCK data are loaded for the body;
 - `:kernelvarnotfound` if the text constants of the body have `BODY<id>_PM` without
-  `BODY<id>_POLE_RA` or `BODY<id>_POLE_DEC`.
+  `BODY<id>_POLE_RA` or `BODY<id>_POLE_DEC`;
+- `:competingepochspec` or `:competingframespec` if the pool holds both forms of the
+  epoch (`BODY<sys>_CONSTANTS_JED_EPOCH`, `BODY<sys>_CONSTS_JED_EPOCH`) or the frame
+  variable of the body system;
+- `:degreeoutofrange` if the system has phase angles and `BODY<sys>_MAX_PHASE_DEGREE`
+  is outside 1:3; `:insufficientangles` if the body has more terms than angles.
 
 See also [`tisbod`](@ref), [`pxform`](@ref).
 """

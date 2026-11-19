@@ -54,16 +54,16 @@ the intercept of the ray toward the center.
         sh.dsk || return spoint, alt
         found, spoint = _geo_rayx(ks, sh, pos, spoint - pos, et)
         found || _geo_no_subpoint(what)
-        return spoint, _norm3(spoint - pos)
+        return spoint, _m_norm(spoint - pos)
     end
     if sh.dsk
         found, spoint = _geo_rayx(ks, sh, pos, -pos, et)
         found || _geo_no_subpoint(what)
-        return spoint, _norm3(spoint - pos)
+        return spoint, _m_norm(spoint - pos)
     end
     found, spoint = _m_surfpt(pos, -pos, radii[1], radii[2], radii[3])
     found || _geo_no_intercept()
-    return spoint, _norm3(pos - spoint)
+    return spoint, _m_norm(pos - spoint)
 end
 
 "A shape that carries the DSK data of the method, or a placeholder for an ellipsoid."
@@ -93,7 +93,7 @@ function _geo_subpnt(
     obspos = -tpos
     trgepc = et + s * lt
     radii = _geo_radii(ks, trgcde)
-    primal(_norm3(obspos)) == 0 && throw(
+    primal(_m_norm(obspos)) == 0 && throw(
         SpiceError(
             :noseparation,
             "the distance between the observer $obsrvr and the target $target is zero"
@@ -168,7 +168,7 @@ function _geo_subslr(
     spos, _ = _geo_spkezp(ks, Int32(10), trgepc, fixfid, corr, trgcde)
     spoint, _ = _geo_subpoint(ks, sh, radii, near, spos, trgepc, "sub-solar")
     corr.uselt || return spoint, et, spoint - obspos
-    lt = _norm3(obspos - spoint) / CLIGHT
+    lt = _m_norm(obspos - spoint) / CLIGHT
     trgepc = et + s * lt
     nitr = corr.converged ? 10 : 1
     robs = _ssbpos(ks, obscde, et, Int32(1))
@@ -187,7 +187,7 @@ function _geo_subslr(
         spoint, _ = _geo_subpoint(ks, sh, radii, near, spos, trgepc, "sub-solar")
         xform = frame_rotation(ks, Int32(1), fixfid, trgepc)
         obspos = _m_mxv(xform, robs - _ssbpos(ks, trgcde, trgepc, Int32(1)))
-        lt = _norm3(obspos - spoint) / CLIGHT
+        lt = _m_norm(obspos - spoint) / CLIGHT
         trgepc = et + s * lt
         ltdiff = abs(primal(lt) - prevlt)
         etdiff = abs(primal(trgepc) - prevet)

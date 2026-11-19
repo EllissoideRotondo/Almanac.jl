@@ -1240,9 +1240,10 @@ function inelpl(ellips::SpiceEllipse, plane::SpicePlane)
         1.0 * center + c2 * smajor + s2 * sminor + none
 end
 
-@inline function _m_pjelpl(elin::SpiceEllipse, plane::SpicePlane)
-    # `vperp_c` gives zero for a zero second argument
-    perp(v) = _m_iszero(plane.normal) ? zero(v) - zero(plane.normal) : _m_perp(v, plane.normal, true)
+@inline function _m_pjelpl(elin::SpiceEllipse, plane::SpicePlane, recip::Bool = true)
+    # `vperp_c` gives zero for a zero second argument; `recip` false is the division of
+    # the Fortran `pjelpl_` (`vperp_`)
+    perp(v) = _m_iszero(plane.normal) ? zero(v) - zero(plane.normal) : _m_perp(v, plane.normal, recip)
     return _m_cgv2el(_m_vprjp(elin.center, plane), perp(elin.semimajor), perp(elin.semiminor))
 end
 
@@ -1349,7 +1350,18 @@ function nplnpt(linpt::AbstractVector, lindir::AbstractVector, point::AbstractVe
     ld = _m_v3(lindir)
     p = _m_v3(point)
     _m_iszero(ld) && throw(SpiceError(:zerovector, "the direction vector must not be zero"))
-    pnear = _m_proj(p - lp, ld, true) + lp
+    return _m_nplnpt(lp, ld, p, true)
+end
+
+"""
+    _m_nplnpt(lp, ld, p, recip) -> (pnear, dist)
+
+Nearest point of the line through `lp` along `ld` to `p`, and its distance. `recip`
+chooses the projection of `nplnpt_c` (`vproj_c`, true) or of the Fortran `nplnpt_`
+(`vproj_`, false), which the SPICELIB routines call; see `_m_proj`. `ld` is not zero.
+"""
+@inline function _m_nplnpt(lp::SVector{3}, ld::SVector{3}, p::SVector{3}, recip::Bool)
+    pnear = _m_proj(p - lp, ld, recip) + lp
     return pnear, _m_norm(pnear - p)
 end
 
@@ -1422,10 +1434,19 @@ julia> npedln(1, 1, 1, [2, 0, 0], [0, 0, 1])
 
 See also [`nearpt`](@ref), [`surfpt`](@ref), [`nplnpt`](@ref).
 """
-function npedln(a::Real, b::Real, c::Real, linept::AbstractVector, linedr::AbstractVector)
+npedln(a::Real, b::Real, c::Real, linept::AbstractVector, linedr::AbstractVector) =
+    _m_npedln(a, b, c, _m_v3(linept), _m_v3(linedr), true)
+
+"""
+    _m_npedln(a, b, c, lp, ld, recip) -> (pnear, dist)
+
+`npedln`. `recip` true follows `npedln_c`, false the Fortran `npedln_` that the SPICELIB
+routines (`tangpt_`, `zzraynp_`) call: its `pjelpl_` projects with `vperp_`, which
+divides by the largest component where `vperp_c` multiplies by its reciprocal.
+"""
+function _m_npedln(a::Real, b::Real, c::Real, lp::SVector{3}, ld::SVector{3}, recip::Bool)
     a, b, c = _m_f(a), _m_f(b), _m_f(c)
-    lp = _m_v3(linept)
-    udir, mag = _m_unorm(_m_v3(linedr))
+    udir, mag = _m_unorm(ld)
     primal(mag) == 0.0 && throw(SpiceError(:zerovector, "the line direction is the zero vector"))
     _m_axes_ok(a, b, c) || throw(
         SpiceError(
@@ -1456,7 +1477,7 @@ function npedln(a::Real, b::Real, c::Real, linept::AbstractVector, linedr::Abstr
     xfound || throw(SpiceError(:degeneratecase, "the candidate ellipse was not found"))
     ud2, dmag = _m_unorm(udir)
     prjpl = _m_plane(ud2, zero(dmag) / dmag)
-    prjel = _m_pjelpl(cand, prjpl)
+    prjel = _m_pjelpl(cand, prjpl, recip)
     prjpt = _m_vprjp(sclpt, prjpl)
     prjnpt, dist = _m_npelpt(prjpt, prjel)
     pnear = vprjpi(prjnpt, prjpl, candpl)

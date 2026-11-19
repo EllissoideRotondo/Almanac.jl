@@ -273,21 +273,9 @@ end
     )
     if corr.geometric || targ == obs
         (r,) = spk_jet(ks, targ, et, ref, obs, Val(0))
-        return r, _norm3(r) / CLIGHT
+        return r, _m_norm(r) / CLIGHT
     end
     return abcorr_position(ks, targ, et, ref, corr, obs)
-end
-
-"`spkez_`: state of `targ` relative to `obs` in frame `ref` and the light time."
-@inline function _geo_spkez(
-        ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
-        obs::Int32
-    )
-    if corr.geometric || targ == obs
-        r, v = spk_jet(ks, targ, et, ref, obs, Val(1))
-        return vcat(r, v), _norm3(r) / CLIGHT
-    end
-    return abcorr_state(ks, targ, et, ref, corr, obs)
 end
 
 # --- the target shape -------------------------------------------------------------------
@@ -374,8 +362,8 @@ end
 
 "`zzraynp`: the point of the ray's line nearest to the ellipsoid (or to the outer sphere of DSK data) and the distance."
 @inline function _geo_raynp(sh::_GeoShape, vertex::SVector{3}, raydir::SVector{3})
-    sh.dsk && return npedln(sh.maxrad, sh.maxrad, sh.maxrad, vertex, raydir)
-    return npedln(sh.a, sh.b, sh.c, vertex, raydir)
+    sh.dsk && return _m_npedln(sh.maxrad, sh.maxrad, sh.maxrad, vertex, raydir, false)
+    return _m_npedln(sh.a, sh.b, sh.c, vertex, raydir, false)
 end
 
 "`zzsbfnrm` with `vhat`: the outward unit normal of the shape at the surface point `spoint`."

@@ -108,6 +108,8 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             sd = vcat(u, rand(rng) < 0.1 ? SVector(0.0, 0.0, 0.0) : vnorm(u) * 1.0e-3 * r3())
             over || versus!(t, :surfpv, () -> nf(surfpv(st, sd, a, b, c)), () -> cf(CS.surfpv(st, sd, a, b, c)))
             versus!(t, :npedln, () -> npedln(a, b, c, p, u), () -> CS.npedln(a, b, c, p, u))
+            # `npedln_`, of `tangpt_` and `zzraynp_`, projects with `vperp_` (a division)
+            versus!(t, :npedln_, () -> Almanac._m_npedln(a, b, c, SVector{3}(p), SVector{3}(u), false), () -> CS.npedln_(a, b, c, p, u)[2:3])
             if a > 0 && b > 0 && c > 0 && isfinite(d)
                 m = max(a, b, c)
                 np, alt = nearpt(p, a, b, c)
@@ -218,6 +220,8 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             vtx = rand(rng) < 0.15 ? pl2nvp(pl)[2] : pl.constant * r3() + r3()
             versus!(t, :inrypl, () -> pts(inrypl(vtx, dir, pl), 1), () -> pts(CS.inrypl(vtx, dir, raw), 1))
             versus!(t, :nplnpt, () -> nplnpt(pnt, dir, vtx), () -> CS.nplnpt(pnt, dir, vtx))
+            # `nplnpt_`, of `tangpt_` and `zzsfxcor_`, projects with `vproj_` (a division)
+            iszero(dir) || versus!(t, :nplnpt_, () -> Almanac._m_nplnpt(SVector{3}(pnt), SVector{3}(dir), SVector{3}(vtx), false), () -> CS.nplnpt_(pnt, dir, vtx)[2:3])
             # invariants: unit normal, constant not negative, the spanning vectors
             check!(fails, abs(vnorm(pl.normal) - 1.0) <= 4eps() && pl.constant >= 0.0, "plane: unit normal, constant >= 0", pl)
             pt, u1, u2 = pl2psv(pl)

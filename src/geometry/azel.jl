@@ -37,7 +37,11 @@ conversion.
 See also [`dazldr`](@ref), [`azlcpo`](@ref).
 """
 function recazl(rectan::AbstractVector, azccw::Bool, elplsz::Bool)
-    range, az, el = recrad(rectan)
+    # `recazl_` calls the Fortran `recrad_` and `reclat_`, whose longitude is the
+    # arc tangent of the coordinates as they are (`reclat_c`, and so `recrad_c`, scale
+    # them first).
+    range, az, el = _m_reclat(_m_v3(rectan), false)
+    primal(az) < 0.0 && (az += _M_TWOPI)
     if !azccw && primal(az) > 0.0
         az = 2.0 * Float64(pi) - az
         primal(az) < 0.0 && (az = zero(az))

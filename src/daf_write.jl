@@ -494,13 +494,18 @@ Replace the packed summary of the current array of the search on `handle` with `
 [`dafws`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafws.html) of SPICELIB. The two address components are replaced too; [`dafrs`](@ref) keeps them. The
 change is on disk when the call returns.
 
-Throws `SpiceError(:nocurrentarray)` if the search has no current array, and
-`:dafinvalidparams` if `sum` has fewer doubles than a summary of the file. A call that
-throws does not change the file.
+Throws `SpiceError(:nocurrentarray)` if the search has no current array,
+`:dafillegwrite` if the file is open for read (the kind of `dafws` of SPICELIB and
+CSPICE, which find the current array first; [`dafrs`](@ref) throws
+`:dafinvalidaccess`), and `:dafinvalidparams` if `sum` has fewer doubles than a summary
+of the file. A call that throws does not change the file.
 """
 function dafws(h::DAFHandle, sum::AbstractVector{<:Real})
-    _daf_check_write(h, "dafws")
+    _daf_check_open(h, "dafws")
     _daf_check_current(h, "dafws")
+    h.writable || throw(
+        SpiceError(:dafillegwrite, "dafws: the DAF $(h.path) is open for read; its summaries cannot be written")
+    )
     ss = _daf_sumsize(h.nd, h.ni)
     length(sum) >= ss || throw(
         SpiceError(

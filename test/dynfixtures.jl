@@ -46,6 +46,18 @@ const FRAMES = [
     ("DT_SWITCH_NEST", "switch frame over a switch frame", 399),
 ]
 
+"""
+Frames of the kernel of `frame_kernel` whose base frame is a PCK frame, as `(name,
+family, center)`: an of-date frame, which both engines build relative to J2000 and then
+rotate into the base, and a two-vector frame with the inertial rotation state, whose
+derivative is that of the base. They are compared with CSPICE on their own (`pxform` and
+`sxform`), so the checks of `FRAMES` keep their random data.
+"""
+const BASE_FRAMES = [
+    ("DT_ECL_ON_PCK", "mean ecliptic and equinox of date, base PCK frame", 399),
+    ("DT_GSE_INERT_PCK", "inertial rotation state (two-vector), base PCK frame", 399),
+]
+
 "ET bounds of the intervals of `DT_SWITCH_TIME` (ascending), for the tests at the edges."
 const SWITCH_EDGES = [-6.0e8, -2.0e8, -1.0e8, 1.0e8, 2.5e8, 6.0e8]
 
@@ -462,6 +474,39 @@ function frame_kernel()
            FRAME_1850023_START              = ( -6.0E8, -3.0E8 )
            FRAME_1850023_STOP               = (  6.0E8,  3.0E8 )
 
+           FRAME_DT_ECL_ON_PCK              = 1850026
+           FRAME_1850026_NAME               = 'DT_ECL_ON_PCK'
+           FRAME_1850026_CLASS              = 5
+           FRAME_1850026_CLASS_ID           = 1850026
+           FRAME_1850026_CENTER             = 399
+           FRAME_1850026_RELATIVE           = 'IAU_EARTH'
+           FRAME_1850026_DEF_STYLE          = 'PARAMETERIZED'
+           FRAME_1850026_FAMILY             = 'MEAN_ECLIPTIC_AND_EQUINOX_OF_DATE'
+           FRAME_1850026_PREC_MODEL         = 'EARTH_IAU_1976'
+           FRAME_1850026_OBLIQ_MODEL        = 'EARTH_IAU_1980'
+           FRAME_1850026_ROTATION_STATE     = 'ROTATING'
+
+           FRAME_DT_GSE_INERT_PCK           = 1850027
+           FRAME_1850027_NAME               = 'DT_GSE_INERT_PCK'
+           FRAME_1850027_CLASS              = 5
+           FRAME_1850027_CLASS_ID           = 1850027
+           FRAME_1850027_CENTER             = 399
+           FRAME_1850027_RELATIVE           = 'IAU_EARTH'
+           FRAME_1850027_DEF_STYLE          = 'PARAMETERIZED'
+           FRAME_1850027_FAMILY             = 'TWO-VECTOR'
+           FRAME_1850027_ROTATION_STATE     = 'INERTIAL'
+           FRAME_1850027_PRI_AXIS           = 'X'
+           FRAME_1850027_PRI_VECTOR_DEF     = 'OBSERVER_TARGET_POSITION'
+           FRAME_1850027_PRI_OBSERVER       = 'EARTH'
+           FRAME_1850027_PRI_TARGET         = 'SUN'
+           FRAME_1850027_PRI_ABCORR         = 'NONE'
+           FRAME_1850027_SEC_AXIS           = 'Y'
+           FRAME_1850027_SEC_VECTOR_DEF     = 'OBSERVER_TARGET_VELOCITY'
+           FRAME_1850027_SEC_OBSERVER       = 'EARTH'
+           FRAME_1850027_SEC_TARGET         = 'SUN'
+           FRAME_1850027_SEC_ABCORR         = 'NONE'
+           FRAME_1850027_SEC_FRAME          = 'J2000'
+
         \begintext
         """
     )
@@ -501,7 +546,7 @@ const ERROR_FRAMES = [
     ("DT_BADSTYLE", :notsupported), ("DT_SAMEAXIS", :undefinedframe), ("DT_NOSEC", :kernelvarnotfound),
     ("DT_BADBODY", :notranslation), ("DT_BADABCORR", :spkinvalidoption), ("DT_BADVECDEF", :notsupported),
     ("DT_NOBASE", :kernelvarnotfound), ("DT_SWITCH_GAP", :noframeconnect),
-    ("DT_SWITCH_COUNT", :countmismatch),
+    ("DT_SWITCH_COUNT", :countmismatch), ("DT_BADUNITS", :unitsnotrec),
 ]
 
 """
@@ -616,6 +661,19 @@ function error_kernel()
                FRAME_1850114_ALIGNED_WITH = ( 'IAU_EARTH', 'DT_GSE', 'ECLIPJ2000' )
                FRAME_1850114_START = ( -1.0E9, 2.0E9 )
                FRAME_1850114_STOP = ( 1.5E9, 2.5E9 )
+        """
+    )
+    print(
+        io, head("DT_BADUNITS", 1850115, 5), """
+               FRAME_1850115_RELATIVE = 'J2000'
+               FRAME_1850115_DEF_STYLE = 'PARAMETERIZED'
+               FRAME_1850115_FAMILY = 'EULER'
+               FRAME_1850115_EPOCH = @2010-JAN-01/12:00:00
+               FRAME_1850115_AXES = ( 3, 1, 3 )
+               FRAME_1850115_UNITS = 'FURLONGS'
+               FRAME_1850115_ANGLE_1_COEFFS = ( 0.3, 7.0E-5 )
+               FRAME_1850115_ANGLE_2_COEFFS = ( -0.41 )
+               FRAME_1850115_ANGLE_3_COEFFS = ( 1.1 )
         """
     )
     println(io, "\n\\begintext")

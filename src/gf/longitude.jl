@@ -157,8 +157,7 @@ function _gf_long(
     r2ovr2 = sqrt(2.0) / 2.0
 
     if uop == _GF_EQ
-        cv = cos(xrfval)
-        sv = sin(xrfval)
+        sv, cv = sincos(xrfval)
         pre = ("Coordinate pass 1 of 2", "Coordinate pass 2 of 2")
         usesin = !(abs(sv) >= r2ovr2)
         if usesin
@@ -271,8 +270,7 @@ function _gf_long(
 
     # Inequality. '>' is solved as '<' and the result is complemented.
     flip = uop == _GF_GT
-    cv = cos(xrfval)
-    sv = sin(xrfval)
+    sv, cv = sincos(xrfval)
     locref = atan(sv, cv)
     quad = locref < -Float64(pi) / 2 ? 3 : locref < 0.0 ? 4 : locref < Float64(pi) / 2 ? 1 : 2
     pre = (_gf_pass(tmplat, total + 1), _gf_pass(tmplat, total + 2))

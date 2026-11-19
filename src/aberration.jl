@@ -264,7 +264,7 @@ function _ltc(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, rob
     rt, vt = _ssb(ks, targ, et, iref)
     r = rt - robs
     v = vt - vobs
-    dist = _norm3(r)
+    dist = _m_norm(r)
     lt = dist / CLIGHT
     z = zero(lt)
     primal(lt) == 0 && return (; r, v, lt, dlt = z, ltprev = z, k = z)
@@ -282,11 +282,11 @@ function _ltc(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, rob
         r = rt - robs
         v = vt - vobs
         ltprev = lt
-        lt = _norm3(r) / CLIGHT
+        lt = _m_norm(r) / CLIGHT
         lterr = abs(primal(lt) - primal(ltprev)) / max(1.0, abs(primal(epoch)))
         i += 1
     end
-    a = 1 / (CLIGHT * _norm3(r))
+    a = 1 / (CLIGHT * _m_norm(r))
     b = _dot3(r, v)
     k = s * _dot3(r, vt) * a
     primal(k) > 1 - 1.0e-10 && _throw_range_rate()
@@ -308,13 +308,13 @@ divided by `c`.
 """
 function _apo(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, robs, vobs)
     r = _ssbpos(ks, targ, et, iref) - robs
-    lt = _norm3(r) / CLIGHT
+    lt = _m_norm(r) / CLIGHT
     s = _ltsign(corr)
     maxitr = !corr.uselt ? 0 : corr.converged ? 3 : 1
     # invariant: `lt` is the light time after i - 1 iterations
     for _ in 1:maxitr
         r = _ssbpos(ks, targ, et + s * lt, iref) - robs
-        lt = _norm3(r) / CLIGHT
+        lt = _m_norm(r) / CLIGHT
     end
     corr.stellar || return r, lt
     return _stelab(r, corr.transmit ? -vobs : vobs), lt
@@ -337,30 +337,25 @@ The computation of `stelab`: `pobj` rotated by the angle `asin(|u × vobs/c|)` a
 (`SpiceError(:valueoutofrange)` otherwise). Postcondition: the norm of `pobj` is kept.
 """
 @inline function _stelab(pobj, vobs)
-    u = _vhat(pobj)
+    # The scaled norms and the projection of `vhat_`, `vnorm_` and `vrotv_`.
+    u = _m_hat(pobj)
     vbyc = (1 / CLIGHT) * vobs
     primal(_dot3(vbyc, vbyc)) >= 1 && _throw_vobs()
-    h = cross(u, vbyc)
-    sinphi = _norm3(h)
+    h = _m_cross(u, vbyc)
+    sinphi = _m_norm(h)
     primal(sinphi) == 0 && return pobj - zero(h)
-    phi = asin(sinphi)
-    # `vrotv`: rotate `pobj` about the axis `h` by `phi`.
-    x = h / sinphi
-    p = _dot3(pobj, x) * x
-    v1 = pobj - p
-    v2 = cross(x, v1)
-    sn, cs = sincos(phi)
-    return cs * v1 + sn * v2 + p
+    return _m_vrotv(pobj, h, asin(sinphi))
 end
 
 "The stellar aberration offset of `zzstelab` for the position `r`, the unit vector `rhat` and the observer velocity `vobs`."
 @inline function _stel_offset(r, rhat, vobs)
-    vp = _vperp(vobs, rhat)
-    s = _norm3(vp) / CLIGHT
+    # The scaled norm, projection and unit vector of `vnorm_`, `vperp_` and `vhat_`.
+    vp = _m_perp(vobs, rhat, false)
+    s = _m_norm(vp) / CLIGHT
     c2 = 1 - s * s
     c = primal(c2) > 0 ? sqrt(c2) : zero(c2)
-    vphat = _vhat(vp)
-    ptgmag = _norm3(r)
+    vphat = _m_hat(vp)
+    ptgmag = _m_norm(r)
     return (ptgmag * s) * vphat + (ptgmag * (c - 1)) * rhat, vp, vphat, s, c, ptgmag
 end
 
@@ -385,14 +380,14 @@ offset over ±1 s of linear motion otherwise.
 function _zzstelab(transmit::Bool, accobs, vobs, r, v)
     lcvobs = transmit ? -vobs : +vobs
     lcacc = transmit ? -accobs : +accobs
-    rhat, drhat = _dvhat(r, v)
+    rhat, drhat = _m_pv(_m_dvhat(vcat(r, v), false))
     dptmag = _dot3(v, rhat)
     scorr, vp, vphat, s, c, ptgmag = _stel_offset(r, rhat, lcvobs)
     primal(c) == 0 && _throw_stelab_cos()
     if primal(s) >= 1.0e-6
         dvp = lcacc + (-_dot3(lcvobs, drhat) - _dot3(lcacc, rhat)) * rhat +
             (-_dot3(lcvobs, rhat)) * drhat
-        _, dvphat = _dvhat(vp, dvp)
+        dvphat = _m_pv(_m_dvhat(vcat(vp, dvp), false))[2]
         dphi = 1 / (c * CLIGHT) * _dot3(dvp, vphat)
         term1 = s * dvphat + (c * dphi) * vphat
         term2 = (c - 1) * drhat + (-s * dphi) * rhat
@@ -401,8 +396,8 @@ function _zzstelab(transmit::Bool, accobs, vobs, r, v)
     end
     em = r - v
     ep = r + v
-    lo = _stel_offset(em, _vhat(em), lcvobs - lcacc)[1]
-    hi = _stel_offset(ep, _vhat(ep), lcvobs + lcacc)[1]
+    lo = _stel_offset(em, _m_hat(em), lcvobs - lcacc)[1]
+    hi = _stel_offset(ep, _m_hat(ep), lcvobs + lcacc)[1]
     return scorr, 0.5 * hi - 0.5 * lo
 end
 
@@ -475,7 +470,11 @@ function abcorr_state(
         dltc = qc.dlt
     end
     R, dR = frame_jet(ks, Int32(1), ref, et + s * ltc, Val(1))
-    return vcat(_m_mxv(R, q.r), (1 + s * dltc) * _m_mxv(dR, q.r) + _m_mxv(R, q.v)), q.lt
+    # `zzcorsxf_` scales the derivative block by the rate of the light-time corrected
+    # epoch, and `mxvg_` applies the matrix: the order of operations of `spkez_`.
+    scale = 1 + s * dltc
+    r, v = rotate_jet((R, map(x -> x * scale, dR)), (q.r, q.v))
+    return vcat(r, v), q.lt
 end
 
 """
@@ -624,7 +623,7 @@ function spkezr(
     e, f = check_epoch(et), frame_id(ks, ref)
     if corr.geometric
         r, v = spk_jet(ks, t, e, f, o, Val(1))
-        return vcat(r, v), norm(r) / CLIGHT
+        return vcat(r, v), _m_norm(r) / CLIGHT
     end
     return abcorr_state(ks, t, e, f, corr, o)
 end
@@ -644,7 +643,7 @@ function spkpos(
     e, f = check_epoch(et), frame_id(ks, ref)
     if corr.geometric
         (r,) = spk_jet(ks, t, e, f, o, Val(0))
-        return r, norm(r) / CLIGHT
+        return r, _m_norm(r) / CLIGHT
     end
     return abcorr_position(ks, t, e, f, corr, o)
 end
@@ -976,11 +975,11 @@ function ltime(ks::KernelSet, etobs::Real, obs::Integer, dir::AbstractString, ta
         throw(SpiceError(:baddirection, "ltime: the direction must be \"->\" or \"<-\", not \"$dir\""))
     et = check_epoch(etobs)
     robs = _ssbpos(ks, Int32(obs), et, Int32(1))
-    elapsd = _norm3(_ssbpos(ks, Int32(targ), et, Int32(1)) - robs) / CLIGHT
+    elapsd = _m_norm(_ssbpos(ks, Int32(targ), et, Int32(1)) - robs) / CLIGHT
     ettarg = et + s * elapsd
     # invariant: `ettarg = et + s * elapsd`, with `elapsd` from i - 1 iterations
     for _ in 1:3
-        elapsd = _norm3(_ssbpos(ks, Int32(targ), ettarg, Int32(1)) - robs) / CLIGHT
+        elapsd = _m_norm(_ssbpos(ks, Int32(targ), ettarg, Int32(1)) - robs) / CLIGHT
         ettarg = et + s * elapsd
     end
     return ettarg, elapsd

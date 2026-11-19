@@ -185,4 +185,24 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
         @test gget(st, "d(range, az, el)/dt against central difference") < 1.0e-4
         @test gget(st, "d(range, az, el)/dt against the returned rates") < 1.0e-3
     end
+
+    # Regression: `recazl_` (and so `recazl_c` and `azlcpo_`) calls the Fortran `recrad_`
+    # and `reclat_`, whose longitude is the arc tangent of the coordinates as they are;
+    # `reclat_c` and `recrad_c` divide them by the largest one first, which gave another
+    # last bit of the azimuth in about one call in sixteen (measured with the C
+    # library's `atan2`, 183 of 3000). Own random stream.
+    @testset "recazl: the azimuth of recazl_" begin
+        r2 = MersenneTwister(SEED + 1041)
+        fails = Failures()
+        for _ in 1:500
+            v = SVector{3}(randn(r2, 3) .* 10.0 .^ rand(r2, 0:8))
+            az = atan(v[2], v[1])
+            az < 0 && (az += 2pi)
+            r = recazl(v, true, true)
+            q = recrad(v)
+            check!(fails, r[2] == az, "azimuth", v)
+            check!(fails, (r[1], r[3]) == (q[1], q[3]), "range, elevation", v)
+        end
+        @test isempty(fails)
+    end
 end
