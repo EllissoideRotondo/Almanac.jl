@@ -162,6 +162,8 @@ flat(x::Almanac.DSKDescr) = Any[
 # the descriptors of CSPICE have the same fields
 ORACLE && @eval begin
     flat(x::SPICE.DLADescr) = Any[getfield(x, f) for f in fieldnames(typeof(x))]
+    flat(x::SPICE.Plane) = Any[x.normal..., x.constant]
+    flat(x::SPICE.Ellipse) = Any[x.center..., x.semi_major..., x.semi_minor...]
     flat(x::SPICE.DSKDescr) = Any[
         x.surfce, x.center, x.dclass, x.dtype, x.frmcde, x.corsys,
         x.corpar..., x.co1min, x.co1max, x.co2min, x.co2max, x.co3min, x.co3max, x.start, x.stop,
@@ -709,6 +711,18 @@ plain(x::AbstractArray{Any}) = all(v -> v isa Integer, x) ? Int.(x) :
     all(v -> v isa Real, x) ? Float64.(x) : all(v -> v isa AbstractString, x) ? String.(x) : x
 plain(x) = x
 
+"An input as SPICE.jl takes it: the planes and ellipses of SPICELIB (4 and 9 doubles) as its types."
+function oracle_arg(a::Arg)
+    if a.kind == 'd' && length(a.values) == 4 && a.name in ("plane", "projpl", "invpl")
+        v = Float64.(a.values)
+        return SPICE.Plane((v[1], v[2], v[3]), v[4])
+    elseif a.kind == 'd' && length(a.values) == 9 && a.name in ("ellips", "ellipse", "limb")
+        v = Float64.(a.values)
+        return SPICE.Ellipse((v[1], v[2], v[3]), (v[4], v[5], v[6]), (v[7], v[8], v[9]))
+    end
+    return plain(jl(a))
+end
+
 "The routines that change the kernels or the settings, mirrored into CSPICE."
 const STATEFUL = Set(
     [
@@ -816,6 +830,15 @@ function cspice_evsgp4(et, geophs, elems)
 end
 cspice_azlcpo(method, target, et, abcorr, azccw, elplsz, obspos, obsctr, obsref) =
     SPICE.azlcpo(target, et, abcorr, obspos, obsctr, obsref; method, azccw, elplsz)
+# SPICE.jl's timdef has a buffer of 10 characters: a longer value (a zone) throws
+function cspice_timdef(action, item, value)
+    buf = zeros(UInt8, 256)
+    v = Vector{UInt8}(value); copyto!(buf, v)
+    ccall((:timdef_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cint, Ptr{UInt8}), action, item, 256, buf)
+    SPICE.handleerror()
+    return String(buf[1:(findfirst(iszero, buf) - 1)])
+end
+CSPICE_EXTRA["timdef"] = cspice_timdef
 CSPICE_EXTRA["evsgp4"] = cspice_evsgp4
 CSPICE_EXTRA["azlcpo"] = cspice_azlcpo
 # body names that a family defines with boddef (F_SINCPT maps SUN to 399) reach CSPICE
@@ -830,7 +853,7 @@ function cspice_call(c::Call)
         isdefined(SPICE, Symbol(name)) ? getfield(SPICE, Symbol(name)) : nothing
     f === nothing && return nothing
     drop = get(DROP, lowercase(c.name), String[])
-    args = Any[plain(jl(a)) for a in c.inputs if !(a.name in drop)]
+    args = Any[oracle_arg(a) for a in c.inputs if !(a.name in drop)]
     v = isempty(c.inputs) ? Any[] : c.inputs[end].values
     name == "pdpool" && (args = Any[args[1], Float64.(v)])
     name == "pipool" && (args = Any[args[1], Int.(v)])
@@ -1222,6 +1245,41 @@ function audit!(name, c, result)
     return
 end
 
+# TSPICE_ORACLE_ALL=1 (with TSPICE_ORACLE=1) calls CSPICE for every call that returns
+# values, not only for the mismatches, and writes cspice_agreement.tsv: per routine, how
+# many calls of Almanac and of SPICELIB agree with CSPICE exactly, within `RTOL`, within
+# `NEAR`, or not. It measures how close each is to CSPICE; it does not change the counts.
+const ORACLE_ALL = ORACLE && get(ENV, "TSPICE_ORACLE_ALL", "0") == "1"
+const AGREEMENT = Dict{String, Vector{Int}}()     # n, Almanac exact/rtol/near/far, SPICELIB the same
+
+function _agreement_level(x, o)
+    (x === nothing || o === nothing) && return x === o ? 1 : 4
+    length(x) == length(o) || return 4
+    all(t -> t[1] == t[2] || (t[1] isa AbstractString && t[2] isa AbstractString && rstrip(t[1]) == rstrip(t[2])), zip(x, o)) && return 1
+    all(close_enough.(x, o)) && return 2
+    near_output(x, o) && return 3
+    return 4
+end
+
+function compare_all!(name, c, result)
+    r = cspice_call(c)
+    (r === nothing || r isa Exception) && return
+    notout = get(NOTOUT, name, String[])
+    outs = filter(o -> o.name != "found" && !(o.name in notout), c.outputs)
+    oracle = output_pairs(name, outs, r isa Tuple ? collect(r) : Any[r])
+    length(oracle) == length(result) || return
+    la = lb = 1
+    for ((_, e, g), (_, _, o)) in zip(result, oracle)
+        la = max(la, _agreement_level(g, o))
+        lb = max(lb, _agreement_level(e, o))
+    end
+    v = get!(() -> zeros(Int, 9), AGREEMENT, name)
+    v[1] += 1
+    v[1 + la] += 1
+    v[5 + lb] += 1
+    return
+end
+
 # For selftest.jl: TSPICE_FAULT=value scales each floating-point output of Almanac by
 # 1 + 1e-10, below `NEAR`; TSPICE_FAULT=kind changes the kind of each SpiceError.
 const FAULT = get(ENV, "TSPICE_FAULT", "")
@@ -1325,6 +1383,7 @@ function replay_family(path, tallies, mismatches)
                 (n, e, g) for (n, e, g) in result if
                     g === nothing || length(e) != length(g) || !all(close_enough.(e, g))
             ]
+            ORACLE_ALL && !(name in STATEFUL) && compare_all!(name, c, result)
             if isempty(bad)
                 t.match += 1
                 AUDIT && audit!(name, c, result)
@@ -1472,6 +1531,12 @@ function main(args)
     end
     isempty(ORACLE_FAILURES) ||
         println("the oracle failed for ", sum(first, values(ORACLE_FAILURES)), " calls: see oracle_failures.tsv")
+    ORACLE_ALL && open(joinpath(outdir, "cspice_agreement.tsv"), "w") do io
+        println(io, "routine\tcalls\talmanac_exact\talmanac_rtol\talmanac_near\talmanac_far\tspicelib_exact\tspicelib_rtol\tspicelib_near\tspicelib_far")
+        for (r, v) in sort(collect(AGREEMENT); by = first)
+            println(io, r, '\t', join(v, '\t'))
+        end
+    end
     AUDIT && open(joinpath(outdir, "audit.tsv"), "w") do io
         println(io, "routine\tmatch\tnone_compared\tfewer_compared\tnot_compared")
         for (r, v) in sort(collect(AUDITS); by = first)

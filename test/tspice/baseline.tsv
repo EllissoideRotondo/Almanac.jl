@@ -18,25 +18,23 @@ furnsh	0	1	0	documented	:badvarname past 32 characters, as CSPICE (ldpool); PEPP
 gcpool	0	1	0	documented	:typemismatch for a variable of the other type (gcpool)
 gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool)
 gipool	0	1	0	documented	:typemismatch for a variable of the other type (gipool)
-inedpl	0	1	0	cspice	CSPICE N0067 takes a zero normal; PEPPER signals INVALIDPLANE
-kdata	5	0	0	unexplained	
-limbpt	63	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
+kdata	5	0	0	documented	the handle is always 0 (kdata docstring)
+limbpt	5	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
 lmpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool); PEPPER accepts the name
 pcklof	0	1	0	gap	Almanac has no pcklof; the replay loads with furnsh (NOSUCHFILE)
 pcpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pcpool)
 pdpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool)
 pipool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pipool)
-pxform	15	3	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
+pxform	8	1	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
 sincpt	19	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
 spkcpt	3	0	0	documented	last-bit sin and cos (cspice.md)
 spkpvn	0	39	0	documented	spkpvn refuses an epoch outside the segment (spkpvn docstring)
 subpnt	2	0	0	documented	last-bit sin and cos on DSK plates (cspice.md)
-sxform	8	5	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
-tangpt	188	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
+sxform	5	0	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
+tangpt	186	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
 termpt	7	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
 tipbod	0	4	0	documented	tipbod calls tisbod, which has no degree or epoch-spec check (tisbod)
 tisbod	134	8	0	documented	CSPICE's rate of a cubic pole term, and the degree check (cspice.md)
 tkvrsn	399	0	0	documented	the version string names Almanac (tkvrsn docstring)
-vprjp	0	1	0	cspice	CSPICE N0067 takes a normal off unit length; PEPPER signals NONUNITNORMAL
 vprjpi	0	2	0	cspice	CSPICE N0067 takes a normal off unit length; PEPPER signals NONUNITNORMAL
 xfmsta	1	0	0	documented	last-bit sin and cos near the pole (cspice.md)
