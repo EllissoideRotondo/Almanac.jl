@@ -650,6 +650,15 @@ function default_mapping(ctx, c::Call)
         fexp || return [("found", Any[false], Any[true])]
     end
     vals = r isa Tuple ? collect(r) : Any[r]
+    # a null EK entry: SPICELIB leaves the values undefined, Almanac returns none; only
+    # the null flag is compared
+    if occursin(r"^ekrce[cdi]$", name) && length(vals) == length(outs)
+        k = findfirst(o -> o.name == "isnull", outs)
+        if k !== nothing && outs[k].values == Any[true]
+            keep = [i for i in eachindex(outs) if !(outs[i].name in ("cvals", "dvals", "ivals"))]
+            outs, vals = outs[keep], vals[keep]
+        end
+    end
     WRITE_HANDLE[] = Int[a.values[1] for a in c.inputs if a.name in HANDLE_ARGS && a.kind == 'i']
     pairs = counted(name, map_handles(output_pairs(name, outs, vals)))
     # kinfo and kdata give the handle of a loaded file with its name: from here the handle
