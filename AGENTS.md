@@ -168,7 +168,8 @@ update that page in the same change.
   returns a path in place of a handle.
 - CK type 6 uses the stored clock rate of the next mini-segment, which `ckr06_` rounds
   to a whole number.
-- `spkpvn` checks the time bounds for every SPK type.
+- `spkpvn` checks the time bounds for every SPK type but 15 and 17, whose single set of
+  elements it propagates to any epoch, as CSPICE does.
 - `_spks19` throws `:spkstructureerror` where `spks19` reads `data[0]`.
 - `ckw02`/`ckw03` take the full record count, and `pckw02` takes the degree from the
   record length. Both fix defects of SPICE.jl 0.2.5.
