@@ -115,7 +115,9 @@ function foreach_call(f, path; want = _ -> true)
                         v = nextline()
                         vals[j] = k == "d" ? parse(Float64, strip(v)) :
                             k == "i" ? parse(Int, strip(v)) :
-                            k == "l" ? strip(v) == "T" : String(v[2:end])
+                            k == "l" ? strip(v) == "T" :
+                            # `%`: a string with characters outside printable ASCII, in hex
+                            v[1] == '%' ? String(hex2bytes(v[2:end])) : String(v[2:end])
                     end
                     push!((l[1] == '<' ? ins : outs), Arg(aname[2:end], k[1], vals))
                 elseif startswith(l, "@ ")

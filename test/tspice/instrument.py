@@ -668,7 +668,7 @@ contains
       end if
       call head(label, 'c', int(n))
       do k = 1, n
-         call emit('|' // trim(x(k)))
+         call emit(tlog_str(x(k)))
       end do
    end subroutine tlog_c
    subroutine tlog_c1(label, x)
@@ -676,8 +676,29 @@ contains
       character(*), intent(in) :: x
       if (.not. on()) return
       call head(label, 'c', 1)
-      call emit('|' // trim(x))
+      call emit(tlog_str(x))
    end subroutine tlog_c1
+   !> A string as one line of the log: `|` and the string without its trailing blanks, or,
+   !> if it holds a character outside printable ASCII (a line feed would end the line),
+   !> `%` and the hexadecimal codes of its characters.
+   function tlog_str(x) result(line)
+      character(*), intent(in) :: x
+      character(len=:), allocatable :: line
+      character(len=*), parameter :: hexd = '0123456789abcdef'
+      integer :: k, c, n
+      n = len_trim(x)
+      if (all([(iachar(x(k:k)) >= 32 .and. iachar(x(k:k)) <= 126, k = 1, n)])) then
+         line = '|' // x(1:n)
+         return
+      end if
+      allocate(character(len=1 + 2*n) :: line)
+      line(1:1) = '%'
+      do k = 1, n
+         c = iachar(x(k:k))
+         line(2*k:2*k) = hexd(c/16 + 1:c/16 + 1)
+         line(2*k + 1:2*k + 1) = hexd(mod(c, 16) + 1:mod(c, 16) + 1)
+      end do
+   end function tlog_str
    !> Number of strings that NCHARS characters fill at the positions BPOS:EPOS of strings
    !> of length SLEN; huge(0), which logs the array as not held, for positions outside.
    integer(ip) function tlog_nsub(nchars, bpos, epos, slen)
