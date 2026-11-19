@@ -141,10 +141,20 @@ function foreach_call(f, path; want = _ -> true)
     end
 end
 
-"The values of a binary file of the recorder (`B` line): doubles or 4-byte integers."
+"""
+The values of a binary file of the recorder (`B` line): doubles, 4-byte integers, or
+strings of the length that the name gives (`.c80.gz`), without their trailing blanks as
+the log has them.
+"""
 function read_bin(path, kind)
     bytes = read(`gzip -dc $path`)
-    return kind == 'd' ? Any[reinterpret(Float64, bytes)...] : Any[Int.(reinterpret(Int32, bytes))...]
+    kind == 'd' && return Any[reinterpret(Float64, bytes)...]
+    kind == 'i' && return Any[Int.(reinterpret(Int32, bytes))...]
+    m = match(r"\.c(\d+)\.gz$", path)
+    m === nothing && return Any[TRUNCATED]
+    l = parse(Int, m[1])
+    l == 0 && return Any["" for _ in 1:0]
+    return Any[rstrip(String(bytes[(k + 1):(k + l)]), ' ') for k in 0:l:(length(bytes) - l)]
 end
 
 # --- argument conversion -----------------------------------------------------------------
@@ -415,6 +425,55 @@ const DROPPED = Dict{Int, String}()
 
 "The files that Almanac created with the internal name `replay` for SPICELIB's blank one."
 const IFNAME_REPLAY = Set{String}()
+
+"The EK fast loads that Almanac's ekifld began, by SPICELIB's handle and segment."
+const EKFAST = Dict{Tuple{Int, Int}, Any}()
+
+"""
+SPKW19 and CKW06: the counts of the mini-segments are vectors in Almanac (also of one
+value), and the count `nname` is their length.
+"""
+function minisegment_writer(ctx, c, f, nname, dbl)
+    a = Dict(x.name => x for x in c.inputs)
+    any(x -> any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+    h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+    n = jl(a[nname])
+    n < 0 && throw(UnmappedHandle())
+    args = Any[]
+    for x in c.inputs
+        x.name in ("handle", nname) && continue
+        push!(
+            args, x.name in ("npkts", "subtps", "degres") ? Int.(x.values)[1:n] :
+                x.name in dbl ? Float64.(x.values) : jl(x)
+        )
+    end
+    applicable(f, ctx, h, args...) ? f(ctx, h, args...) : f(h, args...)
+    return []
+end
+
+"EKACLC, EKACLD, EKACLI: the column of the fast load that EKIFLD began."
+function ek_column(c, f, T)
+    a = Dict(x.name => x for x in c.inputs)
+    any(x -> any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+    h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+    segno = jl(a["segno"])
+    rc = get(EKFAST, (a["handle"].values[1], segno), nothing)
+    rc === nothing && throw(UnmappedHandle())
+    vk = only(k for k in keys(a) if k in ("cvals", "dvals", "ivals"))
+    vals = T === String ? String.(a[vk].values) : T.(a[vk].values)
+    f(h, segno, jl(a["column"]), vals, Int.(a["entszs"].values), Bool.(a["nlflgs"].values), rc)
+    return []
+end
+
+"DAFWS and DAFRS: the summary, logged unpacked, of the current array of the search."
+function daf_summary_writer(c, f)
+    a = Dict(x.name => x for x in c.inputs)
+    h = CURRENT_DAF[]
+    # a search that the replay does not have: Almanac's file would miss the write
+    h === nothing && (c.failed || foreach(drop_handle, collect(WRITE_OPEN)); throw(UnmappedHandle()))
+    f(h, Almanac.dafps(Float64.(a["dc"].values), Int.(a["ic"].values)))
+    return []
+end
 
 "The type 14 segment writers of Almanac, by SPICELIB's handle."
 const SPK14W = Dict{Int, Any}()
@@ -1442,9 +1501,6 @@ const MAPPINGS = Dict{String, Function}(
             ctx, h, jl(a["segid"]), jl(a["body"]), jl(a["center"]),
             jl(a["frame"]), jl(a["first"]), jl(a["last"]), jl(a["chbdeg"])
         )
-        # SPK14A is not in the log (the size of its records is not known to the recorder):
-        # the file misses the records, and later opens read SPICELIB's file
-        haskey(HPATH, a["handle"].values[1]) && push!(TAINTED, HPATH[a["handle"].values[1]])
         return []
     end,
     "spk14a" => function (ctx, c)
@@ -1496,6 +1552,53 @@ const MAPPINGS = Dict{String, Function}(
             push!(pairs, (k, Any[rstrip(String(x)) for x in out[k].values[1:min(n, end)]], Any[string(x) for x in v]))
         end
         return pairs
+    end,
+    "spkw19" => (ctx, c) -> minisegment_writer(ctx, c, spkw19, "nintvl", ("packts", "epochs", "ivlbds")),
+    "ckw06" => (ctx, c) -> minisegment_writer(ctx, c, ckw06, "nmini", ("packts", "rates", "sclkdp", "ivlbds")),
+    # the EK fast load: Almanac's EKIFLD returns the state of the load, which the column
+    # writers and EKFFLD take where SPICELIB takes the record pointers
+    "ekifld" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        n = max(0, jl(a["ncols"]))
+        segno, rc = ekifld(
+            h, jl(a["tabnam"]), jl(a["nrows"]), String.(a["cnames"].values)[1:n],
+            String.(a["decls"].values)[1:n]
+        )
+        EKFAST[(a["handle"].values[1], segno)] = rc
+        out = Dict(o.name => o for o in c.outputs)
+        return [("segno", out["segno"].values, Any[segno])]
+    end,
+    "ekaclc" => (ctx, c) -> ek_column(c, ekaclc, String),
+    "ekacld" => (ctx, c) -> ek_column(c, ekacld, Float64),
+    "ekacli" => (ctx, c) -> ek_column(c, ekacli, Int),
+    "ekffld" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        rc = get(EKFAST, (a["handle"].values[1], jl(a["segno"])), nothing)
+        rc === nothing && throw(UnmappedHandle())
+        ekffld(h, jl(a["segno"]), rc)
+        return []
+    end,
+    # DAFWS and DAFRS write the summary of the current array of the search
+    "dafws" => (ctx, c) -> daf_summary_writer(c, dafws),
+    "dafrs" => (ctx, c) -> daf_summary_writer(c, dafrs),
+    # the workspace is not logged; SPICELIB's integer component has the declared size
+    # SPXISZ, of which the index uses the length that Almanac returns
+    "dskmi2" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        any(x -> any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+        nv, np = jl(a["nv"]), jl(a["np"])
+        (nv < 0 || np < 0) && throw(UnmappedHandle())
+        v = reshape(Float64.(a["vrtces"].values)[1:(3nv)], 3, nv)
+        p = reshape(Int.(a["plates"].values)[1:(3np)], 3, np)
+        d, i = dskmi2(
+            v, p, jl(a["finscl"]), jl(a["corscl"]), jl(a["worksz"]), jl(a["voxpsz"]),
+            jl(a["voxlsz"]), jl(a["makvtl"]), jl(a["spxisz"])
+        )
+        out = Dict(o.name => o for o in c.outputs)
+        ei = out["spaixi"].values
+        return [("spaixd", out["spaixd"].values, flat(d)), ("spaixi", ei[1:min(end, length(i))], flat(i))]
     end,
     "dafcs" => default_mapping, "dafgh" => default_mapping,
     # DAFCAD selects the DAF to which DAFADA and DAFENA add (Almanac takes the handle)
@@ -1741,7 +1844,7 @@ function replay_family(path, tallies, mismatches)
     empty!(HANDLES)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
-    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED)
+    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED); empty!(EKFAST)
     foreach(
         h -> try
             Almanac.dafcls(h)
