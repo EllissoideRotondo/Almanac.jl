@@ -855,9 +855,11 @@ end
     frame_rotation(ks, from, to, et::T) -> Mat3{T}
 
 Matrix that rotates vectors from frame `from` to frame `to` at `et` (ET seconds),
-generic over the epoch type. The two frame chains (class 4 to its relative frame,
-classes 1, 2 and 3 to J2000) are followed to their first common frame, as `refchg_` of
-CSPICE does, and at most `MAX_FRAME_CHAIN` links each. `from == to` gives the identity.
+generic over the epoch type. The chain of `from` is evaluated link by link (class 4 to
+its relative frame, class 3 to the reference frame of its CK segment for `et`, classes 1
+and 2 to J2000) until it reaches `to` or J2000, then the chain of `to` until it meets it,
+as `zzrefch0_` of CSPICE does (`_chain_rotation`), at most `MAX_FRAME_CHAIN` links each.
+`from == to` gives the identity.
 A class 3 (CK) frame is evaluated as `ckfrot_` does, see `_ck_frame_step`; with a
 `Taylor` epoch the result holds the derivatives of the interpolated rotation. Class 5
 (dynamic) and class 6 (switch) frames are evaluated as `zzdynrot_` and `zzswfxfm_` do,
@@ -866,30 +868,7 @@ see `dynframes.jl` and `switchframes.jl`.
 function frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
     from == to && return one(Mat3{T})
     _both_inertial(from, to) && return _inertial_pair(T, from, to)
-    # The chain of `to`, without evaluation: to, parent(to), ..., J2000.
-    chain = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
-    cur = to
-    len = 1
-    chain = Base.setindex(chain, cur, 1)
-    while cur != _J2000_FRAME    # invariant: chain[1:len] is the chain of `to` down to cur
-        len > MAX_FRAME_CHAIN && _chain_too_long(to)
-        cur = _frame_parent(ks, cur)
-        len += 1
-        chain = Base.setindex(chain, cur, len)
-    end
-    # The first frame on the chain of `from` that is also on the chain of `to`.
-    node = from
-    n = 0
-    while !_in_chain(chain, len, node)
-        n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(from)
-        node = _frame_parent(ks, node)
-    end
-    up = _rotation_up(ks, from, node, et)       # from -> node
-    node == to && return up
-    down = _rotation_up(ks, to, node, et)       # to -> node
-    node == from && return Mat3{T}(transpose(down))
-    return Mat3{T}(_m_mtxm(down, up))
+    return _chain_rotation(_CKExact(), ks, from, to, et)::Mat3{T}
 end
 
 frame_rotation(ks::KernelSet, from::Integer, to::Integer, et::Real) =
@@ -912,14 +891,6 @@ transposed `inertial_rotation`, and the two links meet at J2000).
     up = Mat3{T}(transpose(inertial_rotation(from)))
     to == _J2000_FRAME && return up
     return Mat3{T}(_m_mtxm(Mat3{T}(transpose(inertial_rotation(to))), up))
-end
-
-"True if `id` is one of the first `len` entries of `chain`."
-@inline function _in_chain(chain::NTuple{M, Int32}, len::Int, id::Int32) where {M}
-    for k in 1:len
-        @inbounds chain[k] == id && return true
-    end
-    return false
 end
 
 """

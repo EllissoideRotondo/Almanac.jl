@@ -1003,19 +1003,90 @@ function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where 
     while cur != stop       # invariant: rot takes vectors from frame id to frame cur
         n += 1
         n > MAX_FRAME_CHAIN && _chain_too_long(id)
-        fd = frame_def(ks, cur)
-        if fd.class == 3
-            cur, step = _ck_frame_step(mode, ks, fd, et)
-        elseif fd.class == 5 || fd.class == 6     # dynamic and switch frames, `dynframes.jl`
-            cur, step = _dyn_chain_step(mode, ks, fd, et)
-        elseif fd.class == 2
-            cur, step = _ck_pck_step(mode, ks, fd, et)
-        else
-            cur, step = _frame_step(ks, cur, _ck_epoch(mode, et))
-        end
+        cur, step = _chain_step(mode, ks, cur, et)
         rot = n == 1 ? step : _ck_mxm(mode, step, rot)
     end
     return rot
+end
+
+"""
+    _chain_step(mode, ks, id, et) -> (parent, Mat3)
+
+One link of a frame chain as `zzrotgt0_` (exact mode) and `zzfrmgt0_` (state mode) give
+it: a CK frame is linked to the reference frame of its segment for `et`, a switch frame
+as `_sw_frame_step` links it, every other frame as `_frame_step` links it.
+"""
+@inline function _chain_step(mode, ks::KernelSet, id::Int32, et::T) where {T <: Real}
+    fd = frame_def(ks, id)
+    if fd.class == 3
+        return _ck_frame_step(mode, ks, fd, et)
+    elseif fd.class == 5 || fd.class == 6     # dynamic and switch frames, `dynframes.jl`
+        return _dyn_chain_step(mode, ks, fd, et)
+    elseif fd.class == 2
+        return _ck_pck_step(mode, ks, fd, et)
+    end
+    return _frame_step(ks, id, _ck_epoch(mode, et))
+end
+
+"`transpose(a) * b` in the mode: `_sx_mtxm` in the state mode, `_m_mtxm` in the exact mode."
+@inline _ck_mtxm(::_CKState, a, b) = _sx_mtxm(a, b)
+@inline _ck_mtxm(::_CKExact, a, b) = _m_mtxm(a, b)
+
+"`(k, rots[k])` for the first `k <= len` with `nodes[k] == id`, or `(0, rots[1])`."
+@inline function _chain_find(nodes::NTuple{M, Int32}, rots, len::Int, id::Int32) where {M}
+    for k in 1:len
+        @inbounds nodes[k] == id && return k, rots[k]
+    end
+    return 0, rots[1]
+end
+
+"""
+    _chain_rotation(mode, ks, from, to, et) -> Mat3
+
+Matrix from frame `from` to frame `to` at `et` as `zzrefch0_` (exact mode) and
+`zzfrmch0_` (state mode) compute it: the chain of `from` is evaluated link by link, so
+that a CK or switch frame is followed through the frame its segment or base gives for
+`et`, until it reaches `to` or J2000; the chain of `to` is then evaluated until it meets
+a frame of that chain, and the two parts are joined there. The first frame met can be
+other than J2000 only when it is the frame of a CK segment or of a switch base (the
+static parents of those frames are J2000). At most `MAX_FRAME_CHAIN` links each. Does not
+allocate.
+"""
+function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
+    S = _ck_numtype(mode, T)
+    from == to && return one(Mat3{S})
+    nodes = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
+    rots = ntuple(_ -> one(Mat3{S}), Val(MAX_FRAME_CHAIN + 1))
+    nodes = Base.setindex(nodes, from, 1)
+    len = 1
+    cur = from
+    rot = one(Mat3{S})
+    # invariant: nodes[1:len] is the chain of `from` to cur, rots[k] the matrix from
+    # `from` to nodes[k], and rot = rots[len]
+    while cur != _J2000_FRAME && cur != to
+        len > MAX_FRAME_CHAIN && _chain_too_long(from)
+        cur, step = _chain_step(mode, ks, cur, et)
+        rot = len == 1 ? step : _ck_mxm(mode, step, rot)
+        len += 1
+        nodes = Base.setindex(nodes, cur, len)
+        rots = Base.setindex(rots, rot, len)
+    end
+    cur == to && return rot::Mat3{S}
+    down = one(Mat3{S})
+    cur = to
+    n = 0
+    k, up = _chain_find(nodes, rots, len, cur)
+    # invariant: down is the matrix from `to` to cur, and no frame of the chain of `to`
+    # before cur is on the chain of `from`
+    while k == 0
+        n += 1
+        n > MAX_FRAME_CHAIN && _chain_too_long(to)
+        cur, step = _chain_step(mode, ks, cur, et)
+        down = n == 1 ? step : _ck_mxm(mode, step, down)
+        k, up = _chain_find(nodes, rots, len, cur)
+    end
+    k == 1 && return Mat3{S}(transpose(down))
+    return Mat3{S}(_ck_mtxm(mode, down, up))
 end
 
 """
@@ -1049,26 +1120,5 @@ velocity of its segment, and needs a segment that has one. The two chains are fo
 to their first common frame, as in `frame_rotation`.
 """
 function _ck_state_rotation(ks::KernelSet, from::Int32, to::Int32, et::Float64)
-    from == to && return one(Mat3{Taylor{1, Float64}})
-    chain = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
-    cur = to
-    len = 1
-    chain = Base.setindex(chain, cur, 1)
-    while cur != _J2000_FRAME    # invariant: chain[1:len] is the chain of `to` down to cur
-        len > MAX_FRAME_CHAIN && _chain_too_long(to)
-        cur = _frame_parent(ks, cur)
-        len += 1
-        chain = Base.setindex(chain, cur, len)
-    end
-    node = from
-    n = 0
-    while !_in_chain(chain, len, node)   # invariant: no frame from `from` to before node is in the chain
-        n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(from)
-        node = _frame_parent(ks, node)
-    end
-    up = _ck_chain_to(_CKState(), ks, from, node, et)
-    node == to && return up
-    down = _ck_chain_to(_CKState(), ks, to, node, et)
-    return _sx_mtxm(down, up)
+    return _chain_rotation(_CKState(), ks, from, to, et)
 end
