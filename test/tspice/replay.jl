@@ -803,6 +803,24 @@ const CSPICE_EXTRA = Dict{String, Function}(
     "limbpt" => cspice_limbpt, "ilumin" => cspice_ilumin, "illumg" => cspice_illumg,
 )
 
+# evsgp4 is not wrapped by SPICE.jl; its azlcpo wrapper takes method, azccw and elplsz as
+# keywords, so the positional call of the oracle failed.
+function cspice_evsgp4(et, geophs, elems)
+    state = zeros(6)
+    ccall(
+        (:evsgp4_c, SPICE.libcspice), Cvoid, (SpD, Ref{SpD}, Ref{SpD}, Ref{SpD}),
+        et, Vector{SpD}(geophs), Vector{SpD}(elems), state
+    )
+    SPICE.handleerror()
+    return state
+end
+cspice_azlcpo(method, target, et, abcorr, azccw, elplsz, obspos, obsctr, obsref) =
+    SPICE.azlcpo(target, et, abcorr, obspos, obsctr, obsref; method, azccw, elplsz)
+CSPICE_EXTRA["evsgp4"] = cspice_evsgp4
+CSPICE_EXTRA["azlcpo"] = cspice_azlcpo
+# body names that a family defines with boddef (F_SINCPT maps SUN to 399) reach CSPICE
+push!(STATEFUL, "boddef")
+
 function cspice_call(c::Call)
     name = lowercase(c.name)
     occursin(NO_ORACLE, name) && return nothing

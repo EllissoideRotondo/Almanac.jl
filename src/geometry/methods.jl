@@ -374,8 +374,8 @@ end
 
 "`zzraynp`: the point of the ray's line nearest to the ellipsoid (or to the outer sphere of DSK data) and the distance."
 @inline function _geo_raynp(sh::_GeoShape, vertex::SVector{3}, raydir::SVector{3})
-    sh.dsk && return npedln(sh.maxrad, sh.maxrad, sh.maxrad, vertex, raydir)
-    return npedln(sh.a, sh.b, sh.c, vertex, raydir)
+    sh.dsk && return _m_npedln(sh.maxrad, sh.maxrad, sh.maxrad, vertex, raydir, false)
+    return _m_npedln(sh.a, sh.b, sh.c, vertex, raydir, false)
 end
 
 "`zzsbfnrm` with `vhat`: the outward unit normal of the shape at the surface point `spoint`."

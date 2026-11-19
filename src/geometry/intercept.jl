@@ -122,7 +122,8 @@ function _geo_sfxcor(
         if !found
             i < nitr - 1 || return none
             pnear, _ = _geo_raynp(sh, obspos, trgdir)
-            spoint, _ = nplnpt(obspos, trgdir, pnear)
+            # `zzsfxcor_` calls the Fortran `nplnpt_` (`vproj_`, which divides).
+            spoint, _ = _m_nplnpt(obspos, trgdir, pnear, false)
         end
         lt = _norm3(obspos - spoint) / CLIGHT
         trgepc = et + s * lt
