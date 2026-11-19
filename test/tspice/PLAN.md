@@ -37,25 +37,28 @@ The glibc check: run `replay.jl` through a script that first redefines, for `Flo
 `libm.so.6`, and `sincos(x) = (sin(x), cos(x))`, then `include`s `replay.jl`. A
 mismatch that remains with glibc is not a libm effect.
 
-## State at commit 8d0bfdb (new recording, new baseline)
+## State at commit 5c208be (third recording, new baseline)
 
-Full recording again with the recorder of this branch (399 families, all passed; the
-old recording had a synthetic manifest and logged far fewer top-level calls), then the
-full replay with the oracle and `--update-baseline`:
+Full recording with the recorder of this branch (399 families, all passed), full replay
+with the oracle and `--update-baseline`, then the GF bound fixed (2 rows added):
 
 | kind | count | meaning |
 |---|---|---|
-| match | 15,973,462 | equal to SPICELIB within 1e-12 |
-| cspice | 163,585 | differs from SPICELIB, equal to CSPICE, CSPICE differs from SPICELIB |
-| near | 2,895 | within 1e-9 of SPICELIB; CSPICE agrees with SPICELIB |
+| match | 16,019,710 | equal to SPICELIB within 1e-12 (GF windows: within 2 tol) |
+| cspice | 163,595 | differs from SPICELIB, equal to CSPICE, CSPICE differs from SPICELIB |
+| near | 2,893 | within 1e-9 of SPICELIB; CSPICE agrees with SPICELIB |
 | spread | 137 | SPICELIB and CSPICE differ; Almanac within twice their distance |
-| value | 821 | larger difference (all classed: see item 7) |
+| value | 823 | larger difference (all classed: item 7) |
 | error | 14 | other error, or an error where SPICELIB had none (classed) |
-| adapter | 0 | (1 in the run, fixed after it: switch frame base ID outside Int32) |
-| skipped | 222,936 | see item 9 |
+| adapter | 0 | |
+| skipped | 186,903 | 177,888 unmapped handles (F_ZZDSKBSR 69,728: files past the copy cap and loaded by its utilities), 24 without counterpart, 31 truncated, 14 in an error state |
 
-Classes of the gated rows (`baseline.tsv`): documented 831, cspice 3, gap 1,
-unexplained 0. `selftest.jl` rejects every case.
+Written files compared at close: 38,323, all equal to SPICELIB's; 9,685 not compared
+(9,454 past the copy cap, mostly F_ZZDSKBSR; 215 opened outside the log; 16 others).
+GF searches compared: 712 (rest of the list in `gf_agreement.tsv`), 2 outside 2 tol
+(`gfpa`, `gfilum` of F_GFILUM, libm, documented). Classes of the gated rows: documented
+833, cspice 3, gap 1, unexplained 0. `selftest.jl` rejects every case. Unit tests: 11,463
+pass (full suite on d9fab11; the groups changed since pass).
 
 Earlier measurements, still valid:
 - glibc check on F_DYN01, F_XFMSTA, F_GFDIST, F_LS: near 1,352 -> 0, value 18 -> 4 (the
