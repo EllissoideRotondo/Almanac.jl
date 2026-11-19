@@ -24,6 +24,21 @@ derivatives, orders 0 to M-1), by the Leibniz rule.
     end
 end
 
+# Order 1: each velocity component sums its six products from left to right, those of
+# the derivative block first, as `mxvg_` applies the state transformation of `frmchg_`
+# in `spkgeo_` and `spkez_`; the sum of the general method above rounds differently.
+@inline function rotate_jet(Rjet::NTuple{2, Any}, rjet::NTuple{2, Any})
+    R, dR = Rjet
+    r, v = rjet
+    w = SVector(
+        ntuple(Val(3)) do i
+            dR[i, 1] * r[1] + dR[i, 2] * r[2] + dR[i, 3] * r[3] +
+                R[i, 1] * v[1] + R[i, 2] * v[2] + R[i, 3] * v[3]
+        end
+    )
+    return (_m_mxv(R, r), w)
+end
+
 """
     frame_jet(ks, from::Int32, to::Int32, et, ::Val{N}) -> NTuple{N+1,Mat3}
 

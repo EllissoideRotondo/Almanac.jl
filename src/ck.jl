@@ -921,10 +921,69 @@ end
 @inline _ck_skew(v::Vec3{T}) where {T} =
     Mat3{T}(zero(T), v[3], -v[2], -v[3], zero(T), v[1], v[2], -v[1], zero(T))
 
+"""
+    _sx_mxm(a, b) -> Mat3{Taylor{1,Float64}}
+
+Contract: the product `a * b` of two rotations with their derivatives, with the
+arithmetic of the 6 by 6 product of their state transformations in `zzmsxf_` and
+`mxmg_`: the value is the three products of `a.v` and `b.v` summed from left to right;
+the derivative is `a.d * b.v` and then `a.v * b.d`, the six products summed from left to
+right. The product of `Taylor` numbers sums the terms in another order, which changes
+the last bit.
+"""
+@inline function _sx_mxm(a::Mat3{Taylor{1, Float64}}, b::Mat3{Taylor{1, Float64}})
+    return Mat3{Taylor{1, Float64}}(
+        ntuple(Val(9)) do k
+            i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
+            v = a[i, 1].v * b[1, j].v + a[i, 2].v * b[2, j].v + a[i, 3].v * b[3, j].v
+            d = a[i, 1].d[1] * b[1, j].v + a[i, 2].d[1] * b[2, j].v + a[i, 3].d[1] * b[3, j].v +
+                a[i, 1].v * b[1, j].d[1] + a[i, 2].v * b[2, j].d[1] + a[i, 3].v * b[3, j].d[1]
+            Taylor((v, d))
+        end
+    )
+end
+
+"""
+    _sx_mxv(m, s) -> Vec3{Taylor{1,Float64}}
+
+Contract: the product of the rotation `m` with its derivative and the vector `s` with
+its derivative, with the arithmetic of `mxvg_` applied to the 6 by 6 state
+transformation and the state: the value is the three products of `m.v` and `s.v`, the
+derivative `m.d * s.v` and then `m.v * s.d`, each sum from left to right.
+"""
+@inline function _sx_mxv(m::Mat3{Taylor{1, Float64}}, s::Vec3{Taylor{1, Float64}})
+    return Vec3{Taylor{1, Float64}}(
+        ntuple(Val(3)) do i
+            v = m[i, 1].v * s[1].v + m[i, 2].v * s[2].v + m[i, 3].v * s[3].v
+            d = m[i, 1].d[1] * s[1].v + m[i, 2].d[1] * s[2].v + m[i, 3].d[1] * s[3].v +
+                m[i, 1].v * s[1].d[1] + m[i, 2].v * s[2].d[1] + m[i, 3].v * s[3].d[1]
+            Taylor((v, d))
+        end
+    )
+end
+
+"`_sx_mxm(transpose(a), b)`: the product with the inverse of `a`, as `invstm_` and `zzmsxf_`."
+@inline _sx_mtxm(a::Mat3{Taylor{1, Float64}}, b::Mat3{Taylor{1, Float64}}) =
+    _sx_mxm(Mat3{Taylor{1, Float64}}(transpose(a)), b)
+
+"Matrix product of two links of a chain: `_sx_mxm` in the state mode, `_m_mxm` in the exact mode."
+@inline _ck_mxm(::_CKState, a, b) = _sx_mxm(a, b)
+@inline _ck_mxm(::_CKExact, a, b) = _m_mxm(a, b)
+
 @inline _ck_epoch(::_CKExact, et) = et
 @inline _ck_epoch(::_CKState, et::Float64) = taylor_var(et, Val(1))
 @inline _ck_numtype(::_CKExact, ::Type{T}) where {T} = T
 @inline _ck_numtype(::_CKState, ::Type{Float64}) = Taylor{1, Float64}
+
+"""
+    _ck_pck_step(mode, ks, fd, et) -> (J2000, Mat3)
+
+One link of a frame chain for the PCK frame `fd`: the matrix to J2000, in the state mode
+with the derivative of `tisbod_` (`_body_state`), in the exact mode as `_frame_step`.
+"""
+@inline _ck_pck_step(::_CKExact, ks::KernelSet, fd::FrameDef, et) = _frame_step(ks, fd.id, et)
+@inline _ck_pck_step(::_CKState, ks::KernelSet, fd::FrameDef, et::Float64) =
+    (_J2000_FRAME, Mat3{Taylor{1, Float64}}(transpose(_body_state(ks, fd.classid, et))))
 
 """
     _ck_chain_to(mode, ks, id, stop, et) -> Mat3
@@ -949,29 +1008,32 @@ function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where 
             cur, step = _ck_frame_step(mode, ks, fd, et)
         elseif fd.class == 5 || fd.class == 6     # dynamic and switch frames, `dynframes.jl`
             cur, step = _dyn_chain_step(mode, ks, fd, et)
+        elseif fd.class == 2
+            cur, step = _ck_pck_step(mode, ks, fd, et)
         else
             cur, step = _frame_step(ks, cur, _ck_epoch(mode, et))
         end
-        rot = _m_mxm(step, rot)
+        rot = n == 1 ? step : _ck_mxm(mode, step, rot)
     end
     return rot
 end
 
 """
-    _ck_in_chain(ks, id) -> Bool
+    _ck_in_chain(ks, id, pck = false) -> Bool
 
 True if the chain of frame `id` towards J2000 holds a frame of class 3, 5 or 6 (the
-classes whose CSPICE state transformation is not the time derivative of the rotation)
+classes whose CSPICE state transformation is not the time derivative of the rotation),
+or with `pck` of class 2 (whose derivative `tisbod_` computes with other arithmetic),
 before any other link needs an evaluation. Throws as `_frame_parent` does.
 """
-function _ck_in_chain(ks::KernelSet, id::Int32)
+function _ck_in_chain(ks::KernelSet, id::Int32, pck::Bool = false)
     cur = id
     n = 0
     while cur != _J2000_FRAME       # invariant: no frame from id to before cur is class 3
         n += 1
         n > MAX_FRAME_CHAIN && _chain_too_long(id)
         class = frame_def(ks, cur).class
-        (class == 3 || class == 5 || class == 6) && return true
+        (class == 3 || class == 5 || class == 6 || (pck && class == 2)) && return true
         cur = _frame_parent(ks, cur)
     end
     return false
@@ -1008,5 +1070,5 @@ function _ck_state_rotation(ks::KernelSet, from::Int32, to::Int32, et::Float64)
     up = _ck_chain_to(_CKState(), ks, from, node, et)
     node == to && return up
     down = _ck_chain_to(_CKState(), ks, to, node, et)
-    return Mat3{Taylor{1, Float64}}(_m_mtxm(down, up))
+    return _sx_mtxm(down, up)
 end

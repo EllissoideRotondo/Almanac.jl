@@ -234,7 +234,10 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
             R, dR = pxder(ctx, from, to, et, Val(1))
             X = sxform(ctx, from, to, et)
             @test isapprox(R, pxform(ctx, from, to, et); atol = 4eps())
-            @test dR == X[SVector(4, 5, 6), SOneTo(3)]
+            # `sxform` takes the rate of a PCK frame with the arithmetic of `tisbod_`, and
+            # `pxder` the derivative of the evaluated matrix: the same function, rounded
+            # otherwise. Measured: 6e-16 relative.
+            @test der_reldiff(dR, X[SVector(4, 5, 6), SOneTo(3)]) <= 2.0e-15
             Xc = SPICE.sxform(from, to, et)
             worst = max(worst, der_reldiff(dR, Xc[4:6, 1:3]))
         end

@@ -252,6 +252,28 @@ group(
         foreach(measured, rows)
     end
 
+    # Regression: `zzdynfrm_` builds a two-vector frame with `vhat_`, `dvhat_` and
+    # `ducrss_`, `frmchg_` joins the links with `zzmsxf_`, and `spkgeo_` applies the
+    # state transformation with `mxvg_`. With the same arithmetic the results are those
+    # of CSPICE to the last bit for these frames, whose vectors come from the Chebyshev
+    # segments of de440s.bsp and need no sine or cosine (which differ in the last bit
+    # between Julia and the C library). The old arithmetic differed by about 1e-16
+    # relative in the matrix and by up to 5e-9 in the derivative block. Own random
+    # stream, so that the cases after this one keep their data.
+    @apart @testset "two-vector frames and spkezr to the last bit" begin
+        r2 = MersenneTwister(SEED + 1701)
+        fails = Failures()
+        for name in ("DT_GSE", "DT_GSE_LTS", "DT_GSE_INERTIAL"), et in random_epochs(r2, 10, -span, span)
+            check!(fails, pxform(ctx, name, "J2000", et) == SPICE.pxform(name, "J2000", et), "pxform", name, et)
+            check!(fails, sxform(ctx, "J2000", name, et) == SPICE.sxform("J2000", name, et), "sxform", name, et)
+            for (targ, obs) in (("MOON", "EARTH"), ("SUN", "MOON"))
+                s = spkezr(ctx, targ, et, name, "NONE", obs)[1]
+                check!(fails, s == SPICE.spkezr(targ, et, name, "NONE", obs)[1], "spkezr", name, targ, et)
+            end
+        end
+        @test isempty(fails)
+    end
+
     @apart @testset "other corrections, spkpos, and frame to frame" begin
         d = Float64[]; dv = Float64[]; dq = Float64[]; dx = Float64[]; dxl = Float64[]
         names = first.(DynFix.FRAMES)

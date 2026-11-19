@@ -51,7 +51,7 @@ end
 
 "Contract: `axis` is 1, 2 or 3; returns `[angle]_axis * m` with the arithmetic of CSPICE `rotmat`."
 function _rotmat(m::Matrix{Float64}, angle::Float64, axis::Int)
-    s, c = sin(angle), cos(angle)
+    s, c = sincos(angle)
     idx = (3, 1, 2, 3, 1)
     t = mod(axis, 3)
     i1, i2, i3 = idx[t + 1], idx[t + 2], idx[t + 3]

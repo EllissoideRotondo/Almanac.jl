@@ -475,7 +475,11 @@ function abcorr_state(
         dltc = qc.dlt
     end
     R, dR = frame_jet(ks, Int32(1), ref, et + s * ltc, Val(1))
-    return vcat(_m_mxv(R, q.r), (1 + s * dltc) * _m_mxv(dR, q.r) + _m_mxv(R, q.v)), q.lt
+    # `zzcorsxf_` scales the derivative block by the rate of the light-time corrected
+    # epoch, and `mxvg_` applies the matrix: the order of operations of `spkez_`.
+    scale = 1 + s * dltc
+    r, v = rotate_jet((R, map(x -> x * scale, dR)), (q.r, q.v))
+    return vcat(r, v), q.lt
 end
 
 """
