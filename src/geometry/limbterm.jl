@@ -1069,9 +1069,10 @@ function tangpt(
     end
     j2dir = dfrcde == Int32(1) ? dvec : _m_mxv(frame_rotation(ks, dfrcde, Int32(1), refepc), dvec)
     fixdir = _m_mxv(frame_rotation(ks, Int32(1), fixfid, trgepc), j2dir)
-    srfpt, alt = npedln(a, b, c, fixobs, fixdir)
+    srfpt, alt = _m_npedln(a, b, c, fixobs, fixdir, false)
     srfvec = srfpt - fixobs
-    tanpt, _ = nplnpt(fixobs, fixdir, srfpt)
+    # `tangpt_` calls the Fortran `nplnpt_`, whose projection divides (`vproj_`).
+    tanpt, _ = _m_nplnpt(fixobs, fixdir, srfpt, false)
     if !corr.uselt
         if _m_dot(tanpt - fixobs, fixdir) <= 0.0
             # The ray points away from the target: the tangent point is the observer.
@@ -1108,8 +1109,8 @@ function tangpt(
         fixobs = _m_mxv(j2fixm, j2opos)
         fixdir = _m_mxv(j2fixm, j2dir)
         stlobs = fixobs - stlfix
-        srfpt, alt = npedln(a, b, c, stlobs, fixdir)
-        tanpt = alt != 0.0 ? nplnpt(stlobs, fixdir, srfpt)[1] : srfpt
+        srfpt, alt = _m_npedln(a, b, c, stlobs, fixdir, false)
+        tanpt = alt != 0.0 ? _m_nplnpt(stlobs, fixdir, srfpt, false)[1] : srfpt
         srfvec = srfpt - stlobs
         if _m_dot(tanpt - stlobs, fixdir) <= 0.0
             tanpt = stlobs
