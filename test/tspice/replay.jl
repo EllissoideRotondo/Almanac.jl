@@ -63,6 +63,20 @@ struct Call
     snapshot::String
 end
 
+"""
+The arguments of the routines whose summary instrument.py logs after the call (its
+`DAF_SUMMARY`: the length of the summary is the DAF's), in the order of the routine: the
+inputs are passed to Almanac in the order of the log.
+"""
+const LOGGED_AFTER = Dict("DAFBNA" => ["handle", "sum", "name"])
+
+"`ins` in the order of the arguments of `name`, if `LOGGED_AFTER` has it."
+function argument_order(name, ins)
+    order = get(LOGGED_AFTER, name, nothing)
+    order === nothing && return ins
+    return sort(ins; by = a -> something(findfirst(==(a.name), order), length(order) + 1))
+end
+
 "The log at `path`, decompressed if it ends in `.gz`."
 open_log(f, path) = endswith(path, ".gz") ? open(f, `gzip -dc $path`) : open(f, path)
 
@@ -123,7 +137,7 @@ function foreach_call(f, path; want = _ -> true)
                     break
                 end
             end
-            f(Call(name, start, parse(Int, depth), fb == "T", ins, outs, failed, short, snap))
+            f(Call(name, start, parse(Int, depth), fb == "T", argument_order(name, ins), outs, failed, short, snap))
         end
     end
 end

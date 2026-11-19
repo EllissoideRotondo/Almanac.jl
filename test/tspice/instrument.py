@@ -68,6 +68,15 @@ FILE_ROUTINES = {"furnsh", "ldpool", "spkcov", "spkobj", "ckcov", "ckobj", "pckc
 # of thousands of files in its directory.
 OPEN_ROUTINES = {"dafopr", "dafopw", "dasopr", "dasopw", "ekopr", "ekopw", "spkopa", "dskopa"}
 
+# Array summaries whose length, ND + (NI+1)/2, is that of the DAF and no argument gives:
+# the routine and the argument that holds the handle (None: the DAF of the current
+# search, from DAFGH). After a successful call the summary is logged with ND and NI from
+# DAFHSF; both are called through the context, so the log shows no nested call, and
+# neither can fail once the call succeeded. After a failed call the summary is logged
+# as truncated, without reading it. The parser takes the arguments of a call in any
+# order, so an input logged after the call is still an input.
+DAF_SUMMARY = {"dafbna": "handle", "dafgs": None, "dafrs": None, "dafws": None}
+
 
 # Lengths that the arguments do not give: SPICELIB's documented sizes.
 FIXED_LENGTHS = {
@@ -302,9 +311,12 @@ def instrument_routine(name, h, body, cands):
         return "the wrapper has a RETURN, GO TO or ENTRY"
     lens = {}
     fixed = FIXED_LENGTHS.get(name, {})
+    summary = name in DAF_SUMMARY and "sum" in args
     for a in args:
         if a in fixed:
             lens[a] = fixed[a]
+            continue
+        if summary and a == "sum":
             continue
         k, dims = decls[a]
         n = length_expr(dims, args, decls, a)
@@ -321,12 +333,16 @@ def instrument_routine(name, h, body, cands):
                 s.startswith("parameter") or s.startswith("&") or body[k - 1].rstrip().endswith("&")):
             last_decl = k
     pre = ["      call tlog_begin('" + name.upper() + "')"]
+    if summary:
+        pre.insert(0, "      integer(ip) :: tlog_h, tlog_nd, tlog_ni")
     if name in FILE_ROUTINES:
         pre.append("      call tlog_snapshot()")
     elif name in OPEN_ROUTINES:
         pre.append(f"      call tlog_snapshot_file({args[0]})")
     post = ["      call tlog_mark()"]
     for a in args:
+        if summary and a == "sum":
+            continue
         k, _ = decls[a]
         it = intent[a]
         n = lens[a]
@@ -338,6 +354,18 @@ def instrument_routine(name, h, body, cands):
     if head.group("kind").lower() == "function":
         fk = kind_of(head.group("ftype") or "real(wp)")
         post.append(f"      call tlog_{fk}1('>result', {name})")
+    if summary:
+        label = ("<" if intent["sum"] in ("in", "inout") else ">") + "sum"
+        h = DAF_SUMMARY[name]
+        post += [
+            "      if (.not. ctx%failed()) then",
+            f"         tlog_h = {h}" if h else "         call ctx%dafgh(tlog_h)",
+            "         call ctx%dafhsf(tlog_h, tlog_nd, tlog_ni)",
+            f"         call tlog_d('{label}', sum, max(0_ip, tlog_nd + (tlog_ni + 1)/2))",
+            "      else",
+            f"         call tlog_d('{label}', sum, huge(0_ip))",
+            "      end if",
+        ]
     post.append("      call tlog_end()")
     # `use tspice_log` goes after the first `use` line.
     new = list(body)
