@@ -46,6 +46,18 @@ const FRAMES = [
     ("DT_SWITCH_NEST", "switch frame over a switch frame", 399),
 ]
 
+"""
+Frames of the kernel of `frame_kernel` whose base frame is a PCK frame, as `(name,
+family, center)`: an of-date frame, which both engines build relative to J2000 and then
+rotate into the base, and a two-vector frame with the inertial rotation state, whose
+derivative is that of the base. They are compared with CSPICE on their own (`pxform` and
+`sxform`), so the checks of `FRAMES` keep their random data.
+"""
+const BASE_FRAMES = [
+    ("DT_ECL_ON_PCK", "mean ecliptic and equinox of date, base PCK frame", 399),
+    ("DT_GSE_INERT_PCK", "inertial rotation state (two-vector), base PCK frame", 399),
+]
+
 "ET bounds of the intervals of `DT_SWITCH_TIME` (ascending), for the tests at the edges."
 const SWITCH_EDGES = [-6.0e8, -2.0e8, -1.0e8, 1.0e8, 2.5e8, 6.0e8]
 
@@ -461,6 +473,39 @@ function frame_kernel()
            FRAME_1850023_ALIGNED_WITH       = ( 'IAU_MOON', 'DT_SWITCH_TIME' )
            FRAME_1850023_START              = ( -6.0E8, -3.0E8 )
            FRAME_1850023_STOP               = (  6.0E8,  3.0E8 )
+
+           FRAME_DT_ECL_ON_PCK              = 1850026
+           FRAME_1850026_NAME               = 'DT_ECL_ON_PCK'
+           FRAME_1850026_CLASS              = 5
+           FRAME_1850026_CLASS_ID           = 1850026
+           FRAME_1850026_CENTER             = 399
+           FRAME_1850026_RELATIVE           = 'IAU_EARTH'
+           FRAME_1850026_DEF_STYLE          = 'PARAMETERIZED'
+           FRAME_1850026_FAMILY             = 'MEAN_ECLIPTIC_AND_EQUINOX_OF_DATE'
+           FRAME_1850026_PREC_MODEL         = 'EARTH_IAU_1976'
+           FRAME_1850026_OBLIQ_MODEL        = 'EARTH_IAU_1980'
+           FRAME_1850026_ROTATION_STATE     = 'ROTATING'
+
+           FRAME_DT_GSE_INERT_PCK           = 1850027
+           FRAME_1850027_NAME               = 'DT_GSE_INERT_PCK'
+           FRAME_1850027_CLASS              = 5
+           FRAME_1850027_CLASS_ID           = 1850027
+           FRAME_1850027_CENTER             = 399
+           FRAME_1850027_RELATIVE           = 'IAU_EARTH'
+           FRAME_1850027_DEF_STYLE          = 'PARAMETERIZED'
+           FRAME_1850027_FAMILY             = 'TWO-VECTOR'
+           FRAME_1850027_ROTATION_STATE     = 'INERTIAL'
+           FRAME_1850027_PRI_AXIS           = 'X'
+           FRAME_1850027_PRI_VECTOR_DEF     = 'OBSERVER_TARGET_POSITION'
+           FRAME_1850027_PRI_OBSERVER       = 'EARTH'
+           FRAME_1850027_PRI_TARGET         = 'SUN'
+           FRAME_1850027_PRI_ABCORR         = 'NONE'
+           FRAME_1850027_SEC_AXIS           = 'Y'
+           FRAME_1850027_SEC_VECTOR_DEF     = 'OBSERVER_TARGET_VELOCITY'
+           FRAME_1850027_SEC_OBSERVER       = 'EARTH'
+           FRAME_1850027_SEC_TARGET         = 'SUN'
+           FRAME_1850027_SEC_ABCORR         = 'NONE'
+           FRAME_1850027_SEC_FRAME          = 'J2000'
 
         \begintext
         """

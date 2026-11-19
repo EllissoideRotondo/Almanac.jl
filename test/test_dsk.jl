@@ -13,7 +13,9 @@
 #       graze plate edges and vertices, and start inside;
 #   (e) the plate utilities, the surface name calls, `latsrf` and `srfnrm`;
 #   (f) the tolerances, kernel management, and every input check;
-#   (g) allocation, inference, time per intercept, and use from many threads.
+#   (g) allocation, inference, time per intercept, and use from many threads;
+#   (h) `dskxsi` on segments bounded in longitude and latitude, in latitudinal and in
+#       planetodetic coordinates.
 #
 # Kernels (frames, body constants, surface names, one SPK segment) are written by the
 # group. CSPICE is called from the main task only.
@@ -1234,6 +1236,64 @@ function dsk_part_15(env)
     return nothing
 end
 
+"""
+Part of group 12: (h) segments that cover a part of the body. For these CSPICE takes
+branches that a segment over all longitudes and latitudes does not reach: the bounding
+sphere of a volume element on one side of the equator (`zzlatbox`, `zzpdtbox`), and the
+intercepts of the ray with its latitude cones and longitude planes (`zzrytlat`,
+`zzrytpdt`). Three boxes (north of the equator, south of it, across it), each in
+latitudinal and in planetodetic coordinates. The frame of every segment is that of the
+rays, so the intercepts are equal to the last bit. Own file and own random stream.
+"""
+function dsk_part_16(env)
+    (; dir, tk, spk) = env
+    rng = MersenneTwister(SEED + 1216)
+    rv, rp = rough_shape(rng, 3.0, 0.05, 72, 36)
+    boxes = ((0.3, 2.0, 0.2, 1.2), (0.3, 2.0, -1.2, -0.2), (-2.5, -0.5, -0.4, 0.5))
+    specs = DskSpec[]
+    shapes = Tuple{Vector{V3}, Vector{P3}}[]
+    for (corsys, corpar) in ((1, Float64[]), (4, [3.0, 0.1])), b in boxes
+        v, p = patch_shape(rv, rp, b...)
+        push!(shapes, (v, p))
+        push!(
+            specs, DskSpec(
+                499, 10 + length(specs) + 1, 2, "IAU_MARS", corsys, corpar, b, -1.0e9, 1.0e9,
+                3.0, 3, v, p
+            )
+        )
+    end
+    list = [tk, spk, c_write_dsk(joinpath(dir, "c_partial.bds"), specs)]
+    oracle_load(list)
+    ctx = neo_context(list)
+    ks = Almanac.kernelset(ctx)
+    n = nsample(1200, 12_000)
+    nhit = 0; ndiff = 0; nplate = 0; maxerr = 0.0
+    hits = zeros(Int, length(specs))
+    for k in 1:n
+        s = rand(rng, 1:length(specs))
+        srf = rand(rng, Bool) ? () : [10 + s]
+        v, d = dsk_ray(rng, rand(rng, 1:4), shapes[s])
+        cf, same, plate, stale, err, _ = compare_xsi(ctx, ks, "MARS", srf, 0.0, "IAU_MARS", v, d)
+        nhit += cf
+        ndiff += !same
+        nplate += same && cf && !plate && !stale
+        same && cf && (maxerr = max(maxerr, err))
+        (same && cf && !isempty(srf)) && (hits[s] += 1)
+    end
+    measured(
+        @sprintf(
+            "  dskxsi on 6 partial segments: %d rays, %d hits, %d found/segment diff, %d plate diff, max |dxpt| %.1e km",
+            n, nhit, ndiff, nplate, maxerr
+        )
+    )
+    @test ndiff == 0
+    @test nplate == 0
+    @test maxerr == 0.0
+    @test nhit > n ÷ 10
+    @test all(>(0), hits)             # every segment is hit when it is asked for alone
+    return nothing
+end
+
 group("12. DSK type 2 against CSPICE") do
     rng = MersenneTwister(SEED + 12)
     dir = mktempdir()
@@ -1317,6 +1377,10 @@ group("12. DSK type 2 against CSPICE") do
 
     @apart @testset "(g) many threads, while another task loads and unloads a DSK" begin
         dsk_part_15(env)
+    end
+
+    @apart @testset "(h) segments that cover a part of the body" begin
+        dsk_part_16(env)
     end
 end
 

@@ -278,18 +278,6 @@ end
     return abcorr_position(ks, targ, et, ref, corr, obs)
 end
 
-"`spkez_`: state of `targ` relative to `obs` in frame `ref` and the light time."
-@inline function _geo_spkez(
-        ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration,
-        obs::Int32
-    )
-    if corr.geometric || targ == obs
-        r, v = spk_jet(ks, targ, et, ref, obs, Val(1))
-        return vcat(r, v), _m_norm(r) / CLIGHT
-    end
-    return abcorr_state(ks, targ, et, ref, corr, obs)
-end
-
 # --- the target shape -------------------------------------------------------------------
 
 """

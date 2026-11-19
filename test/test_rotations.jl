@@ -125,6 +125,9 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
         end
         @test same
         @test zeroder
+        # The table of the 21 matrices is made when the package is precompiled; made
+        # again now, it is the same.
+        @test Almanac._build_inertial_rotations() == [Almanac.inertial_rotation(i) for i in 1:21]
     end
 
     @apart @testset "TK frames: MATRIX and QUATERNION as tkfram_" begin

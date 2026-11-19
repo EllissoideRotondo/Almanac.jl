@@ -194,7 +194,7 @@ group(
             check!(fails, haskey(class == 5 ? ks.dyn : ks.switch, Int32(id)), "in the snapshot", name)
         end
         @test isempty(fails)
-        @test length(ks.dyn) + length(ks.switch) == length(DynFix.FRAMES)
+        @test length(ks.dyn) + length(ks.switch) == length(DynFix.FRAMES) + length(DynFix.BASE_FRAMES)
         @test all(d -> d.errkind === :none, values(ks.dyn))
         @test all(d -> d.errkind === :none, values(ks.switch))
         # A snapshot without a dynamic frame has no inner snapshot.
@@ -272,6 +272,32 @@ group(
             end
         end
         @test isempty(fails)
+    end
+
+    # An of-date frame and a frame with the inertial rotation state whose base is a PCK
+    # frame: `zzdynfrm_` builds both relative to J2000 and goes to the base and back
+    # with the state transformation of the base. In the derivative block the rotation
+    # rate of the Earth (7.3e-5 rad/s) then cancels, in both engines, down to the rate
+    # of the precession (8e-12 rad/s) or to zero, so the difference is measured relative
+    # to that rate. Measured on 600 epochs for each frame and start frame: matrix
+    # elements within 1.4e-15 of CSPICE, derivative block within 5.6e-16 of the rate
+    # (4.1e-20 rad/s), from the last bit of a sine or cosine. Own random stream.
+    @apart @testset "of-date and inertial-state frames on a PCK base frame" begin
+        r4 = MersenneTwister(SEED + 1703)
+        rate = 7.292115e-5
+        dp = 0.0; ds = 0.0
+        for (name, family, center) in DynFix.BASE_FRAMES, from in ("J2000", "IAU_MOON")
+            for et in random_epochs(r4, nepoch, -span, span)
+                dp = max(dp, maximum(abs.(pxform(ctx, from, name, et) .- SPICE.pxform(from, name, et))))
+                a6 = sxform(ctx, from, name, et)
+                b6 = SPICE.sxform(from, name, et)
+                dp = max(dp, maximum(abs.(a6[1:3, 1:3] .- b6[1:3, 1:3])))
+                ds = max(ds, df_rel(a6[4:6, 1:3], b6[4:6, 1:3], rate))
+            end
+        end
+        measured(@sprintf("  frames on a PCK base: px=%.1e sx=%.1e of the rotation rate of the base", dp, ds))
+        @test dp <= DF_DEFAULT_TOL[1]
+        @test ds <= 5.0e-15
     end
 
     # Regression: the state transformations of the of-date frames come, as in

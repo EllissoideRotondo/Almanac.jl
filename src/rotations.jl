@@ -323,10 +323,10 @@ end
     while true     # invariant: p * x^n is the result
         isodd(n) && (p *= x)
         n >>= 1
-        n == 0 && return p
+        n == 0 && break
         x *= x
     end
-    return
+    return p
 end
 
 """

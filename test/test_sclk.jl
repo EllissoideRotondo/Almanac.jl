@@ -195,6 +195,28 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         lmpool(other, ["SCLK_DATA_TYPE_90 = ( 2 )"])
         @test sctype(other, -90) == 2
         @test throws_kind(() -> sct2e(other, -90, 0.0), :notsupported)
+        # A clock of type 1 whose partition start and end lists have different lengths
+        # (`zzscup01` of CSPICE signals NUMPARTSUNEQUAL), and one that has its type
+        # only. Both are set in the pool of the two engines and removed from that of
+        # CSPICE afterwards.
+        lines = [
+            "SCLK_DATA_TYPE_91 = ( 1 )", "SCLK01_TIME_SYSTEM_91 = ( 1 )",
+            "SCLK01_N_FIELDS_91 = ( 2 )", "SCLK01_MODULI_91 = ( 4294967296 256 )",
+            "SCLK01_OFFSETS_91 = ( 0 0 )", "SCLK01_OUTPUT_DELIM_91 = ( 1 )",
+            "SCLK_PARTITION_START_91 = ( 0.0 512000.0 )", "SCLK_PARTITION_END_91 = ( 2560000.0 )",
+            "SCLK01_COEFFICIENTS_91 = ( 0.0 0.0 1.0 )", "SCLK_DATA_TYPE_92 = ( 1 )",
+        ]
+        lmpool(other, lines)
+        SPICE.lmpool(lines)
+        try
+            for (id, kind) in ((-91, :numpartsunequal), (-92, :kernelvarnotfound))
+                @test throws_kind(() -> sct2e(other, id, 0.0), kind)
+                ccall((:sct2e_c, SPICE.libcspice), Cvoid, (Cint, Cdouble, Ref{Cdouble}), id, 0.0, Ref(0.0))
+                @test cspice_kind() === kind
+            end
+        finally
+            foreach(l -> SPICE.dvpool(String(strip(first(split(l, '='))))), lines)
+        end
         # The TDT clock needs the leap-second kernel; the TDB clock does not.
         bare = neo_context([CKFix.sclk_kernel()])
         @test throws_kind(() -> sct2e(bare, CKFix.SC_TDT, 1000.0), :missingtimeinfo)
