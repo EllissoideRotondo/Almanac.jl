@@ -85,7 +85,7 @@ function foreach_call(f, path; want = _ -> true)
             length(parts) == 4 || continue
             _, name, depth, fb = parts
             start = lineno
-            ins, outs, snap, unrec = Arg[], Arg[], "", false
+            ins, outs, snap, unrec, bin = Arg[], Arg[], "", false, ""
             keep = want(lowercase(name))
             failed, short = false, ""
             while !eof(io)
@@ -101,6 +101,11 @@ function foreach_call(f, path; want = _ -> true)
                     snap = l[3:end]
                     m = match(r"([^/]+\.log\.files/[^/]+)$", snap)
                     (!isdir(snap) && m !== nothing) && (snap = joinpath(dirname(path), m[1]))
+                elseif startswith(l, "B ")
+                    # the values of the next argument, too long for the log, in a binary file
+                    bin = l[3:end]
+                    m = match(r"([^/]+\.log\.files/bin/[^/]+)$", bin)
+                    (!isfile(bin) && m !== nothing) && (bin = joinpath(dirname(path), m[1]))
                 elseif l == "W"
                     unrec = keep = true     # its handles follow
                 elseif !keep
@@ -111,7 +116,9 @@ function foreach_call(f, path; want = _ -> true)
                     aname, k, n = p
                     n = parse(Int, n)
                     if n < 0                # more values than the log keeps
-                        push!((l[1] == '<' ? ins : outs), Arg(aname[2:end], k[1], Any[TRUNCATED]))
+                        vals = isempty(bin) || !isfile(bin) ? Any[TRUNCATED] : read_bin(bin, k[1])
+                        bin = ""
+                        push!((l[1] == '<' ? ins : outs), Arg(aname[2:end], k[1], vals))
                         continue
                     end
                     vals = Vector{Any}(undef, n)
@@ -134,6 +141,12 @@ function foreach_call(f, path; want = _ -> true)
     end
 end
 
+"The values of a binary file of the recorder (`B` line): doubles or 4-byte integers."
+function read_bin(path, kind)
+    bytes = read(`gzip -dc $path`)
+    return kind == 'd' ? Any[reinterpret(Float64, bytes)...] : Any[Int.(reinterpret(Int32, bytes))...]
+end
+
 # --- argument conversion -----------------------------------------------------------------
 
 "A logged value as Almanac takes it: a scalar, a static vector or a 3x3 or 6x6 matrix."
@@ -145,6 +158,8 @@ function jl(a::Arg)
     n == 1 && return T(v[1])
     n == 9 && return SMatrix{3, 3, T}(v...)
     n == 36 && return SMatrix{6, 6, T}(v...)
+    # past the length of the log (values from a binary file): a plain vector
+    n > 2000 && return T.(v)
     return SVector{n, T}(v...)
 end
 
@@ -315,7 +330,8 @@ function jl_named(a::Arg, routine::AbstractString)
             "cp", "srflst", "dc", "ic", "vrtces", "plates",
         )
     ) &&
-        return a.kind == 'd' ? SVector{length(a.values), Float64}(a.values...) :
+        return length(a.values) > 2000 ? (a.kind == 'd' ? Float64.(a.values) : Int.(a.values)) :
+        a.kind == 'd' ? SVector{length(a.values), Float64}(a.values...) :
         SVector{length(a.values), Int}(a.values...)
     return jl_named(a)
 end
@@ -1195,7 +1211,8 @@ end
 
 function unload_by_handle(ctx, c)
     path = get(HANDLES, jl(c.inputs[1]), nothing)
-    path === nothing || unload(ctx, path)
+    path === nothing && return []      # not loaded by handle (F_SGMETA unloads its write handles)
+    unload(ctx, path)
     delete!(HMAP, jl(c.inputs[1]))
     return []
 end

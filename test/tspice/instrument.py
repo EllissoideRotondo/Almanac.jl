@@ -141,7 +141,11 @@ FIXED_LENGTHS = {
               "avvs": "max(0, 3*nrec)", "rates": "max(0, nrec)"},
     "ckw03": {"sclkdp": "max(0, nrec)", "quats": "max(0, 4*nrec)", "avvs": "max(0, 3*nrec)",
               "starts": "max(0, nints)"},
-    "dskw02": {"corpar": "10", "spaixd": "10", "spaixi": "huge(0_ip)"},
+    # the integer spatial index: SICGRD - 1 + MAXCGR + the voxel pointers, the voxel-plate
+    # list, the vertex pointers (NV) and the vertex-plate list (dsk02.inc)
+    "dskw02": {"corpar": "10", "spaixd": "10", "spaixi":
+               "merge(7 + 100000 + spaixi(5) + spaixi(6) + max(0, nv) + spaixi(7), huge(0_ip), "
+               "min(spaixi(5), spaixi(6), spaixi(7)) >= 0 .and. max(spaixi(5), spaixi(6), spaixi(7), nv) < 50000000)"},
     "ekbseg": {"cnames": "max(0, ncols)", "decls": "max(0, ncols)"},
     "chbint": {"cp": "max(0, degp + 1)"},
     "chbval": {"cp": "max(0, degp + 1)"},
@@ -438,6 +442,9 @@ LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspic
 !>   S DIR                 the files of the working directory, linked into DIR (a load),
 !>                         or the file of an open (before it) or of a close (after it),
 !>                         copied into DIR; for a close DIR has no file past the cap
+!>   B PATH                the values of the next argument, an input of N = -1 of a call
+!>                         from the test program, in the binary file PATH (gzip; doubles
+!>                         or 4-byte integers, native order); within TSPICE_MAXBIN bytes
 !>   W                     a call of a writer that is not recorded: only its handles
 !>                         follow (WRITE_MARKS of instrument.py)
 !>   ! FAILED SHORT        the end of the call: the error status and short message
@@ -468,6 +475,8 @@ module tspice_log
    integer, parameter :: maxlog = 2000   ! longer arrays are logged as N = -1, not replayed
    character(1024), save :: logpath = ' '
    character(1024), save :: closename = ' '   ! the file of a close, if open for write
+   logical, save :: bincheck = .false.
+   integer(int64), save :: binbytes = 0, maxbin = 268435456   ! binary files of long inputs
    character(32), save :: callname = ' '
    character(len=:), allocatable, save :: buf
    integer, save :: blen = 0, inend = 0
@@ -736,6 +745,76 @@ contains
       call emit(trim(ln))
    end subroutine head
 
+   !> True if the input array LABEL of N values of SIZE bytes, too long for the log, goes
+   !> to a binary file: an input of a call from the test program, of at most 50 million
+   !> values, while the family has written less than TSPICE_MAXBIN bytes (default 256 MB)
+   !> of such files.
+   logical function bin_ok(label, n, size)
+      character(*), intent(in) :: label
+      integer(ip), intent(in) :: n
+      integer, intent(in) :: size
+      integer :: l, stat
+      character(24) :: v
+      if (.not. bincheck) then
+         bincheck = .true.
+         call get_environment_variable('TSPICE_MAXBIN', v, l, stat)
+         if (stat == 0 .and. l > 0) read(v, *) maxbin
+         call execute_command_line('mkdir -p "' // trim(logpath) // '.files/bin"')
+      end if
+      bin_ok = label(1:1) == '<' .and. depth == 1 .and. n <= 50000000 .and. &
+         binbytes + int(size, int64) * n <= maxbin
+   end function bin_ok
+
+   !> The path of the binary file of values whose hash is H, of kind K; true if it exists.
+   logical function bin_path(h, k, path)
+      integer(int64), intent(in) :: h
+      character(*), intent(in) :: k
+      character(*), intent(out) :: path
+      write(path, '(a,a,z16.16,a,a)') trim(logpath), '.files/bin/', h, '.', k
+      inquire(file=trim(path) // '.gz', exist=bin_path)
+   end function bin_path
+
+   !> Write the values to a binary file (native byte order, gzip), named by their hash so
+   !> that a repeat is stored once, and log its path in a `B` line before the argument.
+   subroutine bin_d(x, n)
+      real(wp), intent(in) :: x(*)
+      integer(ip), intent(in) :: n
+      character(1200) :: path
+      integer(int64) :: h
+      integer :: k, u
+      h = -3750763034362895579_int64
+      do k = 1, n
+         h = ieor(h, transfer(x(k), 0_int64)) * 1099511628211_int64
+      end do
+      if (.not. bin_path(h, 'd', path)) then
+         open(newunit=u, file=trim(path), access='stream', form='unformatted', status='replace')
+         write(u) x(1:n)
+         close(u)
+         call execute_command_line('gzip -1 -f "' // trim(path) // '"')
+         binbytes = binbytes + 8_int64 * n
+      end if
+      call emit('B ' // trim(path) // '.gz')
+   end subroutine bin_d
+   subroutine bin_i(x, n)
+      integer(ip), intent(in) :: x(*)
+      integer(ip), intent(in) :: n
+      character(1200) :: path
+      integer(int64) :: h
+      integer :: k, u
+      h = -3750763034362895579_int64
+      do k = 1, n
+         h = ieor(h, int(x(k), int64)) * 1099511628211_int64
+      end do
+      if (.not. bin_path(h, 'i4', path)) then
+         open(newunit=u, file=trim(path), access='stream', form='unformatted', status='replace')
+         write(u) x(1:n)
+         close(u)
+         call execute_command_line('gzip -1 -f "' // trim(path) // '"')
+         binbytes = binbytes + 4_int64 * n
+      end if
+      call emit('B ' // trim(path) // '.gz')
+   end subroutine bin_i
+
    subroutine tlog_d(label, x, n)
       character(*), intent(in) :: label
       real(wp), intent(in) :: x(*)
@@ -744,6 +823,7 @@ contains
       character(32) :: ln
       if (.not. on()) return
       if (n > maxlog) then
+         if (bin_ok(label, n, 8)) call bin_d(x, n)
          call head(label, 'd', -1)
          return
       end if
@@ -769,6 +849,7 @@ contains
       character(24) :: ln
       if (.not. on()) return
       if (n > maxlog) then
+         if (bin_ok(label, n, 4)) call bin_i(x, n)
          call head(label, 'i', -1)
          return
       end if
