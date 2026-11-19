@@ -9,8 +9,6 @@ gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool)
 gfilum	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
 gfpa	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
 gipool	0	1	0	documented	:typemismatch for a variable of the other type (gipool)
-kdata	39	0	0	documented	the handle is always 0 (kdata docstring)
-kinfo	7	0	0	documented	the handle is always 0 (kinfo docstring)
 limbpt	5	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
 lmpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool); PEPPER accepts the name
 pcklof	0	1	0	gap	Almanac has no pcklof; the replay loads with furnsh (NOSUCHFILE)
