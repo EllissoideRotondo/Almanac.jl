@@ -242,7 +242,8 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
             worst = max(worst, der_reldiff(dR, Xc[4:6, 1:3]))
         end
         measured(@sprintf("  %-58s max=%.3e", "pxder order 1 against CSPICE sxform, relative", worst))
-        @test worst <= 1.0e-7
+        # Measured 3.4e-16 since `sxform` follows `tisbod_`: the bound is the one above.
+        @test worst <= 2.0e-15
         # Between inertial frames every derivative is zero.
         jet = pxder(ctx, "J2000", "GALACTIC", epochs[1], Val(3))
         @test all(all(iszero, jet[k]) for k in 2:4)

@@ -256,5 +256,7 @@ Each item: what to do, how to know it is done.
    332 hold a truncated array, 14 were made in an error state, 0 have no mapping.
    Open: the unmapped handles come mostly from the unrecorded writers of item 6
    (`spkw19`, `ckw06`, the EK fast load); recording those closes most of them.
-10. **`test/test_derivatives.jl`.** An exact check became a tolerance of 2e-15 (measured
-    6e-16) because `sxform` now rounds as `tisbod_`. Needs the maintainer's approval.
+10. **`test/test_derivatives.jl`.** Done, approved by the maintainer: `pxder` against
+    `sxform` is checked to 2e-15 relative (measured 6e-16; `sxform` rounds as `tisbod_`,
+    `pxder` is the derivative of the evaluated matrix). The check of `pxder` against
+    CSPICE's `sxform`, which allowed 1e-7, now allows 2e-15 too (measured 3.4e-16).
