@@ -33,7 +33,7 @@ const ERROR_KINDS = (
     :boundarytoobig, :boundsdisagree, :boundsoutoforder, :buffertoosmall, :bug,
     :cantfindframe, :cantgetrotationtype, :cellarraytoosmall, :celltoosmall, :cknonexistrec,
     :ckunknowndatatype, :ckwrongdatatype, :coarsegridoverflow, :columnstoredtwice,
-    :columntoosmall, :competingframespec, :coordsysnotrec, :countmismatch, :counttoolarge,
+    :columntoosmall, :competingepochspec, :competingframespec, :coordsysnotrec, :countmismatch, :counttoolarge,
     :coveragegap, :crossanglemissing, :dafbeggtend, :daffrnotfound, :dafinvalidaccess,
     :dafinvalidparams, :dafnegaddr, :dafnewconflict, :dafnoresv, :dafnosearch,
     :dafnosuchhandle, :dafwritefail, :dasfilereadfailed, :dasinvalidaccess,

@@ -149,13 +149,18 @@ function build_bodyrot(pool::AbstractDict)
             pool,
             ("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME"), 1.0
         )
+        both(a, b) = _pool_numbers(pool, a) !== nothing && _pool_numbers(pool, b) !== nothing
+        specerr = both("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH") ?
+            :competingepochspec :
+            both("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME") ?
+            :competingframespec : :none
         out[id] = BodyRot(
             ra, dec, value,
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_RA"),
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_DEC"),
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_PM"),
             _pool_numbers_or_empty(pool, "BODY$(sys)_NUT_PREC_ANGLES"),
-            round(Int32, ref), epoch, _phase_degree(pool, sys)
+            round(Int32, ref), epoch, _phase_degree(pool, sys), specerr
         )
     end
     return out
@@ -171,6 +176,25 @@ function _phase_degree(pool::AbstractDict, sys::Integer)
     v = _pool_numbers(pool, "BODY$(sys)_MAX_PHASE_DEGREE")
     (v === nothing || isempty(v)) && return Int32(1)
     return round(Int32, clamp(v[1], -1.0e9, 1.0e9), RoundNearestTiesAway)
+end
+
+"""
+    _bodyrot_check(br, body)
+
+The checks of `tisbod_` before an evaluation: both forms of the epoch or the frame
+variable (`br.specerr`), then the degree of the phase angles whenever the system has
+phase angles, whether or not the body has terms that use them.
+"""
+@inline function _bodyrot_check(br::BodyRot, body::Integer)
+    br.specerr === :none || throw(
+        SpiceError(
+            br.specerr, "both forms of the " *
+                (br.specerr === :competingepochspec ? "JED_EPOCH" : "REF_FRAME") *
+                " variable of body $(_bodbry(body)) are in the kernel pool; at most one may be"
+        )
+    )
+    isempty(br.nut_prec_angles) || _phase_ncoef(br, body)
+    return nothing
 end
 
 """
@@ -211,6 +235,7 @@ rotation from J2000 to the reference frame of the constants. Throws
 `SpiceError(:insufficientangles)` if an amplitude vector is longer than the angle list.
 """
 function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
+    _bodyrot_check(br, body)
     epoch = et - _SEC_PER_DAY * (br.jed_epoch - _J2000_JED)
     td = epoch / _SEC_PER_DAY
     tc = epoch / _SEC_PER_CENTURY
@@ -307,6 +332,7 @@ one, where `tisbod_` of N0067 divides its cubic term by the seconds per century 
 too often. Throws as `_text_pck_rotation`.
 """
 function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
+    _bodyrot_check(br, body)
     d = _SEC_PER_DAY
     t = _SEC_PER_CENTURY
     epoch = et - d * (br.jed_epoch - _J2000_JED)

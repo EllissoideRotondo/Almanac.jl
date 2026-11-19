@@ -456,7 +456,12 @@ Throws `SpiceError`:
 - `:badarg` if `et` is not finite;
 - `:framedatanotfound` if no PCK data are loaded for the body;
 - `:kernelvarnotfound` if the text constants of the body have `BODY<id>_PM` without
-  `BODY<id>_POLE_RA` or `BODY<id>_POLE_DEC`.
+  `BODY<id>_POLE_RA` or `BODY<id>_POLE_DEC`;
+- `:competingepochspec` or `:competingframespec` if the pool holds both forms of the
+  epoch (`BODY<sys>_CONSTANTS_JED_EPOCH`, `BODY<sys>_CONSTS_JED_EPOCH`) or the frame
+  variable of the body system;
+- `:degreeoutofrange` if the system has phase angles and `BODY<sys>_MAX_PHASE_DEGREE`
+  is outside 1:3; `:insufficientangles` if the body has more terms than angles.
 
 See also [`tisbod`](@ref), [`pxform`](@ref).
 """
