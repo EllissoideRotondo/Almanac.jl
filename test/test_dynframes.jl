@@ -498,8 +498,11 @@ group(
             got == want || @info "error kind" name got want
             @test got == want
             @test got == kind
-            @test df_neo_kind(() -> sxform(ctx2, "J2000", name, et)) == kind
-            @test df_neo_kind(() -> spkezr(ctx2, 301, et, name, "LT+S", 399)) == kind
+            # a state transformation checks the correction with `zzprscor_` in CSPICE
+            skind = kind === :spkinvalidoption ? :invalidoption : kind
+            @test df_neo_kind(() -> sxform(ctx2, "J2000", name, et)) ==
+                df_oracle_kind(:sxform_c, "J2000", name, et) == skind
+            @test df_neo_kind(() -> spkezr(ctx2, 301, et, name, "LT+S", 399)) == skind
             if kind === :none
                 @test maximum(abs.(pxform(ctx2, "J2000", name, et) .- SPICE.pxform("J2000", name, et))) <= 5.0e-10
             end

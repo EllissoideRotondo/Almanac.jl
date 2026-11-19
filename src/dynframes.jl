@@ -184,8 +184,8 @@ _dyn_eqstr(a::AbstractString, b::AbstractString) = _dyn_squeeze(a) == _dyn_squee
 
 Contract: the number of degrees in one angle unit `units`, the factor of `convrt_`.
 An angle `x` is converted to radians as `x * f / (180 / pi)`, the two operations of
-`convrt_`, so that the result has the bits of CSPICE. Throws `SpiceError(:badunits)`
-for a name that `_angle_factor` does not accept.
+`convrt_`, so that the result has the bits of CSPICE. Throws `SpiceError(:unitsnotrec)`
+for a name that is not an angle unit, as `convrt_`.
 """
 function _dyn_degrees(units::AbstractString)
     u = uppercase(strip(units))
@@ -196,10 +196,10 @@ function _dyn_degrees(units::AbstractString)
     u == "HOURANGLE" && return 15.0
     u == "MINUTEANGLE" && return 0.25
     u == "SECONDANGLE" && return 0.0041666666666666666
-    return _angle_factor(units) * (180.0 / pi)
+    throw(SpiceError(:unitsnotrec, "the angle unit '$units' of a dynamic frame is not recognized"))
 end
 
-"`Aberration(s)`; a value that is not valid throws `SpiceError(:spkinvalidoption)`, as `zzvalcor_`."
+"`Aberration(s)`; a value that is not valid throws `SpiceError(:spkinvalidoption)`, as `zzvalcor_` in `zzdynrot_` (`_ck_frame_jet` gives the kind of `zzdynfrm_`)."
 function _dyn_parse_abcorr(s::AbstractString)
     try
         return Aberration(s)

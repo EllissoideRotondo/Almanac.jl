@@ -501,7 +501,7 @@ const ERROR_FRAMES = [
     ("DT_BADSTYLE", :notsupported), ("DT_SAMEAXIS", :undefinedframe), ("DT_NOSEC", :kernelvarnotfound),
     ("DT_BADBODY", :notranslation), ("DT_BADABCORR", :spkinvalidoption), ("DT_BADVECDEF", :notsupported),
     ("DT_NOBASE", :kernelvarnotfound), ("DT_SWITCH_GAP", :noframeconnect),
-    ("DT_SWITCH_COUNT", :countmismatch),
+    ("DT_SWITCH_COUNT", :countmismatch), ("DT_BADUNITS", :unitsnotrec),
 ]
 
 """
@@ -616,6 +616,19 @@ function error_kernel()
                FRAME_1850114_ALIGNED_WITH = ( 'IAU_EARTH', 'DT_GSE', 'ECLIPJ2000' )
                FRAME_1850114_START = ( -1.0E9, 2.0E9 )
                FRAME_1850114_STOP = ( 1.5E9, 2.5E9 )
+        """
+    )
+    print(
+        io, head("DT_BADUNITS", 1850115, 5), """
+               FRAME_1850115_RELATIVE = 'J2000'
+               FRAME_1850115_DEF_STYLE = 'PARAMETERIZED'
+               FRAME_1850115_FAMILY = 'EULER'
+               FRAME_1850115_EPOCH = @2010-JAN-01/12:00:00
+               FRAME_1850115_AXES = ( 3, 1, 3 )
+               FRAME_1850115_UNITS = 'FURLONGS'
+               FRAME_1850115_ANGLE_1_COEFFS = ( 0.3, 7.0E-5 )
+               FRAME_1850115_ANGLE_2_COEFFS = ( -0.41 )
+               FRAME_1850115_ANGLE_3_COEFFS = ( 1.1 )
         """
     )
     println(io, "\n\\begintext")

@@ -27,13 +27,20 @@ end
 Contract: `frame_jet` of order 1 for a snapshot that has CK, PCK, dynamic or switch frames:
 the state transformation of CSPICE if one of the two chains holds such a frame, and
 `rotation_jet` otherwise. Not inlined, so that the callers of `frame_jet` stay small
-for a snapshot without such frames.
+for a snapshot without such frames. An invalid aberration correction in a dynamic frame
+definition throws `SpiceError(:invalidoption)`, the kind of `zzprscor_` in `zzdynfrm_`
+(a rotation alone throws `:spkinvalidoption`, as `zzvalcor_` in `zzdynrot_`).
 """
 @noinline function _ck_frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Float64)
-    (_ck_in_chain(ks, from, true) || _ck_in_chain(ks, to, true)) ||
-        return rotation_jet(ks, from, to, et, Val(1))
-    x = _ck_state_rotation(ks, from, to, et)
-    return map(e -> e.v, x), map(e -> e.d[1], x)
+    try
+        (_ck_in_chain(ks, from, true) || _ck_in_chain(ks, to, true)) ||
+            return rotation_jet(ks, from, to, et, Val(1))
+        x = _ck_state_rotation(ks, from, to, et)
+        return map(e -> e.v, x), map(e -> e.d[1], x)
+    catch e
+        e isa SpiceError && e.kind === :spkinvalidoption && throw(SpiceError(:invalidoption, e.msg))
+        rethrow()
+    end
 end
 
 """
