@@ -443,8 +443,8 @@ function minisegment_writer(ctx, c, f, nname, dbl)
     for x in c.inputs
         x.name in ("handle", nname) && continue
         push!(
-            args, x.name in ("npkts", "subtps", "degres") ? Int.(x.values)[1:n] :
-                x.name in dbl ? Float64.(x.values) : jl(x)
+            args, x.name in ("npkts", "subtps", "degres") ? Int[Int(v) for v in x.values[1:n]] :
+                x.name in dbl ? Float64[Float64(v) for v in x.values] : jl(x)
         )
     end
     applicable(f, ctx, h, args...) ? f(ctx, h, args...) : f(h, args...)
@@ -460,8 +460,11 @@ function ek_column(c, f, T)
     rc = get(EKFAST, (a["handle"].values[1], segno), nothing)
     rc === nothing && throw(UnmappedHandle())
     vk = only(k for k in keys(a) if k in ("cvals", "dvals", "ivals"))
-    vals = T === String ? String.(a[vk].values) : T.(a[vk].values)
-    f(h, segno, jl(a["column"]), vals, Int.(a["entszs"].values), Bool.(a["nlflgs"].values), rc)
+    # typed vectors, also when empty (Almanac's column writers take Int and Bool vectors)
+    vals = T[T(v) for v in a[vk].values]
+    entszs = Int[Int(v) for v in a["entszs"].values]
+    nlflgs = Bool[Bool(v) for v in a["nlflgs"].values]
+    f(h, segno, jl(a["column"]), vals, entszs, nlflgs, rc)
     return []
 end
 
@@ -1597,12 +1600,23 @@ const MAPPINGS = Dict{String, Function}(
             jl(a["voxlsz"]), jl(a["makvtl"]), jl(a["spxisz"])
         )
         out = Dict(o.name => o for o in c.outputs)
-        ei = out["spaixi"].values
-        return [("spaixd", out["spaixd"].values, flat(d)), ("spaixi", ei[1:min(end, length(i))], flat(i))]
+        ei, gi = out["spaixi"].values, flat(i)
+        # the parts in use: the header and the coarse grid of NCGR cells, then, past the
+        # MAXCGR = 100000 cells of room, the pointers and lists. SPICELIB leaves the room
+        # past NCGR as the caller's array had it (values of an earlier call); Almanac
+        # writes zeros.
+        length(gi) >= 7 && gi[4] > 0 || return [("spaixd", out["spaixd"].values, flat(d)), ("spaixi", ei, gi)]
+        ncgr = (gi[1] * gi[2] * gi[3]) ÷ gi[4]^3
+        used = vcat(1:min(7 + ncgr, length(gi)), (100_008):length(gi))
+        return [
+            ("spaixd", out["spaixd"].values, flat(d)),
+            ("spaixi", length(ei) < length(gi) ? ei : ei[used], gi[used]),
+        ]
     end,
     "dafcs" => default_mapping, "dafgh" => default_mapping,
-    # DAFCAD selects the DAF to which DAFADA and DAFENA add (Almanac takes the handle)
-    "dafcad" => default_mapping,
+    # DAFCAD selects the DAF to which DAFADA and DAFENA add (Almanac takes the handle in
+    # each call, and has no DAFCAD: a call that SPICELIB refused has no counterpart)
+    "dafcad" => (ctx, c) -> c.failed ? throw(UnmappedHandle()) : default_mapping(ctx, c),
     # the log holds the summary unpacked (the integers packed into doubles would not
     # survive the decimal log)
     "dafbna" => function (ctx, c)
@@ -1810,7 +1824,16 @@ end
 # The reasons of the skipped calls, per routine, for skips.tsv.
 const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle")
 const SKIPS = Dict{String, Dict{String, Int}}()
-note_skip(name, why) = (d = get!(() -> Dict{String, Int}(), SKIPS, name); d[why] = get(d, why, 0) + 1; nothing)
+"The skipped calls per family and reason, for skips_family.tsv."
+const FAMILY_SKIPS = Dict{Tuple{String, String}, Int}()
+const CURRENT_FAMILY = Ref("")
+function note_skip(name, why)
+    d = get!(() -> Dict{String, Int}(), SKIPS, name)
+    d[why] = get(d, why, 0) + 1
+    k = (CURRENT_FAMILY[], why)
+    FAMILY_SKIPS[k] = get(FAMILY_SKIPS, k, 0) + 1
+    return nothing
+end
 
 # For selftest.jl: TSPICE_FAULT=value scales each floating-point output of Almanac by
 # 1 + 1e-10, below `NEAR`; TSPICE_FAULT=kind changes the kind of each SpiceError.
@@ -1840,6 +1863,7 @@ Tally() = Tally(0, 0, 0, 0, 0, 0, 0, 0)
 
 function replay_family(path, tallies, mismatches)
     family = replace(basename(path), r"\.log(\.gz)?$" => "")
+    CURRENT_FAMILY[] = family
     ctx = SpiceContext()
     empty!(HANDLES)
     empty!(HMAP)
@@ -2091,6 +2115,12 @@ function main(args)
         println(io, join(["routine"; collect(SKIP_REASONS)], '\t'))
         for (r, d) in sort(collect(SKIPS); by = first)
             println(io, join([r; [string(get(d, k, 0)) for k in SKIP_REASONS]], '\t'))
+        end
+    end
+    open(joinpath(outdir, "skips_family.tsv"), "w") do io
+        println(io, join(["family"; collect(SKIP_REASONS)], '\t'))
+        for f in sort(unique(first.(collect(keys(FAMILY_SKIPS)))))
+            println(io, join([f; [string(get(FAMILY_SKIPS, (f, k), 0)) for k in SKIP_REASONS]], '\t'))
         end
     end
     open(joinpath(outdir, "oracle_failures.tsv"), "w") do io
