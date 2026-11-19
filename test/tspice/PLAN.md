@@ -118,19 +118,51 @@ Each item: what to do, how to know it is done.
    `azlcpo`, `spkezr`, `spkpos`, `spkltc`, `spkacs`, `spkcpo`, `spkcpt`, `spkcvo`,
    `spkcvt` now all). Left: 57 `sxform` and 137 `pxform` calls within 1e-12 but not
    exact, 1 `spkgeo` and 1 `spkgps`; not looked at.
-3. **Order of operations in the GF state functions.** `src/gf/surface.jl` `_gf_xf` and
-   `src/gf/illumination.jl` apply `R*v + dR*r`; CSPICE applies the 6x6 matrix as
-   `mxvg_` (derivative block first, sums from left to right), as `rotate_jet` of order 1
-   now does. Done: the GF families show no new near or value, and the changed functions
-   equal their CSPICE counterparts on random input.
+3. **Order of operations in the GF state functions.** Done. `_gf_xf` (`src/gf/surface.jl`)
+   now calls `rotate_jet` of order 1, `_gf_xfi` sums the six products of each velocity
+   component from left to right with the transposed derivative block first (`mxvg_` with
+   the matrix of `invstm`), and the normal state of `_gf_ilurate` (`zzilusta`) goes
+   through `rotate_jet` (same values but for the sign of a zero). The other state
+   transformations of `src/geometry` and `src/aberration.jl` already use `rotate_jet`
+   or `_geo_corsxf`; `zzgfcprx`, `zzgffvu`, `zzgfspu` and the other GF routines apply
+   3 by 3 matrices only (`mxv_`). Probe against `zzgfssob_`, `zzgfssin_`, `zzilusta_`
+   (50 random epochs, Moon and Earth as target, nine corrections, both methods, rays in
+   J2000 and in the observer's body frame), glibc check: bit-identical before 11 to 34 %
+   of the calls of `zzgfssob` and `zzgfssin`, after 100 % but one velocity component of
+   one `CN+S` intercept (one ulp), which comes from the stellar aberration helpers (see
+   below). GF families (51, F_GF*, F_ZZGF*): ids identical to the baseline; note that the
+   replay compares none of the search routines (`gfsubc`, `gfsntc`, `gfilum` are not
+   replayed), so this gate is weak for this item. Unit groups gf_solver gf_quantities
+   gf_posc gf_surface gf_illum gf_occult gf_fov: 1725 pass. No regression test: the
+   change is one ulp, below what a test without glibc's libm can see.
+   Found here and fixed on branch plan-rates (item 1): `_zzstelab` (`src/aberration.jl`) uses `_norm3`, `_vperp` and
+   `_dvhat`, written for every number type, which round differently from `vnorm`
+   (scaled by the largest component), `vperp` and `dvhat`; with glibc they differ from
+   CSPICE in most random calls by an ulp, and `spkaps` of F_SPKCOR stays 176 of 432
+   calls within 1e-12 (not exact) with glibc. `recazl` of F_AZL: 32 of 684 not exact
+   with glibc.
 4. **`spkpos` of F_GFDIST (46) and F_LS (7).** Checked: libm (0 with glibc). Closed.
-5. **Oracle wrappers that fail.** SPICE.jl's `spkaps` (`accobs` of 6), `latsrf`,
-   `srfnrm`, `vequ`, `mxvg`, `mxmg` do not take the arguments as the replay passes
-   them, so a mismatch of these routines is never checked against CSPICE. Add wrappers
-   in `CSPICE_EXTRA`. Done: `oracle_failures.tsv` of a `TSPICE_ORACLE_ALL` run is empty.
-   Also `vprjpi` of F_PRJP (2 errors): SPICELIB signals NONUNITNORMAL, CSPICE takes
-   the normal; the comparison of a call that SPICELIB failed with outputs CSPICE
-   returned is not handled, so it stays `error`.
+5. **Oracle wrappers that fail.** Done. `CSPICE_EXTRA` of `replay.jl` has wrappers for
+   `mxvg`, `mtxvg`, `mxmg`, `mtxmg`, `mxmtg`, `xposeg` (the f2c routines, column major
+   as logged), `vtmvg`, `vequ`, `vequg`, `spkaps` (acceleration of 3), `latsrf`,
+   `srfnrm`, `dskrb2`, `pltar`, `pltvol`, `polyds` (degree from the log), `azlrec`,
+   `drdazl`, `recazl`, `dazldr` (keywords of SPICE.jl) and `swpool`, which is now
+   mirrored into CSPICE as the loads are (its watchers decide `cvpool`).
+   `TSPICE_ORACLE_ALL` over all 399 families in four runs: `oracle_failures.tsv` empty
+   after the last fixes (F_POLYDS, F_POOL, F_VECTORG, F_PLT, F_AZL, F_AZLCPV run again).
+   Each new wrapper agrees with Almanac and SPICELIB on every call (`cspice_agreement.tsv`).
+   Comparison logic: `cspice_call` returns `NoOracle()` where CSPICE is not asked, so a
+   `nothing` of SPICE.jl (not found) is an answer; it agrees only with a result of
+   Almanac that is the output `found` alone and false. For a call that SPICELIB failed
+   and CSPICE did not, Almanac's outputs are compared with CSPICE's alone (SPICELIB's
+   are the caller's values). `within_spread` takes the distance test for floating-point
+   outputs only: integers (handles) must agree. Effect on the ids: `vprjp` 1 and
+   `vprjpi` 2 of F_PRJP and `inedpl` 1 of F_SLICE (CSPICE's `inedpl_c` is a C routine
+   without the zero-normal check of INEDPL) go from `error` to `cspice`; `kdata` 13 and
+   `kinfo` 6 of F_KEEPER and `kinfo` 1 of F_KPBUG go from `spread` to `value` (handles 0 against 9: the spread
+   was a false pass; the other 137 spread rows of the baseline, of `limbpt`, `sincpt`,
+   `subpnt`, `termpt`, stay), and 5 `kdata` of F_DSKKPR stay `value`. The baseline needs an
+   update for these.
 6. **Writers are checked only by reading back.** A writer call compares nothing; its
    file is checked only if a later recorded call reads it. Add a comparison of the file
    that Almanac writes with SPICELIB's at close (`dafcls`, `dascls`, `spkcls`, `ckcls`,

@@ -852,17 +852,204 @@ end
 CSPICE_EXTRA["timdef"] = cspice_timdef
 CSPICE_EXTRA["evsgp4"] = cspice_evsgp4
 CSPICE_EXTRA["azlcpo"] = cspice_azlcpo
+
+# Routines whose SPICE.jl wrapper does not take the arguments as the log has them: the
+# general matrix routines take Julia matrices of their own shape (the log has the column
+# major array of the declared size and the dimensions), spkaps takes an acceleration of
+# 6 numbers (SPICELIB's has 3), latsrf, srfnrm and dskrb2 take lists of points (the log
+# has the flat array), and vequ takes an output vector. The matrix routines are called
+# at the level of the f2c translation of SPICELIB (`mxvg_` ...), which takes the column
+# major arrays as SPICELIB does; the others through the C interface.
+const SpI = Cint
+"An array of the log as a vector of doubles; an array of one value can come as a number."
+_dv(x) = Float64.(vec(vcat(x)))
+_cm(m, nr, nc) = reshape(_dv(m)[1:(nr * nc)], nr, nc)
+function cspice_mxvg(m1, v2, nr1, nc1r2)
+    vout = zeros(nr1)
+    ccall(
+        (:mxvg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
+        _cm(m1, nr1, nc1r2), _dv(v2)[1:nc1r2], nr1, nc1r2, vout
+    )
+    return vout
+end
+function cspice_mtxvg(m1, v2, nc1, nr1r2)
+    vout = zeros(nc1)
+    ccall(
+        (:mtxvg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
+        _cm(m1, nr1r2, nc1), _dv(v2)[1:nr1r2], nc1, nr1r2, vout
+    )
+    return vout
+end
+function cspice_mxmg(m1, m2, nr1, nc1r2, nc2)
+    mout = zeros(nr1, nc2)
+    ccall(
+        (:mxmg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
+        _cm(m1, nr1, nc1r2), _cm(m2, nc1r2, nc2), nr1, nc1r2, nc2, mout
+    )
+    return mout
+end
+function cspice_mtxmg(m1, m2, nc1, nr1r2, nc2)
+    mout = zeros(nc1, nc2)
+    ccall(
+        (:mtxmg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
+        _cm(m1, nr1r2, nc1), _cm(m2, nr1r2, nc2), nc1, nr1r2, nc2, mout
+    )
+    return mout
+end
+function cspice_mxmtg(m1, m2, nr1, nc1c2, nr2)
+    mout = zeros(nr1, nr2)
+    ccall(
+        (:mxmtg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
+        _cm(m1, nr1, nc1c2), _cm(m2, nr2, nc1c2), nr1, nc1c2, nr2, mout
+    )
+    return mout
+end
+function cspice_xposeg(matrix, nrow, ncol)
+    xposem = zeros(ncol, nrow)
+    ccall(
+        (:xposeg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
+        _cm(matrix, nrow, ncol), nrow, ncol, xposem
+    )
+    return xposem
+end
+# the C interface takes the matrix in row major order: its transpose in Julia's order
+function cspice_vtmvg(v1, matrix, v2, nrow, ncol)
+    r = ccall(
+        (:vtmvg_c, SPICE.libcspice), SpD, (Ref{SpD}, Ref{SpD}, Ref{SpD}, SpI, SpI),
+        _dv(v1)[1:nrow], permutedims(_cm(matrix, nrow, ncol)),
+        _dv(v2)[1:ncol], nrow, ncol
+    )
+    SPICE.handleerror()
+    return r
+end
+function cspice_vequ(vin)
+    vout = zeros(3)
+    ccall((:vequ_c, SPICE.libcspice), Cvoid, (Ref{SpD}, Ref{SpD}), _dv(vin), vout)
+    return vout
+end
+function cspice_spkaps(targ, et, ref, abcorr, stobs, accobs)
+    starg = zeros(6)
+    lt, dlt = Ref(0.0), Ref(0.0)
+    ccall(
+        (:spkaps_c, SPICE.libcspice), Cvoid,
+        (SpI, SpD, Cstring, Cstring, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}),
+        targ, et, ref, abcorr, _dv(stobs), _dv(accobs), starg, lt, dlt
+    )
+    SPICE.handleerror()
+    return starg, lt[], dlt[]
+end
+# the points are rows of a C array, columns of a Julia matrix
+function cspice_latsrf(method, target, et, fixref, lonlat)
+    ll = reshape(_dv(lonlat), 2, :)
+    npts = size(ll, 2)
+    srfpts = zeros(3, npts)
+    ccall(
+        (:latsrf_c, SPICE.libcspice), Cvoid,
+        (Cstring, Cstring, SpD, Cstring, SpI, Ref{SpD}, Ref{SpD}),
+        method, target, et, fixref, npts, ll, srfpts
+    )
+    SPICE.handleerror()
+    return srfpts
+end
+function cspice_srfnrm(method, target, et, fixref, srfpts)
+    p = reshape(_dv(srfpts), 3, :)
+    npts = size(p, 2)
+    normls = zeros(3, npts)
+    ccall(
+        (:srfnrm_c, SPICE.libcspice), Cvoid,
+        (Cstring, Cstring, SpD, Cstring, SpI, Ref{SpD}, Ref{SpD}),
+        method, target, et, fixref, npts, p, normls
+    )
+    SPICE.handleerror()
+    return normls
+end
+function cspice_dskrb2(vrtces, plates, corsys, corpar)
+    v = reshape(_dv(vrtces), 3, :)
+    p = reshape(SpI.(vec(vcat(plates))), 3, :)
+    mncor3, mxcor3 = Ref(0.0), Ref(0.0)
+    ccall(
+        (:dskrb2_c, SPICE.libcspice), Cvoid,
+        (SpI, Ref{SpD}, SpI, Ref{SpI}, SpI, Ref{SpD}, Ref{SpD}, Ref{SpD}),
+        size(v, 2), v, size(p, 2), p, corsys, _dv(corpar), mncor3, mxcor3
+    )
+    SPICE.handleerror()
+    return mncor3[], mxcor3[]
+end
+function cspice_vequg(vin)
+    v = _dv(vin)
+    vout = zeros(length(v))
+    ccall((:vequg_c, SPICE.libcspice), Cvoid, (Ref{SpD}, SpI, Ref{SpD}), v, length(v), vout)
+    return vout
+end
+# SPICE.jl's polyds takes no degree (the log has the declared size of the coefficients)
+# a negative degree has no coefficients in the log; CSPICE reads none of them then
+function cspice_polyds(coeffs, deg, nderiv, t)
+    p = zeros(max(nderiv, 0) + 1)
+    c = vcat(_dv(coeffs), zeros(max(deg + 1, 1)))[1:max(deg + 1, 1)]
+    ccall(
+        (:polyds_c, SPICE.libcspice), Cvoid, (Ref{SpD}, SpI, SpI, SpD, Ref{SpD}),
+        c, deg, nderiv, t, p
+    )
+    SPICE.handleerror()
+    return p
+end
+# the counts nv and np are dropped: the arrays give them
+_plates(vrtces, plates) = reshape(_dv(vrtces), 3, :), reshape(SpI.(vec(vcat(plates))), 3, :)
+function cspice_pltar(vrtces, plates)
+    v, p = _plates(vrtces, plates)
+    r = ccall(
+        (:pltar_c, SPICE.libcspice), SpD, (SpI, Ref{SpD}, SpI, Ref{SpI}),
+        size(v, 2), v, size(p, 2), p
+    )
+    SPICE.handleerror()
+    return r
+end
+function cspice_pltvol(vrtces, plates)
+    v, p = _plates(vrtces, plates)
+    r = ccall(
+        (:pltvol_c, SPICE.libcspice), SpD, (SpI, Ref{SpD}, SpI, Ref{SpI}),
+        size(v, 2), v, size(p, 2), p
+    )
+    SPICE.handleerror()
+    return r
+end
+CSPICE_EXTRA["pltar"] = cspice_pltar
+CSPICE_EXTRA["pltvol"] = cspice_pltvol
+# swpool has a count of names; the watchers it sets decide what cvpool returns, so it
+# is mirrored into CSPICE as the loads are
+cspice_swpool(agent, nnames, names) =
+    SPICE.swpool(agent, String.(vcat(names))[1:max(nnames, 0)])
+CSPICE_EXTRA["swpool"] = cspice_swpool
+push!(STATEFUL, "swpool")
+# the azimuth and elevation conversions of SPICE.jl take azccw and elplsz as keywords
+cspice_azlrec(range, az, el, azccw, elplsz) = SPICE.azlrec(range, az, el; azccw, elplsz)
+cspice_drdazl(range, az, el, azccw, elplsz) = SPICE.drdazl(range, az, el; azccw, elplsz)
+cspice_recazl(rectan, azccw, elplsz) = SPICE.recazl(rectan; azccw, elplsz)
+cspice_dazldr(x, y, z, azccw, elplsz) = SPICE.dazldr(x, y, z; azccw, elplsz)
+for (name, f) in (
+        "azlrec" => cspice_azlrec, "drdazl" => cspice_drdazl, "recazl" => cspice_recazl,
+        "dazldr" => cspice_dazldr, "vequg" => cspice_vequg, "polyds" => cspice_polyds,
+        "mxvg" => cspice_mxvg, "mtxvg" => cspice_mtxvg, "mxmg" => cspice_mxmg,
+        "mtxmg" => cspice_mtxmg, "mxmtg" => cspice_mxmtg, "xposeg" => cspice_xposeg,
+        "vtmvg" => cspice_vtmvg, "vequ" => cspice_vequ, "spkaps" => cspice_spkaps,
+        "latsrf" => cspice_latsrf, "srfnrm" => cspice_srfnrm, "dskrb2" => cspice_dskrb2,
+    )
+    CSPICE_EXTRA[name] = f
+end
 # body names that a family defines with boddef (F_SINCPT maps SUN to 399) reach CSPICE
 push!(STATEFUL, "boddef")
 
+"The answer of `cspice_call` for a call that CSPICE is not asked (`nothing` is the result of a wrapper that found nothing)."
+struct NoOracle end
+
 function cspice_call(c::Call)
     name = lowercase(c.name)
-    occursin(NO_ORACLE, name) && return nothing
-    any(a -> handle_value(a) !== nothing, c.inputs) && return nothing
+    occursin(NO_ORACLE, name) && return NoOracle()
+    any(a -> handle_value(a) !== nothing, c.inputs) && return NoOracle()
     name in ("spklef", "cklpf", "pcklof") && (name = "furnsh")
     f = haskey(CSPICE_EXTRA, name) ? CSPICE_EXTRA[name] :
         isdefined(SPICE, Symbol(name)) ? getfield(SPICE, Symbol(name)) : nothing
-    f === nothing && return nothing
+    f === nothing && return NoOracle()
     drop = get(DROP, lowercase(c.name), String[])
     args = Any[oracle_arg(a) for a in c.inputs if !(a.name in drop)]
     v = isempty(c.inputs) ? Any[] : c.inputs[end].values
@@ -907,15 +1094,20 @@ True if CSPICE gives for `c` what Almanac gave and SPICELIB did not: the same er
 or outputs that agree within `NEAR` with `almanac_result`, the outputs of Almanac paired
 with SPICELIB's, where CSPICE also differs from SPICELIB in each output that Almanac
 differs in. Without that last condition a fault of Almanac below `NEAR` would pass as
-`cspice` wherever CSPICE and SPICELIB agree.
+`cspice` wherever CSPICE and SPICELIB agree. For a call that SPICELIB failed and CSPICE
+did not, SPICELIB's outputs are undefined: Almanac's outputs are compared with CSPICE's.
 """
 function agrees_with_cspice(c::Call, almanac_result)
     r = cspice_call(c)
-    r === nothing && return false
+    r isa NoOracle && return false
     if almanac_result isa SpiceError
         return r isa Exception && cspice_kind(r) === almanac_result.kind
     end
     r isa Exception && return false
+    # SPICE.jl returns `nothing` where CSPICE found nothing; Almanac's result is then
+    # the output `found` alone, and it must be false
+    r === nothing && return length(almanac_result) == 1 &&
+        almanac_result[1][1] == "found" && almanac_result[1][3] == Any[false]
     name = lowercase(c.name)
     notout = get(NOTOUT, name, String[])
     outs = [o for o in c.outputs if !(o.name in notout && o.name != "found")]
@@ -930,6 +1122,9 @@ function agrees_with_cspice(c::Call, almanac_result)
         end
         length(a) == length(o) || return false
         near_output(a, o) || return false
+        # SPICELIB signalled an error and CSPICE did not: SPICELIB's outputs are the
+        # values the caller left there, so Almanac's are compared with CSPICE's alone
+        c.failed && continue
         length(e) == length(a) && all(close_enough.(e, a)) && continue
         length(e) == length(o) && all(close_enough.(e, o)) && return false
     end
@@ -970,7 +1165,7 @@ and the C library.
 """
 function within_spread(c::Call, pairs)
     r = cspice_call(c)
-    (r === nothing || r isa Exception) && return false
+    (r isa NoOracle || r === nothing || r isa Exception) && return false
     name = lowercase(c.name)
     notout = get(NOTOUT, name, String[])
     outs = filter(o -> !(o.name in notout) && o.name != "found", c.outputs)
@@ -981,7 +1176,8 @@ function within_spread(c::Call, pairs)
         all(close_enough.(e, g)) && continue
         # an output where CSPICE agrees with SPICELIB has no scatter to be within
         all(close_enough.(e, o)) && return false
-        if all(x -> x isa Real, Iterators.flatten((e, g, o)))
+        # integers (handles, counts, indices) have no rounding scatter: they must agree
+        if all(x -> x isa AbstractFloat, Iterators.flatten((e, g, o)))
             dac = maximum(abs.(Float64.(g) .- Float64.(o)); init = 0.0)
             dsc = maximum(abs.(Float64.(e) .- Float64.(o)); init = 0.0)
             dac <= 2dsc || near_output(g, o) || return false
@@ -1274,7 +1470,7 @@ end
 
 function compare_all!(name, c, result)
     r = cspice_call(c)
-    (r === nothing || r isa Exception) && return
+    (r isa NoOracle || r === nothing || r isa Exception) && return
     notout = get(NOTOUT, name, String[])
     outs = filter(o -> o.name != "found" && !(o.name in notout), c.outputs)
     oracle = output_pairs(name, outs, r isa Tuple ? collect(r) : Any[r])

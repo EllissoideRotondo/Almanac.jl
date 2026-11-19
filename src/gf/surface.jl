@@ -17,10 +17,23 @@
 # other method throws `SpiceError(:notsupported)` at the first evaluation of the state,
 # as in CSPICE.
 
-@inline _gf_xf(R, dR, r, v) = (_m_mxv(R, r), _m_mxv(dR, r) + _m_mxv(R, v))
+"Apply the state transformation with the blocks `R` and `dR` to the state `(r, v)`, as `mxvg_` does (`rotate_jet`)."
+@inline _gf_xf(R, dR, r, v) = rotate_jet((R, dR), (r, v))
 
-"Apply the inverse of the state transformation with the blocks `R` and `dR` to the state `(r, v)` (`invstm`)."
-@inline _gf_xfi(R, dR, r, v) = (_m_mtxv(R, r), _m_mtxv(dR, r) + _m_mtxv(R, v))
+"""
+Apply the inverse of the state transformation with the blocks `R` and `dR` to the state
+`(r, v)`, as `mxvg_` applies the matrix of `invstm`: each velocity component sums its
+six products from left to right, those of the transposed derivative block first.
+"""
+@inline function _gf_xfi(R, dR, r, v)
+    w = SVector(
+        ntuple(Val(3)) do i
+            dR[1, i] * r[1] + dR[2, i] * r[2] + dR[3, i] * r[3] +
+                R[1, i] * v[1] + R[2, i] * v[2] + R[3, i] * v[3]
+        end
+    )
+    return (_m_mtxv(R, r), w)
+end
 
 const _GF_ZERO3 = zero(Vec3{Float64})
 const _GF_ZERO6 = zero(SVector{6, Float64})
