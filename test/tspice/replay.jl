@@ -1603,11 +1603,14 @@ const MAPPINGS = Dict{String, Function}(
         ei, gi = out["spaixi"].values, flat(i)
         # the parts in use: the header and the coarse grid of NCGR cells, then, past the
         # MAXCGR = 100000 cells of room, the pointers and lists. SPICELIB leaves the room
-        # past NCGR as the caller's array had it (values of an earlier call); Almanac
-        # writes zeros.
+        # past NCGR, and past the lists, as the caller's array had it (values of an earlier
+        # call); Almanac writes zeros.
         length(gi) >= 7 && gi[4] > 0 || return [("spaixd", out["spaixd"].values, flat(d)), ("spaixi", ei, gi)]
         ncgr = (gi[1] * gi[2] * gi[3]) ÷ gi[4]^3
-        used = vcat(1:min(7 + ncgr, length(gi)), (100_008):length(gi))
+        # the voxel pointers, the voxel-plate list, the vertex pointers and the
+        # vertex-plate list end the index; both leave the rest of SPXISZ as it was
+        last = min(length(gi), 100_007 + gi[5] + gi[6] + nv + gi[7])
+        used = vcat(1:min(7 + ncgr, length(gi)), (100_008):last)
         return [
             ("spaixd", out["spaixd"].values, flat(d)),
             ("spaixi", length(ei) < length(gi) ? ei : ei[used], gi[used]),
