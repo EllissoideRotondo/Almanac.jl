@@ -61,6 +61,8 @@ struct Call
     failed::Bool
     short::String
     snapshot::String
+    "A writer that the log does not record (a `W` line): only its handles are logged."
+    unrecorded::Bool
 end
 
 "The log at `path`, decompressed if it ends in `.gz`."
@@ -83,7 +85,7 @@ function foreach_call(f, path; want = _ -> true)
             length(parts) == 4 || continue
             _, name, depth, fb = parts
             start = lineno
-            ins, outs, snap = Arg[], Arg[], ""
+            ins, outs, snap, unrec, bin = Arg[], Arg[], "", false, ""
             keep = want(lowercase(name))
             failed, short = false, ""
             while !eof(io)
@@ -99,6 +101,13 @@ function foreach_call(f, path; want = _ -> true)
                     snap = l[3:end]
                     m = match(r"([^/]+\.log\.files/[^/]+)$", snap)
                     (!isdir(snap) && m !== nothing) && (snap = joinpath(dirname(path), m[1]))
+                elseif startswith(l, "B ")
+                    # the values of the next argument, too long for the log, in a binary file
+                    bin = l[3:end]
+                    m = match(r"([^/]+\.log\.files/bin/[^/]+)$", bin)
+                    (!isfile(bin) && m !== nothing) && (bin = joinpath(dirname(path), m[1]))
+                elseif l == "W"
+                    unrec = keep = true     # its handles follow
                 elseif !keep
                     continue
                 elseif startswith(l, "<") || startswith(l, ">")
@@ -107,7 +116,9 @@ function foreach_call(f, path; want = _ -> true)
                     aname, k, n = p
                     n = parse(Int, n)
                     if n < 0                # more values than the log keeps
-                        push!((l[1] == '<' ? ins : outs), Arg(aname[2:end], k[1], Any[TRUNCATED]))
+                        vals = isempty(bin) || !isfile(bin) ? Any[TRUNCATED] : read_bin(bin, k[1])
+                        bin = ""
+                        push!((l[1] == '<' ? ins : outs), Arg(aname[2:end], k[1], vals))
                         continue
                     end
                     vals = Vector{Any}(undef, n)
@@ -125,9 +136,15 @@ function foreach_call(f, path; want = _ -> true)
                     break
                 end
             end
-            f(Call(name, start, parse(Int, depth), fb == "T", ins, outs, failed, short, snap))
+            f(Call(name, start, parse(Int, depth), fb == "T", ins, outs, failed, short, snap, unrec))
         end
     end
+end
+
+"The values of a binary file of the recorder (`B` line): doubles or 4-byte integers."
+function read_bin(path, kind)
+    bytes = read(`gzip -dc $path`)
+    return kind == 'd' ? Any[reinterpret(Float64, bytes)...] : Any[Int.(reinterpret(Int32, bytes))...]
 end
 
 # --- argument conversion -----------------------------------------------------------------
@@ -141,6 +158,8 @@ function jl(a::Arg)
     n == 1 && return T(v[1])
     n == 9 && return SMatrix{3, 3, T}(v...)
     n == 36 && return SMatrix{6, 6, T}(v...)
+    # past the length of the log (values from a binary file): a plain vector
+    n > 2000 && return T.(v)
     return SVector{n, T}(v...)
 end
 
@@ -311,7 +330,8 @@ function jl_named(a::Arg, routine::AbstractString)
             "cp", "srflst", "dc", "ic", "vrtces", "plates",
         )
     ) &&
-        return a.kind == 'd' ? SVector{length(a.values), Float64}(a.values...) :
+        return length(a.values) > 2000 ? (a.kind == 'd' ? Float64.(a.values) : Int.(a.values)) :
+        a.kind == 'd' ? SVector{length(a.values), Float64}(a.values...) :
         SVector{length(a.values), Int}(a.values...)
     return jl_named(a)
 end
@@ -379,12 +399,22 @@ function open_by_handle(ctx, c::Call)
     # SPICELIB takes an empty internal file name and CSPICE does not (`emptystring`);
     # the name is not under test, and without the file the family could not go on.
     args = Any[a.name == "ifname" && isempty(strip(jl(a))) ? "replay" : jl(a) for a in c.inputs]
+    any(a -> a.name == "ifname" && isempty(strip(jl(a))), c.inputs) ? push!(IFNAME_REPLAY, abspath(path)) :
+        occursin(CREATORS, name) && delete!(IFNAME_REPLAY, abspath(path))
     h = f(args...)
     k = findfirst(o -> o.name in HANDLE_ARGS, c.outputs)
     k === nothing || (HMAP[c.outputs[k].values[1]] = h; HPATH[c.outputs[k].values[1]] = abspath(path))
     (k !== nothing && occursin(r"(opn|onw|opw|opa)$", name)) && push!(WRITE_OPEN, c.outputs[k].values[1])
     return []
 end
+
+"What the close of a file that SPICELIB wrote did with it, for files.tsv."
+const FILE_CHECK = Ref("")
+"Why the replay gave up each handle (drop_handle), for files.tsv."
+const DROPPED = Dict{Int, String}()
+
+"The files that Almanac created with the internal name `replay` for SPICELIB's blank one."
+const IFNAME_REPLAY = Set{String}()
 
 "The type 14 segment writers of Almanac, by SPICELIB's handle."
 const SPK14W = Dict{Int, Any}()
@@ -407,7 +437,8 @@ Give up SPICELIB's handle `hid`: Almanac's file misses data that SPICELIB's has.
 file is closed in Almanac, so that a later open does not find it open, and later opens
 read SPICELIB's file from the snapshots.
 """
-function drop_handle(hid)
+function drop_handle(hid, why = "a write that the replay could not make")
+    haskey(HMAP, hid) && (DROPPED[hid] = why)
     haskey(HPATH, hid) && push!(TAINTED, HPATH[hid])
     h = get(HMAP, hid, nothing)
     h isa Almanac.DASHandle && try
@@ -423,7 +454,7 @@ end
 
 # SPICELIB keeps a current DAF for the array search and the array being added; Almanac
 # takes the handle of each call.
-const DAF_SELECT = Set(["dafbfs", "dafbbs", "dafbna", "dafcs"])
+const DAF_SELECT = Set(["dafbfs", "dafbbs", "dafbna", "dafcs", "dafcad"])
 const DAF_CURRENT = Set(["daffna", "daffpa", "dafgs", "dafgn", "dafena", "dafada", "dafws", "dafrs", "dafrn"])
 const CURRENT_DAF = Ref{Any}(nothing)
 
@@ -450,6 +481,7 @@ const RECORD_WRITERS = Dict(
     "spkw03" => ("cdata", a -> 6 * (jl(a["polydg"]) + 1)),
     "spkw20" => ("cdata", a -> 3 * (jl(a["polydg"]) + 2)),
     "pckw02" => ("cdata", a -> 3 * (jl(a["polydg"]) + 1)),
+    "pckw20" => ("cdata", a -> 3 * (jl(a["polydg"]) + 2)),
     "spkw21" => ("dlines", a -> jl(a["dlsize"]))
 )
 
@@ -493,6 +525,10 @@ function default_mapping(ctx, c::Call)
         # a size or count that a vector of records cannot carry, or a log without all
         # values (then Almanac's file misses the segment)
         (m <= 0 || n < 0) && throw(UnmappedHandle())
+        # degree -1 of the type 20 writers (records of 3), or no record of SPKW21: the vector of records gives Almanac
+        # the degree or the size of a difference line, which it then cannot carry
+        (name in ("pckw20", "spkw20") && jl(a["polydg"]) < 0) && throw(UnmappedHandle())
+        (name == "spkw21" && n == 0) && throw(UnmappedHandle())
         length(v) < n * m && (c.failed || drop_handle(a["handle"].values[1]); throw(UnmappedHandle()))
         recs = [v[((k - 1) * m + 1):(k * m)] for k in 1:n]
         drop = ("handle", "n", "polydg", "dlsize")
@@ -566,7 +602,7 @@ function default_mapping(ctx, c::Call)
         # a file that Almanac does not have: the search that follows is skipped
         CURRENT_DAF[] = h
         h === nothing && throw(UnmappedHandle())
-        name == "dafcs" && return []
+        name in ("dafcs", "dafcad") && return []
     end
     name == "dafgh" && return map_handles([("handle", c.outputs[1].values, Any[CURRENT_DAF[]])])
     any(a -> a.name in HANDLE_ARGS && a.kind == 'i' && handle_value(a) === nothing, c.inputs) &&
@@ -611,12 +647,24 @@ function default_mapping(ctx, c::Call)
             catch end    # the close left it open
             haskey(HPATH, hid) && push!(TAINTED, HPATH[hid])
             delete!(HMAP, hid)
+            FILE_CHECK[] = "not compared: Almanac's file has no segment (written outside the log)"
             throw(UnmappedHandle())
         end
         filter!(kv -> kv.second !== args[1], READERS)
         args[1] isa AbstractString || delete!(HMAP, hid)
+        written = hid in WRITE_OPEN
         delete!(WRITE_OPEN, hid)
-        return []
+        # a file that SPICELIB wrote: the recorder copied it after the close (logs from
+        # before that have no copy, and then the close compares nothing)
+        (written && !isempty(c.snapshot) && !c.failed && haskey(HPATH, hid)) || return []
+        path = HPATH[hid]
+        theirs = joinpath(c.snapshot, basename(path))
+        # a write that the replay could not make, or no copy (past the cap of the
+        # recorder): the files are not compared
+        FILE_CHECK[] = path in TAINTED ? "not compared: a write outside the replay" :
+            !isfile(theirs) ? "not compared: no copy of SPICELIB's file (past the cap of the recorder, or deleted before the close)" : "compared"
+        FILE_CHECK[] == "compared" || throw(UnmappedHandle())
+        return compare_files(path, theirs; ifname = path in IFNAME_REPLAY ? "replay" : nothing)
     end
     r = try
         applicable(f, ctx, args...) ? f(ctx, args...) : f(args...)
@@ -676,6 +724,159 @@ function default_mapping(ctx, c::Call)
     end
     return pairs
 end
+
+# --- the files that the writers wrote -------------------------------------------------
+#
+# At the close of a file that SPICELIB wrote, the file that Almanac wrote is compared with
+# the copy of SPICELIB's that the recorder made after the close, through Almanac's
+# readers: the content, not the bytes, since Almanac may lay out the records otherwise
+# (a DAS file is segregated at the close, the reserved records of a DAF are not kept).
+# The result is that of the close: a match, or a value mismatch whose name says what
+# differs.
+
+"""
+Add the pair `name` of SPICELIB's values `e` and Almanac's `g` to `pairs`: the lengths
+if they agree, else the first element that differs, with its index in the name.
+"""
+function file_pair!(pairs, name, e, g)
+    e, g = Any[e...], Any[g...]
+    if length(e) != length(g)
+        push!(pairs, ("$name: length", Any[length(e)], Any[length(g)]))
+        return pairs
+    end
+    k = findfirst(i -> !close_enough(e[i], g[i]), eachindex(e))
+    push!(pairs, k === nothing ? (name, Any[length(e)], Any[length(g)]) : ("$name[$k of $(length(e))]", Any[e[k]], Any[g[k]]))
+    return pairs
+end
+
+"The arrays of a DAF in the order of the file: (dc, ic, name, data)."
+function daf_arrays(h)
+    nd, ni = Almanac.dafhsf(h)
+    out = []
+    Almanac.dafbfs(h)
+    while Almanac.daffna(h)
+        dc, ic = Almanac.dafus(Almanac.dafgs(h), nd, ni)
+        data = ic[end] >= ic[end - 1] ? Almanac.dafgda(h, ic[end - 1], ic[end]) : Float64[]
+        push!(out, (dc, ic, Almanac.dafgn(h), data))
+    end
+    return out
+end
+
+function compare_daf!(pairs, mine, theirs)
+    hm, ht = Almanac.dafopr(mine), Almanac.dafopr(theirs)
+    try
+        # the summary format and the internal name; the record numbers and the free
+        # address depend on the layout
+        file_pair!(pairs, "nd,ni,ifname", Any[Almanac.dafrfr(ht)[1:3]...], Any[Almanac.dafrfr(hm)[1:3]...])
+        file_pair!(pairs, "comments", Almanac.dafec(ht), Almanac.dafec(hm))
+        at, am = daf_arrays(ht), daf_arrays(hm)
+        file_pair!(pairs, "number of arrays", Any[length(at)], Any[length(am)])
+        for (k, ((dt, it, nt, xt), (dm, im, nm, xm))) in enumerate(zip(at, am))
+            file_pair!(pairs, "array $k name", Any[nt], Any[nm])
+            file_pair!(pairs, "array $k dc", dt, dm)
+            # the integers but the addresses, which depend on the layout
+            file_pair!(pairs, "array $k ic", it[1:(end - 2)], im[1:(end - 2)])
+            file_pair!(pairs, "array $k data", xt, xm)
+        end
+    finally
+        Almanac.dafcls(hm); Almanac.dafcls(ht)
+    end
+    return pairs
+end
+
+function compare_das!(pairs, mine, theirs)
+    hm, ht = Almanac.dasopr(mine), Almanac.dasopr(theirs)
+    try
+        file_pair!(pairs, "idword,ifname,nresvr,nresvc,ncomr,ncomc", Any[Almanac.dasrfr(ht)...], Any[Almanac.dasrfr(hm)...])
+        file_pair!(pairs, "comments", Almanac.dasec(ht), Almanac.dasec(hm))
+        lt, lm = Almanac.dashfs(ht)[6], Almanac.dashfs(hm)[6]
+        file_pair!(pairs, "last addresses (c, d, i)", lt, lm)
+        for (k, kind) in enumerate(("character", "double", "integer"))
+            n = min(lt[k], lm[k])
+            n > 0 || continue
+            rd = (Almanac.dasrdc, Almanac.dasrdd, Almanac.dasrdi)[k]
+            vt, vm = rd(ht, 1, n), rd(hm, 1, n)
+            k == 1 && ((vt, vm) = (codeunits(vt), codeunits(vm)))
+            file_pair!(pairs, "$kind data", vt, vm)
+        end
+    finally
+        Almanac.dascls(hm); Almanac.dascls(ht)
+    end
+    return pairs
+end
+
+ek_attrs(x) = Any[x.cclass, String(x.dtype), x.strlen, x.size, x.indexd, x.nullok]
+
+function compare_ek!(pairs, mine, theirs)
+    hm, ht = Almanac.ekopr(mine), Almanac.ekopr(theirs)
+    try
+        rt, rm_ = Almanac.dasrfr(ht), Almanac.dasrfr(hm)
+        file_pair!(pairs, "ifname,ncomc", Any[rt[2], rt[6]], Any[rm_[2], rm_[6]])
+        file_pair!(pairs, "comments", Almanac.dasec(ht), Almanac.dasec(hm))
+        nt, nm = Almanac.eknseg(ht), Almanac.eknseg(hm)
+        file_pair!(pairs, "number of segments", Any[nt], Any[nm])
+        for s in 1:min(nt, nm)
+            st, sm = Almanac.ekssum(ht, s), Almanac.ekssum(hm, s)
+            file_pair!(pairs, "segment $s table,nrows,ncols", Any[st.tabnam, st.nrows, st.ncols], Any[sm.tabnam, sm.nrows, sm.ncols])
+            file_pair!(pairs, "segment $s columns", st.cnames, sm.cnames)
+            for (k, (at, am)) in enumerate(zip(st.cdescrs, sm.cdescrs))
+                file_pair!(pairs, "segment $s column $(st.cnames[k]) attributes", ek_attrs(at), ek_attrs(am))
+            end
+            (st.nrows == sm.nrows && st.cnames == sm.cnames) || continue
+            for (k, col) in enumerate(st.cnames)
+                dt = st.cdescrs[k].dtype
+                rd = dt === :CHR ? Almanac.ekrcec : dt === :INT ? Almanac.ekrcei : Almanac.ekrced
+                et, gt = Any[], Any[]
+                for r in 1:st.nrows
+                    (vt, nlt), (vm, nlm) = rd(ht, s, r, col), rd(hm, s, r, col)
+                    push!(et, nlt, length(vt), vt...)
+                    push!(gt, nlm, length(vm), vm...)
+                end
+                file_pair!(pairs, "segment $s column $col (null flag, size, values of each row)", et, gt)
+            end
+        end
+    finally
+        Almanac.dascls(hm); Almanac.dascls(ht)
+    end
+    return pairs
+end
+
+"The content of the file `mine` that Almanac wrote and of SPICELIB's copy `theirs`, as pairs."
+function compare_files(mine, theirs; ifname = nothing)
+    pairs = Tuple{String, Vector{Any}, Any}[]
+    ft, fm = Almanac.getfat(theirs), Almanac.getfat(mine)
+    file_pair!(pairs, "architecture,type", Any[ft...], Any[fm...])
+    ft == fm || return pairs
+    ft[1] == "DAF" && compare_daf!(pairs, mine, theirs)
+    ft == ("DAS", "EK") && compare_ek!(pairs, mine, theirs)
+    ft[1] == "DAS" && ft[2] != "EK" && compare_das!(pairs, mine, theirs)
+    # the internal name `replay` that the open gave for SPICELIB's blank one (open_by_handle)
+    ifname === nothing || replace!(
+        p -> startswith(p[1], "nd,ni,ifname") || startswith(p[1], "idword,ifname") ||
+            startswith(p[1], "ifname,") ? (p[1], p[2], Any[x == ifname ? "" : x for x in p[3]]) : p, pairs
+    )
+    return pairs
+end
+
+"""
+A writer that the log does not record (a `W` mark): Almanac's copy of the file misses
+its write. The files open for write that the call names (SPICELIB's handles of those are
+negative) are given up; if it names none, it writes the current DAF (DAFWS, the SPKSnn
+subset writers, whose handle is of the file they read), or else any file open for write.
+"""
+function unrecorded_writer(c::Call)
+    hs = [a.values[1] for a in c.inputs if a.name in HANDLE_ARGS && a.kind == 'i' && length(a.values) == 1]
+    w = filter(<(0), hs)
+    if isempty(w)
+        cur = current_daf_ids()
+        w = isempty(cur) ? collect(WRITE_OPEN) : cur
+    end
+    foreach(h -> drop_handle(h, "a writer outside the log ($(lowercase(c.name)))"), w)
+    return
+end
+
+"SPICELIB's handles of the current DAF of Almanac."
+current_daf_ids() = CURRENT_DAF[] === nothing ? Int[] : [k for (k, v) in HMAP if v === CURRENT_DAF[]]
 
 # the handles of the current call, for `counted`
 const WRITE_HANDLE = Ref(Int[])
@@ -1221,7 +1422,8 @@ end
 
 function unload_by_handle(ctx, c)
     path = get(HANDLES, jl(c.inputs[1]), nothing)
-    path === nothing || unload(ctx, path)
+    path === nothing && return []      # not loaded by handle (F_SGMETA unloads its write handles)
+    unload(ctx, path)
     delete!(HMAP, jl(c.inputs[1]))
     return []
 end
@@ -1252,6 +1454,8 @@ const MAPPINGS = Dict{String, Function}(
         return []
     end,
     "spk14e" => function (ctx, c)
+        # a file given up (SPK14A is not recorded) is closed in Almanac
+        haskey(HMAP, c.inputs[1].values[1]) || throw(UnmappedHandle())
         w = get(SPK14W, c.inputs[1].values[1], nothing); w === nothing && throw(UnmappedHandle())
         spk14e(w)
         return []
@@ -1294,6 +1498,19 @@ const MAPPINGS = Dict{String, Function}(
         return pairs
     end,
     "dafcs" => default_mapping, "dafgh" => default_mapping,
+    # DAFCAD selects the DAF to which DAFADA and DAFENA add (Almanac takes the handle)
+    "dafcad" => default_mapping,
+    # the log holds the summary unpacked (the integers packed into doubles would not
+    # survive the decimal log)
+    "dafbna" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        any(x -> any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+        h = handle_value(a["handle"])
+        CURRENT_DAF[] = h
+        h === nothing && throw(UnmappedHandle())
+        dafbna(h, Almanac.dafps(Float64.(a["dc"].values), Int.(a["ic"].values)), jl(a["name"]))
+        return []
+    end,
     "spkuef" => unload_by_handle, "ckupf" => unload_by_handle, "pckuof" => unload_by_handle,
     "tparse" => function (ctx, c)
         errmsg = c.outputs[2].values[1]
@@ -1524,7 +1741,7 @@ function replay_family(path, tallies, mismatches)
     empty!(HANDLES)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
-    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W)
+    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED)
     foreach(
         h -> try
             Almanac.dafcls(h)
@@ -1546,7 +1763,15 @@ function replay_family(path, tallies, mismatches)
         # calls on its handle are skipped
         for a in c.inputs
             (truncated && a.name in HANDLE_ARGS && a.kind == 'i') || continue
-            drop_handle(a.values[1])
+            drop_handle(a.values[1], "a call with more values than the log keeps ($name)")
+        end
+        # the same for a write to the current DAF (DAFADA of more values than the log keeps)
+        (truncated && name in DAF_CURRENT && c.depth == 1 && !c.failed_before) &&
+            foreach(h -> drop_handle(h, "a call with more values than the log keeps ($name)"), current_daf_ids())
+        if c.unrecorded
+            c.depth == 1 && !c.failed_before && unrecorded_writer(c)
+            t.skipped += 1
+            return
         end
         if desync || c.depth > 1 || c.failed_before || truncated ||
                 !(haskey(MAPPINGS, name) || isdefined(Almanac, Symbol(name)))
@@ -1558,6 +1783,8 @@ function replay_family(path, tallies, mismatches)
             return
         end
         mapping = get(MAPPINGS, name, default_mapping)
+        FILE_CHECK[] = ""
+        m0 = t.match
         result = try
             mapping(ctx, c)
         catch e
@@ -1622,6 +1849,16 @@ function replay_family(path, tallies, mismatches)
                 )
             end
         end
+        # files.tsv: each file that SPICELIB wrote and closed (the recorder copied it),
+        # and whether the close compared it
+        if occursin(CLOSERS, name) && !isempty(c.snapshot) && mismatches.files !== nothing
+            why = result isa UnmappedHandle && isempty(FILE_CHECK[]) ?
+                "not compared: " * get(DROPPED, c.inputs[1].values[1], "the handle is not replayed (an open outside the log)") :
+                FILE_CHECK[] == "compared" ? "compared: " * (t.match > m0 ? "match" : "mismatch") :
+                isempty(FILE_CHECK[]) ? "not compared: " * (result isa Exception ? "the close failed" : "SPICELIB's close failed") :
+                FILE_CHECK[]
+            println(mismatches.files, family, '\t', c.line, '\t', name, '\t', why)
+        end
     end
 end
 
@@ -1637,8 +1874,10 @@ mutable struct Mismatches
     io::IO
     rows::Dict{Tuple{String, String}, Int}
     ids::Union{IO, Nothing}
+    files::Union{IO, Nothing}
 end
-Mismatches(io::IO, rows) = Mismatches(io, rows, nothing)
+Mismatches(io::IO, rows) = Mismatches(io, rows, nothing, nothing)
+Mismatches(io::IO, rows, ids) = Mismatches(io, rows, ids, nothing)
 const MAXROWS = 200
 const GATED_KINDS = ("cspice", "near", "spread", "value", "error", "adapter")
 
@@ -1706,7 +1945,8 @@ function main(args)
     tallies = Dict{String, Tally}()
     mismatches = Mismatches(
         open(joinpath(outdir, "replay.tsv"), "w"),
-        Dict{Tuple{String, String}, Int}(), open(joinpath(outdir, "ids.tsv"), "w")
+        Dict{Tuple{String, String}, Int}(), open(joinpath(outdir, "ids.tsv"), "w"),
+        open(joinpath(outdir, "files.tsv"), "w")
     )
     # families.tsv: the status of each family, `done` or `failed` with the error. A family
     # that fails is not a mismatch that the baseline can allow: the exit status is 1.
@@ -1729,6 +1969,7 @@ function main(args)
     end
     close(status)
     close(mismatches.ids)
+    close(mismatches.files)
     println(rpad("routine", 10), lpad("match", 10), lpad("cspice", 8), lpad("near", 8), lpad("spread", 8), lpad("value", 8), lpad("error", 8), lpad("adapter", 10), lpad("skipped", 10))
     tot = Tally()
     for name in sort(collect(keys(tallies)))

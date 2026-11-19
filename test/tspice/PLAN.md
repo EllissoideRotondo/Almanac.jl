@@ -73,8 +73,8 @@ string with a character outside printable ASCII as `%` and hex codes; `replay.jl
 decodes it. F_DASA2L re-recorded and replayed: `dasrdc` 87,500 match, 0 value. Only
 F_DASA2L had such strings (scan of all logs).
 
-To do first on a new machine: record again (instrument.py changed; at least F_DASA2L),
-then `run.jl --update-baseline` and `selftest.jl`.
+To do first on a new machine: record again (instrument.py changed: items 6 and 8), then
+`run.jl --update-baseline` and `selftest.jl`.
 
 ## Open items
 
@@ -163,13 +163,56 @@ Each item: what to do, how to know it is done.
    was a false pass; the other 137 spread rows of the baseline, of `limbpt`, `sincpt`,
    `subpnt`, `termpt`, stay), and 5 `kdata` of F_DSKKPR stay `value`. The baseline needs an
    update for these.
-6. **Writers are checked only by reading back.** A writer call compares nothing; its
-   file is checked only if a later recorded call reads it. Add a comparison of the file
-   that Almanac writes with SPICELIB's at close (`dafcls`, `dascls`, `spkcls`, `ckcls`,
-   `pckcls`, `ekcls`, `dskcls`): snapshot SPICELIB's file at its close in the recorder,
-   and compare the arrays and summaries (not the bytes: Almanac may lay out records
-   differently) in the replay. Done: each writer family compares every segment it
-   wrote; the audit shows no writer whose output is never checked.
+6. **Writers are checked only by reading back.** Done (branch plan-writers). The
+   recorder copies the file of each close from the test program (`dafcls`, `dascls`,
+   `spkcls`, `ckcls`, `pckcls`, `ekcls`, `dskcls` at depth 1) whose handle is open for
+   write, after the close (`tlog_close_name`, `tlog_close_snapshot`: the dedupe of
+   `tlog_snapshot_file`, and past the 256 MB cap nothing is copied or linked). At the
+   close `replay.jl` compares Almanac's file with that copy through Almanac's readers
+   (`compare_files`): DAF: ND, NI, internal name, comments, and per array the name, DC,
+   IC without the two addresses, and the data; DAS: the file record, comments, the last
+   addresses and the data of each type; EK: segments, table, columns, attributes and
+   every entry. The close is a match or a value mismatch whose name says what differs
+   (`array 3 data[85 of 3027]`). `files.tsv` lists each written file: compared, or why
+   not. Changes that this needed:
+   - writers that are not recorded are logged with a `W` mark and their handles
+     (`WRITE_MARKS` of instrument.py: `ekifld`/`ekacl*`/`ekffld`, `spkw19`, `ckw06`,
+     `ckw04*`, `spk14a`, `dafws`, `dafrs`, `dafwda`, the `das*` record writers,
+     `daswfr`, `dascud`, the `sg*` generic segment writers, the `spks*` subset writers);
+     the replay gives up the file they write, so a file that misses a write is never
+     compared;
+   - an input array longer than the log keeps goes to a gzip binary file named by its
+     (byte-wise FNV) hash, within `TSPICE_MAXBIN` (256 MB) per family, named by a `B`
+     line that an older replay ignores. `dskw02` logs `spaixi` with its length from
+     dsk02.inc; before, every `dskw02` call was truncated and no DSK was compared;
+   - `dafbna` is recorded, with its summary unpacked as `dc` and `ic` (packed integers do
+     not survive the decimal log); `dafcad` and `pckw20` are recorded;
+   - a truncated `dafada` gives up the current DAF (F_CK06 left a short file unflagged);
+     an unload of a handle that no loader loaded keeps the handle (F_SGMETA); the
+     internal name `replay` that the replay gives for a blank one is not a difference;
+     `pckw20`/`spkw20` of degree -1 and `spkw21` of no record are not mapped (Almanac
+     takes the degree or line size from the records).
+
+   Measured on the 75 writer families (F_CK0*, F_CKW0*, F_DAF*, F_DAS*, F_DLA, F_DSK*,
+   F_DYN05, F_EK*, F_NNEK*, F_PCK*, F_SGMETA, F_SPK*, F_LTIME, F_POOL), recorded again
+   into a scratch directory: 11,891 written files closed, 11,573 compared, all equal;
+   no real difference in Almanac's written files was found. 318 not compared: 62 a writer
+   outside the log (ekifld 15, spkw19 33, ckw06 8, spk14a 2, dafrs 2, dafwda 1, daswfr
+   1), 62 a file opened outside the log (tspice utilities: TSTSPK, ZZDDHOPN in F_DAFAH),
+   181 past the copy cap or deleted before the close (F_DSKOBJ 177, F_SGMETA 4: KILFIL
+   deletes the files before it closes them), 13 a write the replay could not make (3
+   still truncated: 2 `dskw02` past the binary budget, 1 `dasadc`, whose strings have no
+   binary file; 10 record writers whose log holds fewer values than N records need). The close mismatches
+   found on the way were all the recorder's or the replay's (`dafcad` not recorded,
+   truncated `dafada`, a weak hash, the `replay` internal name). The other mismatches of
+   these families are those of the old baseline, but: new `cspice` rows where calls that
+   were truncated are now replayed (F_PCKBUF `tisbod`/`tipbod` 13 -> 26, F_SPKCPV
+   `spkacs` 128 -> 164, `spkez` 747 -> 1,135, `sxform` 325 -> 336), and the DSK families
+   now replay `dskw02`. `selftest.jl` passes on F_LTIME and F_POOL of the new recording.
+   Remains: the fast-load EK writers, `spkw19` and `ckw06` need lengths that depend on
+   the column declarations or on the packet sizes per subtype; record them to compare
+   those files. The coordinator re-records everything (instrument.py changed) and
+   updates the baseline (closes now compare, so their counts change).
 7. **Review the 1,607 `documented` value and error mismatches one by one.** The class
    says a docstring or the manual states the difference; that has to be true and the
    difference has to be right. Known so far:
@@ -190,13 +233,22 @@ Each item: what to do, how to know it is done.
      CSPICE (the oracle) and the docstrings.
    Done: every `documented` routine of `baseline.tsv` has a note that is checked, and
    any that is wrong is fixed in Almanac or reclassed.
-8. **The other gaps (about 50 calls).** `dafopr`/`dafopw` of F_DAFAH, F_DAFNN, F_DYN05
-   (files made with Fortran I/O outside the log), `daffna`/`daffpa` of F_SGMETA,
-   `eknseg` of F_EK01/F_EK03, `dasrfr` of F_DASFR (`DASWFR` not recorded), `pcklof` of
-   F_PCKBSR. For each: record the missing routine, or snapshot the file at the open
-   (the recorder snapshots opens at depth 1 only), so that the replay reads
-   SPICELIB's file. Done: 0 `gap` rows, or each remaining one has a stated reason
-   that the replay cannot reproduce it.
+8. **The other gaps (about 50 calls).** Done (branch plan-writers), recorded again and
+   replayed: 0 `gap` rows in these families but one.
+   - `dafopr`/`dafopw` of F_DAFAH (21), F_DAFNN (4), F_DYN05 (2): the logs predated the
+     snapshot at the open; with it the replay reads SPICELIB's file: 0.
+   - `daffna`/`daffpa` of F_SGMETA (10): SGCTDF writes with `dafbna`, which was not
+     recorded, and the test unloads its write handles with `spkuef`, which made the
+     replay forget them. Both fixed; `dafwda` is marked: 0.
+   - `eknseg` of F_EK01/F_EK03 (2): TSTEK fills the EK with `ekifld`, `ekacl*`,
+     `ekffld`, now marked; the later `ekopr` reads SPICELIB's file: 0. The `dashfs` of
+     F_NNEK01/03/04 (item 7) went the same way.
+   - `dasrfr` of F_DASFR (1): `daswfr` is marked (Almanac has no `daswfr`), and the
+     `dasrfr` on that handle is skipped: 0. `dascud` is marked too, so the 760 `dashfs`
+     of F_DASCUD (item 7) are skipped.
+   - `pcklof` of F_PCKBSR (1) remains: Almanac has no `pcklof`, the replay loads with
+     `furnsh`, whose error for a missing file is `NOSUCHFILE` (as `furnsh_c`), where
+     SPICELIB's `pcklof` signals `FILENOTFOUND`.
 9. **The 6.4 million skipped calls.** Count them by reason (nested call, error state,
    truncated array, no mapping, unmapped handle) in `tally.tsv`, and list the routines
    with no mapping. Nested calls are expected; any routine that tspice calls at the top

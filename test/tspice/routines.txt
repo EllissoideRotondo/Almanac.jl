@@ -1,6 +1,7 @@
 # Routines whose calls record.sh logs and replay.jl replays: SPICELIB names, one per line.
 # The SPICELIB routines that Almanac.jl exports under the same name, and the loaders by handle
-# (replayed as furnsh and unload).
+# (replayed as furnsh and unload), and DAFCAD, which selects the DAF that DAFADA and DAFENA
+# write (Almanac takes the handle in each call).
 axisar
 azlcpo
 azlrec
@@ -55,6 +56,7 @@ dafada
 dafbbs
 dafbfs
 dafbna
+dafcad
 dafcls
 dafdc
 dafec
@@ -298,6 +300,7 @@ pckcov
 pckfrm
 pckopn
 pckw02
+pckw20
 pcpool
 pdpool
 pgrrec
