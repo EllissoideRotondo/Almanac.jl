@@ -310,7 +310,8 @@ function _kepler_equinoctial(h::Float64, k::Float64)
     xm = 0.0
     for _ in 1:maxit          # invariant: the root is in [xl, xu]
         xm = max(xl, min(xu, (xl + xu) * 0.5))
-        yxm = xm - h * cos(xm) - k * sin(xm)
+        sxm, cxm = sincos(xm)
+        yxm = xm - h * cxm - k * sxm
         if yxm > 0.0
             xu = xm
         else
@@ -319,8 +320,7 @@ function _kepler_equinoctial(h::Float64, k::Float64)
     end
     x = xm
     for _ in 1:5
-        cosx = cos(x)
-        sinx = sin(x)
+        sinx, cosx = sincos(x)
         yx = x - h * cosx - k * sinx
         ypx = h * sinx + 1.0 - k * cosx
         x -= yx / ypx

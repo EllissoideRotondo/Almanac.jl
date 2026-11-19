@@ -31,8 +31,7 @@ state transformation from `f.ref` to `ref` at `et`.
     x = f.pos + (et - f.epoch) * f.vel
     v = f.vel - zero(x)
     f.ref == ref && return x, v
-    R, dR = frame_jet(ks, f.ref, ref, et, Val(1))
-    return _m_mxv(R, x), _m_mxv(dR, x) + _m_mxv(R, v)
+    return rotate_jet(frame_jet(ks, f.ref, ref, et, Val(1)), (x, v))
 end
 
 @inline function _geo_cvx_ssb(ks::KernelSet, f::_GeoFixed, et, iref::Int32)
@@ -132,8 +131,14 @@ of the observer; its acceleration is the central difference of the velocity over
     return (; q.r, q.v, q.lt, q.dlt)
 end
 
-"`zzcorsxf` applied to a state: `[R 0; (1 + s dlt) dR R] * (r, v)`."
-@inline _geo_corsxf(R, dR, scale, r, v) = vcat(_m_mxv(R, r), scale * _m_mxv(dR, r) + _m_mxv(R, v))
+"""
+`zzcorsxf` applied to a state: `[R 0; (1 + s dlt) dR R] * (r, v)`, the derivative block
+scaled element by element and the product formed as `mxvg_` forms it (`rotate_jet`).
+"""
+@inline function _geo_corsxf(R, dR, scale, r, v)
+    pr, pv = rotate_jet((R, map(x -> x * scale, dR)), (r, v))
+    return vcat(pr, pv)
+end
 
 @inline function _geo_frame_class(ks::KernelSet, ref::Int32)
     center, class, found = _geo_frinfo(ks, ref)
@@ -262,9 +267,8 @@ function _geo_cvo(
     if evltyp == _GEO_AT_OBSERVER
         st, lt = _geo_fzo(ks, trgcde, et, Int32(1), corr, f)
         orfcde == Int32(1) && return st, lt
-        R, dR = frame_jet(ks, Int32(1), orfcde, et, Val(1))
-        r, v = _geo_pv(st)
-        return vcat(_m_mxv(R, r), _m_mxv(dR, r) + _m_mxv(R, v)), lt
+        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _geo_pv(st))
+        return vcat(pr, pv), lt
     end
     q = _geo_fao(ks, trgcde, et, Int32(1), corr, f)
     orfcde == Int32(1) && return vcat(q.r, q.v), q.lt
@@ -287,9 +291,8 @@ function _geo_cvt(
     if evltyp == _GEO_AT_OBSERVER
         st, lt = _geo_fzt(ks, f, et, Int32(1), corr, obscde)
         orfcde == Int32(1) && return st, lt
-        R, dR = frame_jet(ks, Int32(1), orfcde, et, Val(1))
-        r, v = _geo_pv(st)
-        return vcat(_m_mxv(R, r), _m_mxv(dR, r) + _m_mxv(R, v)), lt
+        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _geo_pv(st))
+        return vcat(pr, pv), lt
     end
     q = _geo_fat(ks, f, et, Int32(1), corr, obscde)
     orfcde == Int32(1) && return vcat(q.r, q.v), q.lt

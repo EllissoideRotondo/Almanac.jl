@@ -266,6 +266,127 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
 end
 
 """
+    _body_state(ks, classid, et::Float64) -> Mat3{Taylor{1,Float64}}
+
+Contract: the matrix of `_body_rotation` with its time derivative as `tisbod_` gives
+them: from a binary PCK segment if one covers `et` (the derivative of the evaluation),
+else from the text PCK constants (`_text_pck_state`). Throws as `_body_rotation`.
+"""
+function _body_state(ks::KernelSet, classid::Int32, et::Float64)
+    segs = get(ks.pck, classid, nothing)
+    if segs !== nothing && find_segment(segs, et) > 0
+        return _body_rotation(ks, classid, taylor_var(et, Val(1)))::Mat3{Taylor{1, Float64}}
+    end
+    br = get(ks.bodyrot, classid, nothing)
+    br === nothing && return _body_rotation(ks, classid, taylor_var(et, Val(1)))::Mat3{Taylor{1, Float64}}
+    return _text_pck_state(br, classid, et)
+end
+
+"`x^n` for `n >= 0` by the repeated squaring of `pow_di` of the f2c library."
+@inline function _powdi(x::Float64, n::Int)
+    p = 1.0
+    while true     # invariant: p * x^n is the result
+        isodd(n) && (p *= x)
+        n >>= 1
+        n == 0 && return p
+        x *= x
+    end
+    return
+end
+
+"""
+    _text_pck_state(br, body, et::Float64) -> Mat3{Taylor{1,Float64}}
+
+Contract: the matrix of `_text_pck_rotation` with its time derivative, with the
+arithmetic of `tisbod_` of CSPICE: the rates of RA, DEC and W from the derivatives of
+their polynomials and trigonometric terms, written out as `tisbod_` writes them, and the
+derivative of the matrix from these angles and rates by `eul2xf_`. The derivative of
+the `Taylor` evaluation of `_text_pck_rotation` is the same function, rounded
+otherwise. One exception: the rate of a cubic nutation-precession angle is the true
+one, where `tisbod_` of N0067 divides its cubic term by the seconds per century once
+too often. Throws as `_text_pck_rotation`.
+"""
+function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
+    d = _SEC_PER_DAY
+    t = _SEC_PER_CENTURY
+    epoch = et - d * (br.jed_epoch - _J2000_JED)
+    td = epoch / d
+    tc = epoch / t
+    coef(c, i) = i <= length(c) ? @inbounds(c[i]) : 0.0
+    rc, dc0, wc0 = br.pole_ra, br.pole_dec, br.pm
+    # `tisbod_` holds three coefficients of each polynomial, the missing ones zero
+    ra = coef(rc, 1) + tc * (coef(rc, 2) + tc * coef(rc, 3))
+    dec = coef(dc0, 1) + tc * (coef(dc0, 2) + tc * coef(dc0, 3))
+    w = coef(wc0, 1) + td * (coef(wc0, 2) + td * coef(wc0, 3))
+    dra = (coef(rc, 2) + 2.0 * tc * coef(rc, 3)) / t
+    ddec = (coef(dc0, 2) + 2.0 * tc * coef(dc0, 3)) / t
+    dw = (coef(wc0, 2) + 2.0 * td * coef(wc0, 3)) / d
+    ac, dc, wc, th = br.nut_prec_ra, br.nut_prec_dec, br.nut_prec_pm, br.nut_prec_angles
+    na, nd, nw = length(ac), length(dc), length(wc)
+    nterm = max(na, nd, nw)
+    if nterm > 0
+        nco = _phase_ncoef(br, body)
+        nphase = length(th) ÷ nco
+        nterm <= nphase || throw(
+            SpiceError(
+                :insufficientangles,
+                "insufficient number of nutation/precession angles for body $body: " *
+                    "number of angles is $nphase, number required is $nterm"
+            )
+        )
+        sa = sd = sw = 0.0
+        dsa = dsd = dsw = 0.0
+        @inbounds for i in 1:nterm    # invariant: the sums hold the terms 1:i-1
+            k = nco * (i - 1)
+            if nco == 2
+                theta = (th[k + 1] + tc * th[k + 2]) * _RPD
+                dtheta = (th[k + 2] / t) * _RPD
+            else
+                theta = 0.0
+                for j in 1:nco
+                    theta += _powdi(tc, j - 1) * th[k + j]
+                end
+                theta *= _RPD
+                dtheta = th[k + 2] / t
+                for j in 3:nco
+                    # `tisbod_` of N0067 divides by `t^(l-1)`, which is wrong for a cubic
+                    # term (l = 3); the rate of the angle is divided by `t` once.
+                    l = j - 1
+                    dtheta += (l * _powdi(tc, l - 1) * th[k + j]) / t
+                end
+                dtheta *= _RPD
+            end
+            s, c = sincos(theta)
+            ds = c * dtheta
+            dcs = -s * dtheta
+            i <= na && (sa += ac[i] * s; dsa += ac[i] * ds)
+            i <= nd && (sd += dc[i] * c; dsd += dc[i] * dcs)
+            i <= nw && (sw += wc[i] * s; dsw += wc[i] * ds)
+        end
+        ra += sa
+        dec += sd
+        w += sw
+        dra += dsa
+        ddec += dsd
+        dw += dsw
+    end
+    ra *= _RPD
+    dec *= _RPD
+    w = _reduce_twopi(w * _RPD)
+    dra *= _RPD
+    ddec *= _RPD
+    dw *= _RPD
+    x = eul2xf(SVector(w, _HALFPI - dec, ra + _HALFPI, dw, -ddec, dra), 3, 1, 3)
+    r = _eul313(w, _HALFPI - dec, ra + _HALFPI)
+    dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+    if br.ref != _J2000_FRAME
+        c = inertial_rotation(br.ref)
+        r, dr = _m_mxm(r, c), _m_mxm(dr, c)
+    end
+    return map((a, b) -> Taylor((a, b)), r, dr)
+end
+
+"""
     _binary_pck_rotation(data, seg, et::T) -> Mat3{T}
 
 Matrix from J2000 to the body frame of the binary PCK segment `seg` at `et`, as
