@@ -21,15 +21,16 @@
 # A run without FAMILY is the full check. It needs a complete recording: every family of
 # DIR/logs/manifest.tsv recorded and passed. It fails (exit status 1) if
 #   - a family fails to record or to replay;
-#   - a mismatch of kind `value`, `error` or `adapter` is not in the baseline: each is
+#   - a mismatch (any kind but `match` and `skipped`) is not in the baseline: each is
 #     identified by family, routine, kind and a hash of its inputs, so a new mismatch
-#     fails even when another one went away;
+#     fails even when another one went away, and a call that moves from `match` to
+#     `near` or `cspice` fails too;
 #   - a routine has more calls skipped, `near` or `spread` than coverage.tsv records, or
 #     fewer calls compared.
 # A run with FAMILY checks the mismatches of those families only. The exit status is 2
 # for an incomplete recording or a failure of the harness. The results are
 # DIR/results/tally.tsv (counts per routine), DIR/results/replay.tsv (the first
-# mismatches of each routine) and DIR/results/ids.tsv (every gated mismatch).
+# mismatches of each routine) and DIR/results/ids.tsv (every mismatch).
 
 using SHA: sha256
 

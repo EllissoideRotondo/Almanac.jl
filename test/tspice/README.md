@@ -30,18 +30,22 @@ recording, failed to record, or fails to replay to its end.
 
 It **fails** (exit code 1) if:
 
-- a mismatch is not in the baseline `baseline_ids.tsv.gz`. A mismatch is a different
-  value, a different error kind, or an error of the replayed test script itself. Each
-  mismatch is identified by family, routine, kind and a hash of its inputs, so a new
-  mismatch fails even when another one went away;
+- a mismatch is not in the baseline `baseline_ids.tsv.gz`. A mismatch is any call that
+  is not an exact match: a value within a tolerance (`near`), a value that only CSPICE
+  shares (`cspice`), a different value, a different error kind, or an error of the
+  replayed test script itself. Each mismatch is identified by family, routine, kind and a
+  hash of its inputs, so a new mismatch fails even when another one went away, and a call
+  that moves from a match to `near` or `cspice` fails too. A call counts as `cspice` only
+  where CSPICE itself differs from SPICELIB;
 - a routine has more calls skipped, or compared with a tolerance, than `coverage.tsv`
   records, or fewer calls compared.
 
 The mismatches are written to `results/replay.tsv` and `results/ids.tsv`.
 
 `selftest.jl` checks the gate itself. On a copy of the recording it removes a mismatch
-from the baseline, deletes a log, damages a log and marks a family as failed, and
-requires the run to fail each time.
+from the baseline, scales Almanac.jl's outputs by 1 + 1e-10, changes the kind of its
+errors, deletes a log, damages a log and marks a family as failed, and requires the run
+to fail each time.
 
 ## The baseline
 
