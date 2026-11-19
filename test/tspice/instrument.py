@@ -101,6 +101,7 @@ FIXED_LENGTHS = {
     "dasudc": {"data": "tlog_nsub(last - first + 1, bpos, epos, len(data))"},
     "spkw10": {"consts": "8", "elems": "max(0, 10*n)"},
     "pckw02": {"cdata": "max(0, 3*(polydg+1)*n)"},
+    "pckw20": {"cdata": "max(0, 3*(polydg+2)*n)"},
     "spkw18": {"packts": "max(0, n*merge(12, 6, subtyp == 0))"},
     # arrays of assumed size whose length another argument gives
     "dafps": {"dc": "max(0, nd)", "ic": "max(0, ni)", "sum": "max(0, nd + (ni + 1)/2)"},
