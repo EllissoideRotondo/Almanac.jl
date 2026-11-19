@@ -186,11 +186,17 @@ variable (`br.specerr`), then the degree of the phase angles whenever the system
 phase angles, whether or not the body has terms that use them.
 """
 @inline function _bodyrot_check(br::BodyRot, body::Integer)
-    br.specerr === :none || throw(
+    sys = _bodbry(body)
+    br.specerr === :competingepochspec && throw(
         SpiceError(
-            br.specerr, "both forms of the " *
-                (br.specerr === :competingepochspec ? "JED_EPOCH" : "REF_FRAME") *
-                " variable of body $(_bodbry(body)) are in the kernel pool; at most one may be"
+            :competingepochspec, "both BODY$(sys)_CONSTANTS_JED_EPOCH and " *
+                "BODY$(sys)_CONSTS_JED_EPOCH are in the kernel pool; at most one may be"
+        )
+    )
+    br.specerr === :competingframespec && throw(
+        SpiceError(
+            :competingframespec, "both BODY$(sys)_CONSTANTS_REF_FRAME and " *
+                "BODY$(sys)_CONSTS_REF_FRAME are in the kernel pool; at most one may be"
         )
     )
     isempty(br.nut_prec_angles) || _phase_ncoef(br, body)
