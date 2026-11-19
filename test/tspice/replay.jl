@@ -1771,12 +1771,15 @@ end
 
 """
 A GF search: the result window is compared by its number of endpoints and each endpoint
-within the convergence tolerance `tol` of the search (`gfstol`, 1e-6 s by default). The
-solver of both libraries ends with the midpoint of a bracket no wider than `tol` that
-holds the root of its own quantity, so each endpoint lies within `tol / 2` of that root,
-and two of them within `tol` of each other where the two quantities have the same root to
-much better than `tol`. A result within the tolerance is given as SPICELIB's endpoints;
-gf_agreement counts how many were equal to the last bit.
+within twice the convergence tolerance `tol` of the search (`gfstol`, 1e-6 s by default).
+Each library locates an event to within `tol`, so two correct results can differ by up to
+`2 tol`. Where the quantity is flat at the root (a local extremum, an `=` search at a
+small slope), the state at a bisection point is a sign of a value at rounding level, and
+a one-ulp difference of `sin` or `cos` changes one bisection decision: F_GFRR, F_GFILUM
+differ from SPICELIB by one bracket width of the 35th bisection (1.006e-6 and 2.03e-6 s
+against `tol` 1e-6 s, step 34560 s), and are bit-identical with glibc's `sin` and `cos`.
+A result within the tolerance is given as SPICELIB's endpoints; gf_agreement counts how
+many were equal to the last bit.
 """
 function gf_search_mapping(ctx, c)
     name = lowercase(c.name)
@@ -1792,7 +1795,7 @@ function gf_search_mapping(ctx, c)
             push!(args, jl(a))
         end
     end
-    tol = gfstol(ctx)
+    tol = 2 * gfstol(ctx)
     r = getfield(Almanac, Symbol(name))(ctx, args...)
     c.failed && return []
     out = Dict(o.name => o for o in c.outputs)
@@ -1806,6 +1809,9 @@ function gf_search_mapping(ctx, c)
         d == 0 ? (v[2] += 1) : d <= tol ? (v[3] += 1) : (v[4] += 1)
         d <= tol && (GF_MAXDIFF[name] = max(get(GF_MAXDIFF, name, 0.0), d))
         d <= tol && return [("result", Any[exp...], Any[exp...])]
+        # an endpoint farther than `tol`: a mismatch, which the relative comparison of
+        # the values would not catch (1e-12 of an epoch of 1e8 s is 1e-4 s)
+        return [("result", Any[exp...], Any["an endpoint off by $d s, tolerance $tol s"; got...])]
     else
         v[4] += 1
     end
