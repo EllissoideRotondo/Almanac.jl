@@ -209,6 +209,20 @@ function main(args)
     end
     write_counts(joinpath(results, "tally.tsv"), total, COUNTS)
     write_ids(joinpath(results, "ids.tsv"), ids)
+    # the calls for which CSPICE could not be called: their mismatches are not checked
+    # against CSPICE, so a fault of a mapping shows here and not as a disagreement
+    nof = 0
+    open(joinpath(results, "oracle_failures.tsv"), "w") do io
+        for k in 1:length(groups)
+            f = joinpath(results, "worker$k", "oracle_failures.tsv")
+            isfile(f) || continue
+            for l in eachline(f)
+                println(io, l)
+                nof += parse(Int, split(l, '\t')[2])
+            end
+        end
+    end
+    nof > 0 && println("the oracle failed for $nof calls: see $(joinpath(results, "oracle_failures.tsv"))")
     sums = Dict(k => sum(get(c, k, 0) for c in values(total)) for k in COUNTS)
     println(join(["$k $(sums[k])" for k in COUNTS], ", "))
     baseline_path = joinpath(HERE, "baseline.tsv")

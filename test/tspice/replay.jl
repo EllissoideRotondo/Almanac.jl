@@ -807,8 +807,21 @@ function cspice_call(c::Call)
         SPICE.handleerror()
         return r
     catch e
+        # an exception that is not an error of CSPICE (a MethodError of a call that does
+        # not fit SPICE.jl's signature) means the oracle did not answer: it is counted,
+        # so that a mapping fault does not pass for a disagreement with CSPICE
+        e isa SPICE.SpiceError || note_oracle_failure(name, e)
         return e
     end
+end
+
+"Calls for which the oracle failed, per routine: count and first message (oracle_failures.tsv)."
+const ORACLE_FAILURES = Dict{String, Tuple{Int, String}}()
+
+function note_oracle_failure(name, e)
+    n, msg = get(ORACLE_FAILURES, name, (0, ""))
+    ORACLE_FAILURES[name] = (n + 1, n == 0 ? replace(first(sprint(showerror, e), 200), r"\s+" => " ") : msg)
+    return
 end
 
 function cspice_reset()
@@ -1415,6 +1428,13 @@ function main(args)
     println(rpad("all", 10), lpad(tot.match, 10), lpad(tot.cspice, 8), lpad(tot.near, 8), lpad(tot.spread, 8), lpad(tot.value, 8), lpad(tot.error, 8), lpad(tot.adapter, 10), lpad(tot.skipped, 10))
     close(mismatches.io)
     write_tallies(joinpath(outdir, "tally.tsv"), tallies)
+    open(joinpath(outdir, "oracle_failures.tsv"), "w") do io
+        for (r, (n, msg)) in sort(collect(ORACLE_FAILURES); by = first)
+            println(io, r, '\t', n, '\t', msg)
+        end
+    end
+    isempty(ORACLE_FAILURES) ||
+        println("the oracle failed for ", sum(first, values(ORACLE_FAILURES)), " calls: see oracle_failures.tsv")
     AUDIT && open(joinpath(outdir, "audit.tsv"), "w") do io
         println(io, "routine\tmatch\tnone_compared\tfewer_compared\tnot_compared")
         for (r, v) in sort(collect(AUDITS); by = first)
