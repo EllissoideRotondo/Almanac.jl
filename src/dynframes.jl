@@ -859,19 +859,95 @@ Contract: the matrix from the of-date frame `def` (families 1 to 3) to its base 
 at `et`: the transpose of the precession matrix, of nutation times precession, or of
 the obliquity rotation times precession, then the rotation from J2000 to the base.
 """
-function _dyn_ofdate(mode, ks::KernelSet, def::DynFrame, et::T) where {T <: Real}
-    tv = _ck_epoch(mode, et)
-    m = _dyn_prec(tv)
+function _dyn_ofdate(mode::_CKExact, ks::KernelSet, def::DynFrame, et::T) where {T <: Real}
+    m = _dyn_prec(et)
     if def.family == _DYN_TRUE_EQ
         dpsi, deps = _dyn_nutation(mode, et)
-        mob = _dyn_mobliq(tv)
+        mob = _dyn_mobliq(et)
         m = _m_mxm(_dyn_eul(-mob - deps, -dpsi, mob, 1, 3, 1), m)
     elseif def.family == _DYN_MEAN_ECL
-        m = _m_mxm(_dyn_rot(_dyn_mobliq(tv), 1), m)
+        m = _m_mxm(_dyn_rot(_dyn_mobliq(et), 1), m)
     end
     x = typeof(m)(transpose(m))
     def.base == _J2000_FRAME && return x
     return _m_mxm(_dyn_xf(mode, ks, _J2000_FRAME, def.base, et), x)
+end
+
+# State mode, as `zzdynfrm_`: the state transformations of `zzeprc76_`, `zzenut80_` and
+# of the obliquity rotation come from the angles and their analytic rates by `eul2xf_`,
+# their products are `mxmg_` (`_sx_mxm`) and the inverse is `invstm_` (the transpose of
+# each block). The derivative of the `Taylor` evaluation is the same function, rounded
+# otherwise.
+function _dyn_ofdate(mode::_CKState, ks::KernelSet, def::DynFrame, et::Float64)
+    m = _dyn_prec_state(et)
+    if def.family == _DYN_TRUE_EQ
+        m = _sx_mxm(_dyn_enut80_state(et), m)
+    elseif def.family == _DYN_MEAN_ECL
+        mob, dmob = _dyn_mobliq_state(et)
+        m = _sx_mxm(_dyn_eul2xf(0.0, 0.0, mob, 0.0, 0.0, dmob, 1, 3, 1), m)
+    end
+    x = Mat3{Taylor{1, Float64}}(transpose(m))
+    def.base == _J2000_FRAME && return x
+    return _sx_mxm(_dyn_xf(mode, ks, _J2000_FRAME, def.base, et), x)
+end
+
+"""
+    _dyn_eul2xf(a3, a2, a1, d3, d2, d1, x3, x2, x1) -> Mat3{Taylor{1,Float64}}
+
+Contract: the state transformation of `eul2xf_` for the angles `a3`, `a2`, `a1` about
+the axes `x3`, `x2`, `x1` and their rates `d3`, `d2`, `d1`, as a matrix of
+`Taylor{1,Float64}` (value: the rotation block; derivative: the derivative block).
+"""
+@inline function _dyn_eul2xf(a3, a2, a1, d3, d2, d1, x3::Integer, x2::Integer, x1::Integer)
+    x = eul2xf(SVector{6, Float64}(a3, a2, a1, d3, d2, d1), x3, x2, x1)
+    return Mat3{Taylor{1, Float64}}(
+        ntuple(Val(9)) do k
+            i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
+            Taylor((x[i, j], x[i + 3, j]))
+        end
+    )
+end
+
+"""
+    _dyn_prec_state(et::Float64) -> Mat3{Taylor{1,Float64}}
+
+Contract: the precession matrix of `_dyn_prec` with its derivative, with the arithmetic
+of `zzeprc76_`: the angles and their analytic rates go to `eul2xf_`.
+"""
+function _dyn_prec_state(et::Float64)
+    t = et / _DYN_CENTURY
+    zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
+    z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
+    theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
+    ts = 1.0 / _DYN_CENTURY
+    dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * _DYN_ARCSEC
+    dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * _DYN_ARCSEC
+    dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * _DYN_ARCSEC
+    return _dyn_eul2xf(-z, theta, -zeta, -dz, dtheta, -dzeta, 3, 2, 3)
+end
+
+"Contract: the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`."
+@inline function _dyn_mobliq_state(et::Float64)
+    t = et / 31557600.0 / 100.0
+    mob = _DYN_ARCSEC * (t * (t * (t * 0.001813 - 5.9e-4) - 46.815) + 84381.448)
+    dmob = _DYN_ARCSEC * (t * (t * 3 * 0.001813 - 0.0011800000000000001) - 46.815) *
+        (1.0 / (31557600.0 * 100.0))
+    return mob, dmob
+end
+
+"""
+    _dyn_enut80_state(et::Float64) -> Mat3{Taylor{1,Float64}}
+
+Contract: the nutation matrix of the true of-date frame with its derivative, with the
+arithmetic of `zzenut80_`: the angles of `zzwahr_` (`_dyn_wahr_state`) and
+`zzmobliq_` with their rates go to `eul2xf_`.
+"""
+function _dyn_enut80_state(et::Float64)
+    dpsi, deps = _dyn_wahr_state(et)
+    mob, dmob = _dyn_mobliq_state(et)
+    return _dyn_eul2xf(
+        -mob - deps.v, -dpsi.v, mob, -dmob - deps.d[1], -dpsi.d[1], dmob, 1, 3, 1
+    )
 end
 
 # ---------------------------------------------------------------------------------------
@@ -910,7 +986,7 @@ function _dyn_apo(
     targ == obs && return zero(Vec3{T}), zero(T)
     if corr.geometric
         r = spk_jet(ks, targ, et, ref, obs, Val(0))[1]::Vec3{T}
-        return r, _norm3(r) / CLIGHT
+        return r, _m_norm(r) / CLIGHT
     end
     T === Float64 && return abcorr_position(ks, targ, et, ref, corr, obs)::Tuple{Vec3{T}, T}
     inertial = _is_inertial(ks, ref)
@@ -942,7 +1018,7 @@ function _dyn_spkez(
     ) where {T <: Real}
     if corr.geometric
         r, v = spk_jet(ks, targ, et, ref, obs, Val(1))::NTuple{2, Vec3{T}}
-        return r, v, _norm3(r) / CLIGHT
+        return r, v, _m_norm(r) / CLIGHT
     end
     s, lt = abcorr_state(ks, targ, et, ref, corr, obs)::Tuple{SVector{6, T}, T}
     return Vec3{T}(s[1], s[2], s[3]), Vec3{T}(s[4], s[5], s[6]), lt
@@ -959,6 +1035,28 @@ rounding.
 """
 @inline _dyn_nearpt(p::Vec3{S}, radii::Vec3{Float64}) where {S <: Real} =
     Vec3{S}(_m_nearpt(p, radii[1], radii[2], radii[3])[1])
+
+"""
+    _dyn_dnearp(s, radii, vd) -> Vec3{Taylor{1,Float64}}
+
+Contract: the state of the near point on the ellipsoid with the semi-axes `radii` for
+the state `s`, as `dnearp_` gives it to `zzdynfrm_` (`dnearp`: the velocity from
+`zzdnpt_`). Throws `SpiceError(:degeneratecase)` where `dnearp_` finds no velocity of
+the near point, as `zzdynfrm_` does.
+"""
+function _dyn_dnearp(s::Vec3{Taylor{1, Float64}}, radii::Vec3{Float64}, vd::DynVector)
+    st = SVector(s[1].v, s[2].v, s[3].v, s[1].d[1], s[2].d[1], s[3].d[1])
+    r = dnearp(st, radii[1], radii[2], radii[3])
+    r === nothing && throw(
+        SpiceError(
+            :degeneratecase,
+            "a defining vector is the near point on body $(vd.target) as seen from body " *
+                "$(vd.observer); the state of this near point was not found (see dnearp)"
+        )
+    )
+    n = r[1]
+    return Vec3{Taylor{1, Float64}}(Taylor((n[1], n[4])), Taylor((n[2], n[5])), Taylor((n[3], n[6])))
+end
 
 "Epoch `et` moved by the light time `lt` in the direction of the correction `corr`, as `zzcorepc_`."
 @inline _dyn_corepc(corr, et, lt) = corr.uselt ? et + _ltsign(corr) * lt : et
@@ -1054,7 +1152,7 @@ function _dyn_vector(mode::_CKState, ks::KernelSet, vd::DynVector, et::Float64)
     elseif vd.kind == 3
         r, v, lt = _dyn_spkez(ks, vd.target, et, vd.frame, corr, vd.observer)
         sobs = _dyn_pack(-r, -v)
-        d = _dyn_nearpt(sobs, vd.vec) - sobs
+        d = _dyn_dnearp(sobs, vd.vec, vd) - sobs
         fet = _dyn_corepc(corr, et, lt)
         return _sx_mxv(_dyn_xf(_CKState(), ks, vd.frame, _J2000_FRAME, fet), d)
     end

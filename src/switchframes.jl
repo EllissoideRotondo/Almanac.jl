@@ -172,6 +172,10 @@ function _sw_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Re
             found && return ref, rot::Mat3{S}
         elseif class == 5 || class == 6
             return base, one(Mat3{S})
+        elseif class == 2
+            # In the state mode the derivative of `tisbod_`, as for a PCK link of a chain.
+            parent, rot = _ck_pck_step(mode, ks, frame_def(ks, base), et)
+            return parent, rot::Mat3{S}
         else
             parent, rot = _frame_step(ks, base, _ck_epoch(mode, et))
             return parent, rot::Mat3{S}

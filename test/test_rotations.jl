@@ -150,6 +150,23 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
         @test throws_kind(() -> pxfrm2(ctx, "NO_SUCH_FRAME", "J2000", et, et), :unknownframe)
         @test throws_kind(() -> pxfrm2(ctx, "J2000", "NO_SUCH_FRAME", et, et), :unknownframe)
     end
+
+    # Regression: the rate of a binary PCK frame is that of `pckmat_` and `tisbod_`:
+    # the angles and their rates from `chbint_` go to `eul2xf_`; it was the derivative
+    # of a `Taylor` evaluation, which differed in the last bits of every derivative
+    # block. `eul2xf_` uses `sin` and `cos`, which differ in the last bit between Julia
+    # and the C library on some arguments; with the C library swapped in all agree to
+    # the last bit. Measured with Julia's functions (500 epochs): 430 equal to the last
+    # bit (old arithmetic 0). Own random stream.
+    @apart @testset "binary PCK rates as tisbod_" begin
+        r2 = MersenneTwister(SEED + 201)
+        n = 200
+        nexact = 0
+        for et in random_epochs(r2, n, DE440S_COVERAGE...), from in ("J2000", "ECLIPJ2000")
+            nexact += sxform(ctx, from, "MOON_PA", et) == SPICE.sxform(from, "MOON_PA", et)
+        end
+        @test nexact >= 0.6 * 2n
+    end
 end
 
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

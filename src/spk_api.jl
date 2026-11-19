@@ -363,7 +363,7 @@ function spkgeo(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, obs::Inte
     # As in CSPICE, a body relative to itself is zero before `ref` and `et` are checked.
     targ == obs && return zero(SVector{6, typeof(float(et))}), zero(float(et))
     r, v = spk_jet(ks, Int32(targ), check_epoch(et), frame_id(ks, ref), Int32(obs), Val(1))
-    return vcat(r, v), norm(r) / CLIGHT
+    return vcat(r, v), _m_norm(r) / CLIGHT
 end
 spkgeo(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkgeo(kernelset(ctx), targ, et, ref, obs)
@@ -386,7 +386,7 @@ See also [`spkezp`](@ref), [`spkpos`](@ref).
 function spkgps(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, obs::Integer)
     targ == obs && return zero(Vec3{typeof(float(et))}), zero(float(et))
     (r,) = spk_jet(ks, Int32(targ), check_epoch(et), frame_id(ks, ref), Int32(obs), Val(0))
-    return r, norm(r) / CLIGHT
+    return r, _m_norm(r) / CLIGHT
 end
 spkgps(ctx::SpiceContext, targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
     spkgps(kernelset(ctx), targ, et, ref, obs)
