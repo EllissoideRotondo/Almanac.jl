@@ -276,6 +276,35 @@ def length_expr(dims, args, decls, arg=None):
     return "*".join(f"({p})" for p in parts)
 
 
+# The GF searches whose windows are logged (cell_args). The other GF entry points take
+# callbacks (GFEVNT, GFFOVE, GFOCCE, GFUDB, GFUDS), which the log cannot carry.
+CELL_ROUTINES = set("gfdist gfilum gfoclt gfpa gfposc gfrfov gfrr gfsep gfsntc gfsubc gftfov".split())
+
+
+def cell_args(name, args, decls):
+    """{arg: record} for the cell arguments of a routine of CELL_ROUTINES: a window
+    `(lbcell:*)` is logged as its size, its cardinality and its elements (CELL(-1),
+    CELL(0) and the CARD elements that follow, at most 10**6), `record` being the call
+    with `{label}` for the label; a workspace of windows `(lbcell:mw, nw)` is not logged
+    (record None)."""
+    if name not in CELL_ROUTINES:
+        return {}
+    cells = {}
+    for a in args:
+        k, dims = decls[a]
+        if dims is None or not dims.strip().lower().startswith("lbcell"):
+            continue
+        if dims.replace(" ", "").lower() != "lbcell:*":
+            cells[a] = None
+        elif k == "d":
+            cells[a] = (f"tlog_d('{{label}}', {a}(-1), "
+                        f"2_ip + nint(max(0.0_wp, min({a}(0), {a}(-1), 1.0e6_wp)), ip))")
+        elif k == "i":
+            cells[a] = (f"tlog_i('{{label}}', {a}(-1), "
+                        f"2_ip + max(0_ip, min({a}(0), {a}(-1), 1000000_ip)))")
+    return cells
+
+
 def instrument_file(path, wanted, intents, done):
     text = open(path, encoding="latin-1").read()
     lines = text.split("\n")
@@ -332,8 +361,9 @@ def instrument_routine(name, h, body, cands):
     lens = {}
     fixed = FIXED_LENGTHS.get(name, {})
     custom = CUSTOM_ARGS.get(name, {})
+    cells = cell_args(name, args, decls)
     for a in args:
-        if a in custom:
+        if a in custom or a in cells:
             lens[a] = None
             continue
         if a in fixed:
@@ -369,6 +399,12 @@ def instrument_routine(name, h, body, cands):
         n = lens[a]
         if a in custom:
             pre.append("      " + custom[a])
+            continue
+        if a in cells:
+            if cells[a] is not None and it in ("in", "inout"):
+                pre.append("      call " + cells[a].format(label="<" + a))
+            if cells[a] is not None and it in ("out", "inout"):
+                post.append("      call " + cells[a].format(label=">" + a))
             continue
         rec = f"tlog_{k}('{a}', {a}, {n})" if n != "1" else f"tlog_{k}1('{a}', {a})"
         if it in ("in", "inout"):
