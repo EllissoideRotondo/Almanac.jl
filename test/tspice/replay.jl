@@ -852,12 +852,14 @@ CSPICE_EXTRA["azlcpo"] = cspice_azlcpo
 # at the level of the f2c translation of SPICELIB (`mxvg_` ...), which takes the column
 # major arrays as SPICELIB does; the others through the C interface.
 const SpI = Cint
-_cm(m, nr, nc) = reshape(Float64.(vec(m))[1:(nr * nc)], nr, nc)
+"An array of the log as a vector of doubles; an array of one value can come as a number."
+_dv(x) = Float64.(vec(vcat(x)))
+_cm(m, nr, nc) = reshape(_dv(m)[1:(nr * nc)], nr, nc)
 function cspice_mxvg(m1, v2, nr1, nc1r2)
     vout = zeros(nr1)
     ccall(
         (:mxvg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
-        _cm(m1, nr1, nc1r2), Float64.(vec(v2))[1:nc1r2], nr1, nc1r2, vout
+        _cm(m1, nr1, nc1r2), _dv(v2)[1:nc1r2], nr1, nc1r2, vout
     )
     return vout
 end
@@ -865,7 +867,7 @@ function cspice_mtxvg(m1, v2, nc1, nr1r2)
     vout = zeros(nc1)
     ccall(
         (:mtxvg_, SPICE.libcspice), Cint, (Ref{SpD}, Ref{SpD}, Ref{SpI}, Ref{SpI}, Ref{SpD}),
-        _cm(m1, nr1r2, nc1), Float64.(vec(v2))[1:nr1r2], nc1, nr1r2, vout
+        _cm(m1, nr1r2, nc1), _dv(v2)[1:nr1r2], nc1, nr1r2, vout
     )
     return vout
 end
@@ -905,15 +907,15 @@ end
 function cspice_vtmvg(v1, matrix, v2, nrow, ncol)
     r = ccall(
         (:vtmvg_c, SPICE.libcspice), SpD, (Ref{SpD}, Ref{SpD}, Ref{SpD}, SpI, SpI),
-        Float64.(vec(v1))[1:nrow], permutedims(_cm(matrix, nrow, ncol)),
-        Float64.(vec(v2))[1:ncol], nrow, ncol
+        _dv(v1)[1:nrow], permutedims(_cm(matrix, nrow, ncol)),
+        _dv(v2)[1:ncol], nrow, ncol
     )
     SPICE.handleerror()
     return r
 end
 function cspice_vequ(vin)
     vout = zeros(3)
-    ccall((:vequ_c, SPICE.libcspice), Cvoid, (Ref{SpD}, Ref{SpD}), Float64.(vec(vin)), vout)
+    ccall((:vequ_c, SPICE.libcspice), Cvoid, (Ref{SpD}, Ref{SpD}), _dv(vin), vout)
     return vout
 end
 function cspice_spkaps(targ, et, ref, abcorr, stobs, accobs)
@@ -922,14 +924,14 @@ function cspice_spkaps(targ, et, ref, abcorr, stobs, accobs)
     ccall(
         (:spkaps_c, SPICE.libcspice), Cvoid,
         (SpI, SpD, Cstring, Cstring, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}, Ref{SpD}),
-        targ, et, ref, abcorr, Float64.(vec(stobs)), Float64.(vec(accobs)), starg, lt, dlt
+        targ, et, ref, abcorr, _dv(stobs), _dv(accobs), starg, lt, dlt
     )
     SPICE.handleerror()
     return starg, lt[], dlt[]
 end
 # the points are rows of a C array, columns of a Julia matrix
 function cspice_latsrf(method, target, et, fixref, lonlat)
-    ll = reshape(Float64.(vec(lonlat)), 2, :)
+    ll = reshape(_dv(lonlat), 2, :)
     npts = size(ll, 2)
     srfpts = zeros(3, npts)
     ccall(
@@ -941,7 +943,7 @@ function cspice_latsrf(method, target, et, fixref, lonlat)
     return srfpts
 end
 function cspice_srfnrm(method, target, et, fixref, srfpts)
-    p = reshape(Float64.(vec(srfpts)), 3, :)
+    p = reshape(_dv(srfpts), 3, :)
     npts = size(p, 2)
     normls = zeros(3, npts)
     ccall(
@@ -953,17 +955,63 @@ function cspice_srfnrm(method, target, et, fixref, srfpts)
     return normls
 end
 function cspice_dskrb2(vrtces, plates, corsys, corpar)
-    v = reshape(Float64.(vec(vrtces)), 3, :)
-    p = reshape(SpI.(vec(plates)), 3, :)
+    v = reshape(_dv(vrtces), 3, :)
+    p = reshape(SpI.(vec(vcat(plates))), 3, :)
     mncor3, mxcor3 = Ref(0.0), Ref(0.0)
     ccall(
         (:dskrb2_c, SPICE.libcspice), Cvoid,
         (SpI, Ref{SpD}, SpI, Ref{SpI}, SpI, Ref{SpD}, Ref{SpD}, Ref{SpD}),
-        size(v, 2), v, size(p, 2), p, corsys, Float64.(vec(corpar)), mncor3, mxcor3
+        size(v, 2), v, size(p, 2), p, corsys, _dv(corpar), mncor3, mxcor3
     )
     SPICE.handleerror()
     return mncor3[], mxcor3[]
 end
+function cspice_vequg(vin)
+    v = _dv(vin)
+    vout = zeros(length(v))
+    ccall((:vequg_c, SPICE.libcspice), Cvoid, (Ref{SpD}, SpI, Ref{SpD}), v, length(v), vout)
+    return vout
+end
+# SPICE.jl's polyds takes no degree (the log has the declared size of the coefficients)
+# a negative degree has no coefficients in the log; CSPICE reads none of them then
+function cspice_polyds(coeffs, deg, nderiv, t)
+    p = zeros(max(nderiv, 0) + 1)
+    c = vcat(_dv(coeffs), zeros(max(deg + 1, 1)))[1:max(deg + 1, 1)]
+    ccall(
+        (:polyds_c, SPICE.libcspice), Cvoid, (Ref{SpD}, SpI, SpI, SpD, Ref{SpD}),
+        c, deg, nderiv, t, p
+    )
+    SPICE.handleerror()
+    return p
+end
+# the counts nv and np are dropped: the arrays give them
+_plates(vrtces, plates) = reshape(_dv(vrtces), 3, :), reshape(SpI.(vec(vcat(plates))), 3, :)
+function cspice_pltar(vrtces, plates)
+    v, p = _plates(vrtces, plates)
+    r = ccall(
+        (:pltar_c, SPICE.libcspice), SpD, (SpI, Ref{SpD}, SpI, Ref{SpI}),
+        size(v, 2), v, size(p, 2), p
+    )
+    SPICE.handleerror()
+    return r
+end
+function cspice_pltvol(vrtces, plates)
+    v, p = _plates(vrtces, plates)
+    r = ccall(
+        (:pltvol_c, SPICE.libcspice), SpD, (SpI, Ref{SpD}, SpI, Ref{SpI}),
+        size(v, 2), v, size(p, 2), p
+    )
+    SPICE.handleerror()
+    return r
+end
+CSPICE_EXTRA["pltar"] = cspice_pltar
+CSPICE_EXTRA["pltvol"] = cspice_pltvol
+# swpool has a count of names; the watchers it sets decide what cvpool returns, so it
+# is mirrored into CSPICE as the loads are
+cspice_swpool(agent, nnames, names) =
+    SPICE.swpool(agent, String.(vcat(names))[1:max(nnames, 0)])
+CSPICE_EXTRA["swpool"] = cspice_swpool
+push!(STATEFUL, "swpool")
 # the azimuth and elevation conversions of SPICE.jl take azccw and elplsz as keywords
 cspice_azlrec(range, az, el, azccw, elplsz) = SPICE.azlrec(range, az, el; azccw, elplsz)
 cspice_drdazl(range, az, el, azccw, elplsz) = SPICE.drdazl(range, az, el; azccw, elplsz)
@@ -971,7 +1019,7 @@ cspice_recazl(rectan, azccw, elplsz) = SPICE.recazl(rectan; azccw, elplsz)
 cspice_dazldr(x, y, z, azccw, elplsz) = SPICE.dazldr(x, y, z; azccw, elplsz)
 for (name, f) in (
         "azlrec" => cspice_azlrec, "drdazl" => cspice_drdazl, "recazl" => cspice_recazl,
-        "dazldr" => cspice_dazldr,
+        "dazldr" => cspice_dazldr, "vequg" => cspice_vequg, "polyds" => cspice_polyds,
         "mxvg" => cspice_mxvg, "mtxvg" => cspice_mtxvg, "mxmg" => cspice_mxmg,
         "mtxmg" => cspice_mtxmg, "mxmtg" => cspice_mxmtg, "xposeg" => cspice_xposeg,
         "vtmvg" => cspice_vtmvg, "vequ" => cspice_vequ, "spkaps" => cspice_spkaps,
@@ -1119,7 +1167,8 @@ function within_spread(c::Call, pairs)
         all(close_enough.(e, g)) && continue
         # an output where CSPICE agrees with SPICELIB has no scatter to be within
         all(close_enough.(e, o)) && return false
-        if all(x -> x isa Real, Iterators.flatten((e, g, o)))
+        # integers (handles, counts, indices) have no rounding scatter: they must agree
+        if all(x -> x isa AbstractFloat, Iterators.flatten((e, g, o)))
             dac = maximum(abs.(Float64.(g) .- Float64.(o)); init = 0.0)
             dsc = maximum(abs.(Float64.(e) .- Float64.(o)); init = 0.0)
             dac <= 2dsc || near_output(g, o) || return false
