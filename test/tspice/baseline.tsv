@@ -1,16 +1,11 @@
 routine	value	error	adapter	class	note
-daffna	9	0	0	gap	F_SGMETA writes with the generic segment routines, which are not in the log
-daffpa	1	0	0	gap	F_SGMETA writes with the generic segment routines, which are not in the log
-dafopr	0	29	0	gap	F_DAFAH and F_DAFNN make files with Fortran I/O outside the log
-dafopw	0	5	0	gap	F_DAFNN makes files with Fortran I/O outside the log
-dashfs	765	0	0	documented	on a write handle the summary after segregation (dashfs)
+dashfs	761	0	0	documented	on a write handle the summary after segregation (dashfs)
 dasopw	0	1	0	cspice	:emptystring for an empty name, as the CSPICE wrappers
 dasrdc	38164	0	0	gap	F_DASA2L writes the characters with routines outside the log
 dasrfr	1	0	0	gap	F_DASFR rewrites the file record with DASWFR, which is not recorded
 dlaopn	0	2	0	cspice	:emptystring for an empty name, as the CSPICE wrappers
 dskxsi	1	0	0	documented	last-bit sin and cos at a grazing ray (cspice.md)
 dtpool	5	0	0	documented	a name past 32 characters is never set (pdpool)
-eknseg	2	0	0	gap	the EK was filled by a tspice utility outside the log
 ekrcec	2	0	0	documented	a null entry has no element (ekrcec)
 ekrced	2	0	0	documented	a null entry has no element (ekrcec)
 ekrcei	2	0	0	documented	a null entry has no element (ekrcec)
@@ -19,7 +14,6 @@ gcpool	0	1	0	documented	:typemismatch for a variable of the other type (gcpool)
 gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool)
 gipool	0	1	0	documented	:typemismatch for a variable of the other type (gipool)
 inedpl	0	1	0	cspice	CSPICE N0067 takes a zero normal; PEPPER signals INVALIDPLANE
-kdata	5	0	0	unexplained	
 limbpt	63	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
 lmpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool); PEPPER accepts the name
 pcklof	0	1	0	gap	Almanac has no pcklof; the replay loads with furnsh (NOSUCHFILE)
