@@ -1282,6 +1282,11 @@ function compare_all!(name, c, result)
     return
 end
 
+# The reasons of the skipped calls, per routine, for skips.tsv.
+const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle")
+const SKIPS = Dict{String, Dict{String, Int}}()
+note_skip(name, why) = (d = get!(() -> Dict{String, Int}(), SKIPS, name); d[why] = get(d, why, 0) + 1; nothing)
+
 # For selftest.jl: TSPICE_FAULT=value scales each floating-point output of Almanac by
 # 1 + 1e-10, below `NEAR`; TSPICE_FAULT=kind changes the kind of each SpiceError.
 const FAULT = get(ENV, "TSPICE_FAULT", "")
@@ -1341,6 +1346,10 @@ function replay_family(path, tallies, mismatches)
         if desync || c.depth > 1 || c.failed_before || truncated ||
                 !(haskey(MAPPINGS, name) || isdefined(Almanac, Symbol(name)))
             t.skipped += 1
+            note_skip(
+                name, c.depth > 1 ? "nested" : c.failed_before ? "error_state" :
+                    truncated ? "truncated" : desync ? "after_truncated_load" : "no_mapping"
+            )
             return
         end
         mapping = get(MAPPINGS, name, default_mapping)
@@ -1356,6 +1365,7 @@ function replay_family(path, tallies, mismatches)
         expkind = c.failed ? Symbol(lowercase(replace(c.short, r"^SPICE\(|\)$" => ""))) : nothing
         if result isa UnmappedHandle
             t.skipped += 1
+            note_skip(name, "unmapped_handle")
         elseif result isa SpiceError
             if expkind === result.kind
                 t.match += 1
@@ -1526,6 +1536,14 @@ function main(args)
     println(rpad("all", 10), lpad(tot.match, 10), lpad(tot.cspice, 8), lpad(tot.near, 8), lpad(tot.spread, 8), lpad(tot.value, 8), lpad(tot.error, 8), lpad(tot.adapter, 10), lpad(tot.skipped, 10))
     close(mismatches.io)
     write_tallies(joinpath(outdir, "tally.tsv"), tallies)
+    # skips.tsv: per routine, the skipped calls by reason (a call made by another recorded
+    # routine is `nested`, made while SPICELIB was in an error state `error_state`, ...)
+    open(joinpath(outdir, "skips.tsv"), "w") do io
+        println(io, join(["routine"; collect(SKIP_REASONS)], '\t'))
+        for (r, d) in sort(collect(SKIPS); by = first)
+            println(io, join([r; [string(get(d, k, 0)) for k in SKIP_REASONS]], '\t'))
+        end
+    end
     open(joinpath(outdir, "oracle_failures.tsv"), "w") do io
         for (r, (n, msg)) in sort(collect(ORACLE_FAILURES); by = first)
             println(io, r, '\t', n, '\t', msg)
