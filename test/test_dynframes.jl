@@ -274,6 +274,47 @@ group(
         @test isempty(fails)
     end
 
+    # Regression: the state transformations of the of-date frames come, as in
+    # `zzdynfrm_`, from the angles and their analytic rates of `zzeprc76_`, `zzenut80_`
+    # and `zzmobliq_` through `eul2xf_`; they were the derivative of a `Taylor`
+    # evaluation, which differed in the last bits of every derivative block. The f2c
+    # routines are called directly. `zzmobliq_` has no sine or cosine and is compared
+    # to the last bit. The others use `sin` and `cos`, which differ in the last bit
+    # between Julia and the C library on some arguments; with the C library swapped in
+    # all of them agree to the last bit. Measured with Julia's functions (500 epochs):
+    # derivative block equal to the last bit for precession 500 (old arithmetic 1),
+    # for nutation 386 (old 0). Own random stream.
+    @apart @testset "of-date rates as zzeprc76_, zzenut80_, zzmobliq_" begin
+        r3 = MersenneTwister(SEED + 1702)
+        n = 200
+        nprec = 0
+        nnut = 0
+        fails = Failures()
+        for et in random_epochs(r3, n, -span, span)
+            mob = Ref(0.0); dmob = Ref(0.0)
+            ccall((:zzmobliq_, SPICE.libcspice), Cint, (Ref{Float64}, Ref{Float64}, Ref{Float64}), et, mob, dmob)
+            check!(fails, Almanac._dyn_mobliq_state(et) == (mob[], dmob[]), "zzmobliq_", et)
+            for (sym, f) in ((:zzeprc76_, Almanac._dyn_prec_state), (:zzenut80_, Almanac._dyn_enut80_state))
+                x = zeros(36)
+                if sym === :zzeprc76_
+                    ccall((:zzeprc76_, SPICE.libcspice), Cint, (Ref{Float64}, Ptr{Float64}), et, x)
+                else
+                    ccall((:zzenut80_, SPICE.libcspice), Cint, (Ref{Float64}, Ptr{Float64}), et, x)
+                end
+                x = reshape(x, 6, 6)       # column major, as Fortran stores it
+                m = f(et)
+                d = [m[i, j].d[1] for i in 1:3, j in 1:3]
+                exact = d == x[4:6, 1:3]
+                sym === :zzeprc76_ ? (nprec += exact) : (nnut += exact)
+                rel = maximum(abs.(d .- x[4:6, 1:3])) / maximum(abs, x[4:6, 1:3])
+                check!(fails, rel <= 1.0e-14, "rate block", sym, et, rel)
+            end
+        end
+        @test isempty(fails)
+        @test nprec >= 0.9 * n
+        @test nnut >= 0.5 * n
+    end
+
     @apart @testset "other corrections, spkpos, and frame to frame" begin
         d = Float64[]; dv = Float64[]; dq = Float64[]; dx = Float64[]; dxl = Float64[]
         names = first.(DynFix.FRAMES)

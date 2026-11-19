@@ -80,16 +80,44 @@ then `run.jl --update-baseline` and `selftest.jl`.
 
 Each item: what to do, how to know it is done.
 
-1. **Port the CSPICE rate paths that Almanac computes another way.** `zzeprc76`,
-   `zzenut80`, `zzmobliq` (of-date frames and the switch frames over them),
-   `dnearp` (TARGET_NEAR_POINT vectors), the DT_TWOVEC_IN_DYN case, and the analytic
-   rate path of `tisbod` used by `azlcpo` (one ulp in the range rate). Done: the probe
-   frames of `test/dynfixtures.jl` are bit-identical to `sxform_c` with the glibc check,
-   and `azlcpo` equals `azlcpo_c` with it.
-2. **Binary PCK rates.** They come from the Taylor derivative of the evaluation; CSPICE
-   evaluates the Chebyshev derivative (`pckeul`, `spke02`). Compare with `sxform_c` on
-   a binary PCK, port the CSPICE arithmetic if they differ. Done: bit-identical with
-   the glibc check on the binary PCKs of the test kernels.
+1. **Port the CSPICE rate paths that Almanac computes another way.** Done (branch
+   plan-rates). The state mode of `_dyn_ofdate` builds the of-date frames as
+   `zzdynfrm_`: `_dyn_prec_state` (`zzeprc76_`), `_dyn_enut80_state` (`zzenut80_`),
+   `_dyn_mobliq_state` (`zzmobliq_`) through `eul2xf_`, products `mxmg_`, inverse
+   `invstm_`. Near-point vectors take `dnearp` in the state mode (`_dyn_dnearp`). A
+   switch frame over a PCK base takes the `tisbod_` rates (`_ck_pck_step`), not the
+   `Taylor` derivative. `DT_TWOVEC_IN_DYN` followed from the of-date fix. Found on the
+   way and fixed: `zzstelab_` takes scaled norms, projections and unit vectors
+   (`vnorm_`, `vperp_`, `dvhat_`), which the old `_zzstelab` did not (one ulp in the
+   `LT+S` velocity in ECLIPJ2000, seen in `DT_GSE_LTS`); every light time is `vnorm_`
+   of the position over `clight_` (the plain norm differed by one ulp in about a third
+   of all `spkezr`/`spkpos` calls; `_ltc`, `_apo`, `spkezr`/`spkpos`/`spkgeo`/`spkgps`
+   geometric, `geometry/constobs.jl`, `_dyn_apo`/`_dyn_spkez`); `recazl` takes the
+   azimuth of the Fortran `reclat_` (unscaled `atan2`), as `recazl_c` and `azlcpo_` do.
+   Measured with the glibc check: all 25 probe frames of `test/dynfixtures.jl` equal
+   to `sxform_c` on 300 epochs each (before: 9 frames differed); `azlcpo` equal to
+   `azlcpo_c` in every output on 400 random cases over IAU_EARTH, IAU_MOON, IAU_VENUS,
+   MOON_PA_DE440, MOON_ME_DE440_ME421 (before: light time about 30 percent, azimuth a
+   few, the binary PCK rates nearly all). Not covered by a regression test that is
+   independent of libm: `dnearp` in two-vector frames (its frames need `IAU_MOON`).
+2. **Binary PCK rates.** Done (branch plan-rates). `_binary_pck_state`: angles and
+   rates of `chbint_` (`pck_eval` of order 1, type 2) or `spke20_` (type 20), W reduced
+   as `pcke02_`, then `eul2xf_` and the right product with the inertial rotation, as
+   `pckmat_` and `tisbod_`. Glibc check: `sxform` from J2000, ECLIPJ2000 and IAU_EARTH
+   to MOON_PA_DE440 equal to `sxform_c` on 200 epochs each (before: every derivative
+   block differed). Families with binary PCKs: F_PCK20 (type 20), F_PCKBSR,
+   F_DDHFTSIZE (files only).
+
+   Replay of 34 families with the glibc check, `TSPICE_ORACLE_ALL=1`, before and after
+   (F_DYN01..08, F_XFMSTA, F_ZZSWFXFM, F_CKFXFM, F_AZL, F_AZLCPV, F_AB, F_SPKEZ,
+   F_SPKEZP, F_SPKAPO, F_SPKCOR, F_SPKCPV, F_SPKGEO, F_SPKGPS, F_ZZSTELAB, F_LTIME,
+   F_STLABX, F_SPKAPP, F_ZZSPKFUN, F_SUBPNT, F_ILLUMG, F_PCK20, F_RDPCK, F_RDPCKD,
+   F_PCKBUF, F_FRMCHG, F_SXFORM): the tspice classes are the same row for row (no new
+   near or value). Calls equal to CSPICE to the last bit: 745,267 -> 878,267 of
+   960,248 (`sxform` 239,272 -> 349,575 of 349,632; `spkez` 20,789 -> 32,265 of 32,265;
+   `azlcpo`, `spkezr`, `spkpos`, `spkltc`, `spkacs`, `spkcpo`, `spkcpt`, `spkcvo`,
+   `spkcvt` now all). Left: 57 `sxform` and 137 `pxform` calls within 1e-12 but not
+   exact, 1 `spkgeo` and 1 `spkgps`; not looked at.
 3. **Order of operations in the GF state functions.** `src/gf/surface.jl` `_gf_xf` and
    `src/gf/illumination.jl` apply `R*v + dR*r`; CSPICE applies the 6x6 matrix as
    `mxvg_` (derivative block first, sums from left to right), as `rotate_jet` of order 1

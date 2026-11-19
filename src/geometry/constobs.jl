@@ -63,7 +63,7 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
     rt, vt = _geo_cvx_ssb(ks, f, et, iref)
     r = rt - robs
     v = vt - vobs
-    dist = _norm3(r)
+    dist = _m_norm(r)
     lt = dist / CLIGHT
     primal(lt) == 0 && return (; r, v, lt, dlt = zero(lt))
     corr.uselt || return (; r, v, lt, dlt = _dot3(r, v) / (dist * CLIGHT))
@@ -78,11 +78,11 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
         r = rt - robs
         v = vt - vobs
         prvlt = lt
-        lt = _norm3(r) / CLIGHT
+        lt = _m_norm(r) / CLIGHT
         lterr = abs(primal(lt) - primal(prvlt)) / max(1.0, abs(primal(epoch)))
         i += 1
     end
-    a = 1 / (CLIGHT * _norm3(r))
+    a = 1 / (CLIGHT * _m_norm(r))
     b = _dot3(r, v)
     c = _dot3(r, vt)
     primal(s * c * a) > 1 - 1.0e-10 && _geo_throw_rate()
@@ -158,7 +158,7 @@ function _geo_fzo(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration, 
         ro, vo = _geo_cvx(ks, f, et, ref)
         rt, vt = spk_jet(ks, targ, et, ref, f.ctr, Val(1))
         r = rt - ro
-        return vcat(r, vt - vo), _norm3(r) / CLIGHT
+        return vcat(r, vt - vo), _m_norm(r) / CLIGHT
     end
     center, class = _geo_frame_class(ks, ref)
     if class == Int32(1)
@@ -191,7 +191,7 @@ function _geo_fzt(ks::KernelSet, f::_GeoFixed, et, ref::Int32, corr::Aberration,
         rt, vt = _geo_cvx(ks, f, et, ref)
         rc, vc = spk_jet(ks, f.ctr, et, ref, obs, Val(1))
         r = rt + rc
-        return vcat(r, vt + vc), _norm3(r) / CLIGHT
+        return vcat(r, vt + vc), _m_norm(r) / CLIGHT
     end
     center, class = _geo_frame_class(ks, ref)
     if class == Int32(1)

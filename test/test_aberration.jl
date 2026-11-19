@@ -187,6 +187,44 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         end
     end
 
+    # Regression: the light time is `vnorm_` of the position divided by `clight_`
+    # (`spkgeo_`, `spkltc_`, `spkapo_`), the norm scaled by the largest component; the
+    # plain norm gave another last bit in about one call in three. The states of
+    # de440s.bsp in these inertial frames need no sine or cosine, so the light times are
+    # equal to the last bit. `zzstelab_` (f2c routine, no sine or cosine) takes its
+    # norms, projections and unit vectors scaled in the same way: equal to the last bit
+    # on random input. Own random stream.
+    @apart @testset "light time and zzstelab_ to the last bit" begin
+        r2 = MersenneTwister(SEED + 901)
+        fails = Failures()
+        for et in random_epochs(r2, 10, span...), ref in ("J2000", "ECLIPJ2000"),
+                ab in ("NONE", "LT", "CN+S", "XLT+S"), (targ, obs) in ((301, 399), (10, 301), (5, 399))
+            l1 = spkezr(ctx, targ, et, ref, ab, obs)[2]
+            l2 = SPICE.spkezr(string(targ), et, ref, ab, string(obs))[2]
+            check!(fails, l1 == l2, "spkezr light time", et, ref, ab, targ, obs)
+            l1 = spkpos(ctx, targ, et, ref, ab, obs)[2]
+            l2 = SPICE.spkpos(string(targ), et, ref, ab, string(obs))[2]
+            check!(fails, l1 == l2, "spkpos light time", et, ref, ab, targ, obs)
+        end
+        for k in 1:500
+            r = SVector{3}(randn(r2, 3) .* 10.0^rand(r2, 3:9))
+            v = SVector{3}(randn(r2, 3) .* 10.0^rand(r2, -3:2))
+            # an observer speed of 1e-4 km/s takes the numerical derivative of `zzstelab_`
+            vo = SVector{3}(randn(r2, 3) .* (iseven(k) ? 30.0 : 1.0e-4))
+            acc = SVector{3}(randn(r2, 3) .* 1.0e-5)
+            xmit = isodd(k ÷ 2)
+            sc, dsc = Almanac._zzstelab(xmit, acc, vo, r, v)
+            a = zeros(3); b = zeros(3)
+            ccall(
+                (:zzstelab_, SPICE.libcspice), Cint,
+                (Ref{Int32}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ptr{Float64}),
+                xmit, collect(acc), collect(vo), vcat(r, v), a, b
+            )
+            check!(fails, sc == a && dsc == b, "zzstelab_", r, v, vo, acc, xmit)
+        end
+        @test isempty(fails)
+    end
+
     @apart @testset "forms of the call" begin
         # The forms do not depend on the epoch: one epoch in the default run.
         fails = Failures()

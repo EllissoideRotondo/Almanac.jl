@@ -269,13 +269,17 @@ end
     _body_state(ks, classid, et::Float64) -> Mat3{Taylor{1,Float64}}
 
 Contract: the matrix of `_body_rotation` with its time derivative as `tisbod_` gives
-them: from a binary PCK segment if one covers `et` (the derivative of the evaluation),
-else from the text PCK constants (`_text_pck_state`). Throws as `_body_rotation`.
+them: from a binary PCK segment if one covers `et` (`_binary_pck_state`), else from the
+text PCK constants (`_text_pck_state`). Throws as `_body_rotation`.
 """
 function _body_state(ks::KernelSet, classid::Int32, et::Float64)
     segs = get(ks.pck, classid, nothing)
-    if segs !== nothing && find_segment(segs, et) > 0
-        return _body_rotation(ks, classid, taylor_var(et, Val(1)))::Mat3{Taylor{1, Float64}}
+    if segs !== nothing
+        i = find_segment(segs, et)
+        if i > 0
+            seg = @inbounds segs[i]
+            return _binary_pck_state(ks.daf[seg.file], seg, et)
+        end
     end
     br = get(ks.bodyrot, classid, nothing)
     br === nothing && return _body_rotation(ks, classid, taylor_var(et, Val(1)))::Mat3{Taylor{1, Float64}}
@@ -400,6 +404,30 @@ from J2000 to the reference frame of the segment. Requires `seg.t0 <= primal(et)
     tipm = _eul313(_reduce_twopi(ang[3]), ang[2], ang[1])
     seg.frame == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(seg.frame))
+end
+
+"""
+    _binary_pck_state(data, seg, et::Float64) -> Mat3{Taylor{1,Float64}}
+
+Contract: the matrix of `_binary_pck_rotation` with its time derivative, with the
+arithmetic of `pckmat_` and `tisbod_`: the angles and their rates of the segment
+(`chbint_` for type 2, `spke20_` for type 20; W reduced by whole turns as `pcke02_`
+and `pcke20_` do) go to `eul2xf_`, and both blocks are multiplied on the right by the
+rotation from J2000 to the frame of the segment. The derivative of the `Taylor`
+evaluation of `_binary_pck_rotation` is the same function, rounded otherwise.
+"""
+function _binary_pck_state(data::Vector{Float64}, seg::Segment, et::Float64)
+    ang, rate = pck_eval(data, seg, et, Val(1))
+    x = eul2xf(
+        SVector(_reduce_twopi(ang[3]), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
+    )
+    r = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
+    dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+    if seg.frame != _J2000_FRAME
+        c = inertial_rotation(seg.frame)
+        r, dr = _m_mxm(r, c), _m_mxm(dr, c)
+    end
+    return map((a, b) -> Taylor((a, b)), r, dr)
 end
 
 """
