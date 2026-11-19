@@ -67,6 +67,26 @@ FILE_ROUTINES = {"furnsh", "ldpool", "spkcov", "spkobj", "ckcov", "ckobj", "pckc
 # Almanac's copy misses writes. Only the one file: a family such as F_ZZDSKBSR opens each
 # of thousands of files in its directory.
 OPEN_ROUTINES = {"dafopr", "dafopw", "dasopr", "dasopw", "ekopr", "ekopw", "spkopa", "dskopa"}
+# Closes: the file that a close from the test program (not from inside SPICELIB) leaves,
+# if it was open for write, is copied after the close, so that the replay can compare
+# the file that Almanac wrote with SPICELIB's.
+CLOSE_ROUTINES = {"dafcls", "dascls", "spkcls", "ckcls", "pckcls", "ekcls", "dskcls"}
+# Routines that write to an open file and are not recorded (no replay, or the length of
+# an array is not known): a call is logged with a `W` line and its handle only, so that
+# the replay knows that its copy of the file misses the write. Without the mark the file
+# that Almanac closes would differ from SPICELIB's for a reason that is not Almanac's.
+WRITE_MARKS = set("""
+ckw04a ckw04b ckw04e ckw06 spkw19 spk14a pckw20 pck03a pck03b pck03e
+dafarr dafra dafwda dafwdr dafwfr dafwcr dafws dafrs
+daswfr dasacr dasrcr dasufs dasurc dasurd dasuri daswbr daswrc daswrd daswri dascud dassdr dasacu
+sgbwfs sgbwvs sgwes sgwfpk sgwvpk ekacli ekacld ekaclc ekifld ekffld
+spks01 spks02 spks03 spks05 spks08 spks09 spks10 spks12 spks13 spks14 spks15 spks17
+spks18 spks19 spks20 spks21
+""".split())
+# Arguments logged by a routine of tspice_log instead of as an array: the summary of
+# DAFBNA packs its integers into doubles, which the decimal log cannot carry; it is
+# logged unpacked, as `<dc` and `<ic`.
+CUSTOM_ARGS = {"dafbna": {"sum": "call tlog_dafsum(handle, sum)"}}
 
 
 # Lengths that the arguments do not give: SPICELIB's documented sizes.
@@ -258,7 +278,7 @@ def instrument_file(path, wanted, intents, done):
     while i < len(lines):
         line = lines[i]
         h = HEAD.match(line.split("!", 1)[0])
-        if not h or re.match(r"^\s*end\b", line, re.I) or h.group("name").lower() not in wanted:
+        if not h or re.match(r"^\s*end\b", line, re.I) or h.group("name").lower() not in wanted | WRITE_MARKS:
             out.append(line)
             i += 1
             continue
@@ -268,7 +288,11 @@ def instrument_file(path, wanted, intents, done):
         while not re.match(rf"^\s*end\s+(subroutine|function)\s+{name}\b", lines[j], re.I):
             j += 1
         body = lines[i:j + 1]
-        res = instrument_routine(name, h, body, intents.get(name, []))
+        res = (instrument_routine(name, h, body, intents.get(name, [])) if name in wanted
+               else "not in the routines file")
+        if isinstance(res, str) and name in WRITE_MARKS:
+            print(f"mark {name}: {res}", file=sys.stderr)
+            res = mark_routine(name, h, body)
         if isinstance(res, str):
             print(f"skip {name}: {res}", file=sys.stderr)
             out.extend(body)
@@ -302,7 +326,11 @@ def instrument_routine(name, h, body, cands):
         return "the wrapper has a RETURN, GO TO or ENTRY"
     lens = {}
     fixed = FIXED_LENGTHS.get(name, {})
+    custom = CUSTOM_ARGS.get(name, {})
     for a in args:
+        if a in custom:
+            lens[a] = None
+            continue
         if a in fixed:
             lens[a] = fixed[a]
             continue
@@ -325,11 +353,18 @@ def instrument_routine(name, h, body, cands):
         pre.append("      call tlog_snapshot()")
     elif name in OPEN_ROUTINES:
         pre.append(f"      call tlog_snapshot_file({args[0]})")
+    elif name in CLOSE_ROUTINES:
+        pre.append(f"      call tlog_close_name({args[0]})")
     post = ["      call tlog_mark()"]
+    if name in CLOSE_ROUTINES:
+        post.append("      call tlog_close_snapshot()")
     for a in args:
         k, _ = decls[a]
         it = intent[a]
         n = lens[a]
+        if a in custom:
+            pre.append("      " + custom[a])
+            continue
         rec = f"tlog_{k}('{a}', {a}, {n})" if n != "1" else f"tlog_{k}1('{a}', {a})"
         if it in ("in", "inout"):
             pre.append(f"      call {rec.replace(chr(39) + a + chr(39), chr(39) + '<' + a + chr(39), 1)}")
@@ -350,6 +385,46 @@ def instrument_routine(name, h, body, cands):
     return new
 
 
+# Integer arguments of a marked writer that the replay maps to its files.
+MARK_HANDLES = {"handle", "inhan", "han", "handl", "newh"}
+
+
+def mark_routine(name, h, body):
+    """The wrapper of a writer that is not recorded, with a mark: the call, a `W` line and
+    the handles that it takes, with no other argument."""
+    code = joined_lines("\n".join(body))
+    head = HEAD.match(code[0])
+    args = [a.strip().lower() for a in (head.group("args") or "").split(",") if a.strip()]
+    decls = {}
+    for line in code[1:]:
+        d = DECL.match(line)
+        if d:
+            for arg, dims in split_names(d.group("rest")):
+                decls[arg] = (kind_of(d.group("type")), dims)
+    if any(re.match(r"^\s*(return|go\s*to|entry)\b", l, re.I) for l in code[1:]):
+        return "the wrapper has a RETURN, GO TO or ENTRY"
+    last_decl = 0
+    for k, line in enumerate(body):
+        s = line.split("!", 1)[0].strip().lower()
+        if k == 0 or not s:
+            continue
+        if ("::" in s or s.startswith("use ") or s.startswith("implicit") or
+                s.startswith("parameter") or s.startswith("&") or body[k - 1].rstrip().endswith("&")):
+            last_decl = k
+    pre = ["      call tlog_begin('" + name.upper() + "')", "      call tlog_writer()"]
+    for a in args:
+        if a in MARK_HANDLES and decls.get(a) == ("i", None):
+            pre.append(f"      call tlog_i1('<{a}', {a})")
+    post = ["      call tlog_mark()", "      call tlog_end()"]
+    new = list(body)
+    for k, line in enumerate(new):
+        if re.match(r"^\s*(use|implicit)\b", line, re.I):
+            new.insert(k, "      use tspice_log")
+            last_decl += 1
+            break
+    return new[:last_decl + 1] + pre + new[last_decl + 1:-1] + post + [new[-1]]
+
+
 LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspice/instrument.py).
 !> The log goes to the file named by the environment variable TSPICE_LOG (a file or a
 !> FIFO that record.sh compresses); without it nothing is written. Format, one item per
@@ -359,7 +434,11 @@ LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspic
 !>                         (N = -1: more than 2000, not logged),
 !>                         one per following line (strings: their text, trailing blanks
 !>                         removed, after a `|`)
-!>   S DIR                 the files of the working directory, linked into DIR
+!>   S DIR                 the files of the working directory, linked into DIR (a load),
+!>                         or the file of an open (before it) or of a close (after it),
+!>                         copied into DIR; for a close DIR has no file past the cap
+!>   W                     a call of a writer that is not recorded: only its handles
+!>                         follow (WRITE_MARKS of instrument.py)
 !>   ! FAILED SHORT        the end of the call: the error status and short message
 !> A call is kept in memory until it ends. A call of a routine without state (the list
 !> PURE of instrument.py) is not written if its name, error status before the call and
@@ -371,12 +450,13 @@ LOGMOD = r'''!> Call log for the tspice record (written by Almanac.jl test/tspic
 module tspice_log
    use, intrinsic :: iso_fortran_env, only: int64
    use pepper_kinds, only: ip, wp
-   use pepper_instance_module, only: pepper_context
+   use pepper_instance_module, only: pepper_context, pepper_zzddhnfo => zzddhnfo
    use pepper_legacy_context, only: legacy_context
    implicit none
    private
    public :: tlog_nsub, tlog_begin, tlog_end, tlog_mark, tlog_snapshot, tlog_snapshot_file, tlog_d, tlog_d1, &
-      tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1
+      tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1, tlog_close_name, tlog_close_snapshot, tlog_writer, &
+      tlog_dafsum
    integer, save :: unit = 0
    logical, save :: opened = .false.
    logical, save :: checked = .false.
@@ -386,6 +466,7 @@ module tspice_log
    integer, save :: nwritten = 0
    integer, parameter :: maxlog = 2000   ! longer arrays are logged as N = -1, not replayed
    character(1024), save :: logpath = ' '
+   character(1024), save :: closename = ' '   ! the file of a close, if open for write
    character(32), save :: callname = ' '
    character(len=:), allocatable, save :: buf
    integer, save :: blen = 0, inend = 0
@@ -573,6 +654,77 @@ contains
          'echo $((t + $(stat -c %s "$f"))) > "$l/.bytes"; fi; fi; fi 2>/dev/null; true')
       call emit('S ' // trim(dir))
    end subroutine tlog_snapshot_file
+
+   !> Note the file of HANDLE before a close from the test program, if the file is open
+   !> for write (or new): tlog_close_snapshot copies it after the close.
+   subroutine tlog_close_name(handle)
+      integer(ip), intent(in) :: handle
+      type(pepper_context), pointer :: ctx
+      character(1024) :: fname
+      integer(ip) :: arc, bff, amh
+      logical :: found
+      closename = ' '
+      if (.not. on() .or. depth /= 1) return
+      ctx => legacy_context()
+      if (ctx%failed()) return
+      found = .false.
+      call pepper_zzddhnfo(ctx, handle, fname, arc, bff, amh, found)
+      if (found .and. (amh == 2 .or. amh == 4)) closename = fname
+   end subroutine tlog_close_name
+
+   !> Copy the file of the close into a new snapshot directory, as tlog_snapshot_file
+   !> does, but past the cap of 256 MB of copies nothing is copied or linked (the
+   !> directory stays empty): a family may write, close and delete thousands of files,
+   !> and a link would keep each of them on the disk.
+   subroutine tlog_close_snapshot()
+      character(1100) :: dir
+      if (.not. on() .or. depth /= 1) return
+      if (closename == ' ') return
+      nsnap = nsnap + 1
+      write(dir, '(a,a,i0)') trim(logpath), '.files/', nsnap
+      call execute_command_line('d="' // trim(dir) // '"; f="' // trim(closename) // '"; ' // &
+         'l="' // trim(logpath) // '.files/latest"; mkdir -p "$d" "$l"; b=$(basename "$f"); ' // &
+         'if [ -f "$f" ]; then if cmp -s "$f" "$l/$b"; then ln "$l/$b" "$d/"; ' // &
+         'else t=$(cat "$l/.bytes" 2>/dev/null || echo 0); if [ "$t" -le 268435456 ]; then ' // &
+         'cp "$f" "$d/" && ln -f "$d/$b" "$l/$b" && ' // &
+         'echo $((t + $(stat -c %s "$f"))) > "$l/.bytes"; fi; fi; fi 2>/dev/null; true')
+      call emit('S ' // trim(dir))
+      closename = ' '
+   end subroutine tlog_close_snapshot
+
+   !> The mark of a writer that is not recorded (WRITE_MARKS of instrument.py).
+   subroutine tlog_writer()
+      if (.not. on()) return
+      call emit('W')
+   end subroutine tlog_writer
+
+   !> The summary SUM of DAFBNA as its double and integer components, `<dc` and `<ic`:
+   !> the integers are packed into doubles, whose bits the decimal log does not keep.
+   !> No components for a handle that is not of a DAF (DAFBNA then signals the error).
+   subroutine tlog_dafsum(handle, sum)
+      integer(ip), intent(in) :: handle
+      real(wp), intent(in) :: sum(*)
+      type(pepper_context), pointer :: ctx
+      character(1024) :: fname
+      integer(ip) :: arc, bff, amh, nd, ni
+      logical :: found
+      real(wp) :: dc(125)
+      integer(ip) :: ic(250)
+      if (.not. on()) return
+      ctx => legacy_context()
+      nd = 0
+      ni = 0
+      found = .false.
+      if (.not. ctx%failed()) call pepper_zzddhnfo(ctx, handle, fname, arc, bff, amh, found)
+      if (found .and. arc == 1) call ctx%dafhsf(handle, nd, ni)
+      if (ctx%failed() .or. nd < 0 .or. nd > 124 .or. ni < 2 .or. ni > 250) then
+         nd = 0
+         ni = 0
+      end if
+      if (nd + ni > 0) call ctx%dafus(sum, nd, ni, dc, ic)
+      call tlog_d('<dc', dc, nd)
+      call tlog_i('<ic', ic, ni)
+   end subroutine tlog_dafsum
 
    subroutine head(label, kind, n)
       character(*), intent(in) :: label
