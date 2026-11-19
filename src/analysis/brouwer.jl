@@ -56,15 +56,18 @@ function _ma_to_ea(rm::T, ecc::T) where {T}
         while true
             iter += 1
             iter > 1000 && fail("did not converge in 1000 iterations")
-            normalized = 1 - ep * cos(e2)
+            se2, ce2 = sincos(e2)
+            normalized = 1 - ep * ce2
             abs(normalized) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
-            e1 = e2 - (e2 - ep * sin(e2) - rp) / normalized
+            e1 = e2 - (e2 - ep * se2 - rp) / normalized
             abs(e2 - e1) < _MA_EPSILON && break
             e2 = e1
         end
         r0 = rp - (e2 - ep * sin(e2))
-        e2 = _carry(e2, (rm - (e2 - ecc * sin(e2)) - r0) / (1 - ecc * cos(e2)))
-        e2 = _carry(e2, (rm - (e2 - ecc * sin(e2)) - r0) / (1 - ecc * cos(e2)))
+        for _ in 1:2
+            se2, ce2 = sincos(e2)
+            e2 = _carry(e2, (rm - (e2 - ecc * se2) - r0) / (1 - ecc * ce2))
+        end
         return primal(e2) < 0 ? e2 + 2 * T(π) : e2
     end
     f2 = 0.0
@@ -111,7 +114,8 @@ function _ea_to_ta(e::S, ecc::U) where {S, U}
         end
         ta = ta < 0 ? ta + 2 * Float64(π) : ta
         S === Float64 && U === Float64 && return ta
-        return _with_primal(2 * atan(sqrt(1 + ecc) * sin(e / 2), sqrt(1 - ecc) * cos(e / 2)), ta)
+        sh, ch = sincos(e / 2)
+        return _with_primal(2 * atan(sqrt(1 + ecc) * sh, sqrt(1 - ecc) * ch), ta)
     end
     normalized = ecc - 1
     abs(primal(normalized)) < _MA_EPSILON && fail("has a normalized anomaly below 1e-12")
@@ -167,10 +171,11 @@ function _kep_to_cart(sma::T, ecc::T, inc::T, raan::T, aop::T, ta::T, gm::Real) 
         w = w >= π ? w - 2π : w
         abs(w) <= π - acos(1 / primal(ecc)) || fail("has a true anomaly beyond the asymptotes")
     end
-    isfinite(primal(1 + ecc * cos(ta))) || fail("has an infinite radius")
+    sin_ta, cos_ta = sincos(ta)
+    isfinite(primal(1 + ecc * cos_ta)) || fail("has an infinite radius")
     p = sma * (1 - ecc^2)
     abs(primal(p)) >= eps(Float64) || fail("has a zero semi-parameter")
-    radius = p / (1 + ecc * cos(ta))
+    radius = p / (1 + ecc * cos_ta)
     sin_aop_ta, cos_aop_ta = sincos(aop + ta)
     sin_inc, cos_inc = sincos(inc)
     sin_raan, cos_raan = sincos(raan)
@@ -179,8 +184,7 @@ function _kep_to_cart(sma::T, ecc::T, inc::T, raan::T, aop::T, ta::T, gm::Real) 
     y = radius * (cos_aop_ta * sin_raan + cos_inc * sin_aop_ta * cos_raan)
     z = radius * sin_aop_ta * sin_inc
     sqrt_gm_p = sqrt(gm / p)
-    cos_ta_ecc = cos(ta) + ecc
-    sin_ta = sin(ta)
+    cos_ta_ecc = cos_ta + ecc
     vx = sqrt_gm_p * cos_ta_ecc * (-sin_aop * cos_raan - cos_inc * sin_raan * cos_aop) -
         sqrt_gm_p * sin_ta * (cos_aop * cos_raan - cos_inc * sin_raan * sin_aop)
     vy = sqrt_gm_p * cos_ta_ecc * (-sin_aop * sin_raan + cos_inc * cos_raan * cos_aop) -
@@ -234,78 +238,83 @@ function _brouwer_mean_to_osc(sma, ecc, inc, raan, aop, ma, re::Real, j2::Real)
     mean_anom = _wrap(mean_anom)
 
     eta = sqrt(1 - eccp^2)
-    theta = cos(incp)
+    sin_incp, theta = sincos(incp)
     p = smap * eta^2
     gm2 = k2 / smap^2
     gm2p = gm2 / eta^4
     tap = _ma_to_ta(mean_anom, eccp)
-    rp = p / (1 + eccp * cos(tap))
+    s_tap, c_tap = sincos(tap)
+    s_2a2t, c_2a2t = sincos(2 * aopp + 2 * tap)
+    s_2at, c_2at = sincos(2 * aopp + tap)
+    s_2a3t, c_2a3t = sincos(2 * aopp + 3 * tap)
+    rp = p / (1 + eccp * c_tap)
     adr = smap / rp
-    sin_incp = sin(incp)
     theta_sq = theta^2
 
     sma1 = smap + smap * gm2 * (
         (adr^3 - 1 / eta^3) * (-1 + 3 * theta_sq) +
-            3 * (1 - theta_sq) * adr^3 * cos(2 * aopp + 2 * tap)
+            3 * (1 - theta_sq) * adr^3 * c_2a2t
     )
 
     decc = eta^2 / 2 * (
         (
-            3 * (1 / eta^6) * gm2 * (1 - theta_sq) * cos(2 * aopp + 2 * tap) *
-                (3 * eccp * cos(tap)^2 + 3 * cos(tap) + eccp^2 * cos(tap)^3 + eccp)
+            3 * (1 / eta^6) * gm2 * (1 - theta_sq) * c_2a2t *
+                (3 * eccp * c_tap^2 + 3 * c_tap + eccp^2 * c_tap^3 + eccp)
         ) -
-            (gm2p * (1 - theta_sq) * (3 * cos(2 * aopp + tap) + cos(3 * tap + 2 * aopp))) +
+            (gm2p * (1 - theta_sq) * (3 * c_2at + c_2a3t)) +
             (3 * theta_sq - 1) * gm2 / eta^6 *
             (
-            eccp * eta + eccp / (1 + eta) + 3 * eccp * cos(tap)^2 + 3 * cos(tap) +
-                eccp^2 * cos(tap)^3
+            eccp * eta + eccp / (1 + eta) + 3 * eccp * c_tap^2 + 3 * c_tap +
+                eccp^2 * c_tap^3
         )
     )
 
     dinc = gm2p / 2 * theta * sin_incp * (
-        3 * cos(2 * aopp + 2 * tap) +
-            3 * eccp * cos(2 * aopp + tap) + eccp * cos(2 * aopp + 3 * tap)
+        3 * c_2a2t +
+            3 * eccp * c_2at + eccp * c_2a3t
     )
 
     draan = -gm2p / 2 * theta * (
-        6 * (tap - mean_anom + eccp * sin(tap)) -
-            3 * sin(2 * aopp + 2 * tap) - 3 * eccp * sin(2 * aopp + tap) -
-            eccp * sin(2 * aopp + 3 * tap)
+        6 * (tap - mean_anom + eccp * s_tap) -
+            3 * s_2a2t - 3 * eccp * s_2at -
+            eccp * s_2a3t
     )
 
     lgh = raanp + aopp + mean_anom +
         gm2p / 4 * (
-        6 * (-1 - 2 * theta + 5 * theta_sq) * (tap - mean_anom + eccp * sin(tap)) +
+        6 * (-1 - 2 * theta + 5 * theta_sq) * (tap - mean_anom + eccp * s_tap) +
             (3 + 2 * theta - 5 * theta_sq) * (
-            3 * sin(2 * aopp + 2 * tap) +
-                3 * eccp * sin(2 * aopp + tap) + eccp * sin(2 * aopp + 3 * tap)
+            3 * s_2a2t +
+                3 * eccp * s_2at + eccp * s_2a3t
         )
     ) +
         gm2p / 4 * eta^2 / (eta + 1) * eccp *
         (
         3 * (1 - theta_sq) * (
-            sin(3 * tap + 2 * aopp) * (1 / 3 + adr^2 * eta^2 + adr) +
-                sin(2 * aopp + tap) * (1 - adr^2 * eta^2 - adr)
+            s_2a3t * (1 / 3 + adr^2 * eta^2 + adr) +
+                s_2at * (1 - adr^2 * eta^2 - adr)
         ) +
-            2 * sin(tap) * (3 * theta_sq - 1) * (1 + adr^2 * eta^2 + adr)
+            2 * s_tap * (3 * theta_sq - 1) * (1 + adr^2 * eta^2 + adr)
     )
 
     eccpdl = -eta^3 / 4 * gm2p * (
-        2 * (-1 + 3 * theta_sq) * (adr^2 * eta^2 + adr + 1) * sin(tap) +
+        2 * (-1 + 3 * theta_sq) * (adr^2 * eta^2 + adr + 1) * s_tap +
             3 * (1 - theta_sq) * (
-            (-adr^2 * eta^2 - adr + 1) * sin(2 * aopp + tap) +
-                (adr^2 * eta^2 + adr + 1 / 3) * sin(2 * aopp + 3 * tap)
+            (-adr^2 * eta^2 - adr + 1) * s_2at +
+                (adr^2 * eta^2 + adr + 1 / 3) * s_2a3t
         )
     )
 
-    ecosl = (eccp + decc) * cos(mean_anom) - eccpdl * sin(mean_anom)
-    esinl = (eccp + decc) * sin(mean_anom) + eccpdl * cos(mean_anom)
+    s_ma, c_ma = sincos(mean_anom)
+    ecosl = (eccp + decc) * c_ma - eccpdl * s_ma
+    esinl = (eccp + decc) * s_ma + eccpdl * c_ma
     ecc1 = sqrt(ecosl^2 + esinl^2)
     ma1 = primal(ecc1) < 1.0e-11 ? zero(T) : _wrap(atan(esinl, ecosl))
 
     sin_half_i, cos_half_i = sincos(incp / 2)
-    sinhalfisinh = (sin_half_i + cos_half_i * dinc / 2) * sin(raanp) + sin_half_i * draan * cos(raanp)
-    sinhalficosh = (sin_half_i + cos_half_i * dinc / 2) * cos(raanp) - sin_half_i * draan * sin(raanp)
+    s_raan, c_raan = sincos(raanp)
+    sinhalfisinh = (sin_half_i + cos_half_i * dinc / 2) * s_raan + sin_half_i * draan * c_raan
+    sinhalficosh = (sin_half_i + cos_half_i * dinc / 2) * c_raan - sin_half_i * draan * s_raan
     sin_half_i_new = sqrt(sinhalfisinh^2 + sinhalficosh^2)
     sin_half_i_new = primal(sin_half_i_new) > 1 ? one(T) : sin_half_i_new
     inc1 = 2 * asin(sin_half_i_new)

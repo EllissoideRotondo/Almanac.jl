@@ -148,11 +148,16 @@ end
     return radius, lon, lat
 end
 
-@inline _dsk_latrec(r::Float64, lon::Float64, lat::Float64) = Vec3{Float64}(
-    r * cos(lon) * cos(lat), r * sin(lon) * cos(lat), r * sin(lat)
-)
+@inline function _dsk_latrec(r::Float64, lon::Float64, lat::Float64)
+    slon, clon = sincos(lon)
+    slat, clat = sincos(lat)
+    return Vec3{Float64}(r * clon * clat, r * slon * clat, r * slat)
+end
 
-@inline _dsk_cylrec(r::Float64, lon::Float64, z::Float64) = Vec3{Float64}(r * cos(lon), r * sin(lon), z)
+@inline function _dsk_cylrec(r::Float64, lon::Float64, z::Float64)
+    slon, clon = sincos(lon)
+    return Vec3{Float64}(r * clon, r * slon, z)
+end
 
 @noinline _dsk_throw(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
 
@@ -174,10 +179,8 @@ end
     re > 0.0 || _dsk_throw(:valueoutofrange, "the equatorial radius must be positive")
     f < 1.0 || _dsk_throw(:valueoutofrange, "the flattening coefficient must be less than 1")
     rp = re - f * re
-    cphi = cos(lat)
-    sphi = sin(lat)
-    clmbda = cos(lon)
-    slmbda = sin(lon)
+    sphi, cphi = sincos(lat)
+    slmbda, clmbda = sincos(lon)
     big = max(abs(re * cphi), abs(rp * sphi))
     x = re * cphi / big
     y = rp * sphi / big
@@ -683,7 +686,8 @@ end
 "`zzelnaxx`: the x and y intercepts of the normal line of the ellipse `a`, `b` at planetodetic latitude `lat`."
 @inline function _dsk_elnaxx(a::Float64, b::Float64, lat::Float64)
     (a > 0.0 && b > 0.0) || _dsk_throw(:nonpositiveaxis, "the semi-axis lengths must be positive")
-    ept = _dsk_ednmpt(a, b, b, Vec3{Float64}(cos(lat), sin(lat), 0.0))
+    slat, clat = sincos(lat)
+    ept = _dsk_ednmpt(a, b, b, Vec3{Float64}(clat, slat, 0.0))
     d1 = b / a
     d2 = a / b
     return (1.0 - d1 * d1) * ept[1], (1.0 - d2 * d2) * ept[2]
@@ -1127,7 +1131,8 @@ function _dsk_rytlat(
         end
     end
     if cos(maxlon - minlon) < 1.0
-        westb = Vec3{Float64}(sin(minlon), -cos(minlon), 0.0)
+        smin, cmin = sincos(minlon)
+        westb = Vec3{Float64}(smin, -cmin, 0.0)
         s = (_dsk_vnorm(vertex) + maxr) * 1.1
         nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
         if nx == 1 && _dsk_inlat(srfx, b, margin, 1)
@@ -1141,7 +1146,8 @@ function _dsk_rytlat(
                 end
             end
         end
-        eastb = Vec3{Float64}(-sin(maxlon), cos(maxlon), 0.0)
+        smax, cmax = sincos(maxlon)
+        eastb = Vec3{Float64}(-smax, cmax, 0.0)
         nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
         if nx == 1 && _dsk_inlat(srfx, b, margin, 1)
             eback = _dsk_ucrss(_DSK_ZAXIS, eastb)
@@ -1309,7 +1315,8 @@ function _dsk_rytpdt(
         done && return nxpts, xpt
     end
     if cos(maxlon - minlon) < 1.0
-        westb = Vec3{Float64}(sin(minlon), -cos(minlon), 0.0)
+        smin, cmin = sincos(minlon)
+        westb = Vec3{Float64}(smin, -cmin, 0.0)
         s = (_dsk_vnorm(vertex) + maxr) * 1.1
         nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
         if nx == 1 && _dsk_inpdt(srfx, b, re, f, margin, 1)
@@ -1323,7 +1330,8 @@ function _dsk_rytpdt(
                 end
             end
         end
-        eastb = Vec3{Float64}(-sin(maxlon), cos(maxlon), 0.0)
+        smax, cmax = sincos(maxlon)
+        eastb = Vec3{Float64}(-smax, cmax, 0.0)
         nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
         if nx == 1 && _dsk_inpdt(srfx, b, re, f, margin, 1)
             eback = _dsk_ucrss(_DSK_ZAXIS, eastb)
@@ -1382,8 +1390,9 @@ end
     )
     hdlon = (maxlon - minlon) / 2
     midlon = minlon + hdlon
-    lr = hdlon <= _DSK_HALFPI ? outrad - inrad * cos(hdlon) : (1.0 - cos(hdlon)) * outrad
-    lt = hdlon > _DSK_HALFPI ? outrad * 2.0 : outrad * 2.0 * sin(hdlon)
+    shd, chd = sincos(hdlon)
+    lr = hdlon <= _DSK_HALFPI ? outrad - inrad * chd : (1.0 - chd) * outrad
+    lt = hdlon > _DSK_HALFPI ? outrad * 2.0 : outrad * 2.0 * shd
     lz = maxz - minz
     lr = max(0.0, lr)
     lt = max(0.0, lt)
@@ -1411,21 +1420,23 @@ function _dsk_latbox(b::NTuple{6, Float64})
     minlon, maxlon, minlat, maxlat = _dsk_box_lonlat(b)
     minr = b[5]
     maxr = b[6]
+    smin, cmin = sincos(minlat)
+    smax, cmax = sincos(maxlat)
     if minlat >= 0.0
-        outrad = cos(minlat) * maxr
-        inrad = cos(maxlat) * minr
-        maxz = maxr * sin(maxlat)
-        minz = minr * sin(minlat)
+        outrad = cmin * maxr
+        inrad = cmax * minr
+        maxz = maxr * smax
+        minz = minr * smin
     elseif maxlat <= 0.0
-        outrad = cos(maxlat) * maxr
-        inrad = cos(minlat) * minr
-        maxz = minr * sin(maxlat)
-        minz = maxr * sin(minlat)
+        outrad = cmax * maxr
+        inrad = cmin * minr
+        maxz = minr * smax
+        minz = maxr * smin
     else
         outrad = maxr
         inrad = cos(max(abs(maxlat), abs(minlat))) * minr
-        maxz = maxr * sin(maxlat)
-        minz = maxr * sin(minlat)
+        maxz = maxr * smax
+        minz = maxr * smin
     end
     return _dsk_cylbox(outrad, inrad, minlon, maxlon, maxz, minz)
 end

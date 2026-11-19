@@ -438,7 +438,7 @@ function _sgp4_init(
     omeosq = 1.0 - eccsq
     rteosq = sqrt(max(omeosq, 0.0))
     omeosq < 0.0 && (rteosq = NaN)
-    cosio = cos(inclo)
+    sinio, cosio = sincos(inclo)
     cosio2 = cosio * cosio
     ak = _sgp4_realpow(xke / no, x2o3)
     d1 = j2 * 0.75 * (cosio2 * 3.0 - 1.0) / (rteosq * omeosq)
@@ -447,7 +447,6 @@ function _sgp4_init(
     del = d1 / (adel * adel)
     no = no / (del + 1.0)
     ao = _sgp4_realpow(xke / no, x2o3)
-    sinio = sin(inclo)
     po = ao * omeosq
     con42 = 1.0 - cosio2 * 5.0
     con41 = -con42 - cosio2 - cosio2
@@ -525,9 +524,9 @@ function _sgp4_init(
         j3oj2 * -0.25 * sinio * (cosio * 5.0 + 3.0) / temp4
     end
     aycof = j3oj2 * -0.5 * sinio
-    d = eta * cos(mo) + 1.0
+    sinmao, cosmao = sincos(mo)
+    d = eta * cosmao + 1.0
     delmo = d * (d * d)
-    sinmao = sin(mo)
     x7thm1 = cosio2 * 7.0 - 1.0
 
     # Deep space: period of 225 minutes or more.
@@ -623,30 +622,38 @@ number of steps from the epoch, and `xli`, `xni` are the integrated values at `a
     while true
         if ds.irez != 2
             # Terms of the near-synchronous resonance.
-            xndt = ds.del1 * sin(xli - fasx2) + ds.del2 * sin((xli - fasx4) * 2.0) +
-                ds.del3 * sin((xli - fasx6) * 3.0)
+            s1, c1 = sincos(xli - fasx2)
+            s2, c2 = sincos((xli - fasx4) * 2.0)
+            s3, c3 = sincos((xli - fasx6) * 3.0)
+            xndt = ds.del1 * s1 + ds.del2 * s2 + ds.del3 * s3
             xldot = xni + ds.xfact
-            xnddt = ds.del1 * cos(xli - fasx2) + ds.del2 * 2.0 * cos((xli - fasx4) * 2.0) +
-                ds.del3 * 3.0 * cos((xli - fasx6) * 3.0)
+            xnddt = ds.del1 * c1 + ds.del2 * 2.0 * c2 + ds.del3 * 3.0 * c3
             xnddt *= xldot
         else
             # Terms of the near-half-day resonance.
             xomi = r.argpo + r.argpdot * atime
             x2omi = xomi + xomi
             x2li = xli + xli
-            xndt = ds.d2201 * sin(x2omi + xli - g22) + ds.d2211 * sin(xli - g22) +
-                ds.d3210 * sin(xomi + xli - g32) + ds.d3222 * sin(-xomi + xli - g32) +
-                ds.d4410 * sin(x2omi + x2li - g44) + ds.d4422 * sin(x2li - g44) +
-                ds.d5220 * sin(xomi + xli - g52) + ds.d5232 * sin(-xomi + xli - g52) +
-                ds.d5421 * sin(xomi + x2li - g54) + ds.d5433 * sin(-xomi + x2li - g54)
+            s01, c01 = sincos(x2omi + xli - g22)
+            s02, c02 = sincos(xli - g22)
+            s03, c03 = sincos(xomi + xli - g32)
+            s04, c04 = sincos(-xomi + xli - g32)
+            s05, c05 = sincos(x2omi + x2li - g44)
+            s06, c06 = sincos(x2li - g44)
+            s07, c07 = sincos(xomi + xli - g52)
+            s08, c08 = sincos(-xomi + xli - g52)
+            s09, c09 = sincos(xomi + x2li - g54)
+            s10, c10 = sincos(-xomi + x2li - g54)
+            xndt = ds.d2201 * s01 + ds.d2211 * s02 +
+                ds.d3210 * s03 + ds.d3222 * s04 +
+                ds.d4410 * s05 + ds.d4422 * s06 +
+                ds.d5220 * s07 + ds.d5232 * s08 +
+                ds.d5421 * s09 + ds.d5433 * s10
             xldot = xni + ds.xfact
-            xnddt = ds.d2201 * cos(x2omi + xli - g22) + ds.d2211 * cos(xli - g22) +
-                ds.d3210 * cos(xomi + xli - g32) + ds.d3222 * cos(-xomi + xli - g32) +
-                ds.d5220 * cos(xomi + xli - g52) + ds.d5232 * cos(-xomi + xli - g52) +
-                (
-                ds.d4410 * cos(x2omi + x2li - g44) + ds.d4422 * cos(x2li - g44) +
-                    ds.d5421 * cos(xomi + x2li - g54) + ds.d5433 * cos(-xomi + x2li - g54)
-            ) * 2.0
+            xnddt = ds.d2201 * c01 + ds.d2211 * c02 +
+                ds.d3210 * c03 + ds.d3222 * c04 +
+                ds.d5220 * c07 + ds.d5232 * c08 +
+                (ds.d4410 * c05 + ds.d4422 * c06 + ds.d5421 * c09 + ds.d5433 * c10) * 2.0
             xnddt *= xldot
         end
         abs(t0 - atime) >= stepp || break

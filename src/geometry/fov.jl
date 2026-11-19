@@ -138,14 +138,12 @@ function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
             b, bmag = _m_unorm(bsight)
             b1 = _m_hat(_m_perp(refvec, bsight, true))
             b2 = _m_cross(b, b1)
-            cosran = cos(refang)
-            coscan = cos(crsang)
+            sinran, cosran = sincos(refang)
+            sincan, coscan = sincos(crsang)
             (cosran < 1.0e-15 || coscan < 1.0e-15) && _geo_fov_error(
                 :badboundary,
                 "the half angles of the instrument $instid must be below 90 degrees"
             )
-            sinran = sin(refang)
-            sincan = sin(crsang)
             n1 = -cosran * b1 + sinran * b
             n2 = -coscan * b2 + sincan * b
             n3 = cosran * b1 + sinran * b

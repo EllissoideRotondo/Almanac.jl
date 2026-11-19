@@ -251,7 +251,7 @@ matrix.
 julia> ctx = SpiceContext();
 
 julia> add_frame!(ctx, "SPIN", 1_400_001, 399, "J2000") do et
-           c, s = cos(1e-3 * et), sin(1e-3 * et)
+           s, c = sincos(1e-3 * et)
            [c -s 0; s c 0; 0 0 1]
        end
 
