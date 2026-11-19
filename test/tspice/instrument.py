@@ -774,6 +774,19 @@ contains
       inquire(file=trim(path) // '.gz', exist=bin_path)
    end function bin_path
 
+   !> FNV-1a of the NB low bytes of W, added to the hash H. Byte by byte: a hash of whole
+   !> words would keep a change of the sign bit in the sign bit alone, and two sign
+   !> changes (a quaternion and its negative) would cancel.
+   subroutine fnv_word(h, w, nb)
+      integer(int64), intent(inout) :: h
+      integer(int64), intent(in) :: w
+      integer, intent(in) :: nb
+      integer :: b
+      do b = 0, nb - 1
+         h = ieor(h, iand(ishft(w, -8*b), 255_int64)) * 1099511628211_int64
+      end do
+   end subroutine fnv_word
+
    !> Write the values to a binary file (native byte order, gzip), named by their hash so
    !> that a repeat is stored once, and log its path in a `B` line before the argument.
    subroutine bin_d(x, n)
@@ -784,7 +797,7 @@ contains
       integer :: k, u
       h = -3750763034362895579_int64
       do k = 1, n
-         h = ieor(h, transfer(x(k), 0_int64)) * 1099511628211_int64
+         call fnv_word(h, transfer(x(k), 0_int64), 8)
       end do
       if (.not. bin_path(h, 'd', path)) then
          open(newunit=u, file=trim(path), access='stream', form='unformatted', status='replace')
@@ -803,7 +816,7 @@ contains
       integer :: k, u
       h = -3750763034362895579_int64
       do k = 1, n
-         h = ieor(h, int(x(k), int64)) * 1099511628211_int64
+         call fnv_word(h, int(x(k), int64), 4)
       end do
       if (.not. bin_path(h, 'i4', path)) then
          open(newunit=u, file=trim(path), access='stream', form='unformatted', status='replace')

@@ -658,7 +658,7 @@ function default_mapping(ctx, c::Call)
         # a write that the replay could not make, or no copy (past the cap of the
         # recorder): the files are not compared
         FILE_CHECK[] = path in TAINTED ? "not compared: a write outside the replay" :
-            !isfile(theirs) ? "not compared: no copy (cap of the recorder)" : "compared"
+            !isfile(theirs) ? "not compared: no copy of SPICELIB's file (past the cap of the recorder, or deleted before the close)" : "compared"
         FILE_CHECK[] == "compared" || throw(UnmappedHandle())
         return compare_files(path, theirs; ifname = path in IFNAME_REPLAY ? "replay" : nothing)
     end
