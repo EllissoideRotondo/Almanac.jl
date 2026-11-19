@@ -232,6 +232,7 @@ for (r, names) in (
         "chbval" => ["degp"], "chbder" => ["degp"], "dafps" => ["nd", "ni"],
         "ckw01" => ["avflag", "nrec"], "ckw02" => ["nrec"], "ckw03" => ["avflag", "nrec", "nints"],
         "pltvol" => ["nv", "np"], "pltar" => ["nv", "np"], "pltexp" => [], "dskw02" => ["nv", "np"],
+        "spkw19" => ["nintvl"], "ckw06" => ["nmini"],
     )
     DROP[r] = names
 end
@@ -300,6 +301,10 @@ function jl_named(a::Arg, routine::AbstractString)
         return Float64.(a.values[1:10])
     if occursin(WRITERS, routine) && a.name in WRITER_ARRAYS && a.kind == 'd'
         return Float64.(a.values)
+    end
+    # the counts of the mini-segment writers (SPKW19, CKW06), a vector also of one value
+    if occursin(WRITERS, routine) && a.name in ("npkts", "subtps", "degres") && a.kind == 'i'
+        return Vector{Int}(a.values)        # `Int.(Any[])` is a Vector{Any}
     end
     # the values of an EK entry are a vector, also of one value
     if occursin(r"^ek[au]ce[cdi]$", routine) && a.name in ("ivals", "dvals", "cvals")

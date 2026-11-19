@@ -145,6 +145,17 @@ FIXED_LENGTHS = {
     "vsepg": {"v1": "max(0, ndim)", "v2": "max(0, ndim)"},
     "vzerog": {"v": "max(0, ndim)"},
     "ckw05": {"packts": "max(0, n*merge(8, merge(4, merge(14, 7, subtyp == 2), subtyp == 1), subtyp == 0))"},
+    # mini-segment writers: one count, packet count, subtype and degree per mini-segment,
+    # one epoch per packet, and packets whose size the subtype gives (S19PSn, C06PSn)
+    "spkw19": {"npkts": "max(0, nintvl)", "subtps": "max(0, nintvl)", "degres": "max(0, nintvl)",
+               "ivlbds": "max(0, nintvl + 1)", "epochs": "max(0, sum(npkts(1:max(0, nintvl))))",
+               "packts": "max(0, sum(npkts(1:max(0, nintvl))*merge(12, 6, subtps(1:max(0, nintvl)) == 0)))"},
+    "ckw06": {"npkts": "max(0, nmini)", "subtps": "max(0, nmini)", "degres": "max(0, nmini)",
+              "rates": "max(0, nmini)", "ivlbds": "max(0, nmini + 1)",
+              "sclkdp": "max(0, sum(npkts(1:max(0, nmini))))",
+              "packts": "max(0, sum(npkts(1:max(0, nmini))*merge(8, merge(4, merge(14, 7, "
+                        "subtps(1:max(0, nmini)) == 2), subtps(1:max(0, nmini)) == 1), "
+                        "subtps(1:max(0, nmini)) == 0)))"},
 }
 
 
