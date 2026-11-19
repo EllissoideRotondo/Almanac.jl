@@ -28,6 +28,20 @@ each such file and whether it was compared, or why not. An input array too long 
 log goes to a compressed binary file beside it (at most `TSPICE_MAXBIN` bytes, default
 256 MB, per family).
 
+Windows and sets (cells) are logged as their size, their cardinality and their elements.
+The GF searches that take procedures (GFEVNT, GFFOVE, GFOCCE) are replayed with the step
+that GFSSTP or the last search set and with Almanac.jl's `gfrefn`, which are the
+procedures that every tspice call passes. Not replayed:
+
+- GFUDB, GFUDS, UDDC and UDDF, whose functions are written in the test program;
+- writers without a counterpart in Almanac.jl (CKW04A, the SPKSnn subset writers,
+  DAFWDR and other record-level writers). A file that one of them wrote is read from
+  the copy of SPICELIB's file, and its later writes are skipped;
+- calls on a file that the test opened with routines outside the recording.
+
+`TSPICE_WHY=1` writes `unmapped.tsv` (in `results/worker*`): for each family and routine,
+the calls skipped for want of a file, and why the replay has none.
+
 ## When a run stops or fails
 
 A run without a list of families is the full check.
