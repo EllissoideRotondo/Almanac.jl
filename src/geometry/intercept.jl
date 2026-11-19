@@ -29,7 +29,7 @@ relative error of `1e-17`).
     while i <= 5 && relerr > 1.0e-17
         stlerr = j2dir - _stelab(stldir, vfwd)
         stldir = stlerr + stldir
-        relerr = primal(_norm3(stlerr)) / primal(_norm3(stldir))
+        relerr = primal(_m_norm(stlerr)) / primal(_m_norm(stldir))
         i += 1
     end
     return stldir
@@ -72,7 +72,7 @@ function _geo_sfxcor(
     corr.stellar && (j2dir = _geo_stl_dir(j2dir, vobs, corr.transmit))
     trgdir = _m_mxv(j2tmat, j2dir)
     none = (false, zero(obspos), trgepc, zero(obspos))
-    range = primal(_norm3(obspos))
+    range = primal(_m_norm(obspos))
     range == 0.0 && throw(
         SpiceError(
             :noseparation,
@@ -95,7 +95,7 @@ function _geo_sfxcor(
         # invariant: no intercept was found in the i - 1 attempts made
         while i <= nitr && !found
             pnear, _ = _geo_raynp(sh, obspos, trgdir)
-            lt = _norm3(obspos - pnear) / CLIGHT
+            lt = _m_norm(obspos - pnear) / CLIGHT
             trgepc = et + s * lt
             xform = frame_rotation(ks, Int32(1), fixfid, trgepc)
             obspos = _m_mxv(xform, robs - _ssbpos(ks, trgcde, trgepc, Int32(1)))
@@ -106,7 +106,7 @@ function _geo_sfxcor(
         found || return none
     end
     nitr = corr.converged ? 10 : 1
-    lt = _norm3(obspos - spoint) / CLIGHT
+    lt = _m_norm(obspos - spoint) / CLIGHT
     trgepc = et + s * lt
     prevlt = 0.0
     prevet = primal(trgepc)
@@ -125,7 +125,7 @@ function _geo_sfxcor(
             # `zzsfxcor_` calls the Fortran `nplnpt_` (`vproj_`, which divides).
             spoint, _ = _m_nplnpt(obspos, trgdir, pnear, false)
         end
-        lt = _norm3(obspos - spoint) / CLIGHT
+        lt = _m_norm(obspos - spoint) / CLIGHT
         trgepc = et + s * lt
         ltdiff = abs(primal(lt) - prevlt)
         etdiff = abs(primal(trgepc) - prevet)
@@ -137,8 +137,8 @@ function _geo_sfxcor(
     # the point of the ray nearest to the target: the ray misses the target (CSPICE
     # returns the flag of the last pass).
     found || return none
-    udir = _vhat(_m_mxv(xform, j2geom))
-    return true, spoint, trgepc, _norm3(spoint - obspos) * udir
+    udir = _m_hat(_m_mxv(xform, j2geom))
+    return true, spoint, trgepc, _m_norm(spoint - obspos) * udir
 end
 
 function _geo_sincpt(

@@ -337,20 +337,14 @@ The computation of `stelab`: `pobj` rotated by the angle `asin(|u × vobs/c|)` a
 (`SpiceError(:valueoutofrange)` otherwise). Postcondition: the norm of `pobj` is kept.
 """
 @inline function _stelab(pobj, vobs)
-    u = _vhat(pobj)
+    # The scaled norms and the projection of `vhat_`, `vnorm_` and `vrotv_`.
+    u = _m_hat(pobj)
     vbyc = (1 / CLIGHT) * vobs
     primal(_dot3(vbyc, vbyc)) >= 1 && _throw_vobs()
-    h = cross(u, vbyc)
-    sinphi = _norm3(h)
+    h = _m_cross(u, vbyc)
+    sinphi = _m_norm(h)
     primal(sinphi) == 0 && return pobj - zero(h)
-    phi = asin(sinphi)
-    # `vrotv`: rotate `pobj` about the axis `h` by `phi`.
-    x = h / sinphi
-    p = _dot3(pobj, x) * x
-    v1 = pobj - p
-    v2 = cross(x, v1)
-    sn, cs = sincos(phi)
-    return cs * v1 + sn * v2 + p
+    return _m_vrotv(pobj, h, asin(sinphi))
 end
 
 "The stellar aberration offset of `zzstelab` for the position `r`, the unit vector `rhat` and the observer velocity `vobs`."
@@ -981,11 +975,11 @@ function ltime(ks::KernelSet, etobs::Real, obs::Integer, dir::AbstractString, ta
         throw(SpiceError(:baddirection, "ltime: the direction must be \"->\" or \"<-\", not \"$dir\""))
     et = check_epoch(etobs)
     robs = _ssbpos(ks, Int32(obs), et, Int32(1))
-    elapsd = _norm3(_ssbpos(ks, Int32(targ), et, Int32(1)) - robs) / CLIGHT
+    elapsd = _m_norm(_ssbpos(ks, Int32(targ), et, Int32(1)) - robs) / CLIGHT
     ettarg = et + s * elapsd
     # invariant: `ettarg = et + s * elapsd`, with `elapsd` from i - 1 iterations
     for _ in 1:3
-        elapsd = _norm3(_ssbpos(ks, Int32(targ), ettarg, Int32(1)) - robs) / CLIGHT
+        elapsd = _m_norm(_ssbpos(ks, Int32(targ), ettarg, Int32(1)) - robs) / CLIGHT
         ettarg = et + s * elapsd
     end
     return ettarg, elapsd

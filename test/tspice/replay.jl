@@ -1308,6 +1308,7 @@ struct NoOracle end
 function cspice_call(c::Call)
     name = lowercase(c.name)
     occursin(NO_ORACLE, name) && return NoOracle()
+    name in GF_SEARCHES && return NoOracle()
     any(a -> handle_value(a) !== nothing, c.inputs) && return NoOracle()
     name in ("spklef", "cklpf", "pcklof") && (name = "furnsh")
     f = haskey(CSPICE_EXTRA, name) ? CSPICE_EXTRA[name] :
@@ -1743,6 +1744,81 @@ const MAPPINGS = Dict{String, Function}(
     end,
 )
 
+# --- the GF searches ---------------------------------------------------------------------
+#
+# The recorder logs a window (a cell of doubles) as its size, its cardinality and its
+# endpoints (instrument.py, cell_args), and not the workspace. Almanac takes the
+# arguments of SPICELIB in the same order, without MW, NW, WORK and RESULT, and returns
+# the result as a `Window`.
+const GF_SEARCHES = Set(
+    ["gfdist", "gfilum", "gfoclt", "gfpa", "gfposc", "gfrfov", "gfrr", "gfsep", "gfsntc", "gfsubc", "gftfov"]
+)
+# Errors of SPICELIB about the sizes of the workspace and of the result window, which
+# Almanac does not take: such a call has no counterpart.
+const GF_SIZE_ERRORS = Set(["SPICE(INVALIDDIMENSION)", "SPICE(OUTOFROOM)", "SPICE(WINDOWEXCESS)", "SPICE(WINDOWTOOSMALL)"])
+
+"A call that has no counterpart in Almanac's API (skipped as `no_counterpart`)."
+struct NoCounterpart <: Exception end
+
+"The endpoints of a window logged as size, cardinality and elements, or nothing."
+function gf_window(a::Arg)
+    v = a.values
+    (length(v) < 2 || any(x -> !(x isa Real), v)) && return nothing
+    card = round(Int, v[2])
+    length(v) == 2 + card || return nothing
+    return Float64.(v[3:end])
+end
+
+"""
+A GF search: the result window is compared by its number of endpoints and each endpoint
+within the convergence tolerance `tol` of the search (`gfstol`, 1e-6 s by default). The
+solver of both libraries ends with the midpoint of a bracket no wider than `tol` that
+holds the root of its own quantity, so each endpoint lies within `tol / 2` of that root,
+and two of them within `tol` of each other where the two quantities have the same root to
+much better than `tol`. A result within the tolerance is given as SPICELIB's endpoints;
+gf_agreement counts how many were equal to the last bit.
+"""
+function gf_search_mapping(ctx, c)
+    name = lowercase(c.name)
+    c.failed && c.short in GF_SIZE_ERRORS && throw(NoCounterpart())
+    args = Any[]
+    for a in c.inputs
+        a.name in ("mw", "nw", "work", "result") && continue
+        if a.name == "cnfine"
+            w = gf_window(a)
+            w === nothing && throw(NoCounterpart())
+            push!(args, Window(w))
+        else
+            push!(args, jl(a))
+        end
+    end
+    tol = gfstol(ctx)
+    r = getfield(Almanac, Symbol(name))(ctx, args...)
+    c.failed && return []
+    out = Dict(o.name => o for o in c.outputs)
+    exp = gf_window(out["result"])
+    exp === nothing && throw(NoCounterpart())
+    got = collect(r)
+    v = get!(() -> zeros(Int, 4), GF_AGREEMENT, name)
+    v[1] += 1
+    if length(got) == length(exp)
+        d = maximum(abs.(got .- exp); init = 0.0)
+        d == 0 ? (v[2] += 1) : d <= tol ? (v[3] += 1) : (v[4] += 1)
+        d <= tol && (GF_MAXDIFF[name] = max(get(GF_MAXDIFF, name, 0.0), d))
+        d <= tol && return [("result", Any[exp...], Any[exp...])]
+    else
+        v[4] += 1
+    end
+    return [("result", Any[exp...], Any[got...])]
+end
+
+"Per GF search: calls compared, results equal to SPICELIB's, within the tolerance, outside it."
+const GF_AGREEMENT = Dict{String, Vector{Int}}()
+"Per GF search: the largest difference of an endpoint (s) in the results within the tolerance."
+const GF_MAXDIFF = Dict{String, Float64}()
+
+foreach(n -> (MAPPINGS[n] = gf_search_mapping), GF_SEARCHES)
+
 function pool_get(ctx, c, f)
     a = Dict(x.name => jl(x) for x in c.inputs)
     out = Dict(o.name => o.values for o in c.outputs)
@@ -1805,6 +1881,29 @@ function _agreement_level(x, o)
     return 4
 end
 
+# TSPICE_AGREE_ROWS=name,name,... (with TSPICE_ORACLE_ALL=1) also writes
+# agreement_rows.tsv: each call of these routines where Almanac is not equal to CSPICE to
+# the last bit, with the outputs that differ and the largest difference in units of the
+# last place of CSPICE's value.
+const AGREE_ROWS = Set(split(get(ENV, "TSPICE_AGREE_ROWS", ""), ',', keepempty = false))
+const AGREE_IO = Ref{Union{IO, Nothing}}(nothing)
+const CURRENT_FAMILY = Ref("")
+
+function agree_row(name, c, result, oracle)
+    io = AGREE_IO[]
+    io === nothing && return
+    diffs = String[]
+    for ((n, _, g), (_, _, o)) in zip(result, oracle)
+        (g === nothing || o === nothing || length(g) != length(o)) && (push!(diffs, "$n: shapes"); continue)
+        idx = [i for i in eachindex(g) if !(g[i] == o[i] || (g[i] isa AbstractString && o[i] isa AbstractString && rstrip(g[i]) == rstrip(o[i])))]
+        isempty(idx) && continue
+        ulps = maximum(i -> g[i] isa AbstractFloat && o[i] isa AbstractFloat ? abs(g[i] - o[i]) / eps(abs(Float64(o[i]))) : Inf, idx)
+        push!(diffs, "$n$(idx): $(round(ulps; digits = 1)) ulp")
+    end
+    println(io, CURRENT_FAMILY[], '\t', c.line, '\t', describe(c), '\t', join(diffs, "; "))
+    return
+end
+
 function compare_all!(name, c, result)
     r = cspice_call(c)
     (r isa NoOracle || r === nothing || r isa Exception) && return
@@ -1817,6 +1916,7 @@ function compare_all!(name, c, result)
         la = max(la, _agreement_level(g, o))
         lb = max(lb, _agreement_level(e, o))
     end
+    la > 1 && name in AGREE_ROWS && agree_row(name, c, result, oracle)
     v = get!(() -> zeros(Int, 9), AGREEMENT, name)
     v[1] += 1
     v[1 + la] += 1
@@ -1825,7 +1925,7 @@ function compare_all!(name, c, result)
 end
 
 # The reasons of the skipped calls, per routine, for skips.tsv.
-const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle")
+const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle", "no_counterpart")
 const SKIPS = Dict{String, Dict{String, Int}}()
 "The skipped calls per family and reason, for skips_family.tsv."
 const FAMILY_SKIPS = Dict{Tuple{String, String}, Int}()
@@ -1928,6 +2028,9 @@ function replay_family(path, tallies, mismatches)
         if result isa UnmappedHandle
             t.skipped += 1
             note_skip(name, "unmapped_handle")
+        elseif result isa NoCounterpart
+            t.skipped += 1
+            note_skip(name, "no_counterpart")
         elseif result isa SpiceError
             if expkind === result.kind
                 t.match += 1
@@ -2082,10 +2185,12 @@ function main(args)
     # that fails is not a mismatch that the baseline can allow: the exit status is 1.
     failed = 0
     status = open(joinpath(outdir, "families.tsv"), "w")
+    isempty(AGREE_ROWS) || (AGREE_IO[] = open(joinpath(outdir, "agreement_rows.tsv"), "w"))
     for path in logs
         fam = replace(basename(path), r"\.log(\.gz)?$" => "")
         println(stderr, basename(path))
         flush(stderr)
+        CURRENT_FAMILY[] = fam
         try
             replay_family(path, tallies, mismatches)
             println(status, fam, "\tdone")
@@ -2098,6 +2203,7 @@ function main(args)
         flush(status)
     end
     close(status)
+    AGREE_IO[] === nothing || close(AGREE_IO[])
     close(mismatches.ids)
     close(mismatches.files)
     println(rpad("routine", 10), lpad("match", 10), lpad("cspice", 8), lpad("near", 8), lpad("spread", 8), lpad("value", 8), lpad("error", 8), lpad("adapter", 10), lpad("skipped", 10))
@@ -2137,6 +2243,12 @@ function main(args)
         println(io, "routine\tcalls\talmanac_exact\talmanac_rtol\talmanac_near\talmanac_far\tspicelib_exact\tspicelib_rtol\tspicelib_near\tspicelib_far")
         for (r, v) in sort(collect(AGREEMENT); by = first)
             println(io, r, '\t', join(v, '\t'))
+        end
+    end
+    isempty(GF_AGREEMENT) || open(joinpath(outdir, "gf_agreement.tsv"), "w") do io
+        println(io, "routine\tcompared\texact\twithin_tol\toutside\tmax_within_s")
+        for (r, v) in sort(collect(GF_AGREEMENT); by = first)
+            println(io, r, '\t', join(v, '\t'), '\t', get(GF_MAXDIFF, r, 0.0))
         end
     end
     AUDIT && open(joinpath(outdir, "audit.tsv"), "w") do io

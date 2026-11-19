@@ -460,6 +460,27 @@ group(
         end
     end
 
+    @apart @testset "chains meet at the reference frame of the CK segment" begin
+        # zzrefch0_ and zzfrmch0_ follow the chain of the first frame through the frame
+        # of its CK segment, so a chain from IAU_EARTH meets TESTSC_T3_EARTH (segment in
+        # IAU_EARTH) there and the result is the C-matrix alone, without the rotation of
+        # IAU_EARTH (which went through J2000 and back, and differed in the last bits).
+        # At the time tags the interpolation angle is zero, so the comparison does not
+        # depend on the sine of the C library: equal to the last bit.
+        tags = CKFix.ticks_tdb()
+        same = true
+        for i in 1:13:length(tags)
+            et = SPICE.sct2e(CKFix.SC_TDB, tags[i])
+            oracle_frame_reset(-77030)
+            same &= Matrix(pxform(ctx, "IAU_EARTH", "TESTSC_T3_EARTH", et)) ==
+                SPICE.pxform("IAU_EARTH", "TESTSC_T3_EARTH", et)
+            oracle_frame_reset(-77030)
+            same &= Matrix(sxform(ctx, "TESTSC_T3_EARTH", "IAU_EARTH", et)) ==
+                SPICE.sxform("TESTSC_T3_EARTH", "IAU_EARTH", et)
+        end
+        @test same
+    end
+
     @apart @testset "type 1 frames at their pointing instances" begin
         for case in CK_CASES[1:2]
             tags = ck_tags(case)

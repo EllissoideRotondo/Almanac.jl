@@ -224,7 +224,7 @@ function main(args)
     end
     nof > 0 && println("the oracle failed for $nof calls: see $(joinpath(results, "oracle_failures.tsv"))")
     # the skipped calls by reason, merged over the workers
-    reasons = ["nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle"]
+    reasons = ["nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle", "no_counterpart"]
     skips = Dict{String, Dict{String, Int}}()
     for k in 1:length(groups)
         f = joinpath(results, "worker$k", "skips.tsv")

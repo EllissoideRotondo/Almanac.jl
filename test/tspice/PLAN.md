@@ -27,6 +27,8 @@ julia --project=test test/tspice/selftest.jl                     # the gates rej
 TSPICE_ORACLE=1 TSPICE_OUT=out julia --project=test test/tspice/replay.jl LOGDIR F_XXX ...
 TSPICE_ORACLE_ALL=1 ...    # also: cspice_agreement.tsv, every call against CSPICE
 TSPICE_AUDIT=1 ...         # also: audit.tsv, matches that compared few or no outputs
+TSPICE_AGREE_ROWS=sxform,pxform ...   # with ORACLE_ALL: agreement_rows.tsv, each call of
+                           # these routines not equal to CSPICE, outputs and ulps
 ```
 
 The glibc check: run `replay.jl` through a script that first redefines, for `Float64`,
@@ -94,7 +96,19 @@ Each item: what to do, how to know it is done.
    `LT+S` velocity in ECLIPJ2000, seen in `DT_GSE_LTS`); every light time is `vnorm_`
    of the position over `clight_` (the plain norm differed by one ulp in about a third
    of all `spkezr`/`spkpos` calls; `_ltc`, `_apo`, `spkezr`/`spkpos`/`spkgeo`/`spkgps`
-   geometric, `geometry/constobs.jl`, `_dyn_apo`/`_dyn_spkez`); `recazl` takes the
+   geometric, `geometry/constobs.jl`, `_dyn_apo`/`_dyn_spkez`; and on branch plan-rest
+   the rest: `subpnt` and `subslr` (`vdist_`/`vnorm_` of the sub-point vector),
+   `zzsfxcor_` of `sincpt`/`ilumin`/`illum*` (light times, `range`, `relerr`, `srflen`
+   and `udir` with `vhat_`), `spkezp_`/`spkez_` of the geometry routines
+   (`_geo_spkezp`, `_geo_spkez`) and `ltime`; `limbpt`, `termpt`, `tangpt` and the GF
+   state functions had them already; the light-time series of `abcorr_jet` are not
+   ports and keep the norm of their number type. Glibc check, `TSPICE_ORACLE_ALL=1`, 33
+   families (F_SUBPNT, F_SUBSLR, F_SINCPT, F_ILUMIN, F_ILLUMG, F_ILLUMF, F_LIMBPT,
+   F_TERMPT, F_TERM, F_TANGPT0..3, F_TANGPTW, F_OCCULT, F_GFDIST, F_GFSUBC, F_GFSNTC,
+   F_GFILUM, F_GFOCLT, F_LTIME, and the F_ZZGF* state functions): calls equal to CSPICE
+   999,647 -> 1,001,223 of 1,064,791 (`sincpt` 3,124 -> 4,690 of 4,690, with
+   `_stelab` also `spkpos` 31,362 -> 31,367, `tangpt` 33,704 -> 33,707, `stelab` 202 ->
+   204: every call of the geometry routines now exact); ids identical); `recazl` takes the
    azimuth of the Fortran `reclat_` (unscaled `atan2`), as `recazl_c` and `azlcpo_` do.
    Measured with the glibc check: all 25 probe frames of `test/dynfixtures.jl` equal
    to `sxform_c` on 300 epochs each (before: 9 frames differed); `azlcpo` equal to
@@ -118,8 +132,32 @@ Each item: what to do, how to know it is done.
    near or value). Calls equal to CSPICE to the last bit: 745,267 -> 878,267 of
    960,248 (`sxform` 239,272 -> 349,575 of 349,632; `spkez` 20,789 -> 32,265 of 32,265;
    `azlcpo`, `spkezr`, `spkpos`, `spkltc`, `spkacs`, `spkcpo`, `spkcpt`, `spkcvo`,
-   `spkcvt` now all). Left: 57 `sxform` and 137 `pxform` calls within 1e-12 but not
-   exact, 1 `spkgeo` and 1 `spkgps`; not looked at.
+   `spkcvt` now all). The 57 `sxform`, 137 `pxform`, 1 `spkgeo` and 1 `spkgps` calls
+   left within 1e-12 but not exact: done (branch plan-rest), all exact now. Found with
+   `TSPICE_AGREE_ROWS` (below); four port differences:
+   - `_stelab` (`stelab_` with `vrotv_`) took plain norms and a plain projection where
+     CSPICE takes `vhat_`, `vnorm_` and `vproj_`: the dynamic frames with stellar
+     aberration (pxform 140 -> 25 not exact, sxform 59 -> 26);
+   - frame chains (`_chain_rotation` in `src/ck.jl`, used by `frame_rotation` and
+     `_ck_state_rotation`): a CK or switch frame was linked to J2000 in one step, so
+     the two chains met at J2000 although the CK segment's frame was the target or on
+     its chain (CK_-9999 to GALACTIC through J2000 and back, up to 24 ulp). Now as
+     `zzrefch0_`/`zzfrmch0_`: the chain of `from` is evaluated link by link to `to` or
+     J2000 (a CK frame without data ends it, as `zzrotgt0_`), then the chain of `to`
+     until it meets it;
+   - `_ck_axisar` (CK types 2 and 3) projected with a plain dot product, `axisar_` uses
+     `vrotv_` (`vproj_`);
+   - TK frames: ANGLES were scaled by pi/180, `tkfram_` calls `convrt_` (degrees over
+     degrees per radian, also from RADIANS); MATRIX and QUATERNION took plain norms,
+     `sharpr_` and `vhatg_` scaled ones (TOPOCENTRIC to TST-PHOENIX 240 ulp, GOLDSTONE_TOPO).
+   Glibc check of the 16 families (F_DYN01..08, F_XFMSTA, F_ZZSWFXFM, F_CKFXFM, F_FRMCHG,
+   F_SXFORM, F_PXFORM, F_SPKGEO, F_SPKGPS), `TSPICE_ORACLE_ALL=1`: calls equal to CSPICE
+   350,921 -> 351,176 of 382,496 (all calls of `sxform` 57,109, `pxform` 36,490,
+   `spkgeo`, `spkgps`, `stelab`, `ckgp`, `ckgpav`; the rest are routines where SPICELIB
+   and CSPICE differ, `mxv` and the like); ids identical. Regression tests (equal to
+   CSPICE to the last bit, without libm): `test_ck.jl` "chains meet at the reference
+   frame of the CK segment", `test_rotations.jl` "TK frames: MATRIX and QUATERNION as
+   tkfram_"; both fail with the old code.
 3. **Order of operations in the GF state functions.** Done. `_gf_xf` (`src/gf/surface.jl`)
    now calls `rotate_jet` of order 1, `_gf_xfi` sums the six products of each velocity
    component from left to right with the transposed derivative block first (`mxvg_` with
@@ -132,9 +170,8 @@ Each item: what to do, how to know it is done.
    J2000 and in the observer's body frame), glibc check: bit-identical before 11 to 34 %
    of the calls of `zzgfssob` and `zzgfssin`, after 100 % but one velocity component of
    one `CN+S` intercept (one ulp), which comes from the stellar aberration helpers (see
-   below). GF families (51, F_GF*, F_ZZGF*): ids identical to the baseline; note that the
-   replay compares none of the search routines (`gfsubc`, `gfsntc`, `gfilum` are not
-   replayed), so this gate is weak for this item. Unit groups gf_solver gf_quantities
+   below). GF families (51, F_GF*, F_ZZGF*): ids identical to the baseline. The search
+   routines are now replayed too (item 11). Unit groups gf_solver gf_quantities
    gf_posc gf_surface gf_illum gf_occult gf_fov: 1725 pass. No regression test: the
    change is one ulp, below what a test without glibc's libm can see.
    Found here and fixed on branch plan-rates (item 1): `_zzstelab` (`src/aberration.jl`) uses `_norm3`, `_vperp` and
@@ -256,5 +293,37 @@ Each item: what to do, how to know it is done.
    332 hold a truncated array, 14 were made in an error state, 0 have no mapping.
    Open: the unmapped handles come mostly from the unrecorded writers of item 6
    (`spkw19`, `ckw06`, the EK fast load); recording those closes most of them.
-10. **`test/test_derivatives.jl`.** An exact check became a tolerance of 2e-15 (measured
-    6e-16) because `sxform` now rounds as `tisbod_`. Needs the maintainer's approval.
+10. **`test/test_derivatives.jl`.** Done, approved by the maintainer: `pxder` against
+    `sxform` is checked to 2e-15 relative (measured 6e-16; `sxform` rounds as `tisbod_`,
+    `pxder` is the derivative of the evaluated matrix). The check of `pxder` against
+    CSPICE's `sxform`, which allowed 1e-7, now allows 2e-15 too (measured 3.4e-16).
+11. **The GF searches were not replayed.** Done (branch plan-rest). The recorder
+    skipped them: their windows are cells `(lbcell:*)`, for which `length_expr` has no
+    length, and the workspace `(lbcell:mw, nw)`. `instrument.py` now has `cell_args`
+    (and `CELL_ROUTINES`, two hooks in `instrument_routine`): for the eleven searches
+    `gfdist gfilum gfoclt gfpa gfposc gfrfov gfrr gfsep gfsntc gfsubc gftfov` a window
+    is logged as an array of doubles from CELL(-1): size, cardinality and the CARD
+    endpoints (at most 10**6), with the existing `tlog_d`; the workspace is not logged.
+    `gfevnt`, `gffove`, `gfocce`, `gfudb`, `gfuds` take callbacks and stay unrecorded.
+    `replay.jl` maps the eleven (`gf_search_mapping`): Almanac takes SPICELIB's
+    arguments in the same order without MW, NW, WORK and RESULT, and the result window
+    is compared by its number of endpoints and each endpoint within the convergence
+    tolerance `tol` of the call (`gfstol`, 1e-6 s by default): both solvers end with the
+    midpoint of a bracket no wider than `tol` that holds the root, so two endpoints of
+    the same root are within `tol`. A SPICELIB error about the sizes that Almanac does
+    not take (INVALIDDIMENSION, OUTOFROOM, WINDOWEXCESS, WINDOWTOOSMALL) is skipped as
+    `no_counterpart` (new skip reason; run.jl knows it). No CSPICE oracle for them yet
+    (`NoOracle`). `gf_agreement.tsv` counts per routine the results equal to SPICELIB's,
+    within the tolerance and outside, with the largest difference within.
+    Measured on the 22 GF search families recorded again (F_GFBAIL, F_GFBIRP,
+    F_GFDIRP, F_GFDIST, F_GFILUM, F_GFLORP, F_GFOCLT, F_GFPA, F_GFPCRP, F_GFPOSC,
+    F_GFREFN, F_GFRFOV, F_GFRPRT, F_GFRR, F_GFSCRP, F_GFSEP, F_GFSNTC, F_GFSPRP,
+    F_GFSTEP, F_GFSUBC, F_GFTFOV, F_GFXCRP), glibc check: before, 0 search calls
+    compared; after, 906 calls: 882 match (175 errors of SPICELIB's kind and 707
+    searches), 24 skipped (no counterpart), no other kind; of the 707 searches 687 equal to SPICELIB's window to the last bit, 20 within the
+    tolerance (gfilum 10, gfposc 8, gfoclt 2; largest 8.9e-7 s, a last bisection step
+    that went the other way), 0 outside; no new mismatch rows (the ids are the old `conics`, `ilumin` cspice and `tkvrsn` rows).
+    Remains: re-record everything (instrument.py changed) and update the baseline; a
+    CSPICE oracle for the searches (the `gf*_c` wrappers need windows as SpiceCells);
+    the same cell logging would record `wn*`, `spkcov`, `ckcov`, `pckcov`, `spkobj`,
+    `ckobj`, `dskobj`, `bltfrm`, `kplfrm` if replay.jl mapped them.

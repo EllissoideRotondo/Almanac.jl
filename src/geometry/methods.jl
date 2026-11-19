@@ -273,7 +273,7 @@ end
     )
     if corr.geometric || targ == obs
         (r,) = spk_jet(ks, targ, et, ref, obs, Val(0))
-        return r, _norm3(r) / CLIGHT
+        return r, _m_norm(r) / CLIGHT
     end
     return abcorr_position(ks, targ, et, ref, corr, obs)
 end
@@ -285,7 +285,7 @@ end
     )
     if corr.geometric || targ == obs
         r, v = spk_jet(ks, targ, et, ref, obs, Val(1))
-        return vcat(r, v), _norm3(r) / CLIGHT
+        return vcat(r, v), _m_norm(r) / CLIGHT
     end
     return abcorr_state(ks, targ, et, ref, corr, obs)
 end
