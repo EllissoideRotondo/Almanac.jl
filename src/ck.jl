@@ -126,20 +126,13 @@ Matrix that rotates vectors by `angle` radians about `axis`, as `axisar_` (each 
 is `vrotv_` of a unit vector); the identity for a zero axis. Generic over the angle type.
 """
 @inline function _ck_axisar(axis::Vec3{Float64}, angle::T) where {T <: Real}
-    n = _ck_vnorm(axis)
-    n == 0.0 && return one(Mat3{T})
-    x = axis / n
-    s, c = sincos(angle)
-    xx = dot(x, x)
-    col(e::Vec3{Float64}) = begin
-        p = (dot(e, x) / xx) * x          # component of e along the axis
-        v1 = e - p
-        v2 = cross(x, v1)
-        c * v1 + s * v2 + p
-    end
-    return hcat(
-        col(Vec3{Float64}(1.0, 0.0, 0.0)), col(Vec3{Float64}(0.0, 1.0, 0.0)),
-        col(Vec3{Float64}(0.0, 0.0, 1.0))
+    _ck_vnorm(axis) == 0.0 && return one(Mat3{T})
+    return Mat3{T}(
+        hcat(
+            _m_vrotv(Vec3{Float64}(1.0, 0.0, 0.0), axis, angle),
+            _m_vrotv(Vec3{Float64}(0.0, 1.0, 0.0), axis, angle),
+            _m_vrotv(Vec3{Float64}(0.0, 0.0, 1.0), axis, angle)
+        )
     )
 end
 
