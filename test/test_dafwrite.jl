@@ -2482,7 +2482,14 @@ group("9. DAF access, SPK and CK writers") do
                     check!(fails, spkpvn(ctxs, src, dn, et) == rn, "spkpvn by path", et)
                 end
                 @test isempty(fails)
-                @test throws_kind(() -> spkpvn(ctxs, hn, dn, a.last + w), :timeoutofbounds)
+                if c.name in ("spkw15", "spkw17")
+                    # one set of elements: CSPICE propagates it outside the coverage too
+                    rc = SPICE.spkpvn(hc, dc, a.last + w)
+                    rn = spkpvn(ctxs, hn, dn, a.last + w)
+                    @test rn[1] == rc[1] && rn[3] == rc[3] && isapprox(rn[2], rc[2]; rtol)
+                else
+                    @test throws_kind(() -> spkpvn(ctxs, hn, dn, a.last + w), :timeoutofbounds)
+                end
                 SPICE.dafcls(hc)
                 dafcls(hn)
             end
