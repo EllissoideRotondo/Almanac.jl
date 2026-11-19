@@ -404,6 +404,41 @@ end
 "The type 14 segment writers of Almanac, by SPICELIB's handle."
 const SPK14W = Dict{Int, Any}()
 
+"""
+The fast loads of Almanac that EKIFLD began (its EKFastLoad), by SPICELIB's handle and
+segment number: the record pointers of SPICELIB are not logged (instrument.py).
+"""
+const EKFAST = Dict{Tuple{Int, Int}, Any}()
+
+"Almanac's handle and fast load for the inputs `a` of a call."
+function ek_fast_load(a)
+    h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+    r = get(EKFAST, (a["handle"].values[1], a["segno"].values[1]), nothing)
+    r === nothing && throw(UnmappedHandle())
+    return h, r
+end
+
+"The adapter of a column writer of a fast load, `f` (EKACLC, EKACLD, EKACLI)."
+function ek_column_mapping(f, vals)
+    return function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h, r = ek_fast_load(a)
+        v = a[vals]
+        T = v.kind == 'c' ? String : v.kind == 'i' ? Int : Float64
+        f(
+            h, jl(a["segno"]), jl(a["column"]), Vector{T}(v.values),
+            Vector{Int}(a["entszs"].values), Vector{Bool}(a["nlflgs"].values), r
+        )
+        return []
+    end
+end
+
+"""
+Routines whose inputs a failed call logs as truncated (instrument.py, EK_COLUMN), and
+that write nothing when they fail: such a call is skipped without dropping the handle.
+"""
+const SKIP_FAILED = Set(["ekaclc", "ekacld", "ekacli"])
+
 "SPICELIB's handles of the files open for write."
 const WRITE_OPEN = Set{Int}()
 
@@ -979,9 +1014,6 @@ const MAPPINGS = Dict{String, Function}(
             ctx, h, jl(a["segid"]), jl(a["body"]), jl(a["center"]),
             jl(a["frame"]), jl(a["first"]), jl(a["last"]), jl(a["chbdeg"])
         )
-        # SPK14A is not in the log (the size of its records is not known to the recorder):
-        # the file misses the records, and later opens read SPICELIB's file
-        haskey(HPATH, a["handle"].values[1]) && push!(TAINTED, HPATH[a["handle"].values[1]])
         return []
     end,
     "spk14a" => function (ctx, c)
@@ -993,6 +1025,28 @@ const MAPPINGS = Dict{String, Function}(
     "spk14e" => function (ctx, c)
         w = get(SPK14W, c.inputs[1].values[1], nothing); w === nothing && throw(UnmappedHandle())
         spk14e(w)
+        return []
+    end,
+    # the fast load of an EK segment: EKIFLD, a column writer for each column, EKFFLD
+    "ekifld" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        segno, r = ekifld(
+            h, jl(a["tabnam"]), jl(a["nrows"]),
+            Vector{String}(a["cnames"].values), Vector{String}(a["decls"].values)
+        )
+        c.failed || (EKFAST[(a["handle"].values[1], Int(segno))] = r)
+        out = Dict(o.name => o for o in c.outputs)
+        return Any[("segno", out["segno"].values, Any[segno])]
+    end,
+    "ekaclc" => ek_column_mapping(ekaclc, "cvals"),
+    "ekacld" => ek_column_mapping(ekacld, "dvals"),
+    "ekacli" => ek_column_mapping(ekacli, "ivals"),
+    "ekffld" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h, r = ek_fast_load(a)
+        ekffld(h, jl(a["segno"]), r)
+        c.failed || delete!(EKFAST, (a["handle"].values[1], a["segno"].values[1]))
         return []
     end,
     "xposeg" => function (ctx, c)
@@ -1223,7 +1277,7 @@ function replay_family(path, tallies, mismatches)
     empty!(HANDLES)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
-    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W)
+    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(EKFAST)
     foreach(
         h -> try
             Almanac.dafcls(h)
@@ -1245,6 +1299,7 @@ function replay_family(path, tallies, mismatches)
         # calls on its handle are skipped
         for a in c.inputs
             (truncated && a.name in HANDLE_ARGS && a.kind == 'i') || continue
+            (c.failed && name in SKIP_FAILED) && continue
             drop_handle(a.values[1])
         end
         if desync || c.depth > 1 || c.failed_before || truncated ||

@@ -77,6 +77,29 @@ OPEN_ROUTINES = {"dafopr", "dafopw", "dasopr", "dasopw", "ekopr", "ekopw", "spko
 # order, so an input logged after the call is still an input.
 DAF_SUMMARY = {"dafbna": "handle", "dafgs": None, "dafrs": None, "dafws": None}
 
+# The column writers of a fast load (EKACLC, EKACLD, EKACLI) and their array of values.
+# The lengths of the values, entry sizes and null flags come from the segment, which no
+# argument gives: the rows that EKIFLD set, and the entry size and the null flag of the
+# column. After a successful call EKSSUM, through the context (no nested call in the
+# log), gives them; the entry sizes are logged only for a column of variable size and
+# the null flags only for one that allows nulls, the arrays that the call reads. A
+# failed call, or a failed EKSSUM (the error is reset), logs them as truncated.
+EK_COLUMN = {"ekaclc": "cvals", "ekacld": "dvals", "ekacli": "ivals"}
+
+# Arguments that are not logged: the record pointers of a fast load, which Almanac keeps
+# in the EKFastLoad that EKIFLD returns, and the work space of the column writers.
+NOT_LOGGED = {
+    "ekifld": {"rcptrs"}, "ekffld": {"rcptrs"},
+    "ekaclc": {"rcptrs", "wkindx"}, "ekacld": {"rcptrs", "wkindx"}, "ekacli": {"rcptrs", "wkindx"},
+}
+
+# Code after the call: SPK14B keeps the degree of the segment it begins, from which
+# SPK14A takes the size of a coefficient set (see tlog_n14).
+EXTRA_POST = {
+    "spk14b": ["      if (.not. ctx%failed()) call tlog_set14(handle, chbdeg)"],
+    "spk14e": ["      call tlog_set14(handle, -1_ip)"],
+}
+
 
 # Lengths that the arguments do not give: SPICELIB's documented sizes.
 FIXED_LENGTHS = {
@@ -144,6 +167,9 @@ FIXED_LENGTHS = {
     "vrelg": {"v1": "max(0, ndim)", "v2": "max(0, ndim)"},
     "vsepg": {"v1": "max(0, ndim)", "v2": "max(0, ndim)"},
     "vzerog": {"v": "max(0, ndim)"},
+    # a coefficient set of the segment that SPK14B began on HANDLE, 2 + 6*(CHBDEG+1)
+    "spk14a": {"coeffs": "tlog_n14(handle, ncsets)", "epochs": "max(0, ncsets)"},
+    "ekifld": {"cnames": "max(0, ncols)", "decls": "max(0, ncols)"},
     "ckw05": {"packts": "max(0, n*merge(8, merge(4, merge(14, 7, subtyp == 2), subtyp == 1), subtyp == 0))"},
     # mini-segment writers: one count, packet count, subtype and degree per mini-segment,
     # one epoch per packet, and packets whose size the subtype gives (S19PSn, C06PSn)
@@ -323,11 +349,15 @@ def instrument_routine(name, h, body, cands):
     lens = {}
     fixed = FIXED_LENGTHS.get(name, {})
     summary = name in DAF_SUMMARY and "sum" in args
+    skip = NOT_LOGGED.get(name, set())
+    ekvals = EK_COLUMN.get(name)
+    if ekvals:                           # logged after the call, with the segment's lengths
+        skip = skip | {ekvals, "entszs", "nlflgs"}
     for a in args:
         if a in fixed:
             lens[a] = fixed[a]
             continue
-        if summary and a == "sum":
+        if (summary and a == "sum") or a in skip:
             continue
         k, dims = decls[a]
         n = length_expr(dims, args, decls, a)
@@ -346,13 +376,22 @@ def instrument_routine(name, h, body, cands):
     pre = ["      call tlog_begin('" + name.upper() + "')"]
     if summary:
         pre.insert(0, "      integer(ip) :: tlog_h, tlog_nd, tlog_ni")
+    if ekvals:
+        pre[0:0] = [
+            "      integer(ip) :: tlog_nr, tlog_nc, tlog_k, tlog_nv, tlog_ne, tlog_nn",
+            "      integer(ip) :: tlog_sz(100), tlog_sl(100)",
+            "      character(64) :: tlog_tn",
+            "      character(32) :: tlog_cn(100)",
+            "      character(4) :: tlog_dt(100)",
+            "      logical :: tlog_ix(100), tlog_nk(100)",
+        ]
     if name in FILE_ROUTINES:
         pre.append("      call tlog_snapshot()")
     elif name in OPEN_ROUTINES:
         pre.append(f"      call tlog_snapshot_file({args[0]})")
     post = ["      call tlog_mark()"]
     for a in args:
-        if summary and a == "sum":
+        if (summary and a == "sum") or a in skip:
             continue
         k, _ = decls[a]
         it = intent[a]
@@ -377,6 +416,40 @@ def instrument_routine(name, h, body, cands):
             f"         call tlog_d('{label}', sum, huge(0_ip))",
             "      end if",
         ]
+    if ekvals:
+        # MXCLSG (100) columns of a segment, column names of CNAMSZ (32) characters
+        vk = decls[ekvals][0]
+        post += [
+            "      tlog_nv = huge(0_ip)",
+            "      tlog_ne = huge(0_ip)",
+            "      tlog_nn = huge(0_ip)",
+            "      if (.not. ctx%failed()) then",
+            "         call ctx%ekssum(handle, segno, tlog_tn, tlog_nr, tlog_nc, tlog_cn, tlog_dt, &",
+            "                         tlog_sz, tlog_sl, tlog_ix, tlog_nk)",
+            "         if (ctx%failed()) then",
+            "            call ctx%reset()",
+            "         else",
+            "            do tlog_k = 1, min(tlog_nc, 100_ip)",
+            "               if (tlog_upper(tlog_cn(tlog_k)) == tlog_upper(column)) exit",
+            "            end do",
+            "            if (tlog_k <= min(tlog_nc, 100_ip) .and. tlog_nr >= 0) then",
+            "               tlog_ne = 0",
+            "               tlog_nn = 0",
+            "               if (tlog_sz(tlog_k) < 0) then",
+            "                  tlog_ne = tlog_nr",
+            "                  tlog_nv = max(0_ip, sum(entszs(1:tlog_nr)))",
+            "               else",
+            "                  tlog_nv = tlog_nr*tlog_sz(tlog_k)",
+            "               end if",
+            "               if (tlog_nk(tlog_k)) tlog_nn = tlog_nr",
+            "            end if",
+            "         end if",
+            "      end if",
+            f"      call tlog_{vk}('<{ekvals}', {ekvals}, tlog_nv)",
+            "      call tlog_i('<entszs', entszs, tlog_ne)",
+            "      call tlog_l('<nlflgs', nlflgs, tlog_nn)",
+        ]
+    post += EXTRA_POST.get(name, [])
     post.append("      call tlog_end()")
     # `use tspice_log` goes after the first `use` line.
     new = list(body)
@@ -415,7 +488,8 @@ module tspice_log
    implicit none
    private
    public :: tlog_nsub, tlog_begin, tlog_end, tlog_mark, tlog_snapshot, tlog_snapshot_file, tlog_d, tlog_d1, &
-      tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1
+      tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1, tlog_set14, tlog_n14, tlog_upper
+   integer(ip), save :: h14(64) = 0, deg14(64) = -1   ! SPK type 14 segments begun, by handle
    integer, save :: unit = 0
    logical, save :: opened = .false.
    logical, save :: checked = .false.
@@ -730,6 +804,50 @@ contains
          tlog_nsub = (nchars + epos - bpos) / (epos - bpos + 1)
       end if
    end function tlog_nsub
+   !> Record the Chebyshev degree of the SPK type 14 segment that SPK14B began on HANDLE;
+   !> a negative degree (SPK14E) forgets it.
+   subroutine tlog_set14(handle, deg)
+      integer(ip), intent(in) :: handle, deg
+      integer :: k
+      do k = 1, size(h14)
+         if (h14(k) == handle) then
+            h14(k) = 0
+            deg14(k) = -1
+         end if
+      end do
+      if (deg < 0) return
+      do k = 1, size(h14)
+         if (h14(k) == 0) then
+            h14(k) = handle
+            deg14(k) = deg
+            return
+         end if
+      end do
+   end subroutine tlog_set14
+   !> Number of doubles of NCSETS coefficient sets of the type 14 segment open on HANDLE,
+   !> NCSETS*(2 + 6*(CHBDEG+1)); huge(0), which logs the array as not held, without one.
+   integer(ip) function tlog_n14(handle, ncsets)
+      integer(ip), intent(in) :: handle, ncsets
+      integer :: k
+      tlog_n14 = huge(0_ip)
+      do k = 1, size(h14)
+         if (h14(k) == handle .and. handle /= 0) then
+            if (ncsets <= 2000) tlog_n14 = max(0_ip, ncsets)*(2 + 6*(deg14(k) + 1))
+            return
+         end if
+      end do
+   end function tlog_n14
+   !> S in upper case, without trailing blanks.
+   function tlog_upper(s) result(u)
+      character(*), intent(in) :: s
+      character(len_trim(s)) :: u
+      integer :: k, c
+      u = s(1:len_trim(s))
+      do k = 1, len(u)
+         c = iachar(u(k:k))
+         if (c >= 97 .and. c <= 122) u(k:k) = achar(c - 32)
+      end do
+   end function tlog_upper
 @PURE@
 end module tspice_log
 '''
