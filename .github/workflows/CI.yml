@@ -109,3 +109,40 @@ jobs:
         with:
           name: lcov
           path: lcov.info
+  ad-lower-bounds:
+    # The AD extensions at the lowest versions that [compat] allows, on the oldest
+    # Julia: the bounds of EnzymeCore and Mooncake are pinned exactly ("=x.y.z"), so a
+    # bound that no longer works fails here. EnzymeCore 0.8.10 is also the oldest
+    # version that the Enzyme extension of DifferentiationInterface 0.7 loads with.
+    name: AD lower bounds (Julia 1.10, ubuntu-latest)
+    if: github.event.repository.private == false
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      actions: write
+      contents: read
+    env:
+      JULIA_NUM_THREADS: 4
+      ALMANAC_REQUIRE_KERNELS: 1
+    steps:
+      - uses: actions/checkout@v4
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1.10'
+      - uses: julia-actions/cache@v2
+      - name: Cache the test kernels
+        uses: actions/cache@v4
+        with:
+          path: test/data
+          key: kernels-${{ hashFiles('test/kernels.jl') }}
+          restore-keys: kernels-
+          enableCrossOsArchive: true
+      - name: Pin EnzymeCore and Mooncake to their lower bounds
+        run: |
+          sed -i -E 's/^(EnzymeCore|Mooncake) = "([0-9.]+)"$/\1 = "=\2"/' Project.toml test/Project.toml
+          grep -E '^(EnzymeCore|Mooncake) = ' Project.toml test/Project.toml
+      - uses: julia-actions/julia-buildpkg@v1
+      - uses: julia-actions/julia-runtest@v1
+        with:
+          coverage: false
+          test_args: 'ad_mooncake ad_enzyme'
