@@ -70,7 +70,7 @@ const ERROR_KINDS = (
     :nonpositivevalue, :nonprintablechars, :nonprintingchars, :nopartition,
     :nosegmentsfound, :noseparation, :nosuchfile, :nosuchhandle, :notanumber, :notarotation,
     :notcomputable, :notdisjoint, :notindexed, :notinpart, :notranslation, :notrecognized,
-    :notsupported, :numberexpected, :numcoeffsnotpos, :numericoverflow, :numpacketsnotpos,
+    :notsupported, :numberexpected, :numcoeffsnotpos, :numericoverflow, :numpacketsnotpos, :numpartsunequal,
     :numstatesnotpos, :objectstooclose, :orbitdecay, :outofrange, :outofroom,
     :partialframespec, :platelisttoosmall, :pointeroutofrange, :pointnotfound,
     :pointnotinsegment, :pointnotonsurface, :pointoffsurface, :pointonzaxis, :pointtoosmall,
