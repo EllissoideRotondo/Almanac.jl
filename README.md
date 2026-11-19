@@ -38,10 +38,6 @@ using Pkg
 Pkg.add(url="https://github.com/Orbitology/Almanac.jl")
 ```
 
-The Quickstart below also uses
-[SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels)
-(`Pkg.add("SPICEKernels")`) to download the kernels.
-
 ## Quickstart
 
 ```julia
