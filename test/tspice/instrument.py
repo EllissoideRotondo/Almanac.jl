@@ -827,8 +827,8 @@ contains
 
    !> True if the array LABEL of N values of SIZE bytes, too long for the log, goes
    !> to a binary file: an argument of a call from the test program, of at most 50 million
-   !> values, while the family has written less than TSPICE_MAXBIN bytes (default 256 MB)
-   !> of such files.
+   !> values and 2 GB, while the family has written at most TSPICE_MAXBIN bytes (default
+   !> 256 MB) of such files, compressed.
    logical function bin_ok(label, n, size)
       character(*), intent(in) :: label
       integer(ip), intent(in) :: n
@@ -841,9 +841,19 @@ contains
          if (stat == 0 .and. l > 0) read(v, *) maxbin
          call execute_command_line('mkdir -p "' // trim(logpath) // '.files/bin"')
       end if
-      bin_ok = depth == 1 .and. n <= 50000000 .and. &
-         binbytes + int(size, int64) * n <= maxbin
+      bin_ok = depth == 1 .and. n <= 50000000 .and. int(size, int64) * n <= 2000000000_int64 .and. &
+         binbytes <= maxbin
    end function bin_ok
+
+   !> Add the size of the compressed file PATH.gz to the bytes of binary files: the
+   !> budget counts the disk, and the index arrays of DSKMI2 (20 million integers, mostly
+   !> zeros) compress to a few hundred kilobytes.
+   subroutine bin_count(path)
+      character(*), intent(in) :: path
+      integer(int64) :: sz
+      inquire(file=trim(path) // '.gz', size=sz)
+      if (sz > 0) binbytes = binbytes + sz
+   end subroutine bin_count
 
    !> The path of the binary file of values whose hash is H, of kind K; true if it exists.
    logical function bin_path(h, k, path)
@@ -884,7 +894,7 @@ contains
          write(u) x(1:n)
          close(u)
          call execute_command_line('gzip -1 -f "' // trim(path) // '"')
-         binbytes = binbytes + 8_int64 * n
+         call bin_count(path)
       end if
       call emit('B ' // trim(path) // '.gz')
    end subroutine bin_d
@@ -903,7 +913,7 @@ contains
          write(u) x(1:n)
          close(u)
          call execute_command_line('gzip -1 -f "' // trim(path) // '"')
-         binbytes = binbytes + 4_int64 * n
+         call bin_count(path)
       end if
       call emit('B ' // trim(path) // '.gz')
    end subroutine bin_i
@@ -928,7 +938,7 @@ contains
          write(u) x(1:n)
          close(u)
          call execute_command_line('gzip -1 -f "' // trim(path) // '"')
-         binbytes = binbytes + int(len(x(1)), int64) * n
+         call bin_count(path)
       end if
       call emit('B ' // trim(path) // '.gz')
    end subroutine bin_c
