@@ -26,7 +26,7 @@ const ERROR_KINDS = (
     :badrecordcount, :badrefvectorspec, :badsemiaxis, :badsemilatus, :badsourceradius,
     :badstoptime, :badsubscript, :badsurfacemap, :badtermlocusmix, :badtimebounds,
     :badtimecase, :badtimeitem, :badtimespec, :badtimestring, :badtimetype, :badtle,
-    :badtypeshapecombo, :badunits, :badvarassign, :badvariablesize, :badvariabletype,
+    :badtypeshapecombo, :badvarassign, :badvariablesize, :badvariabletype,
     :badvarname, :badvector, :badvertexcount, :badvertexindex, :badwindowsize,
     :barraytoosmall, :barycenterephem, :blankfilename, :blankfiletype, :blanknameassigned,
     :bodiesnotdistinct, :bodyandcentersame, :boresightmissing, :boundarymissing,
