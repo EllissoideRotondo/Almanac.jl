@@ -746,7 +746,8 @@ end
 const NO_ORACLE = r"^(ek|das|daf|dla|spkw|ckw|pckw|spko|cko|pcko|dsko|dskw|dskcls|spkcls|ckcls|pckcls)"
 
 # CSPICE routines that SPICE.jl does not wrap (tangpt), or whose wrapper returns arrays of
-# the full size `maxn` (termpt), called as SPICE.jl calls the others.
+# the full size `maxn` (limbpt, termpt) or takes `abcorr` as a keyword (ilumin,
+# illumg), called as SPICE.jl calls the others.
 const SpD = Float64
 function cspice_tangpt(method, target, et, fixref, abcorr, corloc, obsrvr, dref, dvec)
     tanpt, srfpt, srfvec = zeros(3), zeros(3), zeros(3)
@@ -782,7 +783,25 @@ function cspice_termpt(
     n = Int(sum(npts))
     return Int.(npts), [points[:, i] for i in 1:n], epochs[1:n], [trmvcs[:, i] for i in 1:n]
 end
-const CSPICE_EXTRA = Dict{String, Function}("tangpt" => cspice_tangpt, "termpt" => cspice_termpt)
+function cspice_limbpt(
+        method, target, et, fixref, abcorr, corloc, obsrvr, refvec,
+        rolstp, ncuts, schstp, soltol, maxn
+    )
+    npts, points, epochs, tangts = SPICE.limbpt(
+        method, target, et, fixref, abcorr, corloc, obsrvr, refvec,
+        rolstp, ncuts, schstp, soltol, maxn
+    )
+    n = Int(sum(npts))
+    return Int.(npts), points[1:n], epochs[1:n], tangts[1:n]
+end
+cspice_ilumin(method, target, et, fixref, abcorr, obsrvr, spoint) =
+    SPICE.ilumin(method, target, et, fixref, obsrvr, spoint; abcorr)
+cspice_illumg(method, target, ilusrc, et, fixref, abcorr, obsrvr, spoint) =
+    SPICE.illumg(method, target, ilusrc, et, fixref, obsrvr, spoint; abcorr)
+const CSPICE_EXTRA = Dict{String, Function}(
+    "tangpt" => cspice_tangpt, "termpt" => cspice_termpt,
+    "limbpt" => cspice_limbpt, "ilumin" => cspice_ilumin, "illumg" => cspice_illumg,
+)
 
 function cspice_call(c::Call)
     name = lowercase(c.name)
