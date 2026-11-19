@@ -714,6 +714,11 @@ function default_mapping(ctx, c::Call)
             # a file that a meta-kernel listed: read where the last furnsh read
             haskey(LOADDIR, path) || isempty(LAST_LOAD[]) || (LOADDIR[String(path)] = LAST_LOAD[])
         end
+        # Almanac's handle is 0 (documented): the comparison says nothing, and where
+        # SPICELIB reuses the number of an unloaded file it gave a mismatch whose kind
+        # (value or spread) depended on CSPICE's handles, hence on the families that the
+        # process replayed before
+        filter!(p -> p[1] != "handle", pairs)
     end
     return pairs
 end
