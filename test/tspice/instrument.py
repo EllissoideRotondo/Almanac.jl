@@ -98,6 +98,12 @@ CUSTOM_ARGS = {
     "ekacli": {"rcptrs": None, "wkindx": None},
     "ekffld": {"rcptrs": None},
 }
+# Output arguments logged by a routine of tspice_log, after the call: the summary that
+# DAFGS returns, unpacked as `>dc` and `>ic` like the inputs above (its length is that of
+# the DAF of the current search, which no argument gives).
+CUSTOM_OUT = {
+    "dafgs": {"sum": "call tlog_dafsum_cur(sum, '>')"},
+}
 # Calls after the call, before its outputs: the notes from which later calls take their
 # lengths (the rows and column declarations of an EK fast load, the degree of SPK14B).
 CUSTOM_POST = {
@@ -396,9 +402,10 @@ def instrument_routine(name, h, body, cands):
     lens = {}
     fixed = FIXED_LENGTHS.get(name, {})
     custom = CUSTOM_ARGS.get(name, {})
+    custom_out = CUSTOM_OUT.get(name, {})
     cells = cell_args(name, args, decls)
     for a in args:
-        if a in custom or a in cells:
+        if a in custom or a in custom_out or a in cells:
             lens[a] = None
             continue
         if a in fixed:
@@ -436,6 +443,9 @@ def instrument_routine(name, h, body, cands):
         n = lens[a]
         if a in custom:
             custom[a] is None or pre.append("      " + custom[a])
+            continue
+        if a in custom_out:
+            post.append("      " + custom_out[a])
             continue
         if a in cells:
             if cells[a] is not None and it in ("in", "inout"):
@@ -791,9 +801,12 @@ contains
    !> The summary SUM of DAFBNA as its double and integer components, `<dc` and `<ic`:
    !> the integers are packed into doubles, whose bits the decimal log does not keep.
    !> No components for a handle that is not of a DAF (DAFBNA then signals the error).
-   subroutine tlog_dafsum(handle, sum)
+   !> DIR = '>' logs them as outputs, `>dc` and `>ic` (the summary that DAFGS returns).
+   subroutine tlog_dafsum(handle, sum, dir)
       integer(ip), intent(in) :: handle
       real(wp), intent(in) :: sum(*)
+      character(1), intent(in), optional :: dir
+      character(1) :: d
       type(pepper_context), pointer :: ctx
       character(1024) :: fname
       integer(ip) :: arc, bff, amh, nd, ni
@@ -812,8 +825,10 @@ contains
          ni = 0
       end if
       if (nd + ni > 0) call ctx%dafus(sum, nd, ni, dc, ic)
-      call tlog_d('<dc', dc, nd)
-      call tlog_i('<ic', ic, ni)
+      d = '<'
+      if (present(dir)) d = dir
+      call tlog_d(d // 'dc', dc, nd)
+      call tlog_i(d // 'ic', ic, ni)
    end subroutine tlog_dafsum
 
    subroutine head(label, kind, n)
@@ -1104,9 +1119,11 @@ contains
       end do
    end function tlog_spk14_len
 
-   !> The summary of DAFWS or DAFRS, for the DAF of the current search (DAFGH).
-   subroutine tlog_dafsum_cur(sum)
+   !> The summary of DAFWS or DAFRS, or with DIR = '>' the one that DAFGS returned, for
+   !> the DAF of the current search (DAFGH).
+   subroutine tlog_dafsum_cur(sum, dir)
       real(wp), intent(in) :: sum(*)
+      character(1), intent(in), optional :: dir
       type(pepper_context), pointer :: ctx
       integer(ip) :: h
       if (.not. on()) return
@@ -1120,7 +1137,7 @@ contains
             h = 0
          end if
       end if
-      call tlog_dafsum(h, sum)
+      call tlog_dafsum(h, sum, dir)
    end subroutine tlog_dafsum_cur
 
    subroutine tlog_d(label, x, n)

@@ -485,6 +485,14 @@ const SPK14W = Dict{Int, Any}()
 const WRITE_OPEN = Set{Int}()
 
 """
+Writers that make every check of their input before they begin the segment (CKW06 and
+SPKW19 of SPICELIB signal each of their errors before DAFBNA): a call that failed wrote
+nothing, so one that the log holds truncated (an invalid subtype gives the recorder no
+packet size) is skipped without giving up the file.
+"""
+const WRITES_NOTHING_FAILED = Set(["ckw06", "spkw19"])
+
+"""
 DASLLC closes the DAS file on a logical unit, after the test wrote it with Fortran I/O,
 which is not in the log: each file open for write is closed in Almanac, and the later
 opens read SPICELIB's file from the snapshots.
@@ -783,6 +791,11 @@ function default_mapping(ctx, c::Call)
             # a file that a meta-kernel listed: read where the last furnsh read
             haskey(LOADDIR, path) || isempty(LAST_LOAD[]) || (LOADDIR[String(path)] = LAST_LOAD[])
         end
+        # Almanac's handle is 0 (documented): the comparison says nothing, and where
+        # SPICELIB reuses the number of an unloaded file it gave a mismatch whose kind
+        # (value or spread) depended on CSPICE's handles, hence on the families that the
+        # process replayed before
+        filter!(p -> p[1] != "handle", pairs)
     end
     return pairs
 end
@@ -1618,6 +1631,15 @@ const MAPPINGS = Dict{String, Function}(
         ]
     end,
     "dafcs" => default_mapping, "dafgh" => default_mapping,
+    # the summary of the current array of the search, logged unpacked as `dc` and `ic`
+    "dafgs" => function (ctx, c)
+        h = CURRENT_DAF[]
+        h === nothing && throw(UnmappedHandle())
+        s = Almanac.dafgs(h)
+        dc, ic = Almanac.dafus(s, Almanac.dafhsf(h)...)
+        out = Dict(o.name => o for o in c.outputs)
+        return [("dc", out["dc"].values, Any[dc...]), ("ic", out["ic"].values, Any[ic...])]
+    end,
     # DAFCAD selects the DAF to which DAFADA and DAFENA add (Almanac takes the handle in
     # each call, and has no DAFCAD: a call that SPICELIB refused has no counterpart)
     "dafcad" => (ctx, c) -> c.failed ? throw(UnmappedHandle()) : default_mapping(ctx, c),
@@ -1999,6 +2021,7 @@ function replay_family(path, tallies, mismatches)
         # calls on its handle are skipped
         for a in c.inputs
             (truncated && a.name in HANDLE_ARGS && a.kind == 'i') || continue
+            (c.failed && name in WRITES_NOTHING_FAILED) && continue
             drop_handle(a.values[1], "a call with more values than the log keeps ($name)")
         end
         # the same for a write to the current DAF (DAFADA of more values than the log keeps)
