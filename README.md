@@ -111,13 +111,10 @@ If you publish work that uses Almanac.jl, please cite the SPICE toolkit as NAIF 
 
 Bug reports and questions are welcome in the
 [issues](https://github.com/Orbitology/Almanac.jl/issues). Please report bugs in Almanac.jl
-here, not to NAIF. To run the tests and build the manual locally:
+here, not to NAIF.
 
-```sh
-julia --startup-file=no test/parallel.jl                    # tests
-julia --project=docs -e 'using Pkg; Pkg.instantiate()'      # once
-julia --project=docs docs/make.jl                           # manual, in docs/build/
-```
+Run the tests with `julia test/parallel.jl`, and build the manual into `docs/build/` with
+`julia --project=docs docs/make.jl`.
 
 ## License
 
