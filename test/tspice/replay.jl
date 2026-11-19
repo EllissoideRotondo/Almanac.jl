@@ -141,10 +141,20 @@ function foreach_call(f, path; want = _ -> true)
     end
 end
 
-"The values of a binary file of the recorder (`B` line): doubles or 4-byte integers."
+"""
+The values of a binary file of the recorder (`B` line): doubles, 4-byte integers, or
+strings of the length that the name gives (`.c80.gz`), without their trailing blanks as
+the log has them.
+"""
 function read_bin(path, kind)
     bytes = read(`gzip -dc $path`)
-    return kind == 'd' ? Any[reinterpret(Float64, bytes)...] : Any[Int.(reinterpret(Int32, bytes))...]
+    kind == 'd' && return Any[reinterpret(Float64, bytes)...]
+    kind == 'i' && return Any[Int.(reinterpret(Int32, bytes))...]
+    m = match(r"\.c(\d+)\.gz$", path)
+    m === nothing && return Any[TRUNCATED]
+    l = parse(Int, m[1])
+    l == 0 && return Any["" for _ in 1:0]
+    return Any[rstrip(String(bytes[(k + 1):(k + l)]), ' ') for k in 0:l:(length(bytes) - l)]
 end
 
 # --- argument conversion -----------------------------------------------------------------
@@ -415,6 +425,58 @@ const DROPPED = Dict{Int, String}()
 
 "The files that Almanac created with the internal name `replay` for SPICELIB's blank one."
 const IFNAME_REPLAY = Set{String}()
+
+"The EK fast loads that Almanac's ekifld began, by SPICELIB's handle and segment."
+const EKFAST = Dict{Tuple{Int, Int}, Any}()
+
+"""
+SPKW19 and CKW06: the counts of the mini-segments are vectors in Almanac (also of one
+value), and the count `nname` is their length.
+"""
+function minisegment_writer(ctx, c, f, nname, dbl)
+    a = Dict(x.name => x for x in c.inputs)
+    any(x -> any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+    h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+    n = jl(a[nname])
+    n < 0 && throw(UnmappedHandle())
+    args = Any[]
+    for x in c.inputs
+        x.name in ("handle", nname) && continue
+        push!(
+            args, x.name in ("npkts", "subtps", "degres") ? Int[Int(v) for v in x.values[1:n]] :
+                x.name in dbl ? Float64[Float64(v) for v in x.values] : jl(x)
+        )
+    end
+    applicable(f, ctx, h, args...) ? f(ctx, h, args...) : f(h, args...)
+    return []
+end
+
+"EKACLC, EKACLD, EKACLI: the column of the fast load that EKIFLD began."
+function ek_column(c, f, T)
+    a = Dict(x.name => x for x in c.inputs)
+    any(x -> any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+    h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+    segno = jl(a["segno"])
+    rc = get(EKFAST, (a["handle"].values[1], segno), nothing)
+    rc === nothing && throw(UnmappedHandle())
+    vk = only(k for k in keys(a) if k in ("cvals", "dvals", "ivals"))
+    # typed vectors, also when empty (Almanac's column writers take Int and Bool vectors)
+    vals = T[T(v) for v in a[vk].values]
+    entszs = Int[Int(v) for v in a["entszs"].values]
+    nlflgs = Bool[Bool(v) for v in a["nlflgs"].values]
+    f(h, segno, jl(a["column"]), vals, entszs, nlflgs, rc)
+    return []
+end
+
+"DAFWS and DAFRS: the summary, logged unpacked, of the current array of the search."
+function daf_summary_writer(c, f)
+    a = Dict(x.name => x for x in c.inputs)
+    h = CURRENT_DAF[]
+    # a search that the replay does not have: Almanac's file would miss the write
+    h === nothing && (c.failed || foreach(drop_handle, collect(WRITE_OPEN)); throw(UnmappedHandle()))
+    f(h, Almanac.dafps(Float64.(a["dc"].values), Int.(a["ic"].values)))
+    return []
+end
 
 "The type 14 segment writers of Almanac, by SPICELIB's handle."
 const SPK14W = Dict{Int, Any}()
@@ -1443,9 +1505,6 @@ const MAPPINGS = Dict{String, Function}(
             ctx, h, jl(a["segid"]), jl(a["body"]), jl(a["center"]),
             jl(a["frame"]), jl(a["first"]), jl(a["last"]), jl(a["chbdeg"])
         )
-        # SPK14A is not in the log (the size of its records is not known to the recorder):
-        # the file misses the records, and later opens read SPICELIB's file
-        haskey(HPATH, a["handle"].values[1]) && push!(TAINTED, HPATH[a["handle"].values[1]])
         return []
     end,
     "spk14a" => function (ctx, c)
@@ -1498,9 +1557,70 @@ const MAPPINGS = Dict{String, Function}(
         end
         return pairs
     end,
+    "spkw19" => (ctx, c) -> minisegment_writer(ctx, c, spkw19, "nintvl", ("packts", "epochs", "ivlbds")),
+    "ckw06" => (ctx, c) -> minisegment_writer(ctx, c, ckw06, "nmini", ("packts", "rates", "sclkdp", "ivlbds")),
+    # the EK fast load: Almanac's EKIFLD returns the state of the load, which the column
+    # writers and EKFFLD take where SPICELIB takes the record pointers
+    "ekifld" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        n = max(0, jl(a["ncols"]))
+        segno, rc = ekifld(
+            h, jl(a["tabnam"]), jl(a["nrows"]), String.(a["cnames"].values)[1:n],
+            String.(a["decls"].values)[1:n]
+        )
+        EKFAST[(a["handle"].values[1], segno)] = rc
+        out = Dict(o.name => o for o in c.outputs)
+        return [("segno", out["segno"].values, Any[segno])]
+    end,
+    "ekaclc" => (ctx, c) -> ek_column(c, ekaclc, String),
+    "ekacld" => (ctx, c) -> ek_column(c, ekacld, Float64),
+    "ekacli" => (ctx, c) -> ek_column(c, ekacli, Int),
+    "ekffld" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        rc = get(EKFAST, (a["handle"].values[1], jl(a["segno"])), nothing)
+        rc === nothing && throw(UnmappedHandle())
+        ekffld(h, jl(a["segno"]), rc)
+        return []
+    end,
+    # DAFWS and DAFRS write the summary of the current array of the search
+    "dafws" => (ctx, c) -> daf_summary_writer(c, dafws),
+    "dafrs" => (ctx, c) -> daf_summary_writer(c, dafrs),
+    # the workspace is not logged; SPICELIB's integer component has the declared size
+    # SPXISZ, of which the index uses the length that Almanac returns
+    "dskmi2" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        any(x -> any(v -> v isa Symbol, x.values), values(a)) && throw(UnmappedHandle())
+        nv, np = jl(a["nv"]), jl(a["np"])
+        (nv < 0 || np < 0) && throw(UnmappedHandle())
+        v = reshape(Float64.(a["vrtces"].values)[1:(3nv)], 3, nv)
+        p = reshape(Int.(a["plates"].values)[1:(3np)], 3, np)
+        d, i = dskmi2(
+            v, p, jl(a["finscl"]), jl(a["corscl"]), jl(a["worksz"]), jl(a["voxpsz"]),
+            jl(a["voxlsz"]), jl(a["makvtl"]), jl(a["spxisz"])
+        )
+        out = Dict(o.name => o for o in c.outputs)
+        ei, gi = out["spaixi"].values, flat(i)
+        # the parts in use: the header and the coarse grid of NCGR cells, then, past the
+        # MAXCGR = 100000 cells of room, the pointers and lists. SPICELIB leaves the room
+        # past NCGR, and past the lists, as the caller's array had it (values of an earlier
+        # call); Almanac writes zeros.
+        length(gi) >= 7 && gi[4] > 0 || return [("spaixd", out["spaixd"].values, flat(d)), ("spaixi", ei, gi)]
+        ncgr = (gi[1] * gi[2] * gi[3]) ÷ gi[4]^3
+        # the voxel pointers, the voxel-plate list, the vertex pointers and the
+        # vertex-plate list end the index; both leave the rest of SPXISZ as it was
+        last = min(length(gi), 100_007 + gi[5] + gi[6] + nv + gi[7])
+        used = vcat(1:min(7 + ncgr, length(gi)), (100_008):last)
+        return [
+            ("spaixd", out["spaixd"].values, flat(d)),
+            ("spaixi", length(ei) < length(gi) ? ei : ei[used], gi[used]),
+        ]
+    end,
     "dafcs" => default_mapping, "dafgh" => default_mapping,
-    # DAFCAD selects the DAF to which DAFADA and DAFENA add (Almanac takes the handle)
-    "dafcad" => default_mapping,
+    # DAFCAD selects the DAF to which DAFADA and DAFENA add (Almanac takes the handle in
+    # each call, and has no DAFCAD: a call that SPICELIB refused has no counterpart)
+    "dafcad" => (ctx, c) -> c.failed ? throw(UnmappedHandle()) : default_mapping(ctx, c),
     # the log holds the summary unpacked (the integers packed into doubles would not
     # survive the decimal log)
     "dafbna" => function (ctx, c)
@@ -1807,7 +1927,16 @@ end
 # The reasons of the skipped calls, per routine, for skips.tsv.
 const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle", "no_counterpart")
 const SKIPS = Dict{String, Dict{String, Int}}()
-note_skip(name, why) = (d = get!(() -> Dict{String, Int}(), SKIPS, name); d[why] = get(d, why, 0) + 1; nothing)
+"The skipped calls per family and reason, for skips_family.tsv."
+const FAMILY_SKIPS = Dict{Tuple{String, String}, Int}()
+const CURRENT_FAMILY = Ref("")
+function note_skip(name, why)
+    d = get!(() -> Dict{String, Int}(), SKIPS, name)
+    d[why] = get(d, why, 0) + 1
+    k = (CURRENT_FAMILY[], why)
+    FAMILY_SKIPS[k] = get(FAMILY_SKIPS, k, 0) + 1
+    return nothing
+end
 
 # For selftest.jl: TSPICE_FAULT=value scales each floating-point output of Almanac by
 # 1 + 1e-10, below `NEAR`; TSPICE_FAULT=kind changes the kind of each SpiceError.
@@ -1837,11 +1966,12 @@ Tally() = Tally(0, 0, 0, 0, 0, 0, 0, 0)
 
 function replay_family(path, tallies, mismatches)
     family = replace(basename(path), r"\.log(\.gz)?$" => "")
+    CURRENT_FAMILY[] = family
     ctx = SpiceContext()
     empty!(HANDLES)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
-    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED)
+    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED); empty!(EKFAST)
     foreach(
         h -> try
             Almanac.dafcls(h)
@@ -2094,6 +2224,12 @@ function main(args)
         println(io, join(["routine"; collect(SKIP_REASONS)], '\t'))
         for (r, d) in sort(collect(SKIPS); by = first)
             println(io, join([r; [string(get(d, k, 0)) for k in SKIP_REASONS]], '\t'))
+        end
+    end
+    open(joinpath(outdir, "skips_family.tsv"), "w") do io
+        println(io, join(["family"; collect(SKIP_REASONS)], '\t'))
+        for f in sort(unique(first.(collect(keys(FAMILY_SKIPS)))))
+            println(io, join([f; [string(get(FAMILY_SKIPS, (f, k), 0)) for k in SKIP_REASONS]], '\t'))
         end
     end
     open(joinpath(outdir, "oracle_failures.tsv"), "w") do io

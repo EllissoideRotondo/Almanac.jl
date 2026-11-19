@@ -248,10 +248,39 @@ Each item: what to do, how to know it is done.
    were truncated are now replayed (F_PCKBUF `tisbod`/`tipbod` 13 -> 26, F_SPKCPV
    `spkacs` 128 -> 164, `spkez` 747 -> 1,135, `sxform` 325 -> 336), and the DSK families
    now replay `dskw02`. `selftest.jl` passes on F_LTIME and F_POOL of the new recording.
-   Remains: the fast-load EK writers, `spkw19` and `ckw06` need lengths that depend on
-   the column declarations or on the packet sizes per subtype; record them to compare
-   those files. The coordinator re-records everything (instrument.py changed) and
-   updates the baseline (closes now compare, so their counts change).
+
+   Second round (the writers that were only marked). Recorded and mapped now:
+   `spkw19` and `ckw06` (packet sizes per subtype, `tlog_psum`), the EK fast load
+   (`ekifld` notes the rows and, from the declarations, each column's entry size and
+   null flag; `ekaclc`/`ekacld`/`ekacli` log their values with those lengths; the replay
+   keeps Almanac's `EKFastLoad` where SPICELIB passes record pointers), `spk14a` (the
+   degree that `spk14b` noted), `dafws`/`dafrs` (the summary unpacked for the DAF of
+   the current search, `tlog_dafsum_cur`). Strings and outputs too long for the log now
+   also go to binary files, and the budget counts the compressed size (the DSKMI2 index,
+   20 million mostly-zero integers, took 80 MB of it per call before). The workspace of
+   `dskmi2` is not logged; its index is compared on the header, the coarse grid and the
+   lists, which is what is in use (SPICELIB leaves the rest as the caller's array had
+   it). Stay marked, because Almanac has no such routine: `dafwda`, `daswfr`, `dascud`,
+   the other `das*` record writers, `ckw04*`, `pck03*`, the `sg*` generic segment
+   writers and the `spks*` subset writers.
+
+   Measured on the 50 families affected (the writer families of the routines above,
+   the DSK families, F_SRFTRN, F_LTIME, F_POOL), recorded into /tmp/rec-writers2, against
+   the replay of the same families from /tmp/tsp2: files compared at close 17,020 ->
+   17,140, all equal (F_SPKS19 2 -> 27 of 27, F_SPK19 0 -> 8 of 8, F_CK06 8 -> 15 of 16,
+   F_ZZDSKBUX 58 -> 110 of 110, F_EK01/03/04 and F_NNEK01/03/04 0 -> all fast-loaded
+   files, F_SPK14 2 -> 4 of 4, F_DYN05 0 -> 2 of 6). Not compared: 9,450 past the copy
+   cap (F_ZZDSKBSR 9,272, F_DSKOBJ 178), 30 files opened outside the log (tspice
+   utilities), 3 still truncated (1 `ckw06`, 1 `dasadc` with BPOS 0, 2 `dskw02` past the
+   binary limits), 1 `ckw04b` (marked). One real difference found and fixed in src:
+   `dafws` on a DAF open for read threw `:dafinvalidaccess`; SPICELIB and CSPICE's
+   `dafws_` signal `DAFILLEGWRITE` after finding the current array (now so, with a
+   regression test against CSPICE in test_dafwrite.jl; `dafrs` keeps
+   `:dafinvalidaccess`, as `dafrs_` of CSPICE). No other new mismatch in these families
+   (the replay faults found on the way, untyped empty vectors and the room of the
+   DSKMI2 index, were the replay's). Remaining note: a public `ekacl*` call with an
+   untyped empty `entszs` or `nlflgs` (`[]`) throws a MethodError inside Almanac; the
+   docstring example uses typed vectors.
 7. **Review the `documented` mismatches one by one.** Done. Each was checked against
    CSPICE (probe or oracle) or the glibc check; wrong ones were fixed in Almanac:
    - fixed: `spkpvn` (39) evaluates types 15 and 17 outside the coverage, as
@@ -278,8 +307,9 @@ Each item: what to do, how to know it is done.
      recorded, and the test unloads its write handles with `spkuef`, which made the
      replay forget them. Both fixed; `dafwda` is marked: 0.
    - `eknseg` of F_EK01/F_EK03 (2): TSTEK fills the EK with `ekifld`, `ekacl*`,
-     `ekffld`, now marked; the later `ekopr` reads SPICELIB's file: 0. The `dashfs` of
-     F_NNEK01/03/04 (item 7) went the same way.
+     `ekffld`; first marked, now recorded and replayed (item 6, second round), so the
+     later `ekopr` reads the file that Almanac wrote, equal to SPICELIB's at the close: 0.
+     The `dashfs` of F_NNEK01/03/04 (item 7) match too.
    - `dasrfr` of F_DASFR (1): `daswfr` is marked (Almanac has no `daswfr`), and the
      `dasrfr` on that handle is skipped: 0. `dascud` is marked too, so the 760 `dashfs`
      of F_DASCUD (item 7) are skipped.
@@ -291,8 +321,14 @@ Each item: what to do, how to know it is done.
    of which 180,444 name a handle the replay does not have (files of writers that are
    not recorded, see item 6), 22,018 follow a load whose array the log could not hold,
    332 hold a truncated array, 14 were made in an error state, 0 have no mapping.
-   Open: the unmapped handles come mostly from the unrecorded writers of item 6
-   (`spkw19`, `ckw06`, the EK fast load); recording those closes most of them.
+   Second round (item 6): in the 50 affected families, truncated 328 -> 29 (left: failed
+   calls with garbage counts in F_GETFOV, `dasadc`/`dasudc` with positions outside the
+   string, 6 `dskmi2` and 3 `dskw02` past the binary limits, 1 `ckw06`),
+   `after_truncated_load` 22,018 -> 0 (all of F_SRFTRN, a `pcpool` of long strings now
+   in a binary file), `unmapped_handle` 74,457 -> 71,901. The unmapped handles that
+   remain are mostly F_ZZDSKBSR (69,728: `dskgd`, `dlafps`, `dlabbs` on files that its
+   utilities load, and the 9,272 closes past the copy cap, which count here too).
+   `skips_family.tsv` gives the counts per family.
 10. **`test/test_derivatives.jl`.** Done, approved by the maintainer: `pxder` against
     `sxform` is checked to 2e-15 relative (measured 6e-16; `sxform` rounds as `tisbod_`,
     `pxder` is the derivative of the evaluated matrix). The check of `pxder` against

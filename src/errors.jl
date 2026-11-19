@@ -34,7 +34,7 @@ const ERROR_KINDS = (
     :cantfindframe, :cantgetrotationtype, :cellarraytoosmall, :celltoosmall, :cknonexistrec,
     :ckunknowndatatype, :ckwrongdatatype, :coarsegridoverflow, :columnstoredtwice,
     :columntoosmall, :competingepochspec, :competingframespec, :coordsysnotrec, :countmismatch, :counttoolarge,
-    :coveragegap, :crossanglemissing, :dafbeggtend, :daffrnotfound, :dafinvalidaccess,
+    :coveragegap, :crossanglemissing, :dafbeggtend, :daffrnotfound, :dafillegwrite, :dafinvalidaccess,
     :dafinvalidparams, :dafnegaddr, :dafnewconflict, :dafnoresv, :dafnosearch,
     :dafnosuchhandle, :dafwritefail, :dasfilereadfailed, :dasinvalidaccess,
     :dasnosuchaddress, :dasnosuchhandle, :dasnotempty, :daswritefail, :degeneratecase,
