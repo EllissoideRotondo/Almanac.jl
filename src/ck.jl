@@ -894,20 +894,30 @@ segment (`rav2xf_`, `invstm_`).
 
 Throws `SpiceError(:noframeconnect)` if no segment gives a pointing. Does not allocate.
 """
-@inline function _ck_frame_step(::_CKExact, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
-    ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
-    found, cmat, _, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, false)
-    found || _ck_noconnect(fd, et, "no CK segment covers this epoch")
-    return ref, Mat3{T}(transpose(cmat))
+@inline function _ck_frame_step(mode, ks::KernelSet, fd::FrameDef, et::Real)
+    found, ref, rot = _ck_frame_step_found(mode, ks, fd, et)
+    found || _ck_noconnect(
+        fd, et, mode isa _CKState ? "no CK segment with angular velocity covers this epoch" :
+            "no CK segment covers this epoch"
+    )
+    return ref, rot
 end
 
-@inline function _ck_frame_step(::_CKState, ks::KernelSet, fd::FrameDef, et::Float64)
+"`_ck_frame_step` with `found` first: false (and the identity) where it throws."
+@inline function _ck_frame_step_found(::_CKExact, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
+    ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
+    found, cmat, _, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, false)
+    found || return false, fd.id, one(Mat3{T})
+    return true, ref, Mat3{T}(transpose(cmat))
+end
+
+@inline function _ck_frame_step_found(::_CKState, ks::KernelSet, fd::FrameDef, et::Float64)
     ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
     found, cmat, av, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, true)
-    found || _ck_noconnect(fd, et, "no CK segment with angular velocity covers this epoch")
+    found || return false, fd.id, one(Mat3{Taylor{1, Float64}})
     r = Mat3{Float64}(transpose(cmat))
     dr = _m_mxm(_ck_skew(av), r)
-    return ref, map((a, b) -> Taylor((a, b)), r, dr)
+    return true, ref, map((a, b) -> Taylor((a, b)), r, dr)
 end
 
 "Cross-product matrix `[v]ₓ`, so that `[v]ₓ w = v × w`."
@@ -1021,6 +1031,19 @@ as `_sw_frame_step` links it, every other frame as `_frame_step` links it.
     return _frame_step(ks, id, _ck_epoch(mode, et))
 end
 
+"""
+    _chain_step_found(mode, ks, id, et) -> (found, parent, Mat3)
+
+`_chain_step`, but a CK frame without a segment for `et` gives `found` false instead of
+the error, as `zzrotgt0_` and `zzfrmgt0_` report it (`id` and the identity).
+"""
+@inline function _chain_step_found(mode, ks::KernelSet, id::Int32, et::T) where {T <: Real}
+    fd = frame_def(ks, id)
+    fd.class == 3 && return _ck_frame_step_found(mode, ks, fd, et)
+    parent, rot = _chain_step(mode, ks, id, et)
+    return true, parent, rot
+end
+
 "`transpose(a) * b` in the mode: `_sx_mtxm` in the state mode, `_m_mtxm` in the exact mode."
 @inline _ck_mtxm(::_CKState, a, b) = _sx_mtxm(a, b)
 @inline _ck_mtxm(::_CKExact, a, b) = _m_mtxm(a, b)
@@ -1054,11 +1077,14 @@ function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) whe
     len = 1
     cur = from
     rot = one(Mat3{S})
+    found = true
     # invariant: nodes[1:len] is the chain of `from` to cur, rots[k] the matrix from
-    # `from` to nodes[k], and rot = rots[len]
+    # `from` to nodes[k], and rot = rots[len]; the chain ends at a CK frame without
+    # a segment for `et` (found false), as in `zzrefch0_`
     while cur != _J2000_FRAME && cur != to
         len > MAX_FRAME_CHAIN && _chain_too_long(from)
-        cur, step = _chain_step(mode, ks, cur, et)
+        found, cur, step = _chain_step_found(mode, ks, cur, et)
+        found || break
         rot = len == 1 ? step : _ck_mxm(mode, step, rot)
         len += 1
         nodes = Base.setindex(nodes, cur, len)
@@ -1072,6 +1098,8 @@ function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) whe
     # invariant: down is the matrix from `to` to cur, and no frame of the chain of `to`
     # before cur is on the chain of `from`
     while k == 0
+        # no common frame: the error of the link where the chain of `from` ended
+        cur == _J2000_FRAME && _chain_step(mode, ks, nodes[len], et)
         n += 1
         n > MAX_FRAME_CHAIN && _chain_too_long(to)
         cur, step = _chain_step(mode, ks, cur, et)

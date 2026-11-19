@@ -127,6 +127,46 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
         @test zeroder
     end
 
+    @apart @testset "TK frames: MATRIX and QUATERNION as tkfram_" begin
+        # A MATRIX that is not quite orthonormal and a QUATERNION that is not a unit:
+        # `sharpr_` and `vhatg_` take norms scaled by the largest component, and the
+        # result has no sine or cosine, so it is equal to CSPICE's to the last bit.
+        defs = [
+            (-1977101, "TKTEST_MATRIX", "MATRIX", "MATRIX", [0.48, 0.6, 0.64, -0.8, 0.0, 0.6, 0.36, -0.8, 0.48]),
+            (-1977102, "TKTEST_QUAT", "QUATERNION", "Q", [0.3, -1.7, 2.2, 0.9]),
+        ]
+        vars = String[]
+        try
+            for (id, name, spec, key, vals) in defs
+                for (setc, seti, setd) in (
+                        (SPICE.pcpool, SPICE.pipool, SPICE.pdpool),
+                        ((k, v) -> pcpool(ctx, k, v), (k, v) -> pipool(ctx, k, v), (k, v) -> pdpool(ctx, k, v)),
+                    )
+                    seti("FRAME_$name", [id])
+                    setc("FRAME_$(id)_NAME", [name])
+                    seti("FRAME_$(id)_CLASS", [4])
+                    seti("FRAME_$(id)_CLASS_ID", [id])
+                    seti("FRAME_$(id)_CENTER", [399])
+                    setc("TKFRAME_$(id)_SPEC", [spec])
+                    setc("TKFRAME_$(id)_RELATIVE", ["J2000"])
+                    setd("TKFRAME_$(id)_$key", vals)
+                end
+                append!(
+                    vars, [
+                        "FRAME_$name", "FRAME_$(id)_NAME", "FRAME_$(id)_CLASS", "FRAME_$(id)_CLASS_ID",
+                        "FRAME_$(id)_CENTER", "TKFRAME_$(id)_SPEC", "TKFRAME_$(id)_RELATIVE", "TKFRAME_$(id)_$key",
+                    ]
+                )
+            end
+            for d in defs
+                @test Matrix(pxform(ctx, "J2000", d[2], 0.0)) == SPICE.pxform("J2000", d[2], 0.0)
+            end
+        finally
+            foreach(SPICE.dvpool, vars)
+            foreach(v -> dvpool(ctx, v), vars)
+        end
+    end
+
     @apart @testset "pxfrm2: rotation between two epochs" begin
         d = Float64[]
         for _ in 1:200
