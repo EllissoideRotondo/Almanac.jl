@@ -1,7 +1,9 @@
 # Routines whose calls record.sh logs and replay.jl replays: SPICELIB names, one per line.
-# The SPICELIB routines that Almanac.jl exports under the same name, and the loaders by handle
-# (replayed as furnsh and unload), and DAFCAD, which selects the DAF that DAFADA and DAFENA
-# write (Almanac takes the handle in each call).
+# The SPICELIB routines that Almanac.jl exports under the same name; the loaders by handle
+# (replayed as furnsh and unload; ZZDSKLSF and ZZDSKUSF for DSK); SPCOPN (replayed as
+# spkopn); DAFCAD, which selects the DAF that DAFADA and DAFENA write (Almanac takes the
+# handle in each call); and GFSSTP, whose step the replay passes to GFEVNT, GFFOVE and
+# GFOCCE.
 axisar
 azlcpo
 azlrec
@@ -32,11 +34,13 @@ ckgp
 ckgpav
 ckgr02
 ckgr03
+cklpf
 ckmeta
 cknr02
 cknr03
 ckobj
 ckopn
+ckupf
 ckw01
 ckw02
 ckw03
@@ -227,6 +231,7 @@ gfrfov
 gfrr
 gfsep
 gfsntc
+gfsstp
 gfstol
 gfsubc
 gftfov
@@ -298,7 +303,9 @@ oscltx
 pckcls
 pckcov
 pckfrm
+pcklof
 pckopn
+pckuof
 pckw02
 pckw20
 pcpool
@@ -353,6 +360,7 @@ sctiks
 sctype
 sharpr
 sincpt
+spcopn
 spd
 sphcyl
 sphlat
@@ -374,6 +382,7 @@ spkezp
 spkezr
 spkgeo
 spkgps
+spklef
 spkltc
 spkobj
 spkopa
@@ -385,6 +394,7 @@ spksfs
 spkssb
 spksub
 spkuds
+spkuef
 spkw01
 spkw02
 spkw03
@@ -485,22 +495,25 @@ vzero
 vzerog
 wncard
 wncomd
+wncond
 wndifd
 wnelmd
+wnexpd
+wnextd
 wnfetd
+wnfild
+wnfltd
 wnincd
+wninsd
 wnintd
 wnreld
 wnsumd
 wnunid
+wnvald
 xf2eul
 xf2rav
 xfmsta
 xpose
 xposeg
-cklpf
-spklef
-pcklof
-ckupf
-spkuef
-pckuof
+zzdsklsf
+zzdskusf

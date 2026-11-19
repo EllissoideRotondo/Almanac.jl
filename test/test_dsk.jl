@@ -861,6 +861,29 @@ function dsk_part_11(env)
         nk = neo_kind(() -> dskxsi(ctx, pri, target, srf, 0.0, fixref, vtx, d))
         @test (target, fixref, nk) == (target, fixref, c_xsi_kind(target, srf, fixref, vtx, d; pri))
     end
+    # dskxsi_ and dskxv_ keep the frame ID of a call that fails the check of the frame
+    # centre, and the next call with the frame of the last call that passed and the same
+    # target uses it: here IAU_EARTH, whose constants the kernel of the group lacks, so
+    # that CSPICE fails. Almanac keeps no state (docs/src/manual/cspice_defects.md).
+    try
+        _, cx0 = c_dskxsi("MARS", (), 0.0, "IAU_MARS", v, -v)
+        vx0 = c_dskxv("MARS", (), 0.0, "IAU_MARS", [v], [-v])[1][1]
+        for (name, call) in (
+                ("dskxsi", fr -> c_dskxsi("MARS", (), 0.0, fr, v, -v)),
+                ("dskxv", fr -> c_dskxv("MARS", (), 0.0, fr, [v], [-v])),
+            )
+            @test (name, c_kind(() -> call("IAU_EARTH"))) == (name, :invalidframe)
+            @test (name, c_kind(() -> call("IAU_MARS"))) == (name, :framedatanotfound)
+        end
+        @test neo_kind(() -> dskxsi(ctx, false, "MARS", (), 0.0, "IAU_EARTH", v, -v)) === :invalidframe
+        @test dskxsi(ctx, false, "MARS", (), 0.0, "IAU_MARS", v, -v)[1] == cx0
+        @test neo_kind(() -> dskxv(ctx, false, "MARS", (), 0.0, "IAU_EARTH", [v], [-v])) === :invalidframe
+        @test dskxv(ctx, false, "MARS", (), 0.0, "IAU_MARS", [v], [-v])[1][1] == vx0
+    finally
+        # a change of the pool makes CSPICE look the frame up again
+        SPICE.pdpool("ALMANAC_DSK_FRAME_RESET", [0.0])
+        SPICE.dvpool("ALMANAC_DSK_FRAME_RESET")
+    end
     @test neo_kind(() -> dskxv(ctx, true, "MARS", (), 0.0, "IAU_MARS", [v], [-v])) === :badpriorityspec
     @test neo_kind(() -> dskxv(ctx, false, "MARS", (), 0.0, "IAU_MARS", V3[], V3[])) === :invalidcount
     @test neo_kind(() -> dskxv(ctx, false, "MARS", (), 0.0, "IAU_MARS", [v, v], [-v])) === :badarg

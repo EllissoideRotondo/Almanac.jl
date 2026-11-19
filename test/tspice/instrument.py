@@ -45,6 +45,8 @@ sphlat sphrec spd stelab stlabx stmp03 surfnm surfpt surfpv twopi twovec twovxf 
 unorm unormg vadd vaddg vcrss vdist vdistg vdot vdotg vequ vequg vhat vhatg vlcom vlcom3
 vlcomg vminug vminus vnorm vnormg vpack vperp vprjp vprjpi vproj vprojg vrel vrelg vrotv
 vscl vsclg vsep vsepg vsub vsubg vtmv vtmvg vupack vzero vzerog xf2eul xf2rav xpose xposeg
+wncard wncomd wncond wndifd wnelmd wnexpd wnextd wnfetd wnfild wnfltd wnincd wninsd wnintd
+wnreld wnsumd wnunid wnvald
 """.split())
 
 # Queries: they read the loaded kernels, the pool or the time settings and change none
@@ -60,8 +62,9 @@ tipbod tisbod tkfram trgsep unitim utc2et xfmsta timout tparse tpictr dpgrdr drd
 kinfo kdata ktotal
 """.split())
 
-FILE_ROUTINES = {"furnsh", "ldpool", "spkcov", "spkobj", "ckcov", "ckobj", "pckcov",
-                 "dskobj", "dsksrf", "getfat", "spklef", "pcklof", "cklpf", "eklef"}
+FILE_ROUTINES = {"furnsh", "ldpool", "spkcov", "spkobj", "ckcov", "ckobj", "pckcov", "pckfrm",
+                 "dskobj", "dsksrf", "getfat", "spklef", "pcklof", "cklpf", "eklef",
+                 "zzdsklsf"}
 # Opens of an existing file: a snapshot of that file (its first argument) at a call from
 # the test program, not from inside SPICELIB, gives the replay SPICELIB's file where
 # Almanac's copy misses writes. Only the one file: a family such as F_ZZDSKBSR opens each
@@ -93,6 +96,7 @@ CUSTOM_ARGS = {
     "dafws": {"sum": "call tlog_dafsum_cur(sum)"},
     "dafrs": {"sum": "call tlog_dafsum_cur(sum)"},
     "dskmi2": {"work": None},
+    "chbder": {"partdp": None},
     "ekaclc": {"rcptrs": None, "wkindx": None},
     "ekacld": {"rcptrs": None, "wkindx": None},
     "ekacli": {"rcptrs": None, "wkindx": None},
@@ -115,6 +119,8 @@ CUSTOM_POST = {
 # Lengths that the arguments do not give: SPICELIB's documented sizes.
 FIXED_LENGTHS = {
     "oscltx": {"elts": "20"},
+    # the column summaries of a segment, NCOLS of each (none after a failed call)
+    "ekssum": {a: "tlog_okn(ncols)" for a in ("cnames", "dtypes", "sizes", "strlns", "indexd", "nullok")},
     "limbpt": {"npts": "max(0, ncuts)", "points": "3*sum(npts(1:max(0, ncuts)))",
                "epochs": "sum(npts(1:max(0, ncuts)))", "tangts": "3*sum(npts(1:max(0, ncuts)))"},
     "termpt": {"npts": "max(0, ncuts)", "points": "3*sum(npts(1:max(0, ncuts)))",
@@ -151,12 +157,15 @@ FIXED_LENGTHS = {
     "dskx02": {"dladsc": "8"},
     "dskxsi": {"srflst": "max(0, nsurf)", "dladsc": "8", "dskdsc": "24", "dc": "max(0, maxd)",
                "ic": "max(0, maxi)"},
-    "dskxv": {"srflst": "max(0, nsurf)"},
+    "dskxv": {"srflst": "max(0, nsurf)", "vtxarr": "3*max(0, nrays)", "dirarr": "3*max(0, nrays)",
+              "xptarr": "3*max(0, nrays)", "fndarr": "max(0, nrays)"},
     "spksfs": {"descr": "5"},
     "spkpds": {"descr": "5"},
     "spkuds": {"descr": "5"},
-    "ckgr02": {"descr": "5"},
-    "ckgr03": {"descr": "5"},
+    # a type 2 record (start, stop, quaternion, angular velocity, rate) and a type 3 record
+    # (time, quaternion, angular velocity; 5 values without it, the rest as it was)
+    "ckgr02": {"descr": "5", "record": "10"},
+    "ckgr03": {"descr": "5", "record": "8"},
     "cknr02": {"descr": "5"},
     "cknr03": {"descr": "5"},
     "ckw01": {"sclkdp": "max(0, nrec)", "quats": "max(0, 4*nrec)", "avvs": "max(0, 3*nrec)"},
@@ -287,7 +296,8 @@ def kind_of(ftype):
 # Assumed-size arrays counted by an argument other than the first count of the routine:
 # the plates by NP (DSKRB2 and DSKMI2 also take NV), and the coordinate parameters,
 # which have the fixed size NSYPAR.
-NAMED_COUNTS = {"plates": "np", "vrtces": "nv"}
+NAMED_COUNTS = {"plates": "np", "vrtces": "nv", "qpnams": "qnpars", "qcpars": "qnpars", "qdpars": "qnpars",
+                "qipars": "qnpars", "qlpars": "qnpars"}
 FIXED_SIZES = {"corpar": "10"}
 
 
@@ -317,9 +327,26 @@ def length_expr(dims, args, decls, arg=None):
     return "*".join(f"({p})" for p in parts)
 
 
-# The GF searches whose windows are logged (cell_args). The other GF entry points take
-# callbacks (GFEVNT, GFFOVE, GFOCCE, GFUDB, GFUDS), which the log cannot carry.
-CELL_ROUTINES = set("gfdist gfilum gfoclt gfpa gfposc gfrfov gfrr gfsep gfsntc gfsubc gftfov".split())
+# The routines whose cells are logged (cell_args): the GF searches, the window routines,
+# and the routines that give the coverage or the objects of a file or the frames of a
+# class. GFUDB, GFUDS, UDDC and UDDF take functions of the test program, which the replay
+# cannot call.
+CELL_ROUTINES = set("""
+gfdist gfilum gfoclt gfpa gfposc gfrfov gfrr gfsep gfsntc gfsubc gftfov gfevnt gffove gfocce
+wncard wncomd wncond wndifd wnelmd wnexpd wnextd wnfetd wnfild wnfltd wnincd wninsd wnintd
+wnreld wnsumd wnunid wnvald
+spkcov spkobj ckcov ckobj pckcov pckfrm dskobj dsksrf bltfrm kplfrm
+""".split())
+# The input window of WNVALD holds N endpoints that are not yet a window (its
+# cardinality is not set): they are logged as N values after the size and the old
+# cardinality.
+CELL_INPUTS = {"wnvald": {"window": "tlog_d('{label}', window(-1), 2_ip + max(0_ip, min(n, 1000000_ip)))"}}
+# Routines that take procedures: GFEVNT, GFFOVE and GFOCCE take the step, the
+# refinement, the progress report and the interrupt check. Every call of tspice passes
+# SPICELIB's GFSTEP and GFREFN (and report and interrupt routines, which do not change
+# the result); the replay passes the step that GFSSTP set and Almanac's gfrefn. The
+# procedures are not logged.
+PROC_ROUTINES = {"gfevnt", "gffove", "gfocce"}
 
 
 def cell_args(name, args, decls):
@@ -332,6 +359,8 @@ def cell_args(name, args, decls):
         return {}
     cells = {}
     for a in args:
+        if a not in decls:               # a procedure (PROC_ROUTINES)
+            continue
         k, dims = decls[a]
         if dims is None or not dims.strip().lower().startswith("lbcell"):
             continue
@@ -383,16 +412,20 @@ def instrument_routine(name, h, body, cands):
     head = HEAD.match(code[0])
     args = [a.strip().lower() for a in (head.group("args") or "").split(",") if a.strip()]
     decls = {}
+    procs = set()
     for line in code[1:]:
         d = DECL.match(line)
         if d:
             for arg, dims in split_names(d.group("rest")):
                 decls[arg] = (kind_of(d.group("type")), dims)
-    if any(a not in decls for a in args):
+        pm = re.match(r"^\s*procedure\s*\([^)]*\)\s*::\s*(.*)$", line, re.I)
+        if pm and name in PROC_ROUTINES:
+            procs |= {x.strip().lower() for x in pm.group(1).split("!")[0].split(",") if x.strip()}
+    if any(a not in decls and a not in procs for a in args):
         return "an argument has no declaration in the wrapper"
     intent = {} if not args else None
     for c in cands:
-        if all(a in c for a in args):
+        if all(a in c or a in procs for a in args):
             intent = c
             break
     if intent is None:
@@ -405,7 +438,7 @@ def instrument_routine(name, h, body, cands):
     custom_out = CUSTOM_OUT.get(name, {})
     cells = cell_args(name, args, decls)
     for a in args:
-        if a in custom or a in custom_out or a in cells:
+        if a in custom or a in custom_out or a in cells or a in procs:
             lens[a] = None
             continue
         if a in fixed:
@@ -438,6 +471,8 @@ def instrument_routine(name, h, body, cands):
     if name in CUSTOM_POST:
         post.append("      " + CUSTOM_POST[name])
     for a in args:
+        if a in procs:
+            continue
         k, _ = decls[a]
         it = intent[a]
         n = lens[a]
@@ -449,7 +484,8 @@ def instrument_routine(name, h, body, cands):
             continue
         if a in cells:
             if cells[a] is not None and it in ("in", "inout"):
-                pre.append("      call " + cells[a].format(label="<" + a))
+                rec_in = CELL_INPUTS.get(name, {}).get(a, cells[a])
+                pre.append("      call " + rec_in.format(label="<" + a))
             if cells[a] is not None and it in ("out", "inout"):
                 post.append("      call " + cells[a].format(label=">" + a))
             continue
@@ -548,7 +584,7 @@ module tspice_log
    private
    public :: tlog_nsub, tlog_begin, tlog_end, tlog_mark, tlog_snapshot, tlog_snapshot_file, tlog_d, tlog_d1, &
       tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1, tlog_close_name, tlog_close_snapshot, tlog_writer, &
-      tlog_dafsum, tlog_dafsum_cur, tlog_psum, tlog_ek_note, tlog_ek_nvals, tlog_ek_nent, tlog_ek_nnul, &
+      tlog_dafsum, tlog_dafsum_cur, tlog_psum, tlog_okn, tlog_ek_note, tlog_ek_nvals, tlog_ek_nent, tlog_ek_nnul, &
       tlog_spk14_note, tlog_spk14_len
    integer, save :: unit = 0
    logical, save :: opened = .false.
@@ -961,6 +997,16 @@ contains
    !> Sum over the K = 1:N mini-segments of NPKTS(K) times the size of the subtype
    !> SUBTPS(K) (subtypes 0 to 3: S0 to S3); huge, which logs the array as not held, for
    !> a subtype outside or a count past a million.
+   !> N, or 0 after a failed call: the count of an output array that a failed call left
+   !> unset.
+   integer(ip) function tlog_okn(n)
+      integer(ip), intent(in) :: n
+      type(pepper_context), pointer :: ctx
+      ctx => legacy_context()
+      tlog_okn = 0
+      if (.not. ctx%failed()) tlog_okn = max(0_ip, n)
+   end function tlog_okn
+
    integer(ip) function tlog_psum(npkts, subtps, n, s0, s1, s2, s3)
       integer(ip), intent(in) :: npkts(*), subtps(*), n
       integer, intent(in) :: s0, s1, s2, s3

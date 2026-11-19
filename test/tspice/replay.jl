@@ -36,7 +36,8 @@ using Almanac, Printf, LinearAlgebra, StaticArrays
 # `cspice` instead (CSPICE is the reference of Almanac, and some of its routines are
 # not translations of SPICELIB's: vperp_c, the time defaults).
 const ORACLE = get(ENV, "TSPICE_ORACLE", "0") == "1"
-ORACLE && import SPICE
+# SPICE.jl is loaded also without the oracle: the wrappers below name its library
+import SPICE
 
 const RTOL = parse(Float64, get(ENV, "TSPICE_RTOL", "1e-12"))
 const ATOL = parse(Float64, get(ENV, "TSPICE_ATOL", "1e-14"))
@@ -78,17 +79,19 @@ function foreach_call(f, path; want = _ -> true)
         pending = nothing                   # a line read ahead
         lineno = 0
         nextline() = (pending === nothing ? (lineno += 1; readline(io)) : (l = pending; pending = nothing; l))
-        while !eof(io) || pending !== nothing
-            l = nextline()
-            startswith(l, "@ ") || continue
-            parts = split(l)
-            length(parts) == 4 || continue
+        # The call that begins with the line `head`. A deeper call that begins before it
+        # ends (a routine of the log that it calls, such as GFREFN that GFEVNT calls
+        # through its argument) is read and passed to `f` first; the outputs of this one
+        # follow it. A call of the same depth or less ends this one without its outputs.
+        function read_call(head)
+            parts = split(head)
             _, name, depth, fb = parts
+            d = parse(Int, depth)
             start = lineno
             ins, outs, snap, unrec, bin = Arg[], Arg[], "", false, ""
             keep = want(lowercase(name))
             failed, short = false, ""
-            while !eof(io)
+            while !eof(io) || pending !== nothing
                 l = nextline()
                 if startswith(l, "! ")
                     p = split(l, ' '; limit = 3)
@@ -108,6 +111,14 @@ function foreach_call(f, path; want = _ -> true)
                     (!isfile(bin) && m !== nothing) && (bin = joinpath(dirname(path), m[1]))
                 elseif l == "W"
                     unrec = keep = true     # its handles follow
+                elseif startswith(l, "@ ")
+                    q = split(l)
+                    if length(q) == 4 && something(tryparse(Int, q[3]), 0) > d
+                        read_call(l)        # a nested call: this one goes on after it
+                        continue
+                    end
+                    pending = l             # a call that begins before this one ended
+                    break
                 elseif !keep
                     continue
                 elseif startswith(l, "<") || startswith(l, ">")
@@ -131,12 +142,15 @@ function foreach_call(f, path; want = _ -> true)
                             v[1] == '%' ? String(hex2bytes(v[2:end])) : String(v[2:end])
                     end
                     push!((l[1] == '<' ? ins : outs), Arg(aname[2:end], k[1], vals))
-                elseif startswith(l, "@ ")
-                    pending = l             # a nested call before this one ended
-                    break
                 end
             end
-            f(Call(name, start, parse(Int, depth), fb == "T", ins, outs, failed, short, snap, unrec))
+            return f(Call(name, start, d, fb == "T", ins, outs, failed, short, snap, unrec))
+        end
+        while !eof(io) || pending !== nothing
+            l = nextline()
+            startswith(l, "@ ") || continue
+            length(split(l)) == 4 || continue
+            read_call(l)
         end
     end
 end
@@ -317,6 +331,8 @@ function jl_named(a::Arg, routine::AbstractString)
     end
     routine == "dskw02" && a.name == "corpar" && length(a.values) > 10 &&
         return Float64.(a.values[1:10])
+    # a blank segment ID is a string of blanks for a caller of CSPICE too, not an empty one
+    a.name == "segid" && a.kind == 'c' && isempty(strip(jl(a))) && return " "
     if occursin(WRITERS, routine) && a.name in WRITER_ARRAYS && a.kind == 'd'
         return Float64.(a.values)
     end
@@ -370,6 +386,8 @@ const TAINTED = Set{String}()
 
 "Almanac's handle of each handle of SPICELIB."
 const HMAP = Dict{Int, Any}()
+"The number of opens of each handle of SPICELIB that was opened for reading more than once."
+const LINKS = Dict{Int, Int}()
 
 handle_value(a::Arg) = a.kind == 'i' && length(a.values) == 1 && a.name in HANDLE_ARGS ?
     get(HMAP, a.values[1], nothing) : nothing
@@ -413,7 +431,16 @@ function open_by_handle(ctx, c::Call)
         occursin(CREATORS, name) && delete!(IFNAME_REPLAY, abspath(path))
     h = f(args...)
     k = findfirst(o -> o.name in HANDLE_ARGS, c.outputs)
-    k === nothing || (HMAP[c.outputs[k].values[1]] = h; HPATH[c.outputs[k].values[1]] = abspath(path))
+    hid = k === nothing ? nothing : c.outputs[k].values[1]
+    # SPICELIB gives a file that is open for reading the same handle again and counts the
+    # opens; the file stays open until the last close. Almanac's handles are independent:
+    # the replay keeps the first and closes the new one.
+    if hid !== nothing && get(HPATH, hid, nothing) == abspath(path) && get(HMAP, hid, nothing) isa Union{Almanac.DAFHandle, Almanac.DASHandle}
+        h isa Almanac.DAFHandle ? Almanac.dafcls(h) : Almanac.dascls(h)
+        LINKS[hid] = get(LINKS, hid, 1) + 1
+        return []
+    end
+    hid === nothing || (HMAP[hid] = h; HPATH[hid] = abspath(path))
     (k !== nothing && occursin(r"(opn|onw|opw|opa)$", name)) && push!(WRITE_OPEN, c.outputs[k].values[1])
     return []
 end
@@ -422,6 +449,21 @@ end
 const FILE_CHECK = Ref("")
 "Why the replay gave up each handle (drop_handle), for files.tsv."
 const DROPPED = Dict{Int, String}()
+
+"""
+SPCOPN, which the SPK of the test utility TSTSPK opens with: a new SPK or CK file whose
+ID word is `NAIF/DAF` (DAFOPN). Almanac opens it with spkopn, without comment records.
+"""
+const SPCOPN_FILES = Set{String}()
+function spcopn_mapping(ctx, c)
+    path = String(c.inputs[1].values[1])
+    c.failed || (rm(path; force = true); delete!(TAINTED, abspath(path)))
+    h = Almanac.spkopn(path, jl(c.inputs[2]), 0)
+    hid = c.outputs[1].values[1]
+    HMAP[hid] = h; HPATH[hid] = abspath(path); push!(WRITE_OPEN, hid)
+    push!(SPCOPN_FILES, abspath(path))
+    return []
+end
 
 "The files that Almanac created with the internal name `replay` for SPICELIB's blank one."
 const IFNAME_REPLAY = Set{String}()
@@ -493,12 +535,14 @@ packet size) is skipped without giving up the file.
 const WRITES_NOTHING_FAILED = Set(["ckw06", "spkw19"])
 
 """
-DASLLC closes the DAS file on a logical unit, after the test wrote it with Fortran I/O,
-which is not in the log: each file open for write is closed in Almanac, and the later
-opens read SPICELIB's file from the snapshots.
+DASLLC closes the DAS file of its handle, after the test wrote it with Fortran I/O
+(DASWBR), which is not in the log: the file is closed in Almanac, and the later opens
+read SPICELIB's file from the snapshots. A log without the handle gives up every file
+open for write.
 """
 function dasllc_mapping(ctx, c)
-    foreach(drop_handle, collect(WRITE_OPEN))
+    hs = [a.values[1] for a in c.inputs if a.name in HANDLE_ARGS && length(a.values) == 1]
+    foreach(drop_handle, isempty(hs) ? collect(WRITE_OPEN) : hs)
     return []
 end
 
@@ -705,6 +749,12 @@ function default_mapping(ctx, c::Call)
     end
     if occursin(CLOSERS, name)
         hid = c.inputs[1].values[1]
+        # not the last close of a file opened more than once: SPICELIB keeps it open
+        if get(LINKS, hid, 1) > 1
+            LINKS[hid] -= 1
+            return []
+        end
+        delete!(LINKS, hid)
         try
             f(args...)
         catch e
@@ -734,7 +784,7 @@ function default_mapping(ctx, c::Call)
         FILE_CHECK[] = path in TAINTED ? "not compared: a write outside the replay" :
             !isfile(theirs) ? "not compared: no copy of SPICELIB's file (past the cap of the recorder, or deleted before the close)" : "compared"
         FILE_CHECK[] == "compared" || throw(UnmappedHandle())
-        return compare_files(path, theirs; ifname = path in IFNAME_REPLAY ? "replay" : nothing)
+        return compare_files(path, theirs; ifname = path in IFNAME_REPLAY ? "replay" : nothing, spcopn = path in SPCOPN_FILES)
     end
     r = try
         applicable(f, ctx, args...) ? f(ctx, args...) : f(args...)
@@ -916,10 +966,15 @@ function compare_ek!(pairs, mine, theirs)
     return pairs
 end
 
-"The content of the file `mine` that Almanac wrote and of SPICELIB's copy `theirs`, as pairs."
-function compare_files(mine, theirs; ifname = nothing)
+"""
+The content of the file `mine` that Almanac wrote and of SPICELIB's copy `theirs`, as
+pairs. The type of a file of SPCOPN (`spcopn`), whose ID word `NAIF/DAF` names none, is
+not compared.
+"""
+function compare_files(mine, theirs; ifname = nothing, spcopn = false)
     pairs = Tuple{String, Vector{Any}, Any}[]
     ft, fm = Almanac.getfat(theirs), Almanac.getfat(mine)
+    spcopn && ft[1] == fm[1] == "DAF" && (ft = fm)
     file_pair!(pairs, "architecture,type", Any[ft...], Any[fm...])
     ft == fm || return pairs
     ft[1] == "DAF" && compare_daf!(pairs, mine, theirs)
@@ -1014,7 +1069,7 @@ end
 const STATEFUL = Set(
     [
         "furnsh", "unload", "kclear", "ldpool", "clpool", "pdpool", "pcpool",
-        "pipool", "lmpool", "dvpool", "timdef", "spklef", "cklpf", "pcklof",
+        "pipool", "lmpool", "dvpool", "timdef", "spklef", "cklpf", "pcklof", "zzdsklsf", "gfstol",
     ]
 )
 
@@ -1321,9 +1376,9 @@ struct NoOracle end
 function cspice_call(c::Call)
     name = lowercase(c.name)
     occursin(NO_ORACLE, name) && return NoOracle()
-    name in GF_SEARCHES && return NoOracle()
+    (name in GF_SEARCHES || name in CELL_NAMES) && return NoOracle()
     any(a -> handle_value(a) !== nothing, c.inputs) && return NoOracle()
-    name in ("spklef", "cklpf", "pcklof") && (name = "furnsh")
+    name in ("spklef", "cklpf", "pcklof", "zzdsklsf") && (name = "furnsh")
     f = haskey(CSPICE_EXTRA, name) ? CSPICE_EXTRA[name] :
         isdefined(SPICE, Symbol(name)) ? getfield(SPICE, Symbol(name)) : nothing
     f === nothing && return NoOracle()
@@ -1363,6 +1418,7 @@ function cspice_reset()
     ccall((:reset_c, SPICE.libcspice), Cvoid, ())
     SPICE.kclear()
     SPICE.timdef("SET", "CALENDAR", "GREGORIAN")
+    SPICE.gfstol(1.0e-6)
     return SPICE.timdef("SET", "SYSTEM", "UTC")
 end
 
@@ -1375,6 +1431,7 @@ differs in. Without that last condition a fault of Almanac below `NEAR` would pa
 did not, SPICELIB's outputs are undefined: Almanac's outputs are compared with CSPICE's.
 """
 function agrees_with_cspice(c::Call, almanac_result)
+    lowercase(c.name) in GF_SEARCHES && return gf_agrees_with_cspice(c, almanac_result)
     r = cspice_call(c)
     r isa NoOracle && return false
     if almanac_result isa SpiceError
@@ -1488,12 +1545,21 @@ function load_by_handle(ctx, c)
     in_snapshot(c) do
         furnsh(ctx, path)
     end
-    # Almanac keeps the path as given, and `spksfs` returns it as the handle.
+    # Almanac keeps the path as given, and `spksfs` returns it as the handle. A reader
+    # of an earlier file of the same name (daf_reader) is closed.
     c.failed || (
         HANDLES[c.outputs[1].values[1]] = path; HMAP[c.outputs[1].values[1]] = path;
-        LOADDIR[path] = isempty(c.snapshot) ? pwd() : c.snapshot
+        LOADDIR[path] = isempty(c.snapshot) ? pwd() : c.snapshot; close_reader(path)
     )
     return []
+end
+
+"Close the reader handle of `path` that daf_reader opened, if any."
+function close_reader(path)
+    r = pop!(READERS, path, nothing)
+    r isa Almanac.DAFHandle && Almanac.dafcls(r)
+    r isa Almanac.DASHandle && Almanac.dascls(r)
+    return nothing
 end
 
 function unload_by_handle(ctx, c)
@@ -1501,13 +1567,15 @@ function unload_by_handle(ctx, c)
     path === nothing && return []      # not loaded by handle (F_SGMETA unloads its write handles)
     unload(ctx, path)
     delete!(HMAP, jl(c.inputs[1]))
+    close_reader(path)
     return []
 end
 
 # Routines whose arguments do not follow the default.
 const MAPPINGS = Dict{String, Function}(
     "spklef" => load_by_handle, "cklpf" => load_by_handle, "pcklof" => load_by_handle,
-    "eklef" => load_by_handle, "ekuef" => unload_by_handle, "dasllc" => dasllc_mapping,
+    "eklef" => load_by_handle, "ekuef" => unload_by_handle,
+    "zzdsklsf" => load_by_handle, "zzdskusf" => unload_by_handle, "spcopn" => spcopn_mapping, "dasllc" => dasllc_mapping,
     "dasops" => (ctx, c) -> (h = dasops(); c.failed || (HMAP[c.outputs[1].values[1]] = h); []),
     # SPICELIB keeps the type 14 segment being written for its handle; Almanac returns
     # a writer from spk14b and takes it in spk14a and spk14e
@@ -1805,6 +1873,10 @@ many were equal to the last bit.
 """
 function gf_search_mapping(ctx, c)
     name = lowercase(c.name)
+    # the search sets the step of GFSTEP to its own (GFSSTP, which the log does not hold
+    # as it is nested); a failed search may have stopped before or after
+    st = only(a for a in c.inputs if a.name == "step")
+    GF_STEP[] = c.failed ? nothing : Float64(st.values[1])
     c.failed && c.short in GF_SIZE_ERRORS && throw(NoCounterpart())
     args = Any[]
     for a in c.inputs
@@ -1817,13 +1889,21 @@ function gf_search_mapping(ctx, c)
             push!(args, jl(a))
         end
     end
-    tol = 2 * gfstol(ctx)
     r = getfield(Almanac, Symbol(name))(ctx, args...)
     c.failed && return []
     out = Dict(o.name => o for o in c.outputs)
     exp = gf_window(out["result"])
     exp === nothing && throw(NoCounterpart())
-    got = collect(r)
+    return gf_result_pairs(name, exp, collect(r), ctx)
+end
+
+"""
+The comparison of a GF result window `got` with SPICELIB's `exp` (endpoints within twice
+the convergence tolerance), counted in gf_agreement.tsv.
+"""
+function gf_result_pairs(name, exp, got, ctx)
+    GF_TOL[] = gfstol(ctx)
+    tol = 2 * GF_TOL[]
     v = get!(() -> zeros(Int, 4), GF_AGREEMENT, name)
     v[1] += 1
     if length(got) == length(exp)
@@ -1840,12 +1920,296 @@ function gf_search_mapping(ctx, c)
     return [("result", Any[exp...], Any[got...])]
 end
 
+"""
+The result window of CSPICE for the GF search `c`, or an exception. SPICE.jl takes the
+arguments of SPICELIB without MW, NW, WORK and RESULT, and the number of intervals
+`nintvls` before CNFINE (GFOCLT and GFRFOV: `maxwin` after it), which sizes the result
+and the workspace of CSPICE and does not change a result that fits.
+"""
+function cspice_gf(c::Call)
+    name = lowercase(c.name)
+    args = Any[]
+    nint = 100_000
+    for a in c.inputs
+        a.name in ("mw", "nw", "work", "result") && continue
+        if a.name == "cnfine"
+            e = gf_window(a)
+            e === nothing && return NoOracle()
+            w = SPICE.SpiceDoubleCell(max(2, length(e)))
+            for k in 1:2:length(e)
+                SPICE.wninsd!(w, e[k], e[k + 1])
+            end
+            name in ("gfoclt", "gfrfov") ? append!(args, Any[w, nint]) : append!(args, Any[nint, w])
+        else
+            push!(args, a.kind == 'd' && length(a.values) == 3 ? Float64.(a.values) : jl(a))
+        end
+    end
+    return try
+        r = in_snapshot(() -> getfield(SPICE, Symbol(name))(args...), c)
+        SPICE.handleerror()
+        Float64[r[k] for k in 1:length(r)]
+    catch e
+        ccall((:reset_c, SPICE.libcspice), Cvoid, ())
+        e
+    end
+end
+
+"""
+For a GF result that differs from SPICELIB's by more than twice the tolerance: true if
+CSPICE's result has the endpoints of Almanac's within twice the tolerance, and differs
+from SPICELIB's as Almanac's does. For an error, true if CSPICE throws the same kind.
+"""
+function gf_agrees_with_cspice(c::Call, almanac_result)
+    r = cspice_gf(c)
+    r isa NoOracle && return false
+    almanac_result isa SpiceError && return r isa Exception && cspice_kind(r) === almanac_result.kind
+    r isa Exception && return false
+    exp, got = almanac_result[1][2], filter(x -> x isa Real, almanac_result[1][3])
+    tol = 2 * GF_TOL[]
+    within(a, b) = length(a) == length(b) && all(abs.(Float64.(a) .- Float64.(b)) .<= tol)
+    return within(got, r) && !within(exp, r)
+end
+"The GF tolerance of the context of the replay, for the oracle."
+const GF_TOL = Ref(1.0e-6)
+
 "Per GF search: calls compared, results equal to SPICELIB's, within the tolerance, outside it."
 const GF_AGREEMENT = Dict{String, Vector{Int}}()
 "Per GF search: the largest difference of an endpoint (s) in the results within the tolerance."
 const GF_MAXDIFF = Dict{String, Float64}()
 
 foreach(n -> (MAPPINGS[n] = gf_search_mapping), GF_SEARCHES)
+
+# --- the GF searches that take procedures --------------------------------------------------
+#
+# GFEVNT, GFFOVE and GFOCCE take the step, the refinement, the progress report and the
+# interrupt check as procedures, which are not logged. Every call of tspice passes
+# SPICELIB's GFSTEP, whose step is the last one that GFSSTP set (at any depth: the GF
+# searches set it too), and GFREFN; the report and the interrupt check do not change the
+# result. Almanac takes the step as a number and gfrefn.
+"The step of SPICELIB's GFSTEP: the last that GFSSTP set in this family."
+const GF_STEP = Ref{Union{Nothing, Float64}}(nothing)
+
+# GFSSTP has no counterpart in Almanac: the call sets the step for the later searches.
+# It refuses a step that is not positive and keeps the old.
+MAPPINGS["gfsstp"] = function (ctx, c)
+    (c.failed || isempty(c.inputs)) || (GF_STEP[] = Float64(c.inputs[1].values[1]))
+    throw(NoCounterpart())
+end
+
+"Arguments of SPICELIB that Almanac's GF searches do not take."
+const GF_NOT_TAKEN = Set(["qnpars", "rpt", "bail", "mw", "nw", "work", "result"])
+
+function gf_proc_mapping(ctx, c)
+    name = lowercase(c.name)
+    c.failed && c.short in GF_SIZE_ERRORS && throw(NoCounterpart())
+    step = GF_STEP[]
+    step === nothing && throw(NoCounterpart())
+    args = Any[]
+    name == "gfevnt" && append!(args, Any[step, gfrefn])
+    for a in c.inputs
+        a.name in GF_NOT_TAKEN && continue
+        if a.name == "cnfine"
+            w = gf_window(a)
+            w === nothing && throw(NoCounterpart())
+            push!(args, Window(w))
+        elseif a.name in ("qpnams", "qcpars")
+            push!(args, String[String(v) for v in a.values])
+        elseif a.name == "qdpars"
+            push!(args, Float64[Float64(v) for v in a.values])
+        elseif a.name == "qipars"
+            push!(args, Int[Int(v) for v in a.values])
+        elseif a.name == "qlpars"
+            push!(args, Bool[Bool(v) for v in a.values])
+        elseif a.name == "raydir"
+            push!(args, Float64[Float64(v) for v in a.values])
+        else
+            push!(args, jl(a))
+        end
+        # GFFOVE and GFOCCE take the step and the refinement after the tolerance
+        name != "gfevnt" && a.name == "tol" && append!(args, Any[step, gfrefn])
+    end
+    r = getfield(Almanac, Symbol(name))(ctx, args...)
+    c.failed && return []
+    out = Dict(o.name => o for o in c.outputs)
+    exp = gf_window(out["result"])
+    exp === nothing && throw(NoCounterpart())
+    return gf_result_pairs(name, exp, collect(r), ctx)
+end
+foreach(n -> (MAPPINGS[n] = gf_proc_mapping), ("gfevnt", "gffove", "gfocce"))
+
+# --- windows and sets ----------------------------------------------------------------------
+#
+# A window or a set is logged as its size, its cardinality and its elements
+# (instrument.py, cell_args). Almanac's windows and ID lists have no size, so a call that
+# SPICELIB refused for the size of a cell has no counterpart.
+const CELL_SIZE_ERRORS = union(
+    GF_SIZE_ERRORS,
+    Set(["SPICE(CELLTOOSMALL)", "SPICE(SETEXCESS)", "SPICE(SETTOOSMALL)", "SPICE(INVALIDSIZE)", "SPICE(INVALIDCARDINALITY)"]),
+)
+
+"The routines of cells, which the oracle does not call (SPICE.jl takes no cell as SPICELIB logs it)."
+const CELL_NAMES = Set(["gfevnt", "gffove", "gfocce"])
+
+"The elements of a cell logged as size, cardinality and elements, or nothing."
+function cell_elements(a::Arg)
+    v = a.values
+    (length(v) < 2 || any(x -> !(x isa Real), v)) && return nothing
+    card = round(Int, v[2])
+    length(v) == 2 + card || return nothing
+    return a.kind == 'i' ? Int.(v[3:end]) : Float64.(v[3:end])
+end
+
+"The input window `name` of the call `c`, a valid window as SPICELIB checks none."
+function in_window(c, name)
+    a = only(x for x in c.inputs if x.name == name)
+    e = cell_elements(a)
+    e === nothing && throw(NoCounterpart())
+    return Almanac._window_of(Vector{Float64}(e))
+end
+
+"The pair of the output cell `name` with Almanac's elements `got`."
+function cell_pair(c, name, got)
+    o = only(x for x in c.outputs if x.name == name)
+    e = cell_elements(o)
+    e === nothing && throw(NoCounterpart())
+    return (name, Any[e...], Any[got...])
+end
+
+"A window routine: `f(c, ins)` runs Almanac's routine on the inputs `ins` by name."
+function cell_mapping(f)
+    return function (ctx, c)
+        c.failed && c.short in CELL_SIZE_ERRORS && throw(NoCounterpart())
+        ins = Dict(a.name => a for a in c.inputs)
+        return f(ctx, c, ins)
+    end
+end
+
+num(ins, k) = jl(ins[k])
+
+"WNVALD: the N endpoints of the input, which are not yet a window."
+function wnvald_mapping(ctx, c, ins)
+    n = num(ins, "n")
+    v = ins["window"].values
+    (n < 0 || length(v) < 2 + n || any(x -> !(x isa Real), v)) && throw(NoCounterpart())
+    w = Almanac._window_of(Float64[Float64(x) for x in v[3:(2 + n)]])
+    Almanac.wnvald!(w)
+    c.failed && return []
+    return [cell_pair(c, "window", w)]
+end
+
+for (r, f) in (
+        "wncard" => (ctx, c, i) -> [("result", only(c.outputs).values, Any[wncard(in_window(c, "window"))])],
+        "wncomd" => (ctx, c, i) -> [cell_pair(c, "result", wncomd(in_window(c, "window"), num(i, "left"), num(i, "right")))],
+        "wncond" => (ctx, c, i) -> [cell_pair(c, "window", wncond!(in_window(c, "window"), num(i, "left"), num(i, "right")))],
+        "wnexpd" => (ctx, c, i) -> [cell_pair(c, "window", wnexpd!(in_window(c, "window"), num(i, "left"), num(i, "right")))],
+        "wnextd" => (ctx, c, i) -> [cell_pair(c, "window", wnextd!(in_window(c, "window"), only(num(i, "side"))))],
+        "wnfild" => (ctx, c, i) -> [cell_pair(c, "window", wnfild!(in_window(c, "window"), num(i, "smlgap")))],
+        "wnfltd" => (ctx, c, i) -> [cell_pair(c, "window", wnfltd!(in_window(c, "window"), num(i, "smlint")))],
+        "wninsd" => (ctx, c, i) -> [cell_pair(c, "window", wninsd!(in_window(c, "window"), num(i, "left"), num(i, "right")))],
+        "wndifd" => (ctx, c, i) -> [cell_pair(c, "c", wndifd(in_window(c, "a"), in_window(c, "b")))],
+        "wnintd" => (ctx, c, i) -> [cell_pair(c, "c", wnintd(in_window(c, "a"), in_window(c, "b")))],
+        "wnunid" => (ctx, c, i) -> [cell_pair(c, "c", wnunid(in_window(c, "a"), in_window(c, "b")))],
+        "wnelmd" => (ctx, c, i) -> [("result", only(c.outputs).values, Any[wnelmd(in_window(c, "window"), num(i, "point"))])],
+        "wnincd" => (ctx, c, i) -> [("result", only(c.outputs).values, Any[wnincd(in_window(c, "window"), num(i, "left"), num(i, "right"))])],
+        "wnreld" => (ctx, c, i) -> [("result", only(c.outputs).values, Any[wnreld(in_window(c, "a"), num(i, "op"), in_window(c, "b"))])],
+        "wnfetd" => function (ctx, c, i)
+            l, r = wnfetd(in_window(c, "window"), num(i, "n"))
+            out = Dict(o.name => o for o in c.outputs)
+            return [("left", out["left"].values, Any[l]), ("right", out["right"].values, Any[r])]
+        end,
+        "wnsumd" => function (ctx, c, i)
+            out = Dict(o.name => o for o in c.outputs)
+            r = wnsumd(in_window(c, "window"))
+            return [(k, out[k].values, Any[v]) for (k, v) in zip(("meas", "avg", "stddev", "idxsml", "idxlon"), r)]
+        end,
+        "wnvald" => wnvald_mapping,
+        # coverage and objects of a file, read where SPICELIB read it; the cell is the union
+        # of its old content and the new elements
+        "spkcov" => (ctx, c, i) -> [cell_pair(c, "cover", in_snapshot(() -> spkcov!(in_window(c, "cover"), num(i, "spkfnm"), num(i, "idcode")), c))],
+        "pckcov" => (ctx, c, i) -> [cell_pair(c, "cover", in_snapshot(() -> pckcov!(in_window(c, "cover"), num(i, "pckfnm"), num(i, "idcode")), c))],
+        "ckcov" => (ctx, c, i) -> [
+            cell_pair(
+                c, "cover", in_snapshot(c) do
+                    ckcov!(
+                        in_window(c, "cover"), ctx, num(i, "ckfnm"), num(i, "idcode"), num(i, "needav"),
+                        num(i, "level"), num(i, "tol"), num(i, "timsys")
+                    )
+                end
+            ),
+        ],
+        "spkobj" => (ctx, c, i) -> [cell_pair(c, "ids", in_snapshot(() -> spkobj!(in_set(c, "ids"), num(i, "spkfnm")), c))],
+        "ckobj" => (ctx, c, i) -> [cell_pair(c, "ids", in_snapshot(() -> ckobj!(in_set(c, "ids"), num(i, "ckfnm")), c))],
+        "pckfrm" => (ctx, c, i) -> [cell_pair(c, "ids", in_snapshot(() -> pckfrm!(in_set(c, "ids"), num(i, "pckfnm")), c))],
+        "dskobj" => (ctx, c, i) -> [cell_pair(c, "bodids", in_snapshot(() -> dskobj!(in_set(c, "bodids"), num(i, "dskfnm")), c))],
+        "dsksrf" => (ctx, c, i) -> [cell_pair(c, "srfids", in_snapshot(() -> dsksrf!(in_set(c, "srfids"), num(i, "dskfnm"), num(i, "bodyid")), c))],
+        # the set of the frames of a class: SPICELIB empties it first
+        "bltfrm" => (ctx, c, i) -> [cell_pair(c, "idset", bltfrm(num(i, "frmcls")))],
+        "kplfrm" => (ctx, c, i) -> [cell_pair(c, "idset", kplfrm(ctx, num(i, "frmcls")))],
+    )
+    MAPPINGS[r] = cell_mapping(f)
+    push!(CELL_NAMES, r)
+end
+
+# EKSSUM: the summary of a segment. The string length of a column of another type than
+# character is 1 in SPICELIB and 0 in Almanac (EKColumnAttr), and is compared for the
+# character columns only.
+MAPPINGS["ekssum"] = function (ctx, c)
+    a = Dict(x.name => x for x in c.inputs)
+    h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+    # a file loaded by EKLEF is mapped to its path: its reader handle
+    h isa AbstractString && (h = daf_reader(h, c))
+    s = ekssum(h, jl(a["segno"]))
+    c.failed && return []
+    o = Dict(x.name => x.values for x in c.outputs)
+    str(v) = Any[rstrip(String(x)) for x in v]
+    chr = findall(d -> d.dtype === :CHR, s.cdescrs)
+    return [
+        ("tabnam", str(o["tabnam"]), Any[s.tabnam]),
+        ("nrows", o["nrows"], Any[s.nrows]),
+        ("ncols", o["ncols"], Any[s.ncols]),
+        ("cnames", str(o["cnames"]), Any[s.cnames...]),
+        ("dtypes", str(o["dtypes"]), Any[String(d.dtype) for d in s.cdescrs]),
+        ("sizes", o["sizes"], Any[d.size for d in s.cdescrs]),
+        ("strlns", o["strlns"][chr], Any[s.cdescrs[k].strlen for k in chr]),
+        ("indexd", o["indexd"], Any[d.indexd for d in s.cdescrs]),
+        ("nullok", o["nullok"], Any[d.nullok for d in s.cdescrs]),
+    ]
+end
+
+"Three numbers per ray, as SPICELIB's arrays (3, *), as vectors."
+rays(v) = [SVector{3, Float64}(v[(3k - 2):(3k)]...) for k in 1:(length(v) ÷ 3)]
+
+# DSKXV: the intercept of each ray; that of a ray without one is not set by SPICELIB.
+MAPPINGS["dskxv"] = function (ctx, c)
+    a = Dict(x.name => x for x in c.inputs)
+    # a count below zero, which a vector cannot carry (SPICELIB: INVALIDCOUNT)
+    (jl(a["nsurf"]) < 0 || jl(a["nrays"]) < 0) && throw(NoCounterpart())
+    srf = Int[Int(v) for v in a["srflst"].values]
+    x, f = dskxv(
+        ctx, jl(a["pri"]), jl(a["target"]), srf, jl(a["et"]), jl(a["fixref"]),
+        rays(a["vtxarr"].values), rays(a["dirarr"].values)
+    )
+    c.failed && return []
+    o = Dict(y.name => y.values for y in c.outputs)
+    fnd = o["fndarr"]
+    hit = [k for k in eachindex(fnd) if fnd[k] == true]
+    exp = Any[o["xptarr"][3k - 3 + i] for k in hit for i in 1:3]
+    got = Any[x[k][i] for k in hit if k <= length(x) for i in 1:3]
+    return [("fndarr", fnd, Any[f...]), ("xptarr (found rays)", exp, got)]
+end
+function cspice_dskxv(pri, target, srflst, et, fixref, vtx, dir)
+    x, f = SPICE.dskxv(pri, target, collect(Int, srflst), et, fixref, collect.(rays(vtx)), collect.(rays(dir)))
+    return (reduce(vcat, x; init = Float64[]), f)
+end
+CSPICE_EXTRA["dskxv"] = cspice_dskxv
+
+"The input set `name` of the call `c`, as a vector of IDs."
+function in_set(c, name)
+    a = only(x for x in c.inputs if x.name == name)
+    e = cell_elements(a)
+    e === nothing && throw(NoCounterpart())
+    return Vector{Int}(e)
+end
 
 function pool_get(ctx, c, f)
     a = Dict(x.name => jl(x) for x in c.inputs)
@@ -1952,12 +2316,52 @@ function compare_all!(name, c, result)
     return
 end
 
+# Routines that a logged routine calls through a procedure argument (GFREFN, which
+# GFEVNT, GFFOVE and GFOCCE call) and that depend on their inputs only: the replay
+# compares these nested calls too. Other nested calls are part of their parent.
+const NESTED_COMPARED = Set(["gfrefn"])
+
 # The reasons of the skipped calls, per routine, for skips.tsv.
 const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle", "no_counterpart")
 const SKIPS = Dict{String, Dict{String, Int}}()
 "The skipped calls per family and reason, for skips_family.tsv."
 const FAMILY_SKIPS = Dict{Tuple{String, String}, Int}()
 const CURRENT_FAMILY = Ref("")
+
+"""
+With TSPICE_WHY=1, the cause of each skip for an unmapped handle, per family and routine,
+for unmapped.tsv: the handle was given up (and why), was closed, or never appeared in the
+log (a file opened by a routine outside the recording); or no DAF search is current.
+"""
+const WHY = get(ENV, "TSPICE_WHY", "0") == "1"
+const UNMAPPED_WHY = Dict{Tuple{String, String, String}, Int}()
+"The log line of the first call of each entry of UNMAPPED_WHY."
+const UNMAPPED_FIRST = Dict{Tuple{String, String, String}, Int}()
+"Every handle of SPICELIB that the replay mapped once, for TSPICE_WHY."
+const SEEN_HANDLES = Set{Int}()
+function unmapped_why(name, c)
+    hs = [a.values[1] for a in c.inputs if a.name in HANDLE_ARGS && a.kind == 'i' && length(a.values) == 1]
+    if isempty(hs)
+        name in DAF_CURRENT && return CURRENT_DAF[] === nothing ? "no current DAF search" : "current DAF, refused"
+        return "no handle argument"
+    end
+    for h in hs
+        haskey(HMAP, h) && continue
+        haskey(DROPPED, h) && return "given up: " * DROPPED[h]
+        h in SEEN_HANDLES && return "closed or unloaded before"
+        return "never opened in the log"
+    end
+    return "mapped; the mapping refused the call"
+end
+function note_unmapped(name, c)
+    WHY || return nothing
+    union!(SEEN_HANDLES, keys(HMAP))
+    k = (CURRENT_FAMILY[], name, unmapped_why(name, c))
+    UNMAPPED_WHY[k] = get(UNMAPPED_WHY, k, 0) + 1
+    get!(UNMAPPED_FIRST, k, c.line)
+    return nothing
+end
+
 function note_skip(name, why)
     d = get!(() -> Dict{String, Int}(), SKIPS, name)
     d[why] = get(d, why, 0) + 1
@@ -1999,7 +2403,8 @@ function replay_family(path, tallies, mismatches)
     empty!(HANDLES)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
-    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED); empty!(EKFAST)
+    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED); empty!(EKFAST); empty!(LINKS); empty!(SPCOPN_FILES)
+    GF_STEP[] = nothing
     foreach(
         h -> try
             Almanac.dafcls(h)
@@ -2032,7 +2437,7 @@ function replay_family(path, tallies, mismatches)
             t.skipped += 1
             return
         end
-        if desync || c.depth > 1 || c.failed_before || truncated ||
+        if desync || (c.depth > 1 && !(name in NESTED_COMPARED)) || c.failed_before || truncated ||
                 !(haskey(MAPPINGS, name) || isdefined(Almanac, Symbol(name)))
             t.skipped += 1
             note_skip(
@@ -2054,9 +2459,11 @@ function replay_family(path, tallies, mismatches)
         oracle_ok() = ORACLE && !(name in STATEFUL) && !(result isa Exception && !(result isa SpiceError)) &&
             agrees_with_cspice(c, result)
         expkind = c.failed ? Symbol(lowercase(replace(c.short, r"^SPICE\(|\)$" => ""))) : nothing
+        WHY && union!(SEEN_HANDLES, keys(HMAP))
         if result isa UnmappedHandle
             t.skipped += 1
             note_skip(name, "unmapped_handle")
+            note_unmapped(name, c)
         elseif result isa NoCounterpart
             t.skipped += 1
             note_skip(name, "no_counterpart")
@@ -2259,6 +2666,11 @@ function main(args)
         println(io, join(["family"; collect(SKIP_REASONS)], '\t'))
         for f in sort(unique(first.(collect(keys(FAMILY_SKIPS)))))
             println(io, join([f; [string(get(FAMILY_SKIPS, (f, k), 0)) for k in SKIP_REASONS]], '\t'))
+        end
+    end
+    WHY && open(joinpath(outdir, "unmapped.tsv"), "w") do io
+        for ((f, r, w), n) in sort(collect(UNMAPPED_WHY); by = x -> -x[2])
+            println(io, n, '\t', f, '\t', r, '\t', w, '\t', UNMAPPED_FIRST[(f, r, w)])
         end
     end
     open(joinpath(outdir, "oracle_failures.tsv"), "w") do io

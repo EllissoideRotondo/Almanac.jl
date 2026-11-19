@@ -2,6 +2,7 @@ routine	value	error	adapter	class	note
 dasopw	0	1	0	cspice	:emptystring for an empty name, as the CSPICE wrappers
 dlaopn	0	2	0	cspice	:emptystring for an empty name, as the CSPICE wrappers
 dskxsi	1	0	0	documented	last-bit sin and cos at a grazing ray (cspice.md)
+dskxv	1	0	0	documented	the frame of an earlier failed call, a CSPICE defect (cspice_defects.md)
 dtpool	5	0	0	documented	a name past 32 characters is never set (pdpool)
 furnsh	0	1	0	documented	:badvarname past 32 characters, as CSPICE (ldpool); PEPPER accepts the name
 gcpool	0	1	0	documented	:typemismatch for a variable of the other type (gcpool)
@@ -16,7 +17,7 @@ pcpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pcpool)
 pdpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool)
 pipool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pipool)
 pxform	8	1	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
-sincpt	19	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
+sincpt	20	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
 spkcpt	3	0	0	documented	last-bit sin and cos (cspice.md)
 subpnt	2	0	0	documented	last-bit sin and cos on DSK plates (cspice.md)
 sxform	5	0	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
