@@ -68,7 +68,16 @@ function _sw_parse_checked(ks::KernelSet, fd::FrameDef)
     end
     bases = Int32[]
     if list isa Vector{Float64}
-        append!(bases, round.(Int32, list))
+        for x in list
+            # `gipool_` signals INTOUTOFRANGE for a value that is not an integer of 32 bits
+            -2.147483648e9 <= x <= 2.147483647e9 || throw(
+                SpiceError(
+                    :intoutofrange, "base frame ID $x of the switch frame $id is " *
+                        "outside the range of an integer"
+                )
+            )
+            push!(bases, round(Int32, x, RoundNearestTiesAway))   # `nint`
+        end
     else
         for name in list
             code = namfrm(ks, name)
