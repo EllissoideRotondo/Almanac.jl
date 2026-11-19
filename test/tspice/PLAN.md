@@ -131,8 +131,9 @@ Each item: what to do, how to know it is done.
    outputs only: integers (handles) must agree. Effect on the ids: `vprjp` 1 and
    `vprjpi` 2 of F_PRJP and `inedpl` 1 of F_SLICE (CSPICE's `inedpl_c` is a C routine
    without the zero-normal check of INEDPL) go from `error` to `cspice`; `kdata` 13 and
-   `kinfo` 6 of F_KEEPER go from `spread` to `value` (handles 0 against 9: the spread
-   was a false pass), and 5 `kdata` of F_DSKKPR stay `value`. The baseline needs an
+   `kinfo` 6 of F_KEEPER and `kinfo` 1 of F_KPBUG go from `spread` to `value` (handles 0 against 9: the spread
+   was a false pass; the other 137 spread rows of the baseline, of `limbpt`, `sincpt`,
+   `subpnt`, `termpt`, stay), and 5 `kdata` of F_DSKKPR stay `value`. The baseline needs an
    update for these.
 6. **Writers are checked only by reading back.** A writer call compares nothing; its
    file is checked only if a later recorded call reads it. Add a comparison of the file
