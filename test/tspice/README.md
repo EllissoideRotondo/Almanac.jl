@@ -21,6 +21,13 @@ To keep the recording small, a call of a routine that has no state is kept once 
 each distinct set of inputs, and a query is kept once between two changes of the loaded
 kernels or of the settings. `TSPICE_ALL=1` keeps every call.
 
+The recording also copies each file that a test closes after writing it, so that the
+replay compares the file that Almanac.jl wrote with SPICELIB's, by content (arrays and
+summaries, DAS data, EK entries), at the close. `files.tsv` (in `results/worker*`) lists
+each such file and whether it was compared, or why not. An input array too long for the
+log goes to a compressed binary file beside it (at most `TSPICE_MAXBIN` bytes, default
+256 MB, per family).
+
 ## When a run stops or fails
 
 A run without a list of families is the full check.

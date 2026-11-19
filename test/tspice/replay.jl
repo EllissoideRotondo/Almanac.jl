@@ -525,6 +525,10 @@ function default_mapping(ctx, c::Call)
         # a size or count that a vector of records cannot carry, or a log without all
         # values (then Almanac's file misses the segment)
         (m <= 0 || n < 0) && throw(UnmappedHandle())
+        # degree -1 of the type 20 writers (records of 3), or no record of SPKW21: the vector of records gives Almanac
+        # the degree or the size of a difference line, which it then cannot carry
+        (name in ("pckw20", "spkw20") && jl(a["polydg"]) < 0) && throw(UnmappedHandle())
+        (name == "spkw21" && n == 0) && throw(UnmappedHandle())
         length(v) < n * m && (c.failed || drop_handle(a["handle"].values[1]); throw(UnmappedHandle()))
         recs = [v[((k - 1) * m + 1):(k * m)] for k in 1:n]
         drop = ("handle", "n", "polydg", "dlsize")
@@ -838,8 +842,10 @@ function compare_files(mine, theirs; ifname = nothing)
     ft == ("DAS", "EK") && compare_ek!(pairs, mine, theirs)
     ft[1] == "DAS" && ft[2] != "EK" && compare_das!(pairs, mine, theirs)
     # the internal name `replay` that the open gave for SPICELIB's blank one (open_by_handle)
-    ifname === nothing || replace!(p -> startswith(p[1], "nd,ni,ifname") || startswith(p[1], "idword,ifname") ||
-        startswith(p[1], "ifname,") ? (p[1], p[2], Any[x == ifname ? "" : x for x in p[3]]) : p, pairs)
+    ifname === nothing || replace!(
+        p -> startswith(p[1], "nd,ni,ifname") || startswith(p[1], "idword,ifname") ||
+            startswith(p[1], "ifname,") ? (p[1], p[2], Any[x == ifname ? "" : x for x in p[3]]) : p, pairs
+    )
     return pairs
 end
 
@@ -1243,6 +1249,8 @@ const MAPPINGS = Dict{String, Function}(
         return []
     end,
     "spk14e" => function (ctx, c)
+        # a file given up (SPK14A is not recorded) is closed in Almanac
+        haskey(HMAP, c.inputs[1].values[1]) || throw(UnmappedHandle())
         w = get(SPK14W, c.inputs[1].values[1], nothing); w === nothing && throw(UnmappedHandle())
         spk14e(w)
         return []
