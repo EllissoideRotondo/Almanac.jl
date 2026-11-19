@@ -55,7 +55,7 @@ with the oracle and `--update-baseline`, then the GF bound fixed (2 rows added):
 
 Written files compared at close: 38,323, all equal to SPICELIB's; 9,685 not compared
 (9,454 past the copy cap, mostly F_ZZDSKBSR; 215 opened outside the log; 16 others).
-GF searches compared: 712 (rest of the list in `gf_agreement.tsv`), 2 outside 2 tol
+GF searches compared: 716 (per routine in `gf_agreement.tsv`), 2 outside 2 tol
 (`gfpa`, `gfilum` of F_GFILUM, libm, documented). Classes of the gated rows: documented
 833, cspice 3, gap 1, unexplained 0. `selftest.jl` rejects every case. Unit tests: 11,463
 pass (full suite on d9fab11; the groups changed since pass).
