@@ -35,34 +35,36 @@ The glibc check: run `replay.jl` through a script that first redefines, for `Flo
 `libm.so.6`, and `sincos(x) = (sin(x), cos(x))`, then `include`s `replay.jl`. A
 mismatch that remains with glibc is not a libm effect.
 
-## State at commit 8d5eb68 plus the recorder fix
+## State at commit 8d0bfdb (new recording, new baseline)
 
-Full replay (399 families, CSPICE oracle on):
+Full recording again with the recorder of this branch (399 families, all passed; the
+old recording had a synthetic manifest and logged far fewer top-level calls), then the
+full replay with the oracle and `--update-baseline`:
 
 | kind | count | meaning |
 |---|---|---|
-| match | 9,607,829 | equal to SPICELIB within 1e-12 |
-| cspice | 163,581 | differs from SPICELIB, equal to CSPICE, CSPICE differs from SPICELIB |
+| match | 15,973,462 | equal to SPICELIB within 1e-12 |
+| cspice | 163,585 | differs from SPICELIB, equal to CSPICE, CSPICE differs from SPICELIB |
 | near | 2,895 | within 1e-9 of SPICELIB; CSPICE agrees with SPICELIB |
-| spread | 178 | SPICELIB and CSPICE differ; Almanac within twice their distance |
-| value | 39,728 | larger difference |
-| error | 103 | other error, or an error where SPICELIB had none |
-| skipped | 6,443,171 | not replayed (nested calls, calls in an error state, unmapped) |
+| spread | 137 | SPICELIB and CSPICE differ; Almanac within twice their distance |
+| value | 821 | larger difference (all classed: see item 7) |
+| error | 14 | other error, or an error where SPICELIB had none (classed) |
+| adapter | 0 | (1 in the run, fixed after it: switch frame base ID outside Int32) |
+| skipped | 222,936 | see item 9 |
 
-Verified on F_DYN01, F_XFMSTA, F_GFDIST, F_LS with the glibc check: near 1,352 -> 0,
-value 18 -> 4 (the 4 are `tkvrsn`). The large value rows of F_DYN01 (to 3e-7 of the
-vector magnitude) are libm: the velocity of Mars from Phobos in PHOBOS_RADIAL is a
-small residue of a cancellation, which amplifies a one-ulp difference of `sin`.
-The agents found the same for `conics`, `tangpt`, `sincpt`, `spkcpt`, `subpnt`,
-`subslr`, `evsgp4` and the type 5 SPK (`prop2b`). Note: on the arguments checked,
-glibc's `sin` and `cos` were correctly rounded where Julia's were not (one ulp).
+Classes of the gated rows (`baseline.tsv`): documented 831, cspice 3, gap 1,
+unexplained 0. `selftest.jl` rejects every case.
 
-Agreement with CSPICE on every call of 20 families (882,315 calls):
-
-| | exact | within 1e-12 | 1e-12 to 1e-9 | beyond 1e-9 |
-|---|---|---|---|---|
-| Almanac | 721,956 | 151,808 | 6,514 | 2,037 |
-| SPICELIB (PEPPER) | 659,811 | 155,548 | 64,245 | 2,711 |
+Earlier measurements, still valid:
+- glibc check on F_DYN01, F_XFMSTA, F_GFDIST, F_LS: near 1,352 -> 0, value 18 -> 4 (the
+  4 are `tkvrsn`). The large value rows of F_DYN01 (to 3e-7 of the vector magnitude)
+  are libm, amplified by a cancellation in a frame that co-rotates with Phobos. The
+  remaining near rows (`tangpt` 712, `pxform` 489, `sxform` 405, `spkezr` 287, `spkcpt`
+  242, `conics` 216, `spkpos` 105, `xfmsta` 95, `sincpt` 94) are of this kind; `tisbod`
+  129 is the CSPICE defect of cubic rates (Almanac exact).
+- Agreement with CSPICE, every call of 34 families (plan-rates, glibc check): equal to
+  the last bit 878,267 of 960,248 calls; `spkezr`, `spkpos`, `spkez`, `azlcpo` on
+  every call.
 
 ## Fixed since the last baseline: the 38,164 `dasrdc` gaps
 
@@ -213,26 +215,24 @@ Each item: what to do, how to know it is done.
    the column declarations or on the packet sizes per subtype; record them to compare
    those files. The coordinator re-records everything (instrument.py changed) and
    updates the baseline (closes now compare, so their counts change).
-7. **Review the 1,607 `documented` value and error mismatches one by one.** The class
-   says a docstring or the manual states the difference; that has to be true and the
-   difference has to be right. Known so far:
-   - `dashfs` 765: 760 are F_DASCUD, which calls `DASCUD` and `DASRRI`, internal
-     SPICELIB routines that Almanac does not have, so its files differ; class `gap`,
-     not `documented`. 3 are F_NNEK01/03/04 (`free` 212 vs 7) and 1 is F_DASA2L
-     (`lastla` of characters 1,000,000 vs 10 after a write the log cannot hold):
-     not explained yet.
-   - `tkvrsn` 399: the version string names Almanac. By design.
-   - `tisbod` 142, `tipbod` 4: SPICELIB's rate of a cubic angle term is wrong; Almanac
-     gives the exact derivative (manual, CSPICE defects). Also "the degree check":
-     confirm which calls that covers.
-   - `spkpvn` 39: Almanac refuses an epoch outside the segment. Check what CSPICE
-     does; if `spkpvn_c` evaluates, decide with the maintainer.
-   - `tangpt` 186, `sincpt` 19, `pxform` 9, `sxform` 5, `termpt` 7, `limbpt` 5,
-     `spkcpt` 3, `subpnt` 2, `xfmsta` 1: libm. Confirm each with the glibc check.
-   - `dtpool` 5, `pipool` 1, `gdpool` 2, `ekrcec`/`ekrced`/`ekrcei` 6: confirm against
-     CSPICE (the oracle) and the docstrings.
-   Done: every `documented` routine of `baseline.tsv` has a note that is checked, and
-   any that is wrong is fixed in Almanac or reclassed.
+7. **Review the `documented` mismatches one by one.** Done. Each was checked against
+   CSPICE (probe or oracle) or the glibc check; wrong ones were fixed in Almanac:
+   - fixed: `spkpvn` (39) evaluates types 15 and 17 outside the coverage, as
+     `spkpvn_c` does (bit-identical); `tisbod`/`tipbod` (6) signal
+     COMPETINGEPOCHSPEC, COMPETINGFRAMESPEC and DEGREEOUTOFRANGE as `tisbod_c`; a null
+     EK entry (6) compares the null flag only (the values are undefined); a switch
+     frame base ID outside Int32 throws `:intoutofrange` (it threw InexactError);
+     unequal SCLK partition lists throw `:numpartsunequal`; bad ABCORR/UNITS of
+     dynamic frames throw the kinds of CSPICE.
+   - reclassed: `dashfs` (765) came from writes outside the log (DASCUD, DASUFS, the
+     EK fast load), now marked and skipped; `kinfo`/`kdata` handle 0 is documented.
+   - confirmed: `tkvrsn` (399, by design); `tisbod` (134, CSPICE's cubic rate defect,
+     Almanac exact); `tangpt`, `sincpt`, `pxform`, `sxform`, `termpt`, `limbpt`,
+     `spkcpt`, `subpnt`, `xfmsta`, `dskxsi` (libm); `pipool`/`pdpool`/`pcpool`/
+     `lmpool`/`furnsh` `:badvarname` past 32 characters and `dtpool` not found, as
+     CSPICE (probe); F_DYN07 `pxform` `:spkinvalidoption`, as `pxform_c`.
+   - kept by the maintainer's decision: `gdpool`/`gipool`/`gcpool` throw
+     `:typemismatch` for a variable of the other type, where CSPICE returns not found.
 8. **The other gaps (about 50 calls).** Done (branch plan-writers), recorded again and
    replayed: 0 `gap` rows in these families but one.
    - `dafopr`/`dafopw` of F_DAFAH (21), F_DAFNN (4), F_DYN05 (2): the logs predated the
@@ -249,9 +249,12 @@ Each item: what to do, how to know it is done.
    - `pcklof` of F_PCKBSR (1) remains: Almanac has no `pcklof`, the replay loads with
      `furnsh`, whose error for a missing file is `NOSUCHFILE` (as `furnsh_c`), where
      SPICELIB's `pcklof` signals `FILENOTFOUND`.
-9. **The 6.4 million skipped calls.** Count them by reason (nested call, error state,
-   truncated array, no mapping, unmapped handle) in `tally.tsv`, and list the routines
-   with no mapping. Nested calls are expected; any routine that tspice calls at the top
-   and the replay never compares is a coverage gap to close.
+9. **The skipped calls.** Done: `replay.jl` writes `skips.tsv`, the skipped calls per
+   routine by reason, and `run.jl` prints the totals. New recording: 222,936 skipped,
+   of which 180,444 name a handle the replay does not have (files of writers that are
+   not recorded, see item 6), 22,018 follow a load whose array the log could not hold,
+   332 hold a truncated array, 14 were made in an error state, 0 have no mapping.
+   Open: the unmapped handles come mostly from the unrecorded writers of item 6
+   (`spkw19`, `ckw06`, the EK fast load); recording those closes most of them.
 10. **`test/test_derivatives.jl`.** An exact check became a tolerance of 2e-15 (measured
     6e-16) because `sxform` now rounds as `tisbod_`. Needs the maintainer's approval.
