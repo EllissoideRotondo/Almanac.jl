@@ -411,3 +411,38 @@ function eqncpv(et::Real, epoch::Real, eqel::AbstractVector, rapol::Real, decpol
     )
     return _m_state(pos, vel)
 end
+
+"""
+    kpsolv(evec) -> Float64
+
+Return the root `x` of `x = h cos(x) + k sin(x)`, where `evec = (h, k)`, as
+[`kpsolv`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/kpsolv.html)
+of SPICELIB. CSPICE has no C wrapper for it.
+
+The equation is a vector form of Kepler's equation, which [`eqncpv`](@ref) uses for
+equinoctial elements.
+
+Throws `SpiceError(:badarg)` unless `evec` has two elements, and
+`SpiceError(:evecoutofrange)` if `h² + k² >= 1`.
+
+# Examples
+```jldoctest
+julia> kpsolv([0.0, 0.0])
+0.0
+
+julia> x = kpsolv([0.5, 0.0]); x ≈ 0.5 * cos(x)
+true
+```
+"""
+function kpsolv(evec::AbstractVector{<:Real})
+    length(evec) == 2 || _m_baddim("`evec`", 2)
+    h, k = Float64(evec[begin]), Float64(evec[begin + 1])
+    ecc2 = h * h + k * k
+    ecc2 >= 1.0 && throw(
+        SpiceError(
+            :evecoutofrange,
+            "the magnitude of the vector EVEC = ($h, $k) must be less than 1, but it is $(sqrt(ecc2))"
+        )
+    )
+    return _kepler_equinoctial(h, k)
+end

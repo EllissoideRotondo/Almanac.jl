@@ -315,13 +315,38 @@ same_sums(a, b) = length(a) == length(b) && all(zip(a, b)) do (x, y)
 end
 
 """
+    padless(path) -> Vector{UInt8}
+
+The bytes of the native DAF `path` with the unused half of the last integer word of
+each summary zeroed, for an odd count of integers (5 in a binary PCK). `pck03b_` leaves
+that half of the descriptor uninitialized, so CSPICE writes whatever its stack held.
+"""
+function padless(path::AbstractString)
+    out = read(path)
+    nd, ni, fward = Int.(reinterpret(Int32, out[[9:12; 13:16; 77:80]]))
+    isodd(ni) || return out
+    ss = nd + (ni + 1) ÷ 2
+    rec = fward
+    while rec != 0          # invariant: the summary records before `rec` are cleared
+        base = (rec - 1) * 1024
+        ctl = reinterpret(Float64, out[(base + 1):(base + 24)])
+        for k in 0:(Int(ctl[3]) - 1)
+            pad = base + 24 + 8 * ss * k + 8nd + 4ni
+            out[(pad + 1):(pad + 4)] .= 0x00
+        end
+        rec = Int(ctl[1])
+    end
+    return out
+end
+
+"""
     compare_files(pc, pn) -> NamedTuple
 
 Compare the file `pc` that CSPICE wrote with the file `pn` that Almanac wrote. The
 reference is CSPICE reading its own file. `words` is the number of data doubles,
 `badwords` the number that differ in any of the three other readings (CSPICE reads the
 Almanac file; Almanac reads each file). `bytes` is true if the two files are equal
-byte for byte.
+byte for byte, but for the pad of the summaries (`padless`).
 """
 function compare_files(pc::AbstractString, pn::AbstractString)
     ref = c_dump(pc)
@@ -333,7 +358,7 @@ function compare_files(pc::AbstractString, pn::AbstractString)
         names = all(o -> o.names == ref.names, others),
         comments = all(o -> o.comments == ref.comments, others),
         record = all(o -> o.record == ref.record, others),
-        bytes = read(pc) == read(pn),
+        bytes = padless(pc) == padless(pn),
     )
 end
 
@@ -1159,6 +1184,171 @@ function bad_pckw20(a)
     ]
 end
 
+# --- CK type 4 and binary PCK type 3: writers of SPICELIB without a C wrapper ------------
+
+"""
+Type 4 through the three routines of SPICELIB, one packet in each call of `ckw04a_`:
+with more than one packet in a call, `ckw04a_` overwrites the midpoint and the radius of
+the second and later packets (see "ckw04a: several packets in one call"). `ckw04a_`
+changes its arrays, so it gets copies.
+"""
+function c_ckw04(h, a; ranges = [i:i for i in eachindex(a.sclkdp)])
+    ccall(
+        (:ckw04b_, LIBCSPICE), Cint, (
+            Ref{Cint}, Ref{Cdouble}, Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}, Cint, Cint,
+        ), h, a.begtim, a.inst, a.ref, Cint(a.avflag), a.segid, sizeof(a.ref), sizeof(a.segid)
+    )
+    SPICE.handleerror()
+    pos = 0
+    for r in ranges
+        m = sum(a.pktsiz[r]; init = 0)
+        ccall(
+            (:ckw04a_, LIBCSPICE), Cint, (Ref{Cint}, Ref{Cint}, Ptr{Cint}, Ptr{Cdouble}, Ptr{Cdouble}),
+            h, length(r), Cint.(a.pktsiz[r]), a.pktdat[(pos + 1):(pos + m)], a.sclkdp[r]
+        )
+        SPICE.handleerror()
+        pos += m
+    end
+    ccall((:ckw04e_, LIBCSPICE), Cint, (Ref{Cint}, Ref{Cdouble}), h, a.endtim)
+    SPICE.handleerror()
+end
+
+"The same segment with the writer object of the package; the second addition takes no count."
+function n_ckw04(h, a)
+    w = ckw04b(h, a.begtim, a.inst, a.ref, a.avflag, a.segid)
+    n = length(a.sclkdp)
+    if a.cut > 0
+        m = sum(a.pktsiz[1:a.cut])
+        ckw04a(w, a.cut, a.pktsiz[1:a.cut], a.pktdat[1:m], a.sclkdp[1:a.cut])
+        ckw04a(w, a.pktsiz[(a.cut + 1):n], a.pktdat[(m + 1):end], a.sclkdp[(a.cut + 1):n])
+    else
+        ckw04a(w, n, a.pktsiz, a.pktdat, a.sclkdp)
+    end
+    return ckw04e(w, a.endtim)
+end
+
+function gen_ckw04(rng, k)
+    n = rand_n(rng, 1)
+    bounds = ck_times(rng, n + 1)
+    avflag = rand(rng, Bool)
+    pktsiz = Int[]
+    pktdat = Float64[]
+    for i in 1:n
+        counts = [rand(rng, 1:18, 4); avflag ? rand(rng, 1:12, 3) : zeros(Int, 3)]
+        cf = 0.1 .* randn(rng, sum(counts))
+        cf[1] += 1.0                                # q0 is not zero
+        push!(pktsiz, 9 + sum(counts))
+        append!(pktdat, [(bounds[i] + bounds[i + 1]) / 2; (bounds[i + 1] - bounds[i]) / 2; counts; cf])
+    end
+    return (;
+        ck_ids(k)..., begtim = bounds[1], endtim = bounds[end], avflag, segid = rand_segid(rng, "C04"),
+        pktsiz, pktdat, sclkdp = bounds[1:n], cut = n > 1 ? rand(rng, 0:(n - 1)) : 0,
+    )
+end
+
+"The arguments `a` with packet `i` of size `s` (its data cut or padded with zeros)."
+function ck4_resized(a, i, s)
+    off = sum(a.pktsiz[1:(i - 1)]; init = 0)
+    old = a.pktdat[(off + 1):(off + a.pktsiz[i])]
+    new = s <= length(old) ? old[1:s] : [old; zeros(s - length(old))]
+    sz = copy(a.pktsiz)
+    sz[i] = s
+    return merge(a, (pktsiz = sz, pktdat = [a.pktdat[1:off]; new; a.pktdat[(off + a.pktsiz[i] + 1):end]], cut = 0))
+end
+
+function bad_ckw04(a)
+    dup = copy(a.sclkdp)
+    dup[3] = dup[2]
+    # Only the checks of `ckw04b_` go to CSPICE: a rejected `ckw04a_` leaves the segment
+    # that `ckw04b_` began in the file, and it cannot be removed.
+    return Any[
+        ("unknown frame", merge(a, (ref = "NO_SUCH_FRAME",)), :invalidrefframe, true),
+        ("empty frame", merge(a, (ref = "",)), :invalidrefframe, true),
+        ("identifier of 41 characters", merge(a, (segid = "A"^41,)), :segidtoolong, true),
+        ("nonprintable identifier", merge(a, (segid = "BAD\tID",)), :nonprintablechars, true),
+        ("packet of size 0", ck4_resized(a, 2, 0), :invalidargument, false),
+        ("packet of size 143", ck4_resized(a, 2, 143), :invalidargument, false),
+        ("packet without coefficients", ck4_resized(a, 2, 6), :nonpospacketsize, false),
+        ("repeated time tag", merge(a, (sclkdp = dup, cut = 0)), :unorderedrefs, false),
+        ("second addition not after the first", merge(a, (sclkdp = dup, cut = 2)), :unorderedrefs, false),
+        ("time tags shorter than packets", merge(a, (sclkdp = a.sclkdp[1:(end - 1)], cut = 0)), :badarg, false),
+        ("no packet", merge(a, (pktsiz = Int[], pktdat = Float64[], sclkdp = Float64[], cut = 0)), :numpacketsnotpos, false),
+    ]
+end
+
+"Type 3 through the three routines of SPICELIB, as `c_spk14`."
+function c_pck03(h, a)
+    ccall(
+        (:pck03b_, LIBCSPICE), Cint, (
+            Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}, Ref{Cdouble}, Ref{Cdouble}, Ref{Cint}, Cint, Cint,
+        ), h, a.segid, a.clssid, a.frame, a.first, a.last, a.degree, sizeof(a.segid), sizeof(a.frame)
+    )
+    SPICE.handleerror()
+    n = length(a.epochs)
+    for r in (a.cut > 0 ? (1:a.cut, (a.cut + 1):n) : (1:n,))
+        ccall(
+            (:pck03a_, LIBCSPICE), Cint, (Ref{Cint}, Ref{Cint}, Ptr{Cdouble}, Ptr{Cdouble}), h,
+            length(r), a.coeffs[:, r], a.epochs[r]
+        )
+        SPICE.handleerror()
+    end
+    ccall((:pck03e_, LIBCSPICE), Cint, (Ref{Cint},), h)
+    SPICE.handleerror()
+end
+
+function n_pck03(h, a)
+    w = pck03b(h, a.segid, a.clssid, a.frame, a.first, a.last, a.degree)
+    n = length(a.epochs)
+    if a.cut > 0
+        pck03a(w, a.cut, a.coeffs[:, 1:a.cut], a.epochs[1:a.cut])
+        pck03a(w, vec(a.coeffs[:, (a.cut + 1):n]), a.epochs[(a.cut + 1):n])
+    else
+        pck03a(w, n, a.coeffs, a.epochs)
+    end
+    return pck03e(w)
+end
+
+function gen_pck03(rng, k; degree = rand(rng, 0:12))
+    n = rand_n(rng, 1)
+    nc = degree + 1
+    bounds = inc_epochs(rng, n + 1)
+    coeffs = randn(rng, 2 + 6nc, n)
+    for i in 1:n
+        coeffs[1, i] = (bounds[i] + bounds[i + 1]) / 2
+        coeffs[2, i] = (bounds[i + 1] - bounds[i]) / 2
+        coeffs[3:(2 + 3nc), i] .*= 100.0                 # RA, DEC, W in degrees
+        coeffs[3 + 2nc, i] = 1.0e5 * randn(rng)        # W of many turns, not reduced
+        coeffs[(3 + 3nc):end, i] .*= 1.0e-2             # angular velocity in degrees/s
+    end
+    return (;
+        clssid = rand(rng, sort!(collect(keys(PCK_FRAMES)))),
+        frame = rand(rng, ("J2000", "ECLIPJ2000", "B1950", "GALACTIC")), first = bounds[1],
+        last = bounds[end], segid = rand_segid(rng, "P03"), degree, coeffs, epochs = bounds[1:n],
+        cut = n > 1 ? rand(rng, 0:(n - 1)) : 0,
+    )
+end
+function bad_pck03(a)
+    dup = copy(a.epochs)
+    dup[3] = dup[2]
+    return Any[
+        ("negative degree", merge(a, (degree = -1,)), :invalidargument, true),
+        ("body is a barycenter", merge(a, (clssid = 5,)), :barycenteridcode, true),
+        ("frame that is not inertial", merge(a, (frame = "IAU_EARTH",)), :invalidrefframe, true),
+        ("unknown frame", merge(a, (frame = "NO_SUCH_FRAME",)), :invalidrefframe, true),
+        ("first equal to last", merge(a, (last = a.first,)), :baddescrtimes, true),
+        ("identifier of 41 characters", merge(a, (segid = "A"^41,)), :segidtoolong, true),
+        ("nonprintable identifier", merge(a, (segid = "BAD\tID",)), :nonprintingchars, true),
+        ("repeated epoch", merge(a, (epochs = dup, cut = 0)), :unorderedrefs, false),
+        ("second addition not after the first", merge(a, (epochs = dup, cut = 2)), :unorderedrefs, false),
+        ("epochs shorter than records", merge(a, (epochs = a.epochs[1:(end - 1)], cut = 0)), :badarg, false),
+    ]
+end
+
+# The cases of CK type 4 and PCK type 3 came after the other cases: each draws from a
+# stream of its own, so that the cases before them keep their data.
+const CKW04_RNG = MersenneTwister(SEED + 904)
+const PCK03_RNG = MersenneTwister(SEED + 903)
+
 const PCKW20_RNG = MersenneTwister(SEED + 920)
 const WRITER_CASES = WriterCase[
     WriterCase(
@@ -1278,6 +1468,8 @@ const WRITER_CASES = WriterCase[
         (h, a) -> pckw20(h, a.clssid, a.frame, a.first, a.last, a.segid, a.intlen, a.cdata, a.ascale, a.tscale, a.initjd, a.initfr),
         c_pckw20, bad_pckw20
     ),
+    WriterCase("ckw04", :ck, (rng, k) -> gen_ckw04(CKW04_RNG, k), n_ckw04, c_ckw04, bad_ckw04),
+    WriterCase("pck03", :pck, (rng, k) -> gen_pck03(PCK03_RNG, k), n_pck03, c_pck03, bad_pck03),
 ]
 
 "The writer case with the name `name`."
@@ -1637,7 +1829,7 @@ group("9. DAF access, SPK and CK writers") do
                 c.neo(href, a)
                 neo_close(c.kind, href)
                 @test read(pn) == read(pref)
-                @test read(pn) == read(pc)
+                @test padless(pn) == padless(pc)
                 # A read handle and a closed handle are rejected.
                 hr = dafopr(pn)
                 @test throws_kind(() -> c.neo(hr, a), :dafinvalidaccess)
@@ -1671,6 +1863,84 @@ group("9. DAF access, SPK and CK writers") do
         expect(k) = sum(a.coeffs[2 + (k - 1) * nc + j + 1, i] * (iseven(j ÷ 2) ? 1.0 : -1.0) for j in 0:2:a.degree)
         @test all(isapprox(st[k], expect(k); rtol = 1.0e-12, atol = 1.0e-12) for k in 1:6)
         @test rad > 0
+    end
+
+    @apart @testset "ckw04 and pck03: the writer objects" begin
+        a = writer_case("ckw04").gen(rng, 3)
+        p = joinpath(dir, "ck04_object.bc")
+        h = neo_open(:ck, p, "C04")
+        w = ckw04b(h, a.begtim, a.inst, a.ref, a.avflag, a.segid)
+        @test occursin("0 records", sprint(show, w))
+        # The input arrays stay as they were (`ckw04a_` changes them).
+        sz, dat = copy(a.pktsiz), copy(a.pktdat)
+        ckw04a(w, a.pktsiz, a.pktdat, a.sclkdp)
+        @test a.pktsiz == sz && a.pktdat == dat
+        ckw04e(w, a.endtim)
+        @test occursin("ended", sprint(show, w))
+        @test throws_kind(() -> ckw04e(w, a.endtim), :segmentnotopen)
+        @test throws_kind(() -> ckw04a(w, a.pktsiz, a.pktdat, a.sclkdp), :segmentnotopen)
+        neo_close(:ck, h)
+        # The records read back as they went in, through the record readers.
+        h = dafopr(p)
+        dafbfs(h)
+        @test daffna(h)
+        descr = dafgs(h)
+        @test cknr04(h, descr) == length(a.sclkdp)
+        off = 0
+        same = true
+        for i in eachindex(a.sclkdp)
+            same &= ckgr04(h, descr, i) == a.pktdat[(off + 1):(off + a.pktsiz[i])]
+            off += a.pktsiz[i]
+        end
+        @test same
+        dafcls(h)
+        b = writer_case("pck03").gen(rng, 1)
+        p = joinpath(dir, "pck03_object.bpc")
+        h = neo_open(:pck, p, "P03")
+        w = pck03b(h, b.segid, b.clssid, b.frame, b.first, b.last, b.degree)
+        @test throws_kind(() -> pck03a(w, 0, Float64[], Float64[]), :invalidargument)
+        @test occursin("0 records", sprint(show, w))
+        pck03a(w, b.coeffs, b.epochs)
+        pck03e(w)
+        @test occursin("ended", sprint(show, w))
+        @test throws_kind(() -> pck03e(w), :segmentnotopen)
+        @test throws_kind(() -> pck03a(w, b.coeffs, b.epochs), :segmentnotopen)
+        neo_close(:pck, h)
+    end
+
+    @apart @testset "ckw04a: several packets in one call" begin
+        # (CSPICE defect: `ckw04a_` packs the packets of one call in place, and copies the
+        # midpoint and the radius of packet k >= 2 after the coefficients of the packet
+        # have overwritten them. Almanac stores what the caller gave; with one packet in
+        # each call, CSPICE writes the same file ("writers: data area").)
+        a = writer_case("ckw04").gen(rng, 1)
+        while length(a.sclkdp) < 2
+            a = writer_case("ckw04").gen(rng, 1)
+        end
+        a = merge(a, (cut = 0,))
+        pc = joinpath(dir, "ck04_one_call_c.bc")
+        pn = joinpath(dir, "ck04_one_call_n.bc")
+        hc = c_open(:ck, pc, "ONE CALL")
+        c_ckw04(hc, a; ranges = [eachindex(a.sclkdp)])
+        c_close(:ck, hc)
+        hn = neo_open(:ck, pn, "ONE CALL")
+        n_ckw04(hn, a)
+        neo_close(:ck, hn)
+        function bounds(path)
+            h = dafopr(path)
+            dafbfs(h)
+            daffna(h)
+            descr = dafgs(h)
+            out = [ckgr04(h, descr, i)[1:2] for i in 1:cknr04(h, descr)]
+            dafcls(h)
+            return out
+        end
+        offs = cumsum([0; a.pktsiz[1:(end - 1)]])
+        given = [a.pktdat[(o + 1):(o + 2)] for o in offs]
+        @test bounds(pn) == given
+        bc = bounds(pc)
+        @test bc[1] == given[1]
+        @test bc[2] != given[2]
     end
 
     @apart @testset "many segments in one file: past one summary record, and appending" begin
@@ -2375,12 +2645,12 @@ group("9. DAF access, SPK and CK writers") do
         end
     end
 
-    @apart @testset "binary PCK type $type: Almanac reads the file that it writes" for type in (2, 20)
+    @apart @testset "binary PCK type $type: Almanac reads the file that it writes" for type in (2, 3, 20)
         # Type 20 was found missing by the replay of NAIF's tspice (F_PCK20).
-        c = writer_case("pckw$(lpad(type, 2, '0'))")
+        c = writer_case(type == 3 ? "pck03" : "pckw$(lpad(type, 2, '0'))")
         # One segment for each body-fixed frame, each with another base frame.
         segs = [
-            merge(c.gen(type == 2 ? rng : PCKW20_RNG, k), (clssid = id, frame = base)) for (k, (id, base)) in
+            merge(c.gen(type == 2 ? rng : type == 3 ? PCK03_RNG : PCKW20_RNG, k), (clssid = id, frame = base)) for (k, (id, base)) in
                 enumerate(zip(sort!(collect(keys(PCK_FRAMES))), ("ECLIPJ2000", "J2000", "B1950")))
         ]
         pc, pn = write_both(c, dir, "pck_readback_$type", segs)
@@ -2424,6 +2694,42 @@ group("9. DAF access, SPK and CK writers") do
             @test throws_kind(() -> c.neo(h, merge(a, (frame = 22,))), :invalidrefframe)
             @test throws_kind(() -> c.neo(h, merge(a, (frame = 0,))), :invalidrefframe)
             dafcls(h)
+        end
+        # Type 3: the derivative of `sxform` comes from the angular velocity series, as in
+        # `pcke03_`, and the derivative for an AD epoch is that of the angle series. RA and
+        # DEC are constant and W = 10 + 30 s degrees on 50 ± 50 s; the angular velocity
+        # series is the true one, (0, 0, 0.6) degrees/s, for 301 and zero for 499.
+        if type == 3
+            p = joinpath(dir, "pck03_rates.bpc")
+            h = pckopn(p, "RATES")
+            for (id, av3) in ((301, 0.6), (499, 0.0))
+                w = pck03b(h, "rates", id, "J2000", 0.0, 100.0, 1)
+                pck03a(w, [50.0, 50.0, 20.0, 0.0, 40.0, 0.0, 10.0, 30.0, 0.0, 0.0, 0.0, 0.0, av3, 0.0], [0.0])
+                pck03e(w)
+            end
+            # Degree 21: a record of 6 * 22 + 2 = 134 numbers, more than `pckmat_` holds.
+            w = pck03b(h, "too large", 3000, "J2000", 0.0, 100.0, 21)
+            pck03a(w, [50.0; 50.0; zeros(132)], [0.0])
+            pck03e(w)
+            pckcls(h)
+            ctx = neo_context([p])
+            exact(name) = map(
+                e -> e.d[1],
+                Almanac.frame_rotation(Almanac.kernelset(ctx), 1, namfrm(ctx, name), Almanac.taylor_var(30.0, Val(1)))
+            )
+            X = sxform(ctx, "J2000", "IAU_MOON", 30.0)
+            @test X[4:6, 1:3] ≈ exact("IAU_MOON") rtol = 1.0e-14
+            X = sxform(ctx, "J2000", "IAU_MARS", 30.0)
+            @test iszero(X[4:6, 1:3])
+            @test !iszero(exact("IAU_MARS"))
+            @test throws_kind(() -> pxform(ctx, "J2000", "ITRF93", 30.0), :pckkrectoolarge)
+            oracle_load([p])
+            try
+                @test c_value(() -> SPICE.pxform("J2000", "ITRF93", 30.0)) === :error
+                @test SPICE.sxform("J2000", "IAU_MARS", 30.0) == sxform(ctx, "J2000", "IAU_MARS", 30.0)
+            finally
+                SPICE.kclear()
+            end
         end
     end
 

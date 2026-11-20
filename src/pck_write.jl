@@ -1,4 +1,5 @@
-# Binary PCK writer: `pckopn`, `pckw02` and `pckcls`. A binary PCK is a DAF of the type
+# Binary PCK writer: `pckopn`, `pckw02`, `pck03b`/`pck03a`/`pck03e`, `pckw20` and
+# `pckcls`. A binary PCK is a DAF of the type
 # PCK whose summaries hold 2 doubles (the coverage) and 5 integers (frame class ID of the
 # body-fixed frame, base frame, data type, first and last address). `pckw02` makes the
 # input checks of SPICELIB `pckw02` in the same order and stores the records of
@@ -181,6 +182,192 @@ function pckw02(
         h, Float64[first, last], Int[clssid, refcod, 2, 0, 0], segid,
         _seg_cheb_records(cd, n, ninrec, intlen, btime)
     )
+    return nothing
+end
+
+"""
+    PCK03Writer
+
+A binary PCK segment of type 3 that is open for the addition of records.
+[`pck03b`](@ref) returns it, and it is the first argument of [`pck03a`](@ref) and
+[`pck03e`](@ref).
+
+SPICELIB keeps this state in the table of the generic segment writer `sgseqw`; here the
+caller owns it.
+"""
+mutable struct PCK03Writer
+    const handle::DAFHandle
+    const descr::Vector{Float64}
+    const segid::String
+    const ncoef::Int
+    const packets::Vector{Float64}      # (reference, packet) pairs, as `sgwfpk` writes them
+    const refs::Vector{Float64}
+    open::Bool
+end
+
+Base.show(io::IO, w::PCK03Writer) = print(
+    io, "PCK03Writer(\"", w.segid, "\", ",
+    length(w.refs), " records", w.open ? "" : ", ended", ")"
+)
+
+"""
+    pck03b(handle, segid, body, frame, first, last, chbdeg) -> PCK03Writer
+
+Begin a binary PCK segment of type 3 (Chebyshev polynomials for RA, DEC and W and for
+the angular velocity, on intervals of unequal length) in the file of `handle`, as
+[`pck03b`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03b.html)
+of SPICELIB, and return its writer. CSPICE has no C wrapper for it.
+
+`body` is the frame class ID of the body-fixed frame, as `clssid` of [`pckw02`](@ref),
+and `frame` the base frame, a built-in inertial frame given by name or by ID. `first`
+and `last` are the coverage (seconds past J2000 TDB) and `chbdeg` the degree of the
+polynomials. Add records with [`pck03a`](@ref) and end the segment with
+[`pck03e`](@ref).
+
+Throws `SpiceError`:
+- `:invalidargument` if `chbdeg < 0`;
+- `:barycenteridcode` if `0 <= body <= 9`;
+- `:invalidrefframe` if `frame` is not a built-in inertial frame;
+- `:baddescrtimes` unless `first < last`;
+- `:dafnosuchhandle` or `:dafinvalidaccess` if the file is not open for writing;
+- `:segidtoolong` or `:nonprintingchars` (the kind of the generic segment writer;
+  [`ckw04b`](@ref) checks `segid` itself and throws `:nonprintablechars`) if `segid` is
+  not valid.
+
+# Examples
+The frame ITRF93 (class ID 3000) turning at 1 degree per second about the z axis of
+J2000, from 0 to 100 s: one record of degree 1 with RA = -90° and DEC = 90°, so that the
+rotation is about the z axis, W = t degrees, and the angular velocity (0, 0, 1) degrees/s:
+```jldoctest
+julia> path = joinpath(mktempdir(), "type3.bpc");
+
+julia> h = pckopn(path, "type 3 example");
+
+julia> w = pck03b(h, "spin", 3000, "J2000", 0.0, 100.0, 1)
+PCK03Writer("spin", 0 records)
+
+julia> record = [50.0, 50.0, -90.0, 0.0, 90.0, 0.0, 50.0, 50.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0];
+
+julia> pck03a(w, record, [0.0])
+
+julia> pck03e(w)
+
+julia> pckcls(h)
+
+julia> ctx = SpiceContext();
+
+julia> furnsh(ctx, path)
+
+julia> pxform(ctx, "J2000", "ITRF93", 90.0) ≈ [0 1 0; -1 0 0; 0 0 1]
+true
+```
+"""
+function pck03b(
+        h::DAFHandle, segid::AbstractString, body::Integer, frame::SegFrame, first::Real,
+        last::Real, chbdeg::Integer
+    )
+    who = "pck03b"
+    chbdeg < 0 && throw(
+        SpiceError(
+            :invalidargument, "$who: the degree of the Chebyshev polynomial was " *
+                "negative, $chbdeg; the degree of the polynomial must be greater than or equal to zero"
+        )
+    )
+    0 <= body <= 9 && throw(
+        SpiceError(
+            :barycenteridcode, "$who: you have attempted to create a segment for a " *
+                "barycenter, and the PCK system does not support this"
+        )
+    )
+    refcod = _pck_irfnum(frame)
+    refcod == 0 && throw(SpiceError(:invalidrefframe, "$who: the reference frame $frame is not supported"))
+    first, last = Float64(first), Float64(last)
+    first >= last && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: the segment start time $first is at or after the segment stop time $last"
+        )
+    )
+    _daf_check_write(h, who)
+    _seg_idlen(who, segid)
+    cu = codeunits(String(segid))
+    for i in 1:_daf_lastnb(segid)
+        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
+            SpiceError(
+                :nonprintingchars,
+                "$who: the segment identifier contains a nonprinting character at location $i"
+            )
+        )
+    end
+    descr = dafps(Float64[first, last], Int[body, refcod, 3, 0, 0])
+    return PCK03Writer(h, descr, String(segid), Int(chbdeg) + 1, Float64[], Float64[], true)
+end
+
+"""
+    pck03a(writer, ncsets, coeffs, epochs) -> Nothing
+    pck03a(writer, coeffs, epochs) -> Nothing
+
+Add `ncsets` records to the type 3 segment `writer`, as
+[`pck03a`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03a.html)
+of SPICELIB. CSPICE has no C wrapper for it. Without `ncsets`, the number of records is
+`length(epochs)`.
+
+A record has `2 + 6 * (chbdeg + 1)` numbers: the midpoint (seconds past J2000 TDB) and
+the radius (s) of its interval, then the coefficients of RA, DEC and W (degrees) and of
+the three components of the angular velocity (degrees/s, in the body-fixed frame). The
+matrix from the base frame to the body-fixed frame is `R3(W) * R1(90° - DEC) *
+R3(90° + RA)`. `coeffs` holds the records one after the other: a vector, or a matrix
+with one record in each column. `epochs[i]` is the start of the interval of record `i`,
+in seconds past J2000 TDB.
+
+Throws `SpiceError`:
+- `:segmentnotopen` if `pck03e` ended the writer;
+- `:invalidargument` unless `ncsets > 0`;
+- `:dafnosuchhandle` if the handle is closed;
+- `:badarg` if `coeffs` or `epochs` does not have the size that `ncsets` requires;
+- `:unorderedrefs` unless `epochs` is strictly increasing and starts after the last epoch
+  of the call before.
+
+See [`pck03b`](@ref) for an example.
+"""
+function pck03a(w::PCK03Writer, ncsets::Integer, coeffs, epochs)
+    who = "pck03a"
+    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    ncsets <= 0 && throw(
+        SpiceError(
+            :invalidargument, "$who: the number of coefficient sets and epochs to be " *
+                "added to the PCK segment was not positive; its value was $ncsets"
+        )
+    )
+    _daf_check_write(w.handle, who)
+    _seg_add_cheb_packets!(who, w.packets, w.refs, w.ncoef, Int(ncsets), coeffs, epochs)
+    return nothing
+end
+pck03a(w::PCK03Writer, coeffs, epochs) = pck03a(w, length(epochs), coeffs, epochs)
+
+"""
+    pck03e(writer) -> Nothing
+
+End the type 3 segment `writer` and write it to its file, as
+[`pck03e`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03e.html)
+of SPICELIB. CSPICE has no C wrapper for it.
+
+[`pck03b`](@ref) and [`pck03a`](@ref) do not change the file, so a segment that is never
+ended is not in the file. The segment is on disk when the call returns, with the data
+that SPICELIB writes. The writer cannot be used again.
+
+Throws `SpiceError(:segmentnotopen)` if the writer was ended before, and
+`SpiceError(:dafnosuchhandle)` if the handle was closed after [`pck03b`](@ref); the
+segment is then lost.
+"""
+function pck03e(w::PCK03Writer)
+    who = "pck03e"
+    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    _daf_check_write(w.handle, who)
+    dafbna(w.handle, w.descr, w.segid)
+    dafada(w.handle, _seg_cheb_packets(w.ncoef, w.packets, w.refs))
+    dafena(w.handle)
+    w.open = false
     return nothing
 end
 

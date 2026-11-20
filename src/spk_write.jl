@@ -1816,15 +1816,25 @@ function spk14a(w::SPK14Writer, ncsets::Integer, coeffs, epochs)
                 "sets and epochs to be added to the SPK segment was not positive; its value was $ncsets"
         )
     )
-    n = Int(ncsets)
-    pktsiz = 2 + 6 * w.ncoef
+    _seg_add_cheb_packets!(who, w.packets, w.refs, w.ncoef, Int(ncsets), coeffs, epochs)
+    return nothing
+end
+spk14a(w::SPK14Writer, coeffs, epochs) = spk14a(w, length(epochs), coeffs, epochs)
+
+# The checks of `sgwfpk` on `n >= 1` records of `2 + 6 * ncoef` numbers, and their
+# addition to `packets` and `refs`.
+function _seg_add_cheb_packets!(
+        who::String, packets::Vector{Float64}, refs::Vector{Float64}, ncoef::Int, n::Int,
+        coeffs, epochs
+    )
+    pktsiz = 2 + 6 * ncoef
     cf = _seg_vec(who, "coeffs", vec(collect(Float64, coeffs)), n * pktsiz)
     ep = _seg_vec(who, "epochs", epochs, n)
-    if !isempty(w.refs) && w.refs[end] >= ep[1]
+    if !isempty(refs) && refs[end] >= ep[1]
         throw(
             SpiceError(
                 :unorderedrefs, "$who: the epoch $(ep[1]) is not after the " *
-                    "last epoch $(w.refs[end]) of the addition of records before"
+                    "last epoch $(refs[end]) of the addition of records before"
             )
         )
     end
@@ -1836,15 +1846,43 @@ function spk14a(w::SPK14Writer, ncsets::Integer, coeffs, epochs)
             )
         )
     end
-    for i in 1:n                    # invariant: records 1:i-1 are in `w.packets`, each after its epoch
-        push!(w.packets, ep[i])
-        append!(w.packets, @view cf[((i - 1) * pktsiz + 1):(i * pktsiz)])
+    for i in 1:n                    # invariant: records 1:i-1 are in `packets`, each after its epoch
+        push!(packets, ep[i])
+        append!(packets, @view cf[((i - 1) * pktsiz + 1):(i * pktsiz)])
     end
-    append!(w.refs, ep)
-    @assert length(w.packets) == length(w.refs) * (pktsiz + 1)
+    append!(refs, ep)
+    @assert length(packets) == length(refs) * (pktsiz + 1)
     return nothing
 end
-spk14a(w::SPK14Writer, coeffs, epochs) = spk14a(w, length(epochs), coeffs, epochs)
+
+"""
+    _seg_cheb_packets(ncoef, packets, refs) -> Vector{Float64}
+
+The data of a generic segment that `sgwes` writes for SPK type 14 and binary PCK type
+3: the constant `ncoef`, the (reference, packet) pairs `packets` of `2 + 6 * ncoef`
+numbers each, the references `refs`, their directory and the meta data.
+"""
+function _seg_cheb_packets(ncoef::Int, packets::Vector{Float64}, refs::Vector{Float64})
+    n = length(refs)
+    pktsiz = 2 + 6 * ncoef
+    data = Float64[ncoef]
+    append!(data, packets)
+    append!(data, refs)
+    ndir = n > 100 ? (n - 1) ÷ 100 : 0
+    _seg_directory!(data, refs, ndir)
+    pktbas = 1
+    refbas = pktbas + n * (pktsiz + 1)
+    # Meta data of `sgwes` for packets of fixed size with explicit reference values:
+    # CONBAS, NCON, RDRBAS, NRDR, RDRTYP, REFBAS, NREF, PDRBAS, NPDR, PDRTYP, PKTBAS,
+    # NPKT, RSVBAS, NRSV, PKTSZ, PKTOFF, NMETA.
+    append!(
+        data, Float64[
+            0, 1, refbas + n, ndir, 3, refbas, n, 0, 0, 0, pktbas, n, 0, 0,
+            pktsiz, 1, 17,
+        ]
+    )
+    return data
+end
 
 """
     spk14e(writer) -> Nothing
@@ -1864,26 +1902,8 @@ function spk14e(w::SPK14Writer)
     who = "spk14e"
     w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
     _daf_check_write(w.handle, who)
-    n = length(w.refs)
-    pktsiz = 2 + 6 * w.ncoef
-    data = Float64[w.ncoef]
-    append!(data, w.packets)
-    append!(data, w.refs)
-    ndir = n > 100 ? (n - 1) ÷ 100 : 0
-    _seg_directory!(data, w.refs, ndir)
-    pktbas = 1
-    refbas = pktbas + n * (pktsiz + 1)
-    # Meta data of `sgwes` for packets of fixed size with explicit reference values:
-    # CONBAS, NCON, RDRBAS, NRDR, RDRTYP, REFBAS, NREF, PDRBAS, NPDR, PDRTYP, PKTBAS,
-    # NPKT, RSVBAS, NRSV, PKTSZ, PKTOFF, NMETA.
-    append!(
-        data, Float64[
-            0, 1, refbas + n, ndir, 3, refbas, n, 0, 0, 0, pktbas, n, 0, 0,
-            pktsiz, 1, 17,
-        ]
-    )
     dafbna(w.handle, w.descr, w.segid)
-    dafada(w.handle, data)
+    dafada(w.handle, _seg_cheb_packets(w.ncoef, w.packets, w.refs))
     dafena(w.handle)
     w.open = false
     return nothing

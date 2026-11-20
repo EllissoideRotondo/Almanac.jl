@@ -285,6 +285,17 @@ group("16. math: conics") do
                 () -> CS.eqncpv(et, epoch, el, ra, dec)[SVector(4, 5, 6)]
             )
         end
+        # kpsolv (SPICELIB): eccentricities near 0, near 1, and from 1 on (an error).
+        for _ in 1:n
+            u = rand(rng)
+            e = u < 0.05 ? 1.0 + rand(rng) : u < 0.1 ? 1.0 - 1.0e-6 * rand(rng) : u < 0.15 ? 1.0e-9 * rand(rng) : rand(rng)
+            th = 2pi * rand(rng)
+            evec = [e * cos(th), e * sin(th)]
+            versus!(t, :kpsolv, () -> kpsolv(evec), () -> CS.kpsolv_(evec))
+        end
+        @test kpsolv([0.0, 0.0]) == 0.0
+        @test throws_kind(() -> kpsolv([0.6, 0.8]), :evecoutofrange)
+        @test throws_kind(() -> kpsolv([0.1]), :badarg)
         # An eccentricity of exactly 0.9 passes the first check of CSPICE and fails the
         # check of `kepleq` (measured: SPICE(ECCOUTOFBOUNDS)).
         el = [7000.0, 0.9, 0.0, 0.0, 0.0, 0.0, 0.0, 1.0e-3, 0.0]

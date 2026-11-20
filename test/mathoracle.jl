@@ -334,6 +334,8 @@ module CS
     c(:vprjp, V, :v3, :pl, :o3); c(:vprjpi, V, :v3, :pl, :pl, :o3, :ob)
     # the Fortran routines that the SPICELIB routines call (`tangpt_`, `zzraynp_`, `zzsfxcor_`)
     f(:npedln, I, :rd, :rd, :rd, :v3, :v3, :o3, :od); f(:nplnpt, I, :v3, :v3, :v3, :o3, :od)
+    # SPICELIB routines without a C wrapper
+    f(:npsgpt, I, :v3, :v3, :v3, :o3, :od); f(:incnsg, I, :v3, :v3, :rd, :v3, :v3, :oi, :o3, :o3)
 
     "`edterm_c`: the epoch, the observer position and the terminator points as rows."
     function edterm(trmtyp, source, target, et, fixref, abcorr, obsrvr, npts)
@@ -355,7 +357,7 @@ module CS
     c(:conics, V, :v8, :d, :o6); c(:oscelt, V, :v6, :d, :d, :o8); c(:oscltx, V, :v6, :d, :d, :o20)
     c(:prop2b, V, :d, :v6, :d, :o6); f(:stmp03, I, :rd, :od, :od, :od, :od)
 
-    c(:eqncpv, V, :d, :d, :v9, :d, :d, :o6)
+    c(:eqncpv, V, :d, :d, :v9, :d, :d, :o6); f(:kpsolv, D, :v2)
     # matrices of states, quadratic equations, symmetric 2 by 2 matrices
     c(:invstm, V, :m6, :om6); c(:rquad, V, :d, :d, :d, :o2, :o2); c(:diags2, V, :m2, :om2, :om2)
 

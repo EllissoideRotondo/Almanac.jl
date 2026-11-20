@@ -34,16 +34,23 @@ ckgp
 ckgpav
 ckgr02
 ckgr03
+ckgr06
 cklpf
 ckmeta
+ckmp06
+cknm06
 cknr02
 cknr03
+cknr04
 ckobj
 ckopn
 ckupf
 ckw01
 ckw02
 ckw03
+ckw04a
+ckw04b
+ckw04e
 ckw05
 ckw06
 clight
@@ -248,6 +255,7 @@ ident
 illumf
 illumg
 ilumin
+incnsg
 inedpl
 inelpl
 inrypl
@@ -265,6 +273,7 @@ kclear
 kdata
 kinfo
 kplfrm
+kpsolv
 ktotal
 latcyl
 latrec
@@ -295,6 +304,7 @@ nearpt
 npedln
 npelpt
 nplnpt
+npsgpt
 nvc2pl
 nvp2pl
 occult
@@ -353,6 +363,8 @@ sce2s
 sce2t
 scencd
 scfmt
+scid2n
+scn2id
 scpart
 scs2e
 sct2e

@@ -59,8 +59,17 @@ These calls read one segment of an open CK file, given by its descriptor from a 
 search ([`dafbfs`](@ref), [`daffna`](@ref), [`dafgs`](@ref)).
 
 ```@docs
+cknr01
+ckgr01
 cknr02
 ckgr02
 cknr03
 ckgr03
+cknr04
+ckgr04
+cknr05
+ckgr05
+cknm06
+ckmp06
+ckgr06
 ```

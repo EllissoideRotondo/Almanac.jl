@@ -40,8 +40,8 @@ that GFSSTP or the last search set and with Almanac.jl's `gfrefn`, which are the
 procedures that every tspice call passes. Not replayed:
 
 - GFUDB, GFUDS, UDDC and UDDF, whose functions are written in the test program;
-- writers without a counterpart in Almanac.jl (CKW04A, the SPKSnn subset writers,
-  DAFWDR and other record-level writers). A file that one of them wrote is read from
+- writers without a counterpart in Almanac.jl (the SPKSnn subset writers, DAFWDR and
+  other record-level writers). A file that one of them wrote is read from
   the copy of SPICELIB's file, and its later writes are skipped;
 - calls on a file that the test opened with routines outside the recording;
 - DASCUD and the DAS calls of F_DASCUD after it: Almanac.jl keeps a DAS file in memory

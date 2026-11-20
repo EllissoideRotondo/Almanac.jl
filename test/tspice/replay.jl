@@ -561,6 +561,8 @@ end
 
 "The type 14 segment writers of Almanac, by SPICELIB's handle."
 const SPK14W = Dict{Int, Any}()
+"The CK type 4 segment writers of Almanac, by SPICELIB's handle."
+const CKW04W = Dict{Int, Any}()
 
 "SPICELIB's handles of the files open for write."
 const WRITE_OPEN = Set{Int}()
@@ -1055,7 +1057,8 @@ const WRITE_HANDLE = Ref(Int[])
 "Outputs that hold a value only if a count output is at least a number: SPICELIB leaves them undefined otherwise."
 const COUNTED = Dict(
     "inelpl" => ("nxpts", ["xpt1" => 1, "xpt2" => 2]),
-    "inrypl" => ("nxpts", ["xpt" => 1])
+    "inrypl" => ("nxpts", ["xpt" => 1]),
+    "incnsg" => ("nxpts", ["xpt1" => 1, "xpt2" => 2])
 )
 
 function counted(name, pairs)
@@ -1640,6 +1643,30 @@ const MAPPINGS = Dict{String, Function}(
         haskey(HMAP, c.inputs[1].values[1]) || throw(UnmappedHandle())
         w = get(SPK14W, c.inputs[1].values[1], nothing); w === nothing && throw(UnmappedHandle())
         spk14e(w)
+        return []
+    end,
+    # the same for CK type 4: ckw04b returns the writer, ckw04a and ckw04e take it
+    "ckw04b" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
+        CKW04W[a["handle"].values[1]] = ckw04b(
+            ctx, h, jl(a["begtim"]), jl(a["inst"]), jl(a["ref"]), jl(a["avflag"]), jl(a["segid"])
+        )
+        return []
+    end,
+    "ckw04a" => function (ctx, c)
+        a = Dict(x.name => x for x in c.inputs)
+        w = get(CKW04W, a["handle"].values[1], nothing); w === nothing && throw(UnmappedHandle())
+        ckw04a(
+            w, jl(a["npkts"]), Int.(a["pktsiz"].values), Float64.(a["pktdat"].values),
+            Float64.(a["sclkdp"].values)
+        )
+        return []
+    end,
+    "ckw04e" => function (ctx, c)
+        haskey(HMAP, c.inputs[1].values[1]) || throw(UnmappedHandle())
+        w = get(CKW04W, c.inputs[1].values[1], nothing); w === nothing && throw(UnmappedHandle())
+        ckw04e(w, jl(c.inputs[2]))
         return []
     end,
     "xposeg" => function (ctx, c)
@@ -2444,7 +2471,7 @@ function replay_family(path, tallies, mismatches)
     empty!(HANDLES)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
-    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED); empty!(EKFAST); empty!(LINKS); empty!(SPCOPN_FILES)
+    empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(CKW04W); empty!(IFNAME_REPLAY); empty!(DROPPED); empty!(EKFAST); empty!(LINKS); empty!(SPCOPN_FILES)
     empty!(HANDLE_FILE); empty!(BY_FILE)
     GF_STEP[] = nothing
     foreach(

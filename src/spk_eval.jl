@@ -169,8 +169,9 @@ end
 """
     pck_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
 
-Euler angles (radians) of a binary PCK type 2 or 20 segment at `et` and their time
-derivatives to order N, as `pcke02` of CSPICE gives them.
+Euler angles (radians) of a binary PCK type 2, 3 or 20 segment at `et` and their time
+derivatives to order N, as `pcke02` of CSPICE gives them (for type 3 the derivatives of
+the angle series, not its angular velocity series; see `_pck03_state`).
 
 Contract: `seg` is a PCK descriptor from `open_daf` and `data` is the array of the
 same file; `seg.t0 <= primal(et) <= seg.t1` (not checked). The three components are
@@ -185,5 +186,63 @@ frame is `R3(W) * R1(DELTA) * R3(PHI)`. Other types throw
     # Type 20 stores the rates of the angles and the angles at the middle of each
     # record, as SPK type 20 stores velocities and positions (`pcke20_`).
     seg.dtype == 20 && return _spk_more(data, seg, et, v)
+    seg.dtype == 3 && return _pck03_angles(data, seg, et, v)
     return _unsupported("binary PCK", seg.dtype)
+end
+
+# Binary PCK type 3 (`pckr03_`, `pcke03_`): the layout of SPK type 14, with six series in
+# a packet: RA, DEC and W (degrees), then the angular velocity (degrees/s, components in
+# the body frame), which is not the derivative of the angles.
+
+"Address of the packet (its MID) of the PCK type 3 segment `seg` for `et`, and the coefficient count of a series; throws `SpiceError(:pckkrectoolarge)` as `pckmat_`."
+@inline function _pck03_packet(data::Vector{Float64}, seg::Segment, et::Float64)
+    lay = _spk14_layout(data, seg)
+    recsiz = 6 * lay.ncoef + 2
+    recsiz > 130 && throw(
+        SpiceError(
+            :pckkrectoolarge, "storage for $recsiz double precision numbers is needed " *
+                "for a PCK data record and only 130 locations were available"
+        )
+    )
+    k = clamp(_lstled(data, seg.baddr - 1 + lay.refbas, lay.nref, et), 1, lay.npkt)
+    return seg.baddr + lay.pktbas + (k - 1) * lay.stride + lay.pktoff, lay.ncoef
+end
+
+"""
+    _pck03_angles(data, seg, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
+
+The 3-1-3 angles `(PHI, DELTA, W)` (radians) of the PCK type 3 segment `seg` at `et`
+with the arithmetic of `pcke03_` (`PHI = pi/2 + RA`, `DELTA = pi/2 - DEC`, W not reduced),
+and their time derivatives to order N, which are the derivatives of the angle series.
+"""
+@inline function _pck03_angles(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T <: Real, N}
+    a, ncoef = _pck03_packet(data, seg, primal(et))
+    @inbounds mid, radius = data[a], data[a + 1]
+    jet = _cheb3(data, a + 2, ncoef, (et - mid) / radius, radius, v)
+    return ntuple(Val(N + 1)) do m
+        ra, dec, w = _RPD * jet[m][1], _RPD * jet[m][2], _RPD * jet[m][3]
+        m == 1 ? Vec3{T}(_HALFPI + ra, _HALFPI - dec, w) : Vec3{T}(ra, -dec, w)
+    end
+end
+
+"""
+    _pck03_state(data, seg, et::Float64) -> (rot::Mat3, drot::Mat3)
+
+The rotation from the reference frame of the PCK type 3 segment `seg` to the body
+frame at `et` and its derivative, as `pcke03_` gives them: `eul2m_` of the angles, and
+column j of the derivative is `-av × rot[:, j]`, with the angular velocity `av` of the
+segment.
+"""
+function _pck03_state(data::Vector{Float64}, seg::Segment, et::Float64)
+    a, ncoef = _pck03_packet(data, seg, et)
+    @inbounds mid, radius = data[a], data[a + 1]
+    s = (et - mid) / radius
+    (ang,) = _cheb3(data, a + 2, ncoef, s, radius, Val(0))
+    (av,) = _cheb3(data, a + 2 + 3ncoef, ncoef, s, radius, Val(0))
+    ra, dec, w = _RPD * ang[1], _RPD * ang[2], _RPD * ang[3]
+    rot = _eul313(w, _HALFPI - dec, _HALFPI + ra)
+    mav = Vec3{Float64}(-(_RPD * av[1]), -(_RPD * av[2]), -(_RPD * av[3]))
+    c(j) = _m_cross(mav, Vec3{Float64}(rot[1, j], rot[2, j], rot[3, j]))
+    c1, c2, c3 = c(1), c(2), c(3)
+    return rot, Mat3{Float64}(c1[1], c1[2], c1[3], c2[1], c2[2], c2[3], c3[1], c3[2], c3[3])
 end
