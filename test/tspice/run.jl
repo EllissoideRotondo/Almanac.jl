@@ -15,11 +15,12 @@
 #                        of each routine; a routine keeps its class), baseline_ids.tsv.gz
 #                        (every mismatch) and coverage.tsv (the calls of each routine)
 #     --baseline-from DIR  write the baseline as --update-baseline does from the results
-#                        of a full run with the oracle in DIR (DIR/tally.tsv, DIR/ids.tsv),
-#                        without a replay (for a run made elsewhere, such as on CI)
+#                        of a full run with the oracle in DIR (DIR/tally.tsv, DIR/ids.tsv,
+#                        DIR/run.tsv), without a replay (for a run made elsewhere, such as
+#                        on CI); refused for the results of a run of some families
 #
-# Recording needs gcc and Python 3 (or gfortran 16 and fpm with TSPICE_SOURCE=pepper, see
-# record.sh) and takes 15 to 40 minutes; it writes about 2 GB.
+# Recording needs gcc, binutils, Python 3 and curl (or gfortran 16 and fpm with
+# TSPICE_SOURCE=pepper, see record.sh) and takes 15 to 40 minutes; it writes about 2 GB.
 #
 # A run without FAMILY is the full check. It needs a complete recording: every family of
 # DIR/logs/manifest.tsv recorded and passed. It fails (exit status 1) if
@@ -145,10 +146,17 @@ function write_baseline(total, ids)
     return println("baseline written to $baseline_path, baseline_ids.tsv.gz and coverage.tsv")
 end
 
-"The baseline from the results directory `from` of a full run (tally.tsv and ids.tsv)."
+"""
+The baseline from the results directory `from` of a full run with the oracle (tally.tsv
+and ids.tsv). `run.tsv`, which the merge writes, tells a full run from a run of some
+families.
+"""
 function baseline_from(from)
-    tally, idf = joinpath(from, "tally.tsv"), joinpath(from, "ids.tsv")
+    tally, idf, runf = joinpath(from, "tally.tsv"), joinpath(from, "ids.tsv"), joinpath(from, "run.tsv")
     (isfile(tally) && isfile(idf)) || (println("no tally.tsv and ids.tsv in $from"); return 2)
+    run = isfile(runf) ? Dict(Pair(split(l, '\t'; limit = 2)...) for l in eachline(runf)) : Dict()
+    (get(run, "full", "") == "true" && get(run, "oracle", "") == "true") ||
+        (println("$from is not the results of a full run with the oracle"); return 2)
     ids = Dict{String, Int}()
     for l in eachline(idf)
         id, n = rsplit(l, '\t'; limit = 2)
@@ -244,6 +252,7 @@ function main(args)
     end
     write_counts(joinpath(results, "tally.tsv"), total, COUNTS)
     write_ids(joinpath(results, "ids.tsv"), ids)
+    write(joinpath(results, "run.tsv"), "full\t$full\noracle\t$(o["oracle"])\n")
     # the calls for which CSPICE could not be called: their mismatches are not checked
     # against CSPICE, so a fault of a mapping shows here and not as a disagreement
     nof = 0

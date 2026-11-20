@@ -4,9 +4,9 @@
 # Almanac.jl and compare the mismatches with the baseline (test/tspice/run.jl). See
 # test/tspice/README.md.
 #
-# The build needs gcc and Python 3 only. The recording and the results stay on the
-# runner; the results, the status of each family and a candidate baseline written from
-# this run are kept as an artifact.
+# The build needs gcc, binutils, Python 3 and curl, which the runner has. The recording
+# and the results stay on the runner; the results, the status of each family and a
+# candidate baseline written from this run are kept as an artifact.
 name: tspice
 
 on:
@@ -38,7 +38,10 @@ jobs:
           echo "TSPICE_DIR=$RUNNER_TEMP/tspice" >> "$GITHUB_ENV"
           echo "TSPICE_SHA=$(grep -oP '^sha=\K[0-9a-f]{64}' test/tspice/cspice/build_cspice.sh)" >> "$GITHUB_ENV"
 
-      - uses: actions/cache@v4
+      # restored here and saved right after the build, so that a run whose families or
+      # gate fail keeps the archive too (actions/cache saves only after a job that passed)
+      - id: archive
+        uses: actions/cache/restore@v4
         with:
           path: ${{ env.TSPICE_DIR }}/tspice_c.tar
           key: tspice_c-${{ env.TSPICE_SHA }}
@@ -51,6 +54,12 @@ jobs:
           start=$(date +%s)
           bash test/tspice/cspice/build_cspice.sh "$TSPICE_DIR"
           echo "build $(( $(date +%s) - start )) s" >> "$TSPICE_DIR/durations.txt"
+
+      - if: steps.archive.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.TSPICE_DIR }}/tspice_c.tar
+          key: tspice_c-${{ env.TSPICE_SHA }}
 
       - uses: julia-actions/setup-julia@v2
         with:

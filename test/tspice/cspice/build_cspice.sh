@@ -27,8 +27,10 @@ if ! echo "$sha  $tar" | sha256sum -c --quiet 2>/dev/null; then
     mv "$tar.part" "$tar"
     echo "$sha  $tar" | sha256sum -c --quiet || { echo "the archive does not have the SHA-256 $sha" >&2; exit 1; }
 fi
+# a new extraction also discards the objects: the sources keep their archive times, so
+# the objects of an earlier archive would look newer than them
 if [ ! -f "$src/.extracted" ] || [ "$src/.extracted" -ot "$tar" ]; then
-    rm -rf "$src"
+    rm -rf "$src" "$out/obj"
     tar -xf "$tar" -C "$out"
     touch "$src/.extracted"
 fi

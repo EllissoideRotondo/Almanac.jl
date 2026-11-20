@@ -13,21 +13,21 @@ gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool);
 gfilum	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
 gfpa	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
 gipool	0	1	0	documented	:typemismatch for a variable of the other type (gipool)
-limbpt	42	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
+limbpt	42	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md); largest relative difference 9.5e-5
 pcklof	0	2	0	gap	Almanac has no pcklof; the replay loads with furnsh (NOSUCHFILE); FTFULL past 5000 open files is a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 pckopn	0	1	0	documented	DAFFTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 pxform	8	1	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
 scdecd	0	1	0	documented	TOOMANYCOEFFS past 100000 coefficients of an SCLK kernel: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 sce2c	0	1	0	documented	TOOMANYPARTITIONS past 9999 partitions of an SCLK kernel: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits); Almanac then finds the epoch out of range
-sincpt	108	0	0	documented	last-bit sin and cos at grazing rays (cspice.md)
+sincpt	108	0	0	documented	last-bit sin and cos at grazing rays (cspice.md); largest relative difference 4.8e-4, ill-conditioned near grazing incidence
 spkcpt	3	0	0	documented	last-bit sin and cos (cspice.md)
 spkopn	0	1	0	documented	DAFFTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
-subpnt	6	0	0	documented	last-bit sin and cos on DSK plates (cspice.md)
-subslr	6	0	0	documented	last-bit sin and cos on DSK plates (cspice.md)
+subpnt	6	0	0	documented	last-bit sin and cos on DSK plates (cspice.md); largest relative difference 5.9e-9
+subslr	6	0	0	documented	last-bit sin and cos on DSK plates (cspice.md); largest relative difference 9.6e-9
 swpool	0	4	0	documented	KERVARSETOVERFLOW, TOOMANYWATCHES, AGENTLISTOVERFLOW past the sizes of the watcher tables: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 sxform	5	1	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: TOOMANYBASEFRAMES past 15000 base frames of switch frames, a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
-tangpt	192	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
-termpt	32	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
+tangpt	192	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md); largest relative difference 3.6e-5, ill-conditioned near grazing incidence
+termpt	32	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md); largest relative difference 8.8e-6
 tisbod	134	0	0	documented	CSPICE's rate of a cubic pole term, and the degree check (cspice.md)
 tkvrsn	400	0	0	documented	the version string names Almanac (tkvrsn docstring)
 xfmsta	1	0	0	documented	last-bit sin and cos near the pole (cspice.md)
