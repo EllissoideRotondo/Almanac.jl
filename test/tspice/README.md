@@ -24,9 +24,15 @@ kernels or of the settings. `TSPICE_ALL=1` keeps every call.
 The recording also copies each file that a test closes after writing it, so that the
 replay compares the file that Almanac.jl wrote with SPICELIB's, by content (arrays and
 summaries, DAS data, EK entries), at the close. `files.tsv` (in `results/worker*`) lists
-each such file and whether it was compared, or why not. An input array too long for the
-log goes to a compressed binary file beside it (at most `TSPICE_MAXBIN` bytes, default
-256 MB, per family).
+each such file and whether it was compared, or why not. Past 256 MB of copies in a
+family, only the copy of the last close of each file is kept: a test that appends to
+one file and closes it after each segment has its file compared once, with every
+segment, at the last close. An input array too long for the log goes to a compressed
+binary file beside it (at most `TSPICE_MAXBIN` bytes, default 256 MB, per family).
+
+The log also names the file of each handle of a file open for reading. A test gets some
+handles from routines outside the recording (the DSK segment search of ZZDSKBSR), and
+the replay finds them by their file, if Almanac.jl has it loaded.
 
 Windows and sets (cells) are logged as their size, their cardinality and their elements.
 The GF searches that take procedures (GFEVNT, GFFOVE, GFOCCE) are replayed with the step
@@ -37,7 +43,12 @@ procedures that every tspice call passes. Not replayed:
 - writers without a counterpart in Almanac.jl (CKW04A, the SPKSnn subset writers,
   DAFWDR and other record-level writers). A file that one of them wrote is read from
   the copy of SPICELIB's file, and its later writes are skipped;
-- calls on a file that the test opened with routines outside the recording.
+- calls on a file that the test opened with routines outside the recording;
+- DASCUD and the DAS calls of F_DASCUD after it: Almanac.jl keeps a DAS file in memory
+  and writes its directories at the close, so it has no step that updates them;
+- calls of the writers that Almanac.jl's arguments cannot express, such as a degree
+  that disagrees with the length of the data (Almanac.jl takes the degree from the
+  records).
 
 `TSPICE_WHY=1` writes `unmapped.tsv` (in `results/worker*`): for each family and routine,
 the calls skipped for want of a file, and why the replay has none.

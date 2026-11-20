@@ -148,12 +148,21 @@ function foreach_call(f, path; want = _ -> true)
         end
         while !eof(io) || pending !== nothing
             l = nextline()
+            if startswith(l, "H ")
+                # the file of a handle (tlog_handle_file), written between two calls
+                p = split(l, ' '; limit = 3)
+                length(p) == 3 && (h = tryparse(Int, p[2])) !== nothing && (HANDLE_FILE[h] = String(p[3]))
+                continue
+            end
             startswith(l, "@ ") || continue
             length(split(l)) == 4 || continue
             read_call(l)
         end
     end
 end
+
+"The file of each handle that the log names (`H` lines): open for reading in SPICELIB."
+const HANDLE_FILE = Dict{Int, String}()
 
 """
 The values of a binary file of the recorder (`B` line): doubles, 4-byte integers, or
@@ -380,6 +389,10 @@ const HANDLE_ARGS = Set(["handle", "inhan", "han", "handl", "newh"])
 utility such as TSTSPK): the call is skipped; the file is read from the snapshots."
 struct UnmappedHandle <: Exception end
 
+"A close that Almanac made, of a file that the replay cannot compare with SPICELIB's
+(`FILE_CHECK` says why): the call is skipped."
+struct FileNotCompared <: Exception end
+
 "Paths of the files opened by handle, and the files whose writes were not all replayed."
 const HPATH = Dict{Int, String}()
 const TAINTED = Set{String}()
@@ -391,6 +404,32 @@ const LINKS = Dict{Int, Int}()
 
 handle_value(a::Arg) = a.kind == 'i' && length(a.values) == 1 && a.name in HANDLE_ARGS ?
     get(HMAP, a.values[1], nothing) : nothing
+
+"The handles that map_by_file! mapped to a loaded file."
+const BY_FILE = Set{Int}()
+
+"""
+Map each handle of the call that the log never opened (the test got it from a routine
+outside the log, such as the DSK segment search) to its file (`HANDLE_FILE`), if the
+file is loaded in Almanac: a loaded file is known by its path. The mapping goes when
+the file is no longer loaded.
+"""
+function map_by_file!(ctx, c::Call)
+    for a in c.inputs
+        (a.name in HANDLE_ARGS && a.kind == 'i' && length(a.values) == 1) || continue
+        hid = a.values[1]
+        if hid in BY_FILE
+            p = get(HMAP, hid, nothing)
+            (p isa AbstractString && kinfo(ctx, p) !== nothing) || (delete!(HMAP, hid); delete!(BY_FILE, hid))
+        end
+        haskey(HMAP, hid) && continue
+        path = get(HANDLE_FILE, hid, nothing)
+        (path === nothing || kinfo(ctx, path) === nothing) && continue
+        HMAP[hid] = path
+        push!(BY_FILE, hid)
+    end
+    return nothing
+end
 
 """
 A reader handle of Almanac for a file that SPICELIB loaded (`cklpf`, `spklef`): the DAF
@@ -636,14 +675,16 @@ function default_mapping(ctx, c::Call)
         h = handle_value(a["handle"]); h === nothing && throw(UnmappedHandle())
         n, m = jl(a["n"]), sizeof(a)
         v = Float64.(a[data].values)
-        # a size or count that a vector of records cannot carry, or a log without all
-        # values (then Almanac's file misses the segment)
-        (m <= 0 || n < 0) && throw(UnmappedHandle())
-        # degree -1 of the type 20 writers (records of 3), or no record of SPKW21: the vector of records gives Almanac
-        # the degree or the size of a difference line, which it then cannot carry
-        (name in ("pckw20", "spkw20") && jl(a["polydg"]) < 0) && throw(UnmappedHandle())
-        (name == "spkw21" && n == 0) && throw(UnmappedHandle())
-        length(v) < n * m && (c.failed || drop_handle(a["handle"].values[1]); throw(UnmappedHandle()))
+        # a size or count that a vector of records cannot carry: Almanac takes the degree
+        # (or the size of a difference line) from the records, so the call has no
+        # counterpart (degree -1 of the type 20 writers, records of 3; no record of SPKW21)
+        (m <= 0 || n < 0) && throw(NoCounterpart())
+        (name in ("pckw20", "spkw20") && jl(a["polydg"]) < 0) && throw(NoCounterpart())
+        (name == "spkw21" && n == 0) && throw(NoCounterpart())
+        # fewer values than the records need: a failed call whose degree disagrees with
+        # its data has no counterpart either; else the log lacks values, and Almanac's
+        # file misses the segment
+        length(v) < n * m && (c.failed ? throw(NoCounterpart()) : (drop_handle(a["handle"].values[1]); throw(UnmappedHandle())))
         recs = [v[((k - 1) * m + 1):(k * m)] for k in 1:n]
         drop = ("handle", "n", "polydg", "dlsize")
         args = Any[x.name == data ? recs : jl_named(x, name) for x in c.inputs if !(x.name in drop)]
@@ -782,8 +823,8 @@ function default_mapping(ctx, c::Call)
         # a write that the replay could not make, or no copy (past the cap of the
         # recorder): the files are not compared
         FILE_CHECK[] = path in TAINTED ? "not compared: a write outside the replay" :
-            !isfile(theirs) ? "not compared: no copy of SPICELIB's file (past the cap of the recorder, or deleted before the close)" : "compared"
-        FILE_CHECK[] == "compared" || throw(UnmappedHandle())
+            !isfile(theirs) ? "not compared: no copy of SPICELIB's file (past the cap of the recorder, which keeps the last close of each file, or deleted before the close)" : "compared"
+        FILE_CHECK[] == "compared" || throw(FileNotCompared())
         return compare_files(path, theirs; ifname = path in IFNAME_REPLAY ? "replay" : nothing, spcopn = path in SPCOPN_FILES)
     end
     r = try
@@ -2322,7 +2363,7 @@ end
 const NESTED_COMPARED = Set(["gfrefn"])
 
 # The reasons of the skipped calls, per routine, for skips.tsv.
-const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle", "no_counterpart")
+const SKIP_REASONS = ("nested", "error_state", "truncated", "after_truncated_load", "no_mapping", "unmapped_handle", "no_counterpart", "file_not_compared")
 const SKIPS = Dict{String, Dict{String, Int}}()
 "The skipped calls per family and reason, for skips_family.tsv."
 const FAMILY_SKIPS = Dict{Tuple{String, String}, Int}()
@@ -2404,6 +2445,7 @@ function replay_family(path, tallies, mismatches)
     empty!(HMAP)
     CURRENT_DAF[] = nothing; CURRENT_EK[] = nothing
     empty!(HPATH); empty!(TAINTED); empty!(WRITE_OPEN); empty!(SPK14W); empty!(IFNAME_REPLAY); empty!(DROPPED); empty!(EKFAST); empty!(LINKS); empty!(SPCOPN_FILES)
+    empty!(HANDLE_FILE); empty!(BY_FILE)
     GF_STEP[] = nothing
     foreach(
         h -> try
@@ -2446,6 +2488,7 @@ function replay_family(path, tallies, mismatches)
             )
             return
         end
+        map_by_file!(ctx, c)
         mapping = get(MAPPINGS, name, default_mapping)
         FILE_CHECK[] = ""
         m0 = t.match
@@ -2467,6 +2510,9 @@ function replay_family(path, tallies, mismatches)
         elseif result isa NoCounterpart
             t.skipped += 1
             note_skip(name, "no_counterpart")
+        elseif result isa FileNotCompared
+            t.skipped += 1
+            note_skip(name, "file_not_compared")
         elseif result isa SpiceError
             if expkind === result.kind
                 t.match += 1
