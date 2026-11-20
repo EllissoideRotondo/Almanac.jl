@@ -393,8 +393,12 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "differences against CSPICE" begin
         # The ports follow the operation order of CSPICE, so most results are equal bit
-        # for bit; the others have a sine, a cosine or an arc tangent of the C library.
-        report!(t, "ellipsoid"; tol = 0.0, tols = Dict(:ednmpt => 4eps(), :inelpl => 8eps(), :edterm => 4eps()))
+        # for bit; the others have a sine, a cosine or an arc tangent of the C library
+        # (`incnsg`: the cosine of the cone angle, 2.3e-16 on macOS aarch64).
+        report!(
+            t, "ellipsoid"; tol = 0.0,
+            tols = Dict(:ednmpt => 4eps(), :inelpl => 8eps(), :edterm => 4eps(), :incnsg => 4eps())
+        )
     end
 
     @apart @testset "inferred types and no allocation for static arguments" begin

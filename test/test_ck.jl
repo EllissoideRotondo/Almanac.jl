@@ -973,7 +973,9 @@ group(
         @test throws_kind(() -> ckgr01(h1, d1, 1), :dafnosuchhandle)
         # Segments that the writers do not make, copied from the file with one word
         # changed: meta data of 14, 15 and 16 items (type 4; files older than the packet
-        # offset have 15 or 16), and a subtype 7 (types 5 and 6).
+        # offset have 15 or 16), and a subtype 7 (types 5 and 6). Last, a type 4 segment of
+        # fixed-size packets, which `ckgr04` reads as `sgfpkt` does and `ckw04a` never
+        # writes: two packets of 10 words, their references and the meta data.
         words(t) = (ic = dafus(d[t], 2, 6)[2]; dafgda(h, ic[5], ic[6]))
         w4, w5, w6 = words(4), words(5), words(6)
         nint6 = Int(w6[end])
@@ -986,6 +988,11 @@ group(
             (4, [w4[1:(end - 3)]; 14.0]), (4, [w4[1:(end - 2)]; 15.0]), (4, [w4[1:(end - 2)]; 16.0]),
             (5, bad5), (6, bad6),
         ]
+        counts = [2, 1, 1, 1, 1, 1, 0]
+        packed = sum(counts[k] * 128.0^(k - 1) for k in 1:7)
+        pkts = [[10.0, 5.0, packed, 0.5, 0.1, 0.5, 0.5, 0.5, 0.01, 0.02], [30.0, 15.0, packed, 0.6, -0.1, 0.4, 0.5, 0.5, 0.03, 0.04]]
+        meta = [0, 0, 22, 0, 3, 20, 2, 22, 0, 0, 0, 2, 0, 0, 10, 0, 17]
+        push!(cases, (4, [pkts[1]; pkts[2]; 5.0; 15.0; Float64.(meta)]))
         p = joinpath(mktempdir(), "ck_odd_segments.bc")
         hw = ckopn(p, "ODD")
         for (t, data) in cases
@@ -1015,6 +1022,12 @@ group(
             @test_throws SPICE.SpiceError oracle_ckgr_f(:ckgr05_, hc, descrs[4], 1, 1)
             @test throws_kind(() -> ckgr06(h, descrs[5], 1, 1), :notsupported)
             @test_throws SPICE.SpiceError oracle_ckgr06(hc, descrs[5], 1, 1, 1)
+            @test cknr04(h, descrs[6]) == oracle_cknr_f(:cknr04_, hc, descrs[6]) == 2
+            for k in 1:2
+                x = ckgr04(h, descrs[6], k)
+                @test x == oracle_ckgr_f(:ckgr04_, hc, descrs[6], k, length(x))
+                @test x == [pkts[k][1:2]; counts; pkts[k][4:end]]
+            end
         finally
             dafcls(h)
             SPICE.dafcls(hc)
