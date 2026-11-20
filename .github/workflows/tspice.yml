@@ -1,0 +1,118 @@
+# NAIF's test suite (tspice) against Almanac.jl: record the calls of the tspice families
+# to SPICELIB through PEPPER (test/tspice/record.sh), replay them against Almanac.jl and
+# compare the mismatches with the baseline (test/tspice/run.jl). See test/tspice/README.md.
+#
+# gfortran 16, fpm and Python come from PEPPER's pixi environment (its pixi.toml and
+# pixi.lock), as in PEPPER's own CI. The recording and the results stay on the runner;
+# the results and the status of each family are kept as an artifact.
+name: tspice
+
+on:
+  push:
+    branches: [tspice-ci]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tspice:
+    name: tspice (Julia 1, ubuntu-latest)
+    runs-on: ubuntu-latest
+    # recording 15 to 40 minutes, replay about as long with 4 processes
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      # PEPPER at the commit that record.sh records with, cloned before record.sh runs so
+      # that its pixi environment can be installed first. TSPICE_DIR holds the recording
+      # and the results.
+      - name: Clone PEPPER
+        shell: bash
+        run: |
+          echo "TSPICE_DIR=$RUNNER_TEMP/tspice" >> "$GITHUB_ENV"
+          TSPICE_DIR=$RUNNER_TEMP/tspice
+          commit=$(grep -oP 'PEPPER_COMMIT:-\K[0-9a-f]{40}' test/tspice/record.sh)
+          mkdir -p "$TSPICE_DIR"
+          git clone -q https://github.com/jacobwilliams/pepper.git "$TSPICE_DIR/pepper"
+          git -C "$TSPICE_DIR/pepper" checkout -q "$commit"
+          echo "PEPPER at $commit"
+
+      - uses: prefix-dev/setup-pixi@v0.11.2
+        with:
+          pixi-version: v0.80.0
+          manifest-path: ${{ env.TSPICE_DIR }}/pepper/pixi.toml
+          environments: default
+          locked: true
+          cache: true
+
+      - name: Compilers
+        shell: bash
+        run: pixi run --manifest-path "$TSPICE_DIR/pepper/pixi.toml" --frozen bash -c 'gfortran --version | head -1; fpm --version | head -1; python3 --version'
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+
+      # The test environment with this checkout of Almanac.jl. Only what the replay loads
+      # is precompiled (not the AD packages of the test environment).
+      - name: Julia environment
+        shell: bash
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
+        run: |
+          julia --startup-file=no --project=test -e 'using Pkg; Pkg.develop(PackageSpec(path = pwd())); Pkg.instantiate()'
+          julia --startup-file=no --project=test -e 'using Almanac, SPICE, StaticArrays'
+
+      - name: Record
+        shell: bash
+        env:
+          JOBS: 4
+        run: pixi run --manifest-path "$TSPICE_DIR/pepper/pixi.toml" --frozen bash "$GITHUB_WORKSPACE/test/tspice/record.sh" "$TSPICE_DIR"
+
+      - name: Replay and compare with the baseline
+        shell: bash
+        run: |
+          julia --startup-file=no --project=test test/tspice/run.jl --dir "$TSPICE_DIR" --jobs 4 2>&1 | tee "$TSPICE_DIR/run.txt"
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## tspice'
+            if [ -f "$TSPICE_DIR/logs/status.tsv" ]; then
+              echo "Families recorded: $(grep -c . "$TSPICE_DIR/logs/status.tsv"), failed: $(grep -vc $'\tpassed$' "$TSPICE_DIR/logs/status.tsv" || true)"
+            fi
+            echo
+            echo '```'
+            if [ -f "$TSPICE_DIR/run.txt" ]; then
+              grep -v '^\(recording\|replaying\)' "$TSPICE_DIR/run.txt" | tail -60 || true
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # what the artifact keeps besides the results: the status of the recording and
+          # the output of each family that failed
+          mkdir -p "$TSPICE_DIR/results"
+          cp -f "$TSPICE_DIR/run.txt" "$TSPICE_DIR/logs/status.tsv" "$TSPICE_DIR/logs/manifest.tsv" "$TSPICE_DIR/results/" 2>/dev/null || true
+          if [ -f "$TSPICE_DIR/logs/status.tsv" ]; then
+            for fam in $(grep -v $'\tpassed$' "$TSPICE_DIR/logs/status.tsv" | cut -f1); do
+              if [ -f "$TSPICE_DIR/work/$fam/output.txt" ]; then
+                cp "$TSPICE_DIR/work/$fam/output.txt" "$TSPICE_DIR/results/$fam.output.txt"
+              fi
+            done
+          fi
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tspice-results
+          path: ${{ env.TSPICE_DIR }}/results
+          retention-days: 30
+          if-no-files-found: ignore
