@@ -52,6 +52,10 @@ long tlog_okn(long n);
 long tlog_nsub(long nchars, long bpos, long epos, long slen);
 long tlog_sum_i(const integer *x, long n);
 long tlog_nint(double x);
+long tlog_max0(long x);
+long tlog_clamp(long n);                          /* max(0, min(n, 1000000)) */
+long tlog_card_d(const doublereal *cell);         /* the cardinality of a cell, within 0:10**6 */
+long tlog_card_i(const integer *cell);
 
 /* defined by the generated code (tlog_wrap.c): CSPICE's routines, through __real_ when
    they are wrapped, and the lists PURE and QUERY of instrument.py */

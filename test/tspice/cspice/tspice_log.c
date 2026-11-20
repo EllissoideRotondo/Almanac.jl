@@ -567,6 +567,24 @@ long tlog_sum_i(const integer *x, long n) {
 /* Fortran's NINT: half away from zero */
 long tlog_nint(double x) { return x >= 0 ? (long)floor(x + 0.5) : -(long)floor(-x + 0.5); }
 
+long tlog_max0(long x) { return x > 0 ? x : 0; }
+long tlog_clamp(long n) { return n < 0 ? 0 : n > 1000000 ? 1000000 : n; }
+
+/* The size and cardinality of a cell are at CELL(-1) and CELL(0): the f2c pointer is at
+   CELL(LBCELL), LBCELL = -5, so they are cell[4] and cell[5]. As cell_args of
+   instrument.py: min(card, size, 10**6), at least 0. */
+long tlog_card_d(const doublereal *cell) {
+    double v = cell[5] < cell[4] ? cell[5] : cell[4];
+    if (v > 1.0e6) v = 1.0e6;
+    if (v < 0.0) v = 0.0;
+    return tlog_nint(v);
+}
+long tlog_card_i(const integer *cell) {
+    long v = cell[5] < cell[4] ? cell[5] : cell[4];
+    if (v > 1000000) v = 1000000;
+    return v < 0 ? 0 : v;
+}
+
 /* ---- EK fast loads and SPK type 14 ---- */
 
 /* A column name as Fortran's upper32: left-adjusted, 32 characters, upper case
