@@ -1,0 +1,2772 @@
+routine	kind	ftype	arg	akind	dims	intent
+axisar	subroutine		axis	d	3	in
+axisar	subroutine		angle	d		in
+axisar	subroutine		r	d	3,3	out
+azlcpo	subroutine		method	c		in
+azlcpo	subroutine		target	c		in
+azlcpo	subroutine		et	d		in
+azlcpo	subroutine		abcorr	c		in
+azlcpo	subroutine		azccw	l		in
+azlcpo	subroutine		elplsz	l		in
+azlcpo	subroutine		obspos	d	3	in
+azlcpo	subroutine		obsctr	c		in
+azlcpo	subroutine		obsref	c		in
+azlcpo	subroutine		azlsta	d	6	out
+azlcpo	subroutine		lt	d		out
+azlrec	subroutine		range	d		in
+azlrec	subroutine		az	d		in
+azlrec	subroutine		el	d		in
+azlrec	subroutine		azccw	l		in
+azlrec	subroutine		elplsz	l		in
+azlrec	subroutine		rectan	d	3	out
+b1900	function	d				
+b1950	function	d				
+badkpv	function	l	caller	c		in
+badkpv	function	l	name	c		in
+badkpv	function	l	comp	c		in
+badkpv	function	l	size	i		in
+badkpv	function	l	divby	i		in
+badkpv	function	l	type	c		in
+bltfrm	subroutine		frmcls	i		in
+bltfrm	subroutine		idset	i	LBCELL:*	inout
+bodc2n	subroutine		code	i		in
+bodc2n	subroutine		name	c		out
+bodc2n	subroutine		found	l		out
+bodc2s	subroutine		code	i		in
+bodc2s	subroutine		name	c		out
+boddef	subroutine		name	c		in
+boddef	subroutine		code	i		in
+bodfnd	function	l	body	i		in
+bodfnd	function	l	item	c		in
+bodn2c	subroutine		name	c		in
+bodn2c	subroutine		code	i		out
+bodn2c	subroutine		found	l		out
+bods2c	subroutine		name	c		in
+bods2c	subroutine		code	i		out
+bods2c	subroutine		found	l		out
+bodvcd	subroutine		bodyid	i		in
+bodvcd	subroutine		item	c		in
+bodvcd	subroutine		maxn	i		in
+bodvcd	subroutine		dim	i		out
+bodvcd	subroutine		values	d	*	out
+bodvrd	subroutine		bodynm	c		in
+bodvrd	subroutine		item	c		in
+bodvrd	subroutine		maxn	i		in
+bodvrd	subroutine		dim	i		out
+bodvrd	subroutine		values	d	*	out
+ccifrm	entry		frclss	i		in
+ccifrm	entry		clssid	i		in
+ccifrm	entry		frcode	i		out
+ccifrm	entry		frname	c		out
+ccifrm	entry		cent	i		out
+ccifrm	entry		found	l		out
+cgv2el	subroutine		center	d	3	in
+cgv2el	subroutine		vec1	d	3	in
+cgv2el	subroutine		vec2	d	3	in
+cgv2el	subroutine		ellips	d	9	out
+chbder	subroutine		cp	d	*	in
+chbder	subroutine		degp	i		in
+chbder	subroutine		x2s	d	2	in
+chbder	subroutine		x	d		in
+chbder	subroutine		nderiv	i		in
+chbder	subroutine		partdp	d	3,0:*	inout
+chbder	subroutine		dpdxs	d	0:*	out
+chbigr	subroutine		degp	i		in
+chbigr	subroutine		cp	d	*	in
+chbigr	subroutine		x2s	d	2	in
+chbigr	subroutine		x	d		in
+chbigr	subroutine		p	d		out
+chbigr	subroutine		itgrlp	d		out
+chbint	subroutine		cp	d	*	in
+chbint	subroutine		degp	i		in
+chbint	subroutine		x2s	d	2	in
+chbint	subroutine		x	d		in
+chbint	subroutine		p	d		out
+chbint	subroutine		dpdx	d		out
+chbval	subroutine		cp	d	*	in
+chbval	subroutine		degp	i		in
+chbval	subroutine		x2s	d	2	in
+chbval	subroutine		x	d		in
+chbval	subroutine		p	d		out
+cidfrm	entry		cent	i		in
+cidfrm	entry		frcode	i		out
+cidfrm	entry		frname	c		out
+cidfrm	entry		found	l		out
+ckcls	subroutine		handle	i		in
+ckcov	subroutine		ckfnm	c		in
+ckcov	subroutine		idcode	i		in
+ckcov	subroutine		needav	l		in
+ckcov	subroutine		level	c		in
+ckcov	subroutine		tol	d		in
+ckcov	subroutine		timsys	c		in
+ckcov	subroutine		cover	d	LBCELL:*	inout
+ckfrot	subroutine		inst	i		in
+ckfrot	subroutine		et	d		in
+ckfrot	subroutine		rotate	d	3,3	out
+ckfrot	subroutine		ref	i		out
+ckfrot	subroutine		found	l		out
+ckfxfm	subroutine		inst	i		in
+ckfxfm	subroutine		et	d		in
+ckfxfm	subroutine		xform	d	6,6	out
+ckfxfm	subroutine		ref	i		out
+ckfxfm	subroutine		found	l		out
+ckgp	subroutine		inst	i		in
+ckgp	subroutine		sclkdp	d		in
+ckgp	subroutine		tol	d		in
+ckgp	subroutine		ref	c		in
+ckgp	subroutine		cmat	d	3,3	out
+ckgp	subroutine		clkout	d		out
+ckgp	subroutine		found	l		out
+ckgpav	subroutine		inst	i		in
+ckgpav	subroutine		sclkdp	d		in
+ckgpav	subroutine		tol	d		in
+ckgpav	subroutine		ref	c		in
+ckgpav	subroutine		cmat	d	3,3	out
+ckgpav	subroutine		av	d	3	out
+ckgpav	subroutine		clkout	d		out
+ckgpav	subroutine		found	l		out
+ckgr02	subroutine		handle	i		in
+ckgr02	subroutine		descr	d	*	in
+ckgr02	subroutine		recno	i		in
+ckgr02	subroutine		record	d	*	out
+ckgr03	subroutine		handle	i		in
+ckgr03	subroutine		descr	d	*	in
+ckgr03	subroutine		recno	i		in
+ckgr03	subroutine		record	d	*	out
+ckgr06	subroutine		handle	i		in
+ckgr06	subroutine		descr	d	*	in
+ckgr06	subroutine		msno	i		in
+ckgr06	subroutine		recno	i		in
+ckgr06	subroutine		record	d	*	out
+cklpf	entry		fname	c		in
+cklpf	entry		handle	i		out
+ckmeta	subroutine		ckid	i		in
+ckmeta	subroutine		meta	c		in
+ckmeta	subroutine		idcode	i		out
+ckmp06	subroutine		handle	i		in
+ckmp06	subroutine		descr	d	*	in
+ckmp06	subroutine		msno	i		in
+ckmp06	subroutine		rate	d		out
+ckmp06	subroutine		subtyp	i		out
+ckmp06	subroutine		winsiz	i		out
+ckmp06	subroutine		nrec	i		out
+ckmp06	subroutine		ivlbds	d	2	out
+ckmp06	subroutine		lstepc	d		out
+cknm06	subroutine		handle	i		in
+cknm06	subroutine		descr	d	*	in
+cknm06	subroutine		nmini	i		out
+cknr02	subroutine		handle	i		in
+cknr02	subroutine		descr	d	*	in
+cknr02	subroutine		nrec	i		out
+cknr03	subroutine		handle	i		in
+cknr03	subroutine		descr	d	*	in
+cknr03	subroutine		nrec	i		out
+cknr04	subroutine		handle	i		in
+cknr04	subroutine		descr	d	*	in
+cknr04	subroutine		nrec	i		out
+ckobj	subroutine		ckfnm	c		in
+ckobj	subroutine		ids	i	LBCELL:*	inout
+ckopn	subroutine		fname	c		in
+ckopn	subroutine		ifname	c		in
+ckopn	subroutine		ncomch	i		in
+ckopn	subroutine		handle	i		out
+ckupf	entry		handle	i		in
+ckw01	subroutine		handle	i		in
+ckw01	subroutine		begtim	d		in
+ckw01	subroutine		endtim	d		in
+ckw01	subroutine		inst	i		in
+ckw01	subroutine		ref	c		in
+ckw01	subroutine		avflag	l		in
+ckw01	subroutine		segid	c		in
+ckw01	subroutine		nrec	i		in
+ckw01	subroutine		sclkdp	d	*	in
+ckw01	subroutine		quats	d	0:3,*	in
+ckw01	subroutine		avvs	d	3,*	in
+ckw02	subroutine		handle	i		in
+ckw02	subroutine		begtim	d		in
+ckw02	subroutine		endtim	d		in
+ckw02	subroutine		inst	i		in
+ckw02	subroutine		ref	c		in
+ckw02	subroutine		segid	c		in
+ckw02	subroutine		nrec	i		in
+ckw02	subroutine		start	d	*	in
+ckw02	subroutine		stop	d	*	in
+ckw02	subroutine		quats	d	0:3,*	in
+ckw02	subroutine		avvs	d	3,*	in
+ckw02	subroutine		rates	d	*	in
+ckw03	subroutine		handle	i		in
+ckw03	subroutine		begtim	d		in
+ckw03	subroutine		endtim	d		in
+ckw03	subroutine		inst	i		in
+ckw03	subroutine		ref	c		in
+ckw03	subroutine		avflag	l		in
+ckw03	subroutine		segid	c		in
+ckw03	subroutine		nrec	i		in
+ckw03	subroutine		sclkdp	d	*	in
+ckw03	subroutine		quats	d	0:3,*	in
+ckw03	subroutine		avvs	d	3,*	in
+ckw03	subroutine		nints	i		in
+ckw03	subroutine		starts	d	*	in
+ckw04a	subroutine		handle	i		in
+ckw04a	subroutine		npkts	i		in
+ckw04a	subroutine		pktsiz	i	*	inout
+ckw04a	subroutine		pktdat	d	*	inout
+ckw04a	subroutine		sclkdp	d	*	in
+ckw04b	subroutine		handle	i		in
+ckw04b	subroutine		begtim	d		in
+ckw04b	subroutine		inst	i		in
+ckw04b	subroutine		ref	c		in
+ckw04b	subroutine		avflag	l		in
+ckw04b	subroutine		segid	c		in
+ckw04e	subroutine		handle	i		in
+ckw04e	subroutine		endtim	d		in
+ckw05	subroutine		handle	i		in
+ckw05	subroutine		subtyp	i		in
+ckw05	subroutine		degree	i		in
+ckw05	subroutine		begtim	d		in
+ckw05	subroutine		endtim	d		in
+ckw05	subroutine		inst	i		in
+ckw05	subroutine		ref	c		in
+ckw05	subroutine		avflag	l		in
+ckw05	subroutine		segid	c		in
+ckw05	subroutine		n	i		in
+ckw05	subroutine		sclkdp	d	*	in
+ckw05	subroutine		packts	d	*	in
+ckw05	subroutine		rate	d		in
+ckw05	subroutine		nints	i		in
+ckw05	subroutine		starts	d	*	in
+ckw06	subroutine		handle	i		in
+ckw06	subroutine		inst	i		in
+ckw06	subroutine		ref	c		in
+ckw06	subroutine		avflag	l		in
+ckw06	subroutine		first	d		in
+ckw06	subroutine		last	d		in
+ckw06	subroutine		segid	c		in
+ckw06	subroutine		nmini	i		in
+ckw06	subroutine		npkts	i	*	in
+ckw06	subroutine		subtps	i	*	in
+ckw06	subroutine		degres	i	*	in
+ckw06	subroutine		packts	d	*	in
+ckw06	subroutine		rates	d	*	in
+ckw06	subroutine		sclkdp	d	*	in
+ckw06	subroutine		ivlbds	d	*	in
+ckw06	subroutine		sellst	l		in
+clight	function	d				
+clpool	entry					
+cnmfrm	entry		cname	c		in
+cnmfrm	entry		frcode	i		out
+cnmfrm	entry		frname	c		out
+cnmfrm	entry		found	l		out
+conics	subroutine		elts	d	8	in
+conics	subroutine		et	d		in
+conics	subroutine		state	d	6	out
+convrt	subroutine		x	d		in
+convrt	subroutine		in	c		in
+convrt	subroutine		out	c		in
+convrt	subroutine		y	d		out
+cvpool	entry		agent	c		in
+cvpool	entry		update	l		out
+cyllat	subroutine		r	d		in
+cyllat	subroutine		clon	d		in
+cyllat	subroutine		z	d		in
+cyllat	subroutine		radius	d		out
+cyllat	subroutine		lon	d		out
+cyllat	subroutine		lat	d		out
+cylrec	subroutine		r	d		in
+cylrec	subroutine		clon	d		in
+cylrec	subroutine		z	d		in
+cylrec	subroutine		rectan	d	3	out
+cylsph	subroutine		r	d		in
+cylsph	subroutine		clon	d		in
+cylsph	subroutine		z	d		in
+cylsph	subroutine		radius	d		out
+cylsph	subroutine		colat	d		out
+cylsph	subroutine		slon	d		out
+dafac	subroutine		handle	i		in
+dafac	subroutine		n	i		in
+dafac	subroutine		buffer	c	*	in
+dafada	entry		data	d	*	in
+dafada	entry		n	i		in
+dafarr	subroutine		handle	i		in
+dafarr	subroutine		resv	i		in
+dafbbs	entry		handle	i		in
+dafbfs	entry		handle	i		in
+dafbna	entry		handle	i		in
+dafbna	entry		sum	d	*	in
+dafbna	entry		name	c		in
+dafcad	entry		handle	i		in
+dafcls	entry		handle	i		in
+dafdc	subroutine		handle	i		in
+dafec	subroutine		handle	i		in
+dafec	subroutine		bufsiz	i		in
+dafec	subroutine		n	i		out
+dafec	subroutine		buffer	c	*	out
+dafec	subroutine		done	l		out
+dafena	entry					
+daffna	entry		found	l		out
+daffpa	entry		found	l		out
+dafgda	subroutine		handle	i		in
+dafgda	subroutine		baddr	i		in
+dafgda	subroutine		eaddr	i		in
+dafgda	subroutine		data	d	*	out
+dafgn	entry		name	c		out
+dafgs	entry		sum	d	*	out
+dafgsr	entry		handle	i		in
+dafgsr	entry		recno	i		in
+dafgsr	entry		begin	i		in
+dafgsr	entry		end	i		in
+dafgsr	entry		data	d	*	out
+dafgsr	entry		found	l		out
+dafhsf	entry		handle	i		in
+dafhsf	entry		nd	i		out
+dafhsf	entry		ni	i		out
+dafonw	entry		fname	c		in
+dafonw	entry		ftype	c		in
+dafonw	entry		nd	i		in
+dafonw	entry		ni	i		in
+dafonw	entry		ifname	c		in
+dafonw	entry		resv	i		in
+dafonw	entry		handle	i		out
+dafopr	entry		fname	c		in
+dafopr	entry		handle	i		out
+dafopw	entry		fname	c		in
+dafopw	entry		handle	i		out
+dafps	subroutine		nd	i		in
+dafps	subroutine		ni	i		in
+dafps	subroutine		dc	d	*	in
+dafps	subroutine		ic	i	*	in
+dafps	subroutine		sum	d	*	out
+dafra	subroutine		handle	i		in
+dafra	subroutine		iorder	i	*	inout
+dafra	subroutine		n	i		in
+dafrfr	subroutine		handle	i		in
+dafrfr	subroutine		nd	i		out
+dafrfr	subroutine		ni	i		out
+dafrfr	subroutine		ifname	c		out
+dafrfr	subroutine		fward	i		out
+dafrfr	subroutine		bward	i		out
+dafrfr	subroutine		free	i		out
+dafrn	entry		name	c		in
+dafrs	entry		sum	d	*	in
+dafus	entry		sum	d	*	in
+dafus	entry		nd	i		in
+dafus	entry		ni	i		in
+dafus	entry		dc	d	*	out
+dafus	entry		ic	i	*	out
+dafwcr	subroutine		handle	i		in
+dafwcr	subroutine		recno	i		in
+dafwcr	subroutine		crec	c		in
+dafwda	subroutine		handle	i		in
+dafwda	subroutine		begin	i		in
+dafwda	subroutine		end	i		in
+dafwda	subroutine		data	d	*	in
+dafwdr	entry		handle	i		in
+dafwdr	entry		recno	i		in
+dafwdr	entry		drec	d	128	in
+dafwfr	subroutine		handle	i		in
+dafwfr	subroutine		nd	i		in
+dafwfr	subroutine		ni	i		in
+dafwfr	subroutine		ifname	c		in
+dafwfr	subroutine		fward	i		in
+dafwfr	subroutine		bward	i		in
+dafwfr	subroutine		free	i		in
+dafws	entry		sum	d	*	in
+dasac	subroutine		handle	i		in
+dasac	subroutine		n	i		in
+dasac	subroutine		buffer	c	*	in
+dasacr	subroutine		handle	i		in
+dasacr	subroutine		n	i		in
+dasacu	subroutine		comlun	i		in
+dasacu	subroutine		begmrk	c		in
+dasacu	subroutine		endmrk	c		in
+dasacu	subroutine		insbln	l		in
+dasacu	subroutine		handle	i		in
+dasadc	subroutine		handle	i		in
+dasadc	subroutine		n	i		in
+dasadc	subroutine		bpos	i		in
+dasadc	subroutine		epos	i		in
+dasadc	subroutine		data	c	*	in
+dasadd	subroutine		handle	i		in
+dasadd	subroutine		n	i		in
+dasadd	subroutine		data	d	*	in
+dasadi	subroutine		handle	i		in
+dasadi	subroutine		n	i		in
+dasadi	subroutine		data	i	*	in
+dascls	subroutine		handle	i		in
+dascud	subroutine		handle	i		in
+dascud	subroutine		type	i		in
+dascud	subroutine		nwords	i		in
+dasdc	subroutine		handle	i		in
+dasec	subroutine		handle	i		in
+dasec	subroutine		bufsiz	i		in
+dasec	subroutine		n	i		out
+dasec	subroutine		buffer	c	*	out
+dasec	subroutine		done	l		out
+dashfn	entry		handle	i		in
+dashfn	entry		fname	c		out
+dashfs	entry		handle	i		in
+dashfs	entry		nresvr	i		out
+dashfs	entry		nresvc	i		out
+dashfs	entry		ncomr	i		out
+dashfs	entry		ncomc	i		out
+dashfs	entry		free	i		out
+dashfs	entry		lastla	i	3	out
+dashfs	entry		lastrc	i	3	out
+dashfs	entry		lastwd	i	3	out
+daslla	subroutine		handle	i		in
+daslla	subroutine		lastc	i		out
+daslla	subroutine		lastd	i		out
+daslla	subroutine		lasti	i		out
+dasllc	entry		handle	i		in
+dasonw	entry		fname	c		in
+dasonw	entry		ftype	c		in
+dasonw	entry		ifname	c		in
+dasonw	entry		ncomr	i		in
+dasonw	entry		handle	i		out
+dasopr	entry		fname	c		in
+dasopr	entry		handle	i		out
+dasops	entry		handle	i		out
+dasopw	entry		fname	c		in
+dasopw	entry		handle	i		out
+dasrcr	subroutine		handle	i		in
+dasrcr	subroutine		n	i		in
+dasrdc	subroutine		handle	i		in
+dasrdc	subroutine		first	i		in
+dasrdc	subroutine		last	i		in
+dasrdc	subroutine		bpos	i		in
+dasrdc	subroutine		epos	i		in
+dasrdc	subroutine		data	c	*	out
+dasrdd	subroutine		handle	i		in
+dasrdd	subroutine		first	i		in
+dasrdd	subroutine		last	i		in
+dasrdd	subroutine		data	d	*	out
+dasrdi	subroutine		handle	i		in
+dasrdi	subroutine		first	i		in
+dasrdi	subroutine		last	i		in
+dasrdi	subroutine		data	i	*	out
+dasrfr	subroutine		handle	i		in
+dasrfr	subroutine		idword	c		out
+dasrfr	subroutine		ifname	c		out
+dasrfr	subroutine		nresvr	i		out
+dasrfr	subroutine		nresvc	i		out
+dasrfr	subroutine		ncomr	i		out
+dasrfr	subroutine		ncomc	i		out
+dassdr	subroutine		handle	i		in
+dasudc	subroutine		handle	i		in
+dasudc	subroutine		first	i		in
+dasudc	subroutine		last	i		in
+dasudc	subroutine		bpos	i		in
+dasudc	subroutine		epos	i		in
+dasudc	subroutine		data	c	*	in
+dasudd	subroutine		handle	i		in
+dasudd	subroutine		first	i		in
+dasudd	subroutine		last	i		in
+dasudd	subroutine		data	d	*	in
+dasudi	subroutine		handle	i		in
+dasudi	subroutine		first	i		in
+dasudi	subroutine		last	i		in
+dasudi	subroutine		data	i	*	in
+dasufs	entry		handle	i		in
+dasufs	entry		nresvr	i		in
+dasufs	entry		nresvc	i		in
+dasufs	entry		ncomr	i		in
+dasufs	entry		ncomc	i		in
+dasufs	entry		free	i		in
+dasufs	entry		lastla	i	3	in
+dasufs	entry		lastrc	i	3	in
+dasufs	entry		lastwd	i	3	in
+dasurc	entry		handle	i		in
+dasurc	entry		recno	i		in
+dasurc	entry		first	i		in
+dasurc	entry		last	i		in
+dasurc	entry		datac	c		in
+dasurd	entry		handle	i		in
+dasurd	entry		recno	i		in
+dasurd	entry		first	i		in
+dasurd	entry		last	i		in
+dasurd	entry		datad	d	*	in
+dasuri	entry		handle	i		in
+dasuri	entry		recno	i		in
+dasuri	entry		first	i		in
+dasuri	entry		last	i		in
+dasuri	entry		datai	i	*	in
+daswbr	entry		handle	i		in
+daswfr	subroutine		handle	i		in
+daswfr	subroutine		idword	c		in
+daswfr	subroutine		ifname	c		in
+daswfr	subroutine		nresvr	i		in
+daswfr	subroutine		nresvc	i		in
+daswfr	subroutine		ncomr	i		in
+daswfr	subroutine		ncomc	i		in
+daswrc	entry		handle	i		in
+daswrc	entry		recno	i		in
+daswrc	entry		recc	c		in
+daswrd	entry		handle	i		in
+daswrd	entry		recno	i		in
+daswrd	entry		recd	d	128	in
+daswri	entry		handle	i		in
+daswri	entry		recno	i		in
+daswri	entry		reci	i	256	in
+dazldr	subroutine		x	d		in
+dazldr	subroutine		y	d		in
+dazldr	subroutine		z	d		in
+dazldr	subroutine		azccw	l		in
+dazldr	subroutine		elplsz	l		in
+dazldr	subroutine		jacobi	d	3,3	out
+dcyldr	subroutine		x	d		in
+dcyldr	subroutine		y	d		in
+dcyldr	subroutine		z	d		in
+dcyldr	subroutine		jacobi	d	3,3	out
+deltet	subroutine		epoch	d		in
+deltet	subroutine		eptype	c		in
+deltet	subroutine		delta	d		out
+dgeodr	subroutine		x	d		in
+dgeodr	subroutine		y	d		in
+dgeodr	subroutine		z	d		in
+dgeodr	subroutine		re	d		in
+dgeodr	subroutine		f	d		in
+dgeodr	subroutine		jacobi	d	3,3	out
+diags2	subroutine		symmat	d	2,2	in
+diags2	subroutine		diag	d	2,2	out
+diags2	subroutine		rotate	d	2,2	out
+dlabbs	subroutine		handle	i		in
+dlabbs	subroutine		dladsc	i	*	out
+dlabbs	subroutine		found	l		out
+dlabfs	subroutine		handle	i		in
+dlabfs	subroutine		dladsc	i	*	out
+dlabfs	subroutine		found	l		out
+dlabns	subroutine		handle	i		in
+dlaens	subroutine		handle	i		in
+dlafns	subroutine		handle	i		in
+dlafns	subroutine		dladsc	i	*	in
+dlafns	subroutine		nxtdsc	i	*	out
+dlafns	subroutine		found	l		out
+dlafps	subroutine		handle	i		in
+dlafps	subroutine		dladsc	i	*	in
+dlafps	subroutine		prvdsc	i	*	out
+dlafps	subroutine		found	l		out
+dlaopn	subroutine		fname	c		in
+dlaopn	subroutine		ftype	c		in
+dlaopn	subroutine		ifname	c		in
+dlaopn	subroutine		ncomch	i		in
+dlaopn	subroutine		handle	i		out
+dlatdr	subroutine		x	d		in
+dlatdr	subroutine		y	d		in
+dlatdr	subroutine		z	d		in
+dlatdr	subroutine		jacobi	d	3,3	out
+dnearp	subroutine		state	d	6	in
+dnearp	subroutine		a	d		in
+dnearp	subroutine		b	d		in
+dnearp	subroutine		c	d		in
+dnearp	subroutine		dnear	d	6	out
+dnearp	subroutine		dalt	d	2	out
+dnearp	subroutine		found	l		out
+dp2hx	subroutine		number	d		in
+dp2hx	subroutine		hxstr	c		out
+dp2hx	subroutine		hxssiz	i		out
+dpgrdr	subroutine		body	c		in
+dpgrdr	subroutine		x	d		in
+dpgrdr	subroutine		y	d		in
+dpgrdr	subroutine		z	d		in
+dpgrdr	subroutine		re	d		in
+dpgrdr	subroutine		f	d		in
+dpgrdr	subroutine		jacobi	d	3,3	out
+dpr	function	d				
+drdazl	subroutine		range	d		in
+drdazl	subroutine		az	d		in
+drdazl	subroutine		el	d		in
+drdazl	subroutine		azccw	l		in
+drdazl	subroutine		elplsz	l		in
+drdazl	subroutine		jacobi	d	3,3	out
+drdcyl	subroutine		r	d		in
+drdcyl	subroutine		clon	d		in
+drdcyl	subroutine		z	d		in
+drdcyl	subroutine		jacobi	d	3,3	out
+drdgeo	subroutine		lon	d		in
+drdgeo	subroutine		lat	d		in
+drdgeo	subroutine		alt	d		in
+drdgeo	subroutine		re	d		in
+drdgeo	subroutine		f	d		in
+drdgeo	subroutine		jacobi	d	3,3	out
+drdlat	subroutine		r	d		in
+drdlat	subroutine		lon	d		in
+drdlat	subroutine		lat	d		in
+drdlat	subroutine		jacobi	d	3,3	out
+drdpgr	subroutine		body	c		in
+drdpgr	subroutine		lon	d		in
+drdpgr	subroutine		lat	d		in
+drdpgr	subroutine		alt	d		in
+drdpgr	subroutine		re	d		in
+drdpgr	subroutine		f	d		in
+drdpgr	subroutine		jacobi	d	3,3	out
+drdsph	subroutine		r	d		in
+drdsph	subroutine		colat	d		in
+drdsph	subroutine		slon	d		in
+drdsph	subroutine		jacobi	d	3,3	out
+dskb02	subroutine		handle	i		in
+dskb02	subroutine		dladsc	i	*	in
+dskb02	subroutine		nv	i		out
+dskb02	subroutine		np	i		out
+dskb02	subroutine		nvxtot	i		out
+dskb02	subroutine		vtxbds	d	2,3	out
+dskb02	subroutine		voxsiz	d		out
+dskb02	subroutine		voxori	d	3	out
+dskb02	subroutine		vgrext	i	3	out
+dskb02	subroutine		cgscal	i		out
+dskb02	subroutine		vtxnpl	i		out
+dskb02	subroutine		voxnpt	i		out
+dskb02	subroutine		voxnpl	i		out
+dskcls	subroutine		handle	i		in
+dskcls	subroutine		optmiz	l		in
+dskd02	subroutine		handle	i		in
+dskd02	subroutine		dladsc	i	*	in
+dskd02	subroutine		item	i		in
+dskd02	subroutine		start	i		in
+dskd02	subroutine		room	i		in
+dskd02	subroutine		n	i		out
+dskd02	subroutine		values	d	*	out
+dskgd	subroutine		handle	i		in
+dskgd	subroutine		dladsc	i	*	in
+dskgd	subroutine		dskdsc	d	*	out
+dskgtl	entry		keywrd	i		in
+dskgtl	entry		dpval	d		out
+dski02	subroutine		handle	i		in
+dski02	subroutine		dladsc	i	*	in
+dski02	subroutine		item	i		in
+dski02	subroutine		start	i		in
+dski02	subroutine		room	i		in
+dski02	subroutine		n	i		out
+dski02	subroutine		values	i	*	out
+dskmi2	subroutine		nv	i		in
+dskmi2	subroutine		vrtces	d	3,*	in
+dskmi2	subroutine		np	i		in
+dskmi2	subroutine		plates	i	3,*	in
+dskmi2	subroutine		finscl	d		in
+dskmi2	subroutine		corscl	i		in
+dskmi2	subroutine		worksz	i		in
+dskmi2	subroutine		voxpsz	i		in
+dskmi2	subroutine		voxlsz	i		in
+dskmi2	subroutine		makvtl	l		in
+dskmi2	subroutine		spxisz	i		in
+dskmi2	subroutine		work	i	2,WORKSZ	inout
+dskmi2	subroutine		spaixd	d	10	out
+dskmi2	subroutine		spaixi	i	SPXISZ	out
+dskn02	subroutine		handle	i		in
+dskn02	subroutine		dladsc	i	*	in
+dskn02	subroutine		plid	i		in
+dskn02	subroutine		normal	d	3	out
+dskobj	subroutine		dskfnm	c		in
+dskobj	subroutine		bodids	i	LBCELL:*	inout
+dskopn	subroutine		fname	c		in
+dskopn	subroutine		ifname	c		in
+dskopn	subroutine		ncomch	i		in
+dskopn	subroutine		handle	i		out
+dskp02	subroutine		handle	i		in
+dskp02	subroutine		dladsc	i	*	in
+dskp02	subroutine		start	i		in
+dskp02	subroutine		room	i		in
+dskp02	subroutine		n	i		out
+dskp02	subroutine		plates	i	3,*	out
+dskrb2	subroutine		nv	i		in
+dskrb2	subroutine		vrtces	d	3,*	in
+dskrb2	subroutine		np	i		in
+dskrb2	subroutine		plates	i	3,*	in
+dskrb2	subroutine		corsys	i		in
+dskrb2	subroutine		corpar	d	*	in
+dskrb2	subroutine		mncor3	d		out
+dskrb2	subroutine		mxcor3	d		out
+dsksrf	subroutine		dskfnm	c		in
+dsksrf	subroutine		bodyid	i		in
+dsksrf	subroutine		srfids	i	LBCELL:*	inout
+dskstl	entry		keywrd	i		in
+dskstl	entry		dpval	d		in
+dskv02	subroutine		handle	i		in
+dskv02	subroutine		dladsc	i	*	in
+dskv02	subroutine		start	i		in
+dskv02	subroutine		room	i		in
+dskv02	subroutine		n	i		out
+dskv02	subroutine		vrtces	d	3,*	out
+dskw02	subroutine		handle	i		in
+dskw02	subroutine		center	i		in
+dskw02	subroutine		surfid	i		in
+dskw02	subroutine		dclass	i		in
+dskw02	subroutine		frame	c		in
+dskw02	subroutine		corsys	i		in
+dskw02	subroutine		corpar	d	*	in
+dskw02	subroutine		mncor1	d		in
+dskw02	subroutine		mxcor1	d		in
+dskw02	subroutine		mncor2	d		in
+dskw02	subroutine		mxcor2	d		in
+dskw02	subroutine		mncor3	d		in
+dskw02	subroutine		mxcor3	d		in
+dskw02	subroutine		first	d		in
+dskw02	subroutine		last	d		in
+dskw02	subroutine		nv	i		in
+dskw02	subroutine		vrtces	d	3,NV	in
+dskw02	subroutine		np	i		in
+dskw02	subroutine		plates	i	3,NP	in
+dskw02	subroutine		spaixd	d	*	in
+dskw02	subroutine		spaixi	i	*	in
+dskx02	subroutine		handle	i		in
+dskx02	subroutine		dladsc	i	*	in
+dskx02	subroutine		vertex	d	3	in
+dskx02	subroutine		raydir	d	3	in
+dskx02	subroutine		plid	i		out
+dskx02	subroutine		xpt	d	3	out
+dskx02	subroutine		found	l		out
+dskxsi	subroutine		pri	l		in
+dskxsi	subroutine		target	c		in
+dskxsi	subroutine		nsurf	i		in
+dskxsi	subroutine		srflst	i	*	in
+dskxsi	subroutine		et	d		in
+dskxsi	subroutine		fixref	c		in
+dskxsi	subroutine		vertex	d	3	in
+dskxsi	subroutine		raydir	d	3	in
+dskxsi	subroutine		maxd	i		in
+dskxsi	subroutine		maxi	i		in
+dskxsi	subroutine		xpt	d	3	out
+dskxsi	subroutine		handle	i		out
+dskxsi	subroutine		dladsc	i	*	out
+dskxsi	subroutine		dskdsc	d	*	out
+dskxsi	subroutine		dc	d	*	out
+dskxsi	subroutine		ic	i	*	out
+dskxsi	subroutine		found	l		out
+dskxv	subroutine		pri	l		in
+dskxv	subroutine		target	c		in
+dskxv	subroutine		nsurf	i		in
+dskxv	subroutine		srflst	i	*	in
+dskxv	subroutine		et	d		in
+dskxv	subroutine		fixref	c		in
+dskxv	subroutine		nrays	i		in
+dskxv	subroutine		vtxarr	d	3,*	in
+dskxv	subroutine		dirarr	d	3,*	in
+dskxv	subroutine		xptarr	d	3,*	out
+dskxv	subroutine		fndarr	l	*	out
+dskz02	subroutine		handle	i		in
+dskz02	subroutine		dladsc	i	*	in
+dskz02	subroutine		nv	i		out
+dskz02	subroutine		np	i		out
+dsphdr	subroutine		x	d		in
+dsphdr	subroutine		y	d		in
+dsphdr	subroutine		z	d		in
+dsphdr	subroutine		jacobi	d	3,3	out
+dtpool	entry		name	c		in
+dtpool	entry		found	l		out
+dtpool	entry		n	i		out
+dtpool	entry		type	c		out
+ducrss	subroutine		s1	d	6	in
+ducrss	subroutine		s2	d	6	in
+ducrss	subroutine		sout	d	6	out
+dvcrss	subroutine		s1	d	6	in
+dvcrss	subroutine		s2	d	6	in
+dvcrss	subroutine		sout	d	6	out
+dvdot	function	d	s1	d	6	in
+dvdot	function	d	s2	d	6	in
+dvhat	subroutine		s1	d	6	in
+dvhat	subroutine		sout	d	6	out
+dvnorm	function	d	state	d	6	in
+dvpool	entry		name	c		in
+dvsep	function	d	s1	d	6	in
+dvsep	function	d	s2	d	6	in
+edlimb	subroutine		a	d		in
+edlimb	subroutine		b	d		in
+edlimb	subroutine		c	d		in
+edlimb	subroutine		viewpt	d	3	in
+edlimb	subroutine		limb	d	9	out
+ednmpt	subroutine		a	d		in
+ednmpt	subroutine		b	d		in
+ednmpt	subroutine		c	d		in
+ednmpt	subroutine		normal	d	3	in
+ednmpt	subroutine		point	d	3	out
+edpnt	subroutine		p	d	3	in
+edpnt	subroutine		a	d		in
+edpnt	subroutine		b	d		in
+edpnt	subroutine		c	d		in
+edpnt	subroutine		ep	d	3	out
+edterm	subroutine		trmtyp	c		in
+edterm	subroutine		source	c		in
+edterm	subroutine		target	c		in
+edterm	subroutine		et	d		in
+edterm	subroutine		fixref	c		in
+edterm	subroutine		abcorr	c		in
+edterm	subroutine		obsrvr	c		in
+edterm	subroutine		npts	i		in
+edterm	subroutine		trgepc	d		out
+edterm	subroutine		obspos	d	3	out
+edterm	subroutine		trmpts	d	3,NPTS	out
+ekacec	subroutine		handle	i		in
+ekacec	subroutine		segno	i		in
+ekacec	subroutine		recno	i		in
+ekacec	subroutine		column	c		in
+ekacec	subroutine		nvals	i		in
+ekacec	subroutine		cvals	c	*	in
+ekacec	subroutine		isnull	l		in
+ekaced	subroutine		handle	i		in
+ekaced	subroutine		segno	i		inout
+ekaced	subroutine		recno	i		in
+ekaced	subroutine		column	c		in
+ekaced	subroutine		nvals	i		in
+ekaced	subroutine		dvals	d	*	in
+ekaced	subroutine		isnull	l		in
+ekacei	subroutine		handle	i		in
+ekacei	subroutine		segno	i		inout
+ekacei	subroutine		recno	i		in
+ekacei	subroutine		column	c		in
+ekacei	subroutine		nvals	i		in
+ekacei	subroutine		ivals	i	*	in
+ekacei	subroutine		isnull	l		in
+ekaclc	subroutine		handle	i		in
+ekaclc	subroutine		segno	i		in
+ekaclc	subroutine		column	c		in
+ekaclc	subroutine		cvals	c	*	in
+ekaclc	subroutine		entszs	i	*	in
+ekaclc	subroutine		nlflgs	l	*	in
+ekaclc	subroutine		rcptrs	i	*	in
+ekaclc	subroutine		wkindx	i	*	inout
+ekacld	subroutine		handle	i		in
+ekacld	subroutine		segno	i		in
+ekacld	subroutine		column	c		in
+ekacld	subroutine		dvals	d	*	in
+ekacld	subroutine		entszs	i	*	in
+ekacld	subroutine		nlflgs	l	*	in
+ekacld	subroutine		rcptrs	i	*	in
+ekacld	subroutine		wkindx	i	*	inout
+ekacli	subroutine		handle	i		in
+ekacli	subroutine		segno	i		in
+ekacli	subroutine		column	c		in
+ekacli	subroutine		ivals	i	*	in
+ekacli	subroutine		entszs	i	*	in
+ekacli	subroutine		nlflgs	l	*	in
+ekacli	subroutine		rcptrs	i	*	in
+ekacli	subroutine		wkindx	i	*	inout
+ekappr	subroutine		handle	i		in
+ekappr	subroutine		segno	i		in
+ekappr	subroutine		recno	i		out
+ekbseg	subroutine		handle	i		in
+ekbseg	subroutine		tabnam	c		in
+ekbseg	subroutine		ncols	i		in
+ekbseg	subroutine		cnames	c	*	in
+ekbseg	subroutine		decls	c	*	in
+ekbseg	subroutine		segno	i		out
+ekccnt	entry		table	c		in
+ekccnt	entry		ccount	i		out
+ekcii	entry		table	c		in
+ekcii	entry		cindex	i		in
+ekcii	entry		column	c		out
+ekcii	entry		attdsc	i	6	out
+ekcls	subroutine		handle	i		in
+ekdelr	subroutine		handle	i		in
+ekdelr	subroutine		segno	i		in
+ekdelr	subroutine		recno	i		inout
+ekffld	subroutine		handle	i		in
+ekffld	subroutine		segno	i		in
+ekffld	subroutine		rcptrs	i	*	inout
+ekfind	subroutine		query	c		in
+ekfind	subroutine		nmrows	i		out
+ekfind	subroutine		error	l		out
+ekfind	subroutine		errmsg	c		out
+ekgc	entry		selidx	i		in
+ekgc	entry		row	i		in
+ekgc	entry		elment	i		in
+ekgc	entry		cdata	c		out
+ekgc	entry		null	l		out
+ekgc	entry		found	l		out
+ekgd	entry		selidx	i		in
+ekgd	entry		row	i		in
+ekgd	entry		elment	i		in
+ekgd	entry		ddata	d		out
+ekgd	entry		null	l		out
+ekgd	entry		found	l		out
+ekgi	entry		selidx	i		in
+ekgi	entry		row	i		in
+ekgi	entry		elment	i		in
+ekgi	entry		idata	i		out
+ekgi	entry		null	l		out
+ekgi	entry		found	l		out
+ekifld	subroutine		handle	i		in
+ekifld	subroutine		tabnam	c		in
+ekifld	subroutine		ncols	i		in
+ekifld	subroutine		nrows	i		in
+ekifld	subroutine		cnames	c	*	in
+ekifld	subroutine		decls	c	*	in
+ekifld	subroutine		segno	i		out
+ekifld	subroutine		rcptrs	i	*	out
+ekinsr	subroutine		handle	i		in
+ekinsr	subroutine		segno	i		in
+ekinsr	subroutine		recno	i		in
+eklef	entry		fname	c		in
+eklef	entry		handle	i		out
+eknelt	entry		selidx	i		in
+eknelt	entry		row	i		in
+eknelt	entry		nelt	i		out
+eknseg	function	i	handle	i		in
+ekntab	entry		n	i		out
+ekopn	subroutine		fname	c		in
+ekopn	subroutine		ifname	c		in
+ekopn	subroutine		ncomch	i		in
+ekopn	subroutine		handle	i		out
+ekopr	subroutine		fname	c		in
+ekopr	subroutine		handle	i		out
+ekops	subroutine		handle	i		out
+ekopw	subroutine		fname	c		in
+ekopw	subroutine		handle	i		out
+ekpsel	subroutine		query	c		in
+ekpsel	subroutine		n	i		out
+ekpsel	subroutine		xbegs	i	*	out
+ekpsel	subroutine		xends	i	*	out
+ekpsel	subroutine		xtypes	c	*	out
+ekpsel	subroutine		xclass	c	*	out
+ekpsel	subroutine		tabs	c	*	out
+ekpsel	subroutine		cols	c	*	out
+ekpsel	subroutine		error	l		out
+ekpsel	subroutine		errmsg	c		out
+ekrcec	subroutine		handle	i		in
+ekrcec	subroutine		segno	i		inout
+ekrcec	subroutine		recno	i		in
+ekrcec	subroutine		column	c		in
+ekrcec	subroutine		nvals	i		out
+ekrcec	subroutine		cvals	c	*	out
+ekrcec	subroutine		isnull	l		out
+ekrced	subroutine		handle	i		in
+ekrced	subroutine		segno	i		inout
+ekrced	subroutine		recno	i		in
+ekrced	subroutine		column	c		in
+ekrced	subroutine		nvals	i		out
+ekrced	subroutine		dvals	d	*	out
+ekrced	subroutine		isnull	l		out
+ekrcei	subroutine		handle	i		in
+ekrcei	subroutine		segno	i		inout
+ekrcei	subroutine		recno	i		in
+ekrcei	subroutine		column	c		in
+ekrcei	subroutine		nvals	i		out
+ekrcei	subroutine		ivals	i	*	out
+ekrcei	subroutine		isnull	l		out
+ekssum	subroutine		handle	i		in
+ekssum	subroutine		segno	i		in
+ekssum	subroutine		tabnam	c		out
+ekssum	subroutine		nrows	i		out
+ekssum	subroutine		ncols	i		out
+ekssum	subroutine		cnames	c	*	out
+ekssum	subroutine		dtypes	c	*	out
+ekssum	subroutine		sizes	i	*	out
+ekssum	subroutine		strlns	i	*	out
+ekssum	subroutine		indexd	l	*	out
+ekssum	subroutine		nullok	l	*	out
+ektnam	entry		n	i		in
+ektnam	entry		table	c		out
+ekucec	subroutine		handle	i		in
+ekucec	subroutine		segno	i		inout
+ekucec	subroutine		recno	i		in
+ekucec	subroutine		column	c		in
+ekucec	subroutine		nvals	i		in
+ekucec	subroutine		cvals	c	*	in
+ekucec	subroutine		isnull	l		in
+ekuced	subroutine		handle	i		in
+ekuced	subroutine		segno	i		inout
+ekuced	subroutine		recno	i		in
+ekuced	subroutine		column	c		in
+ekuced	subroutine		nvals	i		in
+ekuced	subroutine		dvals	d	*	in
+ekuced	subroutine		isnull	l		in
+ekucei	subroutine		handle	i		in
+ekucei	subroutine		segno	i		inout
+ekucei	subroutine		recno	i		in
+ekucei	subroutine		column	c		in
+ekucei	subroutine		nvals	i		in
+ekucei	subroutine		ivals	i	*	in
+ekucei	subroutine		isnull	l		in
+ekuef	entry		handle	i		in
+el2cgv	subroutine		ellips	d	9	in
+el2cgv	subroutine		center	d	3	out
+el2cgv	subroutine		smajor	d	3	out
+el2cgv	subroutine		sminor	d	3	out
+eqncpv	subroutine		et	d		in
+eqncpv	subroutine		epoch	d		in
+eqncpv	subroutine		eqel	d	9	in
+eqncpv	subroutine		rapol	d		in
+eqncpv	subroutine		decpol	d		in
+eqncpv	subroutine		state	d	6	out
+et2lst	subroutine		et	d		in
+et2lst	subroutine		body	i		in
+et2lst	subroutine		lon	d		in
+et2lst	subroutine		type	c		in
+et2lst	subroutine		hr	i		out
+et2lst	subroutine		mn	i		out
+et2lst	subroutine		sc	i		out
+et2lst	subroutine		time	c		out
+et2lst	subroutine		ampm	c		out
+et2utc	subroutine		et	d		in
+et2utc	subroutine		format	c		in
+et2utc	subroutine		prec	i		in
+et2utc	subroutine		utcstr	c		out
+etcal	subroutine		et	d		in
+etcal	subroutine		calstr	c		out
+eul2m	subroutine		angle3	d		in
+eul2m	subroutine		angle2	d		in
+eul2m	subroutine		angle1	d		in
+eul2m	subroutine		axis3	i		in
+eul2m	subroutine		axis2	i		in
+eul2m	subroutine		axis1	i		in
+eul2m	subroutine		r	d	3,3	out
+eul2xf	entry		eulang	d	6	in
+eul2xf	entry		axisa	i		in
+eul2xf	entry		axisb	i		in
+eul2xf	entry		axisc	i		in
+eul2xf	entry		xform	d	6,6	out
+evsgp4	subroutine		et	d		in
+evsgp4	subroutine		geophs	d	8	in
+evsgp4	subroutine		elems	d	10	in
+evsgp4	subroutine		state	d	6	out
+expool	entry		name	c		in
+expool	entry		found	l		out
+fovray	subroutine		inst	c		in
+fovray	subroutine		raydir	d	3	in
+fovray	subroutine		rframe	c		in
+fovray	subroutine		abcorr	c		in
+fovray	subroutine		obsrvr	c		in
+fovray	subroutine		et	d		in
+fovray	subroutine		visibl	l		out
+fovtrg	subroutine		inst	c		in
+fovtrg	subroutine		target	c		in
+fovtrg	subroutine		tshape	c		in
+fovtrg	subroutine		tframe	c		in
+fovtrg	subroutine		abcorr	c		in
+fovtrg	subroutine		obsrvr	c		in
+fovtrg	subroutine		et	d		in
+fovtrg	subroutine		visibl	l		out
+frame	subroutine		x	d	3	inout
+frame	subroutine		y	d	3	out
+frame	subroutine		z	d	3	out
+frinfo	entry		frcode	i		in
+frinfo	entry		cent	i		out
+frinfo	entry		frclss	i		out
+frinfo	entry		clssid	i		out
+frinfo	entry		found	l		out
+frmnam	entry		frcode	i		in
+frmnam	entry		frname	c		out
+furnsh	entry		file	c		in
+gcpool	entry		name	c		in
+gcpool	entry		start	i		in
+gcpool	entry		room	i		in
+gcpool	entry		n	i		out
+gcpool	entry		cvals	c	*	out
+gcpool	entry		found	l		out
+gdpool	entry		name	c		in
+gdpool	entry		start	i		in
+gdpool	entry		room	i		in
+gdpool	entry		n	i		out
+gdpool	entry		values	d	*	out
+gdpool	entry		found	l		out
+georec	subroutine		lon	d		in
+georec	subroutine		lat	d		in
+georec	subroutine		alt	d		in
+georec	subroutine		re	d		in
+georec	subroutine		f	d		in
+georec	subroutine		rectan	d	3	out
+getelm	subroutine		frstyr	i		in
+getelm	subroutine		lines	c	2	in
+getelm	subroutine		epoch	d		out
+getelm	subroutine		elems	d	10	out
+getfat	subroutine		file	c		in
+getfat	subroutine		arch	c		out
+getfat	subroutine		kertyp	c		out
+getfov	subroutine		instid	i		in
+getfov	subroutine		room	i		in
+getfov	subroutine		shape	c		out
+getfov	subroutine		frame	c		out
+getfov	subroutine		bsight	d	3	out
+getfov	subroutine		n	i		out
+getfov	subroutine		bounds	d	3,*	out
+getfvn	subroutine		inst	c		in
+getfvn	subroutine		room	i		in
+getfvn	subroutine		shape	c		out
+getfvn	subroutine		frame	c		out
+getfvn	subroutine		bsight	d	3	out
+getfvn	subroutine		n	i		out
+getfvn	subroutine		bounds	d	3,*	out
+gfdist	subroutine		target	c		in
+gfdist	subroutine		abcorr	c		in
+gfdist	subroutine		obsrvr	c		in
+gfdist	subroutine		relate	c		in
+gfdist	subroutine		refval	d		in
+gfdist	subroutine		adjust	d		in
+gfdist	subroutine		step	d		in
+gfdist	subroutine		cnfine	d	LBCELL:*	in
+gfdist	subroutine		mw	i		in
+gfdist	subroutine		nw	i		in
+gfdist	subroutine		work	d	LBCELL:MW,NW	inout
+gfdist	subroutine		result	d	LBCELL:*	inout
+gfevnt	subroutine		udstep	p		in
+gfevnt	subroutine		udrefn	p		in
+gfevnt	subroutine		gquant	c		in
+gfevnt	subroutine		qnpars	i		in
+gfevnt	subroutine		qpnams	c	*	in
+gfevnt	subroutine		qcpars	c	*	in
+gfevnt	subroutine		qdpars	d	*	in
+gfevnt	subroutine		qipars	i	*	in
+gfevnt	subroutine		qlpars	l	*	in
+gfevnt	subroutine		op	c		in
+gfevnt	subroutine		refval	d		in
+gfevnt	subroutine		tol	d		in
+gfevnt	subroutine		adjust	d		in
+gfevnt	subroutine		cnfine	d	LBCELL:*	in
+gfevnt	subroutine		rpt	l		in
+gfevnt	subroutine		udrepi	p		in
+gfevnt	subroutine		udrepu	p		in
+gfevnt	subroutine		udrepf	p		in
+gfevnt	subroutine		mw	i		in
+gfevnt	subroutine		nw	i		in
+gfevnt	subroutine		work	d	LBCELL:MW,NW	inout
+gfevnt	subroutine		bail	l		in
+gfevnt	subroutine		udbail	p		in
+gfevnt	subroutine		result	d	LBCELL:*	inout
+gffove	subroutine		inst	c		in
+gffove	subroutine		tshape	c		in
+gffove	subroutine		raydir	d	3	in
+gffove	subroutine		target	c		in
+gffove	subroutine		tframe	c		in
+gffove	subroutine		abcorr	c		in
+gffove	subroutine		obsrvr	c		in
+gffove	subroutine		tol	d		in
+gffove	subroutine		udstep	p		in
+gffove	subroutine		udrefn	p		in
+gffove	subroutine		rpt	l		in
+gffove	subroutine		udrepi	p		in
+gffove	subroutine		udrepu	p		in
+gffove	subroutine		udrepf	p		in
+gffove	subroutine		bail	l		in
+gffove	subroutine		udbail	p		in
+gffove	subroutine		cnfine	d	LBCELL:*	in
+gffove	subroutine		result	d	LBCELL:*	inout
+gfilum	subroutine		method	c		in
+gfilum	subroutine		angtyp	c		in
+gfilum	subroutine		target	c		in
+gfilum	subroutine		illmn	c		in
+gfilum	subroutine		fixref	c		in
+gfilum	subroutine		abcorr	c		in
+gfilum	subroutine		obsrvr	c		in
+gfilum	subroutine		spoint	d	3	in
+gfilum	subroutine		relate	c		in
+gfilum	subroutine		refval	d		in
+gfilum	subroutine		adjust	d		in
+gfilum	subroutine		step	d		in
+gfilum	subroutine		cnfine	d	LBCELL:*	in
+gfilum	subroutine		mw	i		in
+gfilum	subroutine		nw	i		in
+gfilum	subroutine		work	d	LBCELL:MW,NW	inout
+gfilum	subroutine		result	d	LBCELL:*	inout
+gfocce	subroutine		occtyp	c		in
+gfocce	subroutine		front	c		in
+gfocce	subroutine		fshape	c		in
+gfocce	subroutine		fframe	c		in
+gfocce	subroutine		back	c		in
+gfocce	subroutine		bshape	c		in
+gfocce	subroutine		bframe	c		in
+gfocce	subroutine		abcorr	c		in
+gfocce	subroutine		obsrvr	c		in
+gfocce	subroutine		tol	d		in
+gfocce	subroutine		udstep	p		in
+gfocce	subroutine		udrefn	p		in
+gfocce	subroutine		rpt	l		in
+gfocce	subroutine		udrepi	p		in
+gfocce	subroutine		udrepu	p		in
+gfocce	subroutine		udrepf	p		in
+gfocce	subroutine		bail	l		in
+gfocce	subroutine		udbail	p		in
+gfocce	subroutine		cnfine	d	LBCELL:*	in
+gfocce	subroutine		result	d	LBCELL:*	inout
+gfoclt	subroutine		occtyp	c		in
+gfoclt	subroutine		front	c		in
+gfoclt	subroutine		fshape	c		in
+gfoclt	subroutine		fframe	c		in
+gfoclt	subroutine		back	c		in
+gfoclt	subroutine		bshape	c		in
+gfoclt	subroutine		bframe	c		in
+gfoclt	subroutine		abcorr	c		in
+gfoclt	subroutine		obsrvr	c		in
+gfoclt	subroutine		step	d		in
+gfoclt	subroutine		cnfine	d	LBCELL:*	in
+gfoclt	subroutine		result	d	LBCELL:*	inout
+gfpa	subroutine		target	c		in
+gfpa	subroutine		illmn	c		in
+gfpa	subroutine		abcorr	c		in
+gfpa	subroutine		obsrvr	c		in
+gfpa	subroutine		relate	c		in
+gfpa	subroutine		refval	d		in
+gfpa	subroutine		adjust	d		in
+gfpa	subroutine		step	d		in
+gfpa	subroutine		cnfine	d	LBCELL:*	in
+gfpa	subroutine		mw	i		in
+gfpa	subroutine		nw	i		in
+gfpa	subroutine		work	d	LBCELL:MW,NW	inout
+gfpa	subroutine		result	d	LBCELL:*	inout
+gfposc	subroutine		target	c		in
+gfposc	subroutine		frame	c		in
+gfposc	subroutine		abcorr	c		in
+gfposc	subroutine		obsrvr	c		in
+gfposc	subroutine		crdsys	c		in
+gfposc	subroutine		coord	c		in
+gfposc	subroutine		relate	c		in
+gfposc	subroutine		refval	d		in
+gfposc	subroutine		adjust	d		in
+gfposc	subroutine		step	d		in
+gfposc	subroutine		cnfine	d	LBCELL:*	in
+gfposc	subroutine		mw	i		in
+gfposc	subroutine		nw	i		in
+gfposc	subroutine		work	d	LBCELL:MW,NW	inout
+gfposc	subroutine		result	d	LBCELL:*	inout
+gfrefn	subroutine		t1	d		in
+gfrefn	subroutine		t2	d		in
+gfrefn	subroutine		s1	l		in
+gfrefn	subroutine		s2	l		in
+gfrefn	subroutine		t	d		out
+gfrfov	subroutine		inst	c		in
+gfrfov	subroutine		raydir	d	3	in
+gfrfov	subroutine		rframe	c		in
+gfrfov	subroutine		abcorr	c		in
+gfrfov	subroutine		obsrvr	c		in
+gfrfov	subroutine		step	d		in
+gfrfov	subroutine		cnfine	d	LBCELL:*	in
+gfrfov	subroutine		result	d	LBCELL:*	inout
+gfrr	subroutine		target	c		in
+gfrr	subroutine		abcorr	c		in
+gfrr	subroutine		obsrvr	c		in
+gfrr	subroutine		relate	c		in
+gfrr	subroutine		refval	d		in
+gfrr	subroutine		adjust	d		in
+gfrr	subroutine		step	d		in
+gfrr	subroutine		cnfine	d	LBCELL:*	in
+gfrr	subroutine		mw	i		in
+gfrr	subroutine		nw	i		in
+gfrr	subroutine		work	d	LBCELL:MW,NW	inout
+gfrr	subroutine		result	d	LBCELL:*	inout
+gfsep	subroutine		targ1	c		in
+gfsep	subroutine		shape1	c		in
+gfsep	subroutine		frame1	c		in
+gfsep	subroutine		targ2	c		in
+gfsep	subroutine		shape2	c		in
+gfsep	subroutine		frame2	c		in
+gfsep	subroutine		abcorr	c		in
+gfsep	subroutine		obsrvr	c		in
+gfsep	subroutine		relate	c		in
+gfsep	subroutine		refval	d		in
+gfsep	subroutine		adjust	d		in
+gfsep	subroutine		step	d		in
+gfsep	subroutine		cnfine	d	LBCELL:*	in
+gfsep	subroutine		mw	i		in
+gfsep	subroutine		nw	i		in
+gfsep	subroutine		work	d	LBCELL:MW,NW	inout
+gfsep	subroutine		result	d	LBCELL:*	inout
+gfsntc	subroutine		target	c		in
+gfsntc	subroutine		fixref	c		in
+gfsntc	subroutine		method	c		in
+gfsntc	subroutine		abcorr	c		in
+gfsntc	subroutine		obsrvr	c		in
+gfsntc	subroutine		dref	c		in
+gfsntc	subroutine		dvec	d	3	in
+gfsntc	subroutine		crdsys	c		in
+gfsntc	subroutine		coord	c		in
+gfsntc	subroutine		relate	c		in
+gfsntc	subroutine		refval	d		in
+gfsntc	subroutine		adjust	d		in
+gfsntc	subroutine		step	d		in
+gfsntc	subroutine		cnfine	d	LBCELL:*	in
+gfsntc	subroutine		mw	i		in
+gfsntc	subroutine		nw	i		in
+gfsntc	subroutine		work	d	LBCELL:MW,NW	inout
+gfsntc	subroutine		result	d	LBCELL:*	inout
+gfsstp	entry		step	d		in
+gfstol	subroutine		value	d		in
+gfsubc	subroutine		target	c		in
+gfsubc	subroutine		fixref	c		in
+gfsubc	subroutine		method	c		in
+gfsubc	subroutine		abcorr	c		in
+gfsubc	subroutine		obsrvr	c		in
+gfsubc	subroutine		crdsys	c		in
+gfsubc	subroutine		coord	c		in
+gfsubc	subroutine		relate	c		in
+gfsubc	subroutine		refval	d		in
+gfsubc	subroutine		adjust	d		in
+gfsubc	subroutine		step	d		in
+gfsubc	subroutine		cnfine	d	LBCELL:*	in
+gfsubc	subroutine		mw	i		in
+gfsubc	subroutine		nw	i		in
+gfsubc	subroutine		work	d	LBCELL:MW,NW	inout
+gfsubc	subroutine		result	d	LBCELL:*	inout
+gftfov	subroutine		inst	c		in
+gftfov	subroutine		target	c		in
+gftfov	subroutine		tshape	c		in
+gftfov	subroutine		tframe	c		in
+gftfov	subroutine		abcorr	c		in
+gftfov	subroutine		obsrvr	c		in
+gftfov	subroutine		step	d		in
+gftfov	subroutine		cnfine	d	LBCELL:*	in
+gftfov	subroutine		result	d	LBCELL:*	inout
+gfudb	subroutine		udfuns	p		in
+gfudb	subroutine		udfunb	p		in
+gfudb	subroutine		step	d		in
+gfudb	subroutine		cnfine	d	LBCELL:*	in
+gfudb	subroutine		result	d	LBCELL:*	inout
+gfuds	subroutine		udfuns	p		in
+gfuds	subroutine		udqdec	p		in
+gfuds	subroutine		relate	c		in
+gfuds	subroutine		refval	d		in
+gfuds	subroutine		adjust	d		in
+gfuds	subroutine		step	d		in
+gfuds	subroutine		cnfine	d	LBCELL:*	in
+gfuds	subroutine		mw	i		in
+gfuds	subroutine		nw	i		in
+gfuds	subroutine		work	d	LBCELL:MW,NW	inout
+gfuds	subroutine		result	d	LBCELL:*	inout
+gipool	entry		name	c		in
+gipool	entry		start	i		in
+gipool	entry		room	i		in
+gipool	entry		n	i		out
+gipool	entry		ivals	i	*	out
+gipool	entry		found	l		out
+gnpool	entry		name	c		in
+gnpool	entry		start	i		in
+gnpool	entry		room	i		in
+gnpool	entry		n	i		out
+gnpool	entry		cvals	c	*	out
+gnpool	entry		found	l		out
+gr2jul	entry		year	i		inout
+gr2jul	entry		month	i		inout
+gr2jul	entry		day	i		inout
+gr2jul	entry		doy	i		out
+halfpi	function	d				
+hrmesp	subroutine		n	i		in
+hrmesp	subroutine		first	d		in
+hrmesp	subroutine		step	d		in
+hrmesp	subroutine		yvals	d	2*N	in
+hrmesp	subroutine		x	d		in
+hrmesp	subroutine		work	d	2*N,2	inout
+hrmesp	subroutine		f	d		out
+hrmesp	subroutine		df	d		out
+hrmint	subroutine		n	i		in
+hrmint	subroutine		xvals	d	N	in
+hrmint	subroutine		yvals	d	2*N	in
+hrmint	subroutine		x	d		in
+hrmint	subroutine		work	d	2*N,2	inout
+hrmint	subroutine		f	d		out
+hrmint	subroutine		df	d		out
+hx2dp	subroutine		string	c		in
+hx2dp	subroutine		number	d		out
+hx2dp	subroutine		error	l		out
+hx2dp	subroutine		errmsg	c		out
+ident	subroutine		matrix	d	3,3	out
+illumf	subroutine		method	c		in
+illumf	subroutine		target	c		in
+illumf	subroutine		ilusrc	c		in
+illumf	subroutine		et	d		in
+illumf	subroutine		fixref	c		in
+illumf	subroutine		abcorr	c		in
+illumf	subroutine		obsrvr	c		in
+illumf	subroutine		spoint	d	3	in
+illumf	subroutine		trgepc	d		out
+illumf	subroutine		srfvec	d	3	out
+illumf	subroutine		phase	d		out
+illumf	subroutine		incdnc	d		out
+illumf	subroutine		emissn	d		out
+illumf	subroutine		visibl	l		out
+illumf	subroutine		lit	l		out
+illumg	subroutine		method	c		in
+illumg	subroutine		target	c		in
+illumg	subroutine		ilusrc	c		in
+illumg	subroutine		et	d		in
+illumg	subroutine		fixref	c		in
+illumg	subroutine		abcorr	c		in
+illumg	subroutine		obsrvr	c		in
+illumg	subroutine		spoint	d	3	in
+illumg	subroutine		trgepc	d		out
+illumg	subroutine		srfvec	d	3	out
+illumg	subroutine		phase	d		out
+illumg	subroutine		incdnc	d		out
+illumg	subroutine		emissn	d		out
+ilumin	subroutine		method	c		in
+ilumin	subroutine		target	c		in
+ilumin	subroutine		et	d		in
+ilumin	subroutine		fixref	c		in
+ilumin	subroutine		abcorr	c		in
+ilumin	subroutine		obsrvr	c		in
+ilumin	subroutine		spoint	d	3	in
+ilumin	subroutine		trgepc	d		out
+ilumin	subroutine		srfvec	d	3	out
+ilumin	subroutine		phase	d		out
+ilumin	subroutine		incdnc	d		out
+ilumin	subroutine		emissn	d		out
+incnsg	subroutine		apex	d	3	in
+incnsg	subroutine		axis	d	3	in
+incnsg	subroutine		angle	d		in
+incnsg	subroutine		endpt1	d	3	in
+incnsg	subroutine		endpt2	d	3	in
+incnsg	subroutine		nxpts	i		out
+incnsg	subroutine		xpt1	d	3	out
+incnsg	subroutine		xpt2	d	3	out
+inedpl	subroutine		a	d		in
+inedpl	subroutine		b	d		in
+inedpl	subroutine		c	d		in
+inedpl	subroutine		plane	d	4	in
+inedpl	subroutine		ellips	d	9	out
+inedpl	subroutine		found	l		out
+inelpl	subroutine		ellips	d	9	in
+inelpl	subroutine		plane	d	4	in
+inelpl	subroutine		nxpts	i		out
+inelpl	subroutine		xpt1	d	3	out
+inelpl	subroutine		xpt2	d	3	out
+inrypl	subroutine		vertex	d	3	in
+inrypl	subroutine		dir	d	3	in
+inrypl	subroutine		plane	d	4	in
+inrypl	subroutine		nxpts	i		out
+inrypl	subroutine		xpt	d	3	out
+invert	subroutine		m	d	3,3	in
+invert	subroutine		mout	d	3,3	out
+invort	subroutine		m	d	3,3	in
+invort	subroutine		mit	d	3,3	out
+invstm	subroutine		mat	d	6,6	in
+invstm	subroutine		invmat	d	6,6	out
+isrot	function	l	m	d	3,3	in
+isrot	function	l	ntol	d		in
+isrot	function	l	dtol	d		in
+j1900	function	d				
+j1950	function	d				
+j2000	function	d				
+j2100	function	d				
+jul2gr	subroutine		year	i		inout
+jul2gr	subroutine		month	i		inout
+jul2gr	subroutine		day	i		inout
+jul2gr	subroutine		doy	i		out
+jyear	function	d				
+kclear	entry					
+kdata	entry		which	i		in
+kdata	entry		kind	c		in
+kdata	entry		file	c		out
+kdata	entry		filtyp	c		out
+kdata	entry		srcfil	c		out
+kdata	entry		handle	i		out
+kdata	entry		found	l		out
+kinfo	entry		file	c		in
+kinfo	entry		filtyp	c		out
+kinfo	entry		srcfil	c		out
+kinfo	entry		handle	i		out
+kinfo	entry		found	l		out
+kplfrm	subroutine		frmcls	i		in
+kplfrm	subroutine		idset	i	LBCELL:*	inout
+kpsolv	function	d	evec	d	2	in
+ktotal	entry		kind	c		in
+ktotal	entry		count	i		out
+latcyl	subroutine		radius	d		in
+latcyl	subroutine		lon	d		in
+latcyl	subroutine		lat	d		in
+latcyl	subroutine		r	d		out
+latcyl	subroutine		clon	d		out
+latcyl	subroutine		z	d		out
+latrec	subroutine		radius	d		in
+latrec	subroutine		lon	d		in
+latrec	subroutine		lat	d		in
+latrec	subroutine		rectan	d	3	out
+latsph	subroutine		radius	d		in
+latsph	subroutine		lon	d		in
+latsph	subroutine		lat	d		in
+latsph	subroutine		rho	d		out
+latsph	subroutine		colat	d		out
+latsph	subroutine		slon	d		out
+latsrf	subroutine		method	c		in
+latsrf	subroutine		target	c		in
+latsrf	subroutine		et	d		in
+latsrf	subroutine		fixref	c		in
+latsrf	subroutine		npts	i		in
+latsrf	subroutine		lonlat	d	2,*	in
+latsrf	subroutine		srfpts	d	3,*	out
+ldpool	entry		fname	c		in
+lgresp	function	d	n	i		in
+lgresp	function	d	first	d		in
+lgresp	function	d	step	d		in
+lgresp	function	d	yvals	d	*	in
+lgresp	function	d	work	d	*	inout
+lgresp	function	d	x	d		in
+lgrind	subroutine		n	i		in
+lgrind	subroutine		xvals	d	N	in
+lgrind	subroutine		yvals	d	N	in
+lgrind	subroutine		work	d	N,2	inout
+lgrind	subroutine		x	d		in
+lgrind	subroutine		p	d		out
+lgrind	subroutine		dp	d		out
+lgrint	function	d	n	i		in
+lgrint	function	d	xvals	d	*	in
+lgrint	function	d	yvals	d	*	in
+lgrint	function	d	work	d	*	inout
+lgrint	function	d	x	d		in
+limbpt	subroutine		method	c		in
+limbpt	subroutine		target	c		in
+limbpt	subroutine		et	d		in
+limbpt	subroutine		fixref	c		in
+limbpt	subroutine		abcorr	c		in
+limbpt	subroutine		corloc	c		in
+limbpt	subroutine		obsrvr	c		in
+limbpt	subroutine		refvec	d	3	in
+limbpt	subroutine		rolstp	d		in
+limbpt	subroutine		ncuts	i		in
+limbpt	subroutine		schstp	d		in
+limbpt	subroutine		soltol	d		in
+limbpt	subroutine		maxn	i		in
+limbpt	subroutine		npts	i	*	out
+limbpt	subroutine		points	d	3,*	out
+limbpt	subroutine		epochs	d	*	out
+limbpt	subroutine		tangts	d	3,*	out
+lmpool	entry		cvals	c	*	in
+lmpool	entry		n	i		in
+lspcn	function	d	body	c		in
+lspcn	function	d	et	d		in
+lspcn	function	d	abcorr	c		in
+ltime	subroutine		etobs	d		in
+ltime	subroutine		obs	i		in
+ltime	subroutine		dir	c		in
+ltime	subroutine		targ	i		in
+ltime	subroutine		ettarg	d		out
+ltime	subroutine		elapsd	d		out
+m2eul	subroutine		r	d	3,3	in
+m2eul	subroutine		axis3	i		in
+m2eul	subroutine		axis2	i		in
+m2eul	subroutine		axis1	i		in
+m2eul	subroutine		angle3	d		out
+m2eul	subroutine		angle2	d		out
+m2eul	subroutine		angle1	d		out
+m2q	subroutine		r	d	3,3	in
+m2q	subroutine		q	d	0:3	out
+mtxm	subroutine		m1	d	3,3	in
+mtxm	subroutine		m2	d	3,3	in
+mtxm	subroutine		mout	d	3,3	out
+mtxmg	subroutine		m1	d	NR1R2,NC1	in
+mtxmg	subroutine		m2	d	NR1R2,NC2	in
+mtxmg	subroutine		nc1	i		in
+mtxmg	subroutine		nr1r2	i		in
+mtxmg	subroutine		nc2	i		in
+mtxmg	subroutine		mout	d	NC1,NC2	out
+mtxv	subroutine		m	d	3,3	in
+mtxv	subroutine		vin	d	3	in
+mtxv	subroutine		vout	d	3	out
+mtxvg	subroutine		m1	d	NR1R2,NC1	in
+mtxvg	subroutine		v2	d	NR1R2	in
+mtxvg	subroutine		nc1	i		in
+mtxvg	subroutine		nr1r2	i		in
+mtxvg	subroutine		vout	d	NC1	out
+mxm	subroutine		m1	d	3,3	in
+mxm	subroutine		m2	d	3,3	in
+mxm	subroutine		mout	d	3,3	out
+mxmg	subroutine		m1	d	NR1,NC1R2	in
+mxmg	subroutine		m2	d	NC1R2,NC2	in
+mxmg	subroutine		nr1	i		in
+mxmg	subroutine		nc1r2	i		in
+mxmg	subroutine		nc2	i		in
+mxmg	subroutine		mout	d	NR1,NC2	out
+mxmt	subroutine		m1	d	3,3	in
+mxmt	subroutine		m2	d	3,3	in
+mxmt	subroutine		mout	d	3,3	out
+mxmtg	subroutine		m1	d	NR1,NC1C2	in
+mxmtg	subroutine		m2	d	NR2,NC1C2	in
+mxmtg	subroutine		nr1	i		in
+mxmtg	subroutine		nc1c2	i		in
+mxmtg	subroutine		nr2	i		in
+mxmtg	subroutine		mout	d	NR1,NR2	out
+mxv	subroutine		m	d	3,3	in
+mxv	subroutine		vin	d	3	in
+mxv	subroutine		vout	d	3	out
+mxvg	subroutine		m1	d	NR1,NC1R2	in
+mxvg	subroutine		v2	d	NC1R2	in
+mxvg	subroutine		nr1	i		in
+mxvg	subroutine		nc1r2	i		in
+mxvg	subroutine		vout	d	NR1	out
+namfrm	entry		frname	c		in
+namfrm	entry		frcode	i		out
+nearpt	subroutine		positn	d	3	in
+nearpt	subroutine		a	d		in
+nearpt	subroutine		b	d		in
+nearpt	subroutine		c	d		in
+nearpt	subroutine		npoint	d	3	out
+nearpt	subroutine		alt	d		out
+npedln	subroutine		a	d		in
+npedln	subroutine		b	d		in
+npedln	subroutine		c	d		in
+npedln	subroutine		linept	d	3	in
+npedln	subroutine		linedr	d	3	in
+npedln	subroutine		pnear	d	3	out
+npedln	subroutine		dist	d		out
+npelpt	subroutine		point	d	3	in
+npelpt	subroutine		ellips	d	9	in
+npelpt	subroutine		pnear	d	3	out
+npelpt	subroutine		dist	d		out
+nplnpt	subroutine		linpt	d	3	in
+nplnpt	subroutine		lindir	d	3	in
+nplnpt	subroutine		point	d	3	in
+nplnpt	subroutine		pnear	d	3	out
+nplnpt	subroutine		dist	d		out
+npsgpt	subroutine		ep1	d	3	in
+npsgpt	subroutine		ep2	d	3	in
+npsgpt	subroutine		point	d	3	in
+npsgpt	subroutine		pnear	d	3	out
+npsgpt	subroutine		dist	d		out
+nvc2pl	subroutine		normal	d	3	in
+nvc2pl	subroutine		konst	d		in
+nvc2pl	subroutine		plane	d	4	out
+nvp2pl	subroutine		normal	d	3	in
+nvp2pl	subroutine		point	d	3	in
+nvp2pl	subroutine		plane	d	4	out
+occult	subroutine		targ1	c		in
+occult	subroutine		shape1	c		in
+occult	subroutine		frame1	c		in
+occult	subroutine		targ2	c		in
+occult	subroutine		shape2	c		in
+occult	subroutine		frame2	c		in
+occult	subroutine		abcorr	c		in
+occult	subroutine		obsrvr	c		in
+occult	subroutine		et	d		in
+occult	subroutine		ocltid	i		out
+oscelt	subroutine		state	d	6	in
+oscelt	subroutine		et	d		in
+oscelt	subroutine		mu	d		in
+oscelt	subroutine		elts	d	8	out
+oscltx	subroutine		state	d	6	in
+oscltx	subroutine		et	d		in
+oscltx	subroutine		mu	d		in
+oscltx	subroutine		elts	d	*	out
+pck03a	subroutine		handle	i		in
+pck03a	subroutine		ncsets	i		in
+pck03a	subroutine		coeffs	d	*	in
+pck03a	subroutine		epochs	d	*	in
+pck03b	subroutine		handle	i		in
+pck03b	subroutine		segid	c		in
+pck03b	subroutine		body	i		in
+pck03b	subroutine		frame	c		in
+pck03b	subroutine		first	d		in
+pck03b	subroutine		last	d		in
+pck03b	subroutine		chbdeg	i		in
+pck03e	subroutine		handle	i		in
+pckcls	subroutine		handle	i		in
+pckcov	subroutine		pckfnm	c		in
+pckcov	subroutine		idcode	i		in
+pckcov	subroutine		cover	d	LBCELL:*	inout
+pckfrm	subroutine		pckfnm	c		in
+pckfrm	subroutine		ids	i	LBCELL:*	inout
+pcklof	entry		fname	c		in
+pcklof	entry		handle	i		out
+pckopn	subroutine		name	c		in
+pckopn	subroutine		ifname	c		in
+pckopn	subroutine		ncomch	i		in
+pckopn	subroutine		handle	i		out
+pckuof	entry		handle	i		in
+pckw02	subroutine		handle	i		in
+pckw02	subroutine		clssid	i		in
+pckw02	subroutine		frame	c		in
+pckw02	subroutine		first	d		in
+pckw02	subroutine		last	d		in
+pckw02	subroutine		segid	c		in
+pckw02	subroutine		intlen	d		in
+pckw02	subroutine		n	i		in
+pckw02	subroutine		polydg	i		in
+pckw02	subroutine		cdata	d	*	in
+pckw02	subroutine		btime	d		in
+pckw20	subroutine		handle	i		in
+pckw20	subroutine		clssid	i		in
+pckw20	subroutine		frame	c		in
+pckw20	subroutine		first	d		in
+pckw20	subroutine		last	d		in
+pckw20	subroutine		segid	c		in
+pckw20	subroutine		intlen	d		in
+pckw20	subroutine		n	i		in
+pckw20	subroutine		polydg	i		in
+pckw20	subroutine		cdata	d	*	in
+pckw20	subroutine		ascale	d		in
+pckw20	subroutine		tscale	d		in
+pckw20	subroutine		initjd	d		in
+pckw20	subroutine		initfr	d		in
+pcpool	entry		name	c		in
+pcpool	entry		n	i		in
+pcpool	entry		cvals	c	*	in
+pdpool	entry		name	c		in
+pdpool	entry		n	i		in
+pdpool	entry		values	d	*	in
+pgrrec	subroutine		body	c		in
+pgrrec	subroutine		lon	d		in
+pgrrec	subroutine		lat	d		in
+pgrrec	subroutine		alt	d		in
+pgrrec	subroutine		re	d		in
+pgrrec	subroutine		f	d		in
+pgrrec	subroutine		rectan	d	3	out
+phaseq	function	d	et	d		in
+phaseq	function	d	target	c		in
+phaseq	function	d	illmn	c		in
+phaseq	function	d	obsrvr	c		in
+phaseq	function	d	abcorr	c		in
+pipool	entry		name	c		in
+pipool	entry		n	i		in
+pipool	entry		ivals	i	*	in
+pjelpl	subroutine		elin	d	9	in
+pjelpl	subroutine		plane	d	4	in
+pjelpl	subroutine		elout	d	9	out
+pl2nvc	subroutine		plane	d	4	in
+pl2nvc	subroutine		normal	d	3	out
+pl2nvc	subroutine		konst	d		out
+pl2nvp	subroutine		plane	d	4	in
+pl2nvp	subroutine		normal	d	3	out
+pl2nvp	subroutine		point	d	3	out
+pl2psv	subroutine		plane	d	4	in
+pl2psv	subroutine		point	d	3	out
+pl2psv	subroutine		span1	d	3	out
+pl2psv	subroutine		span2	d	3	out
+pltar	function	d	nv	i		in
+pltar	function	d	vrtces	d	3,NV	in
+pltar	function	d	np	i		in
+pltar	function	d	plates	i	3,NP	in
+pltexp	subroutine		iverts	d	3,3	in
+pltexp	subroutine		delta	d		in
+pltexp	subroutine		overts	d	3,3	out
+pltnp	subroutine		point	d	3	in
+pltnp	subroutine		v1	d	3	in
+pltnp	subroutine		v2	d	3	in
+pltnp	subroutine		v3	d	3	in
+pltnp	subroutine		pnear	d	3	out
+pltnp	subroutine		dist	d		out
+pltnrm	subroutine		v1	d	3	in
+pltnrm	subroutine		v2	d	3	in
+pltnrm	subroutine		v3	d	3	in
+pltnrm	subroutine		normal	d	3	out
+pltvol	function	d	nv	i		in
+pltvol	function	d	vrtces	d	3,NV	in
+pltvol	function	d	np	i		in
+pltvol	function	d	plates	i	3,NP	in
+polyds	subroutine		coeffs	d	0:*	in
+polyds	subroutine		deg	i		in
+polyds	subroutine		nderiv	i		in
+polyds	subroutine		t	d		in
+polyds	subroutine		p	d	0:*	out
+prop2b	subroutine		gm	d		in
+prop2b	subroutine		pvinit	d	6	in
+prop2b	subroutine		dt	d		in
+prop2b	subroutine		pvprop	d	6	out
+psv2pl	subroutine		point	d	3	in
+psv2pl	subroutine		span1	d	3	in
+psv2pl	subroutine		span2	d	3	in
+psv2pl	subroutine		plane	d	4	out
+pxform	subroutine		from	c		in
+pxform	subroutine		to	c		in
+pxform	subroutine		et	d		in
+pxform	subroutine		rotate	d	3,3	out
+pxfrm2	subroutine		from	c		in
+pxfrm2	subroutine		to	c		in
+pxfrm2	subroutine		etfrom	d		in
+pxfrm2	subroutine		etto	d		in
+pxfrm2	subroutine		rotate	d	3,3	out
+q2m	subroutine		q	d	0:3	in
+q2m	subroutine		r	d	3,3	out
+qderiv	subroutine		ndim	i		in
+qderiv	subroutine		f0	d	NDIM	in
+qderiv	subroutine		f2	d	NDIM	in
+qderiv	subroutine		delta	d		in
+qderiv	subroutine		dfdt	d	NDIM	out
+qdq2av	subroutine		q	d	0:3	in
+qdq2av	subroutine		dq	d	0:3	in
+qdq2av	subroutine		av	d	3	out
+qxq	subroutine		q1	d	0:3	in
+qxq	subroutine		q2	d	0:3	in
+qxq	subroutine		qout	d	0:3	out
+radrec	subroutine		range	d		in
+radrec	subroutine		ra	d		in
+radrec	subroutine		dec	d		in
+radrec	subroutine		rectan	d	3	out
+rav2xf	subroutine		rot	d	3,3	in
+rav2xf	subroutine		av	d	3	in
+rav2xf	subroutine		xform	d	6,6	out
+raxisa	subroutine		matrix	d	3,3	in
+raxisa	subroutine		axis	d	3	out
+raxisa	subroutine		angle	d		out
+recazl	subroutine		rectan	d	3	in
+recazl	subroutine		azccw	l		in
+recazl	subroutine		elplsz	l		in
+recazl	subroutine		range	d		out
+recazl	subroutine		az	d		out
+recazl	subroutine		el	d		out
+reccyl	subroutine		rectan	d	3	in
+reccyl	subroutine		r	d		out
+reccyl	subroutine		clon	d		out
+reccyl	subroutine		z	d		out
+recgeo	subroutine		rectan	d	3	in
+recgeo	subroutine		re	d		in
+recgeo	subroutine		f	d		in
+recgeo	subroutine		lon	d		out
+recgeo	subroutine		lat	d		out
+recgeo	subroutine		alt	d		out
+reclat	subroutine		rectan	d	3	in
+reclat	subroutine		radius	d		out
+reclat	subroutine		lon	d		out
+reclat	subroutine		lat	d		out
+recpgr	subroutine		body	c		in
+recpgr	subroutine		rectan	d	3	in
+recpgr	subroutine		re	d		in
+recpgr	subroutine		f	d		in
+recpgr	subroutine		lon	d		out
+recpgr	subroutine		lat	d		out
+recpgr	subroutine		alt	d		out
+recrad	subroutine		rectan	d	3	in
+recrad	subroutine		range	d		out
+recrad	subroutine		ra	d		out
+recrad	subroutine		dec	d		out
+recsph	subroutine		rectan	d	3	in
+recsph	subroutine		r	d		out
+recsph	subroutine		colat	d		out
+recsph	subroutine		slon	d		out
+rotate	subroutine		angle	d		in
+rotate	subroutine		iaxis	i		in
+rotate	subroutine		mout	d	3,3	out
+rotmat	subroutine		m1	d	3,3	in
+rotmat	subroutine		angle	d		in
+rotmat	subroutine		iaxis	i		in
+rotmat	subroutine		mout	d	3,3	out
+rotvec	subroutine		v1	d	3	in
+rotvec	subroutine		angle	d		in
+rotvec	subroutine		iaxis	i		in
+rotvec	subroutine		vout	d	3	out
+rpd	function	d				
+rquad	subroutine		a	d		in
+rquad	subroutine		b	d		in
+rquad	subroutine		c	d		in
+rquad	subroutine		root1	d	2	out
+rquad	subroutine		root2	d	2	out
+saelgv	subroutine		vec1	d	3	in
+saelgv	subroutine		vec2	d	3	in
+saelgv	subroutine		smajor	d	3	out
+saelgv	subroutine		sminor	d	3	out
+scdecd	subroutine		sc	i		in
+scdecd	subroutine		sclkdp	d		in
+scdecd	subroutine		sclkch	c		out
+sce2c	subroutine		sc	i		in
+sce2c	subroutine		et	d		in
+sce2c	subroutine		sclkdp	d		out
+sce2s	subroutine		sc	i		in
+sce2s	subroutine		et	d		in
+sce2s	subroutine		sclkch	c		out
+sce2t	subroutine		sc	i		in
+sce2t	subroutine		et	d		in
+sce2t	subroutine		sclkdp	d		out
+scencd	subroutine		sc	i		in
+scencd	subroutine		sclkch	c		in
+scencd	subroutine		sclkdp	d		out
+scfmt	subroutine		sc	i		in
+scfmt	subroutine		ticks	d		in
+scfmt	subroutine		clkstr	c		out
+scid2n	entry		clkid	i		in
+scid2n	entry		clknam	c		out
+scid2n	entry		found	l		out
+scn2id	entry		clknam	c		in
+scn2id	entry		clkid	i		out
+scn2id	entry		found	l		out
+scpart	subroutine		sc	i		in
+scpart	subroutine		nparts	i		out
+scpart	subroutine		pstart	d	*	out
+scpart	subroutine		pstop	d	*	out
+scs2e	subroutine		sc	i		in
+scs2e	subroutine		sclkch	c		in
+scs2e	subroutine		et	d		out
+sct2e	subroutine		sc	i		in
+sct2e	subroutine		sclkdp	d		in
+sct2e	subroutine		et	d		out
+sctiks	subroutine		sc	i		in
+sctiks	subroutine		clkstr	c		in
+sctiks	subroutine		ticks	d		out
+sctype	function	i	sc	i		in
+sgbwfs	entry		handle	i		in
+sgbwfs	entry		descr	d	*	in
+sgbwfs	entry		segid	c		in
+sgbwfs	entry		nconst	i		in
+sgbwfs	entry		const	d	*	in
+sgbwfs	entry		pktsiz	i	*	in
+sgbwfs	entry		idxtyp	i		in
+sgbwvs	entry		handle	i		in
+sgbwvs	entry		descr	d	*	in
+sgbwvs	entry		segid	c		in
+sgbwvs	entry		nconst	i		in
+sgbwvs	entry		const	d	*	in
+sgbwvs	entry		idxtyp	i		in
+sgwes	entry		handle	i		in
+sgwfpk	entry		handle	i		in
+sgwfpk	entry		npkts	i		in
+sgwfpk	entry		pktdat	d	*	in
+sgwfpk	entry		nrefs	i		in
+sgwfpk	entry		refdat	d	*	in
+sgwvpk	entry		handle	i		in
+sgwvpk	entry		npkts	i		in
+sgwvpk	entry		pktsiz	i	*	in
+sgwvpk	entry		pktdat	d	*	in
+sgwvpk	entry		nrefs	i		in
+sgwvpk	entry		refdat	d	*	in
+sharpr	subroutine		rot	d	3,3	inout
+sincpt	subroutine		method	c		in
+sincpt	subroutine		target	c		in
+sincpt	subroutine		et	d		in
+sincpt	subroutine		fixref	c		in
+sincpt	subroutine		abcorr	c		in
+sincpt	subroutine		obsrvr	c		in
+sincpt	subroutine		dref	c		in
+sincpt	subroutine		dvec	d	3	in
+sincpt	subroutine		spoint	d	3	out
+sincpt	subroutine		trgepc	d		out
+sincpt	subroutine		srfvec	d	3	out
+sincpt	subroutine		found	l		out
+spcopn	subroutine		fname	c		in
+spcopn	subroutine		ifname	c		in
+spcopn	subroutine		handle	i		out
+spd	function	d				
+sphcyl	subroutine		radius	d		in
+sphcyl	subroutine		colat	d		in
+sphcyl	subroutine		slon	d		in
+sphcyl	subroutine		r	d		out
+sphcyl	subroutine		clon	d		out
+sphcyl	subroutine		z	d		out
+sphlat	subroutine		r	d		in
+sphlat	subroutine		colat	d		in
+sphlat	subroutine		slon	d		in
+sphlat	subroutine		radius	d		out
+sphlat	subroutine		lon	d		out
+sphlat	subroutine		lat	d		out
+sphrec	subroutine		r	d		in
+sphrec	subroutine		colat	d		in
+sphrec	subroutine		slon	d		in
+sphrec	subroutine		rectan	d	3	out
+spk14a	subroutine		handle	i		in
+spk14a	subroutine		ncsets	i		in
+spk14a	subroutine		coeffs	d	*	in
+spk14a	subroutine		epochs	d	*	in
+spk14b	subroutine		handle	i		in
+spk14b	subroutine		segid	c		in
+spk14b	subroutine		body	i		in
+spk14b	subroutine		center	i		in
+spk14b	subroutine		frame	c		in
+spk14b	subroutine		first	d		in
+spk14b	subroutine		last	d		in
+spk14b	subroutine		chbdeg	i		in
+spk14e	subroutine		handle	i		in
+spkacs	subroutine		targ	i		in
+spkacs	subroutine		et	d		in
+spkacs	subroutine		ref	c		in
+spkacs	subroutine		abcorr	c		in
+spkacs	subroutine		obs	i		in
+spkacs	subroutine		starg	d	6	out
+spkacs	subroutine		lt	d		out
+spkacs	subroutine		dlt	d		out
+spkapo	subroutine		targ	i		in
+spkapo	subroutine		et	d		in
+spkapo	subroutine		ref	c		in
+spkapo	subroutine		sobs	d	6	in
+spkapo	subroutine		abcorr	c		in
+spkapo	subroutine		ptarg	d	3	out
+spkapo	subroutine		lt	d		out
+spkaps	subroutine		targ	i		in
+spkaps	subroutine		et	d		in
+spkaps	subroutine		ref	c		in
+spkaps	subroutine		abcorr	c		in
+spkaps	subroutine		stobs	d	6	in
+spkaps	subroutine		accobs	d	3	in
+spkaps	subroutine		starg	d	6	out
+spkaps	subroutine		lt	d		out
+spkaps	subroutine		dlt	d		out
+spkcls	subroutine		handle	i		in
+spkcov	subroutine		spkfnm	c		in
+spkcov	subroutine		idcode	i		in
+spkcov	subroutine		cover	d	LBCELL:*	inout
+spkcpo	subroutine		target	c		in
+spkcpo	subroutine		et	d		in
+spkcpo	subroutine		outref	c		in
+spkcpo	subroutine		refloc	c		in
+spkcpo	subroutine		abcorr	c		in
+spkcpo	subroutine		obspos	d	3	in
+spkcpo	subroutine		obsctr	c		in
+spkcpo	subroutine		obsref	c		in
+spkcpo	subroutine		state	d	6	out
+spkcpo	subroutine		lt	d		out
+spkcpt	subroutine		trgpos	d	3	in
+spkcpt	subroutine		trgctr	c		in
+spkcpt	subroutine		trgref	c		in
+spkcpt	subroutine		et	d		in
+spkcpt	subroutine		outref	c		in
+spkcpt	subroutine		refloc	c		in
+spkcpt	subroutine		abcorr	c		in
+spkcpt	subroutine		obsrvr	c		in
+spkcpt	subroutine		state	d	6	out
+spkcpt	subroutine		lt	d		out
+spkcvo	subroutine		target	c		in
+spkcvo	subroutine		et	d		in
+spkcvo	subroutine		outref	c		in
+spkcvo	subroutine		refloc	c		in
+spkcvo	subroutine		abcorr	c		in
+spkcvo	subroutine		obssta	d	6	in
+spkcvo	subroutine		obsepc	d		in
+spkcvo	subroutine		obsctr	c		in
+spkcvo	subroutine		obsref	c		in
+spkcvo	subroutine		state	d	6	out
+spkcvo	subroutine		lt	d		out
+spkcvt	subroutine		trgsta	d	6	in
+spkcvt	subroutine		trgepc	d		in
+spkcvt	subroutine		trgctr	c		in
+spkcvt	subroutine		trgref	c		in
+spkcvt	subroutine		et	d		in
+spkcvt	subroutine		outref	c		in
+spkcvt	subroutine		refloc	c		in
+spkcvt	subroutine		abcorr	c		in
+spkcvt	subroutine		obsrvr	c		in
+spkcvt	subroutine		state	d	6	out
+spkcvt	subroutine		lt	d		out
+spkez	subroutine		targ	i		in
+spkez	subroutine		et	d		in
+spkez	subroutine		ref	c		in
+spkez	subroutine		abcorr	c		in
+spkez	subroutine		obs	i		in
+spkez	subroutine		starg	d	6	out
+spkez	subroutine		lt	d		out
+spkezp	subroutine		targ	i		in
+spkezp	subroutine		et	d		in
+spkezp	subroutine		ref	c		in
+spkezp	subroutine		abcorr	c		in
+spkezp	subroutine		obs	i		in
+spkezp	subroutine		ptarg	d	3	out
+spkezp	subroutine		lt	d		out
+spkezr	subroutine		targ	c		in
+spkezr	subroutine		et	d		in
+spkezr	subroutine		ref	c		in
+spkezr	subroutine		abcorr	c		in
+spkezr	subroutine		obs	c		in
+spkezr	subroutine		starg	d	6	out
+spkezr	subroutine		lt	d		out
+spkgeo	subroutine		targ	i		in
+spkgeo	subroutine		et	d		in
+spkgeo	subroutine		ref	c		in
+spkgeo	subroutine		obs	i		in
+spkgeo	subroutine		state	d	6	out
+spkgeo	subroutine		lt	d		out
+spkgps	subroutine		targ	i		in
+spkgps	subroutine		et	d		in
+spkgps	subroutine		ref	c		in
+spkgps	subroutine		obs	i		in
+spkgps	subroutine		pos	d	3	out
+spkgps	subroutine		lt	d		out
+spklef	entry		fname	c		in
+spklef	entry		handle	i		out
+spkltc	subroutine		targ	i		in
+spkltc	subroutine		et	d		in
+spkltc	subroutine		ref	c		in
+spkltc	subroutine		abcorr	c		in
+spkltc	subroutine		stobs	d	6	in
+spkltc	subroutine		starg	d	6	out
+spkltc	subroutine		lt	d		out
+spkltc	subroutine		dlt	d		out
+spkobj	subroutine		spkfnm	c		in
+spkobj	subroutine		ids	i	LBCELL:*	inout
+spkopa	subroutine		file	c		in
+spkopa	subroutine		handle	i		out
+spkopn	subroutine		fname	c		in
+spkopn	subroutine		ifname	c		in
+spkopn	subroutine		ncomch	i		in
+spkopn	subroutine		handle	i		out
+spkpds	subroutine		body	i		in
+spkpds	subroutine		center	i		in
+spkpds	subroutine		frame	c		in
+spkpds	subroutine		type	i		in
+spkpds	subroutine		first	d		in
+spkpds	subroutine		last	d		in
+spkpds	subroutine		descr	d	*	out
+spkpos	subroutine		targ	c		in
+spkpos	subroutine		et	d		in
+spkpos	subroutine		ref	c		in
+spkpos	subroutine		abcorr	c		in
+spkpos	subroutine		obs	c		in
+spkpos	subroutine		ptarg	d	3	out
+spkpos	subroutine		lt	d		out
+spkpvn	subroutine		handle	i		in
+spkpvn	subroutine		descr	d	5	in
+spkpvn	subroutine		et	d		in
+spkpvn	subroutine		ref	i		out
+spkpvn	subroutine		state	d	6	out
+spkpvn	subroutine		center	i		out
+spks01	subroutine		handle	i		in
+spks01	subroutine		baddr	i		in
+spks01	subroutine		eaddr	i		in
+spks01	subroutine		begin	d		in
+spks01	subroutine		end	d		in
+spks02	subroutine		handle	i		in
+spks02	subroutine		baddr	i		in
+spks02	subroutine		eaddr	i		in
+spks02	subroutine		begin	d		in
+spks02	subroutine		end	d		in
+spks03	subroutine		handle	i		in
+spks03	subroutine		baddr	i		in
+spks03	subroutine		eaddr	i		in
+spks03	subroutine		begin	d		in
+spks03	subroutine		end	d		in
+spks05	subroutine		handle	i		in
+spks05	subroutine		baddr	i		in
+spks05	subroutine		eaddr	i		in
+spks05	subroutine		begin	d		in
+spks05	subroutine		end	d		in
+spks08	subroutine		handle	i		in
+spks08	subroutine		baddr	i		in
+spks08	subroutine		eaddr	i		in
+spks08	subroutine		begin	d		in
+spks08	subroutine		end	d		in
+spks09	subroutine		handle	i		in
+spks09	subroutine		baddr	i		in
+spks09	subroutine		eaddr	i		in
+spks09	subroutine		begin	d		in
+spks09	subroutine		end	d		in
+spks10	subroutine		srchan	i		in
+spks10	subroutine		srcdsc	d	*	in
+spks10	subroutine		dsthan	i		in
+spks10	subroutine		dstdsc	d	*	in
+spks10	subroutine		dstsid	c		in
+spks12	subroutine		handle	i		in
+spks12	subroutine		baddr	i		in
+spks12	subroutine		eaddr	i		in
+spks12	subroutine		begin	d		in
+spks12	subroutine		end	d		in
+spks13	subroutine		handle	i		in
+spks13	subroutine		baddr	i		in
+spks13	subroutine		eaddr	i		in
+spks13	subroutine		begin	d		in
+spks13	subroutine		end	d		in
+spks14	subroutine		srchan	i		in
+spks14	subroutine		srcdsc	d	*	in
+spks14	subroutine		dsthan	i		in
+spks14	subroutine		dstdsc	d	*	in
+spks14	subroutine		dstsid	c		in
+spks15	subroutine		handle	i		in
+spks15	subroutine		baddr	i		in
+spks15	subroutine		eaddr	i		in
+spks15	subroutine		begin	d		in
+spks15	subroutine		end	d		in
+spks17	subroutine		handle	i		in
+spks17	subroutine		baddr	i		in
+spks17	subroutine		eaddr	i		in
+spks17	subroutine		begin	d		in
+spks17	subroutine		end	d		in
+spks18	subroutine		handle	i		in
+spks18	subroutine		baddr	i		in
+spks18	subroutine		eaddr	i		in
+spks18	subroutine		begin	d		in
+spks18	subroutine		end	d		in
+spks19	subroutine		handle	i		in
+spks19	subroutine		baddr	i		in
+spks19	subroutine		eaddr	i		in
+spks19	subroutine		begin	d		in
+spks19	subroutine		end	d		in
+spks20	subroutine		handle	i		in
+spks20	subroutine		baddr	i		in
+spks20	subroutine		eaddr	i		in
+spks20	subroutine		begin	d		in
+spks20	subroutine		end	d		in
+spks21	subroutine		handle	i		in
+spks21	subroutine		baddr	i		in
+spks21	subroutine		eaddr	i		in
+spks21	subroutine		begin	d		in
+spks21	subroutine		end	d		in
+spksfs	entry		body	i		in
+spksfs	entry		et	d		in
+spksfs	entry		handle	i		out
+spksfs	entry		descr	d	*	out
+spksfs	entry		ident	c		out
+spksfs	entry		found	l		out
+spkssb	subroutine		targ	i		in
+spkssb	subroutine		et	d		in
+spkssb	subroutine		ref	c		in
+spkssb	subroutine		starg	d	6	out
+spksub	subroutine		handle	i		in
+spksub	subroutine		descr	d	5	in
+spksub	subroutine		ident	c		in
+spksub	subroutine		begin	d		in
+spksub	subroutine		end	d		in
+spksub	subroutine		newh	i		in
+spkuds	subroutine		descr	d	*	in
+spkuds	subroutine		body	i		out
+spkuds	subroutine		center	i		out
+spkuds	subroutine		frame	i		out
+spkuds	subroutine		type	i		out
+spkuds	subroutine		first	d		out
+spkuds	subroutine		last	d		out
+spkuds	subroutine		baddrs	i		out
+spkuds	subroutine		eaddrs	i		out
+spkuef	entry		handle	i		in
+spkw01	subroutine		handle	i		in
+spkw01	subroutine		body	i		in
+spkw01	subroutine		center	i		in
+spkw01	subroutine		frame	c		in
+spkw01	subroutine		first	d		in
+spkw01	subroutine		last	d		in
+spkw01	subroutine		segid	c		in
+spkw01	subroutine		n	i		in
+spkw01	subroutine		dlines	d	71,*	in
+spkw01	subroutine		epochs	d	*	in
+spkw02	subroutine		handle	i		in
+spkw02	subroutine		body	i		in
+spkw02	subroutine		center	i		in
+spkw02	subroutine		frame	c		in
+spkw02	subroutine		first	d		in
+spkw02	subroutine		last	d		in
+spkw02	subroutine		segid	c		in
+spkw02	subroutine		intlen	d		in
+spkw02	subroutine		n	i		in
+spkw02	subroutine		polydg	i		in
+spkw02	subroutine		cdata	d	*	in
+spkw02	subroutine		btime	d		in
+spkw03	subroutine		handle	i		in
+spkw03	subroutine		body	i		in
+spkw03	subroutine		center	i		in
+spkw03	subroutine		frame	c		in
+spkw03	subroutine		first	d		in
+spkw03	subroutine		last	d		in
+spkw03	subroutine		segid	c		in
+spkw03	subroutine		intlen	d		in
+spkw03	subroutine		n	i		in
+spkw03	subroutine		polydg	i		in
+spkw03	subroutine		cdata	d	*	in
+spkw03	subroutine		btime	d		in
+spkw05	subroutine		handle	i		in
+spkw05	subroutine		body	i		in
+spkw05	subroutine		center	i		in
+spkw05	subroutine		frame	c		in
+spkw05	subroutine		first	d		in
+spkw05	subroutine		last	d		in
+spkw05	subroutine		segid	c		in
+spkw05	subroutine		gm	d		in
+spkw05	subroutine		n	i		in
+spkw05	subroutine		states	d	6,*	in
+spkw05	subroutine		epochs	d	*	in
+spkw08	subroutine		handle	i		in
+spkw08	subroutine		body	i		in
+spkw08	subroutine		center	i		in
+spkw08	subroutine		frame	c		in
+spkw08	subroutine		first	d		in
+spkw08	subroutine		last	d		in
+spkw08	subroutine		segid	c		in
+spkw08	subroutine		degree	i		in
+spkw08	subroutine		n	i		in
+spkw08	subroutine		states	d	6,*	in
+spkw08	subroutine		begtim	d		in
+spkw08	subroutine		step	d		in
+spkw09	subroutine		handle	i		in
+spkw09	subroutine		body	i		in
+spkw09	subroutine		center	i		in
+spkw09	subroutine		frame	c		in
+spkw09	subroutine		first	d		in
+spkw09	subroutine		last	d		in
+spkw09	subroutine		segid	c		in
+spkw09	subroutine		degree	i		in
+spkw09	subroutine		n	i		in
+spkw09	subroutine		states	d	6,*	in
+spkw09	subroutine		epochs	d	*	in
+spkw10	subroutine		handle	i		in
+spkw10	subroutine		body	i		in
+spkw10	subroutine		center	i		in
+spkw10	subroutine		frame	c		in
+spkw10	subroutine		first	d		in
+spkw10	subroutine		last	d		in
+spkw10	subroutine		segid	c		in
+spkw10	subroutine		consts	d	*	in
+spkw10	subroutine		n	i		in
+spkw10	subroutine		elems	d	*	in
+spkw10	subroutine		epochs	d	*	in
+spkw12	subroutine		handle	i		in
+spkw12	subroutine		body	i		in
+spkw12	subroutine		center	i		in
+spkw12	subroutine		frame	c		in
+spkw12	subroutine		first	d		in
+spkw12	subroutine		last	d		in
+spkw12	subroutine		segid	c		in
+spkw12	subroutine		degree	i		in
+spkw12	subroutine		n	i		in
+spkw12	subroutine		states	d	6,*	in
+spkw12	subroutine		begtim	d		in
+spkw12	subroutine		step	d		in
+spkw13	subroutine		handle	i		in
+spkw13	subroutine		body	i		in
+spkw13	subroutine		center	i		in
+spkw13	subroutine		frame	c		in
+spkw13	subroutine		first	d		in
+spkw13	subroutine		last	d		in
+spkw13	subroutine		segid	c		in
+spkw13	subroutine		degree	i		in
+spkw13	subroutine		n	i		in
+spkw13	subroutine		states	d	6,*	in
+spkw13	subroutine		epochs	d	*	in
+spkw15	subroutine		handle	i		in
+spkw15	subroutine		body	i		in
+spkw15	subroutine		center	i		in
+spkw15	subroutine		frame	c		in
+spkw15	subroutine		first	d		in
+spkw15	subroutine		last	d		in
+spkw15	subroutine		segid	c		in
+spkw15	subroutine		epoch	d		in
+spkw15	subroutine		tp	d	3	in
+spkw15	subroutine		pa	d	3	in
+spkw15	subroutine		p	d		in
+spkw15	subroutine		ecc	d		in
+spkw15	subroutine		j2flg	d		in
+spkw15	subroutine		pv	d	3	in
+spkw15	subroutine		gm	d		in
+spkw15	subroutine		j2	d		in
+spkw15	subroutine		radius	d		in
+spkw17	subroutine		handle	i		in
+spkw17	subroutine		body	i		in
+spkw17	subroutine		center	i		in
+spkw17	subroutine		frame	c		in
+spkw17	subroutine		first	d		in
+spkw17	subroutine		last	d		in
+spkw17	subroutine		segid	c		in
+spkw17	subroutine		epoch	d		in
+spkw17	subroutine		eqel	d	9	in
+spkw17	subroutine		rapol	d		in
+spkw17	subroutine		decpol	d		in
+spkw18	subroutine		handle	i		in
+spkw18	subroutine		subtyp	i		in
+spkw18	subroutine		body	i		in
+spkw18	subroutine		center	i		in
+spkw18	subroutine		frame	c		in
+spkw18	subroutine		first	d		in
+spkw18	subroutine		last	d		in
+spkw18	subroutine		segid	c		in
+spkw18	subroutine		degree	i		in
+spkw18	subroutine		n	i		in
+spkw18	subroutine		packts	d	*	in
+spkw18	subroutine		epochs	d	*	in
+spkw19	subroutine		handle	i		in
+spkw19	subroutine		body	i		in
+spkw19	subroutine		center	i		in
+spkw19	subroutine		frame	c		in
+spkw19	subroutine		first	d		in
+spkw19	subroutine		last	d		in
+spkw19	subroutine		segid	c		in
+spkw19	subroutine		nintvl	i		in
+spkw19	subroutine		npkts	i	*	in
+spkw19	subroutine		subtps	i	*	in
+spkw19	subroutine		degres	i	*	in
+spkw19	subroutine		packts	d	*	in
+spkw19	subroutine		epochs	d	*	in
+spkw19	subroutine		ivlbds	d	*	in
+spkw19	subroutine		sellst	l		in
+spkw20	subroutine		handle	i		in
+spkw20	subroutine		body	i		in
+spkw20	subroutine		center	i		in
+spkw20	subroutine		frame	c		in
+spkw20	subroutine		first	d		in
+spkw20	subroutine		last	d		in
+spkw20	subroutine		segid	c		in
+spkw20	subroutine		intlen	d		in
+spkw20	subroutine		n	i		in
+spkw20	subroutine		polydg	i		in
+spkw20	subroutine		cdata	d	*	in
+spkw20	subroutine		dscale	d		in
+spkw20	subroutine		tscale	d		in
+spkw20	subroutine		initjd	d		in
+spkw20	subroutine		initfr	d		in
+spkw21	subroutine		handle	i		in
+spkw21	subroutine		body	i		in
+spkw21	subroutine		center	i		in
+spkw21	subroutine		frame	c		in
+spkw21	subroutine		first	d		in
+spkw21	subroutine		last	d		in
+spkw21	subroutine		segid	c		in
+spkw21	subroutine		n	i		in
+spkw21	subroutine		dlsize	i		in
+spkw21	subroutine		dlines	d	DLSIZE,*	in
+spkw21	subroutine		epochs	d	*	in
+srfc2s	subroutine		code	i		in
+srfc2s	subroutine		bodyid	i		in
+srfc2s	subroutine		srfstr	c		out
+srfc2s	subroutine		isname	l		out
+srfcss	subroutine		code	i		in
+srfcss	subroutine		bodstr	c		in
+srfcss	subroutine		srfstr	c		out
+srfcss	subroutine		isname	l		out
+srfnrm	subroutine		method	c		in
+srfnrm	subroutine		target	c		in
+srfnrm	subroutine		et	d		in
+srfnrm	subroutine		fixref	c		in
+srfnrm	subroutine		npts	i		in
+srfnrm	subroutine		srfpts	d	3,*	in
+srfnrm	subroutine		normls	d	3,*	out
+srfrec	subroutine		body	i		in
+srfrec	subroutine		lon	d		in
+srfrec	subroutine		lat	d		in
+srfrec	subroutine		rectan	d	3	out
+srfs2c	subroutine		srfstr	c		in
+srfs2c	subroutine		bodstr	c		in
+srfs2c	subroutine		code	i		out
+srfs2c	subroutine		found	l		out
+srfscc	subroutine		srfstr	c		in
+srfscc	subroutine		bodyid	i		in
+srfscc	subroutine		code	i		out
+srfscc	subroutine		found	l		out
+stelab	subroutine		pobj	d	3	in
+stelab	subroutine		vobs	d	3	in
+stelab	subroutine		appobj	d	3	out
+stlabx	subroutine		pobj	d	3	in
+stlabx	subroutine		vobs	d	3	in
+stlabx	subroutine		corpos	d	3	out
+stmp03	subroutine		x	d		in
+stmp03	subroutine		c0	d		out
+stmp03	subroutine		c1	d		out
+stmp03	subroutine		c2	d		out
+stmp03	subroutine		c3	d		out
+stpool	subroutine		item	c		in
+stpool	subroutine		nth	i		in
+stpool	subroutine		contin	c		in
+stpool	subroutine		nthstr	c		out
+stpool	subroutine		size	i		out
+stpool	subroutine		found	l		out
+str2et	subroutine		timstr	c		in
+str2et	subroutine		et	d		out
+subpnt	subroutine		method	c		in
+subpnt	subroutine		target	c		in
+subpnt	subroutine		et	d		in
+subpnt	subroutine		fixref	c		in
+subpnt	subroutine		abcorr	c		in
+subpnt	subroutine		obsrvr	c		in
+subpnt	subroutine		spoint	d	3	out
+subpnt	subroutine		trgepc	d		out
+subpnt	subroutine		srfvec	d	3	out
+subslr	subroutine		method	c		in
+subslr	subroutine		target	c		in
+subslr	subroutine		et	d		in
+subslr	subroutine		fixref	c		in
+subslr	subroutine		abcorr	c		in
+subslr	subroutine		obsrvr	c		in
+subslr	subroutine		spoint	d	3	out
+subslr	subroutine		trgepc	d		out
+subslr	subroutine		srfvec	d	3	out
+surfnm	subroutine		a	d		in
+surfnm	subroutine		b	d		in
+surfnm	subroutine		c	d		in
+surfnm	subroutine		point	d	3	in
+surfnm	subroutine		normal	d	3	out
+surfpt	subroutine		positn	d	3	in
+surfpt	subroutine		u	d	3	in
+surfpt	subroutine		a	d		in
+surfpt	subroutine		b	d		in
+surfpt	subroutine		c	d		in
+surfpt	subroutine		point	d	3	out
+surfpt	subroutine		found	l		out
+surfpv	subroutine		stvrtx	d	6	in
+surfpv	subroutine		stdir	d	6	in
+surfpv	subroutine		a	d		in
+surfpv	subroutine		b	d		in
+surfpv	subroutine		c	d		in
+surfpv	subroutine		stx	d	6	out
+surfpv	subroutine		found	l		out
+swpool	entry		agent	c		in
+swpool	entry		nnames	i		in
+swpool	entry		names	c	*	in
+sxform	subroutine		from	c		in
+sxform	subroutine		to	c		in
+sxform	subroutine		et	d		in
+sxform	subroutine		xform	d	6,6	out
+szpool	entry		name	c		in
+szpool	entry		n	i		out
+szpool	entry		found	l		out
+tangpt	subroutine		method	c		in
+tangpt	subroutine		target	c		in
+tangpt	subroutine		et	d		in
+tangpt	subroutine		fixref	c		in
+tangpt	subroutine		abcorr	c		in
+tangpt	subroutine		corloc	c		in
+tangpt	subroutine		obsrvr	c		in
+tangpt	subroutine		dref	c		in
+tangpt	subroutine		dvec	d	3	in
+tangpt	subroutine		tanpt	d	3	out
+tangpt	subroutine		alt	d		out
+tangpt	subroutine		range	d		out
+tangpt	subroutine		srfpt	d	3	out
+tangpt	subroutine		trgepc	d		out
+tangpt	subroutine		srfvec	d	3	out
+termpt	subroutine		method	c		in
+termpt	subroutine		ilusrc	c		in
+termpt	subroutine		target	c		in
+termpt	subroutine		et	d		in
+termpt	subroutine		fixref	c		in
+termpt	subroutine		abcorr	c		in
+termpt	subroutine		corloc	c		in
+termpt	subroutine		obsrvr	c		in
+termpt	subroutine		refvec	d	3	in
+termpt	subroutine		rolstp	d		in
+termpt	subroutine		ncuts	i		in
+termpt	subroutine		schstp	d		in
+termpt	subroutine		soltol	d		in
+termpt	subroutine		maxn	i		in
+termpt	subroutine		npts	i	*	out
+termpt	subroutine		points	d	3,*	out
+termpt	subroutine		epochs	d	*	out
+termpt	subroutine		trmvcs	d	3,*	out
+timdef	subroutine		action	c		in
+timdef	subroutine		item	c		in
+timdef	subroutine		value	c		inout
+timout	subroutine		et	d		in
+timout	subroutine		pictur	c		in
+timout	subroutine		output	c		out
+tipbod	subroutine		ref	c		in
+tipbod	subroutine		body	i		in
+tipbod	subroutine		et	d		in
+tipbod	subroutine		tipm	d	3,3	out
+tisbod	subroutine		ref	c		in
+tisbod	subroutine		body	i		in
+tisbod	subroutine		et	d		in
+tisbod	subroutine		tsipm	d	6,6	out
+tkfram	subroutine		frcode	i		in
+tkfram	subroutine		rot	d	3,3	out
+tkfram	subroutine		frame	i		out
+tkfram	subroutine		found	l		out
+tkvrsn	subroutine		item	c		in
+tkvrsn	subroutine		verstr	c		out
+tparch	entry		type	c		in
+tparse	subroutine		string	c		in
+tparse	subroutine		sp2000	d		out
+tparse	subroutine		errmsg	c		out
+tpictr	subroutine		sample	c		in
+tpictr	subroutine		pictur	c		out
+tpictr	subroutine		ok	l		out
+tpictr	subroutine		errmsg	c		out
+trace	function	d	matrix	d	3,3	in
+trgsep	function	d	et	d		in
+trgsep	function	d	targ1	c		in
+trgsep	function	d	shape1	c		in
+trgsep	function	d	frame1	c		in
+trgsep	function	d	targ2	c		in
+trgsep	function	d	shape2	c		in
+trgsep	function	d	frame2	c		in
+trgsep	function	d	obsrvr	c		in
+trgsep	function	d	abcorr	c		in
+tsetyr	entry		year	i		in
+twopi	function	d				
+twovec	subroutine		axdef	d	3	in
+twovec	subroutine		indexa	i		in
+twovec	subroutine		plndef	d	3	in
+twovec	subroutine		indexp	i		in
+twovec	subroutine		mout	d	3,3	out
+twovxf	subroutine		axdef	d	6	in
+twovxf	subroutine		indexa	i		in
+twovxf	subroutine		plndef	d	6	in
+twovxf	subroutine		indexp	i		in
+twovxf	subroutine		xform	d	6,6	out
+tyear	function	d				
+ucrss	subroutine		v1	d	3	in
+ucrss	subroutine		v2	d	3	in
+ucrss	subroutine		vout	d	3	out
+uddc	subroutine		udfunc	p		in
+uddc	subroutine		x	d		in
+uddc	subroutine		dx	d		in
+uddc	subroutine		isdecr	l		out
+uddf	subroutine		udfunc	p		in
+uddf	subroutine		x	d		in
+uddf	subroutine		dx	d		in
+uddf	subroutine		deriv	d		out
+unitim	function	d	epoch	d		in
+unitim	function	d	insys	c		in
+unitim	function	d	outsys	c		in
+unload	entry		file	c		in
+unorm	subroutine		v1	d	3	in
+unorm	subroutine		vout	d	3	out
+unorm	subroutine		vmag	d		out
+unormg	subroutine		v1	d	NDIM	in
+unormg	subroutine		ndim	i		in
+unormg	subroutine		vout	d	NDIM	out
+unormg	subroutine		vmag	d		out
+utc2et	subroutine		utcstr	c		in
+utc2et	subroutine		et	d		out
+vadd	subroutine		v1	d	3	in
+vadd	subroutine		v2	d	3	in
+vadd	subroutine		vout	d	3	out
+vaddg	subroutine		v1	d	NDIM	in
+vaddg	subroutine		v2	d	NDIM	in
+vaddg	subroutine		ndim	i		in
+vaddg	subroutine		vout	d	NDIM	out
+vcrss	subroutine		v1	d	3	in
+vcrss	subroutine		v2	d	3	in
+vcrss	subroutine		vout	d	3	out
+vdist	function	d	v1	d	3	in
+vdist	function	d	v2	d	3	in
+vdistg	function	d	v1	d	*	in
+vdistg	function	d	v2	d	*	in
+vdistg	function	d	ndim	i		in
+vdot	function	d	v1	d	3	in
+vdot	function	d	v2	d	3	in
+vdotg	function	d	v1	d	*	in
+vdotg	function	d	v2	d	*	in
+vdotg	function	d	ndim	i		in
+vequ	subroutine		vin	d	3	in
+vequ	subroutine		vout	d	3	out
+vequg	subroutine		vin	d	NDIM	in
+vequg	subroutine		ndim	i		in
+vequg	subroutine		vout	d	NDIM	out
+vhat	subroutine		v1	d	3	in
+vhat	subroutine		vout	d	3	out
+vhatg	subroutine		v1	d	NDIM	in
+vhatg	subroutine		ndim	i		in
+vhatg	subroutine		vout	d	NDIM	out
+vlcom	subroutine		a	d		in
+vlcom	subroutine		v1	d	3	in
+vlcom	subroutine		b	d		in
+vlcom	subroutine		v2	d	3	in
+vlcom	subroutine		sum	d	3	out
+vlcom3	subroutine		a	d		in
+vlcom3	subroutine		v1	d	3	in
+vlcom3	subroutine		b	d		in
+vlcom3	subroutine		v2	d	3	in
+vlcom3	subroutine		c	d		in
+vlcom3	subroutine		v3	d	3	in
+vlcom3	subroutine		sum	d	3	out
+vlcomg	subroutine		n	i		in
+vlcomg	subroutine		a	d		in
+vlcomg	subroutine		v1	d	N	in
+vlcomg	subroutine		b	d		in
+vlcomg	subroutine		v2	d	N	in
+vlcomg	subroutine		sum	d	N	out
+vminug	subroutine		vin	d	NDIM	in
+vminug	subroutine		ndim	i		in
+vminug	subroutine		vout	d	NDIM	out
+vminus	subroutine		v1	d	3	in
+vminus	subroutine		vout	d	3	out
+vnorm	function	d	v1	d	3	in
+vnormg	function	d	v1	d	NDIM	in
+vnormg	function	d	ndim	i		in
+vpack	subroutine		x	d		in
+vpack	subroutine		y	d		in
+vpack	subroutine		z	d		in
+vpack	subroutine		v	d	3	out
+vperp	subroutine		a	d	3	in
+vperp	subroutine		b	d	3	in
+vperp	subroutine		p	d	3	out
+vprjp	subroutine		vin	d	3	in
+vprjp	subroutine		plane	d	4	in
+vprjp	subroutine		vout	d	3	out
+vprjpi	subroutine		vin	d	3	in
+vprjpi	subroutine		projpl	d	4	in
+vprjpi	subroutine		invpl	d	4	in
+vprjpi	subroutine		vout	d	3	out
+vprjpi	subroutine		found	l		out
+vproj	subroutine		a	d	3	in
+vproj	subroutine		b	d	3	in
+vproj	subroutine		p	d	3	out
+vprojg	subroutine		a	d	NDIM	in
+vprojg	subroutine		b	d	NDIM	in
+vprojg	subroutine		ndim	i		in
+vprojg	subroutine		p	d	NDIM	out
+vrel	function	d	v1	d	3	in
+vrel	function	d	v2	d	3	in
+vrelg	function	d	v1	d	*	in
+vrelg	function	d	v2	d	*	in
+vrelg	function	d	ndim	i		in
+vrotv	subroutine		v	d	3	in
+vrotv	subroutine		axis	d	3	in
+vrotv	subroutine		theta	d		in
+vrotv	subroutine		r	d	3	out
+vscl	subroutine		s	d		in
+vscl	subroutine		v1	d	3	in
+vscl	subroutine		vout	d	3	out
+vsclg	subroutine		s	d		in
+vsclg	subroutine		v1	d	NDIM	in
+vsclg	subroutine		ndim	i		in
+vsclg	subroutine		vout	d	NDIM	out
+vsep	function	d	v1	d	3	in
+vsep	function	d	v2	d	3	in
+vsepg	function	d	v1	d	*	in
+vsepg	function	d	v2	d	*	in
+vsepg	function	d	ndim	i		in
+vsub	subroutine		v1	d	3	in
+vsub	subroutine		v2	d	3	in
+vsub	subroutine		vout	d	3	out
+vsubg	subroutine		v1	d	NDIM	in
+vsubg	subroutine		v2	d	NDIM	in
+vsubg	subroutine		ndim	i		in
+vsubg	subroutine		vout	d	NDIM	out
+vtmv	function	d	v1	d	3	in
+vtmv	function	d	matrix	d	3,3	in
+vtmv	function	d	v2	d	3	in
+vtmvg	function	d	v1	d	NROW	in
+vtmvg	function	d	matrix	d	NROW,NCOL	in
+vtmvg	function	d	v2	d	NCOL	in
+vtmvg	function	d	nrow	i		in
+vtmvg	function	d	ncol	i		in
+vupack	subroutine		v	d	3	in
+vupack	subroutine		x	d		out
+vupack	subroutine		y	d		out
+vupack	subroutine		z	d		out
+vzero	function	l	v	d	3	in
+vzerog	function	l	v	d	*	in
+vzerog	function	l	ndim	i		in
+wncard	function	i	window	d	LBCELL:*	in
+wncomd	subroutine		left	d		in
+wncomd	subroutine		right	d		in
+wncomd	subroutine		window	d	LBCELL:*	in
+wncomd	subroutine		result	d	LBCELL:*	inout
+wncond	subroutine		left	d		in
+wncond	subroutine		right	d		in
+wncond	subroutine		window	d	LBCELL:*	inout
+wndifd	subroutine		a	d	LBCELL:*	in
+wndifd	subroutine		b	d	LBCELL:*	in
+wndifd	subroutine		c	d	LBCELL:*	inout
+wnelmd	function	l	point	d		in
+wnelmd	function	l	window	d	LBCELL:*	in
+wnexpd	subroutine		left	d		in
+wnexpd	subroutine		right	d		in
+wnexpd	subroutine		window	d	LBCELL:*	inout
+wnextd	subroutine		side	c		in
+wnextd	subroutine		window	d	LBCELL:*	inout
+wnfetd	subroutine		window	d	LBCELL:*	in
+wnfetd	subroutine		n	i		in
+wnfetd	subroutine		left	d		out
+wnfetd	subroutine		right	d		out
+wnfild	subroutine		smlgap	d		in
+wnfild	subroutine		window	d	LBCELL:*	inout
+wnfltd	subroutine		smlint	d		in
+wnfltd	subroutine		window	d	LBCELL:*	inout
+wnincd	function	l	left	d		in
+wnincd	function	l	right	d		in
+wnincd	function	l	window	d	LBCELL:*	in
+wninsd	subroutine		left	d		in
+wninsd	subroutine		right	d		in
+wninsd	subroutine		window	d	LBCELL:*	inout
+wnintd	subroutine		a	d	LBCELL:*	in
+wnintd	subroutine		b	d	LBCELL:*	in
+wnintd	subroutine		c	d	LBCELL:*	inout
+wnreld	function	l	a	d	LBCELL:*	in
+wnreld	function	l	op	c		in
+wnreld	function	l	b	d	LBCELL:*	in
+wnsumd	subroutine		window	d	LBCELL:*	in
+wnsumd	subroutine		meas	d		out
+wnsumd	subroutine		avg	d		out
+wnsumd	subroutine		stddev	d		out
+wnsumd	subroutine		idxsml	i		out
+wnsumd	subroutine		idxlon	i		out
+wnunid	subroutine		a	d	LBCELL:*	in
+wnunid	subroutine		b	d	LBCELL:*	in
+wnunid	subroutine		c	d	LBCELL:*	inout
+wnvald	subroutine		size	i		in
+wnvald	subroutine		n	i		in
+wnvald	subroutine		window	d	LBCELL:*	inout
+xf2eul	subroutine		xform	d	6,6	in
+xf2eul	subroutine		axisa	i		in
+xf2eul	subroutine		axisb	i		in
+xf2eul	subroutine		axisc	i		in
+xf2eul	subroutine		eulang	d	6	out
+xf2eul	subroutine		unique	l		out
+xf2rav	subroutine		xform	d	6,6	in
+xf2rav	subroutine		rot	d	3,3	out
+xf2rav	subroutine		av	d	3	out
+xfmsta	subroutine		istate	d	6	in
+xfmsta	subroutine		icosys	c		in
+xfmsta	subroutine		ocosys	c		in
+xfmsta	subroutine		body	c		in
+xfmsta	subroutine		ostate	d	6	out
+xpose	subroutine		m1	d	3,3	in
+xpose	subroutine		mout	d	3,3	out
+xposeg	subroutine		matrix	d	0:*	in
+xposeg	subroutine		nrow	i		in
+xposeg	subroutine		ncol	i		in
+xposeg	subroutine		xposem	d	0:*	out
+zzdsklsf	entry		fname	c		in
+zzdsklsf	entry		handle	i		out
+zzdskusf	entry		handle	i		in
