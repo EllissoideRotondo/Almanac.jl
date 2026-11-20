@@ -1,9 +1,8 @@
 # NAIF's test suite (tspice)
 
-This directory replays the calls of tspice, the test suite of SPICELIB, against
-Almanac.jl. The calls are recorded through [PEPPER](https://github.com/jacobwilliams/pepper),
-and a difference from SPICELIB is checked against CSPICE. The run is not part of the
-default test run.
+This directory replays the calls of tspice, NAIF's test suite, against Almanac.jl, and a
+difference from the recorded library is checked against CSPICE. The run is not part of
+the default test run.
 
 ```sh
 julia --project=test test/tspice/run.jl
@@ -11,11 +10,26 @@ julia --project=test test/tspice/run.jl
 
 ## Recording
 
-The first run builds PEPPER with gfortran 16 and fpm, which must be on `PATH`. It then
-runs the about 400 tspice families and records their calls into
+`TSPICE_SOURCE` selects what the recording runs:
+
+- `cspice`: the 400 families of tspice translated to C by f2c, from NAIF's test suite of
+  CSPICE N0067 ([`tspice_c.tar`](https://naif.jpl.nasa.gov/pub/naif/misc/tspice/N0067/PC_Linux_64bit/tspice_c.tar)),
+  against the CSPICE of the same archive. It needs gcc only. `cspice/build_cspice.sh`
+  downloads the archive (checked by its SHA-256), writes the wrappers with
+  `cspice/instrument_c.py` and builds the program; only the calls of the test program
+  (the families and NAIF's test and support utilities) go through the wrappers.
+  `cspice/signatures.tsv` holds the kind, direction and dimensions of the arguments of
+  each recorded routine, which the C prototypes do not give: after a change of
+  `routines.txt`, write it again with `cspice/signatures.py` from the Fortran sources of
+  SPICELIB (`tspice.tar` in the same directory of NAIF).
+- `pepper` (the default): the families of tspice through
+  [PEPPER](https://github.com/jacobwilliams/pepper)'s SPICELIB interface, built with
+  gfortran 16 and fpm, which must be on `PATH`.
+
+The first run builds the program, runs the families and records their calls into
 `~/.cache/almanac-tspice` (about 2 GB, 15 to 40 minutes), with a manifest of the
-families and of the PEPPER commit. Later runs only replay the recording, in parallel
-processes.
+families and of what made the recording. Later runs only replay the recording, in
+parallel processes.
 
 To keep the recording small, a call of a routine that has no state is kept once for
 each distinct set of inputs, and a query is kept once between two changes of the loaded

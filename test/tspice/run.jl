@@ -319,16 +319,18 @@ manifest_families(logdir) = [
 """
 The problems of the recording in `logdir` for the families (all those of the manifest if
 `nothing`): a family without a log or whose last status is not `passed`, and a manifest
-made with another instrument.py or routines.txt (reported, not a problem).
+made with other files than those that made the wrappers (reported, not a problem).
 """
 function check_recording(logdir, families)
     problems = String[]
     mf = joinpath(logdir, "manifest.tsv")
     isfile(mf) || return ["no manifest.tsv: the recording was not made by a full record.sh run"]
     m = Dict(String(a) => String(b) for (a, b) in (split(l, '\t') for l in readlines(mf)) if a != "family")
-    for f in ("instrument.py", "routines.txt")
-        h = bytes2hex(open(io -> sha256(io), joinpath(HERE, f)))
-        get(m, f, "") == h || println("note: the recording was made with another $f")
+    # the files that made the wrappers, as the manifest lists them (they depend on the source)
+    for (f, h) in m
+        isfile(joinpath(HERE, f)) || continue
+        bytes2hex(open(io -> sha256(io), joinpath(HERE, f))) == h ||
+            println("note: the recording was made with another $f")
     end
     status = Dict{String, String}()
     sf = joinpath(logdir, "status.tsv")

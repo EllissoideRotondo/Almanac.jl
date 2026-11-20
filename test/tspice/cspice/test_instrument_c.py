@@ -71,7 +71,7 @@ class GeneratorTests(unittest.TestCase):
     def test_scalar_and_array(self):
         w = wrapper_of(self.out.code, "spkx")
         in_order(self, w, ['tlog_begin("SPKX")', 'tlog_c("<targ", targ, targ_len, 1)',
-                           'tlog_d("<et", et, 1)', "__real_spkx_(targ, et, starg, targ_len)",
+                           'tlog_d("<et", et, 1)', "spkx_(targ, et, starg, targ_len)",
                            "tlog_mark()", 'tlog_d(">starg", starg, 6)', "tlog_end()"])
 
     def test_string_args(self):
@@ -97,24 +97,28 @@ class GeneratorTests(unittest.TestCase):
 
     def test_function_result(self):
         w = wrapper_of(self.out.code, "vnorm")
-        in_order(self, w, ["doublereal r;", "r = __real_vnorm_(v1);", 'tlog_d(">result", &r, 1)',
+        in_order(self, w, ["doublereal r;", "r = vnorm_(v1);", 'tlog_d(">result", &r, 1)',
                            "return r;"])
 
     def test_write_mark(self):
         w = wrapper_of(self.out.code, "dafwdr")
         in_order(self, w, ['tlog_begin("DAFWDR")', "tlog_writer()", 'tlog_i("<handle", handle, 1)',
-                           "__real_dafwdr_(handle, recno, drec)", "tlog_mark()", "tlog_end()"])
+                           "dafwdr_(handle, recno, drec)", "tlog_mark()", "tlog_end()"])
         self.assertNotIn("drec\", ", w)
 
-    def test_hooks_use_real(self):
-        self.assertIn("__real_dafus_(", self.out.code[self.out.code.index("tlog_hook_dafus"):])
+    def test_hooks_call_cspice(self):
+        # only the test program's calls are redirected to the wrappers (objcopy), so the
+        # hooks call CSPICE's routines by their own names, wrapped or not
+        hook = self.out.code[self.out.code.index("void tlog_hook_dafus"):]
+        self.assertIn("dafus_((doublereal *)sum, &nd, &ni, dc, ic);", hook[:hook.index("}")])
         hook = self.out.code[self.out.code.index("logical tlog_hook_failed"):]
         self.assertIn("return failed_();", hook[:hook.index("}")])
+        self.assertNotIn("__real_", self.out.code)
 
     def test_nested_passthrough(self):
         w = wrapper_of(self.out.code, "spkx")
         in_order(self, w, ["tlog_enter();", "if (tlog_depth() > 1 || !tlog_on()) {",
-                           "r = __real_spkx_(targ, et, starg, targ_len);", "tlog_leave();", "return r;",
+                           "r = spkx_(targ, et, starg, targ_len);", "tlog_leave();", "return r;",
                            'tlog_begin("SPKX")'])
 
     def test_wrapped_list(self):
@@ -130,6 +134,14 @@ class GeneratorTests(unittest.TestCase):
         self.assertIn("length", skips["unk"])
         self.assertNotIn(" __wrap_chfun_(", self.out.code)
         self.assertNotIn(" __wrap_unk_(", self.out.code)
+
+    def test_renamed_symbol(self):
+        # SpiceZrnm.h renames a few f2c symbols (vnorm_ is zz_vnorm_): the wrapper takes the
+        # symbol, the log keeps the routine's name
+        g = G.generate(self.protos, TABLE, {"vnorm"}, G.parse_renames("   #define   vnorm_    zz_vnorm_\n"))
+        w = wrapper_of(g.code, "zz_vnorm")
+        in_order(self, w, ['tlog_begin("VNORM")', "r = zz_vnorm_(v1);"])
+        self.assertIn("zz_vnorm_", g.symbols)
 
     def test_lists(self):
         in_order(self, self.out.code, ["int tlog_is_pure(const char *name)", '"VNORM"'])

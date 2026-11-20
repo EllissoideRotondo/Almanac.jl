@@ -3,6 +3,13 @@
 #
 #     test/tspice/record.sh OUTDIR [FAMILY ...]
 #
+# TSPICE_SOURCE selects what is recorded:
+#
+# - cspice: the f2c-translated families of tspice_c, NAIF's test suite of CSPICE N0067,
+#   against the CSPICE of the same archive, built with gcc by cspice/build_cspice.sh
+#   (cspice/instrument_c.py writes the wrappers);
+# - pepper (the default): the families of tspice through PEPPER, as follows.
+#
 # Clones PEPPER (https://github.com/jacobwilliams/pepper, which carries tspice and a
 # SPICELIB interface on which tspice passes) at the commit below into OUTDIR/pepper,
 # instruments that interface with instrument.py for the routines of routines.txt,
@@ -11,8 +18,9 @@
 # the tspice sources stay in the clone, and the logs and the copies of the kernels that
 # the families write stay in OUTDIR.
 #
-# A full recording (no FAMILY) writes OUTDIR/logs/manifest.tsv: the PEPPER commit, the
-# hashes of instrument.py and routines.txt, and the list of the families; run.jl checks a
+# A full recording (no FAMILY) writes OUTDIR/logs/manifest.tsv: the source, the PEPPER
+# commit or the SHA-256 of the archive, the hashes of the files that made the wrappers,
+# and the list of the families; run.jl checks a
 # recording against it. Each family adds its status to OUTDIR/logs/status.tsv. The exit
 # status is 1 if a family failed or timed out.
 #
@@ -28,20 +36,36 @@ here=$(cd "$(dirname "$0")" && pwd)
 out=$(mkdir -p "$1" && cd "$1" && pwd)
 shift
 commit=${PEPPER_COMMIT:-454d6ba6ca78d2a597f312f7d3afa0465aa4de30}
+source=${TSPICE_SOURCE:-pepper}
 memjobs=$(awk '/MemAvailable/ {print int($2 / 2097152)}' /proc/meminfo 2>/dev/null || echo 0)
 jobs=${JOBS:-$(n=$(nproc); [ "$memjobs" -ge 1 ] && [ "$memjobs" -lt "$n" ] && n=$memjobs; echo "$n")}
 echo "recording with $jobs parallel families"
 timeout=${TIMEOUT:-1800}
 
-if [ ! -d "$out/pepper/.git" ]; then
-    git clone -q https://github.com/jacobwilliams/pepper.git "$out/pepper"
-fi
-git -C "$out/pepper" checkout -q "$commit"
-git -C "$out/pepper" checkout -q -- src/legacy        # undo an earlier instrumentation
-rm -f "$out/pepper/src/legacy/tspice_log.f90"
-python3 "$here/instrument.py" "$out/pepper" "$here/routines.txt"
-(cd "$out/pepper/tspice" && fpm build --profile release)
-exe="$out/pepper/tspice/$(cd "$out/pepper/tspice" && fpm run --profile release --runner echo 2>/dev/null | tail -1)"
+case "$source" in
+cspice)
+    exe=$(JOBS=$jobs bash "$here/cspice/build_cspice.sh" "$out" | tail -1)
+    origin="tspice_c.tar\t$(sha256sum "$out/tspice_c.tar" | cut -d' ' -f1)"
+    makers="cspice/instrument_c.py cspice/tspice_log.c cspice/signatures.tsv instrument.py routines.txt"
+    ;;
+pepper)
+    if [ ! -d "$out/pepper/.git" ]; then
+        git clone -q https://github.com/jacobwilliams/pepper.git "$out/pepper"
+    fi
+    git -C "$out/pepper" checkout -q "$commit"
+    git -C "$out/pepper" checkout -q -- src/legacy        # undo an earlier instrumentation
+    rm -f "$out/pepper/src/legacy/tspice_log.f90"
+    python3 "$here/instrument.py" "$out/pepper" "$here/routines.txt"
+    (cd "$out/pepper/tspice" && fpm build --profile release)
+    exe="$out/pepper/tspice/$(cd "$out/pepper/tspice" && fpm run --profile release --runner echo 2>/dev/null | tail -1)"
+    origin="pepper\t$(git -C "$out/pepper" rev-parse HEAD)"
+    makers="instrument.py routines.txt"
+    ;;
+*)
+    echo "TSPICE_SOURCE must be cspice or pepper, not $source" >&2
+    exit 2
+    ;;
+esac
 
 mkdir -p "$out/logs" "$out/work"
 if [ $# -gt 0 ]; then
@@ -50,9 +74,11 @@ else
     families=$("$exe" --list)
     # a full recording replaces the manifest and the status of every family
     {
-        printf 'pepper\t%s\n' "$(git -C "$out/pepper" rev-parse HEAD)"
-        printf 'instrument.py\t%s\n' "$(sha256sum "$here/instrument.py" | cut -d' ' -f1)"
-        printf 'routines.txt\t%s\n' "$(sha256sum "$here/routines.txt" | cut -d' ' -f1)"
+        printf 'source\t%s\n' "$source"
+        printf "$origin\n"
+        for f in $makers; do
+            printf '%s\t%s\n' "$f" "$(sha256sum "$here/$f" | cut -d' ' -f1)"
+        done
         printf 'TSPICE_ALL\t%s\n' "${TSPICE_ALL:-0}"
         printf 'TSPICE_MAXPURE\t%s\n' "${TSPICE_MAXPURE:-20000}"
         printf '%s\n' $families | sed 's/^/family\t/'

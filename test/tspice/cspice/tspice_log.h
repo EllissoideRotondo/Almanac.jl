@@ -57,8 +57,8 @@ long tlog_clamp(long n);                          /* max(0, min(n, 1000000)) */
 long tlog_card_d(const doublereal *cell);         /* the cardinality of a cell, within 0:10**6 */
 long tlog_card_i(const integer *cell);
 
-/* defined by the generated code (tlog_wrap.c): CSPICE's routines, through __real_ when
-   they are wrapped, and the lists PURE and QUERY of instrument.py */
+/* defined by the generated code (tlog_wrap.c): CSPICE's routines (the wrappers take only
+   the test program's calls), and the lists PURE and QUERY of instrument.py */
 logical tlog_hook_failed(void);
 void tlog_hook_getmsg_short(char *out, ftnlen len);
 void tlog_hook_zzddhnfo(integer h, char *fname, ftnlen len, integer *arc, integer *bff,
