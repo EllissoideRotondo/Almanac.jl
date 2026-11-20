@@ -465,6 +465,9 @@ def instrument_routine(name, h, body, cands):
         pre.append(f"      call tlog_snapshot_file({args[0]})")
     elif name in CLOSE_ROUTINES:
         pre.append(f"      call tlog_close_name({args[0]})")
+    for a in args:
+        if a in MARK_HANDLES and a in decls and decls[a][0] == "i" and lens.get(a) == "1" and intent[a] in ("in", "inout"):
+            pre.append(f"      call tlog_handle_file({a})")
     post = ["      call tlog_mark()"]
     if name in CLOSE_ROUTINES:
         post.append("      call tlog_close_snapshot()")
@@ -585,8 +588,11 @@ module tspice_log
    public :: tlog_nsub, tlog_begin, tlog_end, tlog_mark, tlog_snapshot, tlog_snapshot_file, tlog_d, tlog_d1, &
       tlog_i, tlog_i1, tlog_l, tlog_l1, tlog_c, tlog_c1, tlog_close_name, tlog_close_snapshot, tlog_writer, &
       tlog_dafsum, tlog_dafsum_cur, tlog_psum, tlog_okn, tlog_ek_note, tlog_ek_nvals, tlog_ek_nent, tlog_ek_nnul, &
-      tlog_spk14_note, tlog_spk14_len
+      tlog_spk14_note, tlog_spk14_len, tlog_handle_file
    integer, save :: unit = 0
+   integer(ip), save :: hfh(0:4095) = 0                ! tlog_handle_file: handle, hash of its file
+   integer(int64), save :: hff(0:4095) = 0
+   character(*), parameter :: maxcopy = '268435456'    ! bytes of file copies per family (256 MB)
    logical, save :: opened = .false.
    logical, save :: checked = .false.
    logical, save :: keepall = .false.
@@ -774,8 +780,8 @@ contains
    !> Copy the file NAME into a new snapshot directory, at a call from the test program.
    !> A copy, not a link: the test may later open the file for write and change it. A
    !> file equal to its last copy (kept in .files/latest) is linked to that copy, which
-   !> nothing changes. Past 256 MB of copies in a family the file is linked, not copied:
-   !> F_ZZDSKBSR writes and opens 5000 DSK files of 4 MB, and never changes one after.
+   !> nothing changes. Past `maxcopy` bytes of copies in a family the file is linked, not
+   !> copied: F_ZZDSKBSR writes and opens 5000 DSK files, and never changes one after.
    subroutine tlog_snapshot_file(name)
       character(*), intent(in) :: name
       character(1100) :: dir
@@ -785,11 +791,40 @@ contains
       call execute_command_line('d="' // trim(dir) // '"; f="' // trim(name) // '"; ' // &
          'l="' // trim(logpath) // '.files/latest"; mkdir -p "$d" "$l"; b=$(basename "$f"); ' // &
          'if [ -f "$f" ]; then if cmp -s "$f" "$l/$b"; then ln "$l/$b" "$d/"; ' // &
-         'else t=$(cat "$l/.bytes" 2>/dev/null || echo 0); if [ "$t" -gt 268435456 ]; then ' // &
+         'else t=$(cat "$l/.bytes" 2>/dev/null || echo 0); if [ "$t" -gt ' // maxcopy // ' ]; then ' // &
          'ln -f "$f" "$d/"; else cp "$f" "$d/" && ln -f "$d/$b" "$l/$b" && ' // &
          'echo $((t + $(stat -c %s "$f"))) > "$l/.bytes"; fi; fi; fi 2>/dev/null; true')
       call emit('S ' // trim(dir))
    end subroutine tlog_snapshot_file
+
+   !> Write `H HANDLE PATH` into the log, at once and outside the call, when a logged call
+   !> takes a handle of a file open for reading whose file the log has not named: the test
+   !> gets some handles from routines outside the log (the DSK segment search of
+   !> ZZDSKBSR), and the replay finds them by their file. Outside the call, so that a
+   !> repeat that the log drops does not drop it too.
+   subroutine tlog_handle_file(handle)
+      integer(ip), intent(in) :: handle
+      type(pepper_context), pointer :: ctx
+      character(1024) :: fname
+      character(24) :: num
+      integer(ip) :: arc, bff, amh
+      integer(int64) :: h
+      integer :: k
+      logical :: found
+      if (.not. on()) return
+      ctx => legacy_context()
+      if (ctx%failed()) return
+      found = .false.
+      call pepper_zzddhnfo(ctx, handle, fname, arc, bff, amh, found)
+      if (ctx%failed() .or. .not. found .or. amh /= 1) return
+      h = fnv(trim(fname))
+      k = int(modulo(int(handle, int64), 4096_int64))
+      if (hfh(k) == handle .and. hff(k) == h) return
+      hfh(k) = handle
+      hff(k) = h
+      write(num, '(i0)') handle
+      write(unit) 'H ' // trim(num) // ' ' // trim(fname) // achar(10)
+   end subroutine tlog_handle_file
 
    !> Note the file of HANDLE before a close from the test program, if the file is open
    !> for write (or new): tlog_close_snapshot copies it after the close.
@@ -809,9 +844,11 @@ contains
    end subroutine tlog_close_name
 
    !> Copy the file of the close into a new snapshot directory, as tlog_snapshot_file
-   !> does, but past the cap of 256 MB of copies nothing is copied or linked (the
-   !> directory stays empty): a family may write, close and delete thousands of files,
-   !> and a link would keep each of them on the disk.
+   !> does. Past `maxcopy` bytes of copies the copy of the last close of the same file
+   !> name is removed (its directory stays empty), so that only the last state of each
+   !> file is kept: F_ZZDSKBSR appends to one DSK file thousands of times and closes it
+   !> after each segment, and the last copy holds every segment; a link would keep each
+   !> of the files that a family writes and deletes on the disk.
    subroutine tlog_close_snapshot()
       character(1100) :: dir
       if (.not. on() .or. depth /= 1) return
@@ -821,9 +858,11 @@ contains
       call execute_command_line('d="' // trim(dir) // '"; f="' // trim(closename) // '"; ' // &
          'l="' // trim(logpath) // '.files/latest"; mkdir -p "$d" "$l"; b=$(basename "$f"); ' // &
          'if [ -f "$f" ]; then if cmp -s "$f" "$l/$b"; then ln "$l/$b" "$d/"; ' // &
-         'else t=$(cat "$l/.bytes" 2>/dev/null || echo 0); if [ "$t" -le 268435456 ]; then ' // &
+         'else t=$(cat "$l/.bytes" 2>/dev/null || echo 0); if [ "$t" -le ' // maxcopy // ' ]; then ' // &
          'cp "$f" "$d/" && ln -f "$d/$b" "$l/$b" && ' // &
-         'echo $((t + $(stat -c %s "$f"))) > "$l/.bytes"; fi; fi; fi 2>/dev/null; true')
+         'echo $((t + $(stat -c %s "$f"))) > "$l/.bytes"; ' // &
+         'else p=$(cat "$l/.last.$b" 2>/dev/null); [ -n "$p" ] && rm -f "$p/$b"; ' // &
+         'cp "$f" "$d/" && echo "$d" > "$l/.last.$b"; fi; fi; fi 2>/dev/null; true')
       call emit('S ' // trim(dir))
       closename = ' '
    end subroutine tlog_close_snapshot
