@@ -19,15 +19,16 @@ The orbit calls have no CSPICE counterpart; see [Validation of the orbit calls](
 
 ## Run NAIF's test suite
 
-The calls of tspice, the SPICELIB test suite, can be recorded through
-[PEPPER](https://github.com/jacobwilliams/pepper) and replayed against Almanac.jl. This
-check is not part of the default run:
+NAIF's test suite of CSPICE N0067 (tspice_c, the SPICELIB test suite translated to C)
+can be built with wrappers that record its calls, which are then replayed against
+Almanac.jl. This check is not part of the default run:
 
 ```sh
 julia --project=test test/tspice/run.jl
 ```
 
-The first run needs gfortran and fpm on `PATH`, and records about 2 GB of calls; later
-runs only replay them. A run fails on a mismatch that is not in the baseline of known
-mismatches. Details are in
+The first run downloads NAIF's archive, builds it with gcc and records the calls, about
+2 GB; later runs only replay them. A run fails on a mismatch that is not in the baseline
+of known mismatches. The `tspice` workflow of the repository runs this check, in about an
+hour, on each push to `main` that changes the package. Details are in
 [`test/tspice/README.md`](https://github.com/Orbitology/Almanac.jl/blob/main/test/tspice/README.md).

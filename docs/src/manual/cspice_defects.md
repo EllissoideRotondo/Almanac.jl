@@ -17,7 +17,9 @@ How to read the tables:
 
 - **Where** names the routine of SPICELIB in lower case, `_c` for a routine written in
   C. Parentheses name the public calls through which the defect shows.
-- **Test** names the test group (`test/test_<group>.jl`) that covers the behaviour.
+- **Test** names the test group (`test/test_<group>.jl`) that covers the behaviour, or
+  the family of NAIF's test suite (`tspice F_NAME`) whose difference from CSPICE is in
+  the baseline of that suite.
 
 ## Defects that Almanac.jl copies
 
@@ -66,7 +68,7 @@ error or the correct result.
 | `termpt` | The room left in the output arrays (`maxn`) goes down by n² for each half plane with n points, not by n, so with a DSK method `OUTOFROOM` can come before `maxn` points are found | The room goes down by n | `geom_limbterm` |
 | `zzgfocin` (`gfoclt`, `gfocce`, `occult`) | The surface names given for the back target are translated to IDs as surfaces of the front target. Surfaces given by number are not affected | The surfaces of the back target | `geom_occult`, `gf_occult` |
 | `dskxsi` | Returns the plate of the last segment searched that had an intercept, which need not be the segment of the returned point | The plate of the returned point | `dsk` |
-| `dskxsi`, `dskxv` | A call whose frame is not centred at the target (`INVALIDFRAME`) keeps the ID of that frame. The next call with the same target and the frame of the last call that passed then uses the ID of the failed frame, until the kernel pool changes: the ray is taken in the wrong frame, or the call fails if that frame has no orientation data | Each call uses the frame it names | `dsk` |
+| `dskxsi`, `dskxv` | A call whose frame is not centred at the target (`INVALIDFRAME`) keeps the ID of that frame. The next call with the same target and the frame of the last call that passed then uses the ID of the failed frame, until the kernel pool changes: the ray is taken in the wrong frame, or the call fails if that frame has no orientation data | Each call uses the frame it names | `dsk`, `tspice F_DSKXSI` |
 | `dski02` | For item 1 (the number of vertices) with `start > 1`, gives `INDEXOUTOFRANGE`, `DASNOSUCHADDRESS` or no error, depending on earlier calls | `:indexoutofrange` | `dsk` |
 | `dskmi2` | Does not check that the vertex indices are in 1 to `nv` | `:badvertexindex` | `dsk` |
 | `zzgflong` (`gfposc`, `gfsubc`, `gfsntc`) | For ABSMIN or ABSMAX with `adjust` on a longitude or right ascension, reads the first interval of an empty result window | Returns the empty window | `gf_posc` |
@@ -137,6 +139,8 @@ writes differs.
 
 ## Limits that Almanac.jl does not have
 
+Where CSPICE signals an error past the size of a fixed table, Almanac.jl makes the call.
+
 | Where | Limit of CSPICE | In Almanac.jl | Test |
 |---|---|---|---|
 | `zzddhopn`, `rdker`, `rdtext` | A path is cut to 255 characters, so two paths with the same start are confused | The whole path | `dafwrite` |
@@ -144,3 +148,10 @@ writes differs.
 | `framex` | `HASHISFULL` past 5209 frames defined in kernels | No limit | `frameinfo` |
 | `zzboddef` (`boddef`) | `TOOMANYPAIRS` past 161 pairs, where the header says 150 | No limit | `poolwrite` |
 | `zzrvbf` (`lmpool`) | A string value over 80 characters is written past its slot | Keeps the first 80 characters and writes nothing past them | `poolwrite` |
+| `keeper` (`furnsh`) | `FILENAMETOOLONG`, `PATHTOOLONG` past 255 characters, after the path symbols of a meta-kernel are replaced | The whole name | `tspice F_KEEPER` |
+| `zzddhman`, `dafah` (`spkopn`, `ckopn`, `pckopn`, `furnsh`, the DSK loader) | `FTFULL`, `DAFFTFULL` past 5000 open files | No limit | `tspice F_DDHFTSIZE`, `F_ZZDSKBSR`, `F_PCKBSR` |
+| `dafana` (`dafbna`) | `STFULL` past 20 arrays written at once | No limit | `tspice F_DAFANA` |
+| `pool` (`swpool`) | `KERVARSETOVERFLOW`, `TOOMANYWATCHES`, `AGENTLISTOVERFLOW` past the sizes of the tables of watched names and agents | No limit | `tspice F_DWPOOL` |
+| `zzbodker` (`bodc2n`, `bodn2c`) | `KERVARTOOBIG` past 14983 values of `NAIF_BODY_NAME` | No limit | `tspice F_BODCOD` |
+| `zzscad01` (`scdecd`, `sce2c` and the other SCLK calls) | `TOOMANYCOEFFS` past 100000 coefficients, `TOOMANYPARTITIONS` past 9999 partitions of a type 1 SCLK kernel | No limit | `tspice F_ZZSC01` |
+| `zzswffet` (`sxform`, `pxform` of switch frames) | `TOOMANYBASEFRAMES` past 15000 base frames of switch frames | No limit | `tspice F_ZZSWFXFM` |

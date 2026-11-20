@@ -14,9 +14,13 @@
 #     --update-baseline  make this run the baseline: baseline.tsv (counts, class and note
 #                        of each routine; a routine keeps its class), baseline_ids.tsv.gz
 #                        (every mismatch) and coverage.tsv (the calls of each routine)
+#     --baseline-from DIR  write the baseline as --update-baseline does from the results
+#                        of a full run with the oracle in DIR (DIR/tally.tsv, DIR/ids.tsv,
+#                        DIR/run.tsv), without a replay (for a run made elsewhere, such as
+#                        on CI); refused for the results of a run of some families
 #
-# Recording needs gfortran 16 and fpm on PATH and takes 15 to 40 minutes; it writes
-# about 2 GB.
+# Recording needs gcc, binutils, Python 3 and curl (see record.sh) and takes 15 to 40
+# minutes; it writes about 2 GB.
 #
 # A run without FAMILY is the full check. It needs a complete recording: every family of
 # DIR/logs/manifest.tsv recorded and passed. It fails (exit status 1) if
@@ -46,7 +50,7 @@ function parse_args(args)
     o = Dict{String, Any}(
         "dir" => joinpath(homedir(), ".cache", "almanac-tspice"),
         "record" => false, "jobs" => default_jobs(), "oracle" => true, "update" => false,
-        "families" => String[]
+        "from" => "", "families" => String[]
     )
     i = 1
     while i <= length(args)
@@ -61,6 +65,8 @@ function parse_args(args)
             o["oracle"] = false
         elseif a == "--update-baseline"
             o["update"] = true
+        elseif a == "--baseline-from"
+            o["from"] = abspath(expanduser(args[i + 1])); i += 1
         elseif startswith(a, "--")
             error("unknown option $a")
         else
@@ -124,8 +130,45 @@ function split_logs(logs, n)
     return filter(!isempty, groups)
 end
 
+"""
+Write the baseline from the counts and the mismatches of a full run with the oracle: a
+routine keeps its class and note; a new one is `unexplained` until classed.
+"""
+function write_baseline(total, ids)
+    baseline_path = joinpath(HERE, "baseline.tsv")
+    notes = read_notes(baseline_path)
+    write_counts(
+        baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)),
+        GATED; notes
+    )
+    write_ids_gz(joinpath(HERE, "baseline_ids.tsv.gz"), ids)
+    write_counts(joinpath(HERE, "coverage.tsv"), total, COVERED)
+    return println("baseline written to $baseline_path, baseline_ids.tsv.gz and coverage.tsv")
+end
+
+"""
+The baseline from the results directory `from` of a full run with the oracle (tally.tsv
+and ids.tsv). `run.tsv`, which the merge writes, tells a full run from a run of some
+families.
+"""
+function baseline_from(from)
+    tally, idf, runf = joinpath(from, "tally.tsv"), joinpath(from, "ids.tsv"), joinpath(from, "run.tsv")
+    (isfile(tally) && isfile(idf)) || (println("no tally.tsv and ids.tsv in $from"); return 2)
+    run = isfile(runf) ? Dict(Pair(split(l, '\t'; limit = 2)...) for l in eachline(runf)) : Dict()
+    (get(run, "full", "") == "true" && get(run, "oracle", "") == "true") ||
+        (println("$from is not the results of a full run with the oracle"); return 2)
+    ids = Dict{String, Int}()
+    for l in eachline(idf)
+        id, n = rsplit(l, '\t'; limit = 2)
+        ids[String(id)] = parse(Int, n)
+    end
+    write_baseline(read_counts(tally), ids)
+    return 0
+end
+
 function main(args)
     o = parse_args(args)
+    isempty(o["from"]) || return baseline_from(o["from"])
     dir, jobs = o["dir"], o["jobs"]
     logdir = joinpath(dir, "logs")
     full = isempty(o["families"])
@@ -209,6 +252,7 @@ function main(args)
     end
     write_counts(joinpath(results, "tally.tsv"), total, COUNTS)
     write_ids(joinpath(results, "ids.tsv"), ids)
+    write(joinpath(results, "run.tsv"), "full\t$full\noracle\t$(o["oracle"])\n")
     # the calls for which CSPICE could not be called: their mismatches are not checked
     # against CSPICE, so a fault of a mapping shows here and not as a disagreement
     nof = 0
@@ -246,15 +290,7 @@ function main(args)
     baseline_path = joinpath(HERE, "baseline.tsv")
     if o["update"]
         (full && o["oracle"]) || (println("--update-baseline needs a full run with the oracle"); return 2)
-        # a routine keeps its class and note; a new one is `unexplained` until classed
-        notes = read_notes(baseline_path)
-        write_counts(
-            baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)),
-            GATED; notes
-        )
-        write_ids_gz(joinpath(HERE, "baseline_ids.tsv.gz"), ids)
-        write_counts(joinpath(HERE, "coverage.tsv"), total, COVERED)
-        println("baseline written to $baseline_path, baseline_ids.tsv.gz and coverage.tsv")
+        write_baseline(total, ids)
         return 0
     end
     if !o["oracle"]
@@ -319,16 +355,22 @@ manifest_families(logdir) = [
 """
 The problems of the recording in `logdir` for the families (all those of the manifest if
 `nothing`): a family without a log or whose last status is not `passed`, and a manifest
-made with another instrument.py or routines.txt (reported, not a problem).
+made with other files than those that made the wrappers (reported, not a problem).
 """
 function check_recording(logdir, families)
     problems = String[]
     mf = joinpath(logdir, "manifest.tsv")
     isfile(mf) || return ["no manifest.tsv: the recording was not made by a full record.sh run"]
     m = Dict(String(a) => String(b) for (a, b) in (split(l, '\t') for l in readlines(mf)) if a != "family")
-    for f in ("instrument.py", "routines.txt")
-        h = bytes2hex(open(io -> sha256(io), joinpath(HERE, f)))
-        get(m, f, "") == h || println("note: the recording was made with another $f")
+    # the baseline is made from the recording of tspice_c (an older recording of PEPPER
+    # has other mismatches)
+    src = get(m, "source", "none")
+    src == "cspice" || return ["the recording is of the source $src, not of tspice_c: record again (--record)"]
+    # the files that made the wrappers, as the manifest lists them
+    for (f, h) in m
+        isfile(joinpath(HERE, f)) || continue
+        bytes2hex(open(io -> sha256(io), joinpath(HERE, f))) == h ||
+            println("note: the recording was made with another $f")
     end
     status = Dict{String, String}()
     sf = joinpath(logdir, "status.tsv")

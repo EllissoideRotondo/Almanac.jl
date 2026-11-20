@@ -6,8 +6,8 @@
 # F_LTIME and F_POOL. Each case runs run.jl on those families in a scratch copy of the
 # recording and checks its exit status: 0 for the recording as it is, 1 for a mismatch
 # that the baseline lacks and for a fault injected into Almanac's results (TSPICE_FAULT),
-# 2 for a family without a log, a family that failed to record, and a family whose log
-# cannot be replayed. The baseline files are copied, changed and
+# 2 for a recording of another source than tspice_c, a family without a log, a family
+# that failed to record, and a family whose log cannot be replayed. The baseline files are copied, changed and
 # restored; the scratch directory is removed at the end.
 
 const HERE = @__DIR__
@@ -70,6 +70,14 @@ function main(args)
         got = withenv(() -> run_status(dir, FAMS), "TSPICE_FAULT" => fault)
         check(what, got, 1)
     end
+
+    # the baseline is made from the recording of tspice_c: a recording of another
+    # source (the older PEPPER recording) is refused
+    mf = joinpath(dir, "logs", "manifest.tsv")
+    manifest = read(mf, String)
+    write(mf, replace(manifest, r"^source\t.*$"m => "source\tpepper"))
+    check("a recording of another source", run_status(dir, FAMS), 2)
+    write(mf, manifest)
 
     rm(joinpath(dir, "logs", "F_LTIME.log.gz"))
     check("a family without a log", run_status(dir, FAMS), 2)

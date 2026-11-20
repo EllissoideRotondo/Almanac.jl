@@ -1,0 +1,172 @@
+# NAIF's test suite (tspice) against Almanac.jl: build tspice_c, NAIF's test suite of
+# CSPICE N0067, with wrappers that record its calls (test/tspice/cspice/build_cspice.sh),
+# record the calls of each family (test/tspice/record.sh), replay them against
+# Almanac.jl and compare the mismatches with the baseline (test/tspice/run.jl). See
+# test/tspice/README.md.
+#
+# The build needs gcc, binutils, Python 3 and curl, which the runner has. The recording
+# and the results stay on the runner; the results, the status of each family and a
+# candidate baseline written from this run are kept as an artifact.
+#
+# It runs, in about an hour, on a push to main that changes the package or this harness
+# (in Orbitology/Almanac.jl only, not in forks), on a pull request that changes the
+# harness, and by hand. A newer push cancels the run of an older one.
+name: tspice
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Project.toml'
+      - 'Manifest.toml'
+      - 'test/Project.toml'
+      - 'test/tspice/**'
+      - '.github/workflows/tspice.yml'
+  pull_request:
+    paths:
+      - 'test/tspice/**'
+      - '.github/workflows/tspice.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  tspice:
+    name: tspice (Julia 1, ubuntu-latest)
+    if: github.event_name != 'push' || github.repository == 'Orbitology/Almanac.jl'
+    runs-on: ubuntu-latest
+    # recording 15 to 40 minutes, replay about as long with 4 processes
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      # the generator of the wrappers and the C logger, under a second
+      - name: Unit tests of the recorder
+        shell: bash
+        run: |
+          python3 -B -m unittest discover -s test/tspice/cspice -p 'test_*.py'
+          bash test/tspice/cspice/test_log.sh
+
+      # TSPICE_DIR holds the archive, the build, the recording and the results; the key of
+      # the archive's cache is its SHA-256, which build_cspice.sh checks
+      - name: Paths
+        shell: bash
+        run: |
+          echo "TSPICE_DIR=$RUNNER_TEMP/tspice" >> "$GITHUB_ENV"
+          echo "TSPICE_SHA=$(grep -oP '^sha=\K[0-9a-f]{64}' test/tspice/cspice/build_cspice.sh)" >> "$GITHUB_ENV"
+
+      # restored here and saved right after the build, so that a run whose families or
+      # gate fail keeps the archive too (actions/cache saves only after a job that passed)
+      - id: archive
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ env.TSPICE_DIR }}/tspice_c.tar
+          key: tspice_c-${{ env.TSPICE_SHA }}
+
+      - name: Build
+        shell: bash
+        env:
+          JOBS: 4
+        run: |
+          start=$(date +%s)
+          bash test/tspice/cspice/build_cspice.sh "$TSPICE_DIR"
+          echo "build $(( $(date +%s) - start )) s" >> "$TSPICE_DIR/durations.txt"
+
+      - if: steps.archive.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.TSPICE_DIR }}/tspice_c.tar
+          key: tspice_c-${{ env.TSPICE_SHA }}
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: '1'
+      - uses: julia-actions/cache@v2
+
+      # The test environment with this checkout of Almanac.jl. Only what the replay loads
+      # is precompiled (not the AD packages of the test environment).
+      - name: Julia environment
+        shell: bash
+        env:
+          JULIA_PKG_PRECOMPILE_AUTO: 0
+        run: |
+          julia --startup-file=no --project=test -e 'using Pkg; Pkg.develop(PackageSpec(path = pwd())); Pkg.instantiate()'
+          julia --startup-file=no --project=test -e 'using Almanac, SPICE, StaticArrays'
+
+      - name: Record
+        shell: bash
+        env:
+          JOBS: 4
+        run: |
+          start=$(date +%s)
+          status=0
+          bash test/tspice/record.sh "$TSPICE_DIR" || status=$?
+          echo "record $(( $(date +%s) - start )) s" >> "$TSPICE_DIR/durations.txt"
+          exit $status
+
+      - name: Replay and compare with the baseline
+        shell: bash
+        run: |
+          start=$(date +%s)
+          status=0
+          julia --startup-file=no --project=test test/tspice/run.jl --dir "$TSPICE_DIR" --jobs 4 2>&1 | tee "$TSPICE_DIR/run.txt" || status=$?
+          echo "replay $(( $(date +%s) - start )) s" >> "$TSPICE_DIR/durations.txt"
+          exit $status
+
+      # the baseline that this run would make, for a review before it is committed
+      - name: Candidate baseline
+        if: always()
+        shell: bash
+        run: |
+          if [ -f "$TSPICE_DIR/results/tally.tsv" ]; then
+            julia --startup-file=no test/tspice/run.jl --baseline-from "$TSPICE_DIR/results"
+            mkdir -p "$TSPICE_DIR/results/baseline-candidate"
+            cp test/tspice/baseline.tsv test/tspice/baseline_ids.tsv.gz test/tspice/coverage.tsv "$TSPICE_DIR/results/baseline-candidate/"
+          fi
+
+      - name: Summary
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo '## tspice'
+            if [ -f "$TSPICE_DIR/logs/status.tsv" ]; then
+              echo "Families recorded: $(grep -c . "$TSPICE_DIR/logs/status.tsv"), failed: $(grep -vc $'\tpassed$' "$TSPICE_DIR/logs/status.tsv" || true)"
+            fi
+            if [ -f "$TSPICE_DIR/durations.txt" ]; then
+              echo
+              echo "Durations: $(paste -sd, "$TSPICE_DIR/durations.txt" | sed 's/,/, /g')"
+            fi
+            echo
+            echo '```'
+            if [ -f "$TSPICE_DIR/run.txt" ]; then
+              grep -v '^\(recording\|replaying\)' "$TSPICE_DIR/run.txt" | tail -60 || true
+            fi
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          # what the artifact keeps besides the results: the status of the recording, the
+          # durations and the output of each family that failed
+          mkdir -p "$TSPICE_DIR/results"
+          cp -f "$TSPICE_DIR/run.txt" "$TSPICE_DIR/durations.txt" "$TSPICE_DIR/logs/status.tsv" "$TSPICE_DIR/logs/manifest.tsv" "$TSPICE_DIR/results/" 2>/dev/null || true
+          if [ -f "$TSPICE_DIR/logs/status.tsv" ]; then
+            for fam in $(grep -v $'\tpassed$' "$TSPICE_DIR/logs/status.tsv" | cut -f1); do
+              if [ -f "$TSPICE_DIR/work/$fam/output.txt" ]; then
+                cp "$TSPICE_DIR/work/$fam/output.txt" "$TSPICE_DIR/results/$fam.output.txt"
+              fi
+            done
+          fi
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tspice-results
+          path: ${{ env.TSPICE_DIR }}/results
+          retention-days: 30
+          if-no-files-found: ignore
