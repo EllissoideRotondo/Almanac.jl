@@ -18,8 +18,8 @@
 #                        of a full run with the oracle in DIR (DIR/tally.tsv, DIR/ids.tsv),
 #                        without a replay (for a run made elsewhere, such as on CI)
 #
-# Recording needs gfortran 16 and fpm on PATH and takes 15 to 40 minutes; it writes
-# about 2 GB.
+# Recording needs gcc and Python 3 (or gfortran 16 and fpm with TSPICE_SOURCE=pepper, see
+# record.sh) and takes 15 to 40 minutes; it writes about 2 GB.
 #
 # A run without FAMILY is the full check. It needs a complete recording: every family of
 # DIR/logs/manifest.tsv recorded and passed. It fails (exit status 1) if

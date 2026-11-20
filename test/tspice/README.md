@@ -12,7 +12,7 @@ julia --project=test test/tspice/run.jl
 
 `TSPICE_SOURCE` selects what the recording runs:
 
-- `cspice`: the 400 families of tspice translated to C by f2c, from NAIF's test suite of
+- `cspice` (the default): the 400 families of tspice translated to C by f2c, from NAIF's test suite of
   CSPICE N0067 ([`tspice_c.tar`](https://naif.jpl.nasa.gov/pub/naif/misc/tspice/N0067/PC_Linux_64bit/tspice_c.tar)),
   against the CSPICE of the same archive. It needs gcc only. `cspice/build_cspice.sh`
   downloads the archive (checked by its SHA-256), writes the wrappers with
@@ -22,7 +22,7 @@ julia --project=test test/tspice/run.jl
   each recorded routine, which the C prototypes do not give: after a change of
   `routines.txt`, write it again with `cspice/signatures.py` from the Fortran sources of
   SPICELIB (`tspice.tar` in the same directory of NAIF).
-- `pepper` (the default): the families of tspice through
+- `pepper`: the families of tspice through
   [PEPPER](https://github.com/jacobwilliams/pepper)'s SPICELIB interface, built with
   gfortran 16 and fpm, which must be on `PATH`.
 

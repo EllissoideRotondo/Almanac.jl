@@ -5,10 +5,10 @@
 #
 # TSPICE_SOURCE selects what is recorded:
 #
-# - cspice: the f2c-translated families of tspice_c, NAIF's test suite of CSPICE N0067,
-#   against the CSPICE of the same archive, built with gcc by cspice/build_cspice.sh
-#   (cspice/instrument_c.py writes the wrappers);
-# - pepper (the default): the families of tspice through PEPPER, as follows.
+# - cspice (the default): the f2c-translated families of tspice_c, NAIF's test suite of
+#   CSPICE N0067, against the CSPICE of the same archive, built with gcc by
+#   cspice/build_cspice.sh (cspice/instrument_c.py writes the wrappers);
+# - pepper: the families of tspice through PEPPER, as follows.
 #
 # Clones PEPPER (https://github.com/jacobwilliams/pepper, which carries tspice and a
 # SPICELIB interface on which tspice passes) at the commit below into OUTDIR/pepper,
@@ -36,7 +36,7 @@ here=$(cd "$(dirname "$0")" && pwd)
 out=$(mkdir -p "$1" && cd "$1" && pwd)
 shift
 commit=${PEPPER_COMMIT:-454d6ba6ca78d2a597f312f7d3afa0465aa4de30}
-source=${TSPICE_SOURCE:-pepper}
+source=${TSPICE_SOURCE:-cspice}
 memjobs=$(awk '/MemAvailable/ {print int($2 / 2097152)}' /proc/meminfo 2>/dev/null || echo 0)
 jobs=${JOBS:-$(n=$(nproc); [ "$memjobs" -ge 1 ] && [ "$memjobs" -lt "$n" ] && n=$memjobs; echo "$n")}
 echo "recording with $jobs parallel families"
