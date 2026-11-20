@@ -14,6 +14,9 @@
 #     --update-baseline  make this run the baseline: baseline.tsv (counts, class and note
 #                        of each routine; a routine keeps its class), baseline_ids.tsv.gz
 #                        (every mismatch) and coverage.tsv (the calls of each routine)
+#     --baseline-from DIR  write the baseline as --update-baseline does from the results
+#                        of a full run with the oracle in DIR (DIR/tally.tsv, DIR/ids.tsv),
+#                        without a replay (for a run made elsewhere, such as on CI)
 #
 # Recording needs gfortran 16 and fpm on PATH and takes 15 to 40 minutes; it writes
 # about 2 GB.
@@ -46,7 +49,7 @@ function parse_args(args)
     o = Dict{String, Any}(
         "dir" => joinpath(homedir(), ".cache", "almanac-tspice"),
         "record" => false, "jobs" => default_jobs(), "oracle" => true, "update" => false,
-        "families" => String[]
+        "from" => "", "families" => String[]
     )
     i = 1
     while i <= length(args)
@@ -61,6 +64,8 @@ function parse_args(args)
             o["oracle"] = false
         elseif a == "--update-baseline"
             o["update"] = true
+        elseif a == "--baseline-from"
+            o["from"] = abspath(expanduser(args[i + 1])); i += 1
         elseif startswith(a, "--")
             error("unknown option $a")
         else
@@ -124,8 +129,38 @@ function split_logs(logs, n)
     return filter(!isempty, groups)
 end
 
+"""
+Write the baseline from the counts and the mismatches of a full run with the oracle: a
+routine keeps its class and note; a new one is `unexplained` until classed.
+"""
+function write_baseline(total, ids)
+    baseline_path = joinpath(HERE, "baseline.tsv")
+    notes = read_notes(baseline_path)
+    write_counts(
+        baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)),
+        GATED; notes
+    )
+    write_ids_gz(joinpath(HERE, "baseline_ids.tsv.gz"), ids)
+    write_counts(joinpath(HERE, "coverage.tsv"), total, COVERED)
+    return println("baseline written to $baseline_path, baseline_ids.tsv.gz and coverage.tsv")
+end
+
+"The baseline from the results directory `from` of a full run (tally.tsv and ids.tsv)."
+function baseline_from(from)
+    tally, idf = joinpath(from, "tally.tsv"), joinpath(from, "ids.tsv")
+    (isfile(tally) && isfile(idf)) || (println("no tally.tsv and ids.tsv in $from"); return 2)
+    ids = Dict{String, Int}()
+    for l in eachline(idf)
+        id, n = rsplit(l, '\t'; limit = 2)
+        ids[String(id)] = parse(Int, n)
+    end
+    write_baseline(read_counts(tally), ids)
+    return 0
+end
+
 function main(args)
     o = parse_args(args)
+    isempty(o["from"]) || return baseline_from(o["from"])
     dir, jobs = o["dir"], o["jobs"]
     logdir = joinpath(dir, "logs")
     full = isempty(o["families"])
@@ -246,15 +281,7 @@ function main(args)
     baseline_path = joinpath(HERE, "baseline.tsv")
     if o["update"]
         (full && o["oracle"]) || (println("--update-baseline needs a full run with the oracle"); return 2)
-        # a routine keeps its class and note; a new one is `unexplained` until classed
-        notes = read_notes(baseline_path)
-        write_counts(
-            baseline_path, Dict(r => c for (r, c) in total if any(get(c, k, 0) > 0 for k in GATED)),
-            GATED; notes
-        )
-        write_ids_gz(joinpath(HERE, "baseline_ids.tsv.gz"), ids)
-        write_counts(joinpath(HERE, "coverage.tsv"), total, COVERED)
-        println("baseline written to $baseline_path, baseline_ids.tsv.gz and coverage.tsv")
+        write_baseline(total, ids)
         return 0
     end
     if !o["oracle"]

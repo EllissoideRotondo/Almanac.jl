@@ -107,5 +107,7 @@ Each routine of `baseline.tsv` has a class and a note:
 
 - `--record` records again.
 - `--update-baseline` makes the full run the new baseline and keeps the classes.
+- `--baseline-from DIR` does the same from the `results` directory of a full run made
+  elsewhere (the `tspice` workflow uploads one), without a replay.
 - A list of families (`F_SPK08 F_CK06`) restricts the run to them, without the coverage
   check.
