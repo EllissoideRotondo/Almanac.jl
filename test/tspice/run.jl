@@ -19,8 +19,8 @@
 #                        DIR/run.tsv), without a replay (for a run made elsewhere, such as
 #                        on CI); refused for the results of a run of some families
 #
-# Recording needs gcc, binutils, Python 3 and curl (or gfortran 16 and fpm with
-# TSPICE_SOURCE=pepper, see record.sh) and takes 15 to 40 minutes; it writes about 2 GB.
+# Recording needs gcc, binutils, Python 3 and curl (see record.sh) and takes 15 to 40
+# minutes; it writes about 2 GB.
 #
 # A run without FAMILY is the full check. It needs a complete recording: every family of
 # DIR/logs/manifest.tsv recorded and passed. It fails (exit status 1) if
@@ -362,7 +362,11 @@ function check_recording(logdir, families)
     mf = joinpath(logdir, "manifest.tsv")
     isfile(mf) || return ["no manifest.tsv: the recording was not made by a full record.sh run"]
     m = Dict(String(a) => String(b) for (a, b) in (split(l, '\t') for l in readlines(mf)) if a != "family")
-    # the files that made the wrappers, as the manifest lists them (they depend on the source)
+    # the baseline is made from the recording of tspice_c (an older recording of PEPPER
+    # has other mismatches)
+    src = get(m, "source", "none")
+    src == "cspice" || return ["the recording is of the source $src, not of tspice_c: record again (--record)"]
+    # the files that made the wrappers, as the manifest lists them
     for (f, h) in m
         isfile(joinpath(HERE, f)) || continue
         bytes2hex(open(io -> sha256(io), joinpath(HERE, f))) == h ||

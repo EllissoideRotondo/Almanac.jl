@@ -1,7 +1,33 @@
-/* The call log of the tspice_c recording (test/tspice/cspice): the C port of the
-   Fortran module tspice_log that instrument.py writes for the PEPPER recording, with the
-   same output (the format is described in LOGMOD of instrument.py). The wrappers that
-   instrument_c.py generates call these functions. */
+/* The call log of the tspice_c recording (test/tspice/cspice), which replay.jl reads.
+   The wrappers that instrument_c.py generates call these functions.
+
+   The log goes to the file named by the environment variable TSPICE_LOG (a file or a
+   FIFO that record.sh compresses); without it nothing is written. Format, one item per
+   line:
+
+     @ NAME DEPTH FAILED   a call (DEPTH > 1: made by a routine that is being logged)
+     <ARG K N / >ARG K N   an input / output argument of kind K (d, i, l, c), N values
+                           (N = -1: more than 2000, not logged),
+                           one per following line (strings: their text, trailing blanks
+                           removed, after a `|`)
+     S DIR                 the files of the working directory, linked into DIR (a load),
+                           or the file of an open (before it) or of a close (after it),
+                           copied into DIR; for a close DIR has no file past the cap
+     B PATH                the values of the next argument, of N = -1, of a call
+                           from the test program, in the binary file PATH (gzip; doubles
+                           or 4-byte integers, native order; strings of length L: `cL`);
+                           an input or output, within TSPICE_MAXBIN bytes
+     W                     a call of a writer that is not recorded: only its handles
+                           follow (WRITE_MARKS of tables.py)
+     ! FAILED SHORT        the end of the call: the error status and short message
+
+   A call is kept in memory until it ends. A call of a routine without state (the list
+   PURE of tables.py) is not written if its name, error status before the call and inputs
+   are those of an earlier call of the family; a call of a query (QUERY), which reads the
+   kernels or the settings but changes nothing, if they are those of an earlier call with
+   no call of another routine between them. Once the family has made TSPICE_MAXPURE
+   (default 20000) distinct calls of a routine without state, its other calls are not
+   written either (queries have no such limit). TSPICE_ALL=1 writes all. */
 
 #ifndef TSPICE_LOG_H
 #define TSPICE_LOG_H
@@ -58,7 +84,7 @@ long tlog_card_d(const doublereal *cell);         /* the cardinality of a cell, 
 long tlog_card_i(const integer *cell);
 
 /* defined by the generated code (tlog_wrap.c): CSPICE's routines (the wrappers take only
-   the test program's calls), and the lists PURE and QUERY of instrument.py */
+   the test program's calls), and the lists PURE and QUERY of tables.py */
 logical tlog_hook_failed(void);
 void tlog_hook_getmsg_short(char *out, ftnlen len);
 void tlog_hook_zzddhnfo(integer h, char *fname, ftnlen len, integer *arc, integer *bff,

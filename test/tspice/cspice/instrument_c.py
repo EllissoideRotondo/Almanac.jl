@@ -1,17 +1,17 @@
 """Instrument CSPICE's f2c routines so that NAIF's test suite of CSPICE (tspice_c)
-records the calls that its f2c-translated families make: the C counterpart of
-instrument.py, with the same log (tspice_log.c writes it).
+records the calls that its f2c-translated families make, into the log that tspice_log.c
+writes (its format is described in tspice_log.h).
 
     python3 instrument_c.py TSPICE_C_DIR ROUTINES_FILE OUT_DIR
 
 TSPICE_C_DIR is the extracted tspice_c archive of NAIF. OUT_DIR gets:
 
 - tlog_wrap.c: for each recorded routine R, `__wrap_R_`, which logs the call and calls
-  `R_`; the hooks that tspice_log.c calls; the lists PURE and QUERY of instrument.py;
+  `R_`; the hooks that tspice_log.c calls; the lists PURE and QUERY of tables.py;
 - wrap.syms: the lines `R_ __wrap_R_`, for `objcopy --redefine-syms` on the objects of
   the test program (the families and NAIF's test and support utilities), so that their
   calls, and only theirs, go through the wrappers: CSPICE's calls between its own
-  routines are not logged, as PEPPER's were not;
+  routines are not logged;
 - driver.c: the main program of tspice_c, which runs one f2c family by name
   (`--list` lists them).
 
@@ -27,9 +27,9 @@ import sys
 from collections import namedtuple
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.dirname(HERE))
-import instrument as I  # noqa: E402
+sys.path.insert(0, HERE)
 import signatures  # noqa: E402
+import tables as T  # noqa: E402
 
 Proto = namedtuple("Proto", "ret params character")
 Generated = namedtuple("Generated", "code wrapped symbols skips marks")
@@ -37,8 +37,8 @@ Generated = namedtuple("Generated", "code wrapped symbols skips marks")
 PROTO = re.compile(r"^extern\s+(.*?)\s*\b(\w+)_\((.*)\);\s*$")
 RENAME = re.compile(r"^\s*#\s*define\s+(\w+)_\s+(\w+_)\s*$")
 
-# FIXED_LENGTHS of instrument.py as C expressions: `{x}` is the C parameter of the
-# Fortran argument x (a pointer: `*{n}` is the value of a scalar, `{x}[k-1]` is X(K)),
+# Lengths that the arguments do not give (SPICELIB's documented sizes), as C
+# expressions: `{x}` is the C parameter of the Fortran argument x (a pointer: `*{n}` is the value of a scalar, `{x}[k-1]` is X(K)),
 # `{x_len}` its string length.
 M = "tlog_max0"
 FIXED_LENGTHS_C = {
@@ -133,7 +133,11 @@ FIXED_LENGTHS_C = {
     "ckw05": {"packts": f"{M}(*{{n}}*(long)(*{{subtyp}} == 0 ? 8 : *{{subtyp}} == 1 ? 4"
                         " : *{subtyp} == 2 ? 14 : 7))"},
 }
-# CUSTOM_ARGS, CUSTOM_OUT and CUSTOM_POST of instrument.py, in C.
+# Arguments logged by a routine of tspice_log.c instead of as an array: the summary of
+# DAFBNA packs its integers into doubles, which the decimal log cannot carry; it is
+# logged unpacked, as `<dc` and `<ic`.
+# None: the argument is not logged (a workspace, or the record pointers of an EK fast load,
+# which the replay keeps as the state that Almanac's EKIFLD returns).
 CUSTOM_ARGS_C = {
     "dafbna": {"sum": "tlog_dafsum(*{handle}, {sum}, '<')"},
     "dafws": {"sum": "tlog_dafsum_cur({sum}, '<')"},
@@ -145,18 +149,20 @@ CUSTOM_ARGS_C = {
     "ekacli": {"rcptrs": None, "wkindx": None},
     "ekffld": {"rcptrs": None},
 }
+# Output arguments logged by a routine of tspice_log.c, after the call: the summary that
+# DAFGS returns, unpacked as `>dc` and `>ic` like the inputs above (its length is that of
+# the DAF of the current search, which no argument gives).
 CUSTOM_OUT_C = {"dafgs": {"sum": "tlog_dafsum_cur({sum}, '>')"}}
+# Calls after the call, before its outputs: the notes from which later calls take their
+# lengths (the rows and column declarations of an EK fast load, the degree of SPK14B).
 CUSTOM_POST_C = {
     "ekifld": "tlog_ek_note(*{handle}, *{segno}, *{ncols}, *{nrows}, {cnames}, {cnames_len}, {decls}, {decls_len})",
     "spk14b": "tlog_spk14_note(*{handle}, *{chbdeg})",
 }
-# CELL_INPUTS of instrument.py: the N endpoints of WNVALD's input, which is not yet a window
+# The input window of WNVALD holds N endpoints that are not yet a window (its
+# cardinality is not set): they are logged as N values after the size and the old
+# cardinality.
 CELL_INPUTS_C = {"wnvald": {"window": 'tlog_d("{label}", {window} + 4, 2 + tlog_clamp(*{n}))'}}
-
-for mine, theirs in ((CUSTOM_ARGS_C, I.CUSTOM_ARGS), (CUSTOM_OUT_C, I.CUSTOM_OUT),
-                     (CUSTOM_POST_C, I.CUSTOM_POST), (CELL_INPUTS_C, I.CELL_INPUTS)):
-    assert set(mine) == set(theirs) and all(set(mine[k]) == set(theirs[k]) for k in mine
-                                            if isinstance(mine[k], dict)), (mine, theirs)
 
 # The CSPICE routines that tspice_log.c calls through its hooks.
 HOOKS = {
@@ -221,13 +227,12 @@ def c_names(proto, sig):
 
 
 def length_c(dims, args, kinds, arg, names):
-    """The number of elements of an array argument, as a C expression, or None
-    (length_expr of instrument.py)."""
+    """The number of elements of an array argument, as a C expression, or None."""
     if not dims:
         return "1"
     d = dims.lower()
-    if arg in I.FIXED_SIZES and d == "*":
-        return I.FIXED_SIZES[arg]
+    if arg in T.FIXED_SIZES and d == "*":
+        return T.FIXED_SIZES[arg]
     parts = d.split(",")
     for k, p in enumerate(parts):
         if ":" in p:
@@ -249,7 +254,7 @@ def length_c(dims, args, kinds, arg, names):
         return None if bad else e
 
     if parts[-1] == "*":
-        named = [I.NAMED_COUNTS[arg]] if arg in I.NAMED_COUNTS else []
+        named = [T.NAMED_COUNTS[arg]] if arg in T.NAMED_COUNTS else []
         for cand in named + ["n", "dim", "nvals", "nv", "nsize", "size", "nvars", "npts"]:
             if cand in args and kinds.get(cand) == ("i", ""):
                 lead = [tr(p) for p in parts[:-1]]
@@ -270,9 +275,8 @@ def length_c(dims, args, kinds, arg, names):
 
 
 def cell_records(name, sig):
-    """{arg: record with {label} and the C names, or None} of a routine of CELL_ROUTINES
-    (cell_args of instrument.py)."""
-    if name not in I.CELL_ROUTINES:
+    """{arg: record with {label} and the C names, or None} of a routine of CELL_ROUTINES."""
+    if name not in T.CELL_ROUTINES:
         return {}
     cells = {}
     for a, k, dims, _ in sig["args"]:
@@ -308,7 +312,7 @@ def wrapper(sym, proto, pre, post):
 
 
 def instrument_routine(name, protos, table, sym):
-    """The wrapper of a recorded routine (instrument_routine of instrument.py), or a reason."""
+    """The wrapper of a recorded routine, or a reason."""
     if name not in protos:
         return "no prototype in SpiceZfc.h"
     if name not in table:
@@ -321,7 +325,7 @@ def instrument_routine(name, protos, table, sym):
     if any("?" in (k, it) for _, k, _, it in sig["args"]):
         return "an argument without a kind or a direction"
     procs = {a for a, k, _, _ in sig["args"] if k == "p"}
-    if procs and name not in I.PROC_ROUTINES:
+    if procs and name not in T.PROC_ROUTINES:
         return "an argument is a procedure"
     names, why = c_names(proto, sig)
     if why:
@@ -346,17 +350,17 @@ def instrument_routine(name, protos, table, sym):
             lens[a] = n
     first = names[args[0]] if args else None
     pre = [f'tlog_begin("{name.upper()}")']
-    if name in I.FILE_ROUTINES:
+    if name in T.FILE_ROUTINES:
         pre.append("tlog_snapshot()")
-    elif name in I.OPEN_ROUTINES:
+    elif name in T.OPEN_ROUTINES:
         pre.append(f"tlog_snapshot_file({first}, {names[args[0] + '_len']})")
-    elif name in I.CLOSE_ROUTINES:
+    elif name in T.CLOSE_ROUTINES:
         pre.append(f"tlog_close_name(*{first})")
     for a in args:
-        if a in I.MARK_HANDLES and kinds[a][0] == "i" and lens.get(a) == "1" and intent[a] in ("in", "inout"):
+        if a in T.MARK_HANDLES and kinds[a][0] == "i" and lens.get(a) == "1" and intent[a] in ("in", "inout"):
             pre.append(f"tlog_handle_file(*{names[a]})")
     post = ["tlog_mark()"]
-    if name in I.CLOSE_ROUTINES:
+    if name in T.CLOSE_ROUTINES:
         post.append("tlog_close_snapshot()")
     if name in CUSTOM_POST_C:
         post.append(CUSTOM_POST_C[name].format(**names))
@@ -398,7 +402,7 @@ def mark_routine(name, protos, table, sym):
         return why
     pre = [f'tlog_begin("{name.upper()}")', "tlog_writer()"]
     for a, k, dims, _ in sig["args"]:
-        if a in I.MARK_HANDLES and k == "i" and dims == "":
+        if a in T.MARK_HANDLES and k == "i" and dims == "":
             pre.append(f'tlog_i("<{a}", {names[a]}, 1)')
     return wrapper(sym, proto, pre, ["tlog_mark()", "tlog_end()"])
 
@@ -414,7 +418,7 @@ def generate(protos, table, wanted, renames=None):
              "#include <stdlib.h>", "#include <string.h>", '#include "f2c.h"', '#include "tspice_log.h"', ""]
     renames = renames or {}
     wrapped, symbols, skips, marks = [], [], [], []
-    for name in sorted(set(wanted) | I.WRITE_MARKS):
+    for name in sorted(set(wanted) | T.WRITE_MARKS):
         sym = renames.get(name, name + "_")
         res = instrument_routine(name, protos, table, sym) if name in wanted else "not in the routines file"
         if res.startswith("extern"):
@@ -422,7 +426,7 @@ def generate(protos, table, wanted, renames=None):
             wrapped.append(name)
             symbols.append(sym)
             continue
-        if name in I.WRITE_MARKS:
+        if name in T.WRITE_MARKS:
             marks.append((name, res))
             res = mark_routine(name, protos, table, sym)
             if res.startswith("extern"):
@@ -439,8 +443,8 @@ def generate(protos, table, wanted, renames=None):
         parts.append(f"{signature}\n{{\n    {body.format(f=f)}\n}}\n")
     parts.append("static int tlog_cmp(const void *a, const void *b)\n{\n"
                  "    return strcmp(*(const char *const *)a, *(const char *const *)b);\n}\n")
-    parts.append(name_list("tlog_is_pure", sorted(n.upper() for n in I.PURE)))
-    parts.append(name_list("tlog_is_query", sorted(n.upper() for n in I.QUERY)))
+    parts.append(name_list("tlog_is_pure", sorted(n.upper() for n in T.PURE)))
+    parts.append(name_list("tlog_is_query", sorted(n.upper() for n in T.QUERY)))
     return Generated("\n".join(parts), wrapped, symbols, skips, marks)
 
 
@@ -503,8 +507,8 @@ def driver(pgm):
    }
    naif_main(1, argv);
    {
-      /* failure if any test case failed, as PEPPER's driver (the flag of a family is
-         that of its last check) */
+      /* failure if any test case failed (the flag of a family is that of its last
+         check) */
       logical bad = 0;
       t_anybad__(&bad);
       return bad ? 1 : 0;

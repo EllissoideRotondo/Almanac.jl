@@ -4,7 +4,7 @@
 #     julia --project=test test/tspice/replay.jl LOGDIR [FAMILY ...]
 #
 # LOGDIR holds one log per tspice family (`F_XXX.log.gz` or `F_XXX.log`, written by
-# record.sh through the instrumented SPICELIB interface of PEPPER, see instrument.py),
+# record.sh from tspice_c, in the format of cspice/tspice_log.h),
 # with the copies of the working directory that the log names. Each family is replayed in a new
 # `SpiceContext`, call by call, in the order of the log. A call is:
 #
@@ -845,7 +845,7 @@ function default_mapping(ctx, c::Call)
     end
     notout = get(NOTOUT, name, String[])
     outs = [o for o in c.outputs if !(o.name in notout)]
-    # the arguments that PEPPER declares in-out and that the EK routines leave unchanged
+    # the in-out arguments (cspice/signatures.tsv) that the EK routines leave unchanged
     occursin(r"^ek(ace|uce|rce)[cdi]$|^ekdelr$", name) &&
         filter!(o -> !any(a -> a.name == o.name && a.values == o.values, c.inputs), outs)
     # a routine without outputs (a setter that Almanac makes return its value), and the
@@ -1905,7 +1905,7 @@ const MAPPINGS = Dict{String, Function}(
 # --- the GF searches ---------------------------------------------------------------------
 #
 # The recorder logs a window (a cell of doubles) as its size, its cardinality and its
-# endpoints (instrument.py, cell_args), and not the workspace. Almanac takes the
+# endpoints (CELL_ROUTINES of cspice/tables.py), and not the workspace. Almanac takes the
 # arguments of SPICELIB in the same order, without MW, NW, WORK and RESULT, and returns
 # the result as a `Window`.
 const GF_SEARCHES = Set(
@@ -2108,7 +2108,7 @@ foreach(n -> (MAPPINGS[n] = gf_proc_mapping), ("gfevnt", "gffove", "gfocce"))
 # --- windows and sets ----------------------------------------------------------------------
 #
 # A window or a set is logged as its size, its cardinality and its elements
-# (instrument.py, cell_args). Almanac's windows and ID lists have no size, so a call that
+# (CELL_ROUTINES of cspice/tables.py). Almanac's windows and ID lists have no size, so a call that
 # SPICELIB refused for the size of a cell has no counterpart.
 const CELL_SIZE_ERRORS = union(
     GF_SIZE_ERRORS,

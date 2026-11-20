@@ -7,11 +7,26 @@
 # The build needs gcc, binutils, Python 3 and curl, which the runner has. The recording
 # and the results stay on the runner; the results, the status of each family and a
 # candidate baseline written from this run are kept as an artifact.
+#
+# It runs, in about an hour, on a push to main that changes the package or this harness
+# (in Orbitology/Almanac.jl only, not in forks), on a pull request that changes the
+# harness, and by hand. A newer push cancels the run of an older one.
 name: tspice
 
 on:
   push:
-    branches: [tspice-ci]
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'Project.toml'
+      - 'Manifest.toml'
+      - 'test/Project.toml'
+      - 'test/tspice/**'
+      - '.github/workflows/tspice.yml'
+  pull_request:
+    paths:
+      - 'test/tspice/**'
+      - '.github/workflows/tspice.yml'
   workflow_dispatch:
 
 concurrency:
@@ -24,11 +39,19 @@ permissions:
 jobs:
   tspice:
     name: tspice (Julia 1, ubuntu-latest)
+    if: github.event_name != 'push' || github.repository == 'Orbitology/Almanac.jl'
     runs-on: ubuntu-latest
     # recording 15 to 40 minutes, replay about as long with 4 processes
     timeout-minutes: 300
     steps:
       - uses: actions/checkout@v4
+
+      # the generator of the wrappers and the C logger, under a second
+      - name: Unit tests of the recorder
+        shell: bash
+        run: |
+          python3 -B -m unittest discover -s test/tspice/cspice -p 'test_*.py'
+          bash test/tspice/cspice/test_log.sh
 
       # TSPICE_DIR holds the archive, the build, the recording and the results; the key of
       # the archive's cache is its SHA-256, which build_cspice.sh checks
@@ -80,7 +103,6 @@ jobs:
         shell: bash
         env:
           JOBS: 4
-          TSPICE_SOURCE: cspice
         run: |
           start=$(date +%s)
           status=0

@@ -29,5 +29,6 @@ julia --project=test test/tspice/run.jl
 
 The first run downloads NAIF's archive, builds it with gcc and records the calls, about
 2 GB; later runs only replay them. A run fails on a mismatch that is not in the baseline
-of known mismatches. Details are in
+of known mismatches. The `tspice` workflow of the repository runs this check, in about an
+hour, on each push to `main` that changes the package. Details are in
 [`test/tspice/README.md`](https://github.com/Orbitology/Almanac.jl/blob/main/test/tspice/README.md).

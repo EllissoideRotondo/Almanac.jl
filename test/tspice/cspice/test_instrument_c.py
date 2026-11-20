@@ -6,7 +6,6 @@ import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import instrument_c as G  # noqa: E402
-import instrument  # noqa: E402  (test/tspice, put on the path by instrument_c)
 
 PROTOS = """\
 extern int spkx_(char *targ, doublereal *et, doublereal *starg, ftnlen targ_len);
@@ -82,10 +81,6 @@ class GeneratorTests(unittest.TestCase):
     def test_assumed_size(self):
         w = wrapper_of(self.out.code, "vsum")
         self.assertIn('tlog_d("<x", x, tlog_max0((1)*(long)(*n)))', w)
-
-    def test_fixed_lengths(self):
-        self.assertEqual({k: set(v) for k, v in G.FIXED_LENGTHS_C.items()},
-                         {k: set(v) for k, v in instrument.FIXED_LENGTHS.items()})
 
     def test_cell_arg(self):
         w = wrapper_of(self.out.code, "wnfltd")
@@ -179,7 +174,7 @@ class DriverTests(unittest.TestCase):
         in_order(self, d, ['"F_AB"', '"F_SPK08"'])
         in_order(self, d, ["case 0: f_ab__ ( plain_ok ); break;", "case 1: f_spk08__ ( plain_ok ); break;"])
         in_order(self, d, ["int main(int argc, char **argv)", "--list", "naif_main(1, argv)"])
-        # the status: any failed test case (T_ANYBAD), as PEPPER's driver; the flag of the
+        # the status: any failed test case (T_ANYBAD); the flag of the
         # C-API families, which the driver does not run, is set
         in_order(self, d, ["spice_ok = SPICETRUE;", "tlog_dispatch ( &plain_ok );"])
         in_order(self, d, ["naif_main(1, argv);", "t_anybad__(&bad);", "return bad ? 1 : 0;"])

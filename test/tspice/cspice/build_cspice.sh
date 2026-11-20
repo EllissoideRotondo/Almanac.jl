@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the recording program of tspice_c, NAIF's test suite of CSPICE N0067, for
-# record.sh (TSPICE_SOURCE=cspice).
+# record.sh.
 #
 #     test/tspice/cspice/build_cspice.sh OUTDIR
 #
@@ -35,7 +35,7 @@ if [ ! -f "$src/.extracted" ] || [ "$src/.extracted" -ot "$tar" ]; then
     touch "$src/.extracted"
 fi
 
-python3 "$here/instrument_c.py" "$src" "$here/../routines.txt" "$out/gen" 2> "$out/gen.log" ||
+python3 -B "$here/instrument_c.py" "$src" "$here/../routines.txt" "$out/gen" 2> "$out/gen.log" ||
     { cat "$out/gen.log" >&2; exit 1; }
 grep -v '^mark ' "$out/gen.log" >&2 || true
 cp "$here/tspice_log.c" "$here/tspice_log.h" "$out/gen/"

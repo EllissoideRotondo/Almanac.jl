@@ -5,7 +5,7 @@
 SPICELIB_DIR holds the Fortran sources of SPICELIB N0067 (`*.f` and `*.inc`), for
 example `tspice/src/spicelib` of NAIF's
 https://naif.jpl.nasa.gov/pub/naif/misc/tspice/N0067/PC_Linux_64bit/tspice.tar.
-For each routine of ROUTINES_FILE and of WRITE_MARKS (instrument.py), OUT_TSV gets one
+For each routine of ROUTINES_FILE and of WRITE_MARKS (tables.py), OUT_TSV gets one
 row per argument: its kind (d, i, l, c, or p for a procedure), its dimensions as declared
 (named constants replaced by their values, except in the bounds of a cell) and its
 direction from the routine's Brief_I/O section. instrument_c.py reads the table to write
@@ -23,7 +23,7 @@ COLUMNS = ["routine", "kind", "ftype", "arg", "akind", "dims", "intent"]
 # Brief_I/O sections that state a direction the code contradicts: routine -> {arg: intent}.
 # Each of these routines writes the argument that its Brief_I/O lists as an input (CKW04A
 # packs the counts of each packet into PKTDAT and shortens PKTSIZ; the EK record routines
-# assign SEGNO or RECNO), as the checked intents of PEPPER's interfaces show. A cell
+# assign SEGNO or RECNO), as the code of each routine shows. A cell
 # listed as an output is also read (its size), which `cell_intent` handles.
 OVERRIDES = {
     "ckw04a": {"pktsiz": "inout", "pktdat": "inout"},
@@ -257,8 +257,8 @@ def load(path):
 
 
 def main(spicelib, routines, out):
-    sys.path.insert(0, os.path.dirname(HERE))
-    from instrument import WRITE_MARKS
+    sys.path.insert(0, HERE)
+    from tables import WRITE_MARKS
     wanted = set(WRITE_MARKS)
     for line in open(routines):
         line = line.split("#", 1)[0].strip().lower()

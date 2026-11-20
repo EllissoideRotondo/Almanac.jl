@@ -10,27 +10,25 @@ julia --project=test test/tspice/run.jl
 
 ## Recording
 
-`TSPICE_SOURCE` selects what the recording runs:
-
-- `cspice` (the default): the 400 families of tspice translated to C by f2c, from
-  NAIF's test suite of CSPICE N0067
-  ([`tspice_c.tar`](https://naif.jpl.nasa.gov/pub/naif/misc/tspice/N0067/PC_Linux_64bit/tspice_c.tar)),
-  against the CSPICE of the same archive. It needs gcc, binutils (`objcopy`), Python 3
-  and curl. `cspice/build_cspice.sh` downloads the archive (checked by its SHA-256),
-  writes the wrappers with `cspice/instrument_c.py` and builds the program; only the
-  calls of the test program (the families and NAIF's test and support utilities) go
-  through the wrappers. `cspice/signatures.tsv` holds the kind, direction and
-  dimensions of the arguments of each recorded routine, which the C prototypes do not
-  give: after a change of `routines.txt`, write it again with `cspice/signatures.py`
-  from the Fortran sources of SPICELIB (`tspice.tar` in the same directory of NAIF).
-- `pepper`: the families of tspice through
-  [PEPPER](https://github.com/jacobwilliams/pepper)'s SPICELIB interface, built with
-  gfortran 16 and fpm, which must be on `PATH`.
+The recording runs the 400 families of tspice translated to C by f2c, from NAIF's test
+suite of CSPICE N0067
+([`tspice_c.tar`](https://naif.jpl.nasa.gov/pub/naif/misc/tspice/N0067/PC_Linux_64bit/tspice_c.tar)),
+against the CSPICE of the same archive. It needs gcc, binutils (`objcopy`), Python 3 and
+curl. `cspice/build_cspice.sh` downloads the archive (checked by its SHA-256), writes the
+wrappers with `cspice/instrument_c.py` and builds the program; only the calls of the
+test program (the families and NAIF's test and support utilities) go through the
+wrappers. `cspice/tables.py` lists how each routine is recorded, and
+`cspice/tspice_log.h` describes the log. `cspice/signatures.tsv` holds the kind,
+direction and dimensions of the arguments of each recorded routine, which the C
+prototypes do not give: after a change of `routines.txt`, write it again with
+`cspice/signatures.py` from the Fortran sources of SPICELIB (`tspice.tar` in the same
+directory of NAIF).
 
 The first run builds the program, runs the families and records their calls into
 `~/.cache/almanac-tspice` (about 2 GB, 15 to 40 minutes), with a manifest of the
 families and of what made the recording. Later runs only replay the recording, in
-parallel processes.
+parallel processes. A recording made before tspice_c (through PEPPER) is refused:
+record again with `--record`.
 
 To keep the recording small, a call of a routine that has no state is kept once for
 each distinct set of inputs, and a query is kept once between two changes of the loaded
@@ -91,8 +89,8 @@ The mismatches are written to `results/replay.tsv` and `results/ids.tsv`.
 
 `selftest.jl` checks the gate itself. On a copy of the recording it removes a mismatch
 from the baseline, scales Almanac.jl's outputs by 1 + 1e-10, changes the kind of its
-errors, deletes a log, damages a log and marks a family as failed, and requires the run
-to fail each time.
+errors, changes the source in the manifest, deletes a log, damages a log and marks a
+family as failed, and requires the run to fail each time.
 
 ## The baseline
 
