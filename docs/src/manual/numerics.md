@@ -16,7 +16,12 @@ calls the C library of the platform. Julia and glibc differ in the last bit for 
 3 % of the arguments of `sin` and `cos` (measured on 10⁶ points between 1 and 51), so
 a result can differ from CSPICE in its last bit. Over long spans this grows: a type 5
 SPK segment propagated over six years puts a planet barycenter 3e-8 km away from the
-position of CSPICE, at 2e8 km from the Sun.
+position of CSPICE, at 2e8 km from the Sun. Geometry near a tangency amplifies it: in
+NAIF's test suite, a limb point on a DSK shape differs from that of CSPICE by up to
+2.5e-3 km, and the intercept of a ray that grazes the surface by up to 4.4e-4 km. A
+change of the epoch by one unit in the last place moves the limb point of CSPICE itself
+by 3e-3 km. With the `sin` and `cos` of glibc in place of Julia's, these results equal
+those of CSPICE.
 
 ## Exact derivatives and the rates of CSPICE
 
