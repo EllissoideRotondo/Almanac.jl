@@ -1,28 +1,34 @@
 routine	value	error	adapter	class	note
+bodc2n	0	1	0	documented	KERVARTOOBIG past 14983 body names in the pool: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+boddef	0	1	0	documented	TOOMANYPAIRS past 161 pairs: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+ckopn	0	1	0	documented	DAFFTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+dafbna	0	1	0	documented	STFULL past 20 arrays written at once: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 dasopw	0	1	0	cspice	:emptystring for an empty name, as the CSPICE wrappers
-dlaopn	0	2	0	cspice	:emptystring for an empty name, as the CSPICE wrappers
+dlaopn	0	2	0	cspice	:emptystring for an empty name, as the CSPICE wrappers; kind names (:fileopenfailed for FILEOPENFAIL)
 dskxsi	1	0	0	documented	last-bit sin and cos at a grazing ray (cspice.md)
 dskxv	1	0	0	documented	the frame of an earlier failed call, a CSPICE defect (cspice_defects.md)
-dtpool	5	0	0	documented	a name past 32 characters is never set (pdpool)
-furnsh	0	1	0	documented	:badvarname past 32 characters, as CSPICE (ldpool); PEPPER accepts the name
+furnsh	0	4	0	documented	FILENAMETOOLONG and PATHTOOLONG past 255 characters: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits); Almanac then finds no such file
 gcpool	0	1	0	documented	:typemismatch for a variable of the other type (gcpool)
-gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool)
+gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool); room 0, which Almanac does not take (conventions.md, memory arguments)
 gfilum	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
 gfpa	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
 gipool	0	1	0	documented	:typemismatch for a variable of the other type (gipool)
-limbpt	5	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
-lmpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool); PEPPER accepts the name
-pcklof	0	1	0	gap	Almanac has no pcklof; the replay loads with furnsh (NOSUCHFILE)
-pcpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pcpool)
-pdpool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pdpool)
-pipool	0	1	0	documented	:badvarname past 32 characters, as CSPICE (pipool)
+limbpt	42	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
+pcklof	0	2	0	gap	Almanac has no pcklof; the replay loads with furnsh (NOSUCHFILE); FTFULL past 5000 open files is a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+pckopn	0	1	0	documented	DAFFTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 pxform	8	1	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
-sincpt	20	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
+scdecd	0	1	0	documented	TOOMANYCOEFFS past 100000 coefficients of an SCLK kernel: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+sce2c	0	1	0	documented	TOOMANYPARTITIONS past 9999 partitions of an SCLK kernel: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits); Almanac then finds the epoch out of range
+sincpt	108	0	0	documented	last-bit sin and cos at grazing rays (cspice.md)
 spkcpt	3	0	0	documented	last-bit sin and cos (cspice.md)
-subpnt	2	0	0	documented	last-bit sin and cos on DSK plates (cspice.md)
-sxform	5	0	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: kind names
-tangpt	186	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
-termpt	7	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
+spkopn	0	1	0	documented	DAFFTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+subpnt	6	0	0	documented	last-bit sin and cos on DSK plates (cspice.md)
+subslr	6	0	0	documented	last-bit sin and cos on DSK plates (cspice.md)
+swpool	0	4	0	documented	KERVARSETOVERFLOW, TOOMANYWATCHES, AGENTLISTOVERFLOW past the sizes of the watcher tables: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+sxform	5	1	0	documented	values: last-bit sin and cos of two-vector frames (cspice.md); errors: TOOMANYBASEFRAMES past 15000 base frames of switch frames, a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
+tangpt	192	0	0	documented	last-bit sin and cos at grazing XCN rays (cspice.md)
+termpt	32	0	0	documented	last-bit sin and cos, ill-conditioned DSK tangency (cspice.md)
 tisbod	134	0	0	documented	CSPICE's rate of a cubic pole term, and the degree check (cspice.md)
-tkvrsn	399	0	0	documented	the version string names Almanac (tkvrsn docstring)
+tkvrsn	400	0	0	documented	the version string names Almanac (tkvrsn docstring)
 xfmsta	1	0	0	documented	last-bit sin and cos near the pole (cspice.md)
+zzdsklsf	0	1	0	documented	FTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)

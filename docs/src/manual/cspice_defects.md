@@ -17,7 +17,9 @@ How to read the tables:
 
 - **Where** names the routine of SPICELIB in lower case, `_c` for a routine written in
   C. Parentheses name the public calls through which the defect shows.
-- **Test** names the test group (`test/test_<group>.jl`) that covers the behaviour.
+- **Test** names the test group (`test/test_<group>.jl`) that covers the behaviour, or
+  the family of NAIF's test suite (`tspice F_NAME`) whose difference from CSPICE is in
+  the baseline of that suite.
 
 ## Defects that Almanac.jl copies
 
@@ -137,6 +139,8 @@ writes differs.
 
 ## Limits that Almanac.jl does not have
 
+Where CSPICE signals an error past the size of a fixed table, Almanac.jl makes the call.
+
 | Where | Limit of CSPICE | In Almanac.jl | Test |
 |---|---|---|---|
 | `zzddhopn`, `rdker`, `rdtext` | A path is cut to 255 characters, so two paths with the same start are confused | The whole path | `dafwrite` |
@@ -144,3 +148,10 @@ writes differs.
 | `framex` | `HASHISFULL` past 5209 frames defined in kernels | No limit | `frameinfo` |
 | `zzboddef` (`boddef`) | `TOOMANYPAIRS` past 161 pairs, where the header says 150 | No limit | `poolwrite` |
 | `zzrvbf` (`lmpool`) | A string value over 80 characters is written past its slot | Keeps the first 80 characters and writes nothing past them | `poolwrite` |
+| `keeper` (`furnsh`) | `FILENAMETOOLONG`, `PATHTOOLONG` past 255 characters, after the path symbols of a meta-kernel are replaced | The whole name | `tspice F_KEEPER` |
+| `zzddhman`, `dafah` (`spkopn`, `ckopn`, `pckopn`, `furnsh`, the DSK loader) | `FTFULL`, `DAFFTFULL` past 5000 open files | No limit | `tspice F_DDHFTSIZE`, `F_ZZDSKBSR`, `F_PCKBSR` |
+| `dafana` (`dafbna`) | `STFULL` past 20 arrays written at once | No limit | `tspice F_DAFANA` |
+| `pool` (`swpool`) | `KERVARSETOVERFLOW`, `TOOMANYWATCHES`, `AGENTLISTOVERFLOW` past the sizes of the tables of watched names and agents | No limit | `tspice F_DWPOOL` |
+| `zzbodker` (`bodc2n`, `bodn2c`) | `KERVARTOOBIG` past 14983 values of `NAIF_BODY_NAME` | No limit | `tspice F_BODCOD` |
+| `zzscad01` (`scdecd`, `sce2c` and the other SCLK calls) | `TOOMANYCOEFFS` past 100000 coefficients, `TOOMANYPARTITIONS` past 9999 partitions of a type 1 SCLK kernel | No limit | `tspice F_ZZSC01` |
+| `zzswffet` (`sxform`, `pxform` of switch frames) | `TOOMANYBASEFRAMES` past 15000 base frames of switch frames | No limit | `tspice F_ZZSWFXFM` |
