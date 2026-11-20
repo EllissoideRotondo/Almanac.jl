@@ -337,7 +337,7 @@ void tlog_fmt_double(double x, char out[32]) {
     e = strchr(m, 'E');
     ex = atoi(e + 1);
     *e = '\0';
-    sprintf(out, "%s%sE%c%03d", m[0] == '-' ? "" : " ", m, ex < 0 ? '-' : '+', ex < 0 ? -ex : ex);
+    snprintf(out, 32, "%s%sE%c%03d", m[0] == '-' ? "" : " ", m, ex < 0 ? '-' : '+', ex < 0 ? -ex : ex);
 }
 
 /* True if the array of N values of SIZE bytes, too long for the log, goes to a binary
