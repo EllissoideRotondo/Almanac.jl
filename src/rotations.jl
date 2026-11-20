@@ -426,14 +426,16 @@ end
     _binary_pck_rotation(data, seg, et::T) -> Mat3{T}
 
 Matrix from J2000 to the body frame of the binary PCK segment `seg` at `et`, as
-`pcke02_`, `pckmat_` and `tisbod_` give it: 3-1-3 Euler angles of the segment (W
-reduced by whole turns), then the rotation
+`pcke02_`, `pcke03_`, `pckmat_` and `tisbod_` give it: 3-1-3 Euler angles of the
+segment (W reduced by whole turns for types 2 and 20), then the rotation
 from J2000 to the reference frame of the segment. Requires `seg.t0 <= primal(et) <= seg.t1`.
 """
 @inline function _binary_pck_rotation(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     ang = pck_eval(data, seg, et, Val(0))[1]
-    # `pcke02_` reduces W with `d_mod`; the same arithmetic keeps the value of CSPICE.
-    tipm = _eul313(_reduce_twopi(ang[3]), ang[2], ang[1])
+    # `pcke02_` and `pcke20_` reduce W with `d_mod`, and `pcke03_` does not; the same
+    # arithmetic keeps the value of CSPICE.
+    w = seg.dtype == 3 ? ang[3] : _reduce_twopi(ang[3])
+    tipm = _eul313(w, ang[2], ang[1])
     seg.frame == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(seg.frame))
 end
@@ -446,15 +448,21 @@ arithmetic of `pckmat_` and `tisbod_`: the angles and their rates of the segment
 (`chbint_` for type 2, `spke20_` for type 20; W reduced by whole turns as `pcke02_`
 and `pcke20_` do) go to `eul2xf_`, and both blocks are multiplied on the right by the
 rotation from J2000 to the frame of the segment. The derivative of the `Taylor`
-evaluation of `_binary_pck_rotation` is the same function, rounded otherwise.
+evaluation of `_binary_pck_rotation` is the same function, rounded otherwise. Type 3
+takes the derivative from the angular velocity series of the segment (`_pck03_state`),
+which is not the derivative of the `Taylor` evaluation.
 """
 function _binary_pck_state(data::Vector{Float64}, seg::Segment, et::Float64)
-    ang, rate = pck_eval(data, seg, et, Val(1))
-    x = eul2xf(
-        SVector(_reduce_twopi(ang[3]), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
-    )
-    r = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
-    dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+    if seg.dtype == 3
+        r, dr = _pck03_state(data, seg, et)
+    else
+        ang, rate = pck_eval(data, seg, et, Val(1))
+        x = eul2xf(
+            SVector(_reduce_twopi(ang[3]), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
+        )
+        r = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
+        dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+    end
     if seg.frame != _J2000_FRAME
         c = inertial_rotation(seg.frame)
         r, dr = _m_mxm(r, c), _m_mxm(dr, c)

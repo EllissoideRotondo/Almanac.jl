@@ -55,8 +55,9 @@ manual or a test. The global skills hold the general rules, and the project skil
   in the order of CSPICE.
 - No hidden state. The only global state is the table of open files in
   `daf_access.jl`. State that CSPICE hides in saved variables is either an object the
-  caller owns (`DAFHandle`, `DASHandle`, `EKResult`, `EKFastLoad`, `SPK14Writer`) or an
-  atomic field of the `SpiceContext` (`ks`, `timedefs`, `dsktols`, `gftol`).
+  caller owns (`DAFHandle`, `DASHandle`, `EKResult`, `EKFastLoad`, `SPK14Writer`,
+  `CKW04Writer`, `PCK03Writer`) or an atomic field of the `SpiceContext` (`ks`,
+  `timedefs`, `dsktols`, `gftol`).
 - Where CSPICE computes with 32-bit integers, use `_cint`, `_wrap32`, `_dnint` and
   `_nint` from `time.jl`, so the results are the same.
 - A call that has a "found" flag in CSPICE returns `nothing` when the flag is false.
@@ -108,6 +109,11 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
   segment, as `sxform` does, which is not the time derivative of the rotation.
   `_CKExact()` and `_exact_frame_jet` give the exact derivative. `frame_jet` picks the
   first for chains that contain class 3, 5 or 6 frames.
+- **PCK type 3 rates.** A segment holds series of the angles and of the angular
+  velocity. `sxform` at a plain epoch takes the derivative from the angular velocity
+  series (`_pck03_state`, as `pcke03`), through the state path of class 2 frames; an AD
+  or `Taylor` epoch differentiates the angle series (`_pck03_angles`). W is not reduced
+  by whole turns, as in `pcke03`.
 - **SPK type 3** (separate velocity series): order k >= 1 of the jet is derivative k-1
   of the velocity series, as in `spkder`.
 - **Kernels in memory.** A handle of `dafops` (`spkops`, `ckops`, `pckops`) has an

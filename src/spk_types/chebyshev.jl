@@ -34,7 +34,8 @@ end
 """
     _spk14_layout(data, seg) -> NamedTuple
 
-The parts of the type 14 segment `seg` from its meta data, as offsets from the address
+The parts of the SPK type 14 or binary PCK type 3 segment `seg` (the same layout) from
+its meta data, as offsets from the address
 before the segment: `conbas`, `refbas`, `pktbas`, the counts `nref` and `npkt`, the
 packet size `pktsz`, the packet offset `pktoff`, `stride = pktsz + pktoff`, and the
 coefficient count `ncoef` of a series. Throws `SpiceError(:notsupported)` for a layout
@@ -62,7 +63,8 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
     (rdrtyp == 3 && pdrtyp == 0) || throw(
         SpiceError(
             :notsupported,
-            "SPK type 14 segment with reference directory type $rdrtyp and packet " *
+            "$(seg.dtype == 14 ? "SPK type 14" : "binary PCK type 3") segment with " *
+                "reference directory type $rdrtyp and packet " *
                 "directory type $pdrtyp is not supported"
         )
     )

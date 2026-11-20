@@ -15,6 +15,8 @@ surfpv
 npedln
 npelpt
 nplnpt
+npsgpt
+incnsg
 edlimb
 inedpl
 inelpl

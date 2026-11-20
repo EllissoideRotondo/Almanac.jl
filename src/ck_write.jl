@@ -1,8 +1,8 @@
 # CK writers: `ckopn`, `ckcls` and the segment writers `ckw01`, `ckw02`, `ckw03`,
-# `ckw05`, `ckw06`. Each writer makes the input checks of the SPICELIB routine in the
-# same order and writes the descriptor, the pointing data, the directories and the
-# trailer in the layout of CSPICE, so the data area is equal bit for bit to the one
-# that CSPICE writes from the same input.
+# `ckw04b`/`ckw04a`/`ckw04e`, `ckw05`, `ckw06`. Each writer makes the input checks of the
+# SPICELIB routine in the same order and writes the descriptor, the pointing data, the
+# directories and the trailer in the layout of CSPICE, so the data area is equal bit for
+# bit to the one that CSPICE writes from the same input.
 #
 # Argument lists follow CSPICE without the counts and flags that follow from the input:
 # the record count is the length of the input, and `avflag` of `ckw01` and `ckw03` is
@@ -474,6 +474,258 @@ ckw03(
     default_context(), h, begtim, endtim, inst, ref, segid, sclkdp, quats, avvs,
     starts
 )
+
+"""
+    CKW04Writer
+
+A CK segment of type 4 that is open for the addition of records. [`ckw04b`](@ref)
+returns it, and it is the first argument of [`ckw04a`](@ref) and [`ckw04e`](@ref).
+
+SPICELIB keeps this state in the table of the generic segment writer `sgseqw`; here the
+caller owns it.
+"""
+mutable struct CKW04Writer
+    const handle::DAFHandle
+    const begtim::Float64
+    const inst::Int
+    const refcod::Int
+    const avflag::Bool
+    const segid::String
+    const packets::Vector{Float64}      # (reference, size, packet) triples, as `sgwvpk` writes them
+    const sizes::Vector{Int}            # the stored packet sizes
+    const refs::Vector{Float64}
+    open::Bool
+end
+
+Base.show(io::IO, w::CKW04Writer) = print(
+    io, "CKW04Writer(\"", w.segid, "\", ",
+    length(w.refs), " records", w.open ? "" : ", ended", ")"
+)
+
+"""
+    ckw04b([ctx,] handle, begtim, inst, ref, avflag, segid) -> CKW04Writer
+
+Begin a CK segment of type 4 (Chebyshev polynomials for the quaternion and the angular
+velocity, on intervals of unequal length) in the file of `handle`, as
+[`ckw04b`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04b.html)
+of SPICELIB, and return its writer. CSPICE has no C wrapper for it.
+
+`begtim` is the begin time of the segment (encoded spacecraft clock ticks), `inst` the
+NAIF ID of the instrument, `ref` the reference frame (a name resolved in `ctx`, or an
+ID) and `avflag` whether the segment holds angular velocity. Add records with
+[`ckw04a`](@ref) and end the segment with [`ckw04e`](@ref), which gives the end time.
+
+Throws `SpiceError`:
+- `:invalidrefframe` if `ref` is not a known frame;
+- `:nonprintablechars` or `:segidtoolong` if `segid` is not valid;
+- `:dafnosuchhandle` or `:dafinvalidaccess` if the file is not open for writing.
+
+# Examples
+One record of degree 0 (constant pointing) on the interval 0 to 200 ticks:
+```jldoctest
+julia> path = joinpath(mktempdir(), "type4.bc");
+
+julia> h = ckopn(path, "type 4 example");
+
+julia> w = ckw04b(h, 0.0, -77000, "J2000", false, "attitude")
+CKW04Writer("attitude", 0 records)
+
+julia> record = [100.0, 100.0, 1, 1, 1, 1, 0, 0, 0, 1.0, 0.0, 0.0, 0.0];
+
+julia> ckw04a(w, [length(record)], record, [0.0])
+
+julia> ckw04e(w, 200.0)
+
+julia> ckcls(h)
+
+julia> ctx = SpiceContext();
+
+julia> furnsh(ctx, path)
+
+julia> cmat, clkout = ckgp(ctx, -77000, 50.0, 0.0, "J2000");
+
+julia> cmat == [1 0 0; 0 1 0; 0 0 1], clkout
+(true, 50.0)
+```
+"""
+function ckw04b(
+        ctx::SegContext, h::DAFHandle, begtim::Real, inst::Integer, ref::SegFrame,
+        avflag::Bool, segid::AbstractString
+    )
+    who = "ckw04b"
+    refcod = _seg_refcode(who, ctx, ref)
+    _seg_idchars(who, segid)
+    _seg_idlen(who, segid)
+    _daf_check_write(h, who)
+    return CKW04Writer(
+        h, Float64(begtim), Int(inst), refcod, avflag, String(segid), Float64[], Int[],
+        Float64[], true
+    )
+end
+ckw04b(
+    h::DAFHandle, begtim::Real, inst::Integer, ref::SegFrame, avflag::Bool,
+    segid::AbstractString
+) = ckw04b(default_context(), h, begtim, inst, ref, avflag, segid)
+
+"""
+    ckw04a(writer, npkts, pktsiz, pktdat, sclkdp) -> Nothing
+    ckw04a(writer, pktsiz, pktdat, sclkdp) -> Nothing
+
+Add `npkts` records to the type 4 segment `writer`, as
+[`ckw04a`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04a.html)
+of SPICELIB. CSPICE has no C wrapper for it. Without `npkts`, the number of records is
+`length(sclkdp)`.
+
+Record `i` has `pktsiz[i]` numbers: the midpoint and the radius of its interval (ticks),
+the seven coefficient counts of the quaternion components q0 to q3 and of the three
+angular velocity components, then the Chebyshev coefficients, those of q0 first (the
+angular velocity in rad/s).
+`pktdat` holds the records one after the other. `sclkdp[i]` is the start of the interval
+of record `i` (ticks). The inputs are not changed (SPICELIB changes `pktsiz` and
+`pktdat`). [`ckgr04`](@ref) returns a record in this layout.
+
+Throws `SpiceError`:
+- `:segmentnotopen` if `ckw04e` ended the writer;
+- `:badarg` if `pktsiz`, `pktdat` or `sclkdp` does not have the size that `npkts` and
+  `pktsiz` require;
+- `:invalidargument` unless `0 < pktsiz[i] <= 142`;
+- `:dafnosuchhandle` if the handle is closed;
+- `:numpacketsnotpos` unless `npkts > 0`;
+- `:unorderedrefs` unless `sclkdp` is strictly increasing and starts after the last
+  start of the call before;
+- `:nonpospacketsize` if `pktsiz[i] <= 6`: SPICELIB packs the seven counts into one
+  number, so the stored record has `pktsiz[i] - 6` numbers.
+
+See [`ckw04b`](@ref) for an example.
+"""
+function ckw04a(w::CKW04Writer, npkts::Integer, pktsiz, pktdat, sclkdp)
+    who = "ckw04a"
+    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    n = max(Int(npkts), 0)
+    sz = _seg_vec(who, "pktsiz", pktsiz, n)
+    for (k, s) in enumerate(sz)
+        isinteger(s) || throw(SpiceError(:badarg, "$who: `pktsiz[$k]` = $s is not an integer"))
+    end
+    dat = _seg_vec(who, "pktdat", pktdat, Int(sum(sz; init = 0.0)))
+    ref = _seg_vec(who, "sclkdp", sclkdp, n)
+    for k in 1:n
+        sz[k] <= 0 && throw(
+            SpiceError(
+                :invalidargument, "$who: the number of coefficient sets and epochs " *
+                    "in the $k data packet (record) was not positive; its value was $(Int(sz[k]))"
+            )
+        )
+        sz[k] >= 143 && throw(
+            SpiceError(
+                :invalidargument, "$who: the total size of the $k data packet (record) " *
+                    "is greater than the maximum allowed type 4 record size 142; its value was $(Int(sz[k]))"
+            )
+        )
+    end
+    _daf_check_write(w.handle, who)
+    npkts <= 0 && throw(
+        SpiceError(
+            :numpacketsnotpos, "$who: the number of packets to store is not positive; " *
+                "the value supplied was $npkts"
+        )
+    )
+    if !isempty(w.refs) && w.refs[end] >= ref[1]
+        throw(
+            SpiceError(
+                :unorderedrefs, "$who: the reference value $(ref[1]) is not after the " *
+                    "last reference value $(w.refs[end]) of the addition of packets before"
+            )
+        )
+    end
+    for i in 2:n                    # invariant: ref[1:i-1] is strictly increasing
+        ref[i - 1] >= ref[i] && throw(
+            SpiceError(
+                :unorderedrefs,
+                "$who: the reference value $(ref[i - 1]) was found to be out of order for index $(i - 1)"
+            )
+        )
+    end
+    for k in 1:n
+        sz[k] - 6 <= 0 && throw(
+            SpiceError(
+                :nonpospacketsize, "$who: the packet size for packet $k was not " *
+                    "positive; it had a value of $(Int(sz[k]) - 6)"
+            )
+        )
+    end
+    pos = 0
+    for k in 1:n                    # invariant: packets 1:k-1 are in `w.packets`
+        size = Int(sz[k])
+        # The seven counts become one double, base 128 (`zzck4i2d`); the stored packet
+        # is the first `size - 6` words of (mid, rad, counts, coefficients).
+        push!(w.packets, ref[k], size - 6, dat[pos + 1])
+        size >= 8 && push!(w.packets, dat[pos + 2])
+        if size >= 9
+            packed = 0.0
+            x = 1.0
+            for kk in 1:7
+                packed += _cint(dat[pos + 2 + kk]) * x
+                x *= 128.0
+            end
+            push!(w.packets, packed)
+            append!(w.packets, @view dat[(pos + 10):(pos + size)])
+        end
+        push!(w.sizes, size - 6)
+        pos += size
+    end
+    append!(w.refs, ref)
+    return nothing
+end
+ckw04a(w::CKW04Writer, pktsiz, pktdat, sclkdp) = ckw04a(w, length(sclkdp), pktsiz, pktdat, sclkdp)
+
+"""
+    ckw04e(writer, endtim) -> Nothing
+
+End the type 4 segment `writer` with the end time `endtim` (ticks) and write it to its
+file, as
+[`ckw04e`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04e.html)
+of SPICELIB. CSPICE has no C wrapper for it.
+
+[`ckw04b`](@ref) and [`ckw04a`](@ref) do not change the file, so a segment that is never
+ended is not in the file. The segment is on disk when the call returns, with the data that
+SPICELIB writes. The writer cannot be used again.
+
+Throws `SpiceError(:segmentnotopen)` if the writer was ended before, and
+`SpiceError(:dafnosuchhandle)` if the handle was closed after [`ckw04b`](@ref); the
+segment is then lost.
+"""
+function ckw04e(w::CKW04Writer, endtim::Real)
+    who = "ckw04e"
+    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    _daf_check_write(w.handle, who)
+    npkt = length(w.refs)
+    data = copy(w.packets)
+    # Packet directory of `sgwes`: the offset of each packet after its (reference,
+    # size) pair, and one past the last.
+    addr = 3.0
+    for s in w.sizes
+        push!(data, addr)
+        addr += s + 2
+    end
+    push!(data, addr)
+    append!(data, w.refs)
+    _seg_directory!(data, w.refs, (npkt - 1) ÷ 100)
+    total = sum(w.sizes; init = 0)
+    pdrbas = total + 2npkt
+    refbas = pdrbas + npkt + 1
+    # Meta data of `sgwes` for packets of variable size with explicit reference values:
+    # CONBAS, NCON, RDRBAS, NRDR, RDRTYP, REFBAS, NREF, PDRBAS, NPDR, PDRTYP, PKTBAS,
+    # NPKT, RSVBAS, NRSV, PKTSZ, PKTOFF, NMETA.
+    append!(
+        data, Float64[
+            0, 0, refbas + npkt, (npkt - 1) ÷ 100, 3, refbas, npkt, pdrbas, npkt + 1, 1,
+            0, npkt, 0, 0, maximum(w.sizes; init = 0), 2, 17,
+        ]
+    )
+    _ck_add!(w.handle, w.inst, w.refcod, 4, w.avflag, w.begtim, endtim, w.segid, data)
+    w.open = false
+    return nothing
+end
 
 """
     ckw05([ctx,] handle, subtyp, degree, begtim, endtim, inst, ref, avflag, segid, sclkdp,

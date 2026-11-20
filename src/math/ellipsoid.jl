@@ -1365,6 +1365,76 @@ chooses the projection of `nplnpt_c` (`vproj_c`, true) or of the Fortran `nplnpt
     return pnear, _m_norm(pnear - p)
 end
 
+"""
+    npsgpt(ep1, ep2, point) -> (pnear::SVector{3}, dist)
+
+Return the point of the line segment from `ep1` to `ep2` that is nearest to `point`, and
+the distance between the two, as
+[`npsgpt`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/npsgpt.html)
+of SPICELIB. CSPICE has no C wrapper for it. A segment whose end points are equal is a
+point.
+
+# Examples
+```jldoctest
+julia> npsgpt([0, 0, 0], [2, 0, 0], [1, 3, 0])
+([1.0, 0.0, 0.0], 3.0)
+
+julia> npsgpt([0, 0, 0], [2, 0, 0], [5, 4, 0])
+([2.0, 0.0, 0.0], 5.0)
+```
+
+See also [`nplnpt`](@ref).
+"""
+function npsgpt(ep1::AbstractVector, ep2::AbstractVector, point::AbstractVector)
+    e1 = _m_v3(ep1)
+    e2 = _m_v3(ep2)
+    p = _m_v3(point)
+    seg = e2 - e1
+    _m_iszero(seg) && return e1, _m_norm(e1 - p)
+    # `npsgpt_` calls the Fortran `nplnpt_`, whose projection is `vproj_`.
+    lnear, dist = _m_nplnpt(e1, seg, p, false)
+    offdot = _m_dot(lnear - e1, seg)
+    primal(offdot) < 0.0 && return e1, _m_norm(e1 - p)
+    primal(offdot) > primal(_m_dot(seg, seg)) && return e2, _m_norm(e2 - p)
+    return lnear, dist
+end
+
+"""
+    incnsg(apex, axis, angle, endpt1, endpt2) -> (nxpts, xpt1::SVector{3}, xpt2::SVector{3})
+
+Return the number of points (0, 1 or 2) where the line segment from `endpt1` to `endpt2`
+meets the surface of a cone, and the points, as
+[`incnsg`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/incnsg.html)
+of SPICELIB. CSPICE has no C wrapper for it.
+
+The cone has its vertex at `apex`, its axis along `axis` and the half angle `angle`
+(rad), and holds the points `v` whose angle between `v - apex` and `axis` is at most
+`angle`. An angle above `π/2` gives the same surface as the half angle `π - angle` about
+`-axis`. `xpt1` is the intersection nearer to `endpt1`. Only the first `nxpts` points are
+meaningful; the others are unspecified. The inputs are converted to `Float64`.
+
+Throws `SpiceError`:
+- `:zerovector` if `axis` is zero;
+- `:invalidangle` if `angle < 0`;
+- `:endpointsmatch` if `endpt1 == endpt2`.
+
+# Examples
+The segment crosses the cone of half angle 45° about the z axis twice:
+```jldoctest
+julia> n, x1, x2 = incnsg([0, 0, 0], [0, 0, 1], pi / 4, [-2, 0, 1], [2, 0, 1]);
+
+julia> n, x1 ≈ [-1, 0, 1], x2 ≈ [1, 0, 1]
+(2, true, true)
+```
+"""
+function incnsg(
+        apex::AbstractVector, axis::AbstractVector, angle::Real,
+        endpt1::AbstractVector, endpt2::AbstractVector
+    )
+    f(v) = SVector{3, Float64}(_m_v3(v))
+    return _dsk_incnsg(f(apex), f(axis), Float64(angle), f(endpt1), f(endpt2))
+end
+
 @inline function _m_npelpt(point::SVector{3}, ellips::SpiceEllipse)
     center = ellips.center
     minlen = _m_norm(ellips.semiminor)

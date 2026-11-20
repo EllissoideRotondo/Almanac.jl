@@ -174,6 +174,30 @@ group(
             check!(fails, bodc2s(ctx, code) == SPICE.bodc2s(code), "bodc2s", code)
         end
         @test isempty(fails)
+        # scn2id and scid2n (`sctran` of SPICELIB, no C wrapper): the last "SCLK" among the
+        # first 32 characters is removed.
+        function c_scn2id(name)
+            id, found = Ref{Cint}(0), Ref{Cint}(0)
+            ccall((:scn2id_, SPICE.libcspice), Cint, (Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Cint), name, id, found, ncodeunits(name))
+            return found[] == 0 ? nothing : Int(id[])
+        end
+        function c_scid2n(id)
+            buf, found = fill(UInt8(' '), 64), Ref{Cint}(0)
+            ccall((:scid2n_, SPICE.libcspice), Cint, (Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Cint), id, buf, found, 64)
+            return found[] == 0 ? nothing : String(rstrip(String(buf)))
+        end
+        clocks = [
+            "CASSINI SCLK", "cassini sclk", "CASSINI", "  mgs   sclk ", "MARS GLOBAL SURVEYOR SCLK",
+            "SCLK", "", "SCLK CASSINI", "CASSINISCLK", "CASSINI SCLK SCLK", "NO SUCH CLOCK SCLK",
+            "VOYAGER 1" * " "^25 * "SCLK", "-82 SCLK", "MRO SCL",
+        ]
+        for name in clocks
+            check!(fails, scn2id(ctx, name) == c_scn2id(name), "scn2id", repr(name))
+        end
+        for code in codes
+            check!(fails, scid2n(ctx, code) == c_scid2n(code), "scid2n", code)
+        end
+        @test isempty(fails)
         @test bodc2s(ctx, typemin(Int32)) == SPICE.bodc2s(typemin(Int32)) == "-2147483648"
         # Round trip for a random sample of the built-in codes.
         fails = Failures()

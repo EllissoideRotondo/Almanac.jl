@@ -67,6 +67,8 @@ bodn2c
 bodc2n
 bodc2s
 bods2c
+scn2id
+scid2n
 boddef
 namfrm
 frmnam

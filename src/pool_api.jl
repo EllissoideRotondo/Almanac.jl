@@ -221,6 +221,66 @@ function bodc2s(ks::KernelSet, code::Integer)
 end
 
 """
+    scn2id([ctx,] clknam) -> Union{Int,Nothing}
+
+Return the NAIF ID code of the spacecraft clock `clknam`, or `nothing` if the name is
+not known, as
+[`scn2id`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/scn2id.html)
+of SPICELIB. CSPICE has no C wrapper for it.
+
+The name is usually the body name of the spacecraft with the word `SCLK` after it, as
+in `"MGS SCLK"`. Only the first 32 characters count, as in SPICELIB; letter case is
+ignored, the last `SCLK` among them is blanked (it need not be a separate word), and the
+rest is looked up with [`bodn2c`](@ref), so a bare body name gives the same code.
+
+# Examples
+```jldoctest
+julia> scn2id("CASSINI SCLK"), scn2id("cassini"), scn2id("NO SUCH CLOCK")
+(-82, -82, nothing)
+```
+
+See also [`scid2n`](@ref).
+"""
+function scn2id(ks::KernelSet, clknam::AbstractString)
+    # `ucase` into a 32-character buffer, then the last "SCLK" becomes blanks.
+    s = codeunits(String(clknam))
+    b = UInt8[0x61 <= c <= 0x7a ? c - 0x20 : c for c in view(s, 1:min(length(s), 32))]
+    for i in (length(b) - 3):-1:1
+        if b[i] == UInt8('S') && b[i + 1] == UInt8('C') && b[i + 2] == UInt8('L') &&
+                b[i + 3] == UInt8('K')
+            b[i:(i + 3)] .= UInt8(' ')
+            break
+        end
+    end
+    name = String(b)
+    isempty(strip(name)) && return nothing
+    return bodn2c(ks, name)
+end
+
+"""
+    scid2n([ctx,] clkid) -> Union{String,Nothing}
+
+Return the name of the spacecraft clock with the NAIF ID `clkid`, or `nothing` if the
+code has no body name, as
+[`scid2n`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/scid2n.html)
+of SPICELIB. CSPICE has no C wrapper for it.
+
+The name is the body name of [`bodc2n`](@ref) with `" SCLK"` after it.
+
+# Examples
+```jldoctest
+julia> scid2n(-82), scid2n(123456789)
+("CASSINI SCLK", nothing)
+```
+
+See also [`scn2id`](@ref).
+"""
+function scid2n(ks::KernelSet, clkid::Integer)
+    name = body_name(ks, clkid)
+    return name === nothing ? nothing : string(rstrip(name), " SCLK")
+end
+
+"""
     namfrm([ctx,] name) -> Int
 
 Return the ID of the frame `name`, or 0 if the frame is not known, as
@@ -265,13 +325,13 @@ function frmnam(ks::KernelSet, id::Integer)
 end
 
 # Context and default-context forms of the functions above.
-for f in (:gdpool, :gipool, :gcpool, :bods2c, :bodn2c, :namfrm)
+for f in (:gdpool, :gipool, :gcpool, :bods2c, :bodn2c, :scn2id, :namfrm)
     @eval begin
         $f(ctx::SpiceContext, name::AbstractString) = $f(kernelset(ctx), name)
         $f(name::AbstractString) = $f(default_context(), name)
     end
 end
-for f in (:bodc2n, :bodc2s, :frmnam)
+for f in (:bodc2n, :bodc2s, :scid2n, :frmnam)
     @eval begin
         $f(ctx::SpiceContext, code::Integer) = $f(kernelset(ctx), code)
         $f(code::Integer) = $f(default_context(), code)

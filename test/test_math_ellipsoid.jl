@@ -231,6 +231,22 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
             isfinite(vnorm(pr)) && within!(fails, abs(pr ⋅ pl.normal - pl.constant), 1.0e-13 * max(vnorm(pnt), pl.constant, floatmin()), "vprjp on the plane", pnt, pl)
         end
         @test isempty(fails)
+        # Segments (`npsgpt` and `incnsg` of SPICELIB): a degenerate segment, a right angle
+        # and a straight angle among them.
+        for _ in 1:n
+            e1, p = rvec(rng), rvec(rng)
+            e2 = rand(rng) < 0.05 ? e1 : rvec(rng)
+            versus!(t, :npsgpt, () -> npsgpt(e1, e2, p), () -> CS.npsgpt_(e1, e2, p)[2:3])
+            apex, axis = rvec(rng), rvec(rng)
+            angle = rand(rng) < 0.1 ? rand(rng, (0.0, pi / 2, pi, -0.1)) : pi * rand(rng)
+            # `incnsg_` leaves the points that it does not find as they were.
+            versus!(
+                t, :incnsg, () -> (r = incnsg(apex, axis, angle, e1, e2); (r[1], r[2:(1 + r[1])]...)),
+                () -> (r = CS.incnsg_(apex, axis, angle, e1, e2); (r[2], r[3:(2 + r[2])]...))
+            )
+        end
+        @test npsgpt([0.0, 0, 0], [2.0, 0, 0], [1.0, 3, 0]) == ([1.0, 0.0, 0.0], 3.0)
+        @test incnsg([0.0, 0, 0], [0.0, 0, 1], pi / 4, [-2.0, 0, 1], [2.0, 0, 1])[1] == 2
         @test flat(nvc2pl([0.0, 0, 2.0], -6.0)) == [0.0, 0.0, -1.0, 3.0]
         @test throws_kind(() -> nvc2pl([0.0, 0, 0], 1.0), :zerovector)
         @test throws_kind(() -> nvp2pl([0.0, 0, 0], [1.0, 2, 3]), :zerovector)
@@ -377,8 +393,12 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
 
     @apart @testset "differences against CSPICE" begin
         # The ports follow the operation order of CSPICE, so most results are equal bit
-        # for bit; the others have a sine, a cosine or an arc tangent of the C library.
-        report!(t, "ellipsoid"; tol = 0.0, tols = Dict(:ednmpt => 4eps(), :inelpl => 8eps(), :edterm => 4eps()))
+        # for bit; the others have a sine, a cosine or an arc tangent of the C library
+        # (`incnsg`: the cosine of the cone angle, 2.3e-16 on macOS aarch64).
+        report!(
+            t, "ellipsoid"; tol = 0.0,
+            tols = Dict(:ednmpt => 4eps(), :inelpl => 8eps(), :edterm => 4eps(), :incnsg => 4eps())
+        )
     end
 
     @apart @testset "inferred types and no allocation for static arguments" begin

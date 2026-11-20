@@ -9,6 +9,7 @@ conics
 oscelt
 oscltx
 eqncpv
+kpsolv
 prop2b
 stmp03
 ```

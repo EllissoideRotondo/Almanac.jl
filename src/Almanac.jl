@@ -12,12 +12,14 @@ export spkezr, spkpos, spkgeo, spkder, spkez, spkezp, spkgps
 export Aberration, spkssb, spkltc, spkaps, spkacs, spkapo, ltime, stelab, stlabx
 export pxform, sxform, pxder, pxfrm2
 export gdpool, gcpool, gipool, bodvrd, bodn2c, bodc2n, bodc2s, bods2c, namfrm, frmnam
+export scn2id, scid2n
 export deltet, utc2et, str2et, et2utc, etcal, timout, tpictr, tparse, timdef, unitim, tsetyr
 export tparch, jul2gr, gr2jul
 export j1900, j1950, j2000, j2100, jyear, tyear, spd, b1900, b1950, clight
 export halfpi, twopi, rpd, dpr
 export sct2e, sce2c, sce2t, sce2s, scs2e, scencd, scdecd, sctiks, scfmt, scpart, sctype
 export ckgp, ckgpav, ckcov, ckcov!, ckobj, ckobj!, ckmeta, ckfrot, ckfxfm, cknr02, ckgr02, cknr03, ckgr03
+export cknr01, ckgr01, cknr04, ckgr04, cknr05, ckgr05, cknm06, ckmp06, ckgr06
 export DAFHandle, dafopr, dafopw, dafonw, dafops, save_kernel, load_samples!, load_function!, dafcls, dafhsf, dafrfr, getfat
 export dafbfs, dafbbs, daffna, daffpa, dafgs, dafgn, dafps, dafus, dafgda, dafgsr
 export dafbna, dafada, dafena, dafws, dafrs, dafrn, dafac, dafec, dafdc
@@ -27,7 +29,8 @@ export spk14b, spk14a, spk14e, SPK14Writer
 export spksfs, spkpvn, spkuds, spksub
 export getelm, evsgp4, spkw10
 export ckopn, ckops, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
-export pckopn, pckops, pckw02, pckw20, pckcls
+export ckw04b, ckw04a, ckw04e, CKW04Writer
+export pckopn, pckops, pckw02, pckw20, pckcls, pck03b, pck03a, pck03e, PCK03Writer
 export spkobj, spkobj!, spkcov, spkcov!, kinfo, kdata, tkvrsn
 export Window, card, wncard, wninsd!, wnvald!, wnunid, wnintd, wndifd, wncomd
 export wnelmd, wnincd, wnfetd, wnsumd, wnreld, wncond!, wnexpd!, wnextd!, wnfild!, wnfltd!
@@ -48,12 +51,13 @@ export vprojg, vlcomg, vzerog, vtmvg, mxvg, mtxvg, mxmg, mtxmg, mxmtg, xposeg
 export eul2m, m2eul, eul2xf, xf2eul, axisar, raxisa, m2q, q2m, qxq, qdq2av, rav2xf, xf2rav
 export sharpr
 export SpicePlane, SpiceEllipse, nearpt, dnearp, surfpt, surfnm, surfpv, npedln, npelpt, nplnpt
+export npsgpt, incnsg
 export edlimb, edterm, inedpl, inelpl, inrypl, cgv2el, el2cgv, saelgv, nvc2pl, nvp2pl, psv2pl
 export pl2nvc, pl2nvp, pl2psv, pjelpl, ednmpt, edpnt, vprjp, vprjpi
 export reclat, latrec, recrad, radrec, recsph, sphrec, reccyl, cylrec, cyllat, latcyl, cylsph
 export sphcyl, sphlat, latsph, recgeo, georec, recpgr, pgrrec, xfmsta, convrt
 export drdlat, dlatdr, drdsph, dsphdr, drdcyl, dcyldr, drdgeo, dgeodr, drdpgr, dpgrdr
-export conics, oscelt, oscltx, prop2b, stmp03, eqncpv
+export conics, oscelt, oscltx, prop2b, stmp03, eqncpv, kpsolv
 export chbval, chbint, chbder, chbigr, lgrint, lgrind, lgresp, hrmint, hrmesp, polyds, qderiv
 export rquad, diags2
 export dp2hx, hx2dp
@@ -112,9 +116,9 @@ include("ck_api.jl")        # ckgp, ckgpav, ckcov, ckcov!, ckobj, ckmeta; CSPICE
 include("daf_access.jl")    # DAFHandle, dafopr, dafbfs, daffna, dafgs, dafgda, dafec, getfat
 include("daf_write.jl")     # dafonw, dafopw, dafbna, dafada, dafena, dafac, dafdc
 include("spk_write.jl")     # spkopn, spkopa, spkcls, spkw01 ... spkw21
-include("ck_write.jl")      # ckopn, ckcls, ckw01, ckw02, ckw03, ckw05, ckw06
-include("pck_write.jl")     # pckopn, pckw02, pckw20, pckcls
-include("ck_records.jl")    # cknr02, ckgr02, cknr03, ckgr03
+include("ck_write.jl")      # ckopn, ckcls, ckw01 ... ckw06, ckw04b/a/e
+include("pck_write.jl")     # pckopn, pckw02, pck03b/a/e, pckw20, pckcls
+include("ck_records.jl")    # cknr01 ... cknr05, ckgr01 ... ckgr06, cknm06, ckmp06
 include("das.jl")           # DASHandle, dasopr, dasonw, dascls, dasrdi, dasadi, dasudc, dasac, dasec
 include("dla.jl")           # dlaopn, dlabns, dlaens, dlabfs, dlafns, dlabbs, dlafps
 include("dsk.jl")           # type 2 geometry, open_dsk, intercept and segment selection

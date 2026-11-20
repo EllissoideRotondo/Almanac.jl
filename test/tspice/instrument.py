@@ -168,6 +168,15 @@ FIXED_LENGTHS = {
     "ckgr03": {"descr": "5", "record": "8"},
     "cknr02": {"descr": "5"},
     "cknr03": {"descr": "5"},
+    "cknr04": {"descr": "5"},
+    "cknm06": {"descr": "5"},
+    "ckmp06": {"descr": "5"},
+    # a type 6 record: the epoch, the subtype, the clock rate and the packet of the subtype
+    "ckgr06": {"descr": "5", "record": "3 + merge(8, merge(4, merge(14, 7, nint(record(2)) == 2), "
+               "nint(record(2)) == 1), nint(record(2)) == 0)"},
+    # packets of the given sizes, one epoch each
+    "ckw04a": {"pktsiz": "max(0, npkts)", "sclkdp": "max(0, npkts)",
+               "pktdat": "max(0_ip, sum(pktsiz(1:max(0, npkts))))"},
     "ckw01": {"sclkdp": "max(0, nrec)", "quats": "max(0, 4*nrec)", "avvs": "max(0, 3*nrec)"},
     "ckw02": {"start": "max(0, nrec)", "stop": "max(0, nrec)", "quats": "max(0, 4*nrec)",
               "avvs": "max(0, 3*nrec)", "rates": "max(0, nrec)"},

@@ -10,7 +10,8 @@ scope and what replaces the routines that are not.
 - **SPK:** every data type of N0067 (1 to 21), every aberration correction, and
   two-line elements (`getelm`, `evsgp4`).
 - **Frames:** inertial, body-fixed, fixed-offset, CK-based, dynamic and switch frames.
-- **Orientation and clocks:** CK types 1 to 6 and spacecraft clocks of type 1.
+- **Orientation and clocks:** CK types 1 to 6, binary PCK types 2, 3 and 20, and
+  spacecraft clocks of type 1.
 - **Time:** parsing, formatting and conversion between time systems, local solar time.
 - **Kernel pool:** reads, changes and watchers (one set of watchers per context).
 - **Geometry:** sub-points, intercepts, illumination, occultation, limb and terminator,
@@ -18,8 +19,12 @@ scope and what replaces the routines that are not.
 - **Geometry finder:** all `gf` searches, including the user-defined ones.
 - **Mathematics:** vectors, matrices, rotations, quaternions, coordinate systems,
   ellipsoids, conics and interpolation.
-- **Writers:** SPK (all types), CK (5 types), binary PCK (types 2 and 20), DSK type 2
-  and EK, plus low-level DAF and DAS access.
+- **Writers:** SPK (all types), CK (types 1 to 6), binary PCK (types 2, 3 and 20), DSK
+  type 2 and EK, plus low-level DAF and DAS access.
+- **SPICELIB routines without a C wrapper** that a caller of CSPICE reaches through
+  f2c: among them the writers of CK type 4 and binary PCK type 3, the record readers of
+  CK types 1 to 6, [`kpsolv`](@ref), [`npsgpt`](@ref), [`incnsg`](@ref),
+  [`scn2id`](@ref) and [`scid2n`](@ref). Their docstrings say so.
 
 The features beyond CSPICE (derivatives, tables, user-defined bodies and frames,
 orbits) are in [What Almanac.jl adds](@ref).

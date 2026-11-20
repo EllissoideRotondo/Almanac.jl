@@ -196,6 +196,44 @@ function oracle_ckgr(type::Integer, h::Integer, descr::Vector{Float64}, recno::I
     return rec[1:len]
 end
 
+# The record readers of types 1, 4, 5 and 6 are SPICELIB routines without a C wrapper:
+# `cknr01_`, `ckgr01_`, ..., `ckmp06_` on the CSPICE handle `h`.
+cfun(name::Symbol) = Base.Libc.Libdl.dlsym(Base.Libc.Libdl.dlopen(SPICE.libcspice), name)
+function oracle_cknr_f(name::Symbol, h::Integer, descr::Vector{Float64})
+    n = Ref{Cint}(0)
+    ccall(cfun(name), Cint, (Ref{Cint}, Ptr{Cdouble}, Ref{Cint}), h, descr, n)
+    SPICE.handleerror()
+    return Int(n[])
+end
+function oracle_ckgr_f(name::Symbol, h::Integer, descr::Vector{Float64}, recno::Integer, len::Integer)
+    rec = zeros(400)
+    ccall(cfun(name), Cint, (Ref{Cint}, Ptr{Cdouble}, Ref{Cint}, Ptr{Cdouble}), h, descr, recno, rec)
+    SPICE.handleerror()
+    return rec[1:len]
+end
+function oracle_ckgr06(h::Integer, descr::Vector{Float64}, msno::Integer, recno::Integer, len::Integer)
+    rec = zeros(400)
+    ccall(
+        (:ckgr06_, SPICE.libcspice), Cint, (Ref{Cint}, Ptr{Cdouble}, Ref{Cint}, Ref{Cint}, Ptr{Cdouble}),
+        h, descr, msno, recno, rec
+    )
+    SPICE.handleerror()
+    return rec[1:len]
+end
+function oracle_ckmp06(h::Integer, descr::Vector{Float64}, msno::Integer)
+    rate, lstepc = Ref(0.0), Ref(0.0)
+    subtyp, winsiz, nrec = Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0)
+    ivlbds = zeros(2)
+    ccall(
+        (:ckmp06_, SPICE.libcspice), Cint, (
+            Ref{Cint}, Ptr{Cdouble}, Ref{Cint}, Ref{Cdouble}, Ref{Cint}, Ref{Cint}, Ref{Cint},
+            Ptr{Cdouble}, Ref{Cdouble},
+        ), h, descr, msno, rate, subtyp, winsiz, nrec, ivlbds, lstepc
+    )
+    SPICE.handleerror()
+    return rate[], Int(subtyp[]), Int(winsiz[]), Int(nrec[]), ivlbds, lstepc[]
+end
+
 alloc_ckgp(ks, inst, t, tol, ref) = @allocated ckgp(ks, inst, t, tol, ref)
 alloc_ckgpav(ks, inst, t, tol, ref) = @allocated ckgpav(ks, inst, t, tol, ref)
 alloc_ck_pxform(ctx, from, to, et) = @allocated pxform(ctx, from, to, et)
@@ -855,6 +893,145 @@ group(
             SPICE.dafcls(hc)
         end
         @test throws_kind(() -> ckgr02(h, d2, 1), :dafnosuchhandle)
+    end
+
+    @apart @testset "records of type 1, 4, 5 and 6 segments" begin
+        same = true
+        types = Int[]
+        d = Dict{Int, Vector{Float64}}()
+        for p in ckpaths[1:2]
+            h = dafopr(p)
+            hc = SPICE.dafopr(p)
+            try
+                dafbfs(h)
+                SPICE.dafbfs(hc)
+                while daffna(h)
+                    @assert SPICE.daffna()
+                    descr = dafgs(h)
+                    _, ic = dafus(descr, 2, 6)
+                    t = ic[3]
+                    t in (1, 4, 5, 6) || continue
+                    push!(types, t)
+                    d[t] = descr
+                    if t == 6
+                        nm = cknm06(h, descr)
+                        same &= nm == oracle_cknr_f(:cknm06_, hc, descr)
+                        for m in 1:nm
+                            mp = ckmp06(h, descr, m)
+                            same &= isequal(mp, oracle_ckmp06(hc, descr, m))
+                            same &= all(r -> (x = ckgr06(h, descr, m, r); x == oracle_ckgr06(hc, descr, m, r, length(x))), 1:mp[4])
+                        end
+                    else
+                        n = Dict(1 => cknr01, 4 => cknr04, 5 => cknr05)[t](h, descr)
+                        same &= n == oracle_cknr_f(Symbol("cknr0$(t)_"), hc, descr)
+                        get = Dict(1 => ckgr01, 4 => ckgr04, 5 => ckgr05)[t]
+                        same &= all(i -> (x = get(h, descr, i); x == oracle_ckgr_f(Symbol("ckgr0$(t)_"), hc, descr, i, length(x))), 1:n)
+                    end
+                end
+            finally
+                dafcls(h)
+                SPICE.dafcls(hc)
+            end
+        end
+        @test same
+        @test sort(types) == [1, 1, 4, 5, 5, 5, 5, 6]       # subtypes 0 to 3 of type 5
+        # The kinds of SPICELIB, provoked on both: a descriptor of another type, a record
+        # or mini-segment number outside, a closed handle.
+        h = dafopr(ckpaths[2])
+        hc = SPICE.dafopr(ckpaths[2])
+        try
+            for (f, t) in ((cknr01, 4), (cknr04, 5), (cknr05, 6), (cknm06, 4))
+                @test throws_kind(() -> f(h, d[t]), :ckwrongdatatype)
+            end
+            @test_throws SPICE.SpiceError oracle_cknr_f(:cknr04_, hc, d[5])
+            for (f, t) in ((ckgr01, 4), (ckgr04, 5), (ckgr05, 6))
+                @test throws_kind(() -> f(h, d[t], 1), :ckwrongdatatype)
+            end
+            @test throws_kind(() -> ckmp06(h, d[4], 1), :ckwrongdatatype)
+            @test throws_kind(() -> ckgr06(h, d[4], 1, 1), :ckwrongdatatype)
+            n4, n5 = cknr04(h, d[4]), cknr05(h, d[5])
+            @test throws_kind(() -> ckgr04(h, d[4], n4 + 1), :cknonexistrec)
+            @test_throws SPICE.SpiceError oracle_ckgr_f(:ckgr04_, hc, d[4], n4 + 1, 1)
+            @test throws_kind(() -> ckgr05(h, d[5], 0), :cknonexistrec)
+            @test_throws SPICE.SpiceError oracle_ckgr_f(:ckgr05_, hc, d[5], 0, 1)
+            nm = cknm06(h, d[6])
+            @test throws_kind(() -> ckmp06(h, d[6], nm + 1), :indexoutofrange)
+            @test_throws SPICE.SpiceError oracle_ckmp06(hc, d[6], nm + 1)
+            @test throws_kind(() -> ckgr06(h, d[6], 0, 1), :indexoutofrange)
+            @test_throws SPICE.SpiceError oracle_ckgr06(hc, d[6], 0, 1, 1)
+            nr = ckmp06(h, d[6], 1)[4]
+            @test throws_kind(() -> ckgr06(h, d[6], 1, nr + 1), :cknonexistrec)
+            @test_throws SPICE.SpiceError oracle_ckgr06(hc, d[6], 1, nr + 1, 1)
+        finally
+            SPICE.dafcls(hc)
+        end
+        h1 = dafopr(ckpaths[1])
+        d1 = d[1]
+        n1 = cknr01(h1, d1)
+        @test throws_kind(() -> ckgr01(h1, d1, n1 + 1), :cknonexistrec)
+        dafcls(h1)
+        @test throws_kind(() -> ckgr01(h1, d1, 1), :dafnosuchhandle)
+        # Segments that the writers do not make, copied from the file with one word
+        # changed: meta data of 14, 15 and 16 items (type 4; files older than the packet
+        # offset have 15 or 16), and a subtype 7 (types 5 and 6). Last, a type 4 segment of
+        # fixed-size packets, which `ckgr04` reads as `sgfpkt` does and `ckw04a` never
+        # writes: two packets of 10 words, their references and the meta data.
+        words(t) = (ic = dafus(d[t], 2, 6)[2]; dafgda(h, ic[5], ic[6]))
+        w4, w5, w6 = words(4), words(5), words(6)
+        nint6 = Int(w6[end])
+        ptrbas = length(w6) - 2 - (nint6 + 1)
+        bad6 = copy(w6)
+        bad6[Int(w6[ptrbas + 2]) - 1 - 2] = 7.0       # subtype of the first mini-segment
+        bad5 = copy(w5)
+        bad5[end - 3] = 7.0
+        cases = [
+            (4, [w4[1:(end - 3)]; 14.0]), (4, [w4[1:(end - 2)]; 15.0]), (4, [w4[1:(end - 2)]; 16.0]),
+            (5, bad5), (6, bad6),
+        ]
+        counts = [2, 1, 1, 1, 1, 1, 0]
+        packed = sum(counts[k] * 128.0^(k - 1) for k in 1:7)
+        pkts = [[10.0, 5.0, packed, 0.5, 0.1, 0.5, 0.5, 0.5, 0.01, 0.02], [30.0, 15.0, packed, 0.6, -0.1, 0.4, 0.5, 0.5, 0.03, 0.04]]
+        meta = [0, 0, 22, 0, 3, 20, 2, 22, 0, 0, 0, 2, 0, 0, 10, 0, 17]
+        push!(cases, (4, [pkts[1]; pkts[2]; 5.0; 15.0; Float64.(meta)]))
+        p = joinpath(mktempdir(), "ck_odd_segments.bc")
+        hw = ckopn(p, "ODD")
+        for (t, data) in cases
+            dafbna(hw, dafps([0.0, 1.0], [-77900 - t, 1, t, 1, 0, 0]), "odd type $t")
+            dafada(hw, data)
+            dafena(hw)
+        end
+        ckcls(hw)
+        dafcls(h)
+        h = dafopr(p)
+        hc = SPICE.dafopr(p)
+        try
+            dafbfs(h)
+            descrs = Vector{Float64}[]
+            while daffna(h)
+                push!(descrs, dafgs(h))
+            end
+            @test throws_kind(() -> cknr04(h, descrs[1]), :invalidmetadata)
+            @test_throws SPICE.SpiceError oracle_cknr_f(:cknr04_, hc, descrs[1])
+            for k in (2, 3)
+                n = cknr04(h, descrs[k])
+                @test n == oracle_cknr_f(:cknr04_, hc, descrs[k])
+                x = ckgr04(h, descrs[k], 1)
+                @test x == oracle_ckgr_f(:ckgr04_, hc, descrs[k], 1, length(x))
+            end
+            @test throws_kind(() -> ckgr05(h, descrs[4], 1), :notsupported)
+            @test_throws SPICE.SpiceError oracle_ckgr_f(:ckgr05_, hc, descrs[4], 1, 1)
+            @test throws_kind(() -> ckgr06(h, descrs[5], 1, 1), :notsupported)
+            @test_throws SPICE.SpiceError oracle_ckgr06(hc, descrs[5], 1, 1, 1)
+            @test cknr04(h, descrs[6]) == oracle_cknr_f(:cknr04_, hc, descrs[6]) == 2
+            for k in 1:2
+                x = ckgr04(h, descrs[6], k)
+                @test x == oracle_ckgr_f(:ckgr04_, hc, descrs[6], k, length(x))
+                @test x == [pkts[k][1:2]; counts; pkts[k][4:end]]
+            end
+        finally
+            dafcls(h)
+            SPICE.dafcls(hc)
+        end
     end
 
     @apart @testset "concurrent readers" begin
