@@ -121,16 +121,6 @@ function _vsbstr!(
     return incr
 end
 
-"`_vsbstr!` into a new string: `(String, carry)`."
-function _vsbstr(
-        digits::NTuple{14, Int}, expont::Int, from::Int, to::Int, fill::Char = ' ',
-        rnd::Bool = true
-    )
-    buf = UInt8[]
-    incr = _vsbstr!(buf, digits, expont, from, to, fill, rnd)
-    return String(buf), incr
-end
-
 "Append the byte `c` `n` times to `buf` (nothing for `n <= 0`)."
 @inline function _putn!(buf::Vector{UInt8}, c::UInt8, n::Int)
     for _ in 1:n
@@ -171,20 +161,10 @@ function _dpstrf!(buf::Vector{UInt8}, x::Float64, sigdig::Integer)
         push!(buf, UInt8('.'))
     end
     # The blanks of the fill go: the digits follow the sign.
-    k = s0 + 1
-    while k <= length(buf) && buf[k] == UInt8(' ')
-        k += 1
-    end
-    if k > s0 + 1
-        n = length(buf) - k + 1
-        copyto!(buf, s0 + 1, buf, k, n)
-        resize!(buf, s0 + n)
-    end
+    k = something(findnext(!=(UInt8(' ')), buf, s0 + 1), length(buf) + 1)
+    k > s0 + 1 && deleteat!(buf, (s0 + 1):(k - 1))
     return buf
 end
-
-"`_dpstrf!` into a new string."
-_dpstrf(x::Float64, sigdig::Integer)::String = String(_dpstrf!(UInt8[], x, sigdig))
 
 """
     _dpfmt!(buf, x, pictur) -> buf
@@ -264,9 +244,6 @@ end
     e = lstrip(string(Char(sign), SubString(e, 2)), ' ')
     return _puts!(buf, ncodeunits(e) >= lastch ? first(e, lastch) : lpad(e, lastch))
 end
-
-"`_dpfmt!` into a new string."
-_dpfmt(x::Float64, pictur::AbstractString)::String = String(_dpfmt!(UInt8[], x, codeunits(pictur)))
 
 "Append the ASCII string `s` to `buf`."
 @inline _puts!(buf::Vector{UInt8}, s::AbstractString) = append!(buf, codeunits(s))

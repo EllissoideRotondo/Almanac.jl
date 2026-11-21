@@ -830,6 +830,10 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             @test throws_kind(() -> et2utc(ctx, 0.0, bad, 3), :badformat)
         end
         @test throws_kind(() -> et2utc(ctx, -7.0e10, "ISOC", 0), :yearoutofrange)
+        # Trailing blanks of the format are ignored.
+        for f in ("C ", "isoc ", "J   ")
+            @test et2utc(ctx, 8.0e8, f, 3) == SPICE.et2utc(8.0e8, f, 3)
+        end
         # Round trip through a string with nine decimals.
         @test all(abs(str2et(ctx, et2utc(ctx, et, "C", 9)) - et) < 2.0e-6 for et in modern[1:200])
     end
@@ -839,6 +843,36 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         r = compare_outcomes("etcal", vcat(epochs, extreme), SPICE.etcal, etcal)
         @test r.mixed == 0 && r.unequal == 0
         @test etcal(ctx, 0.0) == "2000 JAN 01 12:00:00.000"
+    end
+
+    @apart @testset "number formats against CSPICE: dpfmt_, and the carry of et2utc J" begin
+        nrng = MersenneTwister(SEED + 91)         # a stream of its own
+        function c_dpfmt(x, p)
+            out = fill(UInt8(' '), ncodeunits(p))
+            ccall(
+                (:dpfmt_, SPICE.libcspice), Cint,
+                (Ref{Float64}, Ptr{UInt8}, Ptr{UInt8}, Cint, Cint), x, p, out, ncodeunits(p), ncodeunits(p)
+            )
+            return String(out)
+        end
+        # The pictures of `timout` for a number: sign, zero fill, integer and decimal digits.
+        pics = [
+            s * z * "#"^ni * (nd < 0 ? "" : "." * "#"^nd)
+                for s in ("", "+", "-") for z in ("", "0") for ni in 0:4 for nd in -1:3 if ni + max(nd, 0) + length(z) > 0
+        ]
+        xs = [0.0, 999.96, -0.96, 9.99996, -9.9996, 0.05]
+        for _ in 1:nsample(150, 2000)
+            push!(xs, rand(nrng, (-1, 1)) * rand(nrng, (1.0, 9.99996, 0.95, rand(nrng))) * 10.0^rand(nrng, -6:6))
+        end
+        @test all(String(Almanac._dpfmt!(UInt8[], x, codeunits(p))) == c_dpfmt(x, p) for x in xs for p in pics)
+        # Julian dates just below 10^6 and 10^7, where rounding adds an integer digit.
+        cases = [
+            ((jd - 2451545.0) * 86400.0 + 43.0 + 60.0 * (2rand(nrng) - 1), rand(nrng, 0:14))
+                for jd in (1.0e6, 1.0e7) for _ in 1:nsample(100, 1000)
+        ]
+        r = compare_outcomes("et2utc J near 10^6, 10^7", cases, c -> oracle_et2utc(c[1], "J", c[2]), c -> et2utc(ctx, c[1], "J", c[2]))
+        @test r.mixed == 0 && r.unequal == 0 && r.both == length(cases)
+        @test count(c -> occursin(r"^JD 10+\.", et2utc(ctx, c[1], "J", c[2])), cases) > length(cases) ÷ 10
     end
 
     @apart @testset "allocations of the conversions to and from strings" begin
