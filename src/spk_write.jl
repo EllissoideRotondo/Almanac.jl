@@ -289,7 +289,7 @@ writers and close the handle with [`spkcls`](@ref). Load the file with [`furnsh`
 only after the close.
 
 Throws `SpiceError(:emptystring)` if `path` or `ifname` is empty and `:blankfilename` if
-`path` is blank, as CSPICE, and `:fileopenfailed` if the file exists or cannot be created.
+`path` is blank, as CSPICE, and `:fileopenfail` if the file exists or cannot be created.
 
 # Examples
 Write a type 2 segment that has one record of degree 1, then load the file:

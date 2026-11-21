@@ -370,7 +370,7 @@ Throws `SpiceError`:
 - `:unknownbff` if the binary file format (the number format that the file record
   names) is not known, `:unsupportedbff` if it is `VAX-GFLT` or `VAX-DFLT`;
 - `:dafinvalidparams` if the summary format in the file record is not valid;
-- `:fileopenfailed` if the system cannot open the file.
+- `:fileopenfail` if the system cannot open the file.
 
 # Examples
 Write an SPK file with one segment, then search it as a DAF:
@@ -417,7 +417,7 @@ function dafopr(path::AbstractString)
     io = try
         open(path, "r")
     catch e
-        throw(SpiceError(:fileopenfailed, "dafopr: cannot open $path: $(sprint(showerror, e))"))
+        throw(SpiceError(:fileopenfail, "dafopr: cannot open $path: $(sprint(showerror, e))"))
     end
     return _open_register!(_daf_handle(path, io, false, swap, nd, ni), path, false, "dafopr")
 end

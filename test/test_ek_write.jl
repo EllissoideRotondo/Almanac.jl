@@ -1208,7 +1208,7 @@ group("EK write: input checks give the errors of CSPICE") do
     @test neo_kind(() -> Almanac.ekacei(h, s2, 1, "K", [1], false)) === :indexoutofrange
     @test neo_kind(() -> Almanac.ekbseg(h, "T", ["A", "B"], one)) === :invalidcount
     ekcls(h)
-    @test neo_kind(() -> Almanac.ekopn(path, "OWN")) === :fileopenfailed
+    @test neo_kind(() -> Almanac.ekopn(path, "OWN")) === :fileopenfail
     hr = c_ekopr(path)
     @test c_eknseg(hr) == 2
     @test c_ekrcei(hr, 1, 3, "K") == ([3], false)

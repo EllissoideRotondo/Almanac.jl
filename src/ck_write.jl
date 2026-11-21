@@ -24,7 +24,7 @@ replaced. Add segments with the `ckwNN` writers and close the handle with
 [`ckcls`](@ref). Load the file with [`furnsh`](@ref) only after the close.
 
 Throws `SpiceError(:emptystring)` if `path` or `ifname` is empty and `:blankfilename` if
-`path` is blank, as CSPICE, and `:fileopenfailed` if the file exists or cannot be created.
+`path` is blank, as CSPICE, and `:fileopenfail` if the file exists or cannot be created.
 
 # Examples
 Write a type 3 segment with two pointing records and one interpolation interval:

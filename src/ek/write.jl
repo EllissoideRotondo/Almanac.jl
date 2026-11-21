@@ -30,7 +30,7 @@ reserve. The new file holds no segment: start one with [`ekbseg`](@ref) or
 `ekcls` returns.
 
 Throws `SpiceError(:emptystring)` if `path` or `ifname` is empty,
-`SpiceError(:invalidcount)` if `ncomch < 0`, and `SpiceError(:fileopenfailed)` if
+`SpiceError(:invalidcount)` if `ncomch < 0`, and `SpiceError(:fileopenfail)` if
 `path` exists or cannot be created.
 
 # Examples
@@ -140,7 +140,7 @@ The file is read into memory; all changes are on disk when [`ekcls`](@ref) retur
 No other handle of this process may have the file open, as in [`dasopw`](@ref).
 
 Throws `SpiceError(:emptystring)` if `path` is empty, `SpiceError(:filenotfound)` if
-the file does not exist, `SpiceError(:fileopenfailed)` if it is not writable,
+the file does not exist, `SpiceError(:fileopenfail)` if it is not writable,
 `SpiceError(:wrongarchitecture)` if it is a DAS file that is not an EK, and
 `SpiceError(:invalidformat)` if the EK is damaged. The other errors are those of
 [`dasopw`](@ref).

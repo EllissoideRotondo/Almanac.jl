@@ -141,7 +141,7 @@ writes them. The byte order is the native one. An existing file is never replace
 
 Throws `SpiceError`:
 - `:blankfilename` if `path` is blank;
-- `:fileopenfailed` if the file exists or cannot be created;
+- `:fileopenfail` if the file exists or cannot be created;
 - `:blankfiletype` if `ftype` is blank, `:illegalcharacter` if it has a character that is
   not printable;
 - `:dafinvalidparams` unless `0 <= nd <= 124`, `2 <= ni <= 250` and
@@ -167,7 +167,7 @@ function dafonw(
     catch e
         throw(
             SpiceError(
-                :fileopenfailed,
+                :fileopenfail,
                 "dafonw: attempt to create the new file $path failed: $(sprint(showerror, e))"
             )
         )
@@ -288,7 +288,7 @@ again after the close, because a loaded kernel does not see arrays that are adde
 
 Throws the `SpiceError` kinds of [`dafopr`](@ref), `:unsupportedbff` if the file has the
 other byte order, `:fileopenconflict` if another handle has the file open, and
-`:fileopenfailed` if the file cannot be opened for update.
+`:fileopenfail` if the file cannot be opened for update.
 """
 function dafopw(path::AbstractString)
     nd, ni, swap = _daf_probe(path, "dafopw")
@@ -301,7 +301,7 @@ function dafopw(path::AbstractString)
     io = try
         open(path, "r+")
     catch e
-        throw(SpiceError(:fileopenfailed, "dafopw: cannot open $path for write: $(sprint(showerror, e))"))
+        throw(SpiceError(:fileopenfail, "dafopw: cannot open $path for write: $(sprint(showerror, e))"))
     end
     h = _daf_handle(path, io, true, false, nd, ni)
     try

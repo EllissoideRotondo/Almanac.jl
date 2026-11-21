@@ -490,13 +490,13 @@ path. After the call, [`dasopr`](@ref) can still open the file for read, where C
 refuses; that handle keeps the data of the file as they were when it opened.
 
 Throws the `SpiceError` kinds of [`dasopr`](@ref), `:fileopenconflict` if another handle
-has the file open, and `:fileopenfailed` if the file is not writable.
+has the file open, and `:fileopenfail` if the file is not writable.
 """
 function dasopw(path::AbstractString)
     h = _das_load(path, "dasopw", true)
     (uperm(path) & 0x02) != 0 || throw(
         SpiceError(
-            :fileopenfailed,
+            :fileopenfail,
             "dasopw: the file $path cannot be opened for write"
         )
     )
@@ -518,7 +518,7 @@ and an empty directory record. Data that are added afterwards are in memory unti
 
 Throws `SpiceError`:
 - `:blankfilename` if `path` is blank;
-- `:fileopenfailed` if `path` exists or the file cannot be created;
+- `:fileopenfail` if `path` exists or the file cannot be created;
 - `:blankfiletype` if `ftype` is blank, `:illegalcharacter` if it has a character that is
   not printable;
 - `:invalidcount` if `ncomr < 0`.
@@ -546,7 +546,7 @@ function dasonw(
     )
     ispath(path) && throw(
         SpiceError(
-            :fileopenfailed,
+            :fileopenfail,
             "dasonw: the file $path already exists; a new DAS file cannot replace it"
         )
     )
@@ -566,7 +566,7 @@ function dasonw(
     catch e
         throw(
             SpiceError(
-                :fileopenfailed,
+                :fileopenfail,
                 "dasonw: cannot create $path: $(sprint(showerror, e))"
             )
         )

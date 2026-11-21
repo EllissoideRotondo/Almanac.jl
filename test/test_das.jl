@@ -444,7 +444,7 @@ group("11. DAS files and DLA segment lists") do
         @test neo_kind(() -> dasrdi(h, 1, 1)) === :dasnosuchhandle
         @test occursin("closed", sprint(show, h))
 
-        @test neo_kind(() -> dasonw(cfile, "TEST", "x", 0)) === :fileopenfailed
+        @test neo_kind(() -> dasonw(cfile, "TEST", "x", 0)) === :fileopenfail
         @test isfile(cfile) && getfat(cfile) == ("DAS", "DSK")       # the file is not damaged
         @test neo_kind(() -> dasonw(" ", "TEST", "x", 0)) === :blankfilename
         @test neo_kind(() -> dasonw(joinpath(dir, "n1.das"), " ", "x", 0)) === :blankfiletype

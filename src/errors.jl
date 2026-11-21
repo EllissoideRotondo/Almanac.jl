@@ -42,7 +42,7 @@ const ERROR_KINDS = (
     :difflinetoolarge, :difflinetoosmall, :dividebyzero, :dskdatanotfound, :dtoutofrange,
     :eccoutofbounds, :eccoutofrange, :ekcolnummismatch, :ekmissingcolumn, :eknosegments,
     :emptysegment, :emptystring, :endpointsmatch, :evecoutofrange, :facenotfound, :filarchmismatch,
-    :fileisnotspk, :filenotfound, :fileopenconflict, :fileopenfailed, :filereadfailed,
+    :fileisnotspk, :filenotfound, :fileopenconflict, :fileopenfail, :fileopenfailed, :filereadfailed,
     :fovtoowide, :framechain, :framedatanotfound, :framedeferror, :frameidnotfound,
     :frameinfonotfound, :framemissing, :framenamenotfound, :ftpxfererror, :gridtoolarge,
     :idcodenotfound, :idstringtoolong, :illegalcharacter, :immutablevalue,

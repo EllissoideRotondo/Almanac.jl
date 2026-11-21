@@ -2123,7 +2123,7 @@ group("9. DAF access, SPK and CK writers") do
             dafcls(hn)                                         # a second close does nothing
             @test read(pc) == read(pn)
             @test getfat(pn) == SPICE.getfat(pn) == ("DAF", kind_type(kind))
-            @test throws_kind(() -> neo_open(kind, pn, "EXISTS", 0), :fileopenfailed)
+            @test throws_kind(() -> neo_open(kind, pn, "EXISTS", 0), :fileopenfail)
             @test read(pc) == read(pn)                         # the existing file is not touched
             @test_throws SPICE.SpiceError c_open(kind, pc, "EXISTS", 0)
         end
@@ -2131,7 +2131,7 @@ group("9. DAF access, SPK and CK writers") do
         @test throws_kind(() -> spkopn("", "NAME"), :emptystring)
         @test throws_kind(() -> ckopn("", "NAME"), :emptystring)
         @test throws_kind(() -> pckopn(joinpath(dir, "x.bpc"), ""), :emptystring)
-        @test throws_kind(() -> spkopn(joinpath(dir, "no_such_dir", "x.bsp"), "NAME"), :fileopenfailed)
+        @test throws_kind(() -> spkopn(joinpath(dir, "no_such_dir", "x.bsp"), "NAME"), :fileopenfail)
         @test throws_kind(() -> dafopr(joinpath(dir, "no_such_file.bsp")), :filenotfound)
         @test throws_kind(() -> dafopw(joinpath(dir, "no_such_file.bsp")), :filenotfound)
         # Regression: an empty path gave :blankfilename where the C wrappers of CSPICE give
