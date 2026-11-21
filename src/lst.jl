@@ -22,7 +22,7 @@ gives -1) if it exists; otherwise 1 for a retrograde body and -1 for a prograde 
 `SpiceError(:missingdata)` if the rate is needed and `BODY<body>_PM` is not available.
 """
 function _lst_sense(ks::KernelSet, body::Integer)
-    key = "BODY$(body)_PGR_POSITIVE_LON"
+    key = _body_key(body, "PGR_POSITIVE_LON")
     v = get(ks.pool, key, nothing)
     if v isa Vector{String} && !isempty(v)
         s = uppercase(replace(v[1], ' ' => ""))
@@ -36,7 +36,7 @@ function _lst_sense(ks::KernelSet, body::Integer)
         )
     end
     body == 399 && return 1
-    pm = get(ks.pool, "BODY$(body)_PM", nothing)
+    pm = get(ks.pool, _body_key(body, "PM"), nothing)
     (pm isa Vector{Float64} && length(pm) >= 2) || throw(
         SpiceError(
             :missingdata,
@@ -48,8 +48,17 @@ function _lst_sense(ks::KernelSet, body::Integer)
     return pm[2] < 0.0 ? 1 : -1
 end
 
-"Two decimal digits of the integer `n` in 0:99."
-_lst_two(n::Integer) = string(n ÷ 10, n % 10)
+"`HH:MM:SS` of the numbers `0 <= h, m, s <= 99`, then `suffix`, in one buffer."
+function _lst_clock(h::Int, m::Int, s::Int, suffix::String)
+    buf = Base.StringVector(8 + ncodeunits(suffix))
+    for (k, v) in ((1, h), (4, m), (7, s))
+        buf[k] = UInt8('0') + v ÷ 10
+        buf[k + 1] = UInt8('0') + v % 10
+    end
+    buf[3] = buf[6] = UInt8(':')
+    copyto!(buf, 9, codeunits(suffix), 1, ncodeunits(suffix))
+    return String(buf)
+end
 
 """
     et2lst([ctx,] et, body, lon, type) -> (hr, mn, sc, time, ampm)
@@ -97,12 +106,12 @@ hr, mn, sc, time, ampm = et2lst(et, 399, deg2rad(-118.0), "PLANETOCENTRIC")
 """
 function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::AbstractString)
     _plain_epoch(et, "et2lst")
-    system = uppercase(strip(type))
-    if system == "PLANETOGRAPHIC"
+    system = strip(type)
+    if _eqsys(system, "PLANETOGRAPHIC")
         g = _lst_sense(ks, body) * Float64(lon)
         y, x = sincos(g)
         mylong = (x == 0.0 && y == 0.0) ? 0.0 : atan(y, x)
-    elseif system == "PLANETOCENTRIC"
+    elseif _eqsys(system, "PLANETOCENTRIC")
         mylong = Float64(lon)
     else
         throw(
@@ -125,7 +134,7 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     slong = (state[1] == 0.0 && state[2] == 0.0) ? 0.0 : atan(state[2], state[1])
     _, angle = _lst_rmaind(mylong - slong, _TWOPI)
     angle > pi && (angle -= _TWOPI)
-    pm = get(ks.pool, "BODY$(body)_PM", nothing)
+    pm = get(ks.pool, _body_key(body, "PM"), nothing)
     (pm isa Vector{Float64} && length(pm) >= 2) || throw(
         SpiceError(
             :cantgetrotationtype,
@@ -141,9 +150,7 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     hr, mn, sc = trunc(Int, hours) + 12, trunc(Int, mins), trunc(Int, secnds)
     hr == 24 && (hr = 0)
     h12 = hr == 0 ? 12 : hr > 12 ? hr - 12 : hr
-    suffix = hr >= 12 ? "P.M." : "A.M."
-    tail = string(":", _lst_two(mn), ":", _lst_two(sc))
-    return hr, mn, sc, _lst_two(hr) * tail, string(_lst_two(h12), tail, " ", suffix)
+    return hr, mn, sc, _lst_clock(hr, mn, sc, ""), _lst_clock(h12, mn, sc, hr >= 12 ? " P.M." : " A.M.")
 end
 et2lst(ctx::SpiceContext, et::Real, body::Integer, lon::Real, type::AbstractString) =
     et2lst(kernelset(ctx), et, body, lon, type)

@@ -97,10 +97,10 @@ julia> cidfrm(499)
 See also [`cnmfrm`](@ref).
 """
 function cidfrm(ks::KernelSet, cent::Integer)
-    v = get(ks.pool, "OBJECT_$(cent)_FRAME", nothing)
+    v = get(ks.pool, _pool_key("OBJECT_", cent, "_FRAME"), nothing)
     if v === nothing
         name = body_name(ks, cent)
-        name === nothing || (v = get(ks.pool, uppercase("OBJECT_$(name)_FRAME"), nothing))
+        name === nothing || (v = get(ks.pool, _pool_key("OBJECT_", name, "_FRAME", "", true), nothing))
     end
     v === nothing || return _frame_of_object(ks, v)
     cent == 399 && return 10013, "IAU_EARTH"
@@ -578,7 +578,7 @@ variable can be numeric or character.
 See also [`bodvcd`](@ref).
 """
 bodfnd(ks::KernelSet, body::Integer, item::AbstractString) =
-    haskey(ks.pool, string("BODY", body, "_", strip(item)))
+    haskey(ks.pool, _body_key(body, item))
 
 """
     bodvcd([ctx,] bodyid, item) -> Vector{Float64}
@@ -607,7 +607,7 @@ julia> bodvcd(ctx, 399, "RADII")
 ```
 """
 function bodvcd(ks::KernelSet, bodyid::Integer, item::AbstractString)
-    key = string("BODY", bodyid, "_", strip(item))
+    key = _body_key(bodyid, item)
     v = get(ks.pool, key, nothing)
     v === nothing && throw(
         SpiceError(

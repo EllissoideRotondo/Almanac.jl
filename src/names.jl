@@ -1003,6 +1003,6 @@ function body_name(ks::KernelSet, code::Integer)::Union{String, Nothing}
     n = get(BUILTIN_CODE2NAME, c, nothing)
     # A built-in name that the pool or `boddef` gives to another code no longer names
     # this code, as in `zzbodc2n` of CSPICE.
-    (n === nothing || haskey(ks.name2code, normalize_name(n))) && return nothing
+    (n === nothing || haskey(ks.name2code, n)) && return nothing   # the lookup normalizes `n`
     return n
 end

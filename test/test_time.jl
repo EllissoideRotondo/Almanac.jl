@@ -841,6 +841,20 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test etcal(ctx, 0.0) == "2000 JAN 01 12:00:00.000"
     end
 
+    @apart @testset "allocations of the conversions to and from strings" begin
+        # Upper bounds on the count, a little above the count measured on Julia 1.13: the
+        # returned String and the work buffers. Before the byte buffers, `str2et` made 81
+        # allocations and `timout` more than 100.
+        fs = (
+            () -> et2utc(ks, 8.0e8, "ISOC", 3), () -> et2utc(ks, 8.0e8, "J", 7), () -> etcal(8.0e8),
+            () -> timout(ks, 8.0e8, "YYYY-MM-DDTHR:MN:SC.### ::TDB"),
+            () -> str2et(ks, "2025 MAR 01 12:00:00.000"),
+        )
+        foreach(f -> f(), fs)
+        n = [@allocations(f()) for f in fs]
+        @test all(n .<= [4, 4, 4, 30, 40])
+    end
+
     @apart @testset "timout, pictures of the header and random pictures" begin
         sub = vcat(epochs[1:40:end], dense[1:7:end])
         cases = [(et, pic) for pic in TS_PICTURES for et in sub]

@@ -143,6 +143,11 @@ const _BLANK = UInt8(' ')
 # Token list (ZZTIME)
 # ---------------------------------------------------------------------------------
 
+const _MAXTOK = 64
+const _MAXPIC = 320
+const _ByteView = SubArray{UInt8, 1, Vector{UInt8}, Tuple{UnitRange{Int}}, true}
+const _IntView = SubArray{Int, 1, Vector{Int}, Tuple{UnitRange{Int}}, true}
+
 """
     _Tokens
 
@@ -154,20 +159,34 @@ when the string has an A.M./P.M. mark.
 """
 mutable struct _Tokens
     const str::Vector{UInt8}
-    const rep::Vector{UInt8}
+    const rep::_ByteView
     size::Int
-    const begs::Vector{Int}
-    const ends::Vector{Int}
-    const pbegs::Vector{Int}
-    const pends::Vector{Int}
-    pictur::Vector{UInt8}
+    const begs::_IntView
+    const ends::_IntView
+    const pbegs::_IntView
+    const pends::_IntView
+    const pictur::_ByteView
     ampm::Bool
 end
 
-const _MAXTOK = 64
-const _MAXPIC = 320
+"""
+    _Tokens(str) -> _Tokens
+
+An empty token list of the string `str` (`size` 0, `rep` and `pictur` blank). The
+letters and the picture share one buffer, and the four position vectors another.
+"""
+function _Tokens(str::Vector{UInt8})
+    chars = fill(_BLANK, _MAXTOK + _MAXPIC)
+    ints = zeros(Int, 4 * _MAXTOK)
+    iv(k) = view(ints, ((k - 1) * _MAXTOK + 1):(k * _MAXTOK))
+    return _Tokens(
+        str, view(chars, 1:_MAXTOK), 0, iv(1), iv(2), iv(3), iv(4),
+        view(chars, (_MAXTOK + 1):(_MAXTOK + _MAXPIC)), false
+    )
+end
 
 @inline _upper(c::UInt8) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
+@inline _lower(c::UInt8) = (UInt8('A') <= c <= UInt8('Z')) ? c + 0x20 : c
 @inline _isdigit(c::UInt8) = UInt8('0') <= c <= UInt8('9')
 
 "Contract: returns `s[b:e]` as a `String`; empty when the range is empty or outside `s`."
@@ -182,7 +201,7 @@ function _marked(s::Vector{UInt8}, b::Int, e::Int)
 end
 
 "Contract: `dest` is a blank-padded buffer; writes `text` into `dest[from:to]`, cut or blank padded to that length (the Fortran substring assignment)."
-function _assign!(dest::Vector{UInt8}, from::Int, to::Int, text)
+function _assign!(dest::AbstractVector{UInt8}, from::Int, to::Int, text)
     t = text isa AbstractString ? codeunits(text) : text
     # Loop invariant: `dest[from:i-1]` holds the first characters of `text`, blank padded.
     @inbounds for i in from:to
@@ -192,21 +211,35 @@ function _assign!(dest::Vector{UInt8}, from::Int, to::Int, text)
     return dest
 end
 
-"Contract: returns a copy of the fixed-length buffer `buf` in which `buf[left:right]` is replaced by `text`, cut or blank padded to the length of `buf` (`zzrepsub`)."
-function _repsub(buf::Vector{UInt8}, left::Int, right::Int, text)
+"""
+    _repsub!(buf, left, right, text, ndec=-1) -> buf
+
+Contract: replaces `buf[left:right]` of the fixed-length buffer `buf` by `text`, in
+place, cut or blank padded to the length of `buf` (`zzrepsub`). With `ndec >= 0`,
+`text` is followed by a decimal point and `ndec` characters `#` (the mark of
+`zzmkpc`). `text` is a `String` or a tuple of bytes.
+"""
+function _repsub!(buf::AbstractVector{UInt8}, left::Int, right::Int, text, ndec::Int = -1)
+    t = text isa AbstractString ? codeunits(text) : text
     n = length(buf)
-    out = UInt8[]
-    append!(out, @view buf[1:clamp(left - 1, 0, n)])
-    append!(out, codeunits(text))
-    append!(out, @view buf[(clamp(right, 0, n) + 1):n])
-    m = length(out)
-    resize!(out, n)
-    m < n && fill!(view(out, (m + 1):n), _BLANK)
-    return out
+    head = clamp(left - 1, 0, n)                 # bytes kept before the text
+    tail0 = clamp(right, 0, n) + 1               # first byte kept after the text
+    tlen = length(t) + (ndec >= 0 ? 1 + ndec : 0)
+    dest = head + tlen + 1                       # where the kept tail goes
+    ntail = n - tail0 + 1
+    # The tail moves first: the text may overlap where it was.
+    dest <= n && ntail > 0 && copyto!(buf, dest, buf, tail0, min(ntail, n - dest + 1))
+    @inbounds for k in 1:min(tlen, n - head)
+        buf[head + k] = k <= length(t) ? t[k] : (k == length(t) + 1 ? UInt8('.') : UInt8('#'))
+    end
+    @inbounds for k in (head + tlen + ntail + 1):n
+        buf[k] = _BLANK
+    end
+    return buf
 end
 
 "Contract: returns the first position `b` in `1:n` at which `pat` starts inside `rep[1:n]`, or 0 (`pos`)."
-function _pos(rep::Vector{UInt8}, n::Int, pat)::Int
+function _pos(rep::AbstractVector{UInt8}, n::Int, pat)::Int
     p = codeunits(pat)
     for b in 1:(n - length(p) + 1)
         @views rep[b:(b + length(p) - 1)] == p && return b
@@ -215,7 +248,7 @@ function _pos(rep::Vector{UInt8}, n::Int, pat)::Int
 end
 
 "Contract: returns the last position `b <= start` at which `pat` starts inside `rep[1:n]`, or 0 (`posr`)."
-function _posr(rep::Vector{UInt8}, n::Int, start::Int, pat)::Int
+function _posr(rep::AbstractVector{UInt8}, n::Int, start::Int, pat)::Int
     p = codeunits(pat)
     for b in min(n - length(p) + 1, start):-1:1
         @views rep[b:(b + length(p) - 1)] == p && return b
@@ -244,14 +277,14 @@ function _zzcmbt!(st::_Tokens, pat::String, letter::Char, l2r::Bool)::Bool
     to = from + n - 1
     st.ends[from] = st.ends[to]
     st.pends[from] = st.pends[to]
-    copyto!(st.rep, _repsub(st.rep, from, to, string(letter)))
+    _repsub!(st.rep, from, to, (UInt8(letter),))
     _shift!(st, from + 1, to + 1)
     st.size -= n - 1
     return true
 end
 
 "Contract: returns the 12-character key of the token list (`zzgrep` into the 12-character variable of `tpartv`): longer lists are cut."
-_zzgrep(st::_Tokens) = String(st.rep[1:12])
+_zzgrep(st::_Tokens) = String(@view st.rep[1:12])
 
 "Contract: returns whether the token list has a token of class `letter` (`zzist`)."
 _zzist(st::_Tokens, letter::Char) = UInt8(letter) in @view st.rep[1:st.size]
@@ -394,10 +427,7 @@ function _zztokns(str::AbstractString)
     end
     last == 0 && return nothing, "The input time string is blank."
     resize!(bytes, last)
-    st = _Tokens(
-        bytes, fill(_BLANK, _MAXTOK), 0, zeros(Int, _MAXTOK), zeros(Int, _MAXTOK),
-        zeros(Int, _MAXTOK), zeros(Int, _MAXTOK), fill(_BLANK, _MAXPIC), false
-    )
+    st = _Tokens(bytes)
     toomany(b, e) = (
         nothing, "The input time string '$str' cannot be processed " *
             "because it contains more than $_MAXTOK recognizable tokens. The token that " *
@@ -522,11 +552,19 @@ function _zztokns(str::AbstractString)
     return st, ""
 end
 
-"Contract: returns the picture mark `mark`, with a decimal point and one `#` for each decimal (14 at most) when the token text `token` has them (`zzmkpc`)."
-function _zzmkpc(mark::String, token::AbstractVector{UInt8})
+"Contract: the number of `#` that `zzmkpc` writes after the picture mark of the token text `token`: one for each decimal (14 at most), or -1 if the token has no decimal point."
+function _zzmkpc(token::AbstractVector{UInt8})
     point = findfirst(==(UInt8('.')), token)
-    point === nothing && return mark
-    return string(mark, '.', '#'^min(14, length(token) - point))
+    return point === nothing ? -1 : min(14, length(token) - point)
+end
+
+"Contract: the month number of the first three characters of `s[j:k]` (blank padded, any case) as `_MONTH_ABBR` lists them, or `nothing`."
+function _month_abbr_index(s::Vector{UInt8}, j::Int, k::Int)
+    c1, c2, c3 = ntuple(n -> j + n - 1 <= min(k, j + 2) ? _upper(s[j + n - 1]) : _BLANK, Val(3))
+    for (i, m) in enumerate(_MONTH_ABBR)
+        codeunit(m, 1) == c1 && codeunit(m, 2) == c2 && codeunit(m, 3) == c3 && return i
+    end
+    return nothing
 end
 
 "Contract: returns the value of the number in `s[j:k]` as `nparsd` computes it, or `old` if the text is not a number (`nparsd` leaves its output unchanged then)."
@@ -552,10 +590,10 @@ blank when a token has no meaning, and it is set in every other case.
 function _zzunpck(st::_Tokens, yabbrv::Bool)
     s = st.str
     tvec = zeros(Float64, 8)
-    hms = zeros(Float64, 3)
+    hms = zero(MVector{3, Float64})
     nyear = nmon = nday = nhour = nmin = nsec = ndoy = njd = 0
     ntvec = 0
-    pic = st.pictur
+    pic = copy(st.pictur)
     # Loop invariant: tokens `i+1:size` are counted, their values are stored and their
     # picture marks are written (from the right, so the positions to the left hold).
     for i in st.size:-1:1
@@ -565,43 +603,42 @@ function _zzunpck(st::_Tokens, yabbrv::Bool)
         if item == 'Y'
             nyear += 1; ntvec += 1
             tvec[1] = _tokval(s, j, k, tvec[1])
-            pic = _repsub(pic, st.pbegs[i], st.pends[i], yabbrv ? "YR" : "YYYY")
+            _repsub!(pic, st.pbegs[i], st.pends[i], yabbrv ? "YR" : "YYYY")
         elseif item == 'm'
             nmon += 1; ntvec += 1
-            name = uppercase(rpad(String(s[j:min(k, j + 2)]), 3))
-            value = findfirst(==(name), _MONTH_ABBR)
+            value = _month_abbr_index(s, j, k)
             if value === nothing
                 tvec[2] = _tokval(s, j, k, tvec[2])
-                pic = _repsub(pic, st.pbegs[i], st.pends[i], "MM")
+                _repsub!(pic, st.pbegs[i], st.pends[i], "MM")
             else
                 tvec[2] = Float64(value)
             end
         elseif item == 'D'
             nday += 1; ntvec += 1
             tvec[3] = _tokval(s, j, k, tvec[3])
-            pic = _repsub(pic, st.pbegs[i], st.pends[i], _zzmkpc("DD", tok))
+            _repsub!(pic, st.pbegs[i], st.pends[i], "DD", _zzmkpc(tok))
         elseif item == 'y'
             ndoy += 1; ntvec += 1
             tvec[2] = _tokval(s, j, k, tvec[2])
-            pic = _repsub(pic, st.pbegs[i], st.pends[i], _zzmkpc("DOY", tok))
+            _repsub!(pic, st.pbegs[i], st.pends[i], "DOY", _zzmkpc(tok))
         elseif item == 'H'
             nhour += 1; ntvec += 1
             hms[1] = _tokval(s, j, k, hms[1])
-            pic = _repsub(pic, st.pbegs[i], st.pends[i], _zzmkpc(st.ampm ? "AP" : "HR", tok))
+            _repsub!(pic, st.pbegs[i], st.pends[i], st.ampm ? "AP" : "HR", _zzmkpc(tok))
         elseif item == 'M'
             nmin += 1; ntvec += 1
             hms[2] = _tokval(s, j, k, hms[2])
-            pic = _repsub(pic, st.pbegs[i], st.pends[i], _zzmkpc("MN", tok))
+            _repsub!(pic, st.pbegs[i], st.pends[i], "MN", _zzmkpc(tok))
         elseif item == 'S'
             nsec += 1; ntvec += 1
             hms[3] = _tokval(s, j, k, hms[3])
-            pic = _repsub(pic, st.pbegs[i], st.pends[i], _zzmkpc("SC", tok))
+            _repsub!(pic, st.pbegs[i], st.pends[i], "SC", _zzmkpc(tok))
         elseif item == 'J'
             njd += 1; ntvec += 1
             # A token such as `- jd 2451545.0` is not a number. CSPICE leaves the value
             # of an earlier call in the vector; NaN marks the date as having no value.
             tvec[1] = _tokval(s, j, k, NaN)
-            pic = _repsub(pic, st.pbegs[i], st.pends[i], _zzmkpc("JULIAND", tok))
+            _repsub!(pic, st.pbegs[i], st.pends[i], "JULIAND", _zzmkpc(tok))
         elseif item == 'i'
             return false, tvec, 0, "", "", "The meaning of the integer <$(_sub(s, j, k))> " *
                 "could not be determined: '" * _marked(s, j, k) * "'"
@@ -614,7 +651,11 @@ function _zzunpck(st::_Tokens, yabbrv::Bool)
                 "encountered in the time string: " * _marked(s, j, k)
         end
     end
-    pictur = String(rstrip(String(copy(pic)), ' '))
+    np = length(pic)
+    while np > 0 && pic[np] == _BLANK
+        np -= 1
+    end
+    pictur = String(resize!(pic, np))
     if nyear == 1 && nmon == 1 && nday == 1 && ndoy == 0 && njd == 0 && nhour <= 1 &&
             nmin <= nhour && nsec <= nmin
         tvec[4], tvec[5], tvec[6] = hms
@@ -701,8 +742,14 @@ struct _TimeParts
 end
 
 "Contract: returns `text` after `pictur` without its trailing blanks and `spaces` blanks (`suffix`)."
-_suffix(pictur::String, text::String, spaces::Int) =
-    string(rstrip(pictur, ' '), ' '^spaces, text)
+function _suffix(pictur::String, text::String, spaces::Int)
+    head = rstrip(pictur, ' ')
+    buf = Base.StringVector(ncodeunits(head) + spaces + ncodeunits(text))
+    copyto!(buf, codeunits(head))
+    fill!(view(buf, (ncodeunits(head) + 1):(ncodeunits(head) + spaces)), _BLANK)
+    copyto!(buf, ncodeunits(head) + spaces + 1, codeunits(text), 1, ncodeunits(text))
+    return String(buf)
+end
 
 "Contract: returns `pictur` with the marks that `tpartv` adds after it: `::RND` when `needle` occurs in it, then the zone (if `zone`) and the system modifiers."
 function _picture_suffix(pictur::String, needle::String, modify::Vector{String}, zone::Bool)
@@ -798,8 +845,8 @@ function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
     end
 
     # Modifiers, with or without parentheses.
-    for c in ("e", "w", "N", "Z", "s")
-        _zzrept!(st, "[" * c * "]", "*" * c * "*", l2r)
+    for (pat, transl) in (("[e]", "*e*"), ("[w]", "*w*"), ("[N]", "*N*"), ("[Z]", "*Z*"), ("[s]", "*s*"))
+        _zzrept!(st, pat, transl, l2r)
     end
     _zzsubt!(st, "ie", "Ye", l2r)
     havera, be, ee = _zznote!(st, 'e')

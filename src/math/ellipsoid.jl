@@ -1636,7 +1636,7 @@ end
 
 "Radii of `body` with the checks of `zzgftreb_`."
 function _m_radii(ks::KernelSet, body::Integer)
-    v = get(ks.pool, string("BODY", body, "_RADII"), nothing)
+    v = get(ks.pool, _body_key(body, "RADII"), nothing)
     v === nothing && throw(
         SpiceError(
             :kernelvarnotfound,

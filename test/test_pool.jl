@@ -151,6 +151,16 @@ group(
         @test namfrm(ctx, "") == 0
         @test throws_kind(() -> bodvrd(ctx, "EARTH", "NO_SUCH_ITEM"), :kernelvarnotfound)
         @test throws_kind(() -> bodvrd(ctx, "NO_SUCH_BODY", "RADII"), :notranslation)
+        # Allocation: the returned vector and the key String; upper bounds, because the
+        # count differs between Julia versions.
+        let ks = Almanac.kernelset(ctx)
+            fs = (
+                () -> gdpool(ks, "BODY399_RADII"), () -> gdpool(ks, " BODY399_RADII "),
+                () -> bodvrd(ks, "EARTH", "RADII"), () -> bodvcd(ks, 399, "RADII"),
+            )
+            foreach(f -> f(), fs)
+            @test all([@allocations(f()) for f in fs] .<= [2, 2, 5, 5])
+        end
     end
 
     @apart @testset "bodn2c, bods2c, bodc2n, bodc2s" begin
