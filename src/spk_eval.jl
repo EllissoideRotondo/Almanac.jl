@@ -2,17 +2,38 @@
 # (SPK types 2 and 3, binary PCK type 2), with time derivatives of any order.
 
 """
-    find_segment(segs::Vector{Segment}, et::Float64) -> Int
+    find_segment(segs::Vector, et::Float64) -> Int
 
 Index of the first segment of `segs` (which is in priority order) with
 `t0 <= et <= t1`, or 0 if no segment covers `et`.
 """
-function find_segment(segs::Vector{Segment}, et::Float64)
+function find_segment(segs::Vector, et::Float64)
     @inbounds for i in eachindex(segs)   # invariant: no segment before `i` covers `et`
         s = segs[i]
         (s.t0 <= et <= s.t1) && return i
     end
     return 0
+end
+
+"""
+    find_segment(list::SegmentList, et::Float64) -> Int
+
+The index of the first segment of `list` with `t0 <= et <= t1` (0 for none), as
+`find_segment` of the vector `list.segs`, from a binary search of the index of
+`list` when it has one.
+"""
+function find_segment(list::SegmentList, et::Float64)
+    b = list.bounds
+    isempty(b) && return find_segment(list.segs, et)
+    lo, hi = 0, length(b) + 1
+    @inbounds while hi - lo > 1            # invariant: b[lo] <= et < b[hi] (b[0] = -∞, b[end+1] = +∞)
+        mid = (lo + hi) >>> 1
+        b[mid] <= et ? (lo = mid) : (hi = mid)
+    end
+    lo == 0 && return 0                    # before the first bound, or `et` is NaN
+    @inbounds b[lo] == et && return Int(list.win[2lo - 1])
+    lo == length(b) && return 0
+    return @inbounds Int(list.win[2lo])
 end
 
 """

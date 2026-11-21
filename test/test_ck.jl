@@ -20,6 +20,7 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 isdefined(@__MODULE__, :CKFix) || include("ckfixtures.jl")
 import ForwardDiff
+import Random
 
 const CK_RATE = 2.0e-3
 # Measured: 7e-16 (C-matrix), 2e-16 relative (angular velocity), 0 (clock time).
@@ -1058,6 +1059,43 @@ group(
             end
             @test all(results)
         end
+    end
+
+    @apart @testset "many segments of one instrument: the later one with a pointing" begin
+        # 40 type 3 segments of one instrument, each with its own constant rotation, over
+        # random ranges; the even ones have a gap between two interpolation intervals. The
+        # search at an exact time starts from the index of the segment bounds, so the
+        # reference is the rule of the CK Required Reading: the segment of highest priority
+        # that covers the time and has a pointing there.
+        lrng = Random.Xoshiro(SEED)
+        own = SpiceContext()
+        path = joinpath(mktempdir(), "many.bc")
+        h = ckopn(path, "many", 0)
+        quat(k) = [cos(k / 200), 0.0, 0.0, sin(k / 200)]
+        cover = Tuple{Int, Int, Int, Int}[]          # (begin, gap begin, gap end, end)
+        for k in 1:40
+            q = quat(k)
+            if isodd(k)
+                a, b = sort(Random.randperm(lrng, 101)[1:2] .- 1)
+                ckw03(own, h, a, b, -88001, "J2000", "s$k", [a, b], [q, q], nothing, [a])
+                push!(cover, (a, b, b, b))
+            else
+                a, g1, g2, b = sort(Random.randperm(lrng, 101)[1:4] .- 1)
+                ckw03(own, h, a, b, -88001, "J2000", "s$k", [a, g1, g2, b], [q, q, q, q], nothing, [a, g2])
+                push!(cover, (a, g1, g2, b))
+            end
+        end
+        ckcls(h)
+        furnsh(own, path)
+        @test length(Almanac.kernelset(own).ck[Int32(-88001)]) == 40
+        bad = Float64[]
+        for t in [0:100; 0.5:1:99.5; -1; 101]
+            k = findlast(c -> c[1] <= t <= c[4] && !(c[2] < t < c[3]), cover)
+            r = ckgp(own, -88001, t, 0.0, "J2000")
+            ok = k === nothing ? r === nothing : r !== nothing && isapprox(r[1], q2m(quat(k)); atol = 1.0e-14)
+            ok || push!(bad, t)
+        end
+        @test isempty(bad)
     end
 end
 

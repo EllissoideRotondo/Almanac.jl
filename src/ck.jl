@@ -808,7 +808,12 @@ function _ck_search(
         p = primal(sclk)
         alpha = p - tol
         omega = p + tol
-        for seg in segs         # invariant: no segment before `seg` gives a pointing
+        # With `tol == 0` a segment is tried only if it covers `p`, so the search starts at
+        # the first one that does (0 for none: no segment is tried).
+        start = tol == 0.0 ? find_segment(segs, p) : 1
+        for k in (start == 0 ? (1:0) : (start:length(segs)))
+            # invariant: no segment before `k` gives a pointing
+            seg = @inbounds segs[k]
             (seg.t0 <= seg.t1 && omega >= seg.t0 && alpha <= seg.t1) || continue
             (!needav || seg.avflag) || continue
             found, cmat, av, clkout = _ck_eval(ks.daf[seg.file], seg, sclk, tol, needav)

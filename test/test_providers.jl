@@ -10,6 +10,7 @@
 # No kernel file of NAIF is needed.
 
 using ForwardDiff, LinearAlgebra, StaticArrays
+import Random
 
 @testset "ephemeris providers" begin
     dir = mktempdir()
@@ -130,6 +131,38 @@ using ForwardDiff, LinearAlgebra, StaticArrays
             par[i] = spkezr(prov, -1000, ets[i], "IAU_EARTH", "CN+S", 399)[1]
         end
         @test par == serial
+    end
+
+    @testset "many segments of one body: the later one that covers the epoch" begin
+        # A body with many segments is searched through an index of the segment bounds
+        # (`SegmentList`). Reference: the first covering segment in priority order. The
+        # bounds come from a small set, so that segments share bounds, nest and overlap.
+        rng = Random.Xoshiro(SEED)
+        grid = [-Inf, -3.0, -1.0, -0.0, 0.0, 0.5, 1.0, 2.0, 2.0e9, Inf, NaN]
+        seg(t0, t1) = Almanac.Segment(Int32(5), Int32(0), Int32(1), Int32(2), t0, t1, Int32(1), 0, 0, 0.0, 1.0, Int32(0), Int32(0))
+        for m in (0, 1, 2, 15, 16, 17, 40, 400)
+            segs = [seg(sort(rand(rng, grid, 2))...) for _ in 1:m]
+            m > 3 && (segs[3] = seg(1.0, -1.0); segs[4] = seg(NaN, 1.0))   # empty, never covers
+            list = Almanac.SegmentList(segs)
+            @test list == segs
+            ets = [grid; prevfloat.(grid); nextfloat.(grid); 4 .* rand(rng, 200) .- 2]
+            @test all(et -> Almanac.find_segment(list, et) == Almanac.find_segment(segs, et), ets)
+        end
+        # The same rule through `add_ephemeris!`: 300 overlapping coverages of one body.
+        ctx = SpiceContext()
+        cover = [sort(rand(rng, 0:100, 2)) for _ in 1:300]
+        for (k, (a, b)) in enumerate(cover)
+            add_ephemeris!(et -> fill(Float64(k), 6), ctx, -7, 0, "J2000", a, b; name = "p$k")
+        end
+        @test length(Almanac.kernelset(ctx).spk[Int32(-7)]) == 300
+        for t in [0:100; 0.5:1:99.5; -1; 101]
+            k = findlast(c -> c[1] <= t <= c[2], cover)
+            if k === nothing                       # no SPK file is loaded, only providers
+                @test_throws SpiceError spksfs(ctx, -7, t)
+            else
+                @test spksfs(ctx, -7, t)[1] == "p$k"
+            end
+        end
     end
 
     @testset "frames" begin

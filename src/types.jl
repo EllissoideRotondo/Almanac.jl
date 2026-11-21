@@ -55,6 +55,70 @@ withfile(s::Segment, file::Integer) = Segment(
     s.t1, Int32(file), s.baddr, s.eaddr, s.init, s.intlen, s.rsize, s.nrec
 )
 
+"Segments of one body below which `SegmentList` keeps no index: a linear scan is faster."
+const _SEGMENT_INDEX_MIN = 16
+
+"""
+    SegmentList(segs::Vector{S}) -> SegmentList{S}
+
+The segments (`Segment` or `CKSegment`) of one body (SPK), frame class (binary PCK) or
+instrument (CK), in priority order, with
+an index for `find_segment`. Read it as the vector `segs`. With `_SEGMENT_INDEX_MIN`
+segments or more, `bounds` holds the distinct segment bounds in increasing order
+(`-0.0` stored as `0.0`; a segment with `t0 > t1` or a NaN bound covers no epoch and
+adds none), and `win` the first covering segment of each piece of the line: `win[2j-1]`
+at `bounds[j]`, `win[2j]` between `bounds[j]` and `bounds[j+1]`, 0 for none. Otherwise
+both are empty and the search scans `segs`.
+"""
+struct SegmentList{S} <: AbstractVector{S}
+    segs::Vector{S}
+    bounds::Vector{Float64}
+    win::Vector{Int32}
+end
+
+Base.size(l::SegmentList) = size(l.segs)
+Base.@propagate_inbounds Base.getindex(l::SegmentList, i::Int) = l.segs[i]
+Base.IndexStyle(::Type{<:SegmentList}) = IndexLinear()
+
+function SegmentList(segs::Vector{S}) where {S}
+    length(segs) < _SEGMENT_INDEX_MIN && return SegmentList(segs, Float64[], Int32[])
+    covers(s) = s.t0 <= s.t1                       # false for a NaN bound
+    bounds = Float64[]
+    for s in segs
+        covers(s) && push!(bounds, s.t0 + 0.0, s.t1 + 0.0)   # `+ 0.0`: -0.0 becomes 0.0
+    end
+    unique!(sort!(bounds))
+    isempty(bounds) && return SegmentList(segs, bounds, Int32[])
+    npiece = 2 * length(bounds) - 1
+    win = zeros(Int32, npiece)
+    # Segments in priority order each take the pieces of their range that no earlier
+    # segment took. `next[p]` leads to the first piece at or after `p` not yet taken
+    # (`npiece + 1` for none); the paths are compressed, so the fill is nearly linear.
+    next = collect(1:(npiece + 1))
+    function free(p)
+        r = p
+        while next[r] != r
+            r = next[r]
+        end
+        while next[p] != r                         # compress the path to `r`
+            p, next[p] = next[p], r
+        end
+        return r
+    end
+    for (i, s) in enumerate(segs)
+        covers(s) || continue
+        lo = 2 * searchsortedfirst(bounds, s.t0 + 0.0) - 1
+        hi = 2 * searchsortedfirst(bounds, s.t1 + 0.0) - 1
+        p = free(lo)
+        while p <= hi                              # invariant: pieces lo:p-1 are taken
+            win[p] = i
+            next[p] = p + 1
+            p = free(p + 1)
+        end
+    end
+    return SegmentList(segs, bounds, win)
+end
+
 """
     CKSegment
 
@@ -308,8 +372,9 @@ and readers on many threads do not contend.
 - `loaded`: the load list, in load order.
 - `daf`: data arrays of the DAF files; `Segment.file` indexes this vector.
 - `spk`: SPK segments by target body, highest priority first (later file first, and
-  inside a file later segment first), which is the search order of CSPICE.
-- `pck`: binary PCK segments by frame class ID, in the same priority order.
+  inside a file later segment first), which is the search order of CSPICE, each list
+  with the index of `find_segment` (`SegmentList`).
+- `pck`: binary PCK segments by frame class ID, in the same priority order and form.
 - `pool`: kernel-pool variables after all assignments, in load order.
 - `name2code`, `code2name`: body names defined in the pool (`NAIF_BODY_NAME` and
   `NAIF_BODY_CODE`); keys of `name2code` are normalized with `normalize_name`. The
@@ -319,7 +384,7 @@ and readers on many threads do not contend.
 - `tk`: fixed-offset frames by frame ID.
 - `bodyrot`: text-PCK orientation constants by body ID.
 - `lsk`: leap-second data, or `nothing` if no leap-second kernel is loaded.
-- `ck`: CK segments by instrument ID, in the priority order of `spk`.
+- `ck`: CK segments by instrument ID, in the priority order and form of `spk`.
 - `sclk`: type 1 spacecraft clocks by clock ID (the spacecraft ID, a negative number).
 - `ckmeta`: the pair (`CK_<id>_SCLK`, `CK_<id>_SPK`) for each CK ID that has one of
   these variables in the pool; a missing one of the two holds the default of `ckmeta`.
@@ -340,8 +405,8 @@ and readers on many threads do not contend.
 mutable struct KernelSet
     const loaded::Vector{Loaded}
     const daf::Vector{Vector{Float64}}
-    const spk::Dict{Int32, Vector{Segment}}
-    const pck::Dict{Int32, Vector{Segment}}
+    const spk::Dict{Int32, SegmentList{Segment}}
+    const pck::Dict{Int32, SegmentList{Segment}}
     const pool::Dict{String, PoolValue}
     const name2code::NameTable
     const code2name::Dict{Int32, String}
@@ -350,7 +415,7 @@ mutable struct KernelSet
     const tk::Dict{Int32, TKFrame}
     const bodyrot::Dict{Int32, BodyRot}
     const lsk::Union{Nothing, LeapSeconds}
-    const ck::Dict{Int32, Vector{CKSegment}}
+    const ck::Dict{Int32, SegmentList{CKSegment}}
     const sclk::Dict{Int32, SclkType1}
     const ckmeta::Dict{Int32, NTuple{2, Int32}}
     const dyn::Dict{Int32, DynFrame}

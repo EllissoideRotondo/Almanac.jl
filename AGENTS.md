@@ -88,7 +88,10 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
 ## Invariants that are easy to break
 
 - **Priority order.** `KernelSet.spk`, `pck`, `ck` and `dsk` are in the CSPICE search
-  order: the later file first, and within a file the later segment first.
+  order: the later file first, and within a file the later segment first. The lists of
+  `spk`, `pck` and `ck` are `SegmentList`s: from 16 segments on, `find_segment` answers
+  from an index of the segment bounds, built once with the snapshot, and must give the
+  index of the linear scan. A CK search with a tolerance scans all the segments.
 - **3 by 3 products.** Use `_m_mxv`, `_m_mtxv`, `_m_mxm`, `_m_mtxm` or `_m_mxmt`, never
   `*`. The StaticArrays `*` lets the compiler fuse operations, so its last bit changed
   between Julia versions.
