@@ -619,6 +619,9 @@ function dsk_part_7(env)
     for name in (
             "Ellipsoid One", "ellipsoid   one", " ROUGH ", "rough", "tilted cube",
             "old name", "OLD NAME", "p shape", "12", " -7 ", "nothing", " ", "1.5", "-1.5", "2e1", "x1",
+            # Regression: `nparsi_` is `nparsd_` cut toward zero, so it takes pi, commas
+            # and blanks inside the number, and the bounds of 32-bit integers after the cut.
+            "pi", "-PI", "1,000", "1 000", "2147483647.9", "-2147483648.5", "2147483648", "1d1",
         )
         for body in (499, 401, 5)
             check!(fails, srfscc(ctx, name, body) == SPICE.srfscc(name, body), "srfscc", repr(name), body)
@@ -663,8 +666,25 @@ function dsk_part_7(env)
             ("NAIF_SURFACE_NAME = ( 'A' )\nNAIF_SURFACE_CODE = ( 1 )\nNAIF_SURFACE_BODY = ( 'B' )", :badvariabletype),
             ("NAIF_SURFACE_NAME = ( 'A', 'B' )\nNAIF_SURFACE_CODE = ( 1 )\nNAIF_SURFACE_BODY = ( 499, 499 )", :arraysizemismatch),
             ("NAIF_SURFACE_NAME = ( 'A', ' ' )\nNAIF_SURFACE_CODE = ( 1, 2 )\nNAIF_SURFACE_BODY = ( 499, 499 )", :blanknameassigned),
+            ("NAIF_SURFACE_NAME = ( 'A' )\nNAIF_SURFACE_CODE = ( 3.0D9 )\nNAIF_SURFACE_BODY = ( 499 )", :intoutofrange),
         )
         @test bad_map(text) == (kind, kind, kind)
+    end
+    # Regression: the codes and bodies of the map are read by `gipool_`, which rounds a
+    # tie away from zero; they were rounded to even (body 498, both codes 2).
+    let p = joinpath(dir, "halfmap.tk")
+        write(
+            p, "KPL/FK\n\\begindata\nNAIF_SURFACE_NAME = ( 'HALF A', 'HALF B' )\n" *
+                "NAIF_SURFACE_CODE = ( 1.5, 2.5 )\nNAIF_SURFACE_BODY = ( 499, 498.5 )\n\\begintext\n"
+        )
+        c = SpiceContext()
+        furnsh(c, p)
+        SPICE.kclear()
+        SPICE.furnsh(p)
+        for (name, body) in (("HALF A", 499), ("HALF B", 499), ("HALF B", 498))
+            @test srfscc(c, name, body) == SPICE.srfscc(name, body)
+        end
+        @test srfscc(c, "HALF B", 499) == 3
     end
     oracle_load(loadlist)
     return nothing

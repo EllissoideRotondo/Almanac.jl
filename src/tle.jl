@@ -44,8 +44,8 @@ function _tle_number(text::AbstractString, term::Int, integer::Bool)
     name, line, first, last = _TLE_TERMS[term]
     where = "\"$name\" (characters $first to $last of the " *
         (line == 1 ? "first" : "second") * " line of a two-line element set)"
-    x = try
-        _nparsd(text)
+    return try
+        integer ? Float64(_nparsi(text)) : _nparsd(text)
     catch err
         err isa SpiceError || rethrow()
         _tle_error(
@@ -53,13 +53,6 @@ function _tle_number(text::AbstractString, term::Int, integer::Bool)
                 "diagnostic was:  $(err.msg) "
         )
     end
-    integer || return x
-    abs(trunc(x)) <= 2147483647.0 || _tle_error(
-        "An error occurred while trying to parse " *
-            "the term $where. The diagnostic was:  NPARSI: Value entered is beyond the " *
-            "bounds of representable integers. "
-    )
-    return trunc(x)
 end
 
 """

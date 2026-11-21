@@ -831,7 +831,7 @@ end
     build_ckmeta(pool) -> Dict{Int32,NTuple{2,Int32}}
 
 The pair (clock ID, SPK ID) for each CK ID that has a numeric variable `CK_<id>_SCLK`
-or `CK_<id>_SPK` with one value in the pool; the one of the two that is absent holds
+or `CK_<id>_SPK` in the pool (its first value, rounded by `gipool_`); the one of the two that is absent holds
 the default of `ckmeta_`.
 """
 function build_ckmeta(pool::AbstractDict)
@@ -841,12 +841,10 @@ function build_ckmeta(pool::AbstractDict)
         m === nothing && continue
         id = tryparse(Int32, m.captures[1])
         id === nothing && continue
-        (
-            value isa Vector{Float64} && length(value) == 1 && isfinite(value[1]) &&
-                abs(value[1]) <= typemax(Int32)
-        ) || continue
+        # `gipool_(name, 1, 1, ...)`: the first value, rounded
+        v = _gipool_first(value, name; strict = false)
+        v === nothing && continue
         old = get(out, id, (_ckmeta_default(id), _ckmeta_default(id)))
-        v = round(Int32, value[1])
         out[id] = m.captures[2] == "SCLK" ? (v, old[2]) : (old[1], v)
     end
     return out

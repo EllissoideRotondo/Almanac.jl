@@ -336,21 +336,10 @@ Return the number of degrees in a radian, `180 / pi`, as
 dpr() = 180.0 / Float64(pi)
 
 # ---------------------------------------------------------------------------------
-# Integer conversions of C and the calendar arithmetic of TTRANS and JUL2GR
+# The calendar arithmetic of TTRANS and JUL2GR
 # ---------------------------------------------------------------------------------
 
-"Contract: returns `x` cut to an integer as the C cast `(integer) x` does on x86: toward zero, and the smallest 32-bit integer when `x` is NaN or out of range."
-@inline _cint(x::Float64)::Int =
-    (x > -2147483649.0 && x < 2147483648.0) ? Int(trunc(Int32, x)) : Int(typemin(Int32))
-
-"Contract: returns `n` reduced to the range of a 32-bit integer, as integer arithmetic of the C code does."
-@inline _wrap32(n::Int)::Int = Int(n % Int32)
-
-"Contract: returns the integer nearest to `x`, a tie away from zero, as f2c `i_dnnt`."
-@inline _nint(x::Float64)::Int = _cint(x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x))
-
-"Contract: returns `x` rounded to a whole number, a tie away from zero, as f2c `d_nint`."
-@inline _dnint(x::Float64)::Float64 = x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x)
+# `_cint`, `_wrap32`, `_nint` and `_dnint` are in math/kernels.jl.
 
 "Contract: `1 <= month <= 12`, any `year`; returns the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles."
 function _tt_daynum(year::Int, month::Int, day::Int)::Int

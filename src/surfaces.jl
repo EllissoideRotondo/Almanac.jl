@@ -15,7 +15,7 @@ const _DSK_MAXSRF = 100                   # largest number of surfaces in a meth
 The three kernel variables of the surface name map after the checks of `zzsrfker`, or
 `nothing` if none of them is in the pool. Throws `SpiceError` (`:badsurfacemap` if only
 some are present, `:badvariabletype`, `:toomanysurfaces`, `:arraysizemismatch`,
-`:blanknameassigned`).
+`:intoutofrange`, `:blanknameassigned`).
 """
 function _dsk_surface_vars(ks::KernelSet)
     names = get(ks.pool, _DSK_SRF_VARS[1], nothing)
@@ -46,6 +46,12 @@ function _dsk_surface_vars(ks::KernelSet)
                 "$(length(names)), $(length(codes)) and $(length(bodies)); they must be equal"
         )
     )
+    # `gipool_` of the codes, then of the bodies; the users round with `_nint`, as it does
+    for (key, v) in ((_DSK_SRF_VARS[2], codes), (_DSK_SRF_VARS[3], bodies))
+        for (i, x) in enumerate(v)
+            _gipool_value(x) === nothing && _gipool_range_error(key, i, x)
+        end
+    end
     for n in names
         isempty(strip(n, ' ')) && throw(
             SpiceError(
@@ -69,8 +75,8 @@ function _dsk_surface_n2c(ks::KernelSet, name::AbstractString, bodyid::Integer)
     names, codes, bodies = vars
     nn = normalize_name(name)
     for i in length(names):-1:1          # invariant: no assignment after i matches
-        (round(Int, bodies[i]) == bodyid && normalize_name(names[i]) == nn) &&
-            return round(Int, codes[i])
+        (_nint(bodies[i]) == bodyid && normalize_name(names[i]) == nn) &&
+            return _nint(codes[i])
     end
     return nothing
 end
@@ -89,11 +95,11 @@ function _dsk_surface_c2n(ks::KernelSet, code::Integer, bodyid::Integer)
     names, codes, bodies = vars
     n = length(names)
     for i in n:-1:1                      # invariant: no unmasked assignment after i matches
-        (round(Int, bodies[i]) == bodyid && round(Int, codes[i]) == code) || continue
+        (_nint(bodies[i]) == bodyid && _nint(codes[i]) == code) || continue
         nn = normalize_name(names[i])
         masked = false
         for j in (i + 1):n
-            if round(Int, bodies[j]) == bodyid && normalize_name(names[j]) == nn
+            if _nint(bodies[j]) == bodyid && normalize_name(names[j]) == nn
                 masked = true
                 break
             end
@@ -109,18 +115,14 @@ function _dsk_nonempty(who::AbstractString, name::AbstractString, s::AbstractStr
     return nothing
 end
 
-"`nparsi`: the integer that the string holds, or `nothing` if it does not hold a number."
+"`nparsi` as `srfscc_` calls it: the integer that the string holds (`_nparsi`), or `nothing` if `nparsi` gives an error."
 function _dsk_parse_int(s::AbstractString)
-    t = strip(s, ' ')
-    isempty(t) && return nothing
-    v = tryparse(Int, t)
-    v === nothing || return (typemin(Int32) <= v <= typemax(Int32) ? v : nothing)
-    all(c -> isdigit(c) || c in "+-.eEdD", t) || return nothing
-    x = tryparse(Float64, replace(t, r"[dD]" => "e"))
-    (x === nothing || !isfinite(x)) && return nothing
-    x = trunc(x)                         # `nparsi` drops the fraction
-    (typemin(Int32) <= x <= typemax(Int32)) || return nothing
-    return Int(x)
+    return try
+        _nparsi(s)
+    catch err
+        err isa SpiceError || rethrow()
+        nothing
+    end
 end
 
 """

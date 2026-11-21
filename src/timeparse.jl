@@ -385,13 +385,12 @@ function _zzvalt!(st::_Tokens, b::Int, e::Int, letter::Char)::Bool
         st.rep[i] == UInt8('i') || continue
         # `nparsi` rejects a value that is not a 32-bit integer.
         x = try
-            _nparsd(@view st.str[st.begs[i]:st.ends[i]])
+            _nparsi(@view st.str[st.begs[i]:st.ends[i]])
         catch err
             err isa SpiceError || rethrow()
             continue
         end
-        abs(trunc(x)) <= 2147483647.0 || continue
-        if b <= trunc(Int, x) <= e
+        if b <= x <= e
             st.rep[i] = UInt8(letter)
             did = true
         end

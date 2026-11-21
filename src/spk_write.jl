@@ -1828,6 +1828,8 @@ function _seg_add_cheb_packets!(
         coeffs, epochs
     )
     pktsiz = 2 + 6 * ncoef
+    coeffs isa AbstractArray{<:Real} ||
+        throw(SpiceError(:badarg, "$who: `coeffs` must be an array of numbers"))
     cf = _seg_vec(who, "coeffs", vec(collect(Float64, coeffs)), n * pktsiz)
     ep = _seg_vec(who, "epochs", epochs, n)
     if !isempty(refs) && refs[end] >= ep[1]

@@ -140,7 +140,7 @@ name and not an integer.
 function _dyn_frameid(ks::KernelSet, id, name, item)
     key, v = _dyn_lookup(ks.pool, id, name, item, true)
     length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
-    v isa Vector{Float64} && return round(Int32, v[1])
+    v isa Vector{Float64} && return _gipool_first(v, key)::Int32
     code = namfrm(ks, v[1])
     code != 0 && return Int32(code)
     n = tryparse(Int32, strip(v[1]))
@@ -162,7 +162,7 @@ as `zzdynbid_`. Throws `SpiceError(:notranslation)` for an unknown name.
 function _dyn_bodyid(ks::KernelSet, id, name, item)
     key, v = _dyn_lookup(ks.pool, id, name, item, true)
     length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
-    v isa Vector{Float64} && return round(Int32, v[1])
+    v isa Vector{Float64} && return _gipool_first(v, key)::Int32
     code = bods2c(ks, v[1])
     code === nothing && throw(
         SpiceError(
@@ -459,7 +459,8 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
         key, a = _dyn_lookup(pool, id, name, "AXES", true)
         a isa Vector{Float64} || _dyn_badtype(key, name, "integer")
         length(a) == 3 || _dyn_badsize(key, name, 3, length(a))
-        axes = (round(Int32, a[1]), round(Int32, a[2]), round(Int32, a[3]))
+        _gipool_first(a, key; room = 3)      # `zzdynvai_`: `gipool_` after the size check
+        axes = map(x -> _gipool_value(x)::Int32, (a[1], a[2], a[3]))
         coef = ntuple(i -> copy(_dyn_nums(pool, id, name, "ANGLE_$(i)_COEFFS", 20)), 3)
         scale = _dyn_degrees(_dyn_char(pool, id, name, "UNITS"))
         all(x -> 1 <= x <= 3, axes) || throw(
@@ -577,24 +578,6 @@ end
 @inline _dyn_dmod(x::Real, m::Float64) = x - m * trunc(primal(x) / m)
 
 """
-    _dyn_rot(angle, axis) -> Mat3
-
-Contract: the coordinate rotation `[angle]_axis` of `rotate_` for `axis in 1:3`, in the
-number type of `angle`.
-"""
-@inline function _dyn_rot(angle::S, axis::Integer) where {S <: Real}
-    s, c = sincos(angle)
-    o, z = one(S), zero(S)
-    axis == 1 && return Mat3{S}(o, z, z, z, c, -s, z, s, c)
-    axis == 2 && return Mat3{S}(c, z, s, z, o, z, -s, z, c)
-    return Mat3{S}(c, -s, z, s, c, z, z, z, o)
-end
-
-"`[a3]_x3 * [a2]_x2 * [a1]_x1`, as `eul2m_` and (with `Taylor{1}` angles) `eul2xf_`."
-@inline _dyn_eul(a3::S, a2::S, a1::S, x3::Integer, x2::Integer, x1::Integer) where {S <: Real} =
-    _m_mxm(_dyn_rot(a3, x3), _m_mxm(_dyn_rot(a2, x2), _dyn_rot(a1, x1)))
-
-"""
     _dyn_xf(mode, ks, from, to, et) -> Mat3
 
 Contract: the matrix from frame `from` to frame `to` at `et`: `frame_rotation` in the
@@ -626,7 +609,7 @@ of `et`.
     zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
     z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
     theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
-    return _dyn_eul(-z, theta, -zeta, 3, 2, 3)
+    return _m_eul2m_unchecked(-z, theta, -zeta, 3, 2, 3)
 end
 
 "Contract: the mean obliquity of the ecliptic of date in radians (1980 IAU), as `zzmobliq_`."
@@ -864,9 +847,9 @@ function _dyn_ofdate(mode::_CKExact, ks::KernelSet, def::DynFrame, et::T) where 
     if def.family == _DYN_TRUE_EQ
         dpsi, deps = _dyn_nutation(mode, et)
         mob = _dyn_mobliq(et)
-        m = _m_mxm(_dyn_eul(-mob - deps, -dpsi, mob, 1, 3, 1), m)
+        m = _m_mxm(_m_eul2m_unchecked(-mob - deps, -dpsi, mob, 1, 3, 1), m)
     elseif def.family == _DYN_MEAN_ECL
-        m = _m_mxm(_dyn_rot(_dyn_mobliq(et), 1), m)
+        m = _m_mxm(_m_rotate(_dyn_mobliq(et), 1), m)
     end
     x = typeof(m)(transpose(m))
     def.base == _J2000_FRAME && return x
@@ -1272,7 +1255,7 @@ function _dyn_euler(mode, def::DynFrame, et::T) where {T <: Real}
 end
 
 @inline _dyn_euler_matrix(a1::S, a2::S, a3::S, axes::NTuple{3, Int32}) where {S <: Real} =
-    _dyn_eul(a1, a2, a3, axes[1], axes[2], axes[3])
+    _m_eul2m_unchecked(a1, a2, a3, axes[1], axes[2], axes[3])
 
 # State mode: the angles and their rates (the Horner scheme of a `Taylor` epoch is the
 # arithmetic of `polyds_`) go to `eul2xf_`, as in `zzdynfrm_`; the derivative of the

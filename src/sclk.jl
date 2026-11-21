@@ -40,13 +40,19 @@ function _sclk_build(pool::AbstractDict, sc::Integer)
     (length(coef) >= 3 && length(coef) % 3 == 0) || return nothing
     (length(pstart) == length(pstop) && !isempty(pstart)) || return nothing
     (length(nf) == 1 && length(del) == 1) || return nothing
-    nfield = round(Int, nf[1])
+    # The integer items are read by `scli01_` (`gipool_`); a value outside its range
+    # leaves the clock without data.
+    nf1 = _gipool_first(nf, ""; strict = false)
+    delcde = _gipool_first(del, ""; strict = false)
+    (nf1 === nothing || delcde === nothing) && return nothing
+    nfield = Int(nf1)
     (
         1 <= nfield <= _SCLK_MXNFLD && length(moduli) >= nfield &&
             length(offsets) >= nfield
     ) || return nothing
     ts = num("SCLK01_TIME_SYSTEM")
-    timsys = (ts === nothing || isempty(ts)) ? 1 : round(Int, ts[1])
+    timsys = (ts === nothing || isempty(ts)) ? Int32(1) : _gipool_first(ts, ""; strict = false)
+    timsys === nothing && return nothing
     tikmsc = 1.0
     for i in nfield:-1:2              # invariant: tikmsc = product of moduli[i+1:nfield]
         tikmsc *= moduli[i]
@@ -57,7 +63,7 @@ function _sclk_build(pool::AbstractDict, sc::Integer)
     end
     return SclkType1(
         Int32(sc), coef, pstart, pstop, moduli, offsets, Int32(nfield),
-        Int32(round(Int, del[1])), Int32(timsys), tikmsc, mxtick
+        delcde, timsys, tikmsc, mxtick
     )
 end
 
@@ -104,7 +110,7 @@ function sctype(ks::KernelSet, sc::Integer)
                 "loaded for the clock $sc"
         )
     )
-    return round(Int, v[1])
+    return Int(_gipool_first(v, name)::Int32)
 end
 
 "Throw the error that tells why the clock `sc` has no data in `ks.sclk`."

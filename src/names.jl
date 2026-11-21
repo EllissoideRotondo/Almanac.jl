@@ -909,7 +909,8 @@ removed; leading blanks kept, as in CSPICE). A later element has priority over a
 earlier one. Both are empty if neither variable exists. Throws, with the kinds of
 `zzbodker`, `SpiceError(:missingkpv)` if only one variable exists or one has the wrong
 type, `SpiceError(:baddimensions)` if the sizes differ, and
-`SpiceError(:blanknameassigned)` if a name is blank.
+`SpiceError(:blanknameassigned)` if a name is blank; first, as `gipool_`,
+`SpiceError(:intoutofrange)` if a code is not a 32-bit integer.
 """
 function build_names(pool::AbstractDict{String, PoolValue})
     name2code = Dict{String, Int32}()
@@ -917,6 +918,12 @@ function build_names(pool::AbstractDict{String, PoolValue})
     names = get(pool, "NAIF_BODY_NAME", nothing)
     codes = get(pool, "NAIF_BODY_CODE", nothing)
     names === nothing && codes === nothing && return name2code, code2name
+    # `zzbodker_` reads the codes with `gipool_` (room 14983) before its checks.
+    if codes isa Vector{Float64}
+        for i in 1:min(length(codes), 14983)
+            _gipool_value(codes[i]) === nothing && _gipool_range_error("NAIF_BODY_CODE", i, codes[i])
+        end
+    end
     names isa Vector{String} && codes isa Vector{Float64} || throw(
         SpiceError(
             :missingkpv,
@@ -938,7 +945,7 @@ function build_names(pool::AbstractDict{String, PoolValue})
     last = Dict{String, Int}(nn => i for (i, nn) in enumerate(normalized))
     for (i, (name, code)) in enumerate(zip(names, codes))
         last[normalized[i]] == i || continue
-        c = round(Int32, code)
+        c = Int32(_nint(code))
         name2code[normalized[i]] = c
         code2name[c] = String(rstrip(name, ' '))
     end

@@ -237,6 +237,14 @@ end
     )
 end
 
+"""
+Contract: `[a3]_x3 * [a2]_x2 * [a1]_x1` with the arithmetic of `eul2m_` (`rotate_` of
+`a1`, then `rotmat_` of `a2` and of `a3`), in the number type of the angles. The axes
+are not checked; an axis outside 1:3 is taken modulo 3, as `rotate_` takes it.
+"""
+@inline _m_eul2m_unchecked(a3, a2, a1, x3::Integer, x2::Integer, x1::Integer) =
+    _m_rotmat(_m_rotmat(_m_rotate(a1, x1), a2, x2), a3, x3)
+
 "True if `m` is a rotation within the tolerances, as `isrot_c` (no argument checks)."
 @inline function _m_isrot(m::SMatrix{3, 3}, ntol::Real, dtol::Real)
     u1, n1 = _m_unorm(_m_col(m, 1))
@@ -300,3 +308,19 @@ zero if it is below the smallest one.
     return a / b
 end
 
+# ---------------------------------------------------------------------------------
+# Integer conversions of C
+# ---------------------------------------------------------------------------------
+
+"Contract: returns `x` cut to an integer as the C cast `(integer) x` does on x86: toward zero, and the smallest 32-bit integer when `x` is NaN or out of range."
+@inline _cint(x::Float64)::Int =
+    (x > -2147483649.0 && x < 2147483648.0) ? Int(trunc(Int32, x)) : Int(typemin(Int32))
+
+"Contract: returns `n` reduced to the range of a 32-bit integer, as integer arithmetic of the C code does."
+@inline _wrap32(n::Int)::Int = Int(n % Int32)
+
+"Contract: returns the integer nearest to `x`, a tie away from zero, as f2c `i_dnnt`."
+@inline _nint(x::Float64)::Int = _cint(x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x))
+
+"Contract: returns `x` rounded to a whole number, a tie away from zero, as f2c `d_nint`."
+@inline _dnint(x::Float64)::Float64 = x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x)

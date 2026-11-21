@@ -40,52 +40,26 @@ const INERTIAL_FRAME_DEFS = (
 
 const N_INERTIAL_FRAMES = length(INERTIAL_FRAME_DEFS)
 
-"Contract: `a` and `b` are 3x3; returns `a*b` with the summation order of CSPICE `mxm`."
-function _mxm(a::Matrix{Float64}, b::Matrix{Float64})
-    c = Matrix{Float64}(undef, 3, 3)
-    for i in 1:3, j in 1:3
-        c[i, j] = a[i, 1] * b[1, j] + a[i, 2] * b[2, j] + a[i, 3] * b[3, j]
-    end
-    return c
-end
-
-"Contract: `axis` is 1, 2 or 3; returns `[angle]_axis * m` with the arithmetic of CSPICE `rotmat`."
-function _rotmat(m::Matrix{Float64}, angle::Float64, axis::Int)
-    s, c = sincos(angle)
-    idx = (3, 1, 2, 3, 1)
-    t = mod(axis, 3)
-    i1, i2, i3 = idx[t + 1], idx[t + 2], idx[t + 3]
-    out = Matrix{Float64}(undef, 3, 3)
-    for i in 1:3
-        out[i1, i] = m[i1, i]
-        out[i2, i] = c * m[i2, i] + s * m[i3, i]
-        out[i3, i] = -s * m[i2, i] + c * m[i3, i]
-    end
-    return out
-end
-
 "Contract: returns the 21 matrices that rotate vectors from J2000 to each built-in inertial frame, composed from the base-frame chain as the initialization of `irfrot` composes them."
 function _build_inertial_rotations()
     dpr = 180.0 / acos(-1.0)
     arcsec = 2.7777777777777778e-4
-    trans = Matrix{Float64}[]
+    ident = Mat3{Float64}(1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0)
+    trans = Mat3{Float64}[]
     for (i, (_, base, def)) in enumerate(INERTIAL_FRAME_DEFS)
-        m = Matrix{Float64}([1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])
+        m = ident
         words = split(def, ' '; keepempty = false)
         # Loop invariant: `m` is the product of the rotations of pairs j/2 .. end.
         for j in length(words):-2:2
             axis = parse(Int, rstrip(words[j], ','))
             angle = _nparsd(words[j - 1])
-            m = _rotmat(m, angle * arcsec / dpr, axis)
+            m = _m_rotmat(m, angle * arcsec / dpr, axis)
         end
         b = findfirst(k -> INERTIAL_FRAME_DEFS[k][1] == base, 1:i)
         b === nothing && error("base frame of inertial frame $i is not defined before it")
-        push!(
-            trans, b == i ? _mxm(m, Matrix{Float64}([1.0 0.0 0.0; 0.0 1.0 0.0; 0.0 0.0 1.0])) :
-                _mxm(m, trans[b])
-        )
+        push!(trans, _m_mxm(m, b == i ? ident : trans[b]))
     end
-    return [Mat3{Float64}(t) for t in trans]
+    return trans
 end
 
 const INERTIAL_ROTATIONS = _build_inertial_rotations()
@@ -267,15 +241,9 @@ end
 # Frames defined in the kernel pool
 # ---------------------------------------------------------------------------------
 
-"Contract: returns the single integer value of pool variable `key`, or `nothing` if the variable is missing, is not numeric, or has more than one element."
-function _pool_int(pool::AbstractDict{String, PoolValue}, key::AbstractString)
-    v = get(pool, key, nothing)
-    (
-        v isa Vector{Float64} && length(v) == 1 && isfinite(v[1]) &&
-            abs(v[1]) <= typemax(Int32)
-    ) || return nothing
-    return round(Int32, v[1])
-end
+"Contract: returns the single integer value of pool variable `key`, rounded as `gipool_` rounds it, or `nothing` if the variable is missing, is not numeric, has more than one element, or is outside the range of `gipool_`."
+_pool_int(pool::AbstractDict{String, PoolValue}, key::AbstractString) =
+    _gipool_first(get(pool, key, nothing), key; single = true, strict = false)
 
 """
     _frame_item(pool, name2code, id, name, item) -> Union{Int32,Nothing}

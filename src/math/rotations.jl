@@ -21,7 +21,7 @@
 
 @inline function _m_eul2m(angle3, angle2, angle1, axis3::Integer, axis2::Integer, axis1::Integer)
     (_m_axisok(axis3) && _m_axisok(axis2) && _m_axisok(axis1)) || _m_badaxes(axis3, axis2, axis1)
-    return _m_rotmat(_m_rotmat(_m_rotate(angle1, axis1), angle2, axis2), angle3, axis3)
+    return _m_eul2m_unchecked(angle3, angle2, angle1, axis3, axis2, axis1)
 end
 
 """

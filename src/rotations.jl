@@ -16,29 +16,6 @@ const MAX_FRAME_CHAIN = 10
 
 # --- small rotation helpers -----------------------------------------------------------
 
-"`_axis_indices(axis)`: the cyclic index triple `(i1, i2, i3)` of `rotate_` for `axis` in 1:3."
-@inline _axis_indices(axis::Integer) =
-    axis == 1 ? (1, 2, 3) : axis == 2 ? (2, 3, 1) : (3, 1, 2)
-
-"""
-    _rotate(angle, axis) -> Mat3
-
-Coordinate-system rotation by `angle` radians about axis `axis` (1, 2 or 3), as
-`rotate_` of CSPICE: the matrix that takes components in the original frame to
-components in the rotated frame.
-"""
-function _rotate(angle::Float64, axis::Integer)
-    s, c = sincos(angle)
-    i1, i2, i3 = _axis_indices(axis)
-    m = zeros(MMatrix{3, 3, Float64, 9})
-    m[i1, i1] = 1.0
-    m[i2, i2] = c
-    m[i3, i2] = -s
-    m[i2, i3] = s
-    m[i3, i3] = c
-    return Mat3{Float64}(m)
-end
-
 """
     _eul2m(a3, a2, a1, axis3, axis2, axis1) -> Mat3{Float64}
 
@@ -55,7 +32,7 @@ function _eul2m(
             "Euler axis numbers are $axis3, $axis2, $axis1; each must be 1, 2 or 3"
         )
     )
-    return _m_mxm(_m_mxm(_rotate(a3, axis3), _rotate(a2, axis2)), _rotate(a1, axis1))
+    return _m_eul2m_unchecked(a3, a2, a1, axis3, axis2, axis1)
 end
 
 """
@@ -150,8 +127,11 @@ function build_bodyrot(pool::AbstractDict)
             ("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME"), 1.0
         )
         both(a, b) = _pool_numbers(pool, a) !== nothing && _pool_numbers(pool, b) !== nothing
+        # `tisbod_` reads the frame with `gipool_` after the epoch check and before the
+        # check of the two frame forms.
+        refid = _gipool_value(ref)
         specerr = both("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH") ?
-            :competingepochspec :
+            :competingepochspec : refid === nothing ? :intoutofrange :
             both("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME") ?
             :competingframespec : :none
         out[id] = BodyRot(
@@ -160,7 +140,7 @@ function build_bodyrot(pool::AbstractDict)
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_DEC"),
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_PM"),
             _pool_numbers_or_empty(pool, "BODY$(sys)_NUT_PREC_ANGLES"),
-            round(Int32, ref), epoch, _phase_degree(pool, sys), specerr
+            something(refid, _J2000_FRAME), epoch, _phase_degree(pool, sys), specerr
         )
     end
     return out
@@ -175,7 +155,7 @@ is absent. The value is not checked here; `_phase_ncoef` checks it at evaluation
 function _phase_degree(pool::AbstractDict, sys::Integer)
     v = _pool_numbers(pool, "BODY$(sys)_MAX_PHASE_DEGREE")
     (v === nothing || isempty(v)) && return Int32(1)
-    return round(Int32, clamp(v[1], -1.0e9, 1.0e9), RoundNearestTiesAway)
+    return Int32(_nint(v[1]))                  # `i_dnnt` of `bodvcd_`'s value
 end
 
 """
@@ -191,6 +171,12 @@ phase angles, whether or not the body has terms that use them.
         SpiceError(
             :competingepochspec, "both BODY$(sys)_CONSTANTS_JED_EPOCH and " *
                 "BODY$(sys)_CONSTS_JED_EPOCH are in the kernel pool; at most one may be"
+        )
+    )
+    br.specerr === :intoutofrange && throw(
+        SpiceError(
+            :intoutofrange, "the value of BODY$(sys)_CONSTANTS_REF_FRAME or " *
+                "BODY$(sys)_CONSTS_REF_FRAME is outside the range of integers"
         )
     )
     br.specerr === :competingframespec && throw(
@@ -601,8 +587,10 @@ function _tk_relative_id(pool::AbstractDict, frames::AbstractDict, name::Abstrac
     for fd in values(frames)
         normalize_name(fd.name) == key && return fd.id
     end
-    v = _pool_numbers(pool, "FRAME_" * key)
-    v !== nothing && !isempty(v) && return round(Int32, v[1])
+    # `namfrm_`: `gipool_(FRAME_<name>, 1, 8, ...)`, then the test of one value
+    k = "FRAME_" * key
+    v = _gipool_first(get(pool, k, nothing), k; room = 8, single = true)
+    v === nothing || return v
     return get(BUILTIN_FRAMENAME2ID, key, nothing)
 end
 
@@ -633,11 +621,15 @@ function _tk_matrix(
         _badkpv(pool, "TKFRAM", kang, "=", 3, 1, 'N')
         _badkpv(pool, "TKFRAM", kaxes, "=", 3, 1, 'N')
         ang, axes = pool[kang], pool[kaxes]
+        # The axes as `gipool_` reads them, before the angles are converted.
+        ax = map((1, 2, 3)) do i
+            a = _gipool_value(axes[i])
+            a === nothing ? _gipool_range_error(kaxes, i, axes[i]) : Int(a)
+        end
         # Each angle converted by `convrt_` (to degrees, then over the degrees per
         # radian), from RADIANS without a unit, as `tkfram_` does.
         u = units isa Vector{String} && !isempty(units) ? units[1] : "RADIANS"
         rad = map(x -> convrt(x, u, "RADIANS"), (ang[1], ang[2], ang[3]))
-        ax = round.(Int, axes)
         return _eul2m(Float64(rad[1]), Float64(rad[2]), Float64(rad[3]), ax[1], ax[2], ax[3])
     elseif kind == "QUATERNION"
         key = _tk_key(pool, idkey, namekey, "_Q")

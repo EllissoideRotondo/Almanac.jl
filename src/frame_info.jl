@@ -50,12 +50,13 @@ function _frame_of_object(ks::KernelSet, value::PoolValue)
         name = String(strip(value[1]))
         code = get(BUILTIN_FRAMENAME2ID, normalize_name(name), nothing)
         code === nothing || return Int(code), name
-        v = get(ks.pool, "FRAME_" * name, nothing)
-        (v isa Vector{Float64} && length(v) == 1) || return nothing
-        return round(Int, v[1]), name
+        # `gipool_(FRAME_<name>, 1, 8, ...)`, then the test of one value
+        key = "FRAME_" * name
+        fcode = _gipool_first(get(ks.pool, key, nothing), key; room = 8, single = true)
+        return fcode === nothing ? nothing : (Int(fcode), name)
     end
-    code = round(Int, value[1])
-    f = get(BUILTIN_FRAMES, Int32(clamp(code, typemin(Int32), typemax(Int32))), nothing)
+    code = Int(_gipool_first(value, "OBJECT_<body>_FRAME")::Int32)
+    f = get(BUILTIN_FRAMES, Int32(code), nothing)
     f === nothing || return code, f.name
     v = get(ks.pool, "FRAME_$(code)_NAME", nothing)
     (v isa Vector{String} && length(v) == 1) || return nothing
@@ -210,11 +211,11 @@ function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
         v = ks.pool[key]
         (v isa Vector{Float64} && !isempty(v)) ||
             bad(key, "integer class was not associated with this keyword")
-        round(Int, v[1]) == frclss || continue
+        _gipool_first(v, key) == frclss || continue
         id = get(ks.pool, key * "_ID", nothing)
         (id isa Vector{Float64} && !isempty(id)) ||
             bad(key, "associated integer class ID assignment was not found")
-        round(Int, id[1]) == clssid || continue
+        _gipool_first(id, key * "_ID") == clssid || continue
         name = get(ks.pool, key[1:(end - 6)] * "_NAME", nothing)
         (name isa Vector{String} && !isempty(name)) ||
             bad(key, "associated frame name assignment was not found")
@@ -226,7 +227,7 @@ function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
                     "$(strip(name[1])) but associated frame ID assignment was not found"
             )
         )
-        center = "FRAME_$(round(Int, code[1]))_CENTER"
+        center = "FRAME_$(_gipool_first(code, "FRAME_" * strip(name[1])))_CENTER"
         haskey(ks.pool, center) || throw(
             SpiceError(
                 :kernelvarnotfound,
@@ -317,10 +318,7 @@ function kplfrm(ks::KernelSet, frmcls::Integer)
     pool = ks.pool
     # `gipool_` gives the first value of a numeric variable, rounded; names are 32
     # characters long in CSPICE, so a longer name is cut.
-    getint(key) = (
-        v = get(pool, first(key, 32), nothing);
-        v isa Vector{Float64} && !isempty(v) ? _nint(v[1]) : nothing
-    )
+    getint(key) = (k = first(key, 32); _gipool_first(get(pool, k, nothing), k))
     ids = Int[]
     for (key, val) in pool
         _pool_x_match(key, "FRAME_*_NAME") || continue

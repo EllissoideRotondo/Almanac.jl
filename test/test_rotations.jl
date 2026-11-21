@@ -210,6 +210,70 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
         end
         @test nexact >= 0.6 * 2n
     end
+
+    # Regression: a TK frame of ANGLES is `eul2m_`, which applies `rotate_` to the third
+    # angle and `rotmat_` to the other two; the product of the three rotations in the
+    # order `(R3 R2) R1` rounded otherwise in about half of the samples. A sample is
+    # compared only where `rotate_` of CSPICE and of Almanac agree to the last bit for
+    # each of its angles, because the sine and cosine come from different libraries.
+    # Regression: the axes are read by `gipool_`, which rounds 2.5 to 3 (`i_dnnt`); they
+    # were rounded to even. Own random stream.
+    @apart @testset "TK frames: ANGLES as tkfram_ and eul2m_" begin
+        r2 = MersenneTwister(SEED + 202)
+        id, name = -1977103, "TKTEST_ANGLES"
+        vars = [
+            "FRAME_$name", "FRAME_$(id)_NAME", "FRAME_$(id)_CLASS", "FRAME_$(id)_CLASS_ID",
+            "FRAME_$(id)_CENTER", "TKFRAME_$(id)_SPEC", "TKFRAME_$(id)_RELATIVE",
+            "TKFRAME_$(id)_UNITS", "TKFRAME_$(id)_ANGLES", "TKFRAME_$(id)_AXES",
+        ]
+        setters = (
+            (SPICE.pcpool, SPICE.pipool, SPICE.pdpool),
+            ((k, v) -> pcpool(ctx, k, v), (k, v) -> pipool(ctx, k, v), (k, v) -> pdpool(ctx, k, v)),
+        )
+        try
+            for (setc, seti, _) in setters
+                seti("FRAME_$name", [id])
+                setc("FRAME_$(id)_NAME", [name])
+                seti("FRAME_$(id)_CLASS", [4])
+                seti("FRAME_$(id)_CLASS_ID", [id])
+                seti("FRAME_$(id)_CENTER", [399])
+                setc("TKFRAME_$(id)_SPEC", ["ANGLES"])
+                setc("TKFRAME_$(id)_RELATIVE", ["J2000"])
+                setc("TKFRAME_$(id)_UNITS", ["RADIANS"])
+            end
+            n = 60
+            ncompared = 0
+            for _ in 1:n
+                ang = 6.0 .* rand(r2, 3) .- 3.0
+                ax = rand(r2, 1:3, 3)
+                for (_, _, setd) in setters
+                    setd("TKFRAME_$(id)_ANGLES", ang)
+                    setd("TKFRAME_$(id)_AXES", Float64.(ax))
+                end
+                # `tkfram_` converts each angle with `convrt_`, then calls
+                # `eul2m_(angles[1], angles[2], angles[3], axes[1], axes[2], axes[3])`.
+                rad = map(x -> convrt(x, "RADIANS", "RADIANS"), ang)
+                @test Almanac._eul2m(rad..., ax...) == eul2m(rad..., ax...)
+                trig = all(SPICE.rotate(rad[i], ax[i]) == Matrix(rotate(rad[i], ax[i])) for i in 1:3)
+                trig || continue
+                ncompared += 1
+                @test Matrix(pxform(ctx, "J2000", name, 0.0)) == SPICE.pxform("J2000", name, 0.0)
+            end
+            @test ncompared >= n ÷ 4
+            # axes 3, 1.5, 2.5 are read as 3, 2, 3
+            for (_, _, setd) in setters
+                setd("TKFRAME_$(id)_ANGLES", [0.3, -1.2, 0.8])
+                setd("TKFRAME_$(id)_AXES", [3.0, 1.5, 2.5])
+            end
+            @test isapprox(
+                Matrix(pxform(ctx, "J2000", name, 0.0)), SPICE.pxform("J2000", name, 0.0);
+                atol = 1.0e-15
+            )
+        finally
+            foreach(SPICE.dvpool, vars)
+            foreach(v -> dvpool(ctx, v), vars)
+        end
+    end
 end
 
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

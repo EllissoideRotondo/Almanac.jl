@@ -59,12 +59,7 @@ function gipool(ks::KernelSet, name::AbstractString)
     v = gdpool(ks, name)
     for (i, x) in enumerate(v)
         # `gipool` of CSPICE: DBLE(INTMIN()) <= x <= DBLE(INTMAX()), then NINT
-        -2147483648.0 <= x <= 2147483647.0 || throw(
-            SpiceError(
-                :intoutofrange, "the value associated with index $i of the kernel " *
-                    "variable $name is outside the range of integers; the value stored was $x"
-            )
-        )
+        _gipool_value(x) === nothing && _gipool_range_error(name, i, x)
     end
     return Int[_nint(x) for x in v]
 end
@@ -211,8 +206,9 @@ julia> bodn2c("MOON"), bodn2c("301")
 function bodn2c(ks::KernelSet, name::AbstractString)
     code = bods2c(ks, name)
     code === nothing && return nothing
-    # `body_code` also accepts integer strings; accept one only if it is a defined name.
-    if tryparse(Int, strip(name)) !== nothing
+    # `bods2c` also accepts integer strings (`_parse_int_name`, as `beint`); accept one
+    # only if it is a defined name.
+    if _parse_int_name(name) !== nothing
         haskey(ks.name2code, normalize_name(name)) || return nothing
     end
     return code

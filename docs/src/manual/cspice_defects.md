@@ -30,6 +30,7 @@ How to read the tables:
 | `ttrans` (`str2et`) | Day numbers are 32-bit integers and wrap: the epoch `"238409829538 JD"` gives an ET of the opposite sign | The same | `time` |
 | C casts of f2c (`(integer) x`, `i_dnnt`) | A double outside the 32-bit range, or NaN, is undefined behaviour in C: x86 gives the smallest 32-bit integer, ARM saturates | The x86 result on every machine, so it differs from CSPICE built for ARM | `time` |
 | `hx2dp` | The exponent -2³¹ overflows when negated, and the routine divides by 16 once instead of returning zero | The same | `math_vectors` |
+| `ckw06` | The second check of the bounds of a mini-segment compares its last epoch with the start of its interval, not with the end, so a mini-segment whose epochs end before its interval is written | The same check, so the same files | `dafwrite` |
 
 ## Defects that Almanac.jl fixes
 
