@@ -100,8 +100,8 @@ function build_kernelset(
     lsk = build_lsk(pool)
     return _dyn_levels(
         KernelSet(
-            copy(loaded), daf, spk, pck, pool, NameTable(name2code), code2name, frames,
-            NameTable(framename2id), tk, bodyrot, lsk, ck, build_sclk(pool), build_ckmeta(pool),
+            copy(loaded), daf, _segment_lists(spk), _segment_lists(pck), pool, NameTable(name2code), code2name, frames,
+            NameTable(framename2id), tk, bodyrot, lsk, _segment_lists(ck), build_sclk(pool), build_ckmeta(pool),
             Dict{Int32, DynFrame}(), Dict{Int32, SwitchFrame}(), nothing, false,
             Tuple{String, Int32}[], dskfiles, _dsk_segment_table(dskfiles), ekfiles,
             _ek_build_tables(ekfiles)
@@ -109,6 +109,10 @@ function build_kernelset(
         edited !== nothing, bodydefs
     )
 end
+
+"The segment table `t` with each list in the indexed form of `find_segment`."
+_segment_lists(t::Dict{Int32, Vector{S}}) where {S} =
+    Dict{Int32, SegmentList{S}}(k => SegmentList(v) for (k, v) in t)
 
 SpiceContext() = SpiceContext(empty_kernelset(), ReentrantLock())
 
