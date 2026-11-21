@@ -24,6 +24,14 @@ let
             end
         end
     end
+    # Integer epochs, `Int32` codes and a parsed `Aberration`, which a first call of
+    # these forms compiled for 8 to 20 ms.
+    for head in ((), (C,), (K,))
+        precompile(spkezr, (head..., S, I, S, S, S))
+        precompile(spkezr, (head..., Int32, F, Int32, S, Int32))
+        precompile(spkezr, (head..., S, F, S, Aberration, S))
+        precompile(spkpos, (head..., S, F, S, Aberration, S))
+    end
     for R in (S, I), head in ((), (C,), (K,))
         precompile(spkgeo, (head..., I, F, R, I))
         precompile(pxform, (head..., R, R, F))
@@ -90,7 +98,14 @@ let
         precompile(gfoclt, (head..., S, S, S, S, S, S, S, S, S, F, W))
         precompile(gftfov, (head..., S, S, S, S, S, S, F, W))
         precompile(gfrfov, (head..., S, V, S, S, S, F, W))
+        precompile(azlcpo, (head..., S, S, F, S, Bool, Bool, V, S, S))
+        precompile(et2lst, (head..., F, Int, F, S))
     end
+    precompile(azlcpo, (S, S, F, S, Bool, Bool, V, S, S))
+    precompile(et2lst, (F, Int, F, S))
+    precompile(georec, (F, F, F, F, F))
+    precompile(recgeo, (V, F, F))
+    precompile(recgeo, (SVector{3, F}, F, F))
 end
 
 # EK: open, read, query and the record writers.

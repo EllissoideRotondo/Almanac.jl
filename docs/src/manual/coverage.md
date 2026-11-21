@@ -18,7 +18,8 @@ scope and what replaces the routines that are not.
   fields of view, on ellipsoids and on DSK shapes.
 - **Geometry finder:** all `gf` searches, including the user-defined ones.
 - **Mathematics:** vectors, matrices, rotations, quaternions, coordinate systems,
-  ellipsoids, conics and interpolation.
+  ellipsoids, conics and interpolation. `det` is public but not exported, because
+  `LinearAlgebra` exports a `det` too: call it as `Almanac.det`.
 - **Writers:** SPK (all types), CK (types 1 to 6), binary PCK (types 2, 3 and 20), DSK
   type 2 and EK, plus low-level DAF and DAS access.
 - **SPICELIB routines without a C wrapper** that a caller of CSPICE reaches through
@@ -40,6 +41,8 @@ Routines that Julia or the design of the package makes unnecessary:
 - **Strings and parsing** (`ucase`, `lparse`, `prsdp`, `matchw`, ...): `uppercase`,
   `split`, `parse`, `Regex`.
 - **Constants** (`pi`, `dpmax`, `intmax`, ...): `π`, `floatmax`, `typemax(Int32)`.
+- **Copies and placeholders** (`mequ`, `mequg`, `udf`): `copy`, and an ordinary function
+  where a user-defined search needs one.
 - **Files and the command line** (`exists`, `rdtext`, `prompt`, `getcml`, ...):
   `isfile`, `eachline`, `readline`, `ARGS`.
 - **Routines deprecated by NAIF** (`bodvar`, `illum`, `spkapp`, `srfxpt`, `subpt`,

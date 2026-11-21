@@ -164,12 +164,13 @@ the body, in this frame:
 - the Z axis is the orbital angular momentum of the body about the Sun;
 - the X axis is the cross product of the north pole of the body and the Z axis.
 
-`body` is a name or a NAIF ID, `et` is in seconds past J2000 TDB, and `abcorr` is as
-for [`spkezr`](@ref). The call needs PCK data for the pole and SPK data for the body
+`body` is a name or a NAIF ID, `et` is in seconds past J2000 TDB (a plain real number,
+not a `ForwardDiff.Dual`), and `abcorr` is as for [`spkezr`](@ref). The call needs PCK data for the pole and SPK data for the body
 and the Sun.
 
-Throws `SpiceError(:dependentvectors)` if the pole is parallel to the orbital angular
-momentum, and the errors of [`spkezr`](@ref) and [`tipbod`](@ref).
+Throws `SpiceError(:badarg)` if `et` carries derivatives, `SpiceError(:dependentvectors)`
+if the pole is parallel to the orbital angular momentum, and the errors of
+[`spkezr`](@ref) and [`tipbod`](@ref).
 
 # Examples
 ```julia
@@ -178,6 +179,7 @@ ls = rad2deg(lspcn("EARTH", str2et("2025-03-01"), "LT+S"))    # degrees
 ```
 """
 function lspcn(ks::KernelSet, body::NameOrID, et::Real, abcorr::AbcorrArg)
+    _plain_epoch(et, "lspcn")
     id = body_code(ks, body)
     tipm = tipbod(ks, 1, id, et)
     npole = Vec3{Float64}(tipm[3, 1], tipm[3, 2], tipm[3, 3])

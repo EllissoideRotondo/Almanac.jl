@@ -385,6 +385,25 @@ group("11. DAS files and DLA segment lists") do
         @test SPICE.dlabfs(ch) === nothing
         c_dascls(ch)
         @test dskobj(e) == Int[]
+        # `dlaens` stores the sizes of the data appended since `dlabns`, here two
+        # segments; CSPICE reads the same descriptors from the file.
+        g = joinpath(dir, "two_segments.dla")
+        h = dlaopn(g, "DLA", "two segments", 0)
+        for (ni, nd) in ((3, 2), (1, 5))
+            dlabns(h)
+            dasadi(h, Int32.(1:ni))
+            dasadd(h, collect(1.0:nd))
+            dlaens(h)
+        end
+        dascls(h)
+        h = dasopr(g)
+        ch = c_dasopr(g)
+        d, cd = dlabfs(h), SPICE.dlabfs(ch)
+        @test (d.isize, d.dsize, d.csize) == (3, 2, 0) && dla_tuple(d) == dla_tuple(cd)
+        d, cd = dlafns(h, d), SPICE.dlafns(ch, cd)
+        @test (d.isize, d.dbase, d.dsize) == (1, 2, 5) && dla_tuple(d) == dla_tuple(cd)
+        c_dascls(ch)
+        dascls(h)
     end
 
     @apart @testset "(g) input checks" begin
@@ -452,6 +471,19 @@ group("11. DAS files and DLA segment lists") do
         @test neo_kind(() -> dasonw(joinpath(dir, "n3.das"), "TEST", "x", -1)) === :invalidcount
         @test neo_kind(() -> dlaopn(joinpath(dir, "n4.das"), "DSK", "x", -1)) === :badrecordcount
         @test !any(isfile, joinpath.(dir, ["n1.das", "n2.das", "n3.das", "n4.das"]))
+        # I/O failures: a directory that does not exist, and the directory of a file open
+        # for writing removed before the close; the handle then stays open.
+        @test neo_kind(() -> dasonw(joinpath(dir, "nodir", "n5.das"), "TEST", "x", 0)) === :fileopenfail
+        gone = mktempdir()
+        g = dasonw(joinpath(gone, "g.das"), "TEST", "x", 0)
+        if !Sys.iswindows()     # Windows cannot remove a directory with an open file
+            rm(gone; recursive = true)
+            @test neo_kind(() -> dascls(g)) === :daswritefail
+            @test g.isopen
+            mkpath(gone)
+        end
+        dascls(g)
+        @test getfat(joinpath(gone, "g.das"))[1] == "DAS"
         w = dasonw(joinpath(dir, "w.das"), "TEST", "x", 0)
         @test neo_kind(() -> dasac(w, String[])) === :invalidargument
         @test neo_kind(() -> dasac(w, ["tab\there"])) === :illegalcharacter
