@@ -89,6 +89,7 @@ include("ek/types.jl")      # EKColumnAttr, EKSegmentSummary, EKFile, EKTable
 include("errors.jl")         # SpiceError and its subtypes, ERROR_KINDS
 include("types.jl")
 include("taylor.jl")        # Taylor{N,T} truncated series, `primal`
+include("math/kernels.jl")  # _m_ vector and matrix kernels (operation order of SPICELIB)
 include("daf.jl")           # open_daf, segment descriptors
 include("spk_eval.jl")      # spk_eval, pck_eval, find_segment
 include("spk_more.jl")      # SPK types 1, 5, 8, 9, 12 to 15, 17 to 21
