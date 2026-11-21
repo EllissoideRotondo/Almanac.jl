@@ -124,7 +124,7 @@ before the binary-file-format string (bytes 85 to 92 zero) is taken as native.
 function _das_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
     _isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
-    raw = open(io -> read(io, _DAS_RECLEN), path, "r")
+    raw = _open_read(io -> read(io, _DAS_RECLEN), path, who)
     length(raw) == _DAS_RECLEN || throw(
         SpiceError(
             :filereadfailed,
@@ -462,7 +462,8 @@ The file can have either byte order, and it need not be segregated (see
 
 Throws `SpiceError`:
 - `:emptystring` if `path` is empty, `:blankfilename` if it holds only blanks;
-- `:filenotfound` if the file does not exist;
+- `:filenotfound` if the file does not exist, `:fileopenfailed` if the process may not
+  read it;
 - `:filereadfailed` if the file is shorter than one record (1024 bytes);
 - `:filarchmismatch` if the file is a DAF, `:unknownfilarc` if it is neither a DAF
   nor a DAS file (a text kernel, for example);
@@ -490,13 +491,13 @@ path. After the call, [`dasopr`](@ref) can still open the file for read, where C
 refuses; that handle keeps the data of the file as they were when it opened.
 
 Throws the `SpiceError` kinds of [`dasopr`](@ref), `:fileopenconflict` if another handle
-has the file open, and `:fileopenfailed` if the file is not writable.
+has the file open, and `:fileopenfail` if the file is not writable.
 """
 function dasopw(path::AbstractString)
     h = _das_load(path, "dasopw", true)
     (uperm(path) & 0x02) != 0 || throw(
         SpiceError(
-            :fileopenfailed,
+            :fileopenfail,
             "dasopw: the file $path cannot be opened for write"
         )
     )
@@ -518,7 +519,7 @@ and an empty directory record. Data that are added afterwards are in memory unti
 
 Throws `SpiceError`:
 - `:blankfilename` if `path` is blank;
-- `:fileopenfailed` if `path` exists or the file cannot be created;
+- `:fileopenfail` if `path` exists or the file cannot be created;
 - `:blankfiletype` if `ftype` is blank, `:illegalcharacter` if it has a character that is
   not printable;
 - `:invalidcount` if `ncomr < 0`.
@@ -546,7 +547,7 @@ function dasonw(
     )
     ispath(path) && throw(
         SpiceError(
-            :fileopenfailed,
+            :fileopenfail,
             "dasonw: the file $path already exists; a new DAS file cannot replace it"
         )
     )
@@ -566,7 +567,7 @@ function dasonw(
     catch e
         throw(
             SpiceError(
-                :fileopenfailed,
+                :fileopenfail,
                 "dasonw: cannot create $path: $(sprint(showerror, e))"
             )
         )

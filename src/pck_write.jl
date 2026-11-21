@@ -34,7 +34,7 @@ make room for. The file is on disk when the call returns, byte for byte the file
 [`furnsh`](@ref) only after the close.
 
 Throws `SpiceError(:emptystring)` if `path` or `ifname` is empty and `:blankfilename` if
-`path` is blank, as CSPICE, and `:fileopenfailed` if the file exists or cannot be created.
+`path` is blank, as CSPICE, and `:fileopenfail` if the file exists or cannot be created.
 
 # Examples
 Write a segment for the frame IAU_MOON (frame class ID 301) whose angles are constant,

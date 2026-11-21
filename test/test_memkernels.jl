@@ -295,7 +295,7 @@ end
         out = joinpath(dir, "saved.bsp")
         save_kernel(hs, out)
         @test read(out) == read(spk)
-        @test throws_kind(() -> save_kernel(hs, out), :fileopenfailed)
+        @test throws_kind(() -> save_kernel(hs, out), :fileopenfail)
         r = dafopr(spk)
         @test throws_kind(() -> save_kernel(r, joinpath(dir, "x.bsp")), :dafinvalidaccess)
         dafcls(r)

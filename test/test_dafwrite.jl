@@ -2123,7 +2123,7 @@ group("9. DAF access, SPK and CK writers") do
             dafcls(hn)                                         # a second close does nothing
             @test read(pc) == read(pn)
             @test getfat(pn) == SPICE.getfat(pn) == ("DAF", kind_type(kind))
-            @test throws_kind(() -> neo_open(kind, pn, "EXISTS", 0), :fileopenfailed)
+            @test throws_kind(() -> neo_open(kind, pn, "EXISTS", 0), :fileopenfail)
             @test read(pc) == read(pn)                         # the existing file is not touched
             @test_throws SPICE.SpiceError c_open(kind, pc, "EXISTS", 0)
         end
@@ -2131,7 +2131,7 @@ group("9. DAF access, SPK and CK writers") do
         @test throws_kind(() -> spkopn("", "NAME"), :emptystring)
         @test throws_kind(() -> ckopn("", "NAME"), :emptystring)
         @test throws_kind(() -> pckopn(joinpath(dir, "x.bpc"), ""), :emptystring)
-        @test throws_kind(() -> spkopn(joinpath(dir, "no_such_dir", "x.bsp"), "NAME"), :fileopenfailed)
+        @test throws_kind(() -> spkopn(joinpath(dir, "no_such_dir", "x.bsp"), "NAME"), :fileopenfail)
         @test throws_kind(() -> dafopr(joinpath(dir, "no_such_file.bsp")), :filenotfound)
         @test throws_kind(() -> dafopw(joinpath(dir, "no_such_file.bsp")), :filenotfound)
         # Regression: an empty path gave :blankfilename where the C wrappers of CSPICE give
@@ -2186,6 +2186,23 @@ group("9. DAF access, SPK and CK writers") do
         )
         for (neo, c) in openers, p in ("", "  ")
             @test nkind(() -> neo(p)) === ckind(() -> c(p))
+        end
+        # Regression: a DAF or DAS file that the process may not read gave a SystemError,
+        # where dafopr_c and dasopr_c give FILEOPENFAILED. A read-only file is opened for
+        # write by CSPICE (the f2c library falls back to read) and fails at the first
+        # write; Almanac refuses it at the open (cspice_defects.md).
+        if !Sys.iswindows() && ccall(:geteuid, Cuint, ()) != 0
+            pdaf, pdas = joinpath(dir, "perm.bsp"), joinpath(dir, "perm.das")
+            dafcls(dafonw(pdaf, "SPK", 2, 6, "X", 0))
+            dascls(dasonw(pdas, "TEST", "X", 0))
+            for (p, (rneo, rc), (wneo, wc)) in ((pdaf, openers[1], openers[2]), (pdas, openers[3], openers[4]))
+                chmod(p, 0o000)
+                @test nkind(() -> rneo(p)) === ckind(() -> rc(p)) === :fileopenfailed
+                chmod(p, 0o444)
+                @test nkind(() -> wneo(p)) === :fileopenfail
+                @test ckind(() -> wc(p)) === :none
+                ccall((:kclear_c, SPICE.libcspice), Cvoid, ())       # closes CSPICE's handle
+            end
         end
         @test throws_kind(() -> dafopr(sclk), :filereadfailed)       # shorter than one record
         longtext = joinpath(dir, "long.tpc")

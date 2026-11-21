@@ -360,6 +360,11 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
             (:nosuchfile, () -> furnsh(ctx, none), () -> ccall((:furnsh_c, SPICE.libcspice), Cvoid, (Cstring,), none)),
             (:blankfilename, () -> furnsh(ctx, " "), () -> ccall((:furnsh_c, SPICE.libcspice), Cvoid, (Cstring,), " ")),
             (:fileopenfailed, () -> ldpool(ctx, none), () -> ccall((:ldpool_c, SPICE.libcspice), Cvoid, (Cstring,), none)),
+            # a new file over an existing one: FILEOPENFAIL, not the FILEOPENFAILED of ldpool
+            (
+                :fileopenfail, () -> spkopn(Kernels.LSK, "x", 0),
+                () -> ccall((:spkopn_c, SPICE.libcspice), Cvoid, (Cstring, Cstring, Cint, Ref{Cint}), Kernels.LSK, "x", 0, Ref{Cint}(0)),
+            ),
             (
                 :filenotfound, () -> eklef(ctx, none),
                 () -> ccall((:eklef_c, SPICE.libcspice), Cvoid, (Cstring, Ptr{Cint}), none, n),

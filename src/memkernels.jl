@@ -184,7 +184,7 @@ Throws `SpiceError`:
 
 - `:emptystring` or `:blankfilename` if `path` is empty or blank;
 - `:dafnosuchhandle` if `handle` is closed, `:dafinvalidaccess` if it has a file;
-- `:fileopenfailed` if the file exists or cannot be created, `:dafwritefail` if the write
+- `:fileopenfail` if the file exists or cannot be created, `:dafwritefail` if the write
   fails (the file is then removed).
 
 See also [`furnsh`](@ref).
@@ -207,7 +207,7 @@ function save_kernel(h::DAFHandle, path::AbstractString)
     catch e
         throw(
             SpiceError(
-                :fileopenfailed,
+                :fileopenfail,
                 "save_kernel: attempt to create the new file $path failed: $(sprint(showerror, e))"
             )
         )

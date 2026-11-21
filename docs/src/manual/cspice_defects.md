@@ -59,6 +59,7 @@ error or the correct result.
 | `ckbsr` (`ckgp`, `ckgpav`) | Keeps the last segment found: `ckgp` right after `ckgpav` reuses it, although a segment of higher priority covers the request | No state between calls | `ck` |
 | `ckr05` | After a request in a gap between interpolation intervals, keeps that interval, so a later request finds no pointing where a new process finds some | No state between calls | `ck` |
 | `zzsgp4` (`evsgp4`, SPK type 10) | An eccentricity above 1 gives no error, and the constants of the previous element set are kept | `:invalidelements` | `sgp4` |
+| f2c `open` (`dafopw`, `dasopw`) | A file that the process may not write is opened for read without an error, so the open for write succeeds and the first write fails | `:fileopenfail` at the open | `dafwrite` |
 
 ### Geometry, events, vectors
 

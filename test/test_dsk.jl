@@ -1076,7 +1076,7 @@ function dsk_part_12(env)
         )
     ) === :dasinvalidaccess
     dascls(h)
-    @test neo_kind(() -> dskopn(files[:a][1], "x", 0)) === :fileopenfailed
+    @test neo_kind(() -> dskopn(files[:a][1], "x", 0)) === :fileopenfail
     @test neo_kind(() -> dskopn(joinpath(dir, "neg.bds"), "x", -1)) === :badrecordcount
     return nothing
 end

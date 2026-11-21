@@ -42,7 +42,7 @@ const ERROR_KINDS = (
     :difflinetoolarge, :difflinetoosmall, :dividebyzero, :dskdatanotfound, :dtoutofrange,
     :eccoutofbounds, :eccoutofrange, :ekcolnummismatch, :ekmissingcolumn, :eknosegments,
     :emptysegment, :emptystring, :endpointsmatch, :evecoutofrange, :facenotfound, :filarchmismatch,
-    :fileisnotspk, :filenotfound, :fileopenconflict, :fileopenfailed, :filereadfailed,
+    :fileisnotspk, :filenotfound, :fileopenconflict, :fileopenfail, :fileopenfailed, :filereadfailed,
     :fovtoowide, :framechain, :framedatanotfound, :framedeferror, :frameidnotfound,
     :frameinfonotfound, :framemissing, :framenamenotfound, :ftpxfererror, :gridtoolarge,
     :idcodenotfound, :idstringtoolong, :illegalcharacter, :immutablevalue,
@@ -238,5 +238,25 @@ function _isfile(path::AbstractString)
     catch e
         e isa InterruptException && rethrow()
         return false
+    end
+end
+
+# `open(path, "r")` of a DAF or DAS file, with a failure of the system open (a file that
+# the process may not read) as SPICE(FILEOPENFAILED), the message of `dafopr_c` and
+# `dasopr_c`.
+function _open_read(path::AbstractString, who::AbstractString)
+    try
+        return open(path, "r")
+    catch e
+        e isa SystemError || rethrow()
+        throw(SpiceError(:fileopenfailed, "$who: cannot open $path: $(sprint(showerror, e))"))
+    end
+end
+function _open_read(f, path::AbstractString, who::AbstractString)
+    io = _open_read(path, who)
+    try
+        return f(io)
+    finally
+        close(io)
     end
 end
