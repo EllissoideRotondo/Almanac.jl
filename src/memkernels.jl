@@ -217,9 +217,8 @@ function save_kernel(h::DAFHandle, path::AbstractString)
         write(fd, bytes)
         close(fd)
     catch e
-        isopen(fd) && close(fd)
+        close(fd)
         rm(path; force = true)           # no partial file stays behind
-        _io_failure(e) || rethrow()
         throw(
             SpiceError(
                 :dafwritefail,
