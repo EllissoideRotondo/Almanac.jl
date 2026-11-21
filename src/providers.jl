@@ -88,7 +88,7 @@ function _resolve_body(ks::KernelSet, x::NameOrID, bodies::Vector{Tuple{String, 
 end
 
 """
-    add_ephemeris!(f, [ctx,] body, center, frame, t0, t1; name, bodies) -> Nothing
+    add_ephemeris!(f, [ctx,] body, center, frame, t0, t1; name="", bodies=()) -> Nothing
 
 Make `body` a body whose state relative to `center` in `frame` is `f(et)` for
 `t0 <= et <= t1` (ET, seconds past J2000 TDB). `f` returns six numbers: the position
@@ -100,7 +100,8 @@ any aberration correction, [`spkpos`](@ref), the geometry calls, the event searc
 segment, so the rules of a file hold: it has priority over the files loaded before it
 and not over those loaded after it, outside `[t0, t1]` the files that cover the body
 apply, [`unload`](@ref) with `name` removes it and [`kclear`](@ref) removes it with
-the rest. [`kdata`](@ref) lists it with the type `"SPK"`.
+the rest. [`kdata`](@ref) lists it with the type `"SPK"`. An empty `name` stands for
+`"ephemeris of body <code>"`, with the NAIF code of `body`.
 
 `bodies`, pairs such as `["MYSAT" => -1001]`, are body names that hold while the
 provider is loaded, as for [`furnsh`](@ref) of a handle; `body` and `center` may be
@@ -210,7 +211,7 @@ Throws `SpiceError(:badarraysize)` if it does not have 3 x 3 elements.
 end
 
 """
-    add_frame!(f, [ctx,] name, id, center, relative; path) -> Nothing
+    add_frame!(f, [ctx,] name, id, center, relative; path="") -> Nothing
 
 Define the frame `name` with the frame ID `id`, centered on the body `center`, whose
 orientation relative to the frame `relative` is `f(et)`: `f` returns the 3 x 3 matrix
@@ -221,8 +222,8 @@ that takes the coordinates of a vector in frame `name` to its coordinates in fra
 The frame is then available to every call that takes a frame: [`pxform`](@ref),
 [`sxform`](@ref), states in the frame, [`add_ephemeris!`](@ref) and other frames
 relative to it, [`frinfo`](@ref) (class 7, a class that CSPICE does not have). It
-enters the load list as a frame kernel named `path`: [`unload`](@ref) with `path`
-removes it and [`kclear`](@ref) removes it with the rest. A frame of a text kernel with
+enters the load list as a frame kernel named `path` (`"frame <name>"` if `path` is
+empty): [`unload`](@ref) with `path` removes it and [`kclear`](@ref) removes it with the rest. A frame of a text kernel with
 the same name or ID loses to it, whatever the load order.
 
 `f` is called from any thread that makes a query, so it must not change shared data. It
@@ -238,6 +239,7 @@ the call. This call has no CSPICE counterpart.
 
 Throws `SpiceError`:
 
+- `:emptystring` if `name` is empty or blank;
 - `:idcodenotfound` for an unknown center name;
 - `:unknownframe` for an unknown relative frame;
 - `:badframe` if `name` or `id` is a frame built into the package, or `id` is the ID

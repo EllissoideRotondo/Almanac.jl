@@ -436,7 +436,7 @@ function _das_write_image(h::DASHandle)
         mv(tmp, h.path; force = true)
     catch e
         rm(tmp; force = true)
-        e isa SpiceError && rethrow()
+        _io_failure(e) || rethrow()
         throw(
             SpiceError(
                 :daswritefail,
@@ -565,6 +565,7 @@ function dasonw(
             write(io, zeros(Int32, 256))
         end
     catch e
+        _io_failure(e) || rethrow()
         throw(
             SpiceError(
                 :fileopenfail,

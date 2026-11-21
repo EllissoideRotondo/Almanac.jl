@@ -258,12 +258,6 @@ Postcondition: the three values are positive. No allocation for an ID in 1:999.
     return a, b, c
 end
 
-@inline _geo_v3(a::Vec3) = a
-@inline function _geo_v3(a::AbstractVector)
-    length(a) == 3 || throw(SpiceError(:badarg, "a vector must have 3 elements"))
-    @inbounds return Vec3(float(a[begin]), float(a[begin + 1]), float(a[begin + 2]))
-end
-
 # --- positions --------------------------------------------------------------------------
 
 "`spkezp_`: position of `targ` relative to `obs` in frame `ref` and the light time."
@@ -364,14 +358,4 @@ end
 @inline function _geo_raynp(sh::_GeoShape, vertex::SVector{3}, raydir::SVector{3})
     sh.dsk && return _m_npedln(sh.maxrad, sh.maxrad, sh.maxrad, vertex, raydir, false)
     return _m_npedln(sh.a, sh.b, sh.c, vertex, raydir, false)
-end
-
-"`zzsbfnrm` with `vhat`: the outward unit normal of the shape at the surface point `spoint`."
-@inline function _geo_normal(ks::KernelSet, sh::_GeoShape, spoint::SVector{3, T}, et) where {T}
-    sh.dsk || return _m_surfnm(sh.a, sh.b, sh.c, spoint)
-    n = _dsk_bun(
-        ks, sh.tols, sh.trgcde, sh.srflst, _geo_plain(et), sh.fixfid,
-        _geo_plain(spoint)
-    )
-    return SVector{3, T}(_dsk_vhat(n))
 end

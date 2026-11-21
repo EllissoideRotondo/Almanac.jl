@@ -27,12 +27,13 @@ group("static checks: Aqua and ExplicitImports") do
         # a tuple with one element replaced; `Filesystem.open`, the only open with
         # O_EXCL (a file is created only if it does not exist); `indexed_iterate`, the
         # call of `st, lt = spkezr(...)`, named by the directives of `precompile.jl`;
-        # `StringVector`, bytes that become a `String` without a copy.
-        # Julia 1.10 has no `public` declaration, so names such as `Base.tail` count as
-        # internal there.
+        # `IOError`, the error of a failed write to a `Filesystem.File`, which the
+        # writers report as a `SpiceError` (`_io_failure`); `StringVector`, bytes that
+        # become a `String` without a copy. Julia 1.10 has no `public` declaration, so
+        # names such as `Base.tail` count as internal there.
         @test VERSION < v"1.11" || EI.check_all_qualified_accesses_are_public(
             Almanac; from = deps,
-            ignore = (:broadcastable, :RefValue, :setindex, :open, :indexed_iterate, :StringVector)
+            ignore = (:broadcastable, :RefValue, :setindex, :open, :indexed_iterate, :IOError, :StringVector)
         ) === nothing
     end
 end

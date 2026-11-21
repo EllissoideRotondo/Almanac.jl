@@ -205,6 +205,7 @@ function save_kernel(h::DAFHandle, path::AbstractString)
                 Base.Filesystem.JL_O_WRONLY, 0o644
         )
     catch e
+        _io_failure(e) || rethrow()
         throw(
             SpiceError(
                 :fileopenfail,
