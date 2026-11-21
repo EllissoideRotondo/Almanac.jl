@@ -82,7 +82,7 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
 | Writers | `spk_write.jl`, `ck_write.jl`, `pck_write.jl`, `dsk_write.jl`, `ek/write*.jl` |
 | DAS, DSK, EK | `das.jl`, `dla.jl`, `dsk.jl`, `dsk_api.jl`, `surfaces.jl`, `ek/` |
 | Math, geometry, events | `math/`, `geometry/`, `gf/`, `windows.jl` |
-| Tables, AD, extensions | `table.jl`, `ad.jl`, `ext/` (Adapt, ForwardDiff, ChainRulesCore, EnzymeCore, Mooncake, ReverseDiff, Tracker) |
+| Tables, AD, extensions | `table.jl`, `ad.jl`, `ext/` (Adapt, KernelAbstractions with GPUArraysCore, ForwardDiff, ChainRulesCore, EnzymeCore, Mooncake, ReverseDiff, Tracker) |
 | Orbit layer (ANISE-style analysis) | `analysis/`: `orbit.jl` (`Orbit`, `orbit`), `elements.jl` (`element`, `elements`), `brouwer.jl` (Brouwer mean elements, Kepler solver), `build.jl` (`keplerian_orbit`, `with_element`, `with_apsides`, `two_body`), `local_frames.jl` |
 
 ## Invariants that are easy to break
@@ -137,6 +137,12 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
   checks, and a private function, which does the computation; the geometry finder
   calls the private one. `occultation.jl`, `limbterm.jl`, `fov.jl` and `lst.jl` take
   plain epochs only, through `_plain_epoch`.
+- **Tables on a GPU.** `table_jet` and `table_rotation_jet` compile in a GPU kernel:
+  no allocation, no dynamic call, no throw outside the `@boundscheck`. The batch calls
+  check the epochs on the caller's side before the kernel of
+  `AlmanacKernelAbstractionsExt` runs; the group `table_device` compiles them with
+  JLArrays, through GPUCompiler. A mixed table keeps degrees 0 to 2 of each series in
+  `head` (`Float64`) and zeros in their places in `coef`; `_full_coef` joins them.
 - **Geometry finder.** `gf/solver.jl` knows no geometry. A new quantity is a new
   subtype of `GFQuantity` with three methods: `_gf_value`, `_gf_decreasing` and
   `_gf_label`. The "is decreasing" test is the CSPICE formula, not the exact

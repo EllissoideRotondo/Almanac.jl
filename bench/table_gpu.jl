@@ -1,5 +1,6 @@
 # Ephemeris tables on a GPU: build two tables on the CPU, move them to the GPU and
-# evaluate them at many epochs, by broadcast and in a hand-written kernel.
+# evaluate them at many epochs, by broadcast, with the batch kernel of `table_states!`
+# and in a hand-written kernel, with Float64, Float32 and mixed coefficients.
 #
 # CUDA.jl is not a dependency of the package or of `bench/Project.toml`. Run with a
 # temporary environment:
@@ -41,8 +42,12 @@ function main()
     )
 
     rows = Tuple{String, Float64, Float64}[]
-    for (name, T) in (("Float64", Float64), ("Float32", Float32))
-        cpu = T === Float64 ? earth : Almanac.EphemerisTable{T}(earth)
+    exact = [spkezr(ctx, 399, et, "J2000", "NONE", 10)[1] for et in ets[1:997:end]]
+    batch = CUDA.zeros(Float64, n, 6)
+    for (name, cpu) in (
+            ("Float64", earth), ("Float32", Almanac.EphemerisTable{Float32}(earth)),
+            ("mixed", Almanac.EphemerisTable{Float32}(earth; mixed = true)),
+        )
         gpu = adapt(CuArray, cpu)
         @assert isbits(cudaconvert(gpu))
         f = let gpu = gpu
@@ -50,9 +55,13 @@ function main()
         end
         out = Array(map(f, gets))                      # compile
         best = minimum(@elapsed(CUDA.@sync map(f, gets)) for _ in 1:5)
-        exact = [spkezr(ctx, 399, et, "J2000", "NONE", 10)[1] for et in ets[1:997:end]]
         err = maximum(norm(Float64.(out[1 + 997 * (k - 1)][SVector(1, 2, 3)]) - exact[k][SVector(1, 2, 3)]) for k in eachindex(exact))
         push!(rows, ("GPU broadcast, table_state, " * name, best / n * 1.0e9, err))
+        table_states!(batch, gpu, gets)                # compile
+        best = minimum(@elapsed(CUDA.@sync table_states!(batch, gpu, gets)) for _ in 1:5)
+        b = Array(batch)
+        err = maximum(norm(b[1 + 997 * (k - 1), 1:3] - exact[k][SVector(1, 2, 3)]) for k in eachindex(exact))
+        push!(rows, ("GPU table_states!, " * name * " (with the check of the epochs)", best / n * 1.0e9, err))
     end
 
     # CPU reference, one thread

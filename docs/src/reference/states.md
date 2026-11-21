@@ -63,6 +63,8 @@ EphemerisTable
 ephemeris_table
 table_position
 table_state
+table_positions!
+table_states!
 table_jet
 table_span
 RotationTable

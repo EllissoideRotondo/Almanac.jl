@@ -33,7 +33,7 @@ const GROUPS = [
     "gf_solver", "gf_quantities", "gf_posc", "gf_threads", "gf_surface", "gf_illum", "gf_occult",
     "gf_fov",
     "geom_subpoints", "geom_illum", "geom_occult", "geom_limbterm", "geom_fov", "geom_constobs",
-    "geom_azel", "table",
+    "geom_azel", "table", "table_device",
     "ek_file", "ek_parse", "ek_query", "ek_threads", "ek_write", "jsonkernel", "providers", "queries",
     "analysis_orbit", "memkernels", "alloccheck", "ad_enzyme", "ad_mooncake", "ad_zygote", "ad_tracked", "static",
 ]

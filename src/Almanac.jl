@@ -76,6 +76,7 @@ export add_ephemeris!, add_frame!
 export StateQuery, state_query, RotationQuery, rotation_query
 export Orbit, orbit, element, elements, keplerian, keplerian_orbit, with_element, with_apsides, two_body, vinf_periapsis, vinf_turn_angle, local_frame, local_frame_state, relative_state
 export EphemerisTable, ephemeris_table, table_position, table_state, table_jet, table_span
+export table_positions!, table_states!
 export RotationTable, rotation_table, table_rotation, table_rotation_jet, table_to_spk
 export EKColumnAttr, EKSegmentSummary
 export ekopr, ekcls, eknseg, ekssum, ekrcec, ekrced, ekrcei

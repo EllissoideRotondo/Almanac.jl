@@ -14,6 +14,7 @@ group("allocation proof: numeric kernels (AllocCheck)") do
     M = SMatrix{3, 3, Float64, 9}; F = Float64
     ctx = neo_context([Kernels.LSK, Kernels.DE440S])
     tab = ephemeris_table(ctx, "EARTH", 0.0, 86400.0 * 30, "J2000", "NONE", "SUN")
+    mixed = Almanac.EphemerisTable{Float32}(tab; mixed = true)
     cases = Any[
         (vhat, (V,)), (vnorm, (V,)), (unorm, (V,)), (vcrss, (V, V)), (vdot, (V, V)), (vsep, (V, V)),
         (vproj, (V, V)), (vperp, (V, V)), (ucrss, (V, V)), (vrotv, (V, V, F)), (vlcom, (F, V, F, V)),
@@ -31,7 +32,8 @@ group("allocation proof: numeric kernels (AllocCheck)") do
         (prop2b, (F, V6, F)), (conics, (SVector{8, Float64}, F)), (oscelt, (V6, F, F)),
         (stelab, (V, V)), (deltet, (SpiceContext, F, String)), (unitim, (SpiceContext, F, String, String)),
         (table_state, (typeof(tab), F)), (table_position, (typeof(tab), F)),
-        (table_jet, (typeof(tab), F, Val{2})),
+        (table_jet, (typeof(tab), F, Val{2})), (table_jet, (typeof(mixed), F, Val{2})),
+        (table_states!, (Matrix{Float64}, typeof(tab), Vector{Float64})),
         (element, (Orbit{Float64}, Symbol)), (keplerian, (Orbit{Float64},)),
         (local_frame, (Orbit{Float64}, Symbol)), (local_frame_state, (Orbit{Float64}, Symbol)),
         (relative_state, (Orbit{Float64}, Orbit{Float64}, Symbol)), (two_body, (Orbit{Float64}, Float64)),

@@ -6,7 +6,12 @@
 #     kernels, so the position agrees to a few units of rounding (measured 6e-16
 #     relative) and the velocity to rounding times degree^2 (measured 8e-13);
 #   interpolation: the position agrees within `maxerr` of the table plus the
-#     difference between Almanac and CSPICE.
+#     difference between Almanac and CSPICE;
+#   mixed tables (head of degrees 0 to 2 in Float64, the rest in Float32): the Float32
+#     rounding of the sum of the rest, measured over 400 days at 20000 epochs as
+#     2.4e-4 km for the Earth from the Sun and 1.2e-3 km for the Moon from the Earth;
+#     the limits are twice that. A head of degrees 0 and 1 gave 1.4e-2 km for the
+#     Earth, and a Float32 table 16 km.
 
 # Compile time. In the default run the test code of this group is compiled without
 # optimization (`@optlevel 0` for `Main`, until the end of this file), because the
@@ -258,6 +263,100 @@ group("ephemeris table", Kernels.FULL_SET_FILES...) do
         @test throws_kind(() -> rotation_table(ctx, "J2000", "IAU_EARTH", r0, r1; tol = 1.0e-15, maxintervals = 8), :noconvergence)
         @test throws_kind(() -> Almanac.RotationTable(zeros(5), 0.0, 1.0, 1, 2, 1, 2, 0.0), :badarg)
         @test_throws SpiceError rotation_table(ctx, "J2000", "NO_SUCH_FRAME", r0, r1)
+    end
+
+    @apart @testset "mixed precision" begin
+        oracle_load(set)
+        for (targ, obs, limit) in [(399, 10, 5.0e-4), (301, 399, 2.5e-3)]
+            tab = ephemeris_table(ctx, targ, t0, t1, "J2000", "NONE", obs)
+            mixed = Almanac.EphemerisTable{Float32}(tab; mixed = true)
+            @test mixed.coef isa Vector{Float32} && mixed.head isa Vector{Float64}
+            @test length(mixed.head) == 9 * tab.nint && table_span(mixed) == table_span(tab)
+            lo, hi = table_span(tab)
+            ep = ev = 0.0
+            for et in random_epochs(rng, 2000, lo, hi)
+                c = SPICE.spkezr(string(targ), et, "J2000", "NONE", string(obs))[1]
+                x = table_state(mixed, et)
+                ep = max(ep, norm(x[1:3] - c[1:3])); ev = max(ev, norm(x[4:6] - c[4:6]))
+            end
+            single = maximum(et -> norm(table_position(Almanac.EphemerisTable{Float32}(tab), et) - table_position(tab, et)), (lo, (lo + hi) / 2, hi))
+            measured(@sprintf("  table mixed %3d rel %3d: position %.2e km, velocity %.2e km/s; Float32 table %.1e km", targ, obs, ep, ev, single))
+            @test ep <= limit && ev <= 1.0e-7
+            @test table_state(mixed, lo) isa SVector{6, Float64}
+        end
+        tab = ephemeris_table(ctx, 399, t0, t1, "J2000", "NONE", 10)
+        mixed = Almanac.EphemerisTable{Float32}(tab; mixed = true)
+        n = tab.ncoef
+        # The head is exact; the rest is the Float32 rounding of the coefficients.
+        full = Almanac.EphemerisTable{Float64}(mixed).coef
+        k = [mod(j - 1, n) for j in eachindex(full)]      # the degree of each coefficient
+        @test full[k .<= 2] == tab.coef[k .<= 2]
+        @test full[k .> 2] == Float64.(Float32.(tab.coef[k .> 2]))
+        @test Almanac.EphemerisTable{Float32}(mixed).coef == Float32.(full)
+        @test Almanac.EphemerisTable{Float32}(mixed; mixed = true).head == mixed.head
+        # Derivatives: the jet, dual numbers, no allocation.
+        et = t0 + 4.56e6
+        jet, ref_jet = table_jet(mixed, et, Val(2)), table_jet(tab, et, Val(2))
+        @test jet[1] == table_position(mixed, et) && vcat(jet[1], jet[2]) == table_state(mixed, et)
+        @test all(m -> rel(jet[m], ref_jet[m]) <= (1.0e-11, 1.0e-9, 1.0e-6)[m], 1:3)
+        # A dual epoch is not rounded to Float32 before the sum of the Float32 part, so it
+        # differs from the jet by that rounding: measured 1.2e-11 relative.
+        d1 = ForwardDiff.derivative(t -> table_position(mixed, t), et)
+        @test rel(d1, jet[2]) <= 1.0e-10 && rel(d1, ref_jet[2]) <= 1.0e-9
+        @test (@inferred table_state(mixed, et)) isa SVector{6, Float64}
+        table_alloc(mixed, et)
+        @test table_alloc(mixed, et) == 0
+        small = Almanac.EphemerisTable{Float32}(
+            Almanac.EphemerisTable(SVector{12, Float64}(1:12), 0.0, 2.0, 1, 4, 1, 2, 1, 0.0); mixed = true
+        )
+        @test table_position(small, 1.5) ≈ SVector(1 + 2 * 0.5 + 3 * (-0.5) + 4 * (-1.0), 5 + 6 * 0.5 + 7 * (-0.5) + 8 * (-1.0), 9 + 10 * 0.5 + 11 * (-0.5) + 12 * (-1.0))
+        @test occursin("Float64 head", sprint(show, mixed))
+        # The head moves with `adapt`; a conversion of the head to Float32 is refused.
+        @test Adapt.adapt(Array, mixed).head == mixed.head
+        @test throws_kind(() -> Adapt.adapt(ToFloat32(), mixed), :badarg)
+        @test throws_kind(() -> Almanac.EphemerisTable(mixed.coef, mixed.t0, mixed.dt, mixed.nint, n, 399, 10, 1, 0.0, zeros(5)), :badarg)
+        @test throws_kind(() -> Almanac.EphemerisTable(mixed.coef, mixed.t0, mixed.dt, mixed.nint, n, 399, 10, 1, 0.0, Float32.(mixed.head)), :badarg)
+        # A mixed table written as a segment holds the coefficients of `full`.
+        p = joinpath(mktempdir(), "mixed.bsp")
+        h = spkopn(p, "TABLE", 0)
+        table_to_spk(ctx, h, mixed, "earth, mixed")
+        spkcls(h)
+        own = neo_context([p])
+        seg = only(Almanac.kernelset(own).spk[Int32(399)])
+        d = Almanac.kernelset(own).daf[seg.file]
+        @test d[(seg.baddr + 2):(seg.baddr + 3 * n + 1)] == full[1:(3 * n)]
+    end
+
+    @apart @testset "batch evaluation" begin
+        tab = ephemeris_table(ctx, 301, t0, t1, "J2000", "NONE", 399)
+        lo, hi = table_span(tab)
+        # Every boundary of an interval (the last one is `hi`), where the index of the
+        # interval is computed with the reciprocal of `dt`, and random epochs.
+        ets = vcat(lo .+ tab.dt .* (0:(tab.nint)), random_epochs(rng, 200, lo, hi))
+        states = table_states!(zeros(length(ets), 6), tab, ets)
+        @test all(j -> states[j, :] == table_state(tab, ets[j]), eachindex(ets))
+        @test table_positions!(zeros(length(ets), 3), tab, ets) == states[:, 1:3]
+        @test table_positions!(zeros(Float32, length(ets), 3), tab, ets) == Float32.(states[:, 1:3])
+        mixed = Almanac.EphemerisTable{Float32}(tab; mixed = true)
+        @test all(j -> table_states!(zeros(length(ets), 6), mixed, ets)[j, :] == table_state(mixed, ets[j]), eachindex(ets))
+        e = maximum(eachindex(ets)) do j
+            norm(states[j, 1:3] - SPICE.spkpos("301", ets[j], "J2000", "NONE", "399")[1])
+        end
+        measured(@sprintf("  table batch, interval boundaries and random epochs: %.1e km against CSPICE", e))
+        @test e <= 5.0e-15 * 4.1e5      # rounding of the native grid, relative 5e-15 of the distance
+        batch_alloc(out, tb, x) = @allocated table_states!(out, tb, x)
+        out = zeros(length(ets), 6)
+        batch_alloc(out, tab, ets)
+        @test batch_alloc(out, tab, ets) == 0
+        @test table_states!(zeros(0, 6), tab, Float64[]) == zeros(0, 6)
+        # The epochs are checked before anything is written.
+        out = zeros(3, 3)
+        @test throws_kind(() -> table_positions!(out, tab, [lo, hi + 1.0, lo]), :spkinsuffdata)
+        @test throws_kind(() -> table_positions!(out, tab, [lo, NaN, lo]), :spkinsuffdata)
+        @test throws_kind(() -> table_positions!(out, tab, [lo - 1.0, lo, lo]), :spkinsuffdata)
+        @test out == zeros(3, 3)
+        @test throws_kind(() -> table_positions!(zeros(3, 6), tab, [lo, lo, lo]), :badarg)
+        @test throws_kind(() -> table_states!(zeros(2, 6), tab, [lo, lo, lo]), :badarg)
     end
 end
 

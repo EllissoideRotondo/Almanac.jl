@@ -7,7 +7,7 @@
 """
     EphemerisTable{T,A<:AbstractVector{T}}
     EphemerisTable(coef, t0, dt, nint, ncoef, target, observer, frame, maxerr)
-    EphemerisTable{T}(tab) -> EphemerisTable{T,Vector{T}}
+    EphemerisTable{T}(tab; mixed=false) -> EphemerisTable{T,Vector{T}}
 
 Position of one body relative to another on a fixed span of time, as piecewise
 Chebyshev polynomials that need no kernel to evaluate. [`ephemeris_table`](@ref)
@@ -24,41 +24,56 @@ array type; the table is then an `isbits` value on a GPU.
 | `ncoef`            | Chebyshev coefficients for each component and interval               |
 | `coef`             | the coefficients, km                                                 |
 | `maxerr`           | largest difference from `spkpos` that `ephemeris_table` measured, km   |
+| `head`             | `nothing`, or the `Float64` part of a mixed table                    |
 
 Interval `i` (from 0) covers `t0 + i dt` to `t0 + (i + 1) dt`. It holds `ncoef`
 coefficients for each of x, y and z, in this order, from index `3 ncoef i + 1` of
 `coef`: the layout of a record of SPK type 2 without its first two numbers.
 
 `EphemerisTable{T}(tab)` returns a copy with coefficients of type `T` on the CPU. With
-`Float32` the position keeps about seven digits (15 km at one astronomical unit);
+`Float32` the position keeps about seven digits (16 km at one astronomical unit);
 `maxerr` is not measured again.
 
+`EphemerisTable{T}(tab; mixed=true)` keeps the coefficients of degree 0 to 2 of each
+series in `Float64` (the field `head`) and the others in `T`. The query returns
+`Float64` values, computes the three largest terms in `Float64` and the rest in `T`.
+On a GPU with slow `Float64` arithmetic, most of the work is then in `T`. Over 400 days
+of `de440s.bsp` with `T = Float32`, the position of the Earth relative to the Sun stays
+within 0.24 m of `Float64` (16 km for a `Float32` table), and the position of the Moon
+relative to the Earth within 1.2 m. The higher coefficients are small in an inertial
+frame; in a rotating frame such as `IAU_EARTH` they are not, and a mixed table gains
+little (6 km for the Sun from the Earth). Move a mixed table to a GPU with
+`adapt(CuArray, tab)`. `cu(tab)` converts the head to `Float32` and throws.
+
 Throws `SpiceError(:badarg)` if the constructor gets `dt <= 0`, `nint < 1`,
-`ncoef < 1` or `length(coef) != 3 * ncoef * nint`.
+`ncoef < 1` or `length(coef) != 3 * ncoef * nint`, or a head that is not `Float64`.
 
 # Examples
 ```jldoctest
 julia> coef = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0];    # nint = 1 interval, ncoef = 2
 
-julia> tab = EphemerisTable(coef, 0.0, 10.0, 1, 2, 301, 399, 1, 0.0);
+julia> tab = EphemerisTable(coef, 0.0, 8.0, 1, 2, 301, 399, 1, 0.0);
 
 julia> table_span(tab)
-(0.0, 10.0)
+(0.0, 8.0)
 
-julia> table_state(tab, 7.5)    # x = 1 + 2s, y = 3 + 4s, z = 5 + 6s at s = 0.5
+julia> table_state(tab, 6.0)    # x = 1 + 2s, y = 3 + 4s, z = 5 + 6s at s = 0.5
 6-element StaticArraysCore.SVector{6, Float64} with indices SOneTo(6):
  2.0
  5.0
  8.0
- 0.4
- 0.8
- 1.2
+ 0.5
+ 1.0
+ 1.5
+
+julia> table_position(EphemerisTable{Float32}(tab; mixed = true), 6.0) == [2, 5, 8]
+true
 ```
 
 See also [`table_position`](@ref), [`table_state`](@ref), [`table_jet`](@ref),
-[`table_to_spk`](@ref), [`RotationTable`](@ref).
+[`table_positions!`](@ref), [`table_to_spk`](@ref), [`RotationTable`](@ref).
 """
-struct EphemerisTable{T <: AbstractFloat, A <: AbstractVector{T}}
+struct EphemerisTable{T <: AbstractFloat, A <: AbstractVector{T}, H <: Union{Nothing, AbstractVector{Float64}}}
     coef::A
     t0::Float64
     dt::Float64
@@ -68,21 +83,70 @@ struct EphemerisTable{T <: AbstractFloat, A <: AbstractVector{T}}
     observer::Int32
     frame::Int32
     maxerr::Float64
+    head::H
+    rdt::Float64        # 1 / dt, so that a query multiplies where it would divide
     function EphemerisTable(
             coef::A, t0::Real, dt::Real, nint::Integer, ncoef::Integer,
-            target::Integer, observer::Integer, frame::Integer, maxerr::Real
-        ) where {T <: AbstractFloat, A <: AbstractVector{T}}
+            target::Integer, observer::Integer, frame::Integer, maxerr::Real,
+            head::H = nothing
+        ) where {T <: AbstractFloat, A <: AbstractVector{T}, H <: Union{Nothing, AbstractVector{Float64}}}
         (dt > 0 && nint >= 1 && ncoef >= 1 && length(coef) == 3 * ncoef * nint) ||
             throw(SpiceError(:badarg, "EphemerisTable: the sizes do not agree"))
-        return new{T, A}(coef, t0, dt, nint, ncoef, target, observer, frame, maxerr)
+        (head === nothing || length(head) == 3 * _TAB_HEAD * nint) ||
+            throw(SpiceError(:badarg, "EphemerisTable: the sizes of the head do not agree"))
+        return new{T, A, H}(coef, t0, dt, nint, ncoef, target, observer, frame, maxerr, head, 1 / dt)
     end
 end
 
-EphemerisTable{T}(tab::EphemerisTable) where {T <: AbstractFloat} =
-    EphemerisTable(
-    Vector{T}(tab.coef), tab.t0, tab.dt, tab.nint, tab.ncoef, tab.target,
-    tab.observer, tab.frame, tab.maxerr
+# A head of another element type: `cu(tab)` converts every Float64 array to Float32.
+EphemerisTable(
+    coef::AbstractVector{<:AbstractFloat}, t0::Real, dt::Real, nint::Integer, ncoef::Integer,
+    target::Integer, observer::Integer, frame::Integer, maxerr::Real, head::AbstractVector
+) = throw(
+    SpiceError(
+        :badarg,
+        "EphemerisTable: the head of a mixed table must be Float64; move the table with Adapt.adapt, not with a conversion to Float32"
+    )
 )
+
+const _TAB_HEAD = 3      # coefficients of each series in the head of a mixed table
+
+"""
+    _full_coef(tab) -> Vector{Float64}
+
+The coefficients of `tab` in the layout of `coef`, on the CPU, as `Float64`. A mixed
+table holds the coefficients of degree 0 to `_TAB_HEAD - 1` of each series in `head`
+(in the layout of `coef` with `_TAB_HEAD` coefficients for each series) and zeros in
+their places in `coef`.
+"""
+function _full_coef(tab::EphemerisTable)
+    coef = Vector{Float64}(Array(tab.coef))
+    tab.head === nothing && return coef
+    head, n, h = Array(tab.head), tab.ncoef, _TAB_HEAD
+    for i in 0:(tab.nint - 1), c in 0:2, k in 0:(min(n, h) - 1)   # invariant: the terms before (i, c, k) are complete
+        coef[3n * i + n * c + k + 1] = head[3h * i + h * c + k + 1]
+    end
+    return coef
+end
+
+function EphemerisTable{T}(tab::EphemerisTable; mixed::Bool = false) where {T <: AbstractFloat}
+    full = _full_coef(tab)
+    mixed || return EphemerisTable(
+        Vector{T}(full), tab.t0, tab.dt, tab.nint, tab.ncoef, tab.target,
+        tab.observer, tab.frame, tab.maxerr
+    )
+    n, h = tab.ncoef, _TAB_HEAD
+    head = zeros(3 * h * tab.nint)
+    for i in 0:(tab.nint - 1), c in 0:2, k in 0:(min(n, h) - 1)   # invariant: the terms before (i, c, k) are split
+        a = 3n * i + n * c + k + 1
+        head[3h * i + h * c + k + 1] = full[a]
+        full[a] = 0.0
+    end
+    return EphemerisTable(
+        Vector{T}(full), tab.t0, tab.dt, tab.nint, tab.ncoef, tab.target,
+        tab.observer, tab.frame, tab.maxerr, head
+    )
+end
 
 """
     table_span(tab) -> (first, last)
@@ -96,7 +160,7 @@ of the kernels covers whole records, so its span can be wider than the requested
 @inline table_span(tab::EphemerisTable) = (tab.t0, tab.t0 + tab.nint * tab.dt)
 
 Base.show(io::IO, tab::EphemerisTable{T}) where {T} = print(
-    io, "EphemerisTable{", T, "}(",
+    io, "EphemerisTable{", T, "}(", tab.head === nothing ? "" : "Float64 head, ",
     tab.target, " relative to ", tab.observer, ", frame ", tab.frame, ", ET ", tab.t0,
     " to ", table_span(tab)[2], ", ", tab.nint, " intervals of ", tab.dt, " s, ",
     tab.ncoef, " coefficients, largest error ", tab.maxerr, " km)"
@@ -116,8 +180,10 @@ derivatives to order `N`.
 
 Element `k + 1` is the derivative of order `k`, in km/s^k; every order is a
 derivative of the position polynomial. `et` is in seconds past J2000 TDB and is a
-plain number or a dual number. A plain epoch is used as `Float64` also when the
-coefficients are `Float32`. The call reads no kernel and does not allocate.
+plain number or a dual number. The interval and the normalized time are computed in
+`Float64` also when the coefficients are `Float32`; the polynomial is then summed in
+`Float32`, except the head of a mixed table (see [`EphemerisTable`](@ref)), and
+a mixed table returns `Float64`. The call reads no kernel and does not allocate.
 
 Throws `SpiceError(:spkinsuffdata)` if `et` is outside [`table_span`](@ref)`(tab)`;
 this is the kind of [`spkezr`](@ref) for an epoch outside the loaded data. The check is
@@ -126,16 +192,54 @@ epoch outside the table then gives the extrapolation of the nearest interval.
 
 See also [`table_position`](@ref), [`table_state`](@ref).
 """
-Base.@propagate_inbounds function table_jet(tab::EphemerisTable{T}, et::Real, v::Val{N}) where {T, N}
+Base.@propagate_inbounds function table_jet(tab::EphemerisTable, et::Real, v::Val)
+    i, s, rr = _tab_locate(tab, et)
+    return _tab_eval(tab.head, tab, i, s, rr, v)
+end
+
+@inline _tab_eval(::Nothing, tab::EphemerisTable{T}, i, s, rr, v::Val) where {T} =
+    _tab_scale(_cheb3(tab.coef, 3 * tab.ncoef * i + 1, tab.ncoef, _tab_arg(T, s), one(T), v), _tab_arg(T, rr))
+
+# A mixed table: the head (degrees 0 to 2) is summed in Float64 at `s`, the rest in `T`
+# at `s` rounded to `T`. Measured on de440s over 400 days with a Float32 tail: 0.24 m
+# for the Earth relative to the Sun, against 16 km for a Float32 table and 14 m with a
+# head of degrees 0 and 1 only, where the Float32 rounding of the Clenshaw sum of the
+# degree-2 term (4.5e4 km) dominated. A first-order correction for the rounding of `s`
+# gained 30 % for twice the Float32 work, and was left out.
+@inline function _tab_eval(head::AbstractVector{Float64}, tab::EphemerisTable{T}, i, s, rr, v::Val{N}) where {T, N}
+    tail = _tab_scale(_cheb3(tab.coef, 3 * tab.ncoef * i + 1, tab.ncoef, _tab_arg(T, s), one(T), v), _tab_arg(T, rr))
+    top = _tab_scale(_cheb3(head, 3 * _TAB_HEAD * i + 1, _TAB_HEAD, s, 1.0, v), rr)
+    R = promote_type(eltype(top[1]), eltype(tail[1]))
+    return ntuple(m -> Vec3{R}(top[m] + tail[m]), Val(N + 1))
+end
+
+"""
+    _tab_locate(tab, et) -> (i, s, 1 / radius)
+
+The interval `i` (from 0) of `et`, the normalized time `s` in it, and the reciprocal
+of the half length of an interval. The interval is chosen on `primal(et)`; the bounds
+check throws `:spkinsuffdata` outside the table. The epoch arithmetic is `Float64`
+(or the type of `et`) and multiplies by `tab.rdt` in place of a division, which on
+a GPU costs a sequence of `Float64` operations.
+"""
+Base.@propagate_inbounds function _tab_locate(tab, et::Real)
     t = primal(et)
     @boundscheck (tab.t0 <= t <= tab.t0 + tab.nint * tab.dt) || _throw_table_range()
-    i = clamp(unsafe_trunc(Int, (t - tab.t0) / tab.dt), 0, tab.nint - 1)
-    radius = tab.dt / 2
-    s = (et - (tab.t0 + (2i + 1) * radius)) / radius
-    return _cheb3(
-        tab.coef, 3 * tab.ncoef * i + 1, tab.ncoef, _tab_arg(T, s),
-        _tab_arg(T, radius), v
-    )
+    i = clamp(unsafe_trunc(Int, (t - tab.t0) * tab.rdt), 0, tab.nint - 1)
+    rr = 2 * tab.rdt
+    s = (et - (tab.t0 + (2i + 1) * (tab.dt / 2))) * rr
+    return i, s, rr
+end
+
+"Order `m` of the jet (derivatives with respect to `s`) times `rr^m`: derivatives with respect to time."
+@inline function _tab_scale(jet::NTuple{M}, rr) where {M}
+    return ntuple(Val(M)) do m
+        v = jet[m]
+        for _ in 2:m      # invariant: `v` has been multiplied by `rr` once per pass
+            v = v * rr
+        end
+        v
+    end
 end
 
 """
@@ -168,6 +272,88 @@ Throws `SpiceError(:spkinsuffdata)` if `et` is outside the table.
 Base.@propagate_inbounds function table_state(tab::EphemerisTable, et::Real)
     r, v = table_jet(tab, et, Val(1))
     return vcat(r, v)
+end
+
+"""
+    table_positions!(out, tab, ets) -> out
+
+Write the position (km) from the ephemeris table `tab` at each epoch of `ets` into
+`out`, an `n` by 3 matrix for `n = length(ets)`. Row `j` holds the position at
+`ets[j]`, one component per column. This call has no CSPICE counterpart.
+
+The values are those of [`table_position`](@ref), converted to the element type of
+`out`. If `out`, `ets` and the coefficients of `tab` are GPU
+arrays of one device (`tab` moved with `Adapt.adapt`), the call runs one
+KernelAbstractions kernel on that device and returns without waiting for it. It
+needs `KernelAbstractions` and `GPUArraysCore` in the environment, which the GPU
+packages load. On the CPU it is a loop that does not allocate. A column per
+component lets neighbouring threads of a GPU write neighbouring addresses.
+
+Throws:
+- `SpiceError(:badarg)` if the size of `out` does not agree with `ets`, or if a GPU
+  array is mixed with an array or a table that is not on the same device;
+- `SpiceError(:spkinsuffdata)` if an epoch is outside [`table_span`](@ref)`(tab)` or
+  is `NaN`. The epochs are checked before anything is written, also on a GPU;
+- `ArgumentError` if the indices of `out` or `ets` do not start at 1.
+
+# Examples
+```jldoctest
+julia> tab = EphemerisTable([1.0, 2.0, 3.0, 4.0, 5.0, 6.0], 0.0, 10.0, 1, 2, 301, 399, 1, 0.0);
+
+julia> table_positions!(zeros(2, 3), tab, [5.0, 7.5])
+2×3 Matrix{Float64}:
+ 1.0  3.0  5.0
+ 2.0  5.0  8.0
+```
+
+See also [`table_states!`](@ref).
+"""
+function table_positions!(out::AbstractMatrix, tab::EphemerisTable, ets::AbstractVector)
+    _check_batch(out, tab, ets, 3)
+    isempty(ets) || _table_batch!(out, tab, ets, Val(0))
+    return out
+end
+
+"""
+    table_states!(out, tab, ets) -> out
+
+Write the position and the velocity (km, km/s) from the ephemeris table `tab` at each
+epoch of `ets` into `out`, an `n` by 6 matrix for `n = length(ets)`: the values of
+[`table_state`](@ref), one row per epoch. Devices, errors and the order of the checks
+are those of [`table_positions!`](@ref).
+"""
+function table_states!(out::AbstractMatrix, tab::EphemerisTable, ets::AbstractVector)
+    _check_batch(out, tab, ets, 6)
+    isempty(ets) || _table_batch!(out, tab, ets, Val(1))
+    return out
+end
+
+function _check_batch(out, tab, ets, width)
+    Base.require_one_based_indexing(out, ets)
+    size(out) == (length(ets), width) || throw(
+        SpiceError(:badarg, "table batch: out must have length(ets) rows and $width columns, not size $(size(out))")
+    )
+    isempty(ets) && return nothing
+    lo, hi = extrema(primal, ets)
+    (tab.t0 <= lo && hi <= tab.t0 + tab.nint * tab.dt) || _throw_table_range()
+    return nothing
+end
+
+# Row `j` of `out` from the jet of order N (position, or position and velocity).
+Base.@propagate_inbounds function _table_row!(out, tab, ets, j, v::Val{N}) where {N}
+    jet = table_jet(tab, ets[j], v)
+    for o in 0:N, c in 1:3      # invariant: the columns before (o, c) of row j are set
+        out[j, 3o + c] = jet[o + 1][c]
+    end
+    return nothing
+end
+
+# CPU loop; the KernelAbstractions extension adds the methods for GPU arrays.
+function _table_batch!(out::AbstractMatrix, tab, ets::AbstractVector, v::Val)
+    @inbounds for j in eachindex(ets)   # invariant: the rows before j are set
+        _table_row!(out, tab, ets, j, v)
+    end
+    return nothing
 end
 
 # ---------------------------------------------------------------------------------
@@ -489,7 +675,7 @@ function table_to_spk(
             "table_to_spk: the reference frame $(tab.frame) of the table is not known"
         )
     )
-    cdata = reshape(Vector{Float64}(Array(tab.coef)), 3 * tab.ncoef, tab.nint)
+    cdata = reshape(_full_coef(tab), 3 * tab.ncoef, tab.nint)
     spkw02(
         ctx, h, tab.target, tab.observer, Int(tab.frame), first, last, segid, tab.dt,
         cdata, tab.t0
@@ -544,13 +730,14 @@ struct RotationTable{T <: AbstractFloat, A <: AbstractVector{T}}
     from::Int32
     to::Int32
     maxerr::Float64
+    rdt::Float64        # 1 / dt
     function RotationTable(
             coef::A, t0::Real, dt::Real, nint::Integer, ncoef::Integer,
             from::Integer, to::Integer, maxerr::Real
         ) where {T <: AbstractFloat, A <: AbstractVector{T}}
         (dt > 0 && nint >= 1 && ncoef >= 1 && length(coef) == 9 * ncoef * nint) ||
             throw(SpiceError(:badarg, "RotationTable: the sizes do not agree"))
-        return new{T, A}(coef, t0, dt, nint, ncoef, from, to, maxerr)
+        return new{T, A}(coef, t0, dt, nint, ncoef, from, to, maxerr, 1 / dt)
     end
 end
 
@@ -584,16 +771,12 @@ call reads no kernel and does not allocate.
 Throws `SpiceError(:spkinsuffdata)` if `et` is outside [`table_span`](@ref)`(tab)`.
 """
 Base.@propagate_inbounds function table_rotation_jet(tab::RotationTable{T}, et::Real, v::Val{N}) where {T, N}
-    t = primal(et)
-    @boundscheck (tab.t0 <= t <= tab.t0 + tab.nint * tab.dt) || _throw_table_range()
-    i = clamp(unsafe_trunc(Int, (t - tab.t0) / tab.dt), 0, tab.nint - 1)
-    radius = tab.dt / 2
-    s = _tab_arg(T, (et - (tab.t0 + (2i + 1) * radius)) / radius)
-    r = _tab_arg(T, radius)
+    i, s0, rr0 = _tab_locate(tab, et)
+    s, rr = _tab_arg(T, s0), _tab_arg(T, rr0)
     a = 9 * tab.ncoef * i + 1
-    c1 = _cheb3(tab.coef, a, tab.ncoef, s, r, v)
-    c2 = _cheb3(tab.coef, a + 3 * tab.ncoef, tab.ncoef, s, r, v)
-    c3 = _cheb3(tab.coef, a + 6 * tab.ncoef, tab.ncoef, s, r, v)
+    c1 = _tab_scale(_cheb3(tab.coef, a, tab.ncoef, s, one(T), v), rr)
+    c2 = _tab_scale(_cheb3(tab.coef, a + 3 * tab.ncoef, tab.ncoef, s, one(T), v), rr)
+    c3 = _tab_scale(_cheb3(tab.coef, a + 6 * tab.ncoef, tab.ncoef, s, one(T), v), rr)
     return ntuple(k -> hcat(c1[k], c2[k], c3[k]), Val(N + 1))
 end
 

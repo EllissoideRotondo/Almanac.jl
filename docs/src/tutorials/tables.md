@@ -75,6 +75,8 @@ The figures below cover 400 days of `de440s.bsp`, measured by `bench/table_gpu.j
 | Earth relative to Sun, J2000, GPU, `Float64` | 101 | 1.2e-7 | 1.2 | |
 | Earth relative to Sun, J2000, GPU, `Float32` | 101 | 16 | 0.33 | |
 
+The GPU rows were measured with `map` before the batch kernel and the mixed tables existed. The CPU rows were also measured before the table started to multiply by the reciprocal of the interval length, which made it 8 to 13 % faster on an AMD Ryzen 9 6900HS.
+
 A table is no more accurate than its source: the `IAU_EARTH` and `LT+S` rows reach the limits in [Known limits of accuracy](@ref).
 
 ## Save a table as a kernel
@@ -89,6 +91,15 @@ spkcls(handle)
 spkobj(path)
 ```
 
+## Evaluate many epochs at once
+
+[`table_positions!`](@ref) and [`table_states!`](@ref) fill a matrix with one row per epoch and one column per component. They check every epoch first, so an epoch outside the table throws before anything is written.
+
+```@example tab
+epochs = range(t0, t1; length = 5)
+table_positions!(zeros(5, 3), tab, epochs)
+```
+
 ## Evaluate on a GPU
 
 The table is parametric in its array type, so Adapt.jl moves it to a device, and its evaluation is plain arithmetic that compiles in a GPU kernel. Epochs and bounds stay `Float64` even with `Float32` coefficients, because a `Float32` count of seconds past J2000 resolves only about a minute. Below, `epochs` is a vector of `Float64`.
@@ -96,9 +107,30 @@ The table is parametric in its array type, so Adapt.jl moves it to a device, and
 ```julia
 using CUDA, Adapt
 
-gpu = adapt(CuArray, tab)                   # `cu(tab)` gives Float32 coefficients
-states = map(et -> @inbounds(table_state(gpu, et)), CuArray(epochs))
+gpu = adapt(CuArray, tab)
+out = CUDA.zeros(Float64, length(epochs), 6)
+table_states!(out, gpu, CuArray(epochs))    # one kernel; one column per component
+states = map(et -> @inbounds(table_state(gpu, et)), CuArray(epochs))   # the same, as SVectors
 ```
+
+With a GPU array, [`table_states!`](@ref) runs a KernelAbstractions kernel on the device of the arrays; the GPU packages (CUDA.jl, AMDGPU.jl, Metal.jl, oneAPI.jl, OpenCL.jl) load what it needs. One column per component lets neighbouring threads write neighbouring addresses. A table evaluated inside your own kernel, with [`table_position`](@ref) under `@inbounds`, works the same way, and several tables can go into one kernel.
+
+Consumer GPUs compute `Float64` at a small fraction of their `Float32` speed (1/64 on recent NVIDIA cards). A `Float32` table is fast but keeps only about seven digits: 16 km for the Earth relative to the Sun. A mixed table keeps the coefficients of degree 0 to 2 in `Float64` and the others in `Float32`, which keeps most of the arithmetic in `Float32`:
+
+```julia
+mixed = EphemerisTable{Float32}(tab; mixed = true)
+gpu = adapt(CuArray, mixed)                 # not `cu`, which would convert the Float64 part
+```
+
+Measured against CSPICE over 400 days of `de440s.bsp` (20,000 epochs, largest error in km):
+
+| Table | Earth from Sun, J2000 | Moon from Earth, J2000 | Jupiter barycenter from Sun, ECLIPJ2000 | Sun from Earth, IAU_EARTH |
+|---|---:|---:|---:|---:|
+| `Float64` | 1.2e-7 | 2.6e-10 | 3.7e-7 | 3.5e-3 |
+| mixed | 2.4e-4 | 1.2e-3 | 3.8e-5 | 6.0 |
+| `Float32` | 16 | 4.3e-2 | 64 | 29 |
+
+A mixed table helps in an inertial frame, where the coefficients above degree 2 are small. In a rotating frame they are not.
 
 ## Use a table in a CasADi model
 
