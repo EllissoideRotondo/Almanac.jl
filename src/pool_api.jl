@@ -2,7 +2,7 @@
 
 "Return the value of pool variable `name`; throws `SpiceError(:kernelvarnotfound)` if it is absent."
 function pool_value(ks::KernelSet, name::AbstractString)
-    v = get(ks.pool, String(strip(name)), nothing)
+    v = get(ks.pool, strip(name), nothing)          # a `SubString` key: no copy of the name
     v === nothing && throw(SpiceError(:kernelvarnotfound, "kernel-pool variable $name is not loaded"))
     return v
 end
@@ -87,6 +87,46 @@ function gcpool(ks::KernelSet, name::AbstractString)
     return copy(v)
 end
 
+"""
+    _pool_key(prefix, mid, s1, s2="", upper=false) -> String
+
+The pool name `prefix * mid * s1 * s2`, built in one buffer: `mid` is an integer (its
+decimal digits) or a string (in upper case if `upper`).
+"""
+function _pool_key(
+        prefix::String, mid::Union{Integer, AbstractString}, s1::AbstractString,
+        s2::AbstractString = "", upper::Bool = false
+    )
+    if mid isa Integer
+        n = abs(Int(mid))
+        nmid = ndigits(n) + (mid < 0)
+    else
+        nmid = ncodeunits(mid)
+    end
+    np, n1, n2 = ncodeunits(prefix), ncodeunits(s1), ncodeunits(s2)
+    buf = Base.StringVector(np + nmid + n1 + n2)
+    copyto!(buf, 1, codeunits(prefix), 1, np)
+    if mid isa Integer
+        mid < 0 && (buf[np + 1] = UInt8('-'))
+        # Loop invariant: the `k` last digits of `n` are written, the last at `np + nmid`.
+        for k in 0:(ndigits(n) - 1)
+            n, d = divrem(n, 10)
+            buf[np + nmid - k] = UInt8('0') + d
+        end
+    else
+        for k in 1:nmid
+            c = codeunit(mid, k)
+            buf[np + k] = upper && UInt8('a') <= c <= UInt8('z') ? c - 0x20 : c
+        end
+    end
+    copyto!(buf, np + nmid + 1, codeunits(s1), 1, n1)
+    copyto!(buf, np + nmid + n1 + 1, codeunits(s2), 1, n2)
+    return String(buf)
+end
+
+"The pool name `BODY<code>_<item>`, with the blanks around `item` removed."
+_body_key(code::Integer, item::AbstractString) = _pool_key("BODY", code, "_", strip(item))
+
 # `bodvrd_c` signals SPICE(NOTRANSLATION) for a name without a code, where the state
 # calls signal SPICE(IDCODENOTFOUND).
 function _bodvrd_code(ks::KernelSet, body)
@@ -122,7 +162,7 @@ a, b, c = bodvrd("EARTH", "RADII")    # km
 See also [`bodvcd`](@ref), [`gdpool`](@ref).
 """
 bodvrd(ks::KernelSet, body::NameOrID, item::AbstractString) =
-    gdpool(ks, string("BODY", _bodvrd_code(ks, body), "_", strip(item)))
+    gdpool(ks, _body_key(_bodvrd_code(ks, body), item))
 
 """
     bods2c([ctx,] name) -> Union{Int,Nothing}

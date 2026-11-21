@@ -432,7 +432,7 @@ it is present; otherwise the sign of the prime meridian rate `BODY<id>_PM[2]` do
 """
 function _m_pgrsense(ks::KernelSet, body::NameOrID)
     id = _m_bodyid(ks, body, :idcodenotfound)
-    kv = get(ks.pool, string("BODY", id, "_PGR_POSITIVE_LON"), nothing)
+    kv = get(ks.pool, _body_key(id, "PGR_POSITIVE_LON"), nothing)
     if kv isa Vector{String} && !isempty(kv)
         s = uppercase(filter(!isspace, kv[1]))
         s = s[1:min(4, lastindex(s))]
@@ -446,7 +446,7 @@ function _m_pgrsense(ks::KernelSet, body::NameOrID)
         )
     end
     id == 399 && return 1
-    pm = get(ks.pool, string("BODY", id, "_PM"), nothing)
+    pm = get(ks.pool, _body_key(id, "PM"), nothing)
     (pm isa Vector{Float64} && length(pm) >= 2) || throw(
         SpiceError(
             :missingdata,
