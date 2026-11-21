@@ -63,7 +63,6 @@ Base.@propagate_inbounds function Base.iterate(s::FixedString, i::Int = 1)
     return Char(_fsbyte(s, i)), i + 1
 end
 Base.sizeof(s::FixedString) = s.len
-Base.isascii(::FixedString) = true
 function Base.String(s::FixedString)
     v = Base.StringVector(s.len)
     @inbounds for i in 1:(s.len)
@@ -76,7 +75,6 @@ end
 # writer that grows a buffer with `_bresize` writes every new byte.
 _blen(b::Vector{UInt8}) = length(b)
 _blen(b::FixedString) = b.len
-@inline _bget(b::Vector{UInt8}, i::Int) = b[i]
 @inline _bget(b::FixedString, i::Int) = _fsbyte(b, i)
 @inline _bset(b::Vector{UInt8}, i::Int, c::UInt8) = (b[i] = c; b)
 @inline function _bset(b::FixedString, i::Int, c::UInt8)
