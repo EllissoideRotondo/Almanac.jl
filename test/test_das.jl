@@ -385,6 +385,25 @@ group("11. DAS files and DLA segment lists") do
         @test SPICE.dlabfs(ch) === nothing
         c_dascls(ch)
         @test dskobj(e) == Int[]
+        # `dlaens` stores the sizes of the data appended since `dlabns`, here two
+        # segments; CSPICE reads the same descriptors from the file.
+        g = joinpath(dir, "two_segments.dla")
+        h = dlaopn(g, "DLA", "two segments", 0)
+        for (ni, nd) in ((3, 2), (1, 5))
+            dlabns(h)
+            dasadi(h, Int32.(1:ni))
+            dasadd(h, collect(1.0:nd))
+            dlaens(h)
+        end
+        dascls(h)
+        h = dasopr(g)
+        ch = c_dasopr(g)
+        d, cd = dlabfs(h), SPICE.dlabfs(ch)
+        @test (d.isize, d.dsize, d.csize) == (3, 2, 0) && dla_tuple(d) == dla_tuple(cd)
+        d, cd = dlafns(h, d), SPICE.dlafns(ch, cd)
+        @test (d.isize, d.dbase, d.dsize) == (1, 2, 5) && dla_tuple(d) == dla_tuple(cd)
+        c_dascls(ch)
+        dascls(h)
     end
 
     @apart @testset "(g) input checks" begin

@@ -1357,8 +1357,13 @@ end
 # and the compiler does not follow the call. There is one pointer for each mode and
 # number type, made on first use.
 
-"Pointers of `_dyn_call`, by `Tuple{mode type, number type}`. Replaced, never mutated."
-const _DYN_POINTERS = Ref(IdDict{Any, Ptr{Cvoid}}())
+"Holder of the table of pointers; the field is atomic, so that a reader without the lock sees a complete table."
+mutable struct _DynPointerTable
+    @atomic table::IdDict{Any, Ptr{Cvoid}}
+end
+
+"Pointers of `_dyn_call`, by `Tuple{mode type, number type}`. The table is replaced, never mutated."
+const _DYN_POINTERS = _DynPointerTable(IdDict{Any, Ptr{Cvoid}}())
 const _DYN_POINTER_LOCK = ReentrantLock()
 
 "C entry points of `_dyn_call`: `_dyn_eval` with the snapshot of the level `lev`."
@@ -1390,12 +1395,12 @@ new one, both complete. The compiler does not follow the call that makes the poi
 """
 @noinline function _dyn_pointer_slow(@nospecialize(F))
     return @lock _DYN_POINTER_LOCK begin
-        p = get(_DYN_POINTERS[], F, C_NULL)::Ptr{Cvoid}
+        p = get(@atomic(:acquire, _DYN_POINTERS.table), F, C_NULL)::Ptr{Cvoid}
         if p == C_NULL
             p = Base.invokelatest(_dyn_cfunction, F)::Ptr{Cvoid}
-            table = copy(_DYN_POINTERS[])
+            table = copy(@atomic(:acquire, _DYN_POINTERS.table))
             table[F] = p
-            _DYN_POINTERS[] = table
+            @atomic :release _DYN_POINTERS.table = table
         end
         p
     end
@@ -1403,13 +1408,13 @@ end
 
 "Pointer of `_dyn_call` for `F = Tuple{mode type, number type}`. No allocation after the first use."
 @inline function _dyn_pointer(::Type{F}) where {F}
-    p = get(_DYN_POINTERS[], F, C_NULL)::Ptr{Cvoid}
+    p = get(@atomic(:acquire, _DYN_POINTERS.table), F, C_NULL)::Ptr{Cvoid}
     return p == C_NULL ? _dyn_pointer_slow(F) : p
 end
 
 "Forget the pointers of an earlier process (they are not valid in a loaded package image)."
 function __init__()
-    _DYN_POINTERS[] = IdDict{Any, Ptr{Cvoid}}()
+    @atomic :release _DYN_POINTERS.table = IdDict{Any, Ptr{Cvoid}}()
     return nothing
 end
 

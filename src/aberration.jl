@@ -188,26 +188,6 @@ const AbcorrArg = Union{AbstractString, Aberration}
 @inline _dot3(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 @inline _norm3(a) = sqrt(_dot3(a, a))
 
-"Unit vector along `a`, or the zero vector if `a` is zero, as `vhat`."
-@inline function _vhat(a)
-    n = _norm3(a)
-    return primal(n) == 0 ? zero(a) : a / n
-end
-
-"Component of `a` perpendicular to `b`; `a` itself if `b` is zero, as `vperp`."
-@inline function _vperp(a, b)
-    bb = _dot3(b, b)
-    return primal(bb) == 0 ? a - zero(b) : a - (_dot3(a, b) / bb) * b
-end
-
-"Unit vector along `r` and its time derivative for the velocity `v`, as `dvhat`."
-@inline function _dvhat(r, v)
-    n = _norm3(r)
-    primal(n) == 0 && return zero(r) - zero(v), v - zero(r)
-    u = r / n
-    return u - zero(v), _vperp(v, u) / n
-end
-
 @inline _ssb(ks::KernelSet, body::Int32, et, iref::Int32) =
     spk_jet(ks, body, et, iref, Int32(0), Val(1))
 

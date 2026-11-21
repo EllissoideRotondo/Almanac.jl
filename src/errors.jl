@@ -241,6 +241,9 @@ function _isfile(path::AbstractString)
     end
 end
 
+"True for the errors of the file system and of I/O, which the file calls report as a `SpiceError`; any other error (an interrupt, a fault of the code) passes through."
+_io_failure(e) = e isa SystemError || e isa Base.IOError
+
 # `open(path, "r")` of a DAF or DAS file, with a failure of the system open (a file that
 # the process may not read) as SPICE(FILEOPENFAILED), the message of `dafopr_c` and
 # `dasopr_c`.
@@ -248,7 +251,7 @@ function _open_read(path::AbstractString, who::AbstractString)
     try
         return open(path, "r")
     catch e
-        e isa SystemError || rethrow()
+        _io_failure(e) || rethrow()
         throw(SpiceError(:fileopenfailed, "$who: cannot open $path: $(sprint(showerror, e))"))
     end
 end

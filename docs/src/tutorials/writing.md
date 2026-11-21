@@ -28,7 +28,7 @@ spkcls(handle)
 spkobj(path)                                 # the bodies in the file
 ```
 
-As in CSPICE, the file changes on disk at each write call, except for type 14, whose writer ([`spk14b`](@ref), [`spk14a`](@ref), [`spk14e`](@ref)) collects records and writes the segment at the end.
+As in CSPICE, the file changes on disk at each write call, except for the writers that collect records and write the segment at the end: SPK type 14 ([`spk14b`](@ref), [`spk14a`](@ref), [`spk14e`](@ref)), CK type 4 ([`ckw04b`](@ref), [`ckw04a`](@ref), [`ckw04e`](@ref)) and binary PCK type 3 ([`pck03b`](@ref), [`pck03a`](@ref), [`pck03e`](@ref)).
 
 ## Inspect the file
 
@@ -67,8 +67,8 @@ state[1:3]                                   # km
 |---|---|---|---|
 | SPK, 16 data types | [`spkopn`](@ref), or [`spkopa`](@ref) to append | `spkwNN` for each type, [`spk14b`](@ref) for type 14 | [`spkcls`](@ref) |
 | SPK from two-line elements | [`spkopn`](@ref) | [`getelm`](@ref), [`spkw10`](@ref) | [`spkcls`](@ref) |
-| CK, 5 data types | [`ckopn`](@ref) | `ckw01`, `ckw02`, `ckw03`, `ckw05`, `ckw06` | [`ckcls`](@ref) |
-| Binary PCK, types 2 and 20 | [`pckopn`](@ref) | [`pckw02`](@ref), [`pckw20`](@ref) | [`pckcls`](@ref) |
+| CK, types 1 to 6 | [`ckopn`](@ref) | `ckw01`, `ckw02`, `ckw03`, `ckw05`, `ckw06`, [`ckw04b`](@ref) for type 4 | [`ckcls`](@ref) |
+| Binary PCK, types 2, 3 and 20 | [`pckopn`](@ref) | [`pckw02`](@ref), [`pckw20`](@ref), [`pck03b`](@ref) for type 3 | [`pckcls`](@ref) |
 | DSK type 2 | [`dskopn`](@ref) | [`dskmi2`](@ref), [`dskw02`](@ref) | [`dskcls`](@ref) |
 | EK | [`ekopn`](@ref), [`ekops`](@ref) | [`ekbseg`](@ref), [`ekappr`](@ref), `ekace*`, or whole columns with [`ekifld`](@ref) | [`ekcls`](@ref) |
 | Any DAF, or any DAS (the container of DSK and EK files) | [`dafonw`](@ref), [`dasonw`](@ref) | `dafada`, `dasadd` and related calls | [`dafcls`](@ref), [`dascls`](@ref) |

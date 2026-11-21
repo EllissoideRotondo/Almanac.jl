@@ -35,7 +35,7 @@ repository:
 
 ```julia
 using Pkg
-Pkg.add(url="https://github.com/Orbitology/Almanac.jl")
+Pkg.add(url = "https://github.com/Orbitology/Almanac.jl")
 ```
 
 ## Quickstart
@@ -113,8 +113,9 @@ Bug reports and questions are welcome in the
 [issues](https://github.com/Orbitology/Almanac.jl/issues). Please report bugs in Almanac.jl
 here, not to NAIF.
 
-Run the tests with `julia test/parallel.jl`, and build the manual into `docs/build/` with
-`julia --project=docs docs/make.jl`.
+Run the tests with `julia --startup-file=no --threads=8 test/parallel.jl` (group names
+as arguments run only those groups; with one thread the thread tests are skipped), and
+build the manual into `docs/build/` with `julia --project=docs docs/make.jl`.
 
 ## License
 

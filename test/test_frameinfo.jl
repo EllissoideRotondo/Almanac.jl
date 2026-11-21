@@ -15,6 +15,7 @@ isdefined(@__MODULE__, Symbol("@apart")) || include("apart.jl")
 
 isdefined(@__MODULE__, :CKFix) || include("ckfixtures.jl")
 isdefined(@__MODULE__, :DynFix) || include("dynfixtures.jl")
+import ForwardDiff
 
 "`tkfram_` of CSPICE: `(rot, relative frame ID)`, the error kind, or `nothing` if not found."
 function oracle_tkfram(id::Integer)
@@ -586,6 +587,8 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         @test s.max <= 2.0e-12
         @test 0 <= lspcn(ctx, "EARTH", 0.0, "NONE") < 2pi
         @test (@inferred lspcn(ks, 399, 1.0e8, "LT+S")) isa Float64
+        # A plain epoch only, as et2lst: no derivatives, and no MethodError.
+        @test throws_kind(() -> lspcn(ctx, 399, ForwardDiff.Dual(1.0e8, 1.0), "NONE"), :badarg)
     end
 
     @apart @testset "bltfrm and kplfrm" begin
