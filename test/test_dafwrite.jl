@@ -2187,6 +2187,23 @@ group("9. DAF access, SPK and CK writers") do
         for (neo, c) in openers, p in ("", "  ")
             @test nkind(() -> neo(p)) === ckind(() -> c(p))
         end
+        # Regression: a DAF or DAS file that the process may not read gave a SystemError,
+        # where dafopr_c and dasopr_c give FILEOPENFAILED. A read-only file is opened for
+        # write by CSPICE (the f2c library falls back to read) and fails at the first
+        # write; Almanac refuses it at the open (cspice_defects.md).
+        if !Sys.iswindows() && ccall(:geteuid, Cuint, ()) != 0
+            pdaf, pdas = joinpath(dir, "perm.bsp"), joinpath(dir, "perm.das")
+            dafcls(dafonw(pdaf, "SPK", 2, 6, "X", 0))
+            dascls(dasonw(pdas, "TEST", "X", 0))
+            for (p, (rneo, rc), (wneo, wc)) in ((pdaf, openers[1], openers[2]), (pdas, openers[3], openers[4]))
+                chmod(p, 0o000)
+                @test nkind(() -> rneo(p)) === ckind(() -> rc(p)) === :fileopenfailed
+                chmod(p, 0o444)
+                @test nkind(() -> wneo(p)) === :fileopenfail
+                @test ckind(() -> wc(p)) === :none
+                ccall((:kclear_c, SPICE.libcspice), Cvoid, ())       # closes CSPICE's handle
+            end
+        end
         @test throws_kind(() -> dafopr(sclk), :filereadfailed)       # shorter than one record
         longtext = joinpath(dir, "long.tpc")
         write(longtext, "KPL/PCK\n" * "a line of text\n"^200)

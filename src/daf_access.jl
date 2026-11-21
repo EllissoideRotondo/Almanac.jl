@@ -298,7 +298,7 @@ kind `:emptystring`, `:blankfilename`, `:filenotfound`, `:filereadfailed`,
 function _daf_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
     _isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
-    raw, little = open(path, "r") do io
+    raw, little = _open_read(path, who) do io
         raw = read(io, _DAF_RECLEN)
         length(raw) == _DAF_RECLEN || throw(
             SpiceError(
@@ -370,7 +370,7 @@ Throws `SpiceError`:
 - `:unknownbff` if the binary file format (the number format that the file record
   names) is not known, `:unsupportedbff` if it is `VAX-GFLT` or `VAX-DFLT`;
 - `:dafinvalidparams` if the summary format in the file record is not valid;
-- `:fileopenfail` if the system cannot open the file.
+- `:fileopenfailed` if the process may not read the file.
 
 # Examples
 Write an SPK file with one segment, then search it as a DAF:
@@ -414,11 +414,7 @@ See also [`dafopw`](@ref), [`dafbfs`](@ref), [`dafgda`](@ref), [`dafec`](@ref),
 """
 function dafopr(path::AbstractString)
     nd, ni, swap = _daf_probe(path, "dafopr")
-    io = try
-        open(path, "r")
-    catch e
-        throw(SpiceError(:fileopenfail, "dafopr: cannot open $path: $(sprint(showerror, e))"))
-    end
+    io = _open_read(path, "dafopr")
     return _open_register!(_daf_handle(path, io, false, swap, nd, ni), path, false, "dafopr")
 end
 

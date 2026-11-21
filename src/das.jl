@@ -124,7 +124,7 @@ before the binary-file-format string (bytes 85 to 92 zero) is taken as native.
 function _das_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
     _isfile(path) || throw(SpiceError(:filenotfound, "$who: the file $path does not exist"))
-    raw = open(io -> read(io, _DAS_RECLEN), path, "r")
+    raw = _open_read(io -> read(io, _DAS_RECLEN), path, who)
     length(raw) == _DAS_RECLEN || throw(
         SpiceError(
             :filereadfailed,
@@ -462,7 +462,8 @@ The file can have either byte order, and it need not be segregated (see
 
 Throws `SpiceError`:
 - `:emptystring` if `path` is empty, `:blankfilename` if it holds only blanks;
-- `:filenotfound` if the file does not exist;
+- `:filenotfound` if the file does not exist, `:fileopenfailed` if the process may not
+  read it;
 - `:filereadfailed` if the file is shorter than one record (1024 bytes);
 - `:filarchmismatch` if the file is a DAF, `:unknownfilarc` if it is neither a DAF
   nor a DAS file (a text kernel, for example);
