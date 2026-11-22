@@ -22,13 +22,12 @@ end
 
 _ByteBuf() = _ByteBuf(ntuple(_ -> zero(UInt64), Val(8)), 0)
 
-# The interface of an `AbstractString` that the constructor of `String63` uses. It is
-# faster than `InlineStrings.addcodeunit` byte by byte, which shifts all 64 bytes.
+# The part of the `AbstractString` interface that the constructor of `String63` reads,
+# in InlineStrings 1.x and 2.x: the length and the bytes. It is faster than
+# `InlineStrings.addcodeunit` byte by byte, which shifts all 64 bytes.
 Base.ncodeunits(b::_ByteBuf) = b.len
 Base.codeunit(::_ByteBuf) = UInt8
 Base.codeunit(b::_ByteBuf, i::Int) = _bget(b, i)
-Base.isvalid(b::_ByteBuf, i::Int) = 1 <= i <= b.len
-Base.iterate(b::_ByteBuf, i::Int = 1) = i > b.len ? nothing : (Char(_bget(b, i)), i + 1)
 
 "The bytes of `b` as a `String63`; they fit, as `b` holds at most 63."
 _inline(b::_ByteBuf) = String63(b)
