@@ -50,11 +50,11 @@ manual or a test. The global skills hold the general rules, and the project skil
 - Hot paths allocate nothing and return StaticArrays values.
 - Errors: `throw(SpiceError(kind, msg))`, where `kind` is the CSPICE short message in
   lower case (`:invaliddegree` for SPICE(INVALIDDEGREE)). A new kind must be added to
-  `ERROR_KINDS` in `errors.jl`: the constructor refuses an unknown kind, and a test
+  `ERROR_KINDS` in `core/errors.jl`: the constructor refuses an unknown kind, and a test
   compares the registry with the source. Public calls make the input checks of CSPICE
   in the order of CSPICE.
 - No hidden state. The only global state is the table of open files in
-  `daf_access.jl`. State that CSPICE hides in saved variables is either an object the
+  `files/daf_access.jl`. State that CSPICE hides in saved variables is either an object the
   caller owns (`DAFHandle`, `DASHandle`, `EKResult`, `EKFastLoad`, `SPK14Writer`,
   `CKW04Writer`, `PCK03Writer`) or an atomic field of the `SpiceContext` (`ks`,
   `timedefs`, `dsktols`, `gftol`).
@@ -67,24 +67,26 @@ manual or a test. The global skills hold the general rules, and the project skil
 ## Source layout
 
 `src/Almanac.jl` sets the include order, and a file uses only files that come before
-it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
-`ek/types.jl`. They are immutable. The snapshot-like types are `mutable` with only
-`const` fields, so that an atomic reference to one of them is a single word.
+it; the folders group the files by area and do not change that order. The shared types
+are in `core/types.jl`, `frames/dyntypes.jl`, `dsk/dsk_types.jl` and `ek/types.jl`. They
+are immutable. The snapshot-like types are `mutable` with only `const` fields, so that
+an atomic reference to one of them is a single word.
 
-| Area | Files |
+| Folder | Files |
 |---|---|
-| Binary kernels (DAF) | `daf.jl` (read), `daf_access.jl`, `daf_write.jl`, `memkernels.jl` (kernels built in memory: `furnsh` of a handle, `load_samples!`, `load_function!`) |
-| SPK evaluation | `spk_eval.jl` (types 2, 3), `spk_more.jl`, `spk_types/`, `conic.jl`, `interp.jl`, `mda.jl` |
-| Text and JSON kernels, pool | `textkernel.jl`, `jsonkernel.jl`, `pool_api.jl`, `pool_write.jl` |
-| Names, frames, rotations | `names.jl`, `frames.jl`, `rotations.jl`, `dynframes.jl`, `switchframes.jl`, `frame_info.jl` |
-| Time, clocks | `time.jl`, `timeparse.jl`, `timeout.jl`, `time_api.jl`, `sclk.jl`, `lst.jl` |
-| CK | `ck.jl`, `ck_api.jl`, `ck_records.jl`, `ck_write.jl` |
-| Context, queries | `context.jl`, `spk_api.jl`, `frame_api.jl`, `aberration.jl`, `queries.jl`, `providers.jl` |
-| Writers | `spk_write.jl`, `ck_write.jl`, `pck_write.jl`, `dsk_write.jl`, `ek/write*.jl` |
-| DAS, DSK, EK | `das.jl`, `dla.jl`, `dsk.jl`, `dsk_api.jl`, `surfaces.jl`, `ek/` |
-| Math, geometry, events | `math/`, `geometry/`, `gf/`, `windows.jl` |
-| Tables, AD, extensions | `table.jl`, `ad.jl`, `ext/` (Adapt, ForwardDiff, ChainRulesCore, EnzymeCore, Mooncake, ReverseDiff, Tracker) |
-| Orbit layer (ANISE-style analysis) | `analysis/`: `orbit.jl` (`Orbit`, `orbit`), `elements.jl` (`element`, `elements`), `brouwer.jl` (Brouwer mean elements, Kepler solver), `build.jl` (`keplerian_orbit`, `with_element`, `with_apsides`, `two_body`), `local_frames.jl` |
+| `core/` | `types.jl`, `errors.jl`, `strings.jl`, `taylor.jl` (`Taylor`, `primal`), `bytebuf.jl` (buffers of the number and time formats), `hex.jl` |
+| `files/` (DAF, DAS) | `daf.jl` (read), `daf_access.jl`, `daf_write.jl`, `das.jl`, `dla.jl` |
+| `kernels/` (contexts, pool) | `context.jl`, `textkernel.jl`, `jsonkernel.jl`, `pool_api.jl`, `pool_write.jl`, `names.jl`, `kernel_info.jl`, `memkernels.jl` (kernels built in memory: `furnsh` of a handle, `load_samples!`, `load_function!`) |
+| `spk/` | `spk_eval.jl` (types 2, 3; PCK segments, `_cheb3`, `find_segment`), `spk_more.jl`, `types/` (`conic.jl`, `interp.jl`, `mda.jl`, `sgp4.jl`, ...), `spk_api.jl`, `aberration.jl`, `spk_segments.jl`, `spk_write.jl`, `tle.jl` |
+| `ck/` | `ck.jl`, `ck_api.jl`, `ck_records.jl`, `ck_write.jl` |
+| `frames/` | `dyntypes.jl`, `frames.jl`, `rotations.jl`, `dynframes.jl`, `switchframes.jl`, `frame_api.jl`, `frame_info.jl`, `pck_write.jl` |
+| `time/` | `time.jl`, `timeparse.jl`, `timeout.jl`, `time_api.jl`, `sclk.jl`, `lst.jl` |
+| `dsk/` | `dsk_types.jl`, `dsk.jl`, `dsk_api.jl`, `dsk_write.jl`, `surfaces.jl` |
+| `ek/` | event kernels: file, columns, query parser and engine, writers (`write*.jl`) |
+| `queries/` | `queries.jl` (prepared queries), `providers.jl`, `table.jl` |
+| `math/`, `geometry/`, `gf/` | SPICELIB math (`kernels.jl` holds the `_m_` products; `windows.jl`), geometry, the geometry finder |
+| `analysis/` (Orbit layer, ANISE-style) | `orbit.jl` (`Orbit`, `orbit`), `elements.jl` (`element`, `elements`), `brouwer.jl` (Brouwer mean elements, Kepler solver), `build.jl` (`keplerian_orbit`, `with_element`, `with_apsides`, `two_body`), `local_frames.jl` |
+| top level | `Almanac.jl`, `ad.jl` (AD rules), `precompile.jl`; the package extensions are in `ext/` (Adapt, ForwardDiff, ChainRulesCore, EnzymeCore, Mooncake, ReverseDiff, Tracker) |
 
 ## Invariants that are easy to break
 

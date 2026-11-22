@@ -1,6 +1,6 @@
 # Evaluation of the SPK data types other than the fixed-interval Chebyshev types 2 and
 # 3: types 1, 5, 8, 9, 12, 13, 14, 15, 17, 18, 19, 20 and 21. Type 10 (two-line
-# elements) needs the kernel set and is in `spk_types/type10.jl`.
+# elements) needs the kernel set and is in `spk/types/type10.jl`.
 #
 # Each type has one function `state(data, seg, et::T) -> (pos::Vec3{T}, vel::Vec3{T})`
 # that follows the algorithm of the CSPICE reader and evaluator pair `spkrNN`/`spkeNN`
@@ -90,11 +90,11 @@ refuses with this kind.
 "Three consecutive doubles `data[a:a+2]` as a vector; requires the range inside `data` (not checked)."
 @inline _vec3(data::Vector{Float64}, a::Int) = @inbounds Vec3{Float64}(data[a], data[a + 1], data[a + 2])
 
-include("spk_types/numeric.jl")     # Taylor extras, implicit derivatives
-include("spk_types/interp.jl")      # types 8, 9, 12, 13, 18, 19
-include("spk_types/mda.jl")         # types 1, 21
-include("spk_types/chebyshev.jl")   # types 14, 20
-include("spk_types/conic.jl")       # types 5, 15, 17
+include("types/numeric.jl")     # Taylor extras, implicit derivatives
+include("types/interp.jl")      # types 8, 9, 12, 13, 18, 19
+include("types/mda.jl")         # types 1, 21
+include("types/chebyshev.jl")   # types 14, 20
+include("types/conic.jl")       # types 5, 15, 17
 
 """
     _spk_state(data, seg, et::T) -> (pos::Vec3{T}, vel::Vec3{T})
@@ -129,7 +129,7 @@ function _spk_state(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real
     elseif dtype == 17
         return _spk17(data, seg, et)
     elseif dtype == 10
-        _t10_needs_lsk(seg)     # type 10 needs a kernel set: spk_types/type10.jl
+        _t10_needs_lsk(seg)     # type 10 needs a kernel set: spk/types/type10.jl
     else
         _unsupported("SPK", dtype)
     end
