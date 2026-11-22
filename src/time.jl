@@ -66,7 +66,7 @@ JAN 01 12:00:00 UTC with 86400 seconds in every day (the result of [`tparse`](@r
 loaded.
 
 Throws `SpiceError(:kernelvarnotfound)` if no leap-second kernel is loaded and
-`SpiceError(:badepochtype)` if `eptype` is not `"UTC"` or `"ET"`.
+`SpiceError(:invalidepoch)` if `eptype` is not `"UTC"` or `"ET"`.
 
 # Examples
 ```julia
@@ -82,7 +82,7 @@ function deltet(ks::KernelSet, epoch::Real, eptype::AbstractString)::Float64
     isutc = _eqci(typ, "UTC")
     isutc || _eqci(typ, "ET") || throw(
         SpiceError(
-            :badepochtype,
+            :invalidepoch,
             "the epoch type '$eptype' is neither 'UTC' nor 'ET'"
         )
     )

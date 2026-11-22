@@ -423,8 +423,8 @@ A picture without a system or zone mark is UTC, and one without a calendar mark 
 Gregorian, unless [`timdef`](@ref) changed the default of the context. The result has
 no trailing blanks. [`tpictr`](@ref) makes a picture from a sample string.
 
-Throws `SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded and
-`SpiceError(:badformat)` if `pictur` is the empty string.
+Throws `SpiceError(:emptystring)` if `pictur` is the empty string and
+`SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded.
 
 # Examples
 ```julia
@@ -441,13 +441,13 @@ function timout(
         ks::KernelSet, et::Real, pictur::AbstractString,
         defs::TimeDefaults = TimeDefaults()
     )::String
-    l = _lsk(ks, :missingtimeinfo)
     isempty(pictur) && throw(
         SpiceError(
-            :badformat, "timout: the picture is an empty " *
+            :emptystring, "timout: the picture is an empty " *
                 "string (a blank picture gives a blank string)"
         )
     )
+    l = _lsk(ks, :missingtimeinfo)
     # The picture, left justified, with one blank after it: the blank closes the last
     # numeric component.
     pic = strip(pictur, ' ')
@@ -870,7 +870,8 @@ ignored:
 date, as in CSPICE. The fraction is rounded. The seconds are 60 inside a leap second. A year
 before 1000 has `A.D.` or `B.C.` in the formats `C` and `D`.
 
-Throws `SpiceError(:badformat)` if `format` is not one of the five,
+Throws `SpiceError(:emptystring)` if `format` is empty, `SpiceError(:invalidtimeformat)`
+if it is not one of the five,
 `SpiceError(:yearoutofrange)` if the year is before 1 A.D. in an ISO format, and
 `SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded.
 
@@ -883,10 +884,11 @@ et2utc(0.0, "ISOC", 3)      # UTC at the epoch J2000 TDB
 See also [`timout`](@ref), [`str2et`](@ref).
 """
 function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer)::String63
+    isempty(format) && throw(SpiceError(:emptystring, "et2utc: the format is an empty string"))
     fmt = _et2utc_format(format)
     fmt == 0 && throw(
         SpiceError(
-            :badformat,
+            :invalidtimeformat,
             "the format '$format' is not one of 'C', 'D', 'J', 'ISOC', 'ISOD'"
         )
     )
