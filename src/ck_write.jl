@@ -845,28 +845,6 @@ const _CK06_MINI = (
 )
 
 """
-    _ck06_qdist(pk, p, a, s) -> Float64
-
-The distance of `vdistg` between the quaternion `pk[p:p+3]` and `s` times the
-quaternion `pk[a:a+3]` (`s` is 1 or -1), with the scaling of `vdistg_`, so that tiny
-quaternions do not underflow.
-"""
-function _ck06_qdist(pk::Vector{Float64}, p::Int, a::Int, s::Float64)
-    scale = 0.0
-    for c in 0:3
-        d = abs(pk[p + c] - s * pk[a + c])
-        scale = scale >= d ? scale : d          # `max` of f2c
-    end
-    scale == 0.0 && return 0.0
-    dist = 0.0
-    for c in 0:3
-        t = (pk[p + c] - s * pk[a + c]) / scale
-        dist += t * t
-    end
-    return scale * sqrt(dist)
-end
-
-"""
     _ck06_quats(who, pk, i, pktbeg, n, pktsiz, subtyp) -> Nothing
 
 The quaternion checks of `ckw06` on the `n` packets of mini-segment `i`, which start at
@@ -888,7 +866,9 @@ function _ck06_quats(
         )
         if j > 1 && iseven(subtyp)
             p = a - pktsiz
-            _ck06_qdist(pk, p, a, -1.0) < _ck06_qdist(pk, p, a, 1.0) && throw(
+            prevq = SVector(pk[p], pk[p + 1], pk[p + 2], pk[p + 3])
+            q = SVector(pk[a], pk[a + 1], pk[a + 2], pk[a + 3])
+            _m_vdistg(prevq, -q) < _m_vdistg(prevq, q) && throw(
                 SpiceError(
                     :badquatsign, "$who: the " *
                         "quaternion at index $j within mini-segment $i is farther than its " *

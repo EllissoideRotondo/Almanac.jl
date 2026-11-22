@@ -1146,17 +1146,7 @@ See also [`vdist`](@ref).
 """
 function vdistg(v1::AbstractVector, v2::AbstractVector)
     _m_samelen(v1, v2)
-    scale = 0.0
-    @inbounds for i in eachindex(v1, v2)       # invariant: scale bounds the differences seen
-        scale = max(scale, abs(primal(_m_f(v1[i]) - _m_f(v2[i]))))
-    end
-    dist = zero(_m_f(zero(eltype(v1))) - _m_f(zero(eltype(v2)))) / 1.0
-    scale == 0.0 && return dist
-    @inbounds for i in eachindex(v1, v2)       # invariant: dist is the sum of squares seen
-        t = (_m_f(v1[i]) - _m_f(v2[i])) / scale
-        dist += t * t
-    end
-    return scale * sqrt(dist)
+    return _m_vdistg(v1, v2)
 end
 
 """

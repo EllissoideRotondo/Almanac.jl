@@ -324,6 +324,29 @@ end
     return _m_dvhat(_m_dvcrss(a, b), false)
 end
 
+"""
+    _m_vdistg(v1, v2)
+
+Distance between two vectors of equal length, as `vdistg_`: the differences are divided
+by the largest of their magnitudes before they are squared, so that tiny or huge
+components neither underflow nor overflow. The largest magnitude is taken with the `max`
+of f2c (`a >= b ? a : b`), which keeps the previous value when a difference is NaN.
+"""
+function _m_vdistg(v1::AbstractVector, v2::AbstractVector)
+    scale = 0.0
+    @inbounds for i in eachindex(v1, v2)       # invariant: scale bounds the differences seen
+        d = abs(primal(_m_f(v1[i]) - _m_f(v2[i])))
+        scale = scale >= d ? scale : d
+    end
+    dist = zero(_m_f(zero(eltype(v1))) - _m_f(zero(eltype(v2)))) / 1.0
+    scale == 0.0 && return dist
+    @inbounds for i in eachindex(v1, v2)       # invariant: dist is the sum of squares seen
+        t = (_m_f(v1[i]) - _m_f(v2[i])) / scale
+        dist += t * t
+    end
+    return scale * sqrt(dist)
+end
+
 "Angle between two unit vectors `u1` and `u2`, with the two-branch arcsine of `vsep`."
 @inline function _m_usep(u1::SVector{3}, u2::SVector{3})
     d = primal(_m_dot(u1, u2))
