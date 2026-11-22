@@ -552,15 +552,6 @@ end
 @inline _dyn_lift(::Type{S}, x::Float64) where {S <: Real} = convert(S, x)
 @inline _dyn_lift(::Type{S}, x::Taylor{1, Float64}) where {S <: Real} = convert(S, _dyn_still(x))
 
-"Unit vector along `a`, or the zero vector if `a` is zero, in any number type."
-@inline function _dyn_unit(a::Vec3{S}) where {S <: Real}
-    n = _norm3(a)
-    return primal(n) == 0 ? zero(a) : a / n
-end
-
-"Unit vector along `a × b`, as `ucrss_` and `ducrss_`, in any number type."
-@inline _dyn_ucross(a::Vec3{S}, b::Vec3{S}) where {S <: Real} = _dyn_unit(cross(a, b))
-
 "`x - m * trunc(x / m)` with the arithmetic of `d_mod` of the f2c library; the subtracted quantity is a constant, so derivatives are not changed."
 @inline _dyn_dmod(x::Real, m::Float64) = x - m * trunc(primal(x) / m)
 
@@ -597,22 +588,32 @@ of `et`.
 end
 
 """
-    _dyn_prec_angles(et) -> (zeta, z, theta, dzeta, dz, dtheta)
+    _dyn_prec_angles(et) -> (zeta, z, theta)
 
-Contract: the precession angles of `zzeprc76_` (radians) at `et` (TDB seconds) and their
-analytic rates (radians per second), with the arithmetic of `zzeprc76_`, in the number
-type of `et`.
+Contract: the precession angles of `zzeprc76_` (radians) at `et` (TDB seconds), with the
+arithmetic of `zzeprc76_`, in the number type of `et`.
 """
 @inline function _dyn_prec_angles(et::S) where {S <: Real}
     t = et / _DYN_CENTURY
     zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
     z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
     theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
+    return zeta, z, theta
+end
+
+"""
+    _dyn_prec_rates(et) -> (dzeta, dz, dtheta)
+
+Contract: the analytic rates (radians per second) of the angles of `_dyn_prec_angles`,
+with the arithmetic of `zzeprc76_`.
+"""
+@inline function _dyn_prec_rates(et::S) where {S <: Real}
+    t = et / _DYN_CENTURY
     ts = 1.0 / _DYN_CENTURY
     dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * _DYN_ARCSEC
     dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * _DYN_ARCSEC
     dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * _DYN_ARCSEC
-    return zeta, z, theta, dzeta, dz, dtheta
+    return dzeta, dz, dtheta
 end
 
 "Contract: the mean obliquity of the ecliptic of date in radians (1980 IAU), as `zzmobliq_`."
@@ -910,7 +911,8 @@ Contract: the precession matrix of `_dyn_prec` with its derivative, with the ari
 of `zzeprc76_`: the angles and their analytic rates go to `eul2xf_`.
 """
 function _dyn_prec_state(et::Float64)
-    zeta, z, theta, dzeta, dz, dtheta = _dyn_prec_angles(et)
+    zeta, z, theta = _dyn_prec_angles(et)
+    dzeta, dz, dtheta = _dyn_prec_rates(et)
     return _dyn_eul2xf(-z, theta, -zeta, -dz, dtheta, -dzeta, 3, 2, 3)
 end
 

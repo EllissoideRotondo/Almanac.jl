@@ -545,15 +545,8 @@ function _lt_series(
     return _ssbpos(ks, body, t + s * L, iref) - ro
 end
 
-"Series of the position `p` with stellar aberration for the observer velocity series `vo`: the formula of `zzstelab`, `p + |p| s v̂p + |p| (c - 1) r̂`."
-@inline function _stelab_series(transmit::Bool, vo, p)
-    v = transmit ? -vo : +vo
-    pm = _norm3(p)
-    rhat = p / pm
-    vp = v - _m_dot(v, rhat) * rhat
-    c = sqrt(1 - _m_dot(vp, vp) / CLIGHT^2)
-    return c * p + (pm / CLIGHT) * vp
-end
+"Series of the position `p` with stellar aberration for the observer velocity series `vo` (`-vo` for a transmission): `_dyn_stelab`, the formula of `zzstelab`."
+@inline _stelab_series(transmit::Bool, vo, p) = _dyn_stelab(p, transmit ? -vo : +vo)
 
 """
     abcorr_jet(ks, targ::Int32, et, ref::Int32, corr, obs::Int32, Val(N)) -> NTuple{N+1,Vec3}

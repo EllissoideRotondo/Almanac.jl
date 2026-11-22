@@ -146,7 +146,8 @@ Rotation from J2000 to the mean equator and equinox of date by the IAU 1976
 precession, and its time derivative, as `zzeprc76`.
 """
 @inline function _t10_precession(et::T) where {T <: Real}
-    zeta, z, theta, dzeta, dz, dtheta = _dyn_prec_angles(et)
+    zeta, z, theta = _dyn_prec_angles(et)
+    dzeta, dz, dtheta = _dyn_prec_rates(et)
     return _t10_eul2xf((-z, theta, -zeta, -dz, dtheta, -dzeta), 3, 2, 3)
 end
 

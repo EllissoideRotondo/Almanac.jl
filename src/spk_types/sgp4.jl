@@ -39,15 +39,8 @@ Requires `primal(x) > 0` (not checked).
     return Expr(:block, Expr(:meta, :inline), ex..., _pack(:r, N))
 end
 
-"""
-    _sgp4_mod(x::T, m::Float64) -> T
-
-Remainder of `x` divided by `m` with the sign of `x` (`d_mod` of f2c). The plain value
-is `f2c_dmod(primal(x), m)`, `x - m trunc(x / m)`, not the exact remainder `rem`, which
-moved the state by up to 1.4e-12 relative from that of CSPICE; the derivative parts of `x`
-do not change.
-"""
-@inline _sgp4_mod(x::Real, m::Float64) = _with_primal(x, f2c_dmod(primal(x), m))
+# The remainders are `_dyn_dmod` (`d_mod` of f2c), not the exact remainder `rem`, which
+# moved the state by up to 1.4e-12 relative from that of CSPICE.
 
 """
     _sgp4_lsterms(zcosg, zsing, zcosi, zsini, zcosh, zsinh, cc, c) -> NamedTuple
@@ -603,7 +596,7 @@ number of steps from the epoch, and `xli`, `xni` are the integrated values at `a
     g54 = 4.4108898
     stepp = 720.0
     step2 = 259200.0
-    theta = _sgp4_mod(r.gsto + t * _SGP4_RPTIM, _TWOPI)
+    theta = _dyn_dmod(r.gsto + t * _SGP4_RPTIM, _TWOPI)
     eccm = eccm + ds.dedt * t
     inclm = inclm + ds.didt * t
     argpm = argpm + ds.domdt * t
@@ -729,7 +722,7 @@ Lyddane form; the choice follows the plain value of the inclination.
         dbet = -ph * sinop + pinc * cosip * cosop
         alfdp = alfdp + dalf
         betdp = betdp + dbet
-        nodep = _sgp4_mod(nodep, _TWOPI)
+        nodep = _dyn_dmod(nodep, _TWOPI)
         (primal(nodep) < 0.0 && r.opmode == _SGP4_AFSPC) && (nodep = nodep + _TWOPI)
         xls = mp + argpp + cosip * nodep
         dls = pl + pgh - pinc * nodep * sinip
@@ -849,10 +842,10 @@ Earth radius). No allocation.
     primal(eccm) < 1.0e-6 && (eccm = convert(T, 1.0e-6))
     mm = mm + r.no * templ
     xlm = mm + argpm + nodem
-    nodem = _sgp4_mod(nodem, _TWOPI)
-    argpm = _sgp4_mod(argpm, _TWOPI)
-    xlm = _sgp4_mod(xlm, _TWOPI)
-    mm = _sgp4_mod(xlm - argpm - nodem, _TWOPI)
+    nodem = _dyn_dmod(nodem, _TWOPI)
+    argpm = _dyn_dmod(argpm, _TWOPI)
+    xlm = _dyn_dmod(xlm, _TWOPI)
+    mm = _dyn_dmod(xlm - argpm - nodem, _TWOPI)
     # Lunar and solar periodics.
     eccp = eccm
     xincp = inclm
@@ -892,7 +885,7 @@ Earth radius). No allocation.
     aynl = eccp * sargpp + temp * aycof
     xl = mp + argpp + nodep + temp * xlcof * axnl
     # Kepler equation: plain solution as CSPICE, then the derivative parts.
-    u = _sgp4_mod(xl - nodep, _TWOPI)
+    u = _dyn_dmod(xl - nodep, _TWOPI)
     eo1 = convert(T, _sgp4_kepler(primal(u), primal(axnl), primal(aynl)))
     for _ in 1:_ad_order(T)       # invariant: one more derivative order of eo1 is exact
         s, c = sincos(eo1)

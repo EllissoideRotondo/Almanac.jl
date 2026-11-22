@@ -191,19 +191,12 @@ function lspcn(ks::KernelSet, body::NameOrID, et::Real, abcorr::AbcorrArg)
     tipm = tipbod(ks, 1, id, et)
     npole = Vec3{Float64}(tipm[3, 1], tipm[3, 2], tipm[3, 3])
     r, v = spk_jet(ks, id, check_epoch(et), _J2000_FRAME, Int32(10), Val(1))
-    z = _dyn_ucross(r, v)
-    x = _dyn_ucross(npole, z)
-    primal(_m_dot(x, x)) == 0 && throw(
-        SpiceError(
-            :dependentvectors,
-            "lspcn: the pole of body $id is parallel to its orbital angular momentum"
-        )
-    )
-    y = _dyn_ucross(z, x)
+    # The arithmetic of `lspcn_`: `ucrss`, `twovec` (Z along the angular momentum, Y in
+    # the plane of the pole), `mxv` and `recrad` (with `reclat_`).
+    trans = twovec(_m_ucrss(r, v), 3, npole, 2)
     s, _ = spkezr(ks, 10, et, 1, Aberration(abcorr), id)
-    p = Vec3{Float64}(s[1], s[2], s[3])
-    px, py = dot(x, p), dot(y, p)
-    ra = (px == 0.0 && py == 0.0) ? 0.0 : atan(py, px)
+    pos = _m_mxv(trans, Vec3{Float64}(s[1], s[2], s[3]))
+    _, ra, _ = _m_reclat(pos, false)
     return ra < 0.0 ? ra + _TWOPI : ra
 end
 lspcn(ctx::SpiceContext, body::NameOrID, et::Real, abcorr::AbcorrArg) =
