@@ -14,8 +14,8 @@
 # one to one.
 #
 # A function `_ekw_<name>` ports the routine `zzek<name>` of CSPICE (`_ekw_pgal` is
-# `zzekpgal`, `_ekw_trin` is `zzektrin`); `_ekw_base` is `zzekpgbs` and `_ekw_udc` is
-# `dasudc`. A tree is known by the number of its root page.
+# `zzekpgal`, `_ekw_trin` is `zzektrin`); `_ekw_base` is `zzekpgbs`. A tree is known
+# by the number of its root page.
 #
 # Nothing here keeps state outside the handle.
 
@@ -68,14 +68,6 @@ function _ekw_sei(h::DASHandle, addr::Integer, val::Integer)
         chars[addr + k] = (n % 128) % UInt8
         n ÷= 128
     end
-    return nothing
-end
-
-@inline function _ekw_udc(
-        h::DASHandle, addr::Integer, src::AbstractVector{UInt8}, first::Int,
-        n::Int
-    )
-    n > 0 && copyto!(h.chars, Int(addr), src, first, n)
     return nothing
 end
 
@@ -573,24 +565,24 @@ function _ekw_tr13(h::DASHandle, tree::Integer)
     child2, _ = _ekw_pgal(h, 3)
     c1page = _ekw_Page()
     c1page[0] = _EK_MNKEYC
-    _ekw_move!(c1page, 1, rpage, 5, _EK_MNKEYC)
-    _ekw_move!(c1page, 128, rpage, 172, _EK_MNKEYC)
-    _ekw_move!(c1page, 64, rpage, 88, _EK_MNKIDC)
+    _ekw_move!(c1page, _EK_TRKEYC, rpage, _EK_TRKEYR, _EK_MNKEYC)
+    _ekw_move!(c1page, _EK_TRDATC, rpage, _EK_TRDATR, _EK_MNKEYC)
+    _ekw_move!(c1page, _EK_TRKIDC, rpage, _EK_TRKIDR, _EK_MNKIDC)
     c2page = _ekw_Page()
     c2page[0] = _EK_MNKEYC
     middle = _EK_MNKEYC + 1
-    _ekw_move!(c2page, 1, rpage, middle + 5, _EK_MNKEYC)
-    _ekw_move!(c2page, 128, rpage, middle + 172, _EK_MNKEYC)
-    _ekw_move!(c2page, 64, rpage, middle + 88, _EK_MNKIDC)
+    _ekw_move!(c2page, _EK_TRKEYC, rpage, middle + _EK_TRKEYR, _EK_MNKEYC)
+    _ekw_move!(c2page, _EK_TRDATC, rpage, middle + _EK_TRDATR, _EK_MNKEYC)
+    _ekw_move!(c2page, _EK_TRKIDC, rpage, middle + _EK_TRKIDR, _EK_MNKIDC)
     delta = rpage[middle + 4]
     for i in 1:_EK_MNKEYC
         c2page[i] = c2page[i] - delta
     end
     rpage[5] = rpage[middle + 4]
-    rpage[172] = rpage[middle + 171]
-    rpage[88] = child1
-    rpage[89] = child2
-    rpage[4] = 1
+    rpage[_EK_TRDATR] = rpage[middle + _EK_TRDATR - 1]
+    rpage[_EK_TRKIDR] = child1
+    rpage[_EK_TRKIDR + 1] = child2
+    rpage[4] = _EK_MNKEYR
     rpage[3] = rpage[3] + 1
     rpage[1] = rpage[1] + 2
     _ekw_clear!(rpage, 6, _EK_MXKEYR)
@@ -603,7 +595,8 @@ function _ekw_tr13(h::DASHandle, tree::Integer)
 end
 
 "Key, data and child bases (0-based offsets) of a node: the root or another node."
-@inline _ekw_bases(isroot::Bool) = isroot ? (5, 172, 88) : (1, 128, 64)
+@inline _ekw_bases(isroot::Bool) =
+    isroot ? (_EK_TRKEYR, _EK_TRDATR, _EK_TRKIDR) : (_EK_TRKEYC, _EK_TRDATC, _EK_TRKIDC)
 
 @inline function _ekw_sibling_check(
         ppage::_ekw_Page, kidbas::Int, pkidx::Int, left::Int,
@@ -693,10 +686,10 @@ function _ekw_tr23(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     local overfl::Bool
     if parent == root
         ppage[4] = ppage[4] + 1
-        overfl = ppage[4] == 83
+        overfl = ppage[4] == _EK_MXKEYR + 1
     else
         ppage[0] = ppage[0] + 1
-        overfl = ppage[0] == 63
+        overfl = ppage[0] == _EK_MXKEYC + 1
     end
     c1page[0] = lsize
     _ekw_clear!(c1page, lsize + 1, 63 - lsize)
@@ -1341,13 +1334,13 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
             "Tree has size $tsize; should be empty.EK = $(h.path); TREE = $tree."
         )
     )
-    tsize = 82
+    tsize = _EK_MXKEYR
     d = 1
     s = 1
     while tsize < size                   # invariant: a tree of depth d holds up to tsize keys
         d += 1
-        s = d == 2 ? 82 : s * 63 + 83
-        tsize = s * 62 + 82
+        s = d == 2 ? _EK_MXKEYR : s * _EK_MXKIDC + _EK_MXKIDR
+        tsize = s * _EK_MXKEYC + _EK_MXKEYR
     end
     d > _EK_TRMXDP && throw(
         SpiceError(
@@ -1377,9 +1370,9 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
                 if d > 1
                     nnodes = 0
                     for _ in 1:(d - 1)
-                        nnodes = nnodes * 63 + 1
+                        nnodes = nnodes * _EK_MXKIDC + 1
                     end
-                    maxsiz = nnodes * 62
+                    maxsiz = nnodes * _EK_MXKEYC
                     q = subsiz + 1
                     div = maxsiz + 1
                     nkids = (q + div - 1) ÷ div
@@ -1412,15 +1405,15 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
                 _ekw_pgwi(h, tree, page)
             elseif level < d
                 _ekw_clear!(page, 0, 256)
-                n = subsiz - 41
-                reqsiz = (n + 40) ÷ 41
+                n = subsiz - _EK_MNKEYC
+                reqsiz = (n + _EK_MNKEYC - 1) ÷ _EK_MNKEYC
                 nnodes = 0
                 for _ in 1:(d - level)
-                    nnodes = nnodes * 63 + 1
+                    nnodes = nnodes * _EK_MXKIDC + 1
                 end
-                maxsiz = nnodes * 62
+                maxsiz = nnodes * _EK_MXKEYC
                 if reqsiz <= maxsiz
-                    nkids = 42
+                    nkids = _EK_MNKIDC
                     bigsiz = reqsiz
                     nsmall = bigsiz * nkids - n
                     nbig = nkids - nsmall
@@ -1456,7 +1449,7 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
                 stnbig[level] = nbig
                 stnext[level] = 2
                 stnbas[level] = basidx
-                kidbas = level == 1 ? 88 : 64
+                kidbas = level == 1 ? _EK_TRKIDR : _EK_TRKIDC
                 level += 1
                 node = page[kidbas]
                 subsiz = bigsiz
@@ -1483,7 +1476,7 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
             end
         elseif next <= nkids
             stnext[level] = next + 1
-            kidbas = level == 1 ? 88 : 64
+            kidbas = level == 1 ? _EK_TRKIDR : _EK_TRKIDC
             node = page[kidbas + next - 1]
             subsiz = next <= nbig ? stlsiz[level] : stlsiz[level] - 1
             basidx = if next <= nbig + 1
@@ -1509,52 +1502,5 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
         end
     end
     h.ints[_ek_ibase(tree) + 2] = totnod
-    return nothing
-end
-
-"""
-    _ekw_trfr(h, tree) -> Nothing
-
-Free all pages of the tree with the root page `tree` (`zzektrfr`). Precondition: the
-depth is at most 10, else `SpiceError(:invalidformat)`.
-"""
-function _ekw_trfr(h::DASHandle, tree::Integer)
-    page = _ekw_pgri(h, tree)
-    depth = page[3]
-    depth > _EK_TRMXDP && throw(
-        SpiceError(
-            :invalidformat, "Tree has depth $depth; max " *
-                "supported depth is $_EK_TRMXDP.EK = $(h.path); TREE = $tree."
-        )
-    )
-    stack = zeros(Int, 3 * _EK_TRMXDP)
-    level = 1
-    remain = page[1]
-    node = Int(tree)
-    nkids = depth == 1 ? 0 : page[4] + 1
-    first = 1
-    while remain > 0                     # invariant: `remain` nodes of the tree are not free
-        if nkids > 0
-            kidbas = level == 1 ? 88 : 64
-            stack[3level - 2] = node
-            stack[3level - 1] = nkids
-            stack[3level] = first
-            level += 1
-            node = page[kidbas + first - 1]
-            _ekw_pgri!(page, h, node)
-            nkids = level < depth ? page[0] + 1 : 0
-            first = 1
-        else
-            _ekw_pgfr(h, 3, node)
-            remain -= 1
-            level -= 1
-            if level > 0
-                node = stack[3level - 2]
-                first = stack[3level] + 1
-                nkids = stack[3level - 1] - 1
-                _ekw_pgri!(page, h, node)
-            end
-        end
-    end
     return nothing
 end

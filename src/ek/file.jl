@@ -85,7 +85,6 @@ const _EK_MXKIDC = 63
 const _EK_MNKEYC = 41             # smallest number of keys of a node that is not the root
 const _EK_MNKIDC = 42
 const _EK_MNKEYR = 1
-const _EK_MNKIDR = 2
 const _EK_TRMXDP = 10             # largest depth of a tree
 
 @inline _ek_cbase(p::Integer) = (Int(p) - 1) * 1024

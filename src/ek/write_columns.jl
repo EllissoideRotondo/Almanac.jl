@@ -1404,38 +1404,6 @@ function _ekw_wpal(h::DASHandle, segdsc::Vector{Int32}, lvals::AbstractVector{Bo
 end
 
 """
-    _ekw_wpac(h, segdsc, l, cvals) -> base
-
-Store the strings `cvals`, each with exactly `l` characters, in new adjacent character
-data pages of the segment and return the base address of the first page (`zzekwpac`).
-Precondition: `1 <= l <= 1014`, else `SpiceError(:invalidsize)`.
-"""
-function _ekw_wpac(h::DASHandle, segdsc::Vector{Int32}, l::Int, cvals::Vector{Vector{UInt8}})
-    (1 <= l <= _EK_CPSIZE) || throw(
-        SpiceError(
-            :invalidsize,
-            "String length $l is just plain wrong."
-        )
-    )
-    nvals = length(cvals)
-    spp = _EK_CPSIZE ÷ l
-    p, base = _ekw_acps(h, segdsc, 1, (nvals + spp - 1) ÷ spp)
-    page = fill(UInt8(' '), 1024)
-    to = 1
-    for from in 1:nvals                  # invariant: the pages before `p` are written
-        _ekw_putc!(page, to, cvals[from], 1, l)
-        to += l
-        if to > _EK_CPSIZE - l + 1 || from == nvals
-            copyto!(h.chars, _ek_cbase(p) + 1, page, 1, 1024)
-            _ekw_slnk(h, 1, p, (to - l) ÷ l)
-            p += 1
-            to = 1
-        end
-    end
-    return base
-end
-
-"""
     _ekw_fixed_finish(h, segdsc, coldsc, datbas, iorder, nlflgs) -> Nothing
 
 The common end of `zzekac07`, `zzekac08` and `zzekac09`: the base of the data goes
