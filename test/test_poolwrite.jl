@@ -565,6 +565,8 @@ group(
             ["PW_BAD = @JUNK"], ["PW_BAD = @2000 JAN 1 PST"],
             ["NAIF_BODY_NAME = 'PW_SPUD'", "NAIF_BODY_CODE = ( 1009, 1010 )"],
             ["NAIF_BODY_NAME = 'PW_SPUD'"], ["NAIF_BODY_NAME = ' '", "NAIF_BODY_CODE = 1009"],
+            # Regression: a name that ends in a nonprinting character is NONPRINTINGCHAR.
+            ["PW_BAD\x7f = 1"],
         ]
         for (i, lines) in enumerate(cases)
             k = pw_kernel("bad$i.tpc", lines)

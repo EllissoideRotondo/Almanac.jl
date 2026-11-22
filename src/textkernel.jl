@@ -436,8 +436,8 @@ end
 const _BEGINDATA = Vector{UInt8}(codeunits("\\begindata"))
 const _BEGINTEXT = Vector{UInt8}(codeunits("\\begintext"))
 
-# The kinds are the short messages of `zzrvar`: BADVARASSIGN, BADVARNAME, TYPEMISMATCH,
-# NUMBEREXPECTED, BADTIMESPEC.
+# The kinds are the short messages of `zzrvar`: BADVARASSIGN, NONPRINTINGCHAR, BADVARNAME,
+# TYPEMISMATCH, NUMBEREXPECTED, BADTIMESPEC.
 @noinline _tk_fail(path, lineno::Int, msg, kind::Symbol = :badvarassign) =
     throw(SpiceError(kind, "$msg (line $lineno of '$path')"))
 
@@ -466,7 +466,8 @@ assignments in file order with the values CSPICE puts in the kernel pool. `path`
 used for the result and for error messages only; `yearbound` is the bound of `tsetyr`
 for a year of two digits in an `@` date, and `check` the range check of `tparch` for
 it. Throws `SpiceError` for a malformed assignment, with the kind that `zzrvar` gives
-(`:badvarassign`, `:badvarname`, `:typemismatch`, `:numberexpected`, `:badtimespec`).
+(`:badvarassign`, `:nonprintingchar`, `:badvarname`, `:typemismatch`, `:numberexpected`,
+`:badtimespec`).
 """
 function parse_text_lines(
         path::AbstractString, lines, yearbound::Int = 1969,
@@ -499,6 +500,11 @@ function parse_text_lines(
             count >= 3 || _tk_fail(
                 path, lineno, "a kernel variable assignment must have the form " *
                     "'<name> [+]= <values>'"
+            )
+            # `lastpc_` of the name: the last character must be printable (33 to 126).
+            0x21 <= line[ends[1]] <= 0x7e || _tk_fail(
+                path, lineno, "the variable name ends in a nonprinting character " *
+                    "(ASCII code $(Int(line[ends[1]])))", :nonprintingchar
             )
             ends[1] - begs[1] + 1 <= _TK_MAXNAME ||
                 _tk_fail(
