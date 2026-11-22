@@ -77,13 +77,13 @@ column 1 are not read.
 
 Throws `SpiceError`:
 - `:badarg` unless `lines` holds two lines;
-- `:noleapseconds` if no leap-second kernel is loaded;
 - `:badtle`, as CSPICE, in each of these cases:
   - the satellite numbers of the two lines differ;
   - a line does not have 68 or 69 characters (blanks at the end are not counted);
   - a term is not a number, or an exponent has more than one digit;
   - a value is out of range. The ranges are [0, 360) degrees for NODE0, OMEGA and M0,
     [0, 180] degrees for INCL, and [0, 20] revolutions per day for N0.
+- `:noleapseconds` if no leap-second kernel is loaded (tested after the lines).
 
 # Examples
 The file names are those of the generic kernels of NAIF; `geophs` holds the constants of
@@ -106,7 +106,6 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
             "getelm: `lines` must hold two lines, it holds $(length(lines))"
         )
     )
-    l = _lsk(ks)
     raw = (String(lines[1]), String(lines[2]))
     (isascii(raw[1]) && isascii(raw[2])) ||
         _tle_error("A line of the TLE pair has a character that is not ASCII.")
@@ -164,6 +163,8 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
     first = Int(frstyr)
     year = div(first, 100) * 100 + Int(yr)
     year < first && (year += 100)
+    # The leap seconds are needed only now, as in zzgetelm_, after all the checks.
+    l = _lsk(ks)
     epoch = _ttrans(l, _TT_YDD, _TT_TDB, _tvec(year, day))[1]
     return epoch, SVector{10, Float64}(ndt20, ndd60, bstar, incl, node0, ecc, omega, mo, no, epoch)
 end

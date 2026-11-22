@@ -497,6 +497,8 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         @test throws_kind(() -> getelm(ctx0, 1957, [l1, put(l2, 9:16, " 34.26é2")]), :badtle)
         # No leap-second kernel.
         @test throws_kind(() -> getelm(SpiceContext(), 1957, [l1, l2]), :noleapseconds)
+        # Regression: the lines are checked before the leap seconds, as in zzgetelm_.
+        @test throws_kind(() -> getelm(SpiceContext(), 1957, [l1, put(l2, 3:7, "00006")]), :badtle)
     end
 
     # Worst differences of each class: (b) evsgp4, (d) J2000 and IAU_EARTH.
