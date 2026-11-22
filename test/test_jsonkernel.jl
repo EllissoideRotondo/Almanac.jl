@@ -1,4 +1,4 @@
-# Group 51: JSON kernels (`src/jsonkernel.jl`).
+# Group 51: JSON kernels (`src/kernels/jsonkernel.jl`).
 #
 # A JSON kernel is a text kernel in the format of jsonspice, which PEPPER also reads.
 # The tests write each kernel twice, as a text kernel and as JSON, and compare the

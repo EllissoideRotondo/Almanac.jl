@@ -1,5 +1,5 @@
 # Group 52: bodies and frames that come from functions (`add_ephemeris!`, `add_frame!`,
-# src/providers.jl).
+# src/queries/providers.jl).
 #
 # Invariant layer: each provider describes linear motion, which an SPK of type 9 of
 # degree 1 holds exactly, so a context with the providers and a context with the same
