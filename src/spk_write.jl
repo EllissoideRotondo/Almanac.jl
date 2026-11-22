@@ -271,7 +271,7 @@ function _spk_add_pds!(
 end
 
 "`data` followed by every 100th epoch from the first `ndir * 100` epochs (the directory of the epoch table)."
-function _seg_directory!(data::Vector{Float64}, epochs::Vector{Float64}, ndir::Int)
+function _seg_directory!(data::Vector{Float64}, epochs::AbstractVector{Float64}, ndir::Int)
     for i in 1:ndir
         push!(data, epochs[100i])
     end
@@ -1525,6 +1525,176 @@ spkw21(
 
 const _SPK19_PKTSZS = (12, 6, 6)
 
+# What differs between the mini-segment writers `spkw19` and `ckw06` (`_CK06_MINI` in
+# ck_write.jl), apart from the clock rates and the quaternion checks of `ckw06`: the
+# packet sizes, the largest subtype and degree, the words of the messages, and the
+# bound that the last epoch of a mini-segment is compared with (`ckw06` of SPICELIB
+# compares it with the start of the interval, not with its end).
+const _SPK19_MINI = (
+    pktszs = _SPK19_PKTSZS, maxsub = 2, maxdeg = 27, endbound = true,
+    kname = "SPK type 19", count = "mini-segment/interval", bounds = "interval",
+    ivl = "interpolation interval", union = "interpolation intervals", times = "epochs",
+)
+
+"The number of mini-segments, `length(npkts)`; throws `SpiceError(:badarg)` unless `subtps` and `degres` have that length."
+function _seg_mini_count(who::AbstractString, npkts, subtps, degres)
+    n = length(npkts)
+    (length(subtps) == n && length(degres) == n) || throw(
+        SpiceError(
+            :badarg,
+            "$who: `npkts`, `subtps` and `degres` must have the same length"
+        )
+    )
+    return n
+end
+
+"""
+    _seg_minis(who, par, ctx, frame, first, last, segid, npkts, subtps, degres, pk, ep,
+               rt, bd, sellst, pktcheck) -> (refcod, data)
+
+The checks and the data of a segment of mini-segments, as `spkw19` and `ckw06` of
+SPICELIB make them after their argument checks: `par` is `_SPK19_MINI` or `_CK06_MINI`,
+`pk`, `ep` and `bd` the packets, epochs and interval bounds, `rt` the clock rates of
+`ckw06` (`nothing` for `spkw19`), and `pktcheck(i, pktbeg, n, pktsiz, subtyp)` the
+checks of the packets of mini-segment `i` that follow its bound checks (`nothing`: none).
+"""
+function _seg_minis(
+        who::AbstractString, par::NamedTuple, ctx::SegContext, frame::SegFrame,
+        first::Real, last::Real, segid::AbstractString, npkts, subtps, degres,
+        pk::Vector{Float64}, ep::Vector{Float64}, rt::Union{Nothing, Vector{Float64}},
+        bd::Vector{Float64}, sellst::Bool, pktcheck
+    )
+    nintvl = length(npkts)
+    last < first && throw(
+        SpiceError(
+            :baddescrtimes, "$who: segment start time is " *
+                "$first; stop time is $last; bounds must be in nondecreasing order"
+        )
+    )
+    refcod = _seg_refcode(who, ctx, frame)
+    _seg_idlen(who, segid)
+    _seg_idchars(who, segid)
+    nintvl < 1 && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: $(par.count) count was $nintvl; this count must be positive"
+        )
+    )
+    for i in 1:nintvl
+        bd[i] >= bd[i + 1] && throw(
+            SpiceError(
+                :boundsoutoforder, "$who: $(par.bounds) bounds at " *
+                    "indices $i and $(i + 1) are $(bd[i]) and $(bd[i + 1]); they must be strictly increasing"
+            )
+        )
+    end
+    (first < bd[1] || last > bd[nintvl + 1]) && throw(
+        SpiceError(
+            :coveragegap, "$who: " *
+                "segment coverage [$first, $last] must be contained within the union of the " *
+                "$(par.union) [$(bd[1]), $(bd[nintvl + 1])]"
+        )
+    )
+    winsizes = zeros(Int, nintvl)
+    pktend = 0
+    eepix = 0
+    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are valid
+        n = Int(npkts[i])
+        n < 2 && throw(
+            SpiceError(
+                :toofewpackets, "$who: at least 2 packets are " *
+                    "required for $(par.kname); $n were supplied in mini-segment $i"
+            )
+        )
+        subtyp = Int(subtps[i])
+        (subtyp < 0 || subtyp > par.maxsub) && throw(
+            SpiceError(
+                :invalidsubtype,
+                "$who: unexpected $(par.kname) subtype $subtyp found in mini-segment $i"
+            )
+        )
+        pktsiz = par.pktszs[subtyp + 1]
+        winsiz = isodd(subtyp) ? degres[i] + 1 : (degres[i] + 1) ÷ 2    # odd: Lagrange
+        (rt !== nothing && rt[i] <= 0.0) && throw(
+            SpiceError(
+                :invalidsclkrate,
+                "$who: SCLK rate in mini-segment $i was $(rt[i]); the rate must be positive"
+            )
+        )
+        (degres[i] < 1 || degres[i] > par.maxdeg) && throw(
+            SpiceError(
+                :invaliddegree, "$who: the " *
+                    "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
+                    "valid degree range is [1, $(par.maxdeg)]"
+            )
+        )
+        isodd(winsiz) && throw(
+            SpiceError(
+                :badwindowsize, "$who: the interpolating " *
+                    "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"
+            )
+        )
+        winsizes[i] = winsiz
+        pktbeg = pktend + 1
+        pktend = pktbeg - 1 + n * pktsiz
+        bepix = eepix + 1
+        eepix = bepix - 1 + n
+        (length(ep) >= eepix && length(pk) >= pktend) || throw(
+            SpiceError(
+                :badarg,
+                "$who: `$(par.times)` or `packts` is shorter than the packet counts require"
+            )
+        )
+        for k in bepix:(eepix - 1)
+            ep[k] >= ep[k + 1] && throw(
+                SpiceError(
+                    :timesoutoforder, "$who: in mini-segment " *
+                        "$i, epoch $(ep[k]) having index $k is greater than or equal to its successor"
+                )
+            )
+        end
+        ep[bepix] > bd[i] && throw(
+            SpiceError(
+                :boundsdisagree, "$who: $(par.ivl) " *
+                    "$i start time $(bd[i]) precedes mini-segment's first epoch $(ep[bepix])"
+            )
+        )
+        endbd = par.endbound ? bd[i + 1] : bd[i]
+        ep[eepix] < endbd && throw(
+            SpiceError(
+                :boundsdisagree, "$who: $(par.ivl) " *
+                    "$i end time $endbd exceeds mini-segment's last epoch $(ep[eepix])"
+            )
+        )
+        pktcheck === nothing || pktcheck(i, pktbeg, n, pktsiz, subtyp)
+    end
+    data = Float64[]
+    pktend = 0
+    eepix = 0
+    pointers = Float64[]
+    segend = 0
+    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are in data
+        pktsiz = par.pktszs[subtps[i] + 1]
+        n = Int(npkts[i])
+        append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
+        pktend += n * pktsiz
+        bepix = eepix + 1
+        eepix = bepix - 1 + n
+        append!(data, view(ep, bepix:eepix))
+        _seg_directory!(data, view(ep, bepix:eepix), (n - 1) ÷ 100)
+        rt === nothing || push!(data, rt[i])
+        push!(data, Float64(subtps[i]), Float64(winsizes[i]), Float64(n))
+        minisz = n * (pktsiz + 1) + (n - 1) ÷ 100 + (rt === nothing ? 3 : 4)
+        push!(pointers, Float64(segend + 1))
+        segend += minisz
+    end
+    append!(data, bd)
+    _seg_directory!(data, bd, nintvl ÷ 100)
+    append!(data, pointers)
+    push!(data, Float64(segend + 1), sellst ? 1.0 : -1.0, Float64(nintvl))
+    return refcod, data
+end
+
 """
     spkw19([ctx,] handle, body, center, frame, first, last, segid, npkts, subtps, degres,
            packts, epochs, ivlbds, sellst) -> Nothing
@@ -1574,135 +1744,14 @@ function spkw19(
     _daf_check_write(h, who)
     frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
     _chkfstr(who, "string `segid`", segid)
-    nintvl = length(npkts)
-    (length(subtps) == nintvl && length(degres) == nintvl) || throw(
-        SpiceError(
-            :badarg,
-            "$who: `npkts`, `subtps` and `degres` must have the same length"
-        )
-    )
+    nintvl = _seg_mini_count(who, npkts, subtps, degres)
     pk = _seg_vec(who, "packts", packts, -1)
     ep = _seg_vec(who, "epochs", epochs, -1)
     bd = _seg_vec(who, "ivlbds", ivlbds, nintvl < 1 ? -1 : nintvl + 1)
-    last < first && throw(
-        SpiceError(
-            :baddescrtimes, "$who: segment start time is " *
-                "$first; stop time is $last; bounds must be in nondecreasing order"
-        )
+    refcod, data = _seg_minis(
+        who, _SPK19_MINI, ctx, frame, first, last, segid, npkts, subtps, degres, pk, ep,
+        nothing, bd, sellst, nothing
     )
-    refcod = _seg_refcode(who, ctx, frame)
-    _seg_idlen(who, segid)
-    _seg_idchars(who, segid)
-    nintvl < 1 && throw(
-        SpiceError(
-            :invalidcount,
-            "$who: mini-segment/interval count was $nintvl; this count must be positive"
-        )
-    )
-    for i in 1:nintvl
-        bd[i] >= bd[i + 1] && throw(
-            SpiceError(
-                :boundsoutoforder, "$who: interval bounds at " *
-                    "indices $i and $(i + 1) are $(bd[i]) and $(bd[i + 1]); they must be strictly increasing"
-            )
-        )
-    end
-    (first < bd[1] || last > bd[nintvl + 1]) && throw(
-        SpiceError(
-            :coveragegap, "$who: " *
-                "segment coverage [$first, $last] must be contained within the union of the " *
-                "interpolation intervals [$(bd[1]), $(bd[nintvl + 1])]"
-        )
-    )
-    winsizes = zeros(Int, nintvl)
-    eepix = 0
-    npk = 0
-    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are valid
-        npkts[i] < 2 && throw(
-            SpiceError(
-                :toofewpackets, "$who: at least 2 packets are " *
-                    "required for SPK type 19; $(npkts[i]) were supplied in mini-segment $i"
-            )
-        )
-        subtyp = Int(subtps[i])
-        (subtyp < 0 || subtyp > 2) && throw(
-            SpiceError(
-                :invalidsubtype,
-                "$who: unexpected SPK type 19 subtype $subtyp found in mini-segment $i"
-            )
-        )
-        winsiz = subtyp == 1 ? degres[i] + 1 : (degres[i] + 1) ÷ 2
-        (degres[i] < 1 || degres[i] > 27) && throw(
-            SpiceError(
-                :invaliddegree, "$who: the " *
-                    "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
-                    "valid degree range is [1, 27]"
-            )
-        )
-        isodd(winsiz) && throw(
-            SpiceError(
-                :badwindowsize, "$who: the interpolating " *
-                    "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"
-            )
-        )
-        winsizes[i] = winsiz
-        bepix = eepix + 1
-        eepix = bepix - 1 + Int(npkts[i])
-        npk += Int(npkts[i]) * _SPK19_PKTSZS[subtyp + 1]
-        (length(ep) >= eepix && length(pk) >= npk) || throw(
-            SpiceError(
-                :badarg,
-                "$who: `epochs` or `packts` is shorter than the packet counts require"
-            )
-        )
-        for k in bepix:(eepix - 1)
-            ep[k] >= ep[k + 1] && throw(
-                SpiceError(
-                    :timesoutoforder, "$who: in mini-segment " *
-                        "$i, epoch $(ep[k]) having index $k is greater than or equal to its successor"
-                )
-            )
-        end
-        ep[bepix] > bd[i] && throw(
-            SpiceError(
-                :boundsdisagree, "$who: interpolation interval " *
-                    "$i start time $(bd[i]) precedes mini-segment's first epoch $(ep[bepix])"
-            )
-        )
-        ep[eepix] < bd[i + 1] && throw(
-            SpiceError(
-                :boundsdisagree, "$who: interpolation interval " *
-                    "$i end time $(bd[i + 1]) exceeds mini-segment's last epoch $(ep[eepix])"
-            )
-        )
-    end
-    data = Float64[]
-    pktend = 0
-    eepix = 0
-    pointers = Float64[]
-    segend = 0
-    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are in data
-        pktsiz = _SPK19_PKTSZS[subtps[i] + 1]
-        n = Int(npkts[i])
-        append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
-        pktend += n * pktsiz
-        bepix = eepix + 1
-        eepix = bepix - 1 + n
-        append!(data, view(ep, bepix:eepix))
-        for j in 1:((n - 1) ÷ 100)
-            push!(data, ep[bepix - 1 + 100j])
-        end
-        push!(data, Float64(subtps[i]), Float64(winsizes[i]), Float64(n))
-        minisz = n * (pktsiz + 1) + (n - 1) ÷ 100 + 3
-        push!(pointers, Float64(segend + 1))
-        segend += minisz
-    end
-    append!(data, bd)
-    for i in 1:(nintvl ÷ 100)
-        push!(data, bd[100i])
-    end
-    append!(data, pointers)
-    push!(data, Float64(segend + 1), sellst ? 1.0 : -1.0, Float64(nintvl))
     _spk_add!(h, body, center, refcod, 19, first, last, segid, data)
     return nothing
 end

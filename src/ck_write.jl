@@ -836,6 +836,54 @@ ckw05(
     sclkdp, packts, rate, nints, starts
 )
 
+# The mini-segments of CK type 6 for `_seg_minis` (see `_SPK19_MINI`); SPICELIB
+# compares the last epoch of a mini-segment with the start of its interval.
+const _CK06_MINI = (
+    pktszs = _CK5_PACKSZ, maxsub = 3, maxdeg = 23, endbound = false,
+    kname = "CK type 6", count = "mini-segment", bounds = "mini-segment interval",
+    ivl = "mini-segment interval", union = "mini-segment intervals", times = "sclkdp",
+)
+
+"""
+    _ck06_quats(who, pk, i, pktbeg, n, pktsiz, subtyp) -> Nothing
+
+The quaternion checks of `ckw06` on the `n` packets of mini-segment `i`, which start at
+`pk[pktbeg]`: `:zeroquaternion` for a zero quaternion, and for a Hermite subtype
+`:badquatsign` if a quaternion is farther from its predecessor than its negative is.
+"""
+function _ck06_quats(
+        who::AbstractString, pk::Vector{Float64}, i::Int, pktbeg::Int, n::Int,
+        pktsiz::Int, subtyp::Int
+    )
+    for j in 1:n
+        a = pktbeg + pktsiz * (j - 1)
+        (pk[a] == 0.0 && pk[a + 1] == 0.0 && pk[a + 2] == 0.0 && pk[a + 3] == 0.0) &&
+            throw(
+            SpiceError(
+                :zeroquaternion, "$who: the quaternion at index $j within " *
+                    "mini-segment $i has magnitude zero"
+            )
+        )
+        if j > 1 && iseven(subtyp)
+            p = a - pktsiz
+            dneg = 0.0
+            dpos = 0.0
+            for c in 0:3
+                dneg += (pk[p + c] + pk[a + c])^2
+                dpos += (pk[p + c] - pk[a + c])^2
+            end
+            sqrt(dneg) < sqrt(dpos) && throw(
+                SpiceError(
+                    :badquatsign, "$who: the " *
+                        "quaternion at index $j within mini-segment $i is farther than its " *
+                        "negative from its predecessor at index $(j - 1)"
+                )
+            )
+        end
+    end
+    return nothing
+end
+
 """
     ckw06([ctx,] handle, inst, ref, avflag, first, last, segid, npkts, subtps, degres,
           packts, rates, sclkdp, ivlbds, sellst) -> Nothing
@@ -890,173 +938,16 @@ function ckw06(
     _daf_check_write(h, who)
     ref isa AbstractString && _chkfstr(who, "string `ref`", ref)
     _chkfstr(who, "string `segid`", segid)
-    nmini = length(npkts)
-    (length(subtps) == nmini && length(degres) == nmini) || throw(
-        SpiceError(
-            :badarg,
-            "$who: `npkts`, `subtps` and `degres` must have the same length"
-        )
-    )
+    nmini = _seg_mini_count(who, npkts, subtps, degres)
     pk = _seg_vec(who, "packts", packts, -1)
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     rt = _seg_vec(who, "rates", rates, nmini)
     bd = _seg_vec(who, "ivlbds", ivlbds, nmini < 1 ? -1 : nmini + 1)
-    last < first && throw(
-        SpiceError(
-            :baddescrtimes, "$who: segment start time is " *
-                "$first; stop time is $last; bounds must be in nondecreasing order"
-        )
+    pktcheck = (i, pktbeg, n, pktsiz, subtyp) -> _ck06_quats(who, pk, i, pktbeg, n, pktsiz, subtyp)
+    refcod, data = _seg_minis(
+        who, _CK06_MINI, ctx, ref, first, last, segid, npkts, subtps, degres, pk, t, rt,
+        bd, sellst, pktcheck
     )
-    refcod = _seg_refcode(who, ctx, ref)
-    _seg_idlen(who, segid)
-    _seg_idchars(who, segid)
-    nmini < 1 && throw(
-        SpiceError(
-            :invalidcount,
-            "$who: mini-segment count was $nmini; this count must be positive"
-        )
-    )
-    for i in 1:nmini
-        bd[i] >= bd[i + 1] && throw(
-            SpiceError(
-                :boundsoutoforder, "$who: mini-segment interval " *
-                    "bounds at indices $i and $(i + 1) are $(bd[i]) and $(bd[i + 1]); they must be " *
-                    "strictly increasing"
-            )
-        )
-    end
-    (first < bd[1] || last > bd[nmini + 1]) && throw(
-        SpiceError(
-            :coveragegap, "$who: segment " *
-                "coverage [$first, $last] must be contained within the union of the mini-segment " *
-                "intervals [$(bd[1]), $(bd[nmini + 1])]"
-        )
-    )
-    winsizes = zeros(Int, nmini)
-    pktend = 0
-    eepix = 0
-    for i in 1:nmini                     # invariant: mini-segments 1 .. i-1 are valid
-        n = Int(npkts[i])
-        n < 2 && throw(
-            SpiceError(
-                :toofewpackets, "$who: at least 2 packets are required " *
-                    "for CK type 6; $n were supplied in mini-segment $i"
-            )
-        )
-        subtyp = Int(subtps[i])
-        (subtyp < 0 || subtyp > 3) && throw(
-            SpiceError(
-                :invalidsubtype,
-                "$who: unexpected CK type 6 subtype $subtyp found in mini-segment $i"
-            )
-        )
-        pktsiz = _CK5_PACKSZ[subtyp + 1]
-        winsiz = isodd(subtyp) ? degres[i] + 1 : (degres[i] + 1) ÷ 2
-        rt[i] <= 0.0 && throw(
-            SpiceError(
-                :invalidsclkrate,
-                "$who: SCLK rate in mini-segment $i was $(rt[i]); the rate must be positive"
-            )
-        )
-        pktbeg = pktend + 1
-        pktend = pktbeg - 1 + n * pktsiz
-        (degres[i] < 1 || degres[i] > 23) && throw(
-            SpiceError(
-                :invaliddegree, "$who: the " *
-                    "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
-                    "valid degree range is [1, 23]"
-            )
-        )
-        isodd(winsiz) && throw(
-            SpiceError(
-                :badwindowsize, "$who: the interpolating " *
-                    "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"
-            )
-        )
-        winsizes[i] = winsiz
-        bepix = eepix + 1
-        eepix = bepix - 1 + n
-        (length(t) >= eepix && length(pk) >= pktend) || throw(
-            SpiceError(
-                :badarg,
-                "$who: `sclkdp` or `packts` is shorter than the packet counts require"
-            )
-        )
-        for k in bepix:(eepix - 1)
-            t[k] >= t[k + 1] && throw(
-                SpiceError(
-                    :timesoutoforder, "$who: in mini-segment $i, " *
-                        "epoch $(t[k]) having index $k is greater than or equal to its successor"
-                )
-            )
-        end
-        t[bepix] > bd[i] && throw(
-            SpiceError(
-                :boundsdisagree, "$who: mini-segment interval " *
-                    "$i start time $(bd[i]) precedes mini-segment's first epoch $(t[bepix])"
-            )
-        )
-        # SPICELIB compares the last epoch with the interval start here, not with its end.
-        t[eepix] < bd[i] && throw(
-            SpiceError(
-                :boundsdisagree, "$who: mini-segment interval " *
-                    "$i end time exceeds mini-segment's last epoch $(t[eepix])"
-            )
-        )
-        for j in 1:n
-            a = pktbeg + pktsiz * (j - 1)
-            (pk[a] == 0.0 && pk[a + 1] == 0.0 && pk[a + 2] == 0.0 && pk[a + 3] == 0.0) &&
-                throw(
-                SpiceError(
-                    :zeroquaternion, "$who: the quaternion at index $j within " *
-                        "mini-segment $i has magnitude zero"
-                )
-            )
-            if j > 1 && iseven(subtyp)
-                p = a - pktsiz
-                dneg = 0.0
-                dpos = 0.0
-                for c in 0:3
-                    dneg += (pk[p + c] + pk[a + c])^2
-                    dpos += (pk[p + c] - pk[a + c])^2
-                end
-                sqrt(dneg) < sqrt(dpos) && throw(
-                    SpiceError(
-                        :badquatsign, "$who: the " *
-                            "quaternion at index $j within mini-segment $i is farther than its " *
-                            "negative from its predecessor at index $(j - 1)"
-                    )
-                )
-            end
-        end
-    end
-    data = Float64[]
-    pktend = 0
-    eepix = 0
-    pointers = Float64[]
-    segend = 0
-    for i in 1:nmini                     # invariant: mini-segments 1 .. i-1 are in data
-        pktsiz = _CK5_PACKSZ[subtps[i] + 1]
-        n = Int(npkts[i])
-        append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
-        pktend += n * pktsiz
-        bepix = eepix + 1
-        eepix = bepix - 1 + n
-        append!(data, view(t, bepix:eepix))
-        for j in 1:((n - 1) ÷ 100)
-            push!(data, t[bepix - 1 + 100j])
-        end
-        push!(data, rt[i], Float64(subtps[i]), Float64(winsizes[i]), Float64(n))
-        minisz = n * (pktsiz + 1) + (n - 1) ÷ 100 + 4
-        push!(pointers, Float64(segend + 1))
-        segend += minisz
-    end
-    append!(data, bd)
-    for i in 1:(nmini ÷ 100)
-        push!(data, bd[100i])
-    end
-    append!(data, pointers)
-    push!(data, Float64(segend + 1), sellst ? 1.0 : -1.0, Float64(nmini))
     _ck_add!(h, inst, refcod, 6, avflag, first, last, segid, data)
     return nothing
 end
