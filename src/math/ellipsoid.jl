@@ -1259,6 +1259,26 @@ See also [`vprjp`](@ref), [`cgv2el`](@ref).
 pjelpl(elin::SpiceEllipse, plane::SpicePlane) = _m_pjelpl(elin, plane)
 
 """
+    _m_scaled_axes(a, b, c) -> (scale, scla, sclb, sclc, scla2, sclb2, sclc2)
+
+The scaling of `edlimb_` and `npedln_`: the longest semi-axis `scale`, the semi-axes
+divided by it and their squares. Throws `SpiceError(:degeneratecase)` if a square
+underflows to zero. The semi-axes are checked by the caller.
+"""
+@inline function _m_scaled_axes(a, b, c)
+    scale = _m_max(_m_max(a, b), c)
+    scla = a / scale
+    sclb = b / scale
+    sclc = c / scale
+    scla2 = scla * scla
+    sclb2 = sclb * sclb
+    sclc2 = sclc * sclc
+    (primal(scla2) == 0.0 || primal(sclb2) == 0.0 || primal(sclc2) == 0.0) &&
+        throw(SpiceError(:degeneratecase, "a semi-axis is too small"))
+    return scale, scla, sclb, sclc, scla2, sclb2, sclc2
+end
+
+"""
     edlimb(a, b, c, viewpt) -> SpiceEllipse
 
 Return the limb of an ellipsoid as seen from the point `viewpt`, as
@@ -1295,15 +1315,7 @@ function edlimb(a::Real, b::Real, c::Real, viewpt::AbstractVector)
             "semi-axis lengths: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"
         )
     )
-    scale = _m_max(_m_max(a, b), c)
-    scla = a / scale
-    sclb = b / scale
-    sclc = c / scale
-    scla2 = scla * scla
-    sclb2 = sclb * sclb
-    sclc2 = sclc * sclc
-    (primal(scla2) == 0.0 || primal(sclb2) == 0.0 || primal(sclc2) == 0.0) &&
-        throw(SpiceError(:degeneratecase, "a semi-axis is too small"))
+    scale, scla, sclb, sclc, scla2, sclb2, sclc2 = _m_scaled_axes(a, b, c)
     v = (1.0 / scale) * vp
     level = (v[1] * v[1] / scla2) + (v[2] * v[2] / sclb2) + (v[3] * v[3] / sclc2)
     primal(level) < 1.0 && throw(
@@ -1524,15 +1536,7 @@ function _m_npedln(a::Real, b::Real, c::Real, lp::SVector{3}, ld::SVector{3}, re
             "semi-axis lengths: a = $(primal(a)), b = $(primal(b)), c = $(primal(c))"
         )
     )
-    scale = _m_max(_m_max(a, b), c)
-    scla = a / scale
-    sclb = b / scale
-    sclc = c / scale
-    scla2 = scla * scla
-    sclb2 = sclb * sclb
-    sclc2 = sclc * sclc
-    (primal(scla2) == 0.0 || primal(sclb2) == 0.0 || primal(sclc2) == 0.0) &&
-        throw(SpiceError(:degeneratecase, "a semi-axis is too small"))
+    scale, scla, sclb, sclc, scla2, sclb2, sclc2 = _m_scaled_axes(a, b, c)
     sclpt = SVector(lp[1] / scale, lp[2] / scale, lp[3] / scale)
     for dir in (udir, -udir)
         found, pt = _m_surfpt(sclpt, dir, scla, sclb, sclc)

@@ -165,17 +165,28 @@ end
     _throw_abcorr(s, "is not recognized")
 end
 
+"""
+    _abcorr_fast(s) -> UInt8
+
+The flags of the nine common spellings of a correction, compared as they are, or `0xff`
+(no valid set of flags) for any other string. No allocation.
+"""
+@inline function _abcorr_fast(s::AbstractString)
+    s == "NONE" && return 0x00
+    s == "LT" && return _AB_LT
+    s == "LT+S" && return _AB_LT | _AB_S
+    s == "CN" && return _AB_LT | _AB_CN
+    s == "CN+S" && return _AB_LT | _AB_CN | _AB_S
+    s == "XLT" && return _AB_X | _AB_LT
+    s == "XLT+S" && return _AB_X | _AB_LT | _AB_S
+    s == "XCN" && return _AB_X | _AB_LT | _AB_CN
+    s == "XCN+S" && return _AB_X | _AB_LT | _AB_CN | _AB_S
+    return 0xff
+end
+
 @inline function Aberration(s::AbstractString)
-    # Fast path: the common spellings, compared as they are.
-    s == "NONE" && return _aberration(0x00)
-    s == "LT" && return _aberration(_AB_LT)
-    s == "LT+S" && return _aberration(_AB_LT | _AB_S)
-    s == "CN" && return _aberration(_AB_LT | _AB_CN)
-    s == "CN+S" && return _aberration(_AB_LT | _AB_CN | _AB_S)
-    s == "XLT" && return _aberration(_AB_X | _AB_LT)
-    s == "XLT+S" && return _aberration(_AB_X | _AB_LT | _AB_S)
-    s == "XCN" && return _aberration(_AB_X | _AB_LT | _AB_CN)
-    s == "XCN+S" && return _aberration(_AB_X | _AB_LT | _AB_CN | _AB_S)
+    f = _abcorr_fast(s)
+    f == 0xff || return _aberration(f)
     return _parse_abcorr(s)
 end
 

@@ -454,8 +454,7 @@ function _geo_limbpt(
             "the roll step is zero and more than one cutting half plane is asked for"
         )
     )
-    sh = m.dsk ? _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst) :
-        _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+    sh = _geo_subshape(ks, tols, m, trgcde, fixfid)
     radii = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?
         _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
     et = Float64(check_epoch(et0))
@@ -640,8 +639,7 @@ function _geo_termpt(
             "the roll step is zero and more than one cutting half plane is asked for"
         )
     )
-    sh = m.dsk ? _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst) :
-        _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+    sh = _geo_subshape(ks, tols, m, trgcde, fixfid)
     srad = _geo_radii3(ks, ilucde, :badradiuscount)
     ilurad = max(max(srad[1], srad[2]), srad[3])
     trad = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?

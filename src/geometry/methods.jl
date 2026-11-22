@@ -145,15 +145,8 @@ values (case and blanks ignored) throws `SpiceError(:invalidoption)`, the short 
 of CSPICE. No allocation for the common spellings.
 """
 @inline function _geo_abcorr(s::AbstractString)
-    s == "NONE" && return _aberration(0x00)
-    s == "LT" && return _aberration(_AB_LT)
-    s == "LT+S" && return _aberration(_AB_LT | _AB_S)
-    s == "CN" && return _aberration(_AB_LT | _AB_CN)
-    s == "CN+S" && return _aberration(_AB_LT | _AB_CN | _AB_S)
-    s == "XLT" && return _aberration(_AB_X | _AB_LT)
-    s == "XLT+S" && return _aberration(_AB_X | _AB_LT | _AB_S)
-    s == "XCN" && return _aberration(_AB_X | _AB_LT | _AB_CN)
-    s == "XCN+S" && return _aberration(_AB_X | _AB_LT | _AB_CN | _AB_S)
+    f = _abcorr_fast(s)
+    f == 0xff || return _aberration(f)
     return _geo_abcorr_slow(s)
 end
 @inline _geo_abcorr(c::Aberration) = c
