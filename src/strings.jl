@@ -56,11 +56,12 @@ function _eqstr(a::AbstractString, b::AbstractString)
         while j <= length(cb) && cb[j] == UInt8(' ')
             j += 1
         end
-        (i > length(ca) || j > length(cb)) && return i > length(ca) && j > length(cb)
+        (i > length(ca) || j > length(cb)) && break
         _upper(ca[i]) == _upper(cb[j]) || return false
         i += 1
         j += 1
     end
+    return i > length(ca) && j > length(cb)
 end
 
 """
@@ -161,11 +162,12 @@ function _matchi(string::AbstractString, templ::AbstractString)
         while tcur <= tlast && iswstr(tcur)
             tcur += 1
         end
-        tcur > tlast && return true
+        tcur > tlast && break
         left = tcur
         while tcur <= tlast && !iswstr(tcur)
             tcur += 1
         end
         right = tcur - 1
     end
+    return true
 end

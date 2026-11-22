@@ -29,7 +29,7 @@ _mdot(a::Number, d::Number) = a * d
 
 # The rules of the derivative points (`_AD_POINTS`), for a `Float64` epoch.
 for (f, types, iet) in _AD_POINTS
-    sig = Tuple{typeof(f), ntuple(i -> i == iet ? Float64 : types[i], length(types))...}
+    sig = Tuple{typeof(f), [i == iet ? Float64 : types[i] for i in eachindex(types)]...}
     @eval begin
         @is_primitive DefaultCtx $sig
         function Mooncake.frule!!(::Dual{typeof($f)}, args::Vararg{Dual})

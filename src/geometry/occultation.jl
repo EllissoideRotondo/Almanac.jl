@@ -454,7 +454,7 @@ end
 "True if a target with DSK data is paired with a target that is not a point (`zzgfocin`)."
 @inline _geo_occ_dsk_combo(front::_GeoOccBody, back::_GeoOccBody) =
     (front.kind == _GEO_OCC_DSK && back.kind != _GEO_OCC_POINT) ||
-        (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
+    (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
 
 "The correction of `zzgfocin`: `abcorr` without stellar aberration."
 @inline function _geo_occ_corr(abcorr)
