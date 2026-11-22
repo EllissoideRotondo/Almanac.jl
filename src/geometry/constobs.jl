@@ -66,7 +66,7 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
     dist = _m_norm(r)
     lt = dist / CLIGHT
     primal(lt) == 0 && return (; r, v, lt, dlt = zero(lt))
-    corr.uselt || return (; r, v, lt, dlt = _dot3(r, v) / (dist * CLIGHT))
+    corr.uselt || return (; r, v, lt, dlt = _m_dot(r, v) / (dist * CLIGHT))
     s = _ltsign(corr)
     numitr = corr.converged ? 5 : 1
     lterr = 1.0
@@ -83,8 +83,8 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
         i += 1
     end
     a = 1 / (CLIGHT * _m_norm(r))
-    b = _dot3(r, v)
-    c = _dot3(r, vt)
+    b = _m_dot(r, v)
+    c = _m_dot(r, vt)
     primal(s * c * a) > 1 - 1.0e-10 && _geo_throw_rate()
     dlt = a * b / (1 - s * c * a)
     v = (1 + s * dlt) * vt - vobs

@@ -79,6 +79,9 @@ end
     a[1] * b[2] - a[2] * b[1]
 )
 
+"Norm without the scaling of `vnorm`, `sqrt(a ⋅ a)`, for every element type (no comparison)."
+@inline _norm3(a) = sqrt(_m_dot(a, a))
+
 "Norm with the scaling by the largest component of `vnorm`."
 @inline function _m_norm(v::SVector{3, T}) where {T}
     vmax = _m_maxabs(v)

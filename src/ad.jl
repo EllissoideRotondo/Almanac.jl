@@ -105,7 +105,7 @@ end
 "Derivative of the light time `|r| / c` for the position `r` with derivative `dr`."
 @inline function _ad_lt_rate(r::Vec3, dr::Vec3)
     n = _norm3(r)
-    return primal(n) == 0 ? zero(n) : _dot3(r, dr) / (n * CLIGHT)
+    return primal(n) == 0 ? zero(n) : _m_dot(r, dr) / (n * CLIGHT)
 end
 
 # --- results for a number type that carries derivatives ---------------------------------

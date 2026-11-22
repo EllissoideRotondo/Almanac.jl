@@ -87,7 +87,7 @@ end
 "Three consecutive doubles `data[a:a+2]` as a vector; requires the range inside `data` (not checked)."
 @inline _vec3(data::Vector{Float64}, a::Int) = @inbounds Vec3{Float64}(data[a], data[a + 1], data[a + 2])
 
-include("spk_types/numeric.jl")     # Taylor extras, implicit derivatives, vector helpers
+include("spk_types/numeric.jl")     # Taylor extras, implicit derivatives
 include("spk_types/interp.jl")      # types 8, 9, 12, 13, 18, 19
 include("spk_types/mda.jl")         # types 1, 21
 include("spk_types/chebyshev.jl")   # types 14, 20

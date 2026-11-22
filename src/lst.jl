@@ -193,7 +193,7 @@ function lspcn(ks::KernelSet, body::NameOrID, et::Real, abcorr::AbcorrArg)
     r, v = spk_jet(ks, id, check_epoch(et), _J2000_FRAME, Int32(10), Val(1))
     z = _dyn_ucross(r, v)
     x = _dyn_ucross(npole, z)
-    primal(_dot3(x, x)) == 0 && throw(
+    primal(_m_dot(x, x)) == 0 && throw(
         SpiceError(
             :dependentvectors,
             "lspcn: the pole of body $id is parallel to its orbital angular momentum"

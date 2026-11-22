@@ -459,7 +459,7 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
     if corsys == 1
         mx = 0.0
         for i in 1:nv                    # invariant: mx is the largest norm of the vertices 1 .. i-1
-            mx = max(_dsk_vnorm(_dsk_get3(vrtces, i)), mx)
+            mx = max(_m_norm(_dsk_get3(vrtces, i)), mx)
         end
         mn = _DSK_DPMAX
         for i in 1:np                    # invariant: mn is the least distance of the plates 1 .. i-1
@@ -494,8 +494,8 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
             v1 = _dsk_get3(vrtces, i1)
             v2 = _dsk_get3(vrtces, i2)
             v3 = _dsk_get3(vrtces, i3)
-            center = _dsk_vlcom3(third, v1, third, v2, third, v3)
-            maxd = max(max(_dsk_vdist(v1, center), _dsk_vdist(v2, center)), _dsk_vdist(v3, center))
+            center = third * v1 + third * v2 + third * v3
+            maxd = max(max(_m_norm(v1 - center), _m_norm(v2 - center)), _m_norm(v3 - center))
             mn = min(mn, _dsk_altitude(center, re, f) - maxd)
         end
         return mn, mx
@@ -615,7 +615,7 @@ function dskw02(
     par = zeros(Float64, 10)
     copyto!(par, corpar)
     twopi_ = _TWOPI
-    hpi = _DSK_HALFPI
+    hpi = _HALFPI
     if corsys == 1 || corsys == 4
         mn1 == mx1 && _dsk_throw(
             :zeroboundsextent,

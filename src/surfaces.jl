@@ -561,14 +561,14 @@ function _dsk_latsrf(
     for i in 1:npts                      # invariant: out[1:i-1] holds the points 1 .. i-1
         lon, lat = _dsk_get2(lonlat, i)
         x = _dsk_latrec(r, lon, lat)
-        xpt, _, _, found = _dsk_bux(ks, tols, trgcde, srflst, t, fixfid, x, _dsk_vminus(x))
+        xpt, _, _, found = _dsk_bux(ks, tols, trgcde, srflst, t, fixfid, x, -x)
         found || throw(
             SpiceError(
                 :pointnotfound, "no surface point was found on body " *
                     "$trgcde at planetocentric longitude $(rad2deg(lon)) deg, latitude $(rad2deg(lat)) deg"
             )
         )
-        _dsk_vdot(x, xpt) < 0.0 && throw(
+        _m_dot(x, xpt) < 0.0 && throw(
             SpiceError(
                 :shapenotsupported, "the intercept is " *
                     "on the far side of the center of body $trgcde; such a shape is not supported"
@@ -641,7 +641,7 @@ function _dsk_srfnrm(
     end
     t = Float64(et)
     for i in 1:npts                      # invariant: out[1:i-1] holds the normals 1 .. i-1
-        out[i] = _dsk_vhat(_dsk_bun(ks, tols, trgcde, srflst, t, fixfid, _dsk_get3(srfpts, i)))
+        out[i] = _m_hat(_dsk_bun(ks, tols, trgcde, srflst, t, fixfid, _dsk_get3(srfpts, i)))
     end
     return out
 end

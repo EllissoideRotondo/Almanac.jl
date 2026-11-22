@@ -89,7 +89,7 @@ function _geo_illumf(
     # surface list of the method string is not used) and the epoch at the point.
     sh = _geo_dskshape(ks, tols, trgcde, fixfid, _GEO_NOSURF)
     tp = _geo_plain(trgepc)
-    normal = _dsk_vhat(_dsk_bun(ks, tols, trgcde, _GEO_NOSURF, tp, fixfid, sp))
+    normal = _m_hat(_dsk_bun(ks, tols, trgcde, _GEO_NOSURF, tp, fixfid, sp))
     phase = vsep(obspos, tipos)
     incdnc = vsep(normal, tipos)
     emissn = vsep(normal, obspos)

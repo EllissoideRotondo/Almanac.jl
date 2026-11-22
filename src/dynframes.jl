@@ -947,8 +947,8 @@ sine), for any number type. Requires `p != 0` and `|v| < c`.
 @inline function _dyn_stelab(p, v)
     pm = _norm3(p)
     u = p / pm
-    vp = v - _dot3(v, u) * u
-    c = sqrt(1 - _dot3(vp, vp) / CLIGHT^2)
+    vp = v - _m_dot(v, u) * u
+    c = sqrt(1 - _m_dot(vp, vp) / CLIGHT^2)
     return c * p + (pm / CLIGHT) * vp
 end
 
@@ -977,7 +977,7 @@ function _dyn_apo(
     nos = _aberration(corr.flags & ~_AB_S)
     robs, vobs = _ssb(ks, obs, et, iref)::NTuple{2, Vec3{T}}
     r, lt = _apo(ks, targ, et, iref, nos, robs, vobs)::Tuple{Vec3{T}, T}
-    if corr.stellar && primal(_dot3(r, r)) > 0
+    if corr.stellar && primal(_m_dot(r, r)) > 0
         r = _dyn_stelab(r, corr.transmit ? -vobs : +vobs)
     end
     inertial && return r, lt

@@ -181,13 +181,6 @@ end
 
 const AbcorrArg = Union{AbstractString, Aberration}
 
-# --- small vector helpers -----------------------------------------------------------
-#
-# Written out so that they hold for every element type (`Taylor` has no comparisons).
-
-@inline _dot3(a, b) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
-@inline _norm3(a) = sqrt(_dot3(a, a))
-
 @inline _ssb(ks::KernelSet, body::Int32, et, iref::Int32) =
     spk_jet(ks, body, et, iref, Int32(0), Val(1))
 
@@ -248,7 +241,7 @@ function _ltc(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, rob
     lt = dist / CLIGHT
     z = zero(lt)
     primal(lt) == 0 && return (; r, v, lt, dlt = z, ltprev = z, k = z)
-    corr.uselt || return (; r, v, lt, dlt = _dot3(r, v) / (dist * CLIGHT), ltprev = z, k = z)
+    corr.uselt || return (; r, v, lt, dlt = _m_dot(r, v) / (dist * CLIGHT), ltprev = z, k = z)
     s = _ltsign(corr)
     numitr = corr.converged ? 5 : 1
     ltprev = lt
@@ -267,8 +260,8 @@ function _ltc(ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration, rob
         i += 1
     end
     a = 1 / (CLIGHT * _m_norm(r))
-    b = _dot3(r, v)
-    k = s * _dot3(r, vt) * a
+    b = _m_dot(r, v)
+    k = s * _m_dot(r, vt) * a
     primal(k) > 1 - 1.0e-10 && _throw_range_rate()
     dlt = a * b / (1 - k)
     v = (1 + s * dlt) * vt - vobs
@@ -320,7 +313,7 @@ The computation of `stelab`: `pobj` rotated by the angle `asin(|u × vobs/c|)` a
     # The scaled norms and the projection of `vhat_`, `vnorm_` and `vrotv_`.
     u = _m_hat(pobj)
     vbyc = (1 / CLIGHT) * vobs
-    primal(_dot3(vbyc, vbyc)) >= 1 && _throw_vobs()
+    primal(_m_dot(vbyc, vbyc)) >= 1 && _throw_vobs()
     h = _m_cross(u, vbyc)
     sinphi = _m_norm(h)
     primal(sinphi) == 0 && return pobj - zero(h)
@@ -361,14 +354,14 @@ function _zzstelab(transmit::Bool, accobs, vobs, r, v)
     lcvobs = transmit ? -vobs : +vobs
     lcacc = transmit ? -accobs : +accobs
     rhat, drhat = _m_pv(_m_dvhat(vcat(r, v), false))
-    dptmag = _dot3(v, rhat)
+    dptmag = _m_dot(v, rhat)
     scorr, vp, vphat, s, c, ptgmag = _stel_offset(r, rhat, lcvobs)
     primal(c) == 0 && _throw_stelab_cos()
     if primal(s) >= 1.0e-6
-        dvp = lcacc + (-_dot3(lcvobs, drhat) - _dot3(lcacc, rhat)) * rhat +
-            (-_dot3(lcvobs, rhat)) * drhat
+        dvp = lcacc + (-_m_dot(lcvobs, drhat) - _m_dot(lcacc, rhat)) * rhat +
+            (-_m_dot(lcvobs, rhat)) * drhat
         dvphat = _m_pv(_m_dvhat(vcat(vp, dvp), false))[2]
-        dphi = 1 / (c * CLIGHT) * _dot3(dvp, vphat)
+        dphi = 1 / (c * CLIGHT) * _m_dot(dvp, vphat)
         term1 = s * dvphat + (c * dphi) * vphat
         term2 = (c - 1) * drhat + (-s * dphi) * rhat
         dscorr = ptgmag * (term1 + term2) + (dptmag * s) * vphat + (dptmag * (c - 1)) * rhat
@@ -522,7 +515,7 @@ function _lt_series(
     s = _ltsign(corr)
     geo = _ssbpos(ks, body, t, iref) - ro
     # Coincident bodies: the geometric series, as `spkltc` returns the geometric state.
-    primal(_dot3(geo, geo)) == 0 && return geo
+    primal(_m_dot(geo, geo)) == 0 && return geo
     if !corr.converged
         return _ssbpos(ks, body, t + s * (_norm3(geo) / CLIGHT), iref) - ro
     end
@@ -546,8 +539,8 @@ end
     v = transmit ? -vo : +vo
     pm = _norm3(p)
     rhat = p / pm
-    vp = v - _dot3(v, rhat) * rhat
-    c = sqrt(1 - _dot3(vp, vp) / CLIGHT^2)
+    vp = v - _m_dot(v, rhat) * rhat
+    c = sqrt(1 - _m_dot(vp, vp) / CLIGHT^2)
     return c * p + (pm / CLIGHT) * vp
 end
 
@@ -573,7 +566,7 @@ function abcorr_jet(
     ro = _series(ojet, 1, Val(N))
     t = taylor_var(et, Val(N))
     p = _lt_series(ks, targ, et, t, iref, corr, robs, vobs, ro)
-    moving = primal(_dot3(p, p)) > 0
+    moving = primal(_m_dot(p, p)) > 0
     q = corr.stellar && moving ? _stelab_series(corr.transmit, _series(ojet, 2, Val(N)), p) : p
     if !inertial
         center = frame_def(ks, ref).center
@@ -582,7 +575,7 @@ function abcorr_jet(
             moving && (tau = t + s * (_norm3(p) / CLIGHT))
         elseif center != obs
             pc = _lt_series(ks, center, et, t, iref, corr, robs, vobs, ro)
-            primal(_dot3(pc, pc)) > 0 && (tau = t + s * (_norm3(pc) / CLIGHT))
+            primal(_m_dot(pc, pc)) > 0 && (tau = t + s * (_norm3(pc) / CLIGHT))
         end
         q = _m_mxv(frame_rotation(ks, Int32(1), ref, tau), q)
     end

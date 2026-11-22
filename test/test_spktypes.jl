@@ -780,13 +780,13 @@ group("9. SPK data types against CSPICE") do
         @test throws_kind(() -> Almanac._stumpff(-1.0e6), :badorbit)
         # Angle between vectors and rotation about an axis.
         ex, ey, ez = SVector(1.0, 0.0, 0.0), SVector(0.0, 1.0, 0.0), SVector(0.0, 0.0, 1.0)
-        @test Almanac._vsep(ex, ey) == pi / 2
-        @test Almanac._vsep(ex, -ex) ≈ pi
-        @test Almanac._vsep(ex, SVector(1.0, 1.0, 0.0)) ≈ pi / 4
-        @test Almanac._vsep(ex, zero(ex)) == 0.0
-        @test Almanac._vrotv(ex, ez, pi / 2) ≈ ey
-        @test Almanac._vrotv(ex, zero(ez), 1.0) == ex
-        @test Almanac._vrotv(zero(ex), ez, 1.0) == zero(ex)
+        @test Almanac._m_vsep(ex, ey) == pi / 2
+        @test Almanac._m_vsep(ex, -ex) ≈ pi
+        @test Almanac._m_vsep(ex, SVector(1.0, 1.0, 0.0)) ≈ pi / 4
+        @test Almanac._m_vsep(ex, zero(ex)) == 0.0
+        @test Almanac._m_vrotv(ex, ez, pi / 2) ≈ ey
+        @test Almanac._m_vrotv(ex, zero(ez), 1.0) == ex
+        @test Almanac._m_vrotv(zero(ex), ez, 1.0) == zero(ex)
         @test Almanac._dsign(2.0, -0.0) == 2.0 && Almanac._dsign(-2.0, -1.0) == -2.0
         # Two-body propagation: zero time gives the state back; bad input is refused.
         r0, v0 = SVector(7000.0, 0.0, 0.0), SVector(0.0, 7.5, 1.0)

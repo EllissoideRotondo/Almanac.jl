@@ -390,7 +390,7 @@ end
 
 "Norm of `v` scaled by its largest plain component, as `vnorm`."
 @inline function _t10_vnorm(v::Vec3{T}) where {T <: Real}
-    m = _maxabs(v)
+    m = _m_maxabs(v)
     m == 0.0 && return zero(T)
     a, b, c = v[1] / m, v[2] / m, v[3] / m
     return m * sqrt(a * a + b * b + c * c)
@@ -398,15 +398,15 @@ end
 
 "Component of `a` normal to `b`, with the scaling of `vperp` and `vproj`."
 @inline function _t10_vperp(a::Vec3{T}, b::Vec3{T}) where {T <: Real}
-    biga, bigb = _maxabs(a), _maxabs(b)
+    biga, bigb = _m_maxabs(a), _m_maxabs(b)
     biga == 0.0 && return zero(Vec3{T})
     bigb == 0.0 && return a
     t = a / biga
     r = b / bigb
-    bt, br = _maxabs(t), _maxabs(r)
+    bt, br = _m_maxabs(t), _m_maxabs(r)
     r2 = r / br
     t2 = t / bt
-    v = (_dot(t2, r2) * bt / _dot(r2, r2)) * r2
+    v = (_m_dot(t2, r2) * bt / _m_dot(r2, r2)) * r2
     return biga * (t - v)
 end
 
@@ -420,14 +420,14 @@ end
 
 "Unit vector along the cross product of `p1` and `p2`, and its time derivative for the rates `v1` and `v2`, as `ducrss`."
 @inline function _t10_ducrss(p1::Vec3{T}, v1::Vec3{T}, p2::Vec3{T}, v2::Vec3{T}) where {T <: Real}
-    f1, f2 = _maxabs(p1), _maxabs(p2)
+    f1, f2 = _m_maxabs(p1), _m_maxabs(p2)
     if f1 > 0.0
         p1, v1 = (1.0 / f1) * p1, (1.0 / f1) * v1
     end
     if f2 > 0.0
         p2, v2 = (1.0 / f2) * p2, (1.0 / f2) * v2
     end
-    return _t10_dvhat(_cross(p1, p2), _cross(v1, p2) + _cross(p1, v2))
+    return _t10_dvhat(_m_cross(p1, p2), _m_cross(v1, p2) + _m_cross(p1, v2))
 end
 
 @inline _t10_row(m::Mat3{T}, i::Int) where {T} = Vec3{T}(m[i, 1], m[i, 2], m[i, 3])

@@ -1169,22 +1169,6 @@ spkw18(
 # Types 15 and 17: precessing conic elements
 # ---------------------------------------------------------------------------------------
 
-"Norm of the 3-vector `v`, with the scaling of `vnorm` of SPICELIB (same rounding)."
-function _seg_vnorm(v)
-    vmax = max(abs(v[1]), abs(v[2]), abs(v[3]))
-    vmax == 0.0 && return 0.0
-    a = v[1] / vmax
-    b = v[2] / vmax
-    c = v[3] / vmax
-    return vmax * sqrt(a * a + b * b + c * c)
-end
-
-"Unit vector of the 3-vector `v`, or zero for the zero vector, as `vhat` of SPICELIB (same rounding)."
-function _seg_vhat(v)
-    m = _seg_vnorm(v)
-    return m > 0.0 ? (v[1] / m, v[2] / m, v[3] / m) : (0.0, 0.0, 0.0)
-end
-
 """
     spkw15([ctx,] handle, body, center, frame, first, last, segid, epoch, tp, pa, p, ecc,
            j2flg, pv, gm, j2, radius) -> Nothing
@@ -1226,9 +1210,9 @@ function spkw15(
     tp = _seg_fixed(who, "tp", tp, 3)
     pa = _seg_fixed(who, "pa", pa, 3)
     pv = _seg_fixed(who, "pv", pv, 3)
-    mypa = _seg_vhat(pa)
-    mytp = _seg_vhat(tp)
-    record = Float64[epoch, mytp..., mypa..., p, ecc, j2flg, _seg_vhat(pv)..., gm, j2, radius]
+    mypa = _m_hat(_m_v3(pa))
+    mytp = _m_hat(_m_v3(tp))
+    record = Float64[epoch, mytp..., mypa..., p, ecc, j2flg, _m_hat(_m_v3(pv))..., gm, j2, radius]
     p <= 0 && throw(SpiceError(:badlatusrectum, "$who: the semi-latus rectum must be positive; it was $p"))
     ecc < 0 && throw(SpiceError(:badeccentricity, "$who: the eccentricity must be non-negative; it was $ecc"))
     gm <= 0 && throw(SpiceError(:nonpositivemass, "$who: the mass of the central body must be positive; GM was $gm"))

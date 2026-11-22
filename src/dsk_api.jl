@@ -279,7 +279,7 @@ function _dsk_n02(ints::Vector{Int32}, dps::Vector{Float64}, seg::DSKSegment, pl
     v1 = _dsk_vertex(dps, seg, i1)
     v2 = _dsk_vertex(dps, seg, i2)
     v3 = _dsk_vertex(dps, seg, i3)
-    return _dsk_ucrss(_dsk_vsub(v2, v1), _dsk_vsub(v3, v1))
+    return _m_ucrss(v2 - v1, v3 - v1)
 end
 
 """
@@ -982,7 +982,7 @@ function pltar(vrtces, plates)
         v1 = _dsk_get3(vrtces, i1)
         v2 = _dsk_get3(vrtces, i2)
         v3 = _dsk_get3(vrtces, i3)
-        area += _dsk_vnorm(_dsk_vcrss(_dsk_vsub(v2, v1), _dsk_vsub(v3, v2))) * 0.5
+        area += _m_norm(_m_cross(v2 - v1, v3 - v2)) * 0.5
     end
     return area
 end
