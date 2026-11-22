@@ -865,6 +865,20 @@ group("9. SPK data types against CSPICE") do
         @test refuses("type 17, h 0.12, k -0.09", :baddaf, (d, s) -> d[b(s) + 1] = 0.0)      # A
         @test refuses("type 5, ellipse", :badorbit, (d, s) -> d[e(s) - 1] = 0.0)             # GM
     end
+
+    # Regression: the counts of a segment were rounded with ties away from zero, where
+    # `i_dnnt` of f2c takes the floor of `x + 0.5`: 0.49999999999999994 + 0.5 rounds to
+    # 1.0, so `spkr08_` reads the degree 1 (a window of two states), not 0.
+    @apart @testset "segment counts as i_dnnt" begin
+        c8 = cases[findfirst(x -> x.label == "type 8, degree 7", cases)]
+        seg8 = ks.spk[Int32(c8.body)][1]
+        whole, near = copy(ks.daf[seg8.file]), copy(ks.daf[seg8.file])
+        whole[seg8.eaddr - 1] = 1.0
+        near[seg8.eaddr - 1] = prevfloat(0.5)
+        for et in (c8.t0 + (c8.t1 - c8.t0) / 3, c8.t1 - (c8.t1 - c8.t0) / 7)
+            @test Almanac.spk_eval(near, seg8, et, Val(1)) == Almanac.spk_eval(whole, seg8, et, Val(1))
+        end
+    end
 end
 
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

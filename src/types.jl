@@ -101,7 +101,9 @@ function SegmentList(segs::Vector{S}) where {S}
             r = next[r]
         end
         while next[p] != r                         # compress the path to `r`
-            p, next[p] = next[p], r
+            q = next[p]
+            next[p] = r
+            p = q
         end
         return r
     end

@@ -806,25 +806,6 @@ end
 )
 
 """
-    _rotation_up(ks, id, stop, et::T) -> Mat3{T}
-
-Matrix from frame `id` to its ancestor `stop` at `et`. Requires `stop` to be `id`
-itself or a frame on the chain from `id` to J2000.
-"""
-function _rotation_up(ks::KernelSet, id::Int32, stop::Int32, et::T) where {T <: Real}
-    rot = one(Mat3{T})
-    cur = id
-    n = 0
-    while cur != stop      # invariant: rot takes vectors from frame id to frame cur
-        n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(id)
-        cur, step = _frame_step(ks, cur, et)
-        rot = n == 1 ? step : _m_mxm(step, rot)
-    end
-    return rot
-end
-
-"""
     frame_rotation(ks, from, to, et::T) -> Mat3{T}
 
 Matrix that rotates vectors from frame `from` to frame `to` at `et` (ET seconds),

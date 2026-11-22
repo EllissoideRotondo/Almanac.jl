@@ -16,13 +16,27 @@
 
 # `_lstled` and `_lstltd` are in `spk_more.jl`.
 
-"Index in `1:n` of the element of `data[base+1:base+n]` (ascending) closest to `x`; of two equally close the later one, as `lstcld_`. Requires `n >= 1`."
+"""
+    _lstcld(data, base, n, x) -> Int
+
+Index in `1:n` of the element of `data[base+1:base+n]` (ascending) closest to `x`, as
+`lstcld_`: of two equally close the later one, and of a run of equal elements the last
+one. Requires `n >= 1`.
+"""
 @inline function _lstcld(data::Vector{Float64}, base::Int, n::Int, x::Float64)
     @inbounds begin
-        x <= data[base + 1] && return 1
-        data[base + n] <= x && return n
-        i = _lstltd(data, base, n, x)          # data[i] < x <= data[i+1], 1 <= i < n
-        return x - data[base + i] < data[base + i + 1] - x ? i : i + 1
+        i = if x <= data[base + 1]
+            1
+        elseif data[base + n] <= x
+            n
+        else
+            j = _lstltd(data, base, n, x)      # data[j] < x <= data[j+1], 1 <= j < n
+            x - data[base + j] < data[base + j + 1] - x ? j : j + 1
+        end
+        while i < n && data[base + i] == data[base + i + 1]   # invariant: data[i] is closest
+            i += 1
+        end
+        return i
     end
 end
 
@@ -56,7 +70,7 @@ function _ck_eval01(
     p = primal(sclk)
     beg = seg.baddr
     psiz = seg.avflag ? 7 : 4
-    nrec = trunc(Int, data[seg.eaddr])
+    nrec = _cint(data[seg.eaddr])          # `(integer)` of `ckr01_`
     (nrec >= 1 && beg + (psiz + 1) * nrec - 1 <= seg.eaddr) ||
         _ck_bad(:baddaf, "CK type 1 segment with a wrong record count")
     ndir = (nrec - 1) ÷ 100

@@ -1035,6 +1035,40 @@ group(
         end
     end
 
+    # Regression: the pointing search of type 1 segments stopped at the first of equal
+    # time tags, where `lstcld_` returns the last of the run. `lstcld_` is the oracle.
+    @apart @testset "closest time tag of a type 1 segment, as lstcld" begin
+        c_lstcld(x, a) = Int(
+            ccall(
+                (:lstcld_, SPICE.libcspice), Cint, (Ref{Cdouble}, Ref{Cint}, Ptr{Cdouble}),
+                x, length(a), a
+            )
+        )
+        arrays = ([1.0, 2.0, 2.0, 3.0], [1.0, 1.0, 2.0], [1.0, 2.0, 3.0, 3.0], [5.0, 5.0, 5.0], [1.0, 3.0])
+        for a in arrays, x in (0.5, 1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 5.0, 6.0)
+            # The array starts after two other words, as the times of a segment do.
+            @test Almanac._lstcld([-9.0; -9.0; a], 2, length(a), x) == c_lstcld(x, a)
+        end
+        @test Almanac._lstcld([1.0, 2.0, 2.0, 3.0], 0, 4, 2.0) == 3
+        @test Almanac._lstcld([1.0, 1.0, 2.0], 0, 3, 0.5) == 2
+    end
+
+    # Regression: a type 1 segment whose record count is not a number threw an
+    # InexactError. The count is cut as the cast `(integer)` of `ckr01_` cuts it, which
+    # gives the smallest 32-bit integer on x86, and the segment is refused. CSPICE is not
+    # called: it would read outside the segment.
+    @apart @testset "a type 1 segment with a record count that is not a number" begin
+        p = joinpath(mktempdir(), "ck01_nan_count.bc")
+        hw = ckopn(p, "NAN")
+        dafbna(hw, dafps([0.0, 10.0], [-77001, 1, 1, 0, 0, 0]), "NAN COUNT")
+        dafada(hw, [1.0, 0.0, 0.0, 0.0, 5.0, NaN])
+        dafena(hw)
+        ckcls(hw)
+        ctx = SpiceContext()
+        furnsh(ctx, p)
+        @test throws_kind(() -> ckgp(ctx, -77001, 5.0, 0.0, 1), :baddaf)
+    end
+
     @apart @testset "concurrent readers" begin
         if Threads.nthreads() == 1
             skip_notice("10. concurrent CK readers", "one thread only")

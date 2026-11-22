@@ -306,7 +306,7 @@ function _kepler_equinoctial(h::Float64, k::Float64)
     else
         return 0.0
     end
-    maxit = min(32, max(1, _round_index(1.0 / (1.0 - ecc))))
+    maxit = min(32, max(1, _nint(1.0 / (1.0 - ecc))))
     xm = 0.0
     for _ in 1:maxit          # invariant: the root is in [xl, xu]
         xm = max(xl, min(xu, (xl + xu) * 0.5))

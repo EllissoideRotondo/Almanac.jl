@@ -28,7 +28,7 @@ names `what` unless `x` is finite and the result is in `lo:hi`.
 """
 @inline function _seg_count(seg::Segment, x::Float64, lo::Int, hi::Int, what::String)
     (isfinite(x) && lo - 0.5 < x < hi + 0.5) || _badsegment(seg, _count_msg(what, x, lo, hi))
-    n = unsafe_trunc(Int, round(x, RoundNearestTiesAway))
+    n = _nint(x)
     (lo <= n <= hi) || _badsegment(seg, _count_msg(what, x, lo, hi))
     return n
 end
@@ -90,10 +90,6 @@ end
 
 "Whole part of `x` as an `Int`, with `x` limited to a range that cannot overflow."
 @inline _trunc_index(x::Float64) = unsafe_trunc(Int, clamp(x, -1.0e15, 1.0e15))
-
-"Nearest whole number to `x` as an `Int` (ties away from zero, as `i_dnnt`), limited as `_trunc_index`."
-@inline _round_index(x::Float64) =
-    unsafe_trunc(Int, round(clamp(x, -1.0e15, 1.0e15), RoundNearestTiesAway))
 
 "Three consecutive doubles `data[a:a+2]` as a vector; requires the range inside `data` (not checked)."
 @inline _vec3(data::Vector{Float64}, a::Int) = @inbounds Vec3{Float64}(data[a], data[a + 1], data[a + 2])
