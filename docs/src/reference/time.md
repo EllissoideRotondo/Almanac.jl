@@ -14,7 +14,6 @@ utc2et
 str2et
 et2utc
 etcal
-Almanac.FixedString
 timout
 tpictr
 tparse

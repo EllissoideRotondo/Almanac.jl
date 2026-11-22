@@ -876,7 +876,7 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
     end
 
     @apart @testset "allocations of the conversions to and from strings" begin
-        # `et2utc` and `etcal` return a `FixedString` and allocate nothing, in every format
+        # `et2utc` and `etcal` return a `String63` and allocate nothing, in every format
         # and at the extremes of their range.
         zs = (
             () -> et2utc(ks, 8.0e8, "ISOC", 3), () -> et2utc(ks, 8.0e8, "C", 14),
@@ -896,17 +896,21 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test all([@allocations(f()) for f in fs] .<= [30, 40])
     end
 
-    @apart @testset "FixedString: a String in all but its storage" begin
+    @apart @testset "String63: a String in all but its storage" begin
         s = et2utc(ks, 8.0e8, "ISOC", 3)
-        @test s isa Almanac.FixedString && isbitstype(typeof(s))
+        @test s isa Almanac.String63 && isbitstype(typeof(s))
         @test s == "2025-05-08T18:12:10.815" == String(s) && String(s) isa String
         @test (length(s), sizeof(s), s[1:4], s[end], "<$s>") == (23, 23, "2025", '5', "<2025-05-08T18:12:10.815>")
-        @test repr(s) == repr(String(s)) && hash(s) == hash(String(s))
+        @test hash(s) == hash(String(s)) && sprint(print, s) == String(s)
         @test collect(s) == collect(String(s)) && occursin(r"T18:12", s) && startswith(s, "2025-")
         @test str2et(ctx, s) == str2et(ctx, String(s))
-        @test Almanac.FixedString("") == "" && Almanac.FixedString("x"^64) == "x"^64
-        @test throws_kind(() -> Almanac.FixedString("x"^65), :buffertoosmall)
-        @test throws_kind(() -> Almanac.FixedString("é"), :nonprintablechars)
+        # Equal strings are identical: no byte past the length differs.
+        @test s === Almanac.String63(String(s)) && et2utc(ks, 8.0e8, "C", 14) === Almanac.String63(String(et2utc(ks, 8.0e8, "C", 14)))
+        @test etcal(8.0e8) === Almanac.String63(String(etcal(8.0e8)))
+        # The build buffer holds what a `String63` holds, and no more.
+        b = Almanac._puts(Almanac._ByteBuf(), "x"^63)
+        @test Almanac._inline(b) == "x"^63
+        @test throws_kind(() -> Almanac._bpush(b, UInt8('x')), :buffertoosmall)
     end
 
     @apart @testset "timout, pictures of the header and random pictures" begin

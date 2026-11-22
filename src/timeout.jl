@@ -130,7 +130,7 @@ Contract: appends to `buf` the number `x` in fixed-point form with `clamp(sigdig
 for the sign, then the digits; the rounding is the two-step rounding of CSPICE (to 14
 digits, then to the requested digit), so a tie rounds away from zero.
 """
-function _dpstrf(buf, x::Float64, sigdig::Integer)
+function _dpstrf(buf::_ByteBuf, x::Float64, sigdig::Integer)
     maxdig = Int(clamp(sigdig, 1, 14))
     buf = _bpush(buf, x < 0.0 ? UInt8('-') : UInt8(' '))
     if x == 0.0
@@ -235,7 +235,6 @@ end
     e = lstrip(string(Char(sign), SubString(e, 2)), ' ')
     return _puts(buf, ncodeunits(e) >= lastch ? first(e, lastch) : lpad(e, lastch))
 end
-
 
 # ---------------------------------------------------------------------------------
 # TIMOUT
@@ -846,12 +845,14 @@ function _et2utc_format(format::AbstractString)
 end
 
 """
-    et2utc([ctx,] et, format, prec) -> FixedString
+    et2utc([ctx,] et, format, prec) -> String63
 
 Return the epoch `et` (seconds past J2000 TDB) as a UTC string, as
 [`et2utc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/et2utc_c.html).
-The string is a [`FixedString`](@ref Almanac.FixedString), stored inline, so that the
-call allocates nothing; `String(s)` converts it.
+The string is a `String63` of
+[InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl), stored inline, so
+that the call allocates nothing. It compares equal to the `String` with the same
+characters; `String(s)` converts it.
 
 A leap-second kernel must be loaded. `format` selects the form; letter case is
 ignored:
@@ -881,7 +882,7 @@ et2utc(0.0, "ISOC", 3)      # UTC at the epoch J2000 TDB
 
 See also [`timout`](@ref), [`str2et`](@ref).
 """
-function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer)::FixedString
+function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer)::String63
     fmt = _et2utc_format(format)
     fmt == 0 && throw(
         SpiceError(
@@ -892,10 +893,10 @@ function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer):
     l = _lsk(ks, :missingtimeinfo)
     p = Int(clamp(prec, 0, 14))
     x = primal(et)
-    buf = FixedString()
+    buf = _ByteBuf()
     if fmt == 3                                            # J
         jd = _ttrans(l, _TT_TDB, _TT_JDUTC, _tvec(x))[1]
-        return _dpstrf(_puts(buf, "JD"), jd, p + 7)
+        return _inline(_dpstrf(_puts(buf, "JD"), jd, p + 7))
     end
     tai = _unitim(l, x, _US_TDB, _US_TAI)
     whole = floor(tai)
@@ -969,17 +970,17 @@ function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer):
         keep = min(p + 1, _blen(buf) - dot + 1)
         buf = _bresize(_bmove(buf, n0 + 1, dot, keep), n0 + keep)
     end
-    return buf
+    return _inline(buf)
 end
 
 """
-    etcal([ctx,] et) -> FixedString
+    etcal([ctx,] et) -> String63
 
 Return the calendar string of `et` (seconds past J2000 TDB) on the formal calendar, on
 which every day has 86400 seconds, as
 [`etcal_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/etcal_c.html).
-The string is a [`FixedString`](@ref Almanac.FixedString), as the one of
-[`et2utc`](@ref), so the call allocates nothing.
+The string is a `String63`, as the one of [`et2utc`](@ref), so the call allocates
+nothing.
 
 The string has the form `1986 APR 12 16:31:09.814`. It is a TDB date without leap
 seconds, and the call needs no kernel; `ctx` is
@@ -999,7 +1000,7 @@ julia> etcal(-1.0e11)
 "1170 B.C. FEB 16 02:13:20.000"
 ```
 """
-function etcal(et::Real)::FixedString
+function etcal(et::Real)::String63
     mynum = primal(et) + _HALFD
     q = trunc(mynum / _SPD)
     secs = mynum - q * _SPD
@@ -1039,7 +1040,7 @@ function etcal(et::Real)::FixedString
     secs = Float64(tsecs) / 1.0e3
     secs + 5.0e-4 < 60.0 && (secs += 5.0e-4)
     secs = trunc(Int, secs * 1.0e3) / 1.0e3
-    buf = FixedString()
+    buf = _ByteBuf()
     if !isempty(messge)
         buf = _bpush(_puts(buf, messge), UInt8(' '))
     end
@@ -1062,5 +1063,5 @@ function etcal(et::Real)::FixedString
         buf = _binsert(buf, n0 + 1, UInt8('0'))
         n += 1
     end
-    return _bresize(buf, n0 + min(n, 6))
+    return _inline(_bresize(buf, n0 + min(n, 6)))
 end
