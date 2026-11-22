@@ -187,6 +187,9 @@ update that page in the same change.
   `zzekjsqz`). `compat = true` reproduces them for the tests.
 - `dafopw` refuses a write open of a file that another handle has open
   (`:fileopenconflict`).
+- Kernel pool names are stripped of the blanks around them on every write and lookup,
+  and a blank name is `:badvarname`; CSPICE keeps leading blanks and stores a blank
+  name.
 
 ## Tests
 
