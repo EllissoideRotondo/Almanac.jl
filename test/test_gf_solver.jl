@@ -206,15 +206,21 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             (:valueoutofrange, ("ABSMAX", 0.0, -0.1, 0.3)),
             (:invalidvalue, ("<", 0.0, 0.1, 0.3)),
             (:invalidvalue, ("LOCMAX", 0.0, 0.1, 0.3)),
-            # A NaN or infinite adjustment for a relation that takes none (adjust != 0),
-            # and a negative infinite one (adjust < 0).
-            (:invalidvalue, ("<", 0.0, NaN, 0.3)),
-            (:invalidvalue, ("=", 0.0, Inf, 0.3)),
-            (:valueoutofrange, ("ABSMIN", 0.0, -Inf, 0.3)),
         )
         for (kind, (rel, refval, adjust, step)) in cases
             @test throws_kind(() -> gfuds(f1, qdec, rel, refval, adjust, step, cn), kind)
             @test GFO.kind(() -> GFO.gfuds(f1, qdec, rel, refval, adjust, step, collect(cn))) === kind
+        end
+        # A NaN or infinite adjustment for a relation that takes none (adjust != 0), and a
+        # negative infinite one (adjust < 0), with the kinds that `zzgfrelx_` signals.
+        # CSPICE is not called: it aborts while it writes the value into the message
+        # (`dpstr_` indexes its table of powers with the exponent of a NaN).
+        for (kind, (rel, refval, adjust, step)) in (
+                (:invalidvalue, ("<", 0.0, NaN, 0.3)),
+                (:invalidvalue, ("=", 0.0, Inf, 0.3)),
+                (:valueoutofrange, ("ABSMIN", 0.0, -Inf, 0.3)),
+            )
+            @test throws_kind(() -> gfuds(f1, qdec, rel, refval, adjust, step, cn), kind)
         end
         @test throws_kind(() -> gfudb(GFState(t -> true), 0.0, cn), :invalidstep)
         @test GFO.kind(() -> GFO.gfudb(t -> true, 0.0, collect(cn))) === :invalidstep
