@@ -238,7 +238,7 @@ vector is less than 90 degrees from it. Throws `SpiceError` (`:invalidcount`,
 function _geo_hullax(bounds::Vector{Vec3{Float64}})
     n = length(bounds)
     n < 3 && _geo_fov_error(:invalidcount, "a polygonal field of view needs 3 boundary vectors; it has $n")
-    halfpi = _M_HALFPI
+    halfpi = _HALFPI
     found = false
     xidx = 0
     next = 0
@@ -341,7 +341,7 @@ function _geo_fovaxi(bounds::Vector{Vec3{Float64}})
         axis = _m_hat(bounds[i]) + axis
     end
     axis = (1.0 / n) * axis
-    limit = _M_HALFPI - 1.0e-12
+    limit = _HALFPI - 1.0e-12
     for i in 1:n
         if vsep(bounds[i], axis) > limit
             axis = _geo_hullax(bounds)
@@ -386,7 +386,7 @@ function _geo_wind2d(poly::Vector{SVector{2, Float64}}, point::SVector{2, Float6
         atotal += (rnext[1] * -rvec[2] + rnext[2] * rvec[1]) >= 0.0 ? sep : -sep
         rvec = rnext
     end
-    return round(Int, atotal / _M_TWOPI, RoundNearestTiesAway)
+    return round(Int, atotal / _TWOPI, RoundNearestTiesAway)
 end
 
 """
@@ -422,7 +422,7 @@ function _geo_wind_rays(plane::SpicePlane, bounds::Vector{Vec3{Float64}}, point:
         atotal += _m_dot(rnext, _m_ucrss(normal, rvec)) >= 0.0 ? sep : -sep
         rvec = rnext
     end
-    return round(Int, atotal / _M_TWOPI, RoundNearestTiesAway)
+    return round(Int, atotal / _TWOPI, RoundNearestTiesAway)
 end
 
 """
@@ -606,10 +606,10 @@ function _geo_fovvis(
     for b in bounds
         arad = max(arad, vsep(b, faxi))
     end
-    arad > _M_HALFPI - 1.0e-6 && _geo_fov_error(
+    arad > _HALFPI - 1.0e-6 && _geo_fov_error(
         :fovtoowide,
         "the field of view of the instrument $inst has the angular radius $(rad2deg(arad)) " *
-            "degrees; the limit is $(rad2deg(_M_HALFPI - 1.0e-6)) degrees"
+            "degrees; the limit is $(rad2deg(_HALFPI - 1.0e-6)) degrees"
     )
     plane = nvc2pl(faxi, 1.0)
     fvct = _m_hat(faxi)
@@ -619,7 +619,7 @@ function _geo_fovvis(
     xmag1 = 0.0
     xmag2 = 0.0
     if shape == "ELLIPSE" || (circle && etrg)
-        b2 = circle ? _m_vrotv(bounds[1], faxi, _M_HALFPI) : bounds[2]
+        b2 = circle ? _m_vrotv(bounds[1], faxi, _HALFPI) : bounds[2]
         nx, p = inrypl(origin, bounds[1], plane)
         nx == 1 || _geo_fov_error(:degeneratecase, "the first boundary vector does not meet the plane of the field of view")
         semi1 = p - fvct

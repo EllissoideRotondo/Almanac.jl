@@ -337,7 +337,7 @@ function _t10_wahr(et::T) where {T <: Real}
             if m != 0
                 arg = arg + m * angle[j]
                 argrt = argrt + m * angrt[j]
-                arg = _sgp4_mod(arg, _SGP4_TWOPI)
+                arg = _sgp4_mod(arg, _TWOPI)
             end
         end
         cl = row[6] + row[7] * t

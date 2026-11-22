@@ -18,9 +18,6 @@
 "A scalar quantity of the geometry finder; see the head of `gf/quantities.jl`."
 abstract type GFQuantity end
 
-"J2000, the frame of every quantity that does not depend on a frame."
-const _GF_J2000 = Int32(1)
-
 function _gf_body(ks::KernelSet, name::AbstractString, what::AbstractString)
     id = bods2c(ks, name)
     id === nothing && throw(
@@ -107,10 +104,10 @@ end
 _gf_label(::GFDistance) = "Distance pass # of # "
 
 @inline _gf_value(q::GFDistance, et::Float64) =
-    vnorm(_gf_spkezp(q.ks, q.targ, et, _GF_J2000, q.corr, q.obs)[1])
+    vnorm(_gf_spkezp(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
 
 @inline function _gf_decreasing(q::GFDistance, et::Float64)
-    r, v = _gf_pv(_gf_spkez(q.ks, q.targ, et, _GF_J2000, q.corr, q.obs)[1])
+    r, v = _gf_pv(_gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
     return vdot(r, v) < 0.0
 end
 
@@ -183,8 +180,8 @@ end
 
 "Separation of the limbs: the angle between the positions minus the two angular radii (`zzsepq`)."
 @inline function _gf_value(q::GFSeparation, et::Float64)
-    p1 = _gf_spkezp(q.ks, q.bod1, et, _GF_J2000, q.corr, q.obs)[1]
-    p2 = _gf_spkezp(q.ks, q.bod2, et, _GF_J2000, q.corr, q.obs)[1]
+    p1 = _gf_spkezp(q.ks, q.bod1, et, _J2000_FRAME, q.corr, q.obs)[1]
+    p2 = _gf_spkezp(q.ks, q.bod2, et, _J2000_FRAME, q.corr, q.obs)[1]
     a1 = _gf_angrad(q, q.bod1, q.rad1, vnorm(p1))
     a2 = _gf_angrad(q, q.bod2, q.rad2, vnorm(p2))
     return vsep(p1, p2) - a1 - a2
@@ -220,8 +217,8 @@ observer is not outside the sphere.
 end
 
 @inline function _gf_decreasing(q::GFSeparation, et::Float64)
-    s1 = _gf_spkez(q.ks, q.bod1, et, _GF_J2000, q.corr, q.obs)[1]
-    s2 = _gf_spkez(q.ks, q.bod2, et, _GF_J2000, q.corr, q.obs)[1]
+    s1 = _gf_spkez(q.ks, q.bod1, et, _J2000_FRAME, q.corr, q.obs)[1]
+    s2 = _gf_spkez(q.ks, q.bod2, et, _J2000_FRAME, q.corr, q.obs)[1]
     dtheta = dvsep(s1, s2)
     dtheta = dtheta - _gf_dhfa(s1, q.rad1) - _gf_dhfa(s2, q.rad2)
     return dtheta < 0.0
@@ -271,7 +268,7 @@ end
 _gf_label(::GFRangeRate) = "Range Rate pass # of #"
 
 @inline _gf_value(q::GFRangeRate, et::Float64) =
-    dvnorm(_gf_spkez(q.ks, q.targ, et, _GF_J2000, q.corr, q.obs)[1])
+    dvnorm(_gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
 
 """
 The range rate decreases if its derivative is negative. CSPICE has no acceleration, so
@@ -280,10 +277,10 @@ the derivative of the state is the difference quotient of the states at `et - dt
 `acc . rhat + vel . d(rhat)/dt`.
 """
 @inline function _gf_decreasing(q::GFRangeRate, et::Float64)
-    s0 = _gf_spkez(q.ks, q.targ, et - q.dt, _GF_J2000, q.corr, q.obs)[1]
-    s2 = _gf_spkez(q.ks, q.targ, et + q.dt, _GF_J2000, q.corr, q.obs)[1]
+    s0 = _gf_spkez(q.ks, q.targ, et - q.dt, _J2000_FRAME, q.corr, q.obs)[1]
+    s2 = _gf_spkez(q.ks, q.targ, et + q.dt, _J2000_FRAME, q.corr, q.obs)[1]
     dfdt = (0.5 / q.dt) * s2 + (-0.5 / q.dt) * s0
-    s = _gf_spkez(q.ks, q.targ, et, _GF_J2000, q.corr, q.obs)[1]
+    s = _gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1]
     srhat = _m_dvhat(SVector{6, Float64}(s), false)   # f2c `dvhat_`: division, as zzgfrru
     drvel = vdot(_gf_pv(dfdt)[2], _gf_pv(srhat)[1]) + vdot(_gf_pv(s)[2], _gf_pv(srhat)[2])
     return drvel < 0.0
@@ -340,19 +337,19 @@ target seen from the observer and the position of the illuminator seen from the 
 at the epoch `et - lt` (at `et` without correction).
 """
 @inline function _gf_value(q::GFPhase, et::Float64)
-    p1, lt = _gf_spkezp(q.ks, q.targ, et, _GF_J2000, q.corr, q.obs)
+    p1, lt = _gf_spkezp(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)
     ett = q.corr.geometric ? et : et - lt
-    p2 = _gf_spkezp(q.ks, q.illum, ett, _GF_J2000, q.corr, q.targ)[1]
+    p2 = _gf_spkezp(q.ks, q.illum, ett, _J2000_FRAME, q.corr, q.targ)[1]
     return Float64(pi) - vsep(p1, p2)
 end
 
 "The phase angle decreases if the angle of `_gf_value` increases (`dvsep`); the velocity of the illuminator is scaled by the rate of the epoch `et - lt`."
 @inline function _gf_decreasing(q::GFPhase, et::Float64)
-    s1, lt = _gf_spkez(q.ks, q.targ, et, _GF_J2000, q.corr, q.obs)
+    s1, lt = _gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)
     if q.corr.geometric
-        s2 = _gf_spkez(q.ks, q.illum, et, _GF_J2000, q.corr, q.targ)[1]
+        s2 = _gf_spkez(q.ks, q.illum, et, _J2000_FRAME, q.corr, q.targ)[1]
     else
-        s = _gf_spkez(q.ks, q.illum, et - lt, _GF_J2000, q.corr, q.targ)[1]
+        s = _gf_spkez(q.ks, q.illum, et - lt, _J2000_FRAME, q.corr, q.targ)[1]
         r1, v1 = _gf_pv(s1)
         dlt = vdot(vhat(r1), v1) / clight()
         r2, v2 = _gf_pv(s)

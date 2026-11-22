@@ -82,8 +82,8 @@ function _geo_illumf(
         phase = vsep(obspos, tipos)
         incdnc = vsep(normal, tipos)
         emissn = vsep(normal, obspos)
-        return trgepc, srfvec, phase, incdnc, emissn, primal(emissn) <= _M_HALFPI,
-            primal(incdnc) <= _M_HALFPI
+        return trgepc, srfvec, phase, incdnc, emissn, primal(emissn) <= _HALFPI,
+            primal(incdnc) <= _HALFPI
     end
     # As in CSPICE, the DSK branch of `illumf` uses every surface of the target (the
     # surface list of the method string is not used) and the epoch at the point.
@@ -93,8 +93,8 @@ function _geo_illumf(
     phase = vsep(obspos, tipos)
     incdnc = vsep(normal, tipos)
     emissn = vsep(normal, obspos)
-    visibl = emissn <= _M_HALFPI
-    lit = incdnc <= _M_HALFPI
+    visibl = emissn <= _HALFPI
+    lit = incdnc <= _HALFPI
     if lit || visibl
         # A point is hidden or in shadow if the ray from just above it meets the surface.
         vertex = sp + (sh.maxrad * 1.0e-10) * normal

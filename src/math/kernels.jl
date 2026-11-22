@@ -3,6 +3,16 @@
 # rotations and the derivatives of unit vectors. They are included early, so that every
 # file can use them; the public calls are in `math/vectors.jl` and the files after it.
 
+# --- constants of SPICELIB ---------------------------------------------------------
+
+"`pi_()`, `twopi_()` and `halfpi_()` of CSPICE as plain doubles."
+const _PI = Float64(pi)
+const _TWOPI = 2 * Float64(pi)
+const _HALFPI = Float64(pi) / 2
+
+"The ID of the frame J2000."
+const _J2000_FRAME = Int32(1)
+
 # --- input conversion ---------------------------------------------------------------
 
 @inline _m_f(x::Integer) = Float64(x)

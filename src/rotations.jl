@@ -3,13 +3,8 @@
 # joins them. Everything that depends on the epoch is generic over the epoch type, so
 # an epoch of type `Taylor{N,Float64}` gives the time derivatives to order N.
 
-const _SEC_PER_DAY = 86400.0                 # seconds per day, `spd_`
-const _SEC_PER_CENTURY = _SEC_PER_DAY * 36525.0          # seconds per Julian century
-const _J2000_JED = 2451545.0         # `j2000_`
+const _SEC_PER_CENTURY = _SPD * 36525.0          # seconds per Julian century
 const _RPD = pi / 180                # radians per degree, `rpd_`
-const _TWOPI = 2 * Float64(pi)       # `twopi_`
-const _HALFPI = Float64(pi) / 2      # `halfpi_`
-const _J2000_FRAME = Int32(1)
 
 "Maximum number of frames between a frame and J2000 that `frame_rotation` follows."
 const MAX_FRAME_CHAIN = 10
@@ -120,7 +115,7 @@ function build_bodyrot(pool::AbstractDict)
         sys = _bodbry(id)
         epoch = _pool_first(
             pool,
-            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _J2000_JED
+            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _JD2000
         )
         ref = _pool_first(
             pool,
@@ -228,8 +223,8 @@ rotation from J2000 to the reference frame of the constants. Throws
 """
 function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
     _bodyrot_check(br, body)
-    epoch = et - _SEC_PER_DAY * (br.jed_epoch - _J2000_JED)
-    td = epoch / _SEC_PER_DAY
+    epoch = et - _SPD * (br.jed_epoch - _JD2000)
+    td = epoch / _SPD
     tc = epoch / _SEC_PER_CENTURY
     ra = _horner(br.pole_ra, tc)
     dec = _horner(br.pole_dec, tc)
@@ -329,9 +324,9 @@ too often. Throws as `_text_pck_rotation`.
 """
 function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     _bodyrot_check(br, body)
-    d = _SEC_PER_DAY
+    d = _SPD
     t = _SEC_PER_CENTURY
-    epoch = et - d * (br.jed_epoch - _J2000_JED)
+    epoch = et - d * (br.jed_epoch - _JD2000)
     td = epoch / d
     tc = epoch / t
     coef(c, i) = i <= length(c) ? @inbounds(c[i]) : 0.0

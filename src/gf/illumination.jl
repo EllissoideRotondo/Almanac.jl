@@ -135,10 +135,10 @@ function _gf_ilurate(q::GFIllumination, et::Float64)
     ks = q.ks
     corr = q.corr
     f = _GeoFixed(q.spoint, _GF_ZERO3, 0.0, q.targ, q.ref)
-    starg, lt = _geo_cvt(ks, f, et, _GF_J2000, _GEO_AT_TARGET, corr, q.obs)
+    starg, lt = _geo_cvt(ks, f, et, _J2000_FRAME, _GEO_AT_TARGET, corr, q.obs)
     etsurf = et + _geo_sign(corr) * lt
-    srcsta, _ = _geo_cvo(ks, q.illum, etsurf, _GF_J2000, _GEO_AT_OBSERVER, corr, f)
-    R, dR = frame_jet(ks, q.ref, _GF_J2000, etsurf, Val(1))
+    srcsta, _ = _geo_cvo(ks, q.illum, etsurf, _J2000_FRAME, _GEO_AT_OBSERVER, corr, f)
+    R, dR = frame_jet(ks, q.ref, _J2000_FRAME, etsurf, Val(1))
     tr, tv = _gf_pv(starg)
     sr, sv = _gf_pv(srcsta)
     if corr.uselt

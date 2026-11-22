@@ -104,11 +104,11 @@ function _geo_edtmpt(
     d = _m_norm(taxis)
     if umbral
         angle = _geo_dasine((maxr - 1.0) / d, 1.0e-14)
-        targpt = _m_vrotv(utaxis, hplnml, -(_M_HALFPI + angle))
+        targpt = _m_vrotv(utaxis, hplnml, -(_HALFPI + angle))
         s = 1.0
     else
         angle = _geo_dasine((maxr + 1.0) / d, 1.0e-14)
-        targpt = _m_vrotv(utaxis, hplnml, angle - _M_HALFPI)
+        targpt = _m_vrotv(utaxis, hplnml, angle - _HALFPI)
         s = -1.0
     end
     normal = _m_hat(targpt)

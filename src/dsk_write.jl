@@ -614,7 +614,7 @@ function dskw02(
     length(corpar) <= 10 || throw(SpiceError(:badarg, "dskw02: CORPAR has more than 10 elements"))
     par = zeros(Float64, 10)
     copyto!(par, corpar)
-    twopi_ = _DSK_TWOPI
+    twopi_ = _TWOPI
     hpi = _DSK_HALFPI
     if corsys == 1 || corsys == 4
         mn1 == mx1 && _dsk_throw(

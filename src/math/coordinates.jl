@@ -6,8 +6,6 @@
 # (r, colat, slon), cylindrical (r, clon, z), geodetic and planetographic
 # (lon, lat, alt). A Jacobian `J` has `J[i, j] = d out_i / d in_j`.
 
-const _M_TWOPI = 2.0 * Float64(pi)
-const _M_HALFPI = Float64(pi) / 2
 
 # --- rectangular, latitudinal, right ascension ----------------------------------------
 
@@ -95,7 +93,7 @@ See also [`radrec`](@ref), [`reclat`](@ref).
 """
 function recrad(rectan::AbstractVector)
     range, ra, dec = _m_reclat(_m_v3(rectan), true)
-    return range, (primal(ra) < 0.0 ? ra + _M_TWOPI : ra), dec
+    return range, (primal(ra) < 0.0 ? ra + _TWOPI : ra), dec
 end
 
 """
@@ -174,7 +172,7 @@ sphrec(r::Real, colat::Real, slon::Real) = _m_sphrec(_m_f(r), _m_f(colat), _m_f(
     y = v[2] / big
     r = big * sqrt(x * x + y * y)
     clon = atan(y, x)
-    return r + z0, (primal(clon) < 0.0 ? clon + _M_TWOPI : clon), v[3] + z0
+    return r + z0, (primal(clon) < 0.0 ? clon + _TWOPI : clon), v[3] + z0
 end
 
 """
@@ -302,7 +300,7 @@ See also [`latsph`](@ref).
 """
 function sphlat(r::Real, colat::Real, slon::Real)
     r, colat, slon = promote(_m_f(r), _m_f(colat), _m_f(slon))
-    return r, slon, _M_HALFPI - colat
+    return r, slon, _HALFPI - colat
 end
 
 """
@@ -323,7 +321,7 @@ See also [`sphlat`](@ref).
 """
 function latsph(radius::Real, lon::Real, lat::Real)
     radius, lon, lat = promote(_m_f(radius), _m_f(lon), _m_f(lat))
-    return radius, _M_HALFPI - lat, lon
+    return radius, _HALFPI - lat, lon
 end
 
 # --- geodetic -------------------------------------------------------------------------
@@ -508,9 +506,9 @@ function recpgr(ks::KernelSet, body::NameOrID, rectan::AbstractVector, re::Real,
     sense = _m_pgrsense(ks, id)
     lon, lat, alt = _m_recgeo(v, _m_f(re), _m_f(f))
     lon = sense * lon
-    primal(lon) < 0.0 && (lon += _M_TWOPI)
+    primal(lon) < 0.0 && (lon += _TWOPI)
     primal(lon) < 0.0 && (lon = zero(lon))
-    primal(lon) > _M_TWOPI && (lon = _M_TWOPI - zero(lon))
+    primal(lon) > _TWOPI && (lon = _TWOPI - zero(lon))
     return lon, lat, alt
 end
 

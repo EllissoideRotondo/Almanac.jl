@@ -73,7 +73,7 @@ function _geo_asryel(
     v2 = vertex - center
     extprx = domin ? 2.0 : 0.0
     extidx = 0
-    p2 = _M_TWOPI
+    p2 = _TWOPI
     delta = p2 / npt
     udir = _m_hat(dir)
     diff = zero(Vec3{Float64})
@@ -211,7 +211,7 @@ function _geo_occed(
     if minang1 + minang2 > trgsep
         # The inscribed spheres overlap as seen from the view point.
         t2sep = vsep(-tpos[1], t12pos)
-        frtidx, s = t2sep < _M_HALFPI - minang1 ? (2, -1) : (1, 1)
+        frtidx, s = t2sep < _HALFPI - minang1 ? (2, -1) : (1, 1)
         minang1 >= maxang2 + trgsep && return frtidx == 1 ? 3s : 2s
         minang2 >= maxang1 + trgsep && return frtidx == 2 ? 3s : 2s
         (minang1 + trgsep > maxang2 && minang2 + trgsep > maxang1) && return s
@@ -236,7 +236,7 @@ function _geo_occed(
     bigr = _m_norm(raydir)
     uasize = _geo_dasine(1.0 / bigr, 1.0e-12)
     minsep > uasize && return 0
-    sfront = vsep(minpt - bigctr, -raydir) <= _M_HALFPI - uasize
+    sfront = vsep(minpt - bigctr, -raydir) <= _HALFPI - uasize
     s = ((sfront && smlidx == 1) || (!sfront && smlidx == 2)) ? 1 : -1
     minsep <= -uasize && return sfront ? 3s : 2s
     xsmlvu = xview - smlctr
@@ -246,7 +246,7 @@ function _geo_occed(
     maxang = xdist >= majlen ? _geo_dasine(majlen / xdist, 1.0e-12) :
         _geo_occ_maxang(xview, smlctr, smlmaj, smlmin)
     tilt = vsep(_m_ucrss(smlmaj, smlmin), xsmlvu)
-    tilt > _M_HALFPI && (tilt = Float64(pi) - tilt)
+    tilt > _HALFPI && (tilt = Float64(pi) - tilt)
     stilt, ctilt = sincos(tilt)
     minang = atan(ctilt * minlen, stilt * minlen + xdist)
     xasep = vsep(raydir, smlctr - xview)
@@ -365,8 +365,8 @@ function _geo_occ_eval(
     if trgsep < minang
         # The point is in the cone of the inner sphere: only the order along the line
         # of sight decides.
-        pntocc && return vsep(-frtpos, -bckfrt) > _M_HALFPI - minang ? hit : 0
-        return vsep(-bckpos, bckfrt) < _M_HALFPI - minang ? hit : 0
+        pntocc && return vsep(-frtpos, -bckfrt) > _HALFPI - minang ? hit : 0
+        return vsep(-bckpos, bckfrt) < _HALFPI - minang ? hit : 0
     end
     ext = pntocc ? front : back
     sh = _geo_shape(ks, tols, ext.m, ext.id, pntocc ? ffrm : bfrm)

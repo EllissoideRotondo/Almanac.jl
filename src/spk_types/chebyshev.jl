@@ -1,10 +1,6 @@
 # Chebyshev types with their own record layout: type 14 (unequal intervals, a generic
 # segment) and type 20 (velocity series only, position by integration).
 
-"Julian date of J2000 and seconds in one day (`j2000` and `spd` of CSPICE)."
-const _J2000_JD = 2451545.0
-const _SPD = 86400.0
-
 """
     _spk14(data, seg, et::T) -> (pos, vel)
 
@@ -142,10 +138,10 @@ function _spk20(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
             isfinite(initfr) && isfinite(intlen) && intlen > 0.0
     ) ||
         _badsegment(seg, "the scales or the interval values are not valid")
-    init = (initjd - _J2000_JD + initfr) * _SPD
+    init = (initjd - _JD2000 + initfr) * _SPD
     intrvl = intlen * _SPD
     recno = clamp(_trunc_index((primal(et) - init) / intrvl) + 1, 1, nrec)
-    recbeg = (initjd - _J2000_JD + (recno - 1) * intlen) * _SPD
+    recbeg = (initjd - _JD2000 + (recno - 1) * intlen) * _SPD
     radius = intrvl / 2.0
     mid = recbeg + initfr * _SPD + radius
     r = b + (recno - 1) * recsiz

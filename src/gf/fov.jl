@@ -137,10 +137,10 @@ function _gf_fov(
     for b in bounds                      # invariant: arad is the largest angle so far
         arad = max(arad, vsep(b, faxi))
     end
-    arad > _M_HALFPI - 1.0e-6 && _geo_fov_error(
+    arad > _HALFPI - 1.0e-6 && _geo_fov_error(
         :fovtoowide,
         "the field of view of the instrument $inst has the angular radius " *
-            "$(rad2deg(arad)) degrees; the limit is $(rad2deg(_M_HALFPI - 1.0e-6)) degrees"
+            "$(rad2deg(arad)) degrees; the limit is $(rad2deg(_HALFPI - 1.0e-6)) degrees"
     )
     plane = nvc2pl(faxi, 1.0)
     fvct = _m_hat(faxi)
@@ -150,7 +150,7 @@ function _gf_fov(
     xmag1 = 0.0
     xmag2 = 0.0
     if shape == "ELLIPSE" || (circle && etrg)
-        b2 = circle ? _m_vrotv(bounds[1], faxi, _M_HALFPI) : bounds[2]
+        b2 = circle ? _m_vrotv(bounds[1], faxi, _HALFPI) : bounds[2]
         nx, p = inrypl(origin, bounds[1], plane)
         nx == 1 || _geo_fov_error(
             :degeneratecase,
@@ -227,8 +227,8 @@ function _gf_visible(v::_GFFov, et::Float64)
         pos, lt = _geo_spkezp(ks, v.targ, et, v.tfid, v.corr, v.obs)
         ettarg = et + _geo_sign(v.corr) * lt
         insmat = _m_mxm(
-            frame_rotation(ks, _GF_J2000, ifid, et),
-            frame_rotation(ks, v.tfid, _GF_J2000, ettarg)
+            frame_rotation(ks, _J2000_FRAME, ifid, et),
+            frame_rotation(ks, v.tfid, _J2000_FRAME, ettarg)
         )
         if v.poly
             limb = edlimb(trad[1], trad[2], trad[3], -pos)
@@ -242,13 +242,13 @@ function _gf_visible(v::_GFFov, et::Float64)
     if v.tshape == _GEO_FOV_RAY
         dir = _m_mxv(frame_rotation(ks, v.tfid, ifid, et), v.rdir)
         if v.ustl
-            _, vobs = _ssb(ks, v.obs, et, _GF_J2000)
-            m1 = frame_rotation(ks, ifid, _GF_J2000, et)
+            _, vobs = _ssb(ks, v.obs, et, _J2000_FRAME)
+            m1 = frame_rotation(ks, ifid, _J2000_FRAME, et)
             dir = _m_mtxv(m1, _stelab(_m_mxv(m1, dir), v.xmit ? -vobs : vobs))
         end
     else
-        p, _ = _geo_spkezp(ks, v.targ, et, _GF_J2000, v.corr, v.obs)
-        dir = _m_mxv(frame_rotation(ks, _GF_J2000, ifid, et), p)
+        p, _ = _geo_spkezp(ks, v.targ, et, _J2000_FRAME, v.corr, v.obs)
+        dir = _m_mxv(frame_rotation(ks, _J2000_FRAME, ifid, et), p)
     end
     sep = vsep(dir, v.faxi)
     v.circle && return sep <= v.cang

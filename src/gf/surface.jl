@@ -87,14 +87,14 @@ function _gf_ltstate(
         et::Float64, spoint::Vec3{Float64}, trgepc::Float64, nitr::Int, point::F
     ) where {F}
     xmit = corr.transmit
-    robs, vobs = _ssb(ks, obs, et, _GF_J2000)
-    rt0, vt0 = _ssb(ks, targ, trgepc, _GF_J2000)
-    R, dR = frame_jet(ks, _GF_J2000, ref, trgepc, Val(1))
+    robs, vobs = _ssb(ks, obs, et, _J2000_FRAME)
+    rt0, vt0 = _ssb(ks, targ, trgepc, _J2000_FRAME)
+    R, dR = frame_jet(ks, _J2000_FRAME, ref, trgepc, Val(1))
     acc = zero(vobs)
     if corr.stellar
         # `qderiv` of the velocity of the observer over one second on each side
-        acc = 0.5 * _ssb(ks, obs, et + 1.0, _GF_J2000)[2] +
-            (-0.5) * _ssb(ks, obs, et - 1.0, _GF_J2000)[2]
+        acc = 0.5 * _ssb(ks, obs, et + 1.0, _J2000_FRAME)[2] +
+            (-0.5) * _ssb(ks, obs, et - 1.0, _J2000_FRAME)[2]
     end
     pr = spoint
     pv = _GF_ZERO3
@@ -276,22 +276,22 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
     a, b, c = v.radii
     corr = v.corr
     if corr.geometric
-        Rd, dRd = frame_jet(ks, v.dref, _GF_J2000, et, Val(1))
+        Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et, Val(1))
         j2r, j2v = _gf_xf(Rd, dRd, v.dvec, _GF_ZERO3)
         _gf_fixed_frame(ks, v.ref, v.targ)
         tr, tv = _gf_pv(_gf_spkez(ks, v.targ, et, v.ref, corr, v.obs)[1])
-        R, dR = frame_jet(ks, _GF_J2000, v.ref, et, Val(1))
+        R, dR = frame_jet(ks, _J2000_FRAME, v.ref, et, Val(1))
         dr, dv = _gf_xf(R, dR, j2r, j2v)
         st = surfpv(vcat(-tr, -tv), vcat(dr, dv), a, b, c)
         st === nothing && return _GF_ZERO6, false
         return SVector{6, Float64}(st), true
     end
     if v.obs == v.dctr
-        Rd, dRd = frame_jet(ks, v.dref, _GF_J2000, et, Val(1))
+        Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et, Val(1))
     else
         s = corr.transmit ? 1.0 : -1.0
-        _, ltctr, dltctr = spkacs(ks, v.dctr, et, _GF_J2000, corr, v.obs)
-        Rd, dRd = frame_jet(ks, v.dref, _GF_J2000, et + s * ltctr, Val(1))
+        _, ltctr, dltctr = spkacs(ks, v.dctr, et, _J2000_FRAME, corr, v.obs)
+        Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et + s * ltctr, Val(1))
         dRd = (s * dltctr + 1.0) * dRd
     end
     j2r, j2v = _gf_xf(Rd, dRd, v.dvec, _GF_ZERO3)

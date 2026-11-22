@@ -11,8 +11,6 @@
 
 const _DSK_DPMAX = floatmax(Float64)
 const _DSK_HALFPI = pi / 2
-const _DSK_TWOPI = 2 * Float64(pi)
-const _DSK_PI = Float64(pi)
 const _DSK_ZAXIS = Vec3{Float64}(0.0, 0.0, 1.0)
 const _DSK_ORIGIN = Vec3{Float64}(0.0, 0.0, 0.0)
 
@@ -127,9 +125,9 @@ end
     if d > 0.0
         return asin(_dsk_vnorm(_dsk_vsub(u1, u2)) * 0.5) * 2.0
     elseif d < 0.0
-        return _DSK_PI - asin(_dsk_vnorm(_dsk_vadd(u1, u2)) * 0.5) * 2.0
+        return _PI - asin(_dsk_vnorm(_dsk_vadd(u1, u2)) * 0.5) * 2.0
     end
-    return _DSK_PI / 2.0
+    return _PI / 2.0
 end
 
 @inline _dsk_brcktd(x::Float64, e1::Float64, e2::Float64) =
@@ -437,7 +435,7 @@ function _dsk_cxbrut(
     locang = angle
     locaxi = axis
     if angle > _DSK_HALFPI
-        locang = _DSK_PI - angle
+        locang = _PI - angle
         locaxi = _dsk_vminus(axis)
     end
     locaxi = _dsk_vhat(locaxi)
@@ -528,7 +526,7 @@ function _dsk_incnsg(
     locang = angle
     if cosang < 0.0
         cosang = -cosang
-        locang = _DSK_PI - angle
+        locang = _PI - angle
         uaxis = _dsk_vminus(uaxis)
     end
     off1 = _dsk_vsub(endpt1, apex)
@@ -761,7 +759,7 @@ end
 `[-2pi, 2pi]`. Throws `SpiceError` (`:valueoutofrange`, `:zeroboundsextent`).
 """
 function _dsk_nrmlon(inmin::Float64, inmax::Float64, tol::Float64)
-    pi2 = _DSK_TWOPI
+    pi2 = _TWOPI
     tol < 0.0 && _dsk_throw(:valueoutofrange, "the longitude tolerance must be non-negative")
     (inmin < -pi2 - tol || inmin > pi2 + tol) && _dsk_throw(
         :valueoutofrange,
@@ -803,9 +801,9 @@ function _dsk_inlat0(r::Float64, lon::Float64, lat::Float64, b::NTuple{6, Float6
         minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
         loclon = lon
         if lon < minlon - 1.0e-12
-            loclon = lon + _DSK_TWOPI
+            loclon = lon + _TWOPI
         elseif lon > maxlon + 1.0e-12
-            loclon = lon - _DSK_TWOPI
+            loclon = lon - _TWOPI
         end
         (loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12) && return false
     end
@@ -820,9 +818,9 @@ end
     amin = minlon - dlon
     amax = maxlon + dlon
     if lon < amin
-        lon = lon < amin - 1.0e-12 ? lon + _DSK_TWOPI : amin
+        lon = lon < amin - 1.0e-12 ? lon + _TWOPI : amin
     elseif lon > amax
-        lon = lon > amax + 1.0e-12 ? lon - _DSK_TWOPI : amax
+        lon = lon > amax + 1.0e-12 ? lon - _TWOPI : amax
     end
     return !(lon < amin || lon > amax)
 end
@@ -895,9 +893,9 @@ function _dsk_inpdt0(
         minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
         loclon = lon
         if lon < minlon - 1.0e-12
-            loclon = lon + _DSK_TWOPI
+            loclon = lon + _TWOPI
         elseif lon > maxlon + 1.0e-12
-            loclon = lon - _DSK_TWOPI
+            loclon = lon - _TWOPI
         end
         (loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12) && return false
     end
@@ -944,7 +942,7 @@ function _dsk_inpdt(
     if exclud != 3
         amnalt = b[5] - margin * abs(b[5])
         amxalt = b[6] + margin * abs(b[6])
-        altbds = (-_DSK_PI, _DSK_PI, -_DSK_HALFPI, _DSK_HALFPI, amnalt, amxalt)
+        altbds = (-_PI, _PI, -_DSK_HALFPI, _DSK_HALFPI, amnalt, amxalt)
         _dsk_inpdt0(p, lon, altbds, re, f, 1) || return false
     end
     if exclud != 1
@@ -1406,7 +1404,7 @@ end
 function _dsk_box_lonlat(b::NTuple{6, Float64})
     minlon = b[1]
     maxlon = b[2]
-    maxlon <= minlon && (maxlon += _DSK_TWOPI)
+    maxlon <= minlon && (maxlon += _TWOPI)
     maxlon <= minlon && _dsk_throw(:badlongituderange, "the longitude bounds are out of order")
     b[3] > b[4] && _dsk_throw(:badlatitudebounds, "the latitude bounds are out of order")
     (b[3] < -_DSK_HALFPI - 1.0e-12 || b[4] > _DSK_HALFPI + 1.0e-12) && _dsk_throw(

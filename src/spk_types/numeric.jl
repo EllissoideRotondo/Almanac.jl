@@ -98,9 +98,6 @@ change. Postcondition: `primal(result) == p`.
 
 # --- vector routines of CSPICE ----------------------------------------------------------
 
-"The value of `pi_()` of CSPICE as a plain double."
-const _PI = Float64(pi)
-
 "Dot product in the order of `vdot`."
 @inline _dot(a::Vec3, b::Vec3) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
 
