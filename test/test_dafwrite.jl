@@ -2525,6 +2525,12 @@ group("9. DAF access, SPK and CK writers") do
         ckspk_ic(first, last) = Int32.((1, 1, 2, 1, first, last))
         @test Almanac._daf_ckspk(ckspk_word(Dict{Int, Float64}()), ckspk_ic(1, 10)) === :CK
         @test Almanac._daf_ckspk(ckspk_word(Dict(73 => 1.0)), ckspk_ic(1, 73)) === :SPK
+        # Size 1081 (15 SPK records, 108 CK type 2 packets, below 201): the double at
+        # `first + 14 * 71` against the one at `last - 15` decides, SPK if it is larger.
+        for (w1, w2, want) in ((2.0, 1.0, :SPK), (1.0, 2.0, :CK))
+            w = Dict(1081 => 15.0, 995 => w1, 1066 => w2)
+            @test Almanac._daf_ckspk(ckspk_word(w), ckspk_ic(1, 1081)) === want
+        end
         for (w1, w2, want) in ((2.0, 1.0, :CK), (1.0, 2.0, :SPK))
             w = Dict(3313 => 46.0, 3310 => w1, 3311 => w2)
             @test Almanac._daf_ckspk(ckspk_word(w), ckspk_ic(1, 3313)) === want
