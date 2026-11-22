@@ -315,21 +315,38 @@ end
 """
     _geo_occ_eval(ks, tols, front, fframe, back, bframe, bsrf, obs, corr, et) -> Int
 
-The rest of `zzgfocin` (radii, frames, bounding spheres) and `zzgfocst` for the roles
-`front` and `back`. `corr` is the correction without stellar aberration and `bsrf` the
-surface list for the bounding sphere of the back target. The result is 0 if `front`
-does not occult `back`; otherwise 1, 2 or 3 for a partial, an annular or a total
-occultation of two ellipsoids, 3 for an extended `front` and a point `back`, and 2 for
-a point `front` and an extended `back` (the codes that `occult` multiplies by the sign
-of the roles).
+The rest of `zzgfocin` (radii, frames, bounding spheres: `_geo_occ_extent`, the front
+target first) and `zzgfocst` (`_geo_occ_state`) for the roles `front` and `back`. `corr`
+is the correction without stellar aberration and `bsrf` the surface list for the
+bounding sphere of the back target.
 """
-function _geo_occ_eval(
+@inline function _geo_occ_eval(
         ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fframe,
         back::_GeoOccBody, bframe, bsrf, obs::Int32, corr::Aberration, et::Float64
     )
-    # Radii, frame and bounding spheres, the front target first.
-    frad, fmn, fmx, ffrm = _geo_occ_extent(ks, front, fframe, front.m.srflst)
-    brad, bmn, bmx, bfrm = _geo_occ_extent(ks, back, bframe, bsrf)
+    fext = _geo_occ_extent(ks, front, fframe, front.m.srflst)
+    bext = _geo_occ_extent(ks, back, bframe, bsrf)
+    return _geo_occ_state(ks, tols, front, fext, back, bext, obs, corr, et)
+end
+
+"The extent of one target of `occult`: radii, radii of the inner and the outer sphere, frame ID."
+const _GeoOccExtent = Tuple{NTuple{3, Float64}, Float64, Float64, Int32}
+
+"""
+    _geo_occ_state(ks, tols, front, fext, back, bext, obs, corr, et) -> Int
+
+`zzgfocst` for the roles `front` and `back`, whose extents `fext` and `bext` are those
+of `_geo_occ_extent`. The result is 0 if `front` does not occult `back`; otherwise 1, 2
+or 3 for a partial, an annular or a total occultation of two ellipsoids, 3 for an
+extended `front` and a point `back`, and 2 for a point `front` and an extended `back`
+(the codes that `occult` multiplies by the sign of the roles).
+"""
+function _geo_occ_state(
+        ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fext::_GeoOccExtent,
+        back::_GeoOccBody, bext::_GeoOccExtent, obs::Int32, corr::Aberration, et::Float64
+    )
+    frad, fmn, fmx, ffrm = fext
+    brad, bmn, bmx, bfrm = bext
     frtpos, ltfrnt = _geo_spkezp(ks, front.id, et, Int32(1), corr, obs)
     bckpos, ltback = _geo_spkezp(ks, back.id, et, Int32(1), corr, obs)
     s = _geo_sign(corr)
@@ -375,7 +392,7 @@ function _geo_occ_eval(
     return (pntocc ? _m_norm(srfvec) < bdist : _m_norm(srfvec) > fdist) ? hit : 0
 end
 
-"Radii, radii of the inner and the outer sphere, and frame of one target of `occult`."
+"The `_GeoOccExtent` of one target of `occult`: radii, inner and outer sphere, frame."
 @inline function _geo_occ_extent(ks::KernelSet, b::_GeoOccBody, frame, srflst)
     b.kind == _GEO_OCC_POINT && return (0.0, 0.0, 0.0), 0.0, 0.0, Int32(0)
     if b.kind == _GEO_OCC_ELLIPSOID
@@ -434,6 +451,18 @@ end
     return _geo_occ_roles(ks, tols, front, fframe, back, bframe, obs, abcorr, et)
 end
 
+"True if a target with DSK data is paired with a target that is not a point (`zzgfocin`)."
+@inline _geo_occ_dsk_combo(front::_GeoOccBody, back::_GeoOccBody) =
+    (front.kind == _GEO_OCC_DSK && back.kind != _GEO_OCC_POINT) ||
+    (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
+
+"The correction of `zzgfocin`: `abcorr` without stellar aberration."
+@inline function _geo_occ_corr(abcorr)
+    full = _geo_abcorr(abcorr)
+    return full.uselt ?
+        Aberration(; uselt = true, converged = full.converged, transmit = full.transmit) : full
+end
+
 function _geo_occ_roles(
         ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fframe,
         back::_GeoOccBody, bframe, obs::Int32, abcorr, et::Float64
@@ -446,17 +475,12 @@ function _geo_occ_roles(
             :invalidshapecombo, "both targets are points; one target must be extended"
         )
     )
-    (
-        (front.kind == _GEO_OCC_DSK && back.kind != _GEO_OCC_POINT) ||
-            (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
-    ) && throw(
+    _geo_occ_dsk_combo(front, back) && throw(
         SpiceError(
             :invalidshapecombo, "a target with DSK data needs a point as the other target"
         )
     )
-    full = _geo_abcorr(abcorr)
-    corr = full.uselt ? Aberration(; uselt = true, converged = full.converged, transmit = full.transmit) :
-        full
+    corr = _geo_occ_corr(abcorr)
     return _geo_occ_eval(ks, tols, front, fframe, back, bframe, bsrf, obs, corr, et)
 end
 
