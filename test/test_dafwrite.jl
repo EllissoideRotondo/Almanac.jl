@@ -131,7 +131,7 @@ function c_spkw19(h, a)
     SPICE.handleerror()
 end
 
-function c_ckw06(h, a)
+function c_ckw06(h, a; check::Bool = true)
     ccall(
         (:ckw06_, LIBCSPICE), Cint, (
             Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Ref{Cint},
@@ -142,7 +142,7 @@ function c_ckw06(h, a)
         Cint.(a.npkts), Cint.(a.subtps), Cint.(a.degres), a.packts, a.rates, a.sclkdp,
         a.ivlbds, Cint(a.sellst), sizeof(a.ref), sizeof(a.segid)
     )
-    SPICE.handleerror()
+    return check ? SPICE.handleerror() : nothing
 end
 
 function c_ckw01(h, a)
@@ -460,11 +460,14 @@ struct WriterCase
 end
 
 "The frame and identifier checks that all SPK writers share."
-function bad_ids(a; long::Symbol = :segidtoolong, fname::Symbol = :frame, empty_both::Bool = true)
+function bad_ids(
+        a; long::Symbol = :segidtoolong, nonprint::Symbol = :nonprintablechars,
+        fname::Symbol = :frame, empty_both::Bool = true
+    )
     out = Any[
         ("unknown frame", merge(a, NamedTuple{(fname,)}(("NO_SUCH_FRAME",))), :invalidrefframe, true),
         ("identifier of 41 characters", merge(a, (segid = "A"^41,)), long, true),
-        ("nonprintable identifier", merge(a, (segid = "BAD\tID",)), :nonprintablechars, true),
+        ("nonprintable identifier", merge(a, (segid = "BAD\tID",)), nonprint, true),
         ("empty frame", merge(a, NamedTuple{(fname,)}(("",))), :emptystring, empty_both),
         ("empty identifier", merge(a, (segid = "",)), :emptystring, empty_both),
     ]
@@ -504,7 +507,8 @@ function gen_w14(rng, k)
 end
 function bad_w14(a)
     out = Any[
-        bad_ids(a)..., bad_pds(a)...,
+        # Regression: spk14b gave :nonprintablechars; `sgbwfs_` signals NONPRINTINGCHARS.
+        bad_ids(a; nonprint = :nonprintingchars)..., bad_pds(a)...,
         ("negative degree", merge(a, (degree = -1,)), :invalidargument, true),
     ]
     if length(a.epochs) >= 3
@@ -1840,12 +1844,57 @@ group("9. DAF access, SPK and CK writers") do
         end
     end
 
+    # SPICELIB defect that `ckw06` copies: the second check of the bounds of a
+    # mini-segment compares its last epoch with the start of its interval, not with the
+    # end, so a mini-segment that ends before the end of its interval is written. Own
+    # random stream.
+    @apart @testset "ckw06: a mini-segment that ends before its interval" begin
+        r2 = MersenneTwister(SEED + 1206)
+        a = gen_ckw06(r2, 1; nmini = 1)
+        while a.sclkdp[end] <= a.ivlbds[1]       # an interval of positive length
+            a = gen_ckw06(r2, 1; nmini = 1)
+        end
+        bds = copy(a.ivlbds)
+        bds[end] += 0.5
+        pc, pn = write_both(writer_case("ckw06"), dir, "ckw06_short", [merge(a, (ivlbds = bds,))])
+        @test padless(pn) == padless(pc)
+    end
+
+    # Regression: the sign check of the Hermite quaternions of `ckw06` compared sums of
+    # squares, which underflow for a quaternion of magnitude 1e-200; `vdistg_` scales
+    # the differences first, so CSPICE finds (-1e-200, 0, 0, 0) farther from
+    # (1e-200, 0, 0, 0) than its negative. Own random stream.
+    @apart @testset "ckw06: the sign check of tiny quaternions" begin
+        r2 = MersenneTwister(SEED + 1207)
+        a = gen_ckw06(r2, 1; nmini = 1)
+        while isodd(a.subtps[1])
+            a = gen_ckw06(r2, 1; nmini = 1)
+        end
+        pktsiz = a.subtps[1] == 0 ? 8 : 14
+        pk = copy(a.packts)
+        pk[1:4] = [1.0e-200, 0.0, 0.0, 0.0]
+        pk[pktsiz .+ (1:4)] = [-1.0e-200, 0.0, 0.0, 0.0]
+        b = merge(a, (packts = pk,))
+        hn = ckopn(joinpath(dir, "quatsign_n.bc"), "Q", 0)
+        hc = SPICE.ckopn(joinpath(dir, "quatsign_c.bc"), "Q", 0)
+        try
+            @test throws_kind(() -> writer_case("ckw06").neo(hn, b), :badquatsign)
+            c_ckw06(hc, b; check = false)
+            @test cspice_kind() === :badquatsign
+        finally
+            dafcls(hn)
+            SPICE.dafcls(hc)
+        end
+    end
+
     @apart @testset "spk14: the writer object" begin
         a = writer_case("spk14").gen(rng, 3)
         p = joinpath(dir, "w14_object.bsp")
         h = neo_open(:spk, p, "W14")
         w = spk14b(h, a.segid, a.body, a.center, a.frame, a.first, a.last, a.degree)
         @test throws_kind(() -> spk14a(w, 0, Float64[], Float64[]), :invalidargument)
+        # Regression: coefficients that are not numbers gave a MethodError.
+        @test throws_kind(() -> spk14a(w, 1, "not numbers", a.epochs[1:1]), :badarg)
         @test occursin("0 records", sprint(show, w))
         spk14a(w, a.coeffs, a.epochs)
         spk14e(w)
@@ -2464,6 +2513,27 @@ group("9. DAF access, SPK and CK writers") do
             finally
                 SPICE.unload(pz)
             end
+        end
+        # The tests of `zzckspk` on the first summary of an old file with NI = 6,
+        # `ic = (body, center, type, angvel, first, last)`, past the first three tests
+        # (angvel 1, center not 0). Size 10: 9 doubles are no SPK type 1 records
+        # (`zzsizeok`), so CK. Size 73 (one SPK record, last double 1): not of the
+        # size of a CK type 2 segment, so SPK. Size 3313 (46 SPK records, 331 CK
+        # type 2 packets, so 3 CK directory values): the double at `last - 3` and the
+        # next one decide, CK if they decrease.
+        ckspk_word(w) = a -> w[a]
+        ckspk_ic(first, last) = Int32.((1, 1, 2, 1, first, last))
+        @test Almanac._daf_ckspk(ckspk_word(Dict{Int, Float64}()), ckspk_ic(1, 10)) === :CK
+        @test Almanac._daf_ckspk(ckspk_word(Dict(73 => 1.0)), ckspk_ic(1, 73)) === :SPK
+        # Size 1081 (15 SPK records, 108 CK type 2 packets, below 201): the double at
+        # `first + 14 * 71` against the one at `last - 15` decides, SPK if it is larger.
+        for (w1, w2, want) in ((2.0, 1.0, :SPK), (1.0, 2.0, :CK))
+            w = Dict(1081 => 15.0, 995 => w1, 1066 => w2)
+            @test Almanac._daf_ckspk(ckspk_word(w), ckspk_ic(1, 1081)) === want
+        end
+        for (w1, w2, want) in ((2.0, 1.0, :CK), (1.0, 2.0, :SPK))
+            w = Dict(3313 => 46.0, 3310 => w1, 3311 => w2)
+            @test Almanac._daf_ckspk(ckspk_word(w), ckspk_ic(1, 3313)) === want
         end
         # Without the string, a DAF without summaries has no byte order.
         pe = joinpath(dir, "no_bff_empty.bsp")

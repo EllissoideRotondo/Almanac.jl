@@ -103,95 +103,6 @@ end
     throw(SpiceError(:unnaturalrelation, "The relational operator $op was not recognized."))
 end
 
-@inline _ek_up(c::UInt8) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
-
-"""
-    _ek_matchi(string, templ) -> Bool
-
-Port of `matchi` with the wild string `*` and the wild character `%`, as the LIKE
-operator uses it: true if `string` matches the template `templ` without regard to case;
-leading and trailing blanks of both are ignored; `*` stands for any number of
-characters and `%` for exactly one.
-"""
-function _ek_matchi(string::AbstractString, templ::AbstractString)
-    s = codeunits(string)
-    t = codeunits(templ)
-    wstr = UInt8('*')
-    wchr = UInt8('%')
-    blank = UInt8(' ')
-    sfirst = something(findfirst(!=(blank), s), 0)
-    slast = something(findlast(!=(blank), s), 0)
-    tfirst = something(findfirst(!=(blank), t), 0)
-    tlast = something(findlast(!=(blank), t), 0)
-    scur = max(1, sfirst)
-    tcur = tfirst
-    tlast == 0 && return slast == 0
-    samei(i, j) = 1 <= i <= length(s) && 1 <= j <= length(t) && _ek_up(s[i]) == _ek_up(t[j])
-    iswstr(j) = 1 <= j <= length(t) && t[j] == wstr
-    iswchr(j) = 1 <= j <= length(t) && t[j] == wchr
-    # The part of the template before the first wild string must match the start.
-    while tcur <= tlast && scur <= slast && !iswstr(tcur)
-        (_ek_up(t[tcur]) != _ek_up(s[scur]) && t[tcur] != wchr) && return false
-        tcur += 1
-        scur += 1
-    end
-    (tcur > tlast && scur > slast) && return true
-    (tcur > tlast && scur <= slast) && return false
-    if tcur <= tlast && scur > slast
-        return all(j -> t[j] == wstr, tcur:tlast)
-    end
-    while tcur <= tlast && iswstr(tcur)
-        tcur += 1
-    end
-    tcur > tlast && return true
-    left = tcur
-    while tcur <= tlast && !iswstr(tcur)
-        tcur += 1
-    end
-    right = tcur - 1
-    while left <= tlast
-        # invariant: the template before `left` matches the string before `scur`, and
-        # `left:right` is the next part of the template without a wild string
-        slast - scur < right - left && return false
-        if right == tlast
-            i = slast
-            j = tlast
-            while j >= left
-                (iswchr(j) || samei(i, j)) || return false
-                j -= 1
-                i -= 1
-            end
-            return true
-        end
-        nosubm = true
-        while nosubm
-            i = scur
-            j = left
-            while j <= right && (samei(i, j) || iswchr(j))
-                i += 1
-                j += 1
-            end
-            if j > right
-                scur = i
-                nosubm = false
-            else
-                scur += 1
-                slast - scur < right - left && return false
-            end
-        end
-        while tcur <= tlast && iswstr(tcur)
-            tcur += 1
-        end
-        tcur > tlast && return true
-        left = tcur
-        while tcur <= tlast && !iswstr(tcur)
-            tcur += 1
-        end
-        right = tcur - 1
-    end
-    return false
-end
-
 @noinline _ek_noelt(col::_EKColumn, recptr::Integer) = throw(
     SpiceError(
         :invalidindex,
@@ -247,7 +158,7 @@ function _ek_scmp(
     op <= _EK_NE && return _ek_relop(op, rel)
     if (op == _EK_LIKE || op == _EK_UNLIKE) && dtype == _EK_CHR
         enull && return false
-        m = _ek_matchi(_ek_trunc(eltc), cval)
+        m = _matchi(_ek_trunc(eltc), cval)
         return op == _EK_LIKE ? m : !m
     end
     throw(
@@ -323,7 +234,7 @@ function _ek_colmatch(
     b, n2, fnd2 = _ek_elt_c(f2, col2, row2, 1)
     fnd1 || _ek_noelt(col1, row1)
     fnd2 || _ek_noelt(col2, row2)
-    m = _ek_matchi(n1 ? "" : _ek_trunc(a), n2 ? "" : _ek_trunc(b))
+    m = _matchi(n1 ? "" : _ek_trunc(a), n2 ? "" : _ek_trunc(b))
     return op == _EK_LIKE ? m : !m
 end
 

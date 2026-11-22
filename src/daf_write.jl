@@ -450,19 +450,22 @@ function dafena(h::DAFHandle)
     narray += 1
     free = h.afree
     last = bward
+    # The records are those of `dafena`, written in another order: the name before the
+    # summary that makes the array visible, and a new summary record before the forward
+    # link to it, so that the file is a valid DAF after each write.
     if narray < 125 ÷ ss
-        _daf_write_drec!(h, bward, sumrec)
         _daf_write_crec!(h, bward + 1, namrec)
+        _daf_write_drec!(h, bward, sumrec)
     else
         # The summary record is full: a new summary record and name record follow the data.
         next = _daf_arw(h.afree - 1)[1] + 1
-        sumrec[1] = Float64(next)
-        _daf_write_drec!(h, bward, sumrec)
-        _daf_write_crec!(h, bward + 1, namrec)
         newrec = zeros(Float64, _DAF_RECWORDS)
         newrec[2] = Float64(bward)
         _daf_write_drec!(h, next, newrec)
         _daf_write_crec!(h, next + 1, fill(UInt8(' '), _DAF_CRECLEN))
+        sumrec[1] = Float64(next)
+        _daf_write_crec!(h, bward + 1, namrec)
+        _daf_write_drec!(h, bward, sumrec)
         last = next
         free = _daf_rwa(next + 2)
     end
@@ -476,12 +479,20 @@ function dafena(h::DAFHandle)
     return nothing
 end
 
-function _daf_add_array!(h::DAFHandle, dc, ic, name::AbstractString, data::Vector{Float64})
-    dafbna(h, dafps(dc, ic), name)
+"Write the array `data` with the packed summary `descr` and the name `name` to `h`: `dafbna`, `dafada`, `dafena`."
+function _daf_add_descr!(
+        h::DAFHandle, descr::AbstractVector{<:Real}, name::AbstractString,
+        data::AbstractVector{<:Real}
+    )
+    dafbna(h, descr, name)
     dafada(h, data)
     dafena(h)
     return nothing
 end
+
+"Write the array `data` with the summary of the doubles `dc` and the integers `ic` to `h`, as `_daf_add_descr!`."
+_daf_add_array!(h::DAFHandle, dc, ic, name::AbstractString, data::Vector{Float64}) =
+    _daf_add_descr!(h, dafps(dc, ic), name, data)
 
 # ---------------------------------------------------------------------------------------
 # Change summaries and names

@@ -825,10 +825,26 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test r.mixed == 0 && r.unequal == 0 && r.both > nsample(5000, 20000)
         @test et2utc(ctx, leap_et[end] - 0.5, "C", 3) == "2016 DEC 31 23:59:60.500"
         @test et2utc(ctx, leap_et[end] - 0.5, "ISOD", 1) == "2016-366T23:59:60.5"
+        # An empty format is SPICE(EMPTYSTRING) of et2utc_c, another one that is not a
+        # format SPICE(INVALIDTIMEFORMAT) of et2utc_.
+        cbuf = zeros(UInt8, 64)
         for bad in ("", "X", "ISO", "CAL", " C")
-            @test oracle_outcome(() -> SPICE.et2utc(0.0, bad, 3)) === nothing
-            @test throws_kind(() -> et2utc(ctx, 0.0, bad, 3), :badformat)
+            ccall(
+                (:et2utc_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Cint, Cint, Ptr{UInt8}),
+                0.0, bad, 3, 64, cbuf
+            )
+            @test throws_kind(() -> et2utc(ctx, 0.0, bad, 3), cspice_kind())
         end
+        @test throws_kind(() -> et2utc(ctx, 0.0, "", 3), :emptystring)
+        @test throws_kind(() -> et2utc(ctx, 0.0, "X", 3), :invalidtimeformat)
+        # An empty picture of timout is SPICE(EMPTYSTRING) of timout_c, before timout_
+        # looks for the leap seconds.
+        ccall(
+            (:timout_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Cint, Ptr{UInt8}),
+            0.0, "", 64, cbuf
+        )
+        @test throws_kind(() -> timout(ctx, 0.0, ""), cspice_kind())
+        @test throws_kind(() -> timout(Almanac.empty_kernelset(), 0.0, ""), :emptystring)
         @test throws_kind(() -> et2utc(ctx, -7.0e10, "ISOC", 0), :yearoutofrange)
         # Trailing blanks of the format are ignored.
         for f in ("C ", "isoc ", "J   ")
@@ -1018,6 +1034,10 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test wref == 0.0
         @test worst < 1.0e-6
         @test whole
+        # An epoch type other than UTC and ET is SPICE(INVALIDEPOCH) in deltet_.
+        lt = Ref(0.0)
+        ccall((:deltet_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Ref{Cdouble}), 0.0, "TDB", lt)
+        @test throws_kind(() -> deltet(ctx, 0.0, "TDB"), cspice_kind())
     end
 
     @apart @testset "ttrans against the CSPICE library" begin

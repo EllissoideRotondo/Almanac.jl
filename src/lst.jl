@@ -1,53 +1,5 @@
 # Local solar time (`et2lst`) and planetocentric longitude of the Sun (`lspcn`).
 
-"Quotient and remainder of `num / den` with a remainder in `[0, den)`, as `rmaind_`."
-function _lst_rmaind(num::Float64, den::Float64)
-    q = trunc(num / den)
-    r = num - q * den
-    if r < 0.0
-        q -= 1.0
-        r += den
-    end
-    return q, r
-end
-
-"""
-    _lst_sense(ks, body) -> Int
-
-Contract: the sign that turns a planetographic longitude of `body` into a
-planetocentric one, as `pgrrec_`: `BODY<body>_PGR_POSITIVE_LON` (`EAST` gives 1, `WEST`
-gives -1) if it exists; otherwise 1 for a retrograde body and -1 for a prograde body
-(sign of the prime meridian rate), and 1 for the Earth, the Moon and the Sun. Throws
-`SpiceError(:invalidoption)` for another value of the variable and
-`SpiceError(:missingdata)` if the rate is needed and `BODY<body>_PM` is not available.
-"""
-function _lst_sense(ks::KernelSet, body::Integer)
-    key = _body_key(body, "PGR_POSITIVE_LON")
-    v = get(ks.pool, key, nothing)
-    if v isa Vector{String} && !isempty(v)
-        s = uppercase(replace(v[1], ' ' => ""))
-        s == "EAST" && return 1
-        s == "WEST" && return -1
-        throw(
-            SpiceError(
-                :invalidoption,
-                "kernel variable $key may have the values EAST or WEST; the value was $(v[1])"
-            )
-        )
-    end
-    body == 399 && return 1
-    pm = get(ks.pool, _body_key(body, "PM"), nothing)
-    (pm isa Vector{Float64} && length(pm) >= 2) || throw(
-        SpiceError(
-            :missingdata,
-            "the prime meridian rate of kernel variable BODY$(body)_PM is required but not " *
-                "available for body $body"
-        )
-    )
-    (body == 301 || body == 10) && return 1
-    return pm[2] < 0.0 ? 1 : -1
-end
-
 "`HH:MM:SS` of the numbers `0 <= h, m, s <= 99`, then `suffix`, in one buffer."
 function _lst_clock(h::Int, m::Int, s::Int, suffix::String)
     buf = Base.StringVector(8 + ncodeunits(suffix))
@@ -107,11 +59,11 @@ hr, mn, sc, time, ampm = et2lst(et, 399, deg2rad(-118.0), "PLANETOCENTRIC")
 function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::AbstractString)
     _plain_epoch(et, "et2lst")
     system = strip(type)
-    if _eqsys(system, "PLANETOGRAPHIC")
-        g = _lst_sense(ks, body) * Float64(lon)
+    if _eqci(system, "PLANETOGRAPHIC", true)
+        g = _m_pgrsense(ks, body) * Float64(lon)    # the sense of `pgrrec_`
         y, x = sincos(g)
         mylong = (x == 0.0 && y == 0.0) ? 0.0 : atan(y, x)
-    elseif _eqsys(system, "PLANETOCENTRIC")
+    elseif _eqci(system, "PLANETOCENTRIC", true)
         mylong = Float64(lon)
     else
         throw(
@@ -132,7 +84,7 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     )
     state, _ = spkezr(ks, 10, et, fix[1], Aberration("LT+S"), body)
     slong = (state[1] == 0.0 && state[2] == 0.0) ? 0.0 : atan(state[2], state[1])
-    _, angle = _lst_rmaind(mylong - slong, _TWOPI)
+    _, angle = _rmaind(mylong - slong, _TWOPI)
     angle > pi && (angle -= _TWOPI)
     pm = get(ks.pool, _body_key(body, "PM"), nothing)
     (pm isa Vector{Float64} && length(pm) >= 2) || throw(
@@ -145,8 +97,8 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     )
     pm[2] < 0.0 && (angle = -angle)
     secnds = clamp(angle * 86400.0 / _TWOPI, -43200.0, 43200.0)
-    hours, rest = _lst_rmaind(secnds, 3600.0)
-    mins, secnds = _lst_rmaind(rest, 60.0)
+    hours, rest = _rmaind(secnds, 3600.0)
+    mins, secnds = _rmaind(rest, 60.0)
     hr, mn, sc = trunc(Int, hours) + 12, trunc(Int, mins), trunc(Int, secnds)
     hr == 24 && (hr = 0)
     h12 = hr == 0 ? 12 : hr > 12 ? hr - 12 : hr
@@ -191,19 +143,12 @@ function lspcn(ks::KernelSet, body::NameOrID, et::Real, abcorr::AbcorrArg)
     tipm = tipbod(ks, 1, id, et)
     npole = Vec3{Float64}(tipm[3, 1], tipm[3, 2], tipm[3, 3])
     r, v = spk_jet(ks, id, check_epoch(et), _J2000_FRAME, Int32(10), Val(1))
-    z = _dyn_ucross(r, v)
-    x = _dyn_ucross(npole, z)
-    primal(_dot3(x, x)) == 0 && throw(
-        SpiceError(
-            :dependentvectors,
-            "lspcn: the pole of body $id is parallel to its orbital angular momentum"
-        )
-    )
-    y = _dyn_ucross(z, x)
+    # The arithmetic of `lspcn_`: `ucrss`, `twovec` (Z along the angular momentum, Y in
+    # the plane of the pole), `mxv` and `recrad` (with `reclat_`).
+    trans = twovec(_m_ucrss(r, v), 3, npole, 2)
     s, _ = spkezr(ks, 10, et, 1, Aberration(abcorr), id)
-    p = Vec3{Float64}(s[1], s[2], s[3])
-    px, py = dot(x, p), dot(y, p)
-    ra = (px == 0.0 && py == 0.0) ? 0.0 : atan(py, px)
+    pos = _m_mxv(trans, Vec3{Float64}(s[1], s[2], s[3]))
+    _, ra, _ = _m_reclat(pos, false)
     return ra < 0.0 ? ra + _TWOPI : ra
 end
 lspcn(ctx::SpiceContext, body::NameOrID, et::Real, abcorr::AbcorrArg) =

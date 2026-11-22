@@ -523,6 +523,30 @@ group("EK write: trees of depth 3 (records, indexes, data pages)") do
     measured("ek_write: deep files, $words words equal")
 end
 
+group("EK write: fast trees of depth 3 whose middle nodes have the fewest children") do
+    # With 5167 rows (the smallest count of depth 3) the root of the record tree and of
+    # the index tree has two children of 2583 keys; a middle node of 2583 keys gets 42
+    # children (`reqsiz <= maxsiz` of `zzektr1s`). The 5600 and 6000 rows above give
+    # middle nodes of 2800 and 3000 keys, which take the other branch. `zzektr1s` gives
+    # the 42 children overlapping keys here (the tree holds 5209 keys), so the file of
+    # CSPICE cannot be read; Almanac writes a valid tree.
+    dir = mktempdir()
+    rng = MersenneTwister(SEED + 9)
+    cols = [EKColSpec("K", :INT; indexed = true)]
+    rows = Vector{Any}[Any[Any[rand(rng, -1000:1000)]] for _ in 1:5167]
+    segs = [EKSegSpec("MID", cols, rows, true)]
+    pc = ekw_write(EKW_C, joinpath(dir, "c_mid.bes"), segs)
+    pn = ekw_write(EKW_N, joinpath(dir, "n_mid.bes"), segs)
+    nd, _ = ekw_diff(pc, pn)
+    @test nd > 0
+    @test_throws SpiceError ekw_depths(pc)
+    d = ekw_depths(pn)
+    @test d.rec == 3
+    @test d.idx == 3
+    _, bad = ekw_read_check(pn, segs)
+    @test bad == 0
+end
+
 # ---------------------------------------------------------------------------------------
 # (b) CSPICE loads and queries the files of Almanac
 # ---------------------------------------------------------------------------------------
@@ -536,7 +560,7 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
     path = ekw_write(EKW_N, joinpath(dir, "query.bes"), [k1, k2, fx])
     nent, bad = ekw_read_check(path, [k1, k2, fx])
     @test bad == 0
-    # The index searches of the write layer (`zzekillt`, `zzekille`) count as the model does.
+    # The index searches (`zzekillt`, `zzekille`) count on the written files as the model does.
     h = ekopr(path)
     searches = 0
     fails = Failures()
@@ -550,12 +574,15 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
         vals = [r[c][1] for r in seg.rows if r[c] !== nothing]
         nnull = length(seg.rows) - length(vals)
         key isa String && (vals = [String(rstrip(v)) for v in vals])
-        check!(fails, Almanac._ekw_illt(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<(key), vals), "_ekw_illt", segno, c, key)
-        check!(fails, Almanac._ekw_ille(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<=(key), vals), "_ekw_ille", segno, c, key)
+        col = Almanac._ekw_col(coldsc)
+        val = key isa String ? (Almanac._EK_CHR, key, 0.0, 0) :
+            key isa Integer ? (Almanac._EK_INT, "", 0.0, key) : (Almanac._EK_DP, "", key, 0)
+        nrows = length(seg.rows)
+        check!(fails, Almanac._ek_ixlast(h, col, nrows, true, val...) == nnull + count(<(key), vals), "zzekillt", segno, c, key)
+        check!(fails, Almanac._ek_ixlast(h, col, nrows, false, val...) == nnull + count(<=(key), vals), "zzekille", segno, c, key)
         searches += 2
     end
     @test isempty(fails)
-    @test neo_kind(() -> Almanac._ekw_illt(h, h.ints[1:24], h.ints[1:11], 0, 1)) === :invalidsize
     ekcls(h)
     SPICE.kclear()
     SPICE.furnsh(path)

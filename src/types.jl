@@ -101,7 +101,9 @@ function SegmentList(segs::Vector{S}) where {S}
             r = next[r]
         end
         while next[p] != r                         # compress the path to `r`
-            p, next[p] = next[p], r
+            q = next[p]
+            next[p] = r
+            p = q
         end
         return r
     end
@@ -283,7 +285,8 @@ inertial reference frame (`BODY<id>_CONSTS_REF_FRAME`, default 1 = J2000) and
 system (`BODY<sys>_MAX_PHASE_DEGREE`, default 1), stored as given: the evaluation
 rejects a value outside 1:3. `specerr` is `:none`, or `:competingepochspec` or
 `:competingframespec` if the pool holds both forms of the epoch or frame variable of the
-system: the evaluation throws it, as `tisbod_` does.
+system, or `:intoutofrange` if the frame is not a 32-bit integer (`ref` is then 1): the
+evaluation throws it, as `tisbod_` does.
 """
 struct BodyRot
     pole_ra::Vector{Float64}

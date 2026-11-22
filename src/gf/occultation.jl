@@ -5,27 +5,26 @@
 # which a binary state is true, so it is one call of the step-and-bracket search
 # (`zzgfsolv`) for each interval of the confinement window, as `gfudb` is. The state at
 # an epoch is the classification of `occult` for the roles "front" and "back"
-# (`_geo_occ_eval` of `geometry/occultation.jl`).
+# (`_geo_occ_state` of `geometry/occultation.jl`).
 
-"Names of the occultation types, and the code of `_geo_occ_eval` that each one accepts (0: any code but 0)."
+"Names of the occultation types, and the code of `_geo_occ_state` that each one accepts (0: any code but 0)."
 const _GF_OCCTYPES = ("ANNULAR" => 2, "ANY" => 0, "PARTIAL" => 1, "FULL" => 3)
 
 """
     _GFOccultation
 
 The checked inputs of an occultation search, the saved values of `zzgfocin`: the two
-targets with their shapes and frames, the surface list for the bounding sphere of the
-back target, the observer, the correction without stellar aberration, the code `want`
-of the occultation type and the DSK tolerances.
+targets with their shapes and their extents (radii, bounding spheres and frames, of
+`_geo_occ_extent`), the observer, the correction without stellar aberration, the code
+`want` of the occultation type and the DSK tolerances.
 """
 struct _GFOccultation
     ks::KernelSet
     tols::DSKTolerances
     front::_GeoOccBody
-    fframe::Int32
+    fext::_GeoOccExtent
     back::_GeoOccBody
-    bframe::Int32
-    bsrf::Vector{Int}
+    bext::_GeoOccExtent
     obs::Int32
     corr::Aberration
     want::Int
@@ -72,22 +71,16 @@ function _gf_occultation(
     pf.kind == 0x00 && _geo_occ_bad_shape(fshape)
     pb = _geo_occ_parse(ks, idb, bshape, "back target")
     pb.kind == 0x00 && _geo_occ_bad_shape(bshape)
-    fb = _GeoOccBody(idf, pf.kind, pf.m, Int32(0))
-    bb = _GeoOccBody(idb, pb.kind, pb.m, Int32(0))
-    # CSPICE translates the surface names of the back target with the ID of the front
-    # target; the surfaces here are those of the back target.
-    bsrf = bb.m.srflst
-    (
-        (fb.kind == _GEO_OCC_DSK && bb.kind != _GEO_OCC_POINT) ||
-            (bb.kind == _GEO_OCC_DSK && fb.kind != _GEO_OCC_POINT)
-    ) && throw(
+    fb = _GeoOccBody(idf, pf.kind, pf.m)
+    bb = _GeoOccBody(idb, pb.kind, pb.m)
+    _geo_occ_dsk_combo(fb, bb) && throw(
         SpiceError(
             :invalidshapecombo, "Front target shape from FSHAPE string was <$fshape>; back " *
                 "target shape from BSHAPE was <$bshape>. When one shape is DSK, the other must " *
                 "be POINT."
         )
     )
-    typ = uppercase(lstrip(rstrip(occtyp, ' '), ' '))
+    typ = _ljucase(occtyp)
     k = findfirst(p -> p.first == typ, _GF_OCCTYPES)
     k === nothing && throw(
         SpiceError(
@@ -103,17 +96,13 @@ function _gf_occultation(
                 "with point targets."
         )
     )
-    full = _geo_abcorr(abcorr)
-    corr = full.uselt ? Aberration(; uselt = true, converged = full.converged, transmit = full.transmit) :
-        full
-    # Radii, frames and bounding spheres, the front target first; the frames are kept
-    # as IDs for the evaluations.
-    ffrm = _geo_occ_extent(ks, fb, fframe, fb.m.srflst)[4]
-    bfrm = _geo_occ_extent(ks, bb, bframe, bsrf)[4]
-    return _GFOccultation(
-        ks, tols, fb, ffrm, bb, bfrm, bsrf, obs, corr,
-        _GF_OCCTYPES[k].second
-    )
+    corr = _geo_occ_corr(abcorr)
+    # Radii, frames and bounding spheres, the front target first. CSPICE translates the
+    # surface names of the back target with the ID of the front target; the surfaces
+    # here are those of the back target.
+    fext = _geo_occ_extent(ks, fb, fframe, fb.m.srflst)
+    bext = _geo_occ_extent(ks, bb, bframe, bb.m.srflst)
+    return _GFOccultation(ks, tols, fb, fext, bb, bext, obs, corr, _GF_OCCTYPES[k].second)
 end
 
 """
@@ -121,10 +110,7 @@ The state of `zzgfocst`: true if at `et` the front target occults the back targe
 the way that the occultation type asks for.
 """
 @inline function _gf_occulted(o::_GFOccultation, et::Float64)
-    code = _geo_occ_eval(
-        o.ks, o.tols, o.front, o.fframe, o.back, o.bframe, o.bsrf, o.obs,
-        o.corr, et
-    )
+    code = _geo_occ_state(o.ks, o.tols, o.front, o.fext, o.back, o.bext, o.obs, o.corr, et)
     return o.want == 0 ? code != 0 : code == o.want
 end
 

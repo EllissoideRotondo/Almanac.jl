@@ -220,7 +220,15 @@ function _pool_x_edit!(f!, ctx::SpiceContext)
     return nothing
 end
 
-"Contract: the variable name `name` without outer blanks; throws `SpiceError(:badvarname)` if it is empty or longer than 32 characters, as `pdpool_`."
+"""
+    _pool_x_name(name) -> String
+
+Contract: the variable name `name` without outer blanks; throws
+`SpiceError(:badvarname)` if that is empty or longer than 32 characters, as `pdpool_`
+for the length (`pdpool_` accepts a blank name). The callers test an empty `name`
+(`CHKFSTR` of the C wrapper) and the empty value list (`pdpool_` returns before the
+name check) first.
+"""
 function _pool_x_name(name::AbstractString)
     n = String(strip(name))
     (1 <= length(n) <= _TK_MAXNAME) || throw(
@@ -250,7 +258,9 @@ edit. The edit stays through a later
 [`furnsh`](@ref) and through the [`unload`](@ref) of a binary kernel. It is lost at
 [`kclear`](@ref) and at the `unload` of a text kernel or a meta-kernel, as in CSPICE.
 
-Throws `SpiceError(:badvarname)` if `name` is blank or longer than 32 characters.
+Throws `SpiceError(:emptystring)` if `name` is the empty string and
+`SpiceError(:badvarname)`, if `values` is not empty, when `name` is blank or longer than
+32 characters.
 
 # Examples
 ```jldoctest
@@ -266,8 +276,9 @@ julia> gdpool(ctx, "BODY999_GM")
 See also [`pipool`](@ref), [`pcpool`](@ref), [`dvpool`](@ref), [`lmpool`](@ref).
 """
 function pdpool(ctx::SpiceContext, name::AbstractString, values::AbstractVector{<:Real})
-    n = _pool_x_name(name)
+    _chkfstr("pdpool", "variable name", name)     # CHKFSTR of pdpool_c
     isempty(values) && return nothing
+    n = _pool_x_name(name)
     v = _vec_of(Float64, values)
     return _pool_x_edit!(pool -> (pool[n] = v; (n,)), ctx)
 end
@@ -294,8 +305,9 @@ A string longer than 80 characters is cut to 80, as in the kernel pool of CSPICE
 rules and the error are those of [`pdpool`](@ref).
 """
 function pcpool(ctx::SpiceContext, name::AbstractString, cvals::AbstractVector{<:AbstractString})
-    n = _pool_x_name(name)
+    _chkfstr("pcpool", "variable name", name)     # CHKFSTR of pcpool_c
     isempty(cvals) && return nothing
+    n = _pool_x_name(name)
     v = _vec_of(String, cvals, s -> first(String(s), _TK_MAXSTR))
     return _pool_x_edit!(pool -> (pool[n] = v; (n,)), ctx)
 end
@@ -395,7 +407,7 @@ Throws `SpiceError`:
   `:badtimespec` for an `@` time that cannot be parsed. A JSON kernel throws `:badkernel`.
 """
 function ldpool(ctx::SpiceContext, fname::AbstractString)
-    isempty(fname) && throw(SpiceError(:emptystring, "ldpool: the file name is empty"))
+    _chkfstr("ldpool", "file name", fname)
     _isfile(fname) || throw(SpiceError(:fileopenfailed, "ldpool: could not open $fname"))
     defs = timedefaults(ctx)
     tk = parse_text_kernel(String(fname), defs.yearbound, defs.check)
@@ -528,7 +540,7 @@ function badkpv(
         comp::AbstractString, size::Integer, divby::Integer, type::AbstractChar
     )
     for (arg, s) in (("caller", caller), ("name", name), ("comp", comp))
-        isempty(s) && throw(SpiceError(:emptystring, "badkpv: the argument $arg is empty"))
+        _chkfstr("badkpv", arg, s)
     end
     return _badkpv(ks.pool, caller, name, comp, size, divby, type)
 end
@@ -592,37 +604,6 @@ function _badkpv(
 end
 
 """
-    _pool_x_match(s, t) -> Bool
-
-Contract: true if the string `s` matches the template `t`, as `matchi_` with the
-wild cards of `gnpool_`: `*` stands for any substring, `%` for any one character, and
-letter case does not matter.
-"""
-function _pool_x_match(s::AbstractString, t::AbstractString)
-    a, b = collect(uppercase(s)), collect(uppercase(t))
-    i, j, star, mark = 1, 1, 0, 0
-    while i <= length(a)    # invariant: a[1:i-1] matches b[1:j-1]
-        if j <= length(b) && (b[j] == '%' || (b[j] != '*' && b[j] == a[i]))
-            i += 1
-            j += 1
-        elseif j <= length(b) && b[j] == '*'
-            star, mark = j, i
-            j += 1
-        elseif star != 0
-            j = star + 1
-            mark += 1
-            i = mark
-        else
-            return false
-        end
-    end
-    while j <= length(b) && b[j] == '*'
-        j += 1
-    end
-    return j > length(b)
-end
-
-"""
     gnpool([ctx,] name, start=1, room=typemax(Int)) -> Vector{String}
 
 Return the names of the kernel-pool variables that match the template `name`, as
@@ -656,7 +637,7 @@ function gnpool(ks::KernelSet, name::AbstractString, start::Integer = 1, room::I
         )
     )
     t = String(strip(name))
-    hits = sort!(String[k for k in keys(ks.pool) if _pool_x_match(k, t)])
+    hits = sort!(String[k for k in keys(ks.pool) if _matchi(k, t)])
     first = max(1, Int(start))
     first > length(hits) && return String[]
     return hits[first:min(length(hits), first + min(Int(room), length(hits)) - 1)]

@@ -189,7 +189,7 @@ julia> try
 ```
 """
 function tparch(ctx::SpiceContext, type::AbstractString)
-    isempty(type) && throw(SpiceError(:emptystring, "tparch: the argument type is empty"))
+    _chkfstr("tparch", "argument type", type)
     check = uppercase(replace(type, ' ' => "")) == "YES"
     lock(ctx.lock) do
         d = timedefaults(ctx)

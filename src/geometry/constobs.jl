@@ -66,7 +66,7 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
     dist = _m_norm(r)
     lt = dist / CLIGHT
     primal(lt) == 0 && return (; r, v, lt, dlt = zero(lt))
-    corr.uselt || return (; r, v, lt, dlt = _dot3(r, v) / (dist * CLIGHT))
+    corr.uselt || return (; r, v, lt, dlt = _m_dot(r, v) / (dist * CLIGHT))
     s = _ltsign(corr)
     numitr = corr.converged ? 5 : 1
     lterr = 1.0
@@ -83,8 +83,8 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
         i += 1
     end
     a = 1 / (CLIGHT * _m_norm(r))
-    b = _dot3(r, v)
-    c = _dot3(r, vt)
+    b = _m_dot(r, v)
+    c = _m_dot(r, vt)
     primal(s * c * a) > 1 - 1.0e-10 && _geo_throw_rate()
     dlt = a * b / (1 - s * c * a)
     v = (1 + s * dlt) * vt - vobs
@@ -234,9 +234,9 @@ end
 @noinline function _geo_refloc_slow(refloc::AbstractString)
     # The C wrappers of CSPICE reject an empty string before the Fortran code sees it.
     isempty(refloc) && throw(SpiceError(:emptystring, "the reference frame locus string is empty"))
-    _dsk_eqstr(refloc, "OBSERVER") && return _GEO_AT_OBSERVER
-    _dsk_eqstr(refloc, "TARGET") && return _GEO_AT_TARGET
-    _dsk_eqstr(refloc, "CENTER") && return _GEO_AT_CENTER
+    _eqstr(refloc, "OBSERVER") && return _GEO_AT_OBSERVER
+    _eqstr(refloc, "TARGET") && return _GEO_AT_TARGET
+    _eqstr(refloc, "CENTER") && return _GEO_AT_CENTER
     return _geo_bad_refloc(refloc)
 end
 
@@ -301,6 +301,28 @@ function _geo_cvt(
     return _geo_corsxf(R, dR, 1 + s * q.dlt, q.r, q.v), q.lt
 end
 
+"""
+    _geo_cv_args(ks, abcorr, ctr, ctrwhat, body, bodywhat, outref, refloc)
+        -> (corr, ctrcde, bodcde, orfcde, evltyp)
+
+The first checks of `spkcvo`, `spkcpo`, `spkcvt` and `spkcpt`, in their order: the
+correction, the center `ctr` of the constant state, the other body `body`, the output
+frame `outref` and the locus `refloc`. The checks of the state and of its frame follow
+in the caller.
+"""
+@inline function _geo_cv_args(
+        ks::KernelSet, abcorr::AbcorrArg, ctr::NameOrID, ctrwhat::String,
+        body::NameOrID, bodywhat::String, outref::NameOrID, refloc::AbstractString
+    )
+    corr = _geo_abcorr(abcorr)
+    ctrcde = _geo_body(ks, ctr, ctrwhat)
+    bodcde = _geo_body(ks, body, bodywhat)
+    orfcde = _geo_namfrm(ks, outref)
+    orfcde == Int32(0) && _geo_unknown_frame(outref)
+    evltyp = _geo_refloc(refloc)
+    return corr, ctrcde, bodcde, orfcde, evltyp
+end
+
 @inline _geo_pv(s::SVector{6}) = SVector(s[1], s[2], s[3]), SVector(s[4], s[5], s[6])
 
 @inline function _geo_state(s::AbstractVector)
@@ -358,12 +380,8 @@ function spkcvo(
         refloc::AbstractString, abcorr::AbcorrArg, obssta::AbstractVector, obsepc::Real,
         obsctr::NameOrID, obsref::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
-    ctrcde = _geo_body(ks, obsctr, "observer center")
-    trgcde = _geo_body(ks, target, "target")
-    orfcde = _geo_namfrm(ks, outref)
-    orfcde == Int32(0) && _geo_unknown_frame(outref)
-    evltyp = _geo_refloc(refloc)
+    corr, ctrcde, trgcde, orfcde, evltyp =
+        _geo_cv_args(ks, abcorr, obsctr, "observer center", target, "target", outref, refloc)
     pos, vel = _geo_state(obssta)
     f = _GeoFixed(pos, vel, Float64(obsepc), ctrcde, _geo_known_frame(ks, obsref))
     return _geo_cvo(ks, trgcde, check_epoch(et), orfcde, evltyp, corr, f)
@@ -389,12 +407,8 @@ function spkcpo(
         refloc::AbstractString, abcorr::AbcorrArg, obspos::AbstractVector, obsctr::NameOrID,
         obsref::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
-    ctrcde = _geo_body(ks, obsctr, "observer center")
-    trgcde = _geo_body(ks, target, "target")
-    orfcde = _geo_namfrm(ks, outref)
-    orfcde == Int32(0) && _geo_unknown_frame(outref)
-    evltyp = _geo_refloc(refloc)
+    corr, ctrcde, trgcde, orfcde, evltyp =
+        _geo_cv_args(ks, abcorr, obsctr, "observer center", target, "target", outref, refloc)
     f = _GeoFixed(_geo_pos(obspos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, obsref))
     return _geo_cvo(ks, trgcde, check_epoch(et), orfcde, evltyp, corr, f)
 end
@@ -423,12 +437,8 @@ function spkcvt(
         trgref::NameOrID, et::Real, outref::NameOrID, refloc::AbstractString,
         abcorr::AbcorrArg, obsrvr::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
-    ctrcde = _geo_body(ks, trgctr, "target center")
-    obscde = _geo_body(ks, obsrvr, "observer")
-    orfcde = _geo_namfrm(ks, outref)
-    orfcde == Int32(0) && _geo_unknown_frame(outref)
-    evltyp = _geo_refloc(refloc)
+    corr, ctrcde, obscde, orfcde, evltyp =
+        _geo_cv_args(ks, abcorr, trgctr, "target center", obsrvr, "observer", outref, refloc)
     pos, vel = _geo_state(trgsta)
     f = _GeoFixed(pos, vel, Float64(trgepc), ctrcde, _geo_known_frame(ks, trgref))
     return _geo_cvt(ks, f, check_epoch(et), orfcde, evltyp, corr, obscde)
@@ -454,12 +464,8 @@ function spkcpt(
         et::Real, outref::NameOrID, refloc::AbstractString, abcorr::AbcorrArg,
         obsrvr::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
-    ctrcde = _geo_body(ks, trgctr, "target center")
-    obscde = _geo_body(ks, obsrvr, "observer")
-    orfcde = _geo_namfrm(ks, outref)
-    orfcde == Int32(0) && _geo_unknown_frame(outref)
-    evltyp = _geo_refloc(refloc)
+    corr, ctrcde, obscde, orfcde, evltyp =
+        _geo_cv_args(ks, abcorr, trgctr, "target center", obsrvr, "observer", outref, refloc)
     f = _GeoFixed(_geo_pos(trgpos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, trgref))
     return _geo_cvt(ks, f, check_epoch(et), orfcde, evltyp, corr, obscde)
 end

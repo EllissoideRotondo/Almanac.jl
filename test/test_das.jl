@@ -439,6 +439,20 @@ group("11. DAS files and DLA segment lists") do
             write(pb, bytes)
             @test neo_kind(() -> dasopr(pb)) === kind === c_open_kind(pb)
         end
+        # Zeros in place of the format, as in a file from before N0052: the native
+        # byte order, as `zzddhppf` assumes for a DAS file.
+        bytes = read(cfile)
+        bytes[85:92] .= 0x00
+        pz = joinpath(dir, "bff_zero.bds")
+        write(pz, bytes)
+        hz = dasopr(pz)
+        chz = c_dasopr(pz)
+        lastc, lastd, lasti = daslla(hz)
+        @test (lastc, lastd, lasti) == c_daslla(chz)
+        @test dasrdi(hz, 1, lasti) == c_dasrdi(chz, 1, lasti)
+        @test bits_equal(dasrdd(hz, 1, lastd), c_dasrdd(chz, 1, lastd))
+        c_dascls(chz)
+        dascls(hz)
 
         h = dasopr(cfile)
         lastc, lastd, lasti = daslla(h)

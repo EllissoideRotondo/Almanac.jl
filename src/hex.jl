@@ -156,7 +156,7 @@ julia> hx2dp("2A^3"), hx2dp("-B^1"), hx2dp(dp2hx(0.1)) == 0.1
 ```
 """
 function hx2dp(str::AbstractString)
-    isempty(str) && throw(SpiceError(:emptystring, "hx2dp: the string is empty"))
+    _chkfstr("hx2dp", "string", str)
     bad(msg) = throw(SpiceError(:badnumber, msg))
     b = codeunits(str)
     n = length(b)

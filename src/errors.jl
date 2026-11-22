@@ -16,8 +16,8 @@ const ERROR_KINDS = (
     :badboresightspec, :badboundary, :badcoarsevoxscale, :badcolumdecl, :badcolumndecl,
     :badcommentarea, :badcoordbounds, :badcoordsys, :baddaf, :baddascommentarea,
     :baddasdirectory, :baddefaultvalue, :baddescrtimes, :baddimensions, :baddirection,
-    :baddladescriptor, :badeccentricity, :badendpoints, :badepochtype, :badfile,
-    :badfinevoxelscale, :badformat, :badframe, :badframeclass, :badframecount,
+    :baddladescriptor, :badeccentricity, :badendpoints, :badfile,
+    :badfinevoxelscale, :badframe, :badframeclass, :badframecount,
     :badframespec, :badframespec2, :badgeometry, :badgm, :badindex, :badinitstate,
     :badkernel, :badlatitudebounds, :badlatituderange, :badlatusrectum, :badlimblocusmix,
     :badlongituderange, :badmeanmotion, :badmeccentricity, :badmethodsyntax, :badmsemimajor,
@@ -51,7 +51,7 @@ const ERROR_KINDS = (
     :intlennotpos, :intoutofrange, :invalidaddress, :invalidangle, :invalidarchtype, :invalidargument,
     :invalidaxis, :invalidaxislength, :invalidconststep, :invalidcount, :invaliddatatype,
     :invaliddegree, :invaliddescrtime, :invalidelements, :invalidellipse,
-    :invalidendpntspec, :invalidfiletype, :invalidfixref, :invalidformat, :invalidfov,
+    :invalidendpntspec, :invalidepoch, :invalidfiletype, :invalidfixref, :invalidformat, :invalidfov,
     :invalidframe, :invalidframedef, :invalidgeometry, :invalidindex, :invalidlimbtype,
     :invalidlocus, :invalidlonextent, :invalidmetadata, :invalidmethod, :invalidname, :invalidnode,
     :invalidnumint, :invalidnumints, :invalidnumrec, :invalidocctype, :invalidoperation,
@@ -60,14 +60,14 @@ const ERROR_KINDS = (
     :invalidsearchstep, :invalidselection, :invalidshadow, :invalidshape,
     :invalidshapecombo, :invalidsize, :invalidstarttime, :invalidstate, :invalidstep,
     :invalidstepsize, :invalidsublist, :invalidsubtype, :invalidtarget, :invalidtermtype,
-    :invalidtimestring, :invalidtolerance, :invalidtype, :invalidvalue, :invalidvertex,
+    :invalidtimeformat, :invalidtimestring, :invalidtolerance, :invalidtype, :invalidvalue, :invalidvertex,
     :irfnotrec, :itemnotfound, :kernelvarnotfound, :lowerboundtoolow, :missingdata,
     :missingframevar, :missingkpv, :missingtimeinfo, :missingvalue, :namesnotresolved,
     :noclass, :noconverg, :noconvergence, :nocurrentarray, :nodetoofull, :nodsksegments,
     :noframe, :noframeconnect, :noframeinfo, :nofreenodes, :nointerval, :noleapseconds,
     :noloadeddskfiles, :noloadedfiles, :nonconicmotion, :nonemptyentry, :nonemptytree,
     :nonpositiveaxis, :nonpositivemass, :nonpositiveradius, :nonpositivescale,
-    :nonpositivevalue, :nonpospacketsize, :nonprintablechars, :nonprintingchars, :nopartition,
+    :nonpositivevalue, :nonpospacketsize, :nonprintablechars, :nonprintingchar, :nonprintingchars, :nopartition,
     :nosegmentsfound, :noseparation, :nosuchfile, :nosuchhandle, :notanumber, :notarotation,
     :notcomputable, :notdisjoint, :notindexed, :notinpart, :notranslation, :notrecognized,
     :notsupported, :numberexpected, :numcoeffsnotpos, :numericoverflow, :numpacketsnotpos, :numpartsunequal,
@@ -220,10 +220,17 @@ Base.showerror(io::IO, e::SpiceError) = print(io, "SpiceError(", e.kind, "): ", 
 Base.showerror(io::IO, e::SpkInsufficientDataError) =
     print(io, "SpkInsufficientDataError(", e.kind, "): ", e.msg)
 
+# The check of a string argument in the C interface of CSPICE (the macro CHKFSTR): an
+# empty string is SPICE(EMPTYSTRING). `what` names the argument in the message.
+@inline function _chkfstr(who::AbstractString, what::AbstractString, s::AbstractString)
+    isempty(s) && throw(SpiceError(:emptystring, "$who: the $what is empty"))
+    return nothing
+end
+
 # The check of a file name argument in the C interface of CSPICE: an empty string is
 # SPICE(EMPTYSTRING) in the wrapper, a blank one SPICE(BLANKFILENAME) in the routine.
 @inline function _chk_filename(who::AbstractString, path::AbstractString)
-    isempty(path) && throw(SpiceError(:emptystring, "$who: the file name is empty"))
+    _chkfstr(who, "file name", path)
     isempty(strip(path)) &&
         throw(SpiceError(:blankfilename, "$who: the file name is blank"))
     return nothing

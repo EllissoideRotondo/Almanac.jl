@@ -3,9 +3,7 @@
 # calendars (`jul2gr.c`) and the constants. `timeparse.jl` has the strings to ET and
 # `timeout.jl` the ET to strings.
 
-const _SPD = 86400.0
-const _HALFD = 43200.0
-const _JD2000 = 2451545.0
+const _HALFD = 43200.0        # `_SPD` and `_JD2000` are in math/kernels.jl
 
 # ---------------------------------------------------------------------------------
 # Leap-second kernel
@@ -56,10 +54,6 @@ end
     )
 )
 
-"Contract: `b` is upper case; returns whether `a` equals `b` when case is ignored, without allocation."
-_eqci(a::AbstractString, b::AbstractString) =
-    ncodeunits(a) == ncodeunits(b) && all(((x, y),) -> uppercase(x) == y, zip(a, b))
-
 """
     deltet([ctx,] epoch, eptype) -> Float64
 
@@ -72,7 +66,7 @@ JAN 01 12:00:00 UTC with 86400 seconds in every day (the result of [`tparse`](@r
 loaded.
 
 Throws `SpiceError(:kernelvarnotfound)` if no leap-second kernel is loaded and
-`SpiceError(:badepochtype)` if `eptype` is not `"UTC"` or `"ET"`.
+`SpiceError(:invalidepoch)` if `eptype` is not `"UTC"` or `"ET"`.
 
 # Examples
 ```julia
@@ -88,7 +82,7 @@ function deltet(ks::KernelSet, epoch::Real, eptype::AbstractString)::Float64
     isutc = _eqci(typ, "UTC")
     isutc || _eqci(typ, "ET") || throw(
         SpiceError(
-            :badepochtype,
+            :invalidepoch,
             "the epoch type '$eptype' is neither 'UTC' nor 'ET'"
         )
     )
@@ -127,39 +121,54 @@ const _DPBEGL = (0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335)
 "Contract: `year >= 1`; returns 1 for a Gregorian leap year and 0 otherwise."
 _leap(year::Int) = (year % 4 == 0) - (year % 100 == 0) + (year % 400 == 0)
 
-"Contract: `year >= 1`, `1 <= month <= 12`; returns the number of days from 0001-01-01 (day 0) to the given Gregorian date, as the `DAYNUM` of `ttrans`."
-function _daynum(year::Int, month::Int, day::Int)::Int
+"Contract: `1 <= month <= 12`, any `year`; returns the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles."
+function _tt_daynum(year::Int, month::Int, day::Int)::Int
+    doffst = 0
+    if year <= 0
+        yr400, year = fldmod(year, 400)
+        if year == 0
+            year += 400
+            yr400 -= 1
+        end
+        doffst = yr400 * 146097
+    end
     y = year - 1
-    return y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
-        (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1
+    n = y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
+        (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1 + doffst
+    return Int(n % Int32)
 end
 
-const _DN2000 = _daynum(2000, 1, 1)
+const _DN2000 = _tt_daynum(2000, 1, 1)
 const _JD1101 = _JD2000 - Float64(_DN2000) - 0.5
 
-"Contract: returns (year, month, day, day of year) of day number `daynum` in the Gregorian calendar, as `ttrans` computes them."
-function _calendar(daynum::Int)
-    yr400 = div(daynum, 146097)
-    rem = daynum - yr400 * 146097
-    if rem < 0
-        yr400 -= 1
-        rem += 146097
+"Contract: `1 <= dofyr <= 366`; returns (month, day of month) of day `dofyr` of a year that has (`leap`) or does not have a leap day."
+@inline function _month_day(dofyr::Int, leap::Bool)
+    tab = leap ? _DPBEGL : _DPJAN0
+    month = 1
+    # Loop invariant: `tab[month] < dofyr`.
+    while month < 12 && tab[month + 1] < dofyr
+        month += 1
     end
+    return month, dofyr - tab[month]
+end
+
+"Contract: returns (year, day of year) of day number `daynum` (0001-01-01 is day 0) in the extended Gregorian calendar, by the 400-, 100-, 4- and 1-year cycles of `ttrans` and `jul2gr`."
+@inline function _gregorian_year(daynum::Int)
+    yr400, rem = fldmod(daynum, 146097)
     yr100 = min(3, div(rem, 36524))
     rem -= yr100 * 36524
     yr4 = min(24, div(rem, 1461))
     rem -= yr4 * 1461
     yr1 = min(3, div(rem, 365))
     rem -= yr1 * 365
-    dofyr = rem + 1
-    year = yr400 * 400 + yr100 * 100 + yr4 * 4 + yr1 + 1
-    tab = (mod(year, 4) == 0) - (mod(year, 100) == 0) + (mod(year, 400) == 0) == 0 ?
-        _DPJAN0 : _DPBEGL
-    month = 1
-    while month < 12 && tab[month + 1] < dofyr
-        month += 1
-    end
-    return year, month, dofyr - tab[month], dofyr
+    return yr400 * 400 + yr100 * 100 + yr4 * 4 + yr1 + 1, rem + 1
+end
+
+"Contract: returns (year, month, day, day of year) of day number `daynum` in the Gregorian calendar, as `ttrans` computes them."
+function _calendar(daynum::Int)
+    year, dofyr = _gregorian_year(daynum)
+    month, day = _month_day(dofyr, _leap(year) != 0)
+    return year, month, day, dofyr
 end
 
 "Contract: `1 <= i <= length(l.delta_at)`; entry `i` of the `TAITAB` of `ttrans`: TAI seconds past J2000 at the start of the day before (odd `i`) and of the day after (even `i`) each leap-second epoch."
@@ -336,52 +345,13 @@ Return the number of degrees in a radian, `180 / pi`, as
 dpr() = 180.0 / Float64(pi)
 
 # ---------------------------------------------------------------------------------
-# Integer conversions of C and the calendar arithmetic of TTRANS and JUL2GR
+# The calendar arithmetic of TTRANS and JUL2GR
 # ---------------------------------------------------------------------------------
 
-"Contract: returns `x` cut to an integer as the C cast `(integer) x` does on x86: toward zero, and the smallest 32-bit integer when `x` is NaN or out of range."
-@inline _cint(x::Float64)::Int =
-    (x > -2147483649.0 && x < 2147483648.0) ? Int(trunc(Int32, x)) : Int(typemin(Int32))
-
-"Contract: returns `n` reduced to the range of a 32-bit integer, as integer arithmetic of the C code does."
-@inline _wrap32(n::Int)::Int = Int(n % Int32)
-
-"Contract: returns the integer nearest to `x`, a tie away from zero, as f2c `i_dnnt`."
-@inline _nint(x::Float64)::Int = _cint(x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x))
-
-"Contract: returns `x` rounded to a whole number, a tie away from zero, as f2c `d_nint`."
-@inline _dnint(x::Float64)::Float64 = x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x)
-
-"Contract: `1 <= month <= 12`, any `year`; returns the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles."
-function _tt_daynum(year::Int, month::Int, day::Int)::Int
-    doffst = 0
-    if year <= 0
-        yr400, year = fldmod(year, 400)
-        if year == 0
-            year += 400
-            yr400 -= 1
-        end
-        doffst = yr400 * 146097
-    end
-    y = year - 1
-    n = y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
-        (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1 + doffst
-    return Int(n % Int32)
-end
+# `_cint`, `_wrap32`, `_nint` and `_dnint` are in math/kernels.jl, `_tt_daynum` is above.
 
 "Day number of 1991 JAN 06, a Sunday (`SUNDAY` of `ttrans`)."
 const _SUNDAY = _tt_daynum(1991, 1, 6)
-
-"Contract: `1 <= dofyr <= 366`; returns (month, day of month) of day `dofyr` of a year that has (`leap`) or does not have a leap day."
-@inline function _month_day(dofyr::Int, leap::Bool)
-    tab = leap ? _DPBEGL : _DPJAN0
-    month = 1
-    # Loop invariant: `tab[month] < dofyr`.
-    while month < 12 && tab[month + 1] < dofyr
-        month += 1
-    end
-    return month, dofyr - tab[month]
-end
 
 const _RDAYG = _tt_daynum(1582, 10, 15)
 const _RDAYJ = (1582 - 1) * 365 + div(1582 - 1, 4) + (_DPJAN0[10] + 0 + 5) - 1
@@ -423,15 +393,7 @@ function jul2gr(year::Integer, month::Integer, day::Integer)
     jleap = yr % 4 == 0 ? 1 : 0
     dayj = (yr - 1) * 365 + div(yr - 1, 4) + (_DPJAN0[mon] + (mon > 2 ? jleap : 0) + Int(day)) -
         1 + offset
-    m400, dayg = fldmod(dayj + _OFFSTG, 146097)
-    m100 = min(3, div(dayg, 36524))
-    dayg -= m100 * 36524
-    m4 = min(24, div(dayg, 1461))
-    dayg -= m4 * 1461
-    m = min(3, div(dayg, 365))
-    dayg -= m * 365
-    dofyr = dayg + 1
-    yr = m400 * 400 + m100 * 100 + m4 * 4 + m + 1
+    yr, dofyr = _gregorian_year(dayj + _OFFSTG)
     mon, dy = _month_day(dofyr, _leap(yr) != 0)
     return yr, mon, dy, dofyr
 end
@@ -480,34 +442,17 @@ const _US_JDTDB = 7
 const _US_JED = 8
 const _US_TDB = 9
 
-"Contract: `b` is upper case ASCII; returns whether `a` equals `b` when case and the trailing blanks of `a` are ignored, without allocation."
-function _eqsys(a::AbstractString, b::String)::Bool
-    ca = codeunits(a)
-    cb = codeunits(b)
-    n = length(cb)
-    length(ca) >= n || return false
-    @inbounds for i in 1:n
-        c = ca[i]
-        (UInt8('a') <= c <= UInt8('z')) && (c -= 0x20)
-        c == cb[i] || return false
-    end
-    @inbounds for i in (n + 1):length(ca)
-        ca[i] == UInt8(' ') || return false
-    end
-    return true
-end
-
 "Contract: returns the code of the uniform time scale `s` (any case, trailing blanks allowed), or 0 if `s` is not one of them. Does not allocate."
 function _unitim_code(s::AbstractString)::Int
-    _eqsys(s, "TDB") && return _US_TDB
-    _eqsys(s, "ET") && return _US_ET
-    _eqsys(s, "TDT") && return _US_TDT
-    _eqsys(s, "TT") && return _US_TT
-    _eqsys(s, "TAI") && return _US_TAI
-    _eqsys(s, "JED") && return _US_JED
-    _eqsys(s, "JDTDB") && return _US_JDTDB
-    _eqsys(s, "JDTDT") && return _US_JDTDT
-    _eqsys(s, "GPS") && return _US_GPS
+    _eqci(s, "TDB", true) && return _US_TDB
+    _eqci(s, "ET", true) && return _US_ET
+    _eqci(s, "TDT", true) && return _US_TDT
+    _eqci(s, "TT", true) && return _US_TT
+    _eqci(s, "TAI", true) && return _US_TAI
+    _eqci(s, "JED", true) && return _US_JED
+    _eqci(s, "JDTDB", true) && return _US_JDTDB
+    _eqci(s, "JDTDT", true) && return _US_JDTDT
+    _eqci(s, "GPS", true) && return _US_GPS
     return 0
 end
 

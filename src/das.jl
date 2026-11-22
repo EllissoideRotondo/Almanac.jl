@@ -22,8 +22,7 @@ const _DAS_RECLEN = 1024
 const _DAS_NW = (1024, 128, 256)          # words in a record of type 1 (char), 2 (dp), 3 (int)
 const _DAS_NEXT = (2, 3, 1)
 const _DAS_PREV = (3, 1, 2)
-const _DAS_NATIVE_LITTLE = ENDIAN_BOM == 0x04030201
-const _DAS_NATIVE_BFF = _DAS_NATIVE_LITTLE ? "LTL-IEEE" : "BIG-IEEE"
+const _DAS_NATIVE_BFF = _DAF_NATIVE_LITTLE ? "LTL-IEEE" : "BIG-IEEE"
 
 """
     DASHandle
@@ -108,7 +107,7 @@ end
 @inline function _das_i32(raw::AbstractVector{UInt8}, off::Int, swap::Bool)
     v = UInt32(raw[off + 1]) | (UInt32(raw[off + 2]) << 8) | (UInt32(raw[off + 3]) << 16) |
         (UInt32(raw[off + 4]) << 24)
-    v = _DAS_NATIVE_LITTLE ? v : bswap(v)       # `v` is now the stored word, native layout
+    v = _DAF_NATIVE_LITTLE ? v : bswap(v)       # `v` is now the stored word, native layout
     return Int(reinterpret(Int32, swap ? bswap(v) : v))
 end
 
@@ -165,7 +164,7 @@ function _das_probe(path::AbstractString, who::AbstractString)
             )
         )
     elseif all(iszero, raw[85:92])
-        _DAS_NATIVE_LITTLE
+        _DAF_NATIVE_LITTLE
     else
         throw(
             SpiceError(
@@ -174,7 +173,7 @@ function _das_probe(path::AbstractString, who::AbstractString)
             )
         )
     end
-    return raw, little != _DAS_NATIVE_LITTLE
+    return raw, little != _DAF_NATIVE_LITTLE
 end
 
 """

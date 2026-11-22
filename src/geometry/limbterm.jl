@@ -104,11 +104,11 @@ function _geo_edtmpt(
     d = _m_norm(taxis)
     if umbral
         angle = _geo_dasine((maxr - 1.0) / d, 1.0e-14)
-        targpt = _m_vrotv(utaxis, hplnml, -(_M_HALFPI + angle))
+        targpt = _m_vrotv(utaxis, hplnml, -(_HALFPI + angle))
         s = 1.0
     else
         angle = _geo_dasine((maxr + 1.0) / d, 1.0e-14)
-        targpt = _m_vrotv(utaxis, hplnml, angle - _M_HALFPI)
+        targpt = _m_vrotv(utaxis, hplnml, angle - _HALFPI)
         s = -1.0
     end
     normal = _m_hat(targpt)
@@ -454,8 +454,7 @@ function _geo_limbpt(
             "the roll step is zero and more than one cutting half plane is asked for"
         )
     )
-    sh = m.dsk ? _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst) :
-        _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+    sh = _geo_subshape(ks, tols, m, trgcde, fixfid)
     radii = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?
         _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
     et = Float64(check_epoch(et0))
@@ -640,8 +639,7 @@ function _geo_termpt(
             "the roll step is zero and more than one cutting half plane is asked for"
         )
     )
-    sh = m.dsk ? _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst) :
-        _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+    sh = _geo_subshape(ks, tols, m, trgcde, fixfid)
     srad = _geo_radii3(ks, ilucde, :badradiuscount)
     ilurad = max(max(srad[1], srad[2]), srad[3])
     trad = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?
@@ -1030,7 +1028,7 @@ function tangpt(
     _plain_epoch(et0, "tangpt")
     corr = _geo_abcorr(abcorr)
     s = _geo_sign(corr)
-    (method == "ELLIPSOID" || _dsk_eqstr(method, "ELLIPSOID")) || throw(
+    (method == "ELLIPSOID" || _eqstr(method, "ELLIPSOID")) || throw(
         SpiceError(
             :notsupported, "the method <$method> is not supported; use ELLIPSOID"
         )
@@ -1151,8 +1149,8 @@ tangpt(
     return _geo_tanloc_slow(corloc)
 end
 @noinline function _geo_tanloc_slow(corloc::AbstractString)
-    _dsk_eqstr(corloc, "TANGENTPOINT") && return true
-    _dsk_eqstr(corloc, "SURFACEPOINT") && return false
+    _eqstr(corloc, "TANGENTPOINT") && return true
+    _eqstr(corloc, "SURFACEPOINT") && return false
     throw(
         SpiceError(
             :notsupported, "the aberration correction locus <$corloc> is not " *

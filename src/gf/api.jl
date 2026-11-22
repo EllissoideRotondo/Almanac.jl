@@ -120,8 +120,9 @@ Throws `SpiceError` with the kind
 - `:invalidstep` if `step <= 0` or a step does not advance the time (CSPICE then
   loops for ever), `:invalidtolerance` if `tol <= 0`;
 - `:notrecognized` if `relate` is not a relation;
-- `:valueoutofrange` if `adjust < 0` or is not finite, `:invalidvalue` if `adjust` is
-  not zero with a relation other than `"ABSMIN"` and `"ABSMAX"` or `refval` is NaN;
+- `:valueoutofrange` if `adjust < 0`, `:invalidvalue` if `adjust` is NaN or infinite,
+  or not zero with a relation other than `"ABSMIN"` and `"ABSMAX"`, or if `refval` is
+  NaN;
 - `:idcodenotfound` if a body name is not known, `:bodiesnotdistinct` if the two bodies
   are the same;
 - `:invalidoption` if `abcorr` is not a correction.
@@ -462,9 +463,9 @@ the start of the search.
 Throws `SpiceError(:invalidstep)` if `step <= 0` or a step does not advance the time
 (CSPICE then loops for ever), `SpiceError(:invalidtolerance)` if
 `tol <= 0`, `SpiceError(:notrecognized)` if `relate` is not a relation,
-`SpiceError(:valueoutofrange)` if `adjust < 0` or is not finite, and
-`SpiceError(:invalidvalue)` if `adjust` is not zero with a relation other than
-`"ABSMIN"` and `"ABSMAX"` or `refval` is NaN.
+`SpiceError(:valueoutofrange)` if `adjust < 0`, and `SpiceError(:invalidvalue)` if
+`adjust` is NaN or infinite, or not zero with a relation other than `"ABSMIN"` and
+`"ABSMAX"`, or if `refval` is NaN.
 
 # Examples
 ```jldoctest
@@ -662,7 +663,7 @@ function gfevnt(
         qlpars::AbstractVector{Bool}, op::AbstractString, refval::Real, tol::Real,
         adjust::Real, cnfine::Window; bail = nothing, report = nothing, threads::Bool = false
     )
-    quant = uppercase(strip(gquant, ' '))
+    quant = _ljucase(gquant)
     k = findfirst(p -> p.first == quant, _GF_QPARS)
     k === nothing && throw(
         SpiceError(
@@ -678,7 +679,7 @@ function gfevnt(
             "Number of quantity definition parameters = $n;  must be in range 0:10."
         )
     )
-    pnames = String[uppercase(strip(s, ' ')) for s in qpnams]
+    pnames = String[_ljucase(s) for s in qpnams]
     for p in _GF_QPARS[k].second         # invariant: the parameters before p are supplied
         p in pnames || throw(
             SpiceError(
@@ -708,7 +709,7 @@ function gfevnt(
         return _gf_search(q, op, refval, adjust, cnfine, run)
     elseif quant == "COORDINATE"
         rawdef = qcpars[findfirst(==("VECTOR DEFINITION"), pnames)]
-        vecdef = _gf_compress(rawdef)
+        vecdef = normalize_name(rawdef)
         if vecdef == "POSITION"
             q = _gf_position_coordinate(
                 ks, par("TARGET"), par("REFERENCE FRAME"),

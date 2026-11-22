@@ -175,6 +175,12 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         @test throws_kind(() -> scencd(ctx, sc, "1/"), :invalidsclkstring)
         # no fields and no partition: the fields are checked first, as CSPICE (F_SCLK0)
         @test throws_kind(() -> scencd(ctx, sc, " /"), :invalidsclkstring)
+        # Regression: a slash in the first column is BADPARTNUMBER before the fields are
+        # read, and a blank partition number is read after the fields, as in scencd_.
+        for str in ("/", "/  ", "  /x", "  /100.5")
+            ccall((:scencd_c, SPICE.libcspice), Cvoid, (Cint, Cstring, Ref{Cdouble}), sc, str, Ref(0.0))
+            @test throws_kind(() -> scencd(ctx, sc, str), cspice_kind())
+        end
         # A character of several bytes in a field is an error of the string, not of the code.
         @test all(
             s -> try
@@ -214,6 +220,24 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
                 ccall((:sct2e_c, SPICE.libcspice), Cvoid, (Cint, Cdouble, Ref{Cdouble}), id, 0.0, Ref(0.0))
                 @test cspice_kind() === kind
             end
+        finally
+            foreach(l -> SPICE.dvpool(String(strip(first(split(l, '='))))), lines)
+        end
+        # Regression: the type of a clock is the first value of SCLK_DATA_TYPE_<n>,
+        # rounded, as `gipool_` of `scty01_` reads it; a clock was built only for one
+        # value equal to 1.
+        lines = [
+            "SCLK_DATA_TYPE_93 = ( 1.2 7 )", "SCLK01_TIME_SYSTEM_93 = ( 1 )",
+            "SCLK01_N_FIELDS_93 = ( 2 )", "SCLK01_MODULI_93 = ( 4294967296 256 )",
+            "SCLK01_OFFSETS_93 = ( 0 0 )", "SCLK01_OUTPUT_DELIM_93 = ( 1 )",
+            "SCLK_PARTITION_START_93 = ( 0.0 )", "SCLK_PARTITION_END_93 = ( 2560000.0 )",
+            "SCLK01_COEFFICIENTS_93 = ( 0.0 0.0 1.0 )",
+        ]
+        lmpool(other, lines)
+        SPICE.lmpool(lines)
+        try
+            @test sctype(other, -93) == 1
+            @test sct2e(other, -93, 1000.0) == SPICE.sct2e(-93, 1000.0)
         finally
             foreach(l -> SPICE.dvpool(String(strip(first(split(l, '='))))), lines)
         end

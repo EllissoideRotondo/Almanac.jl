@@ -37,12 +37,8 @@ See also [`gfevnt`](@ref), [`gfocce`](@ref), [`gffove`](@ref).
 @inline function gfrefn(t1::Real, t2::Real, s1::Bool = false, s2::Bool = true)
     a = Float64(t1)
     b = Float64(t2)
-    return _gf_brcktd(a * 0.5 + b * 0.5, a, b)
+    return _m_brcktd(a * 0.5 + b * 0.5, a, b)
 end
-
-"`brcktd`: `x` bracketed between the two ends `a` and `b`, in either order."
-@inline _gf_brcktd(x::Float64, a::Float64, b::Float64) =
-    a < b ? max(a, min(b, x)) : max(b, min(a, x))
 
 """
     _GFRun(step, refine, bail, report, tol, threads)
@@ -219,7 +215,7 @@ function _gf_solve!(
                     )
                 )
                 _gf_bail(run)
-                t = _gf_brcktd(Float64(run.refine(t1, t2, l1, l2))::Float64, t1, t2)
+                t = _m_brcktd(Float64(run.refine(t1, t2, l1, l2))::Float64, t1, t2)
                 if t == t1
                     t2 = t
                 elseif t == t2
@@ -237,7 +233,7 @@ function _gf_solve!(
                 prvdif = diff
                 diff = abs(t2 - t1)
             end
-            trnstn = _gf_brcktd((t1 + t2) * 0.5, t1, t2)
+            trnstn = _m_brcktd((t1 + t2) * 0.5, t1, t2)
             if instat
                 wninsd!(result, begtim, trnstn)
             else
@@ -289,47 +285,6 @@ function _gf_scan!(result::Window, cond::F, w::Window, run::_GFRun, cstep::Bool)
 end
 
 """
-    _gf_wnexpd(w, left, right) -> Window
-
-Copy of `w` with each interval expanded by `left` at its left end and by `right` at its
-right end, and overlapping intervals merged, as
-[`wnexpd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnexpd_c.html) (the amounts are not
-negative here).
-"""
-function _gf_wnexpd(w::Window, left::Float64, right::Float64)
-    d = copy(w.data)
-    card = length(d)
-    card == 0 && return Window()
-    for i in 1:2:card                    # invariant: intervals before i are expanded
-        d[i] -= left
-        d[i + 1] += right
-    end
-    i = 2
-    j = 2
-    while j < card                       # invariant: d[1:i-1] is final but for its last end
-        if d[j] < d[j + 1]
-            d[i] = d[j]
-            d[i + 1] = d[j + 1]
-            i += 2
-        end
-        j += 2
-    end
-    d[i] = d[j]
-    resize!(d, i)
-    return _window_of(d)
-end
-
-"Window of the singleton intervals at the left (`side == 1`) or right (`side == 2`) ends of `w` (`wnextd_c`)."
-function _gf_wnextd(w::Window, side::Int)
-    d = Float64[]
-    for i in 1:wncard(w)                 # invariant: d holds the ends of intervals before i
-        x = w.data[2i - 2 + side]
-        push!(d, x, x)
-    end
-    return _window_of(d)
-end
-
-"""
     _gf_wsts(w1, w2) -> Window
 
 The intervals of `w1` that lie in the interior of an interval of `w2`, as `zzgfwsts`
@@ -373,7 +328,7 @@ const _GF_ABSMAX = 7
 _gf_relname(rel::Int) = ("<", "=", ">", "LOCMIN", "ABSMIN", "LOCMAX", "ABSMAX")[rel]
 
 function _gf_relcode(relate::AbstractString)
-    s = uppercase(strip(relate, ' '))
+    s = _ljucase(relate)
     s == "<" && return _GF_LT
     s == "=" && return _GF_EQ
     s == ">" && return _GF_GT
@@ -392,17 +347,19 @@ end
 """
     _gf_checkadjust(rel, adjust)
 
-The checks of `zzgfrelx` on the adjustment value: `SpiceError(:valueoutofrange)` if it
-is negative, `SpiceError(:invalidvalue)` if it is not zero and the relation is not an
-absolute extremum.
+The checks of `zzgfrelx` and `zzgflong` on the adjustment value:
+`SpiceError(:valueoutofrange)` if it is negative, `SpiceError(:invalidvalue)` if it is
+not zero and the relation is not an absolute extremum. A NaN or infinite value is
+`SpiceError(:invalidvalue)` for every relation: CSPICE refuses it with that kind for a
+relation other than ABSMIN and ABSMAX (the test `adjust != 0` is true) and takes it for
+those two.
 """
 function _gf_checkadjust(rel::Int, adjust::Real)
-    # NaN and Inf are refused too: CSPICE takes them and finds no event
-    (isfinite(adjust) && adjust >= 0) || throw(
-        SpiceError(
-            :valueoutofrange,
-            "ADJUST was $adjust; must be non-negative and finite."
-        )
+    adjust < 0 && throw(
+        SpiceError(:valueoutofrange, "ADJUST was $adjust; must be non-negative.")
+    )
+    isfinite(adjust) || throw(
+        SpiceError(:invalidvalue, "ADJUST was $adjust; must be finite.")
     )
     (rel == _GF_ABSMIN || rel == _GF_ABSMAX || adjust == 0) || throw(
         SpiceError(
@@ -455,14 +412,15 @@ function _gf_relx(
     isnan(refval) && throw(
         SpiceError(
             :invalidvalue,
-            "the reference value is NaN; CSPICE takes it and finds no event"
+            "the reference value is NaN; CSPICE takes it, and finds no event for " *
+                "the relations <, > and ="
         )
     )
     card(cnfine) == 0 && return Window()
     # CSPICE compares the relation as it was given with "=", so an equality relation
     # with a leading blank gets no expansion; this is kept.
     addw = rstrip(relate, ' ') == "=" ? _GF_ADDWIN : 0.0
-    confin = _gf_wnexpd(cnfine, addw, addw)
+    confin = wnexpd!(copy(cnfine), addw, addw)
     refer2 = Float64(refval)
 
     # Pass 1: the window on which the quantity decreases.
@@ -472,8 +430,8 @@ function _gf_relx(
 
     # The right ends of `decres` are local minima and the left ends local maxima; the
     # ones in the interior of the confinement window are kept.
-    rel == _GF_LOCMIN && return _gf_wsts(_gf_wnextd(decres, 2), cnfine)
-    rel == _GF_LOCMAX && return _gf_wsts(_gf_wnextd(decres, 1), cnfine)
+    rel == _GF_LOCMIN && return _gf_wsts(wnextd!(decres, 'R'), cnfine)
+    rel == _GF_LOCMAX && return _gf_wsts(wnextd!(decres, 'L'), cnfine)
 
     if rel == _GF_ABSMIN || rel == _GF_ABSMAX
         dec = wnintd(cnfine, decres)
@@ -545,7 +503,8 @@ Return the numerical derivative of the scalar function `udfunc` at `x`, as
 The result is the central difference `(udfunc(x + dx) - udfunc(x - dx)) / (2 dx)`.
 Unlike CSPICE, `udfunc` takes the abscissa alone.
 
-Throws `SpiceError(:dividebyzero)` if `dx == 0`, before `udfunc` is called.
+Throws `SpiceError(:dividebyzero)` if `dx == 0`, after the two calls of `udfunc`, as in
+CSPICE.
 
 # Examples
 ```jldoctest
@@ -557,15 +516,15 @@ See also [`uddc`](@ref), [`gfuds`](@ref).
 """
 function uddf(udfunc::F, x::Real, dx::Real) where {F}
     h = Float64(dx)
-    # checked before `udfunc` is called; CSPICE calls it twice first
+    f0 = Float64(udfunc(Float64(x) - h))
+    f2 = Float64(udfunc(Float64(x) + h))
+    # the check of `qderiv_`, after the two calls of `uddf_`
     h == 0.0 && throw(
         SpiceError(
             :dividebyzero,
             "Delta abscissa value is zero; a non-zero value is required."
         )
     )
-    f0 = Float64(udfunc(Float64(x) - h))
-    f2 = Float64(udfunc(Float64(x) + h))
     return (0.5 / h) * f2 + (-0.5 / h) * f0
 end
 

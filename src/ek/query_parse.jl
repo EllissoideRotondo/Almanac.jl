@@ -41,7 +41,6 @@ const _EKQ_MAXNUM = 100     # Largest number of numeric tokens of a query (`MAXN
 const _EKQ_MAXTAB = 10      # Largest number of tables in a FROM clause (`MAXTAB`)
 const _EKQ_MAXORD = 10      # Largest number of order-by columns (`MAXORD`)
 const _EKQ_MAXSEL = 50      # Largest number of SELECT columns (`MAXSEL`)
-const _EKQ_MAXCON = 1000    # Largest number of constraints of a normalized WHERE clause (`MAXCON`)
 const _EKQ_ISIZE = 27869    # Size of the integer cell of an encoded query (`EQIMIN`)
 const _EKQ_CSIZE = 2000     # Size of the character buffer of an encoded query (`MAXCLN`)
 const _EKQ_TNAMSZ = 64      # Length of a table name or an alias in name resolution (`TNAMSZ`)
@@ -91,9 +90,10 @@ const _EKQ_KWWHER = 29
 
 "Special character strings of the scanner with their token codes and keyword codes."
 const _EKQ_SPECIAL = (
-    ("!=", 1, 22), ("^=", 1, 22), ("<>", 1, 22), ("<=", 1, 17),
-    (">=", 1, 12), ("<", 1, 19), (">", 1, 14), ("=", 1, 10), ("(", 6, 0), (")", 7, 0),
-    (",", 8, 0), (".", 9, 0), ("*", 10, 0),
+    ("!=", _EKQ_TKKEY, _EKQ_KWNE), ("^=", _EKQ_TKKEY, _EKQ_KWNE), ("<>", _EKQ_TKKEY, _EKQ_KWNE),
+    ("<=", _EKQ_TKKEY, _EKQ_KWLE), (">=", _EKQ_TKKEY, _EKQ_KWGE), ("<", _EKQ_TKKEY, _EKQ_KWLT),
+    (">", _EKQ_TKKEY, _EKQ_KWGT), ("=", _EKQ_TKKEY, _EKQ_KWEQ), ("(", _EKQ_TKLPAR, 0),
+    (")", _EKQ_TKRPAR, 0), (",", _EKQ_TKCOMA, 0), (".", _EKQ_TKDOT, 0), ("*", _EKQ_TKSTAR, 0),
 )
 
 # Operator codes of `ekopcd.inc`.
@@ -387,7 +387,6 @@ end
     (UInt8('A') <= c <= UInt8('Z')) || (UInt8('a') <= c <= UInt8('z'))
 @inline _ek_qisidtail(c::UInt8) =
     _ek_qisalpha(c) || _ek_qisdigit(c) || c == UInt8('$') || c == UInt8('_')
-@inline _ek_qupper(c::UInt8) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
 
 "Contract: returns `(last, nchar)` of the unsigned integer that starts at `s[first]`, as `lx4uns_`; `nchar == 0` and `last == first - 1` if there is none."
 function _ek_qlx4uns(s::Vector{UInt8}, first::Int)
@@ -703,7 +702,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
                     "chars needed; only # are available."
                 return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), nchars), room)
             end
-            name = map(_ek_qupper, view(tq, cptr:last))
+            name = map(_upper, view(tq, cptr:last))
             kw = nchars <= 8 ? findfirst(==(String(copy(name))), _EKQ_KEYWORDS) : nothing
             if kw !== nothing
                 token!(_EKQ_TKKEY, kw, cptr, last)
@@ -2090,7 +2089,7 @@ function _ek_qtcnv(ks::KernelSet, td::TimeDefaults, timstr::AbstractVector{UInt8
     loc = UInt8[]
     for c in timstr
         (c == UInt8(' ') && (isempty(loc) || loc[end] == UInt8(' '))) && continue
-        push!(loc, _ek_qupper(c))
+        push!(loc, _upper(c))
     end
     (!isempty(loc) && loc[end] == UInt8(' ')) && pop!(loc)
     locstr = String(loc)
@@ -2452,86 +2451,4 @@ function _ek_psel(
         xclass = fill(:COL, length(sel)), tabs = [q.tables[c.tabidx] for c in sel],
         cols = [c.name for c in sel], failed = false, errmsg = "",
     )
-end
-
-"""
-    _ek_qpcol(tables, q, qcol) -> (tabidx, table, alias, colidx, column, error, errmsg)
-
-Contract: `q` is a query that `_ek_encode_query` returned for the catalog `tables`.
-Parses the column name `qcol` (`<column>` or `<table>.<column>`, where the table is a
-name or an alias of the FROM clause of `q`) as `zzekpcol_` and returns the position
-and the name of its table in the FROM clause, the alias, and the position and the name
-of the column; or `error == true` and the message.
-"""
-function _ek_qpcol(tables::Vector{EKTable}, q::_EKQuery, qcol::AbstractString)
-    fail(msg) = (0, "", "", 0, "", true, msg)
-    qb = codeunits(String(qcol))
-    tk, msg = _ek_qscan(qb, 3, 0, 160)
-    tk === nothing && return fail(msg)
-    badcol = "Invalid column name; name should consist of an identifier."
-    tmptab = ""
-    column = ""
-    if tk.n == 1
-        tk.tokens[1] == _EKQ_TKID || return fail(badcol)
-        column = uppercase(String(rstrip(qcol, ' ')))     # leading blanks stay, as in CSPICE
-    elseif tk.n == 3
-        tk.tokens[1] == _EKQ_TKID ||
-            return fail("Invalid table name; name should consist of an identifier.")
-        tk.tokens[2] == _EKQ_TKDOT || return fail(
-            "Invalid qualified column name; " *
-                "table name should be followed by a period."
-        )
-        tk.tokens[3] == _EKQ_TKID || return fail(badcol)
-        tmptab = String(first(String(_ek_qtext(tk, 1)), _EKQ_TNAMSZ))
-        column = String(_ek_qtext(tk, 3))
-    else
-        return fail(
-            "Invalid tokens present in qualified column name. Valid syntax " *
-                "is <column> or <table>.<column>"
-        )
-    end
-    tabidx = colidx = 0
-    if tk.n == 3
-        tabidx = something(
-            findfirst(==(tmptab), q.tables),
-            findfirst(==(tmptab), q.aliases), 0
-        )
-        tabidx == 0 && return fail(
-            _ek_qrep(
-                "Table name <#> does not match table or " *
-                    "alias from query.", tmptab
-            )
-        )
-        colidx = something(findfirst(==(column), tables[q.tabcat[tabidx]].cnames), 0)
-        colidx == 0 && return fail(
-            _ek_qrep(
-                _ek_qrep(
-                    "Column name <#> does not appear " *
-                        "in the qualifying table <#>.", column
-                ), tmptab
-            )
-        )
-    else
-        nmatch = 0
-        for i in eachindex(q.tables), (j, name) in enumerate(tables[q.tabcat[i]].cnames)
-            if name == column
-                nmatch += 1
-                colidx = j
-                tabidx = i
-            end
-        end
-        nmatch == 0 && return fail(
-            _ek_qrep(
-                "Column name <#> does not appear in any " *
-                    "table in FROM clause of query.", column
-            )
-        )
-        nmatch > 1 && return fail(
-            _ek_qrep(
-                "Column name <#> is ambiguous without a " *
-                    "qualifying table name.", column
-            )
-        )
-    end
-    return (tabidx, q.tables[tabidx], q.aliases[tabidx], colidx, column, false, "")
 end

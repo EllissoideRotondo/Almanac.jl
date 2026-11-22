@@ -21,12 +21,6 @@ const SegContext = Union{SpiceContext, KernelSet}
 _seg_ks(ctx::SpiceContext) = kernelset(ctx)
 _seg_ks(ks::KernelSet) = ks
 
-"Throws `SpiceError(:emptystring)` if the string argument `what` is empty, as the macro CHKFSTR of CSPICE."
-function _seg_chkfstr(who::AbstractString, what::AbstractString, s::AbstractString)
-    isempty(s) && throw(SpiceError(:emptystring, "$who: the string `$what` is empty"))
-    return nothing
-end
-
 """
     _seg_refcode(who, ctx, frame) -> Int
 
@@ -54,13 +48,21 @@ function _seg_idlen(who::AbstractString, segid::AbstractString)
     return nothing
 end
 
-function _seg_idchars(who::AbstractString, segid::AbstractString)
+"""
+    _seg_idchars(who, segid, kind=:nonprintablechars) -> Nothing
+
+Throws `SpiceError(kind)` if a character of `segid` before its trailing blanks is not
+printable ASCII (codes 32 to 126). The segment writers of SPICELIB throw
+`:nonprintablechars`; the generic segment writer (`sgbwfs`, used by `spkw10`, `spk14b`
+and `pck03b`) throws `:nonprintingchars`.
+"""
+function _seg_idchars(who::AbstractString, segid::AbstractString, kind::Symbol = :nonprintablechars)
     cu = codeunits(String(segid))
     for i in 1:_daf_lastnb(segid)
         (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
             SpiceError(
-                :nonprintablechars,
-                "$who: the segment identifier contains nonprintable characters"
+                kind,
+                "$who: the segment identifier contains a nonprinting character at location $i"
             )
         )
     end
@@ -150,13 +152,47 @@ function _seg_fixed(who::AbstractString, what::AbstractString, v, n::Int)
     return _vec_of(Float64, v)
 end
 
-function _seg_increasing(who::AbstractString, epochs::Vector{Float64})
-    for i in 2:length(epochs)            # invariant: epochs[1:i-1] is strictly increasing
-        epochs[i] <= epochs[i - 1] && throw(
+"""
+    _seg_increasing(who, t, what="") -> Nothing
+
+Throws `SpiceError(:timesoutoforder)` unless `t` is strictly increasing. `what` names the
+times in the message of a CK writer (`"SCLKDP"`, `"STARTS"`); empty, the message speaks
+of epochs, as the SPK writers do.
+"""
+function _seg_increasing(who::AbstractString, t::Vector{Float64}, what::AbstractString = "")
+    for i in 2:length(t)                 # invariant: t[1:i-1] is strictly increasing
+        t[i] <= t[i - 1] && throw(SpiceError(:timesoutoforder, _seg_order_msg(who, what, t, i)))
+    end
+    return nothing
+end
+
+function _seg_order_msg(who::AbstractString, what::AbstractString, t::Vector{Float64}, i::Int)
+    isempty(what) &&
+        return "$who: epoch $(t[i]) having index $i is not greater than its predecessor $(t[i - 1])"
+    return "$who: the $what times are not strictly increasing: " *
+        "$what($(i - 1)) = $(t[i - 1]) and $what($i) = $(t[i])"
+end
+
+"""
+    _seg_ordered_refs(who, refs, ep) -> Nothing
+
+The checks of `sgwfpk` and `sgwvpk` on the reference values `ep` of the packets added
+to a generic segment whose packets before have the references `refs`: throws
+`SpiceError(:unorderedrefs)` unless `ep[1] > refs[end]` and `ep` is strictly increasing.
+"""
+function _seg_ordered_refs(who::AbstractString, refs::Vector{Float64}, ep::Vector{Float64})
+    (!isempty(refs) && !isempty(ep) && refs[end] >= ep[1]) && throw(
+        SpiceError(
+            :unorderedrefs, "$who: reference values are out of order; the value " *
+                "$(ep[1]) is not greater than the last reference value $(refs[end]) of the " *
+                "packets added before"
+        )
+    )
+    for i in 2:length(ep)                # invariant: ep[1:i-1] is strictly increasing
+        ep[i - 1] >= ep[i] && throw(
             SpiceError(
-                :timesoutoforder,
-                "$who: epoch $(epochs[i]) having index $i is not greater than its " *
-                    "predecessor $(epochs[i - 1])"
+                :unorderedrefs, "$who: reference values are out of order; the value " *
+                    "$(ep[i - 1]) was found to be out of order for index $(i - 1)"
             )
         )
     end
@@ -230,15 +266,12 @@ function _spk_add_pds!(
         dtype::Int, first::Real, last::Real, segid::AbstractString, data::Vector{Float64},
         ctx::SegContext
     )
-    descr = spkpds(ctx, body, center, frame, dtype, first, last)
-    dafbna(h, descr, segid)
-    dafada(h, data)
-    dafena(h)
+    _daf_add_descr!(h, spkpds(ctx, body, center, frame, dtype, first, last), segid, data)
     return nothing
 end
 
 "`data` followed by every 100th epoch from the first `ndir * 100` epochs (the directory of the epoch table)."
-function _seg_directory!(data::Vector{Float64}, epochs::Vector{Float64}, ndir::Int)
+function _seg_directory!(data::Vector{Float64}, epochs::AbstractVector{Float64}, ndir::Int)
     for i in 1:ndir
         push!(data, epochs[100i])
     end
@@ -269,6 +302,90 @@ function _seg_coverage_gap(
                 "$ltime; the difference is $(last - ltime) s, the tolerance is $tol s"
         )
     )
+    return nothing
+end
+
+"Throws `SpiceError(:invaliddegree)` unless `1 <= degree <= 27`, and `:toofewstates` unless `n > degree`: the Lagrange checks of `spkw08` and `spkw09`."
+function _seg_lagrange_degree(who::AbstractString, degree::Integer, n::Int)
+    (degree < 1 || degree > 27) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
+        )
+    )
+    n <= degree && throw(
+        SpiceError(
+            :toofewstates, "$who: at least $(degree + 1) states " *
+                "are required to define a polynomial of degree $degree; number of states supplied: $n"
+        )
+    )
+    return nothing
+end
+
+"""
+    _seg_hermite_degree(who, dtype, degree, n) -> Nothing
+
+The Hermite checks of `spkw12` and `spkw13` (SPK type `dtype`): `:invaliddegree` unless
+`degree` is odd and in `1:27`, `:toofewstates` unless `n >= (degree + 1) ÷ 2`.
+"""
+function _seg_hermite_degree(who::AbstractString, dtype::Int, degree::Integer, n::Int)
+    winsiz = (degree + 1) ÷ 2
+    (degree < 1 || degree > 27) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the " *
+                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
+        )
+    )
+    iseven(degree) && throw(
+        SpiceError(
+            :invaliddegree, "$who: the interpolating " *
+                "polynomials have degree $degree; for SPK type $dtype, the degree must be odd"
+        )
+    )
+    n < winsiz && throw(
+        SpiceError(
+            :toofewstates, "$who: at least $winsiz states are " *
+                "required to define a Hermite polynomial of degree $degree; number of states supplied: $n"
+        )
+    )
+    return nothing
+end
+
+"The last checks of `spkw08` and `spkw12`: `:invalidstepsize` unless `step > 0`, then the coverage of the `n` states from `begtim` (`_seg_coverage_gap`)."
+function _seg_step_coverage(
+        who::AbstractString, first::Float64, last::Float64, begtim::Float64,
+        step::Float64, n::Int
+    )
+    step <= 0.0 && throw(SpiceError(:invalidstepsize, "$who: the step size must be > 0 but was $step"))
+    tol = max(abs(first), abs(last)) * 1.0e-13
+    ltime = begtim + (n - 1) * step
+    _seg_coverage_gap(who, first, last, begtim, ltime, tol)
+    return nothing
+end
+
+"""
+    _seg_epoch_bounds(who, ep, first, last; start=true, kind=:baddescrtimes) -> Nothing
+
+The epoch checks of the SPK writers of types 1, 9, 13, 18 and 21: `:timesoutoforder`
+unless `ep` is strictly increasing; if `start`, `:baddescrtimes` if `ep[1] > first`;
+then `SpiceError(kind)` if `ep[end] < last`.
+"""
+function _seg_epoch_bounds(
+        who::AbstractString, ep::Vector{Float64}, first::Real, last::Real;
+        start::Bool = true, kind::Symbol = :baddescrtimes
+    )
+    n = length(ep)
+    _seg_increasing(who, ep)
+    start && ep[1] > first && throw(
+        SpiceError(
+            :baddescrtimes,
+            "$who: segment start time $first precedes first epoch $(ep[1])"
+        )
+    )
+    if ep[n] < last
+        gap = kind === :coveragegap ? "segment has coverage gap: " : ""
+        throw(SpiceError(kind, "$who: $(gap)segment end time $last follows last epoch $(ep[n])"))
+    end
     return nothing
 end
 
@@ -317,12 +434,31 @@ true
 See also [`spkopa`](@ref), [`spkw02`](@ref), [`spk14b`](@ref), [`dafac`](@ref) to add
 comments.
 """
-function spkopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
-    _seg_chkfstr("spkopn", "path", path)
-    _seg_chkfstr("spkopn", "ifname", ifname)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafonw(path, "SPK", 2, 6, ifname, ncomr)
+spkopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0) =
+    _seg_opn("spkopn", "SPK", 6, path, ifname, ncomch)
+
+"""
+    _seg_opn(who, type, ni, path, ifname, ncomch) -> DAFHandle
+
+`spkopn`, `ckopn` and `pckopn`: the checks of the C wrapper on `path` and `ifname`, then
+a new DAF of the type `type` with 2 doubles and `ni` integers in a summary and room for
+`ncomch` comment characters.
+"""
+function _seg_opn(
+        who::AbstractString, type::AbstractString, ni::Int, path::AbstractString,
+        ifname::AbstractString, ncomch::Integer
+    )
+    _chkfstr(who, "string `path`", path)
+    _chkfstr(who, "string `ifname`", ifname)
+    return dafonw(path, type, 2, ni, ifname, _seg_ncomr(ncomch))
 end
+
+"`spkops`, `ckops` and `pckops`: a new DAF in memory, as `_seg_opn` makes one on disk."
+_seg_ops(type::AbstractString, ni::Int, ifname::AbstractString, ncomch::Integer) =
+    dafops(type, 2, ni, ifname, _seg_ncomr(ncomch))
+
+"The number of comment records that `ncomch` characters need, as `spkopn` computes it."
+_seg_ncomr(ncomch::Integer) = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
 
 """
     spkops(ifname="", ncomch=0) -> DAFHandle
@@ -336,10 +472,7 @@ has no CSPICE counterpart; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
 """
-function spkops(ifname::AbstractString = "", ncomch::Integer = 0)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafops("SPK", 2, 6, ifname, ncomr)
-end
+spkops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("SPK", 6, ifname, ncomch)
 
 """
     spkopa(path) -> DAFHandle
@@ -417,22 +550,8 @@ function _spk_cheby(
         who::AbstractString, dtype::Int, per::Int, h::DAFHandle, body, center,
         frame, first, last, segid, intlen, cdata, btime, ctx
     )
-    _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
-    cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
-    first, last, intlen, btime = Float64(first), Float64(last), Float64(intlen), Float64(btime)
-    n <= 0 && throw(
-        SpiceError(
-            :numcoeffsnotpos,
-            "$who: the number of sets of coordinate coefficients is not positive: $n"
-        )
-    )
-    ninrec % per == 0 && ninrec > 0 || throw(
-        SpiceError(
-            :badarg, "$who: every record of " *
-                "`cdata` must hold $per * (degree + 1) coefficients, it holds $ninrec"
-        )
+    cd, n, ninrec, first, last, intlen, btime = _seg_cheb_args(
+        who, "coordinate", per, h, frame, first, last, segid, intlen, cdata, btime
     )
     polydg = ninrec ÷ per - 1
     (polydg < 0 || polydg > 27) && throw(
@@ -458,6 +577,39 @@ function _spk_cheby(
         _seg_cheb_records(cd, n, ninrec, intlen, btime)
     )
     return nothing
+end
+
+"""
+    _seg_cheb_args(who, what, per, h, frame, first, last, segid, intlen, cdata, btime)
+        -> (cd, n, ninrec, first, last, intlen, btime)
+
+The first checks of `spkw02`, `spkw03` and `pckw02`, which hold `per` series of `what`
+coefficients in a record: the handle, the empty strings, the record count
+(`:numcoeffsnotpos`) and the record length. Returns the flat coefficients `cd`, the
+record count `n`, the record length `ninrec` and the times as `Float64`.
+"""
+function _seg_cheb_args(
+        who::AbstractString, what::AbstractString, per::Int, h::DAFHandle, frame,
+        first, last, segid, intlen, cdata, btime
+    )
+    _daf_check_write(h, who)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
+    cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
+    first, last, intlen, btime = Float64(first), Float64(last), Float64(intlen), Float64(btime)
+    n <= 0 && throw(
+        SpiceError(
+            :numcoeffsnotpos,
+            "$who: the number of sets of $what coefficients is not positive: $n"
+        )
+    )
+    ninrec % per == 0 && ninrec > 0 || throw(
+        SpiceError(
+            :badarg, "$who: every record of " *
+                "`cdata` must hold $per * (degree + 1) coefficients, it holds $ninrec"
+        )
+    )
+    return cd, n, ninrec, first, last, intlen, btime
 end
 
 """
@@ -618,13 +770,33 @@ function spkw20(
         frame::SegFrame, first::Real, last::Real, segid::AbstractString, intlen::Real,
         cdata, dscale::Real, tscale::Real, initjd::Real, initfr::Real
     )
-    who = "spkw20"
+    refcod, data = _seg_cheb20(
+        "spkw20", "SPK", ctx, h, frame, first, last, segid, intlen, cdata, dscale, tscale,
+        initjd, initfr
+    )
+    _spk_add!(h, body, center, refcod, 20, first, last, segid, data)
+    return nothing
+end
+
+"""
+    _seg_cheb20(who, kind, ctx, h, frame, first, last, segid, intlen, cdata, scale, tscale,
+                initjd, initfr) -> (refcod, data)
+
+The checks and the data of `spkw20` (`kind == "SPK"`) and `pckw20` (`kind == "PCK"`),
+which differ in the test of the coverage (`pckw20` needs `first < last`, `spkw20` only
+`first <= last`) and in the name of `scale` (distance or angle).
+"""
+function _seg_cheb20(
+        who::AbstractString, kind::AbstractString, ctx::SegContext, h::DAFHandle,
+        frame::SegFrame, first::Real, last::Real, segid::AbstractString, intlen::Real,
+        cdata, scale::Real, tscale::Real, initjd::Real, initfr::Real
+    )
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
     first, last, intlen = Float64(first), Float64(last), Float64(intlen)
-    dscale, tscale, initjd, initfr = Float64(dscale), Float64(tscale), Float64(initjd), Float64(initfr)
+    scale, tscale, initjd, initfr = Float64(scale), Float64(tscale), Float64(initjd), Float64(initfr)
     n <= 0 && throw(
         SpiceError(
             :invalidcount,
@@ -646,22 +818,31 @@ function spkw20(
     )
     intlen <= 0.0 && throw(SpiceError(:intlennotpos, "$who: the interval length is not positive: $intlen"))
     refcod = _seg_refcode(who, ctx, frame)
-    first > last && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: the segment start time $first is greater than the segment end time $last"
+    if kind == "PCK"
+        first >= last && throw(
+            SpiceError(
+                :baddescrtimes,
+                "$who: the segment start time $first is not less than the segment end time $last"
+            )
         )
-    )
-    dscale <= 0.0 && throw(SpiceError(:nonpositivescale, "$who: the distance scale is not positive: $dscale"))
+    else
+        first > last && throw(
+            SpiceError(
+                :baddescrtimes,
+                "$who: the segment start time $first is greater than the segment end time $last"
+            )
+        )
+    end
+    what = kind == "PCK" ? "angle" : "distance"
+    scale <= 0.0 && throw(SpiceError(:nonpositivescale, "$who: the $what scale is not positive: $scale"))
     tscale <= 0.0 && throw(SpiceError(:nonpositivescale, "$who: the time scale is not positive: $tscale"))
     btime = 86400.0 * (initjd - 2451545.0 + initfr)
     ltime = btime + n * intlen * 86400.0
     tol = max(abs(btime), abs(ltime)) * 1.0e-13
     _seg_coverage_gap(who, first, last, btime, ltime, tol)
-    _seg_chckid(who, segid)
-    data = append!(cd, (dscale, tscale, initjd, initfr, intlen, Float64(ninrec), Float64(n)))
-    _spk_add!(h, body, center, refcod, 20, first, last, segid, data)
-    return nothing
+    _seg_chckid(who, segid, kind)
+    data = append!(cd, (scale, tscale, initjd, initfr, intlen, Float64(ninrec), Float64(n)))
+    return refcod, data
 end
 spkw20(
     h::DAFHandle, body::Integer, center::Integer, frame::SegFrame, first::Real,
@@ -703,8 +884,8 @@ function spkw05(
     )
     who = "spkw05"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     ep = _seg_vec(who, "epochs", epochs, n)
     gm <= 0 && throw(SpiceError(:nonpositivemass, "$who: GM = $gm; non-positive gravitational parameter"))
@@ -769,35 +950,21 @@ function spkw08(
     )
     who = "spkw08"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     first, last, begtim, step = Float64(first), Float64(last), Float64(epoch1), Float64(step)
     refcod = _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    (degree < 1 || degree > 27) && throw(
-        SpiceError(
-            :invaliddegree, "$who: the " *
-                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
-        )
-    )
-    n <= degree && throw(
-        SpiceError(
-            :toofewstates, "$who: at least $(degree + 1) states " *
-                "are required to define a polynomial of degree $degree; number of states supplied: $n"
-        )
-    )
+    _seg_lagrange_degree(who, degree, n)
     first >= last && throw(
         SpiceError(
             :baddescrtimes, "$who: the segment start time " *
                 "$first is greater than or equal to the segment end time $last"
         )
     )
-    step <= 0.0 && throw(SpiceError(:invalidstepsize, "$who: the step size must be > 0 but was $step"))
-    tol = max(abs(first), abs(last)) * 1.0e-13
-    ltime = begtim + (n - 1) * step
-    _seg_coverage_gap(who, first, last, begtim, ltime, tol)
+    _seg_step_coverage(who, first, last, begtim, step, n)
     data = push!(st, begtim, step, Float64(degree), Float64(n))
     _spk_add!(h, body, center, refcod, 8, first, last, segid, data)
     return nothing
@@ -836,8 +1003,8 @@ function spkw09(
     )
     who = "spkw09"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     ep = _seg_vec(who, "epochs", epochs, n)
     refcod = _seg_refcode(who, ctx, frame)
@@ -849,31 +1016,8 @@ function spkw09(
     )
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
-    (degree < 1 || degree > 27) && throw(
-        SpiceError(
-            :invaliddegree, "$who: the " *
-                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
-        )
-    )
-    n <= degree && throw(
-        SpiceError(
-            :toofewstates, "$who: at least $(degree + 1) states " *
-                "are required to define a polynomial of degree $degree; number of states supplied: $n"
-        )
-    )
-    _seg_increasing(who, ep)
-    ep[1] > first && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: segment start time $first precedes first epoch $(ep[1])"
-        )
-    )
-    ep[n] < last && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: segment end time $last follows last epoch $(ep[n])"
-        )
-    )
+    _seg_lagrange_degree(who, degree, n)
+    _seg_epoch_bounds(who, ep, first, last)
     data = append!(st, ep)
     _seg_directory!(data, ep, (n - 1) ÷ 100)
     push!(data, Float64(degree), Float64(n))
@@ -918,42 +1062,22 @@ function spkw12(
     )
     who = "spkw12"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     first, last, begtim, step = Float64(first), Float64(last), Float64(epoch1), Float64(step)
     winsiz = (degree + 1) ÷ 2
     _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    (degree < 1 || degree > 27) && throw(
-        SpiceError(
-            :invaliddegree, "$who: the " *
-                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
-        )
-    )
-    iseven(degree) && throw(
-        SpiceError(
-            :invaliddegree, "$who: the interpolating " *
-                "polynomials have degree $degree; for SPK type 12, the degree must be odd"
-        )
-    )
-    n < winsiz && throw(
-        SpiceError(
-            :toofewstates, "$who: at least $winsiz states are " *
-                "required to define a Hermite polynomial of degree $degree; number of states supplied: $n"
-        )
-    )
+    _seg_hermite_degree(who, 12, degree, n)
     first >= last && throw(
         SpiceError(
             :baddescrtimes,
             "$who: the segment start time $first is greater than the segment end time $last"
         )
     )
-    step <= 0.0 && throw(SpiceError(:invalidstepsize, "$who: the step size must be > 0 but was $step"))
-    tol = max(abs(first), abs(last)) * 1.0e-13
-    ltime = begtim + (n - 1) * step
-    _seg_coverage_gap(who, first, last, begtim, ltime, tol)
+    _seg_step_coverage(who, first, last, begtim, step, n)
     data = push!(st, begtim, step, Float64(winsiz - 1), Float64(n))
     _spk_add_pds!(h, body, center, frame, 12, first, last, segid, data, ctx)
     return nothing
@@ -993,51 +1117,22 @@ function spkw13(
     )
     who = "spkw13"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     ep = _seg_vec(who, "epochs", epochs, n)
     winsiz = (degree + 1) ÷ 2
     _seg_refcode(who, ctx, frame)
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
-    (degree < 1 || degree > 27) && throw(
-        SpiceError(
-            :invaliddegree, "$who: the " *
-                "interpolating polynomials have degree $degree; the valid degree range is [1, 27]"
-        )
-    )
-    iseven(degree) && throw(
-        SpiceError(
-            :invaliddegree, "$who: the interpolating " *
-                "polynomials have degree $degree; for SPK type 13, the degree must be odd"
-        )
-    )
-    n < winsiz && throw(
-        SpiceError(
-            :toofewstates, "$who: at least $winsiz states are " *
-                "required to define a Hermite polynomial of degree $degree; number of states supplied: $n"
-        )
-    )
+    _seg_hermite_degree(who, 13, degree, n)
     first >= last && throw(
         SpiceError(
             :baddescrtimes,
             "$who: the segment start time $first is greater than the segment end time $last"
         )
     )
-    _seg_increasing(who, ep)
-    ep[1] > first && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: segment start time $first precedes first epoch $(ep[1])"
-        )
-    )
-    ep[n] < last && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: segment end time $last follows last epoch $(ep[n])"
-        )
-    )
+    _seg_epoch_bounds(who, ep, first, last)
     data = append!(st, ep)
     _seg_directory!(data, ep, (n - 1) ÷ 100)
     push!(data, Float64(winsiz - 1), Float64(n))
@@ -1095,8 +1190,8 @@ function spkw18(
     )
     who = "spkw18"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     sub = _spk18_subtype(subtyp)
     (sub == 0 || sub == 1) || throw(
         SpiceError(
@@ -1136,19 +1231,7 @@ function spkw18(
             "$who: the segment start time $first is greater than the segment end time $last"
         )
     )
-    _seg_increasing(who, ep)
-    ep[1] > first && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: segment start time $first precedes first epoch $(ep[1])"
-        )
-    )
-    ep[n] < last && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: segment end time $last follows last epoch $(ep[n])"
-        )
-    )
+    _seg_epoch_bounds(who, ep, first, last)
     data = append!(pk, ep)
     _seg_directory!(data, ep, (n - 1) ÷ 100)
     push!(data, Float64(sub), Float64(winsiz), Float64(n))
@@ -1168,22 +1251,6 @@ spkw18(
 # ---------------------------------------------------------------------------------------
 # Types 15 and 17: precessing conic elements
 # ---------------------------------------------------------------------------------------
-
-"Norm of the 3-vector `v`, with the scaling of `vnorm` of SPICELIB (same rounding)."
-function _seg_vnorm(v)
-    vmax = max(abs(v[1]), abs(v[2]), abs(v[3]))
-    vmax == 0.0 && return 0.0
-    a = v[1] / vmax
-    b = v[2] / vmax
-    c = v[3] / vmax
-    return vmax * sqrt(a * a + b * b + c * c)
-end
-
-"Unit vector of the 3-vector `v`, or zero for the zero vector, as `vhat` of SPICELIB (same rounding)."
-function _seg_vhat(v)
-    m = _seg_vnorm(v)
-    return m > 0.0 ? (v[1] / m, v[2] / m, v[3] / m) : (0.0, 0.0, 0.0)
-end
 
 """
     spkw15([ctx,] handle, body, center, frame, first, last, segid, epoch, tp, pa, p, ecc,
@@ -1221,14 +1288,14 @@ function spkw15(
     )
     who = "spkw15"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     tp = _seg_fixed(who, "tp", tp, 3)
     pa = _seg_fixed(who, "pa", pa, 3)
     pv = _seg_fixed(who, "pv", pv, 3)
-    mypa = _seg_vhat(pa)
-    mytp = _seg_vhat(tp)
-    record = Float64[epoch, mytp..., mypa..., p, ecc, j2flg, _seg_vhat(pv)..., gm, j2, radius]
+    mypa = _m_hat(_m_v3(pa))
+    mytp = _m_hat(_m_v3(tp))
+    record = Float64[epoch, mytp..., mypa..., p, ecc, j2flg, _m_hat(_m_v3(pv))..., gm, j2, radius]
     p <= 0 && throw(SpiceError(:badlatusrectum, "$who: the semi-latus rectum must be positive; it was $p"))
     ecc < 0 && throw(SpiceError(:badeccentricity, "$who: the eccentricity must be non-negative; it was $ecc"))
     gm <= 0 && throw(SpiceError(:nonpositivemass, "$who: the mass of the central body must be positive; GM was $gm"))
@@ -1299,8 +1366,8 @@ function spkw17(
     )
     who = "spkw17"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     el = _seg_fixed(who, "eqel", eqel, 9)
     record = Float64[epoch, el..., rapol, decpol]
     a = record[2]
@@ -1356,8 +1423,8 @@ function spkw01(
     )
     who = "spkw01"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     dl, n, _ = _seg_flat(who, "dlines", dlines, 71)
     ep = _seg_vec(who, "epochs", epochs, n)
     _seg_refcode(who, ctx, frame)
@@ -1375,13 +1442,7 @@ function spkw01(
             "$who: the segment start time $first is greater than the segment end time $last"
         )
     )
-    _seg_increasing(who, ep)
-    ep[n] < last && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: segment end time $last follows last epoch $(ep[n])"
-        )
-    )
+    _seg_epoch_bounds(who, ep, first, last; start = false)
     data = append!(dl, ep)
     _seg_directory!(data, ep, n ÷ 100)
     push!(data, Float64(n))
@@ -1422,8 +1483,8 @@ function spkw21(
     )
     who = "spkw21"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     dl, n, dlsize = _seg_flat(who, "dlines", dlines, 0)
     ep = _seg_vec(who, "epochs", epochs, n)
     dlsize > 111 && throw(
@@ -1453,13 +1514,7 @@ function spkw21(
             "$who: the segment start time $first is greater than the segment end time $last"
         )
     )
-    _seg_increasing(who, ep)
-    ep[n] < last && throw(
-        SpiceError(
-            :coveragegap,
-            "$who: segment has coverage gap: segment end time $last follows last epoch $(ep[n])"
-        )
-    )
+    _seg_epoch_bounds(who, ep, first, last; start = false, kind = :coveragegap)
     maxdim = (dlsize - 11) ÷ 4
     kqmloc = 4 * maxdim + 8
     for i in 1:n                         # invariant: lines 1 .. i-1 have no zero step
@@ -1491,6 +1546,176 @@ spkw21(
 # ---------------------------------------------------------------------------------------
 
 const _SPK19_PKTSZS = (12, 6, 6)
+
+# What differs between the mini-segment writers `spkw19` and `ckw06` (`_CK06_MINI` in
+# ck_write.jl), apart from the clock rates and the quaternion checks of `ckw06`: the
+# packet sizes, the largest subtype and degree, the words of the messages, and the
+# bound that the last epoch of a mini-segment is compared with (`ckw06` of SPICELIB
+# compares it with the start of the interval, not with its end).
+const _SPK19_MINI = (
+    pktszs = _SPK19_PKTSZS, maxsub = 2, maxdeg = 27, endbound = true,
+    kname = "SPK type 19", count = "mini-segment/interval", bounds = "interval",
+    ivl = "interpolation interval", union = "interpolation intervals", times = "epochs",
+)
+
+"The number of mini-segments, `length(npkts)`; throws `SpiceError(:badarg)` unless `subtps` and `degres` have that length."
+function _seg_mini_count(who::AbstractString, npkts, subtps, degres)
+    n = length(npkts)
+    (length(subtps) == n && length(degres) == n) || throw(
+        SpiceError(
+            :badarg,
+            "$who: `npkts`, `subtps` and `degres` must have the same length"
+        )
+    )
+    return n
+end
+
+"""
+    _seg_minis(who, par, ctx, frame, first, last, segid, npkts, subtps, degres, pk, ep,
+               rt, bd, sellst, pktcheck) -> (refcod, data)
+
+The checks and the data of a segment of mini-segments, as `spkw19` and `ckw06` of
+SPICELIB make them after their argument checks: `par` is `_SPK19_MINI` or `_CK06_MINI`,
+`pk`, `ep` and `bd` the packets, epochs and interval bounds, `rt` the clock rates of
+`ckw06` (`nothing` for `spkw19`), and `pktcheck(i, pktbeg, n, pktsiz, subtyp)` the
+checks of the packets of mini-segment `i` that follow its bound checks (`nothing`: none).
+"""
+function _seg_minis(
+        who::AbstractString, par::NamedTuple, ctx::SegContext, frame::SegFrame,
+        first::Real, last::Real, segid::AbstractString, npkts, subtps, degres,
+        pk::Vector{Float64}, ep::Vector{Float64}, rt::Union{Nothing, Vector{Float64}},
+        bd::Vector{Float64}, sellst::Bool, pktcheck
+    )
+    nintvl = length(npkts)
+    last < first && throw(
+        SpiceError(
+            :baddescrtimes, "$who: segment start time is " *
+                "$first; stop time is $last; bounds must be in nondecreasing order"
+        )
+    )
+    refcod = _seg_refcode(who, ctx, frame)
+    _seg_idlen(who, segid)
+    _seg_idchars(who, segid)
+    nintvl < 1 && throw(
+        SpiceError(
+            :invalidcount,
+            "$who: $(par.count) count was $nintvl; this count must be positive"
+        )
+    )
+    for i in 1:nintvl
+        bd[i] >= bd[i + 1] && throw(
+            SpiceError(
+                :boundsoutoforder, "$who: $(par.bounds) bounds at " *
+                    "indices $i and $(i + 1) are $(bd[i]) and $(bd[i + 1]); they must be strictly increasing"
+            )
+        )
+    end
+    (first < bd[1] || last > bd[nintvl + 1]) && throw(
+        SpiceError(
+            :coveragegap, "$who: " *
+                "segment coverage [$first, $last] must be contained within the union of the " *
+                "$(par.union) [$(bd[1]), $(bd[nintvl + 1])]"
+        )
+    )
+    winsizes = zeros(Int, nintvl)
+    pktend = 0
+    eepix = 0
+    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are valid
+        n = Int(npkts[i])
+        n < 2 && throw(
+            SpiceError(
+                :toofewpackets, "$who: at least 2 packets are " *
+                    "required for $(par.kname); $n were supplied in mini-segment $i"
+            )
+        )
+        subtyp = Int(subtps[i])
+        (subtyp < 0 || subtyp > par.maxsub) && throw(
+            SpiceError(
+                :invalidsubtype,
+                "$who: unexpected $(par.kname) subtype $subtyp found in mini-segment $i"
+            )
+        )
+        pktsiz = par.pktszs[subtyp + 1]
+        winsiz = isodd(subtyp) ? degres[i] + 1 : (degres[i] + 1) ÷ 2    # odd: Lagrange
+        (rt !== nothing && rt[i] <= 0.0) && throw(
+            SpiceError(
+                :invalidsclkrate,
+                "$who: SCLK rate in mini-segment $i was $(rt[i]); the rate must be positive"
+            )
+        )
+        (degres[i] < 1 || degres[i] > par.maxdeg) && throw(
+            SpiceError(
+                :invaliddegree, "$who: the " *
+                    "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
+                    "valid degree range is [1, $(par.maxdeg)]"
+            )
+        )
+        isodd(winsiz) && throw(
+            SpiceError(
+                :badwindowsize, "$who: the interpolating " *
+                    "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"
+            )
+        )
+        winsizes[i] = winsiz
+        pktbeg = pktend + 1
+        pktend = pktbeg - 1 + n * pktsiz
+        bepix = eepix + 1
+        eepix = bepix - 1 + n
+        (length(ep) >= eepix && length(pk) >= pktend) || throw(
+            SpiceError(
+                :badarg,
+                "$who: `$(par.times)` or `packts` is shorter than the packet counts require"
+            )
+        )
+        for k in bepix:(eepix - 1)
+            ep[k] >= ep[k + 1] && throw(
+                SpiceError(
+                    :timesoutoforder, "$who: in mini-segment " *
+                        "$i, epoch $(ep[k]) having index $k is greater than or equal to its successor"
+                )
+            )
+        end
+        ep[bepix] > bd[i] && throw(
+            SpiceError(
+                :boundsdisagree, "$who: $(par.ivl) " *
+                    "$i start time $(bd[i]) precedes mini-segment's first epoch $(ep[bepix])"
+            )
+        )
+        endbd = par.endbound ? bd[i + 1] : bd[i]
+        ep[eepix] < endbd && throw(
+            SpiceError(
+                :boundsdisagree, "$who: $(par.ivl) " *
+                    "$i end time $endbd exceeds mini-segment's last epoch $(ep[eepix])"
+            )
+        )
+        pktcheck === nothing || pktcheck(i, pktbeg, n, pktsiz, subtyp)
+    end
+    data = Float64[]
+    pktend = 0
+    eepix = 0
+    pointers = Float64[]
+    segend = 0
+    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are in data
+        pktsiz = par.pktszs[subtps[i] + 1]
+        n = Int(npkts[i])
+        append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
+        pktend += n * pktsiz
+        bepix = eepix + 1
+        eepix = bepix - 1 + n
+        append!(data, view(ep, bepix:eepix))
+        _seg_directory!(data, view(ep, bepix:eepix), (n - 1) ÷ 100)
+        rt === nothing || push!(data, rt[i])
+        push!(data, Float64(subtps[i]), Float64(winsizes[i]), Float64(n))
+        minisz = n * (pktsiz + 1) + (n - 1) ÷ 100 + (rt === nothing ? 3 : 4)
+        push!(pointers, Float64(segend + 1))
+        segend += minisz
+    end
+    append!(data, bd)
+    _seg_directory!(data, bd, nintvl ÷ 100)
+    append!(data, pointers)
+    push!(data, Float64(segend + 1), sellst ? 1.0 : -1.0, Float64(nintvl))
+    return refcod, data
+end
 
 """
     spkw19([ctx,] handle, body, center, frame, first, last, segid, npkts, subtps, degres,
@@ -1539,137 +1764,16 @@ function spkw19(
     )
     who = "spkw19"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
-    nintvl = length(npkts)
-    (length(subtps) == nintvl && length(degres) == nintvl) || throw(
-        SpiceError(
-            :badarg,
-            "$who: `npkts`, `subtps` and `degres` must have the same length"
-        )
-    )
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
+    nintvl = _seg_mini_count(who, npkts, subtps, degres)
     pk = _seg_vec(who, "packts", packts, -1)
     ep = _seg_vec(who, "epochs", epochs, -1)
     bd = _seg_vec(who, "ivlbds", ivlbds, nintvl < 1 ? -1 : nintvl + 1)
-    last < first && throw(
-        SpiceError(
-            :baddescrtimes, "$who: segment start time is " *
-                "$first; stop time is $last; bounds must be in nondecreasing order"
-        )
+    refcod, data = _seg_minis(
+        who, _SPK19_MINI, ctx, frame, first, last, segid, npkts, subtps, degres, pk, ep,
+        nothing, bd, sellst, nothing
     )
-    refcod = _seg_refcode(who, ctx, frame)
-    _seg_idlen(who, segid)
-    _seg_idchars(who, segid)
-    nintvl < 1 && throw(
-        SpiceError(
-            :invalidcount,
-            "$who: mini-segment/interval count was $nintvl; this count must be positive"
-        )
-    )
-    for i in 1:nintvl
-        bd[i] >= bd[i + 1] && throw(
-            SpiceError(
-                :boundsoutoforder, "$who: interval bounds at " *
-                    "indices $i and $(i + 1) are $(bd[i]) and $(bd[i + 1]); they must be strictly increasing"
-            )
-        )
-    end
-    (first < bd[1] || last > bd[nintvl + 1]) && throw(
-        SpiceError(
-            :coveragegap, "$who: " *
-                "segment coverage [$first, $last] must be contained within the union of the " *
-                "interpolation intervals [$(bd[1]), $(bd[nintvl + 1])]"
-        )
-    )
-    winsizes = zeros(Int, nintvl)
-    eepix = 0
-    npk = 0
-    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are valid
-        npkts[i] < 2 && throw(
-            SpiceError(
-                :toofewpackets, "$who: at least 2 packets are " *
-                    "required for SPK type 19; $(npkts[i]) were supplied in mini-segment $i"
-            )
-        )
-        subtyp = Int(subtps[i])
-        (subtyp < 0 || subtyp > 2) && throw(
-            SpiceError(
-                :invalidsubtype,
-                "$who: unexpected SPK type 19 subtype $subtyp found in mini-segment $i"
-            )
-        )
-        winsiz = subtyp == 1 ? degres[i] + 1 : (degres[i] + 1) ÷ 2
-        (degres[i] < 1 || degres[i] > 27) && throw(
-            SpiceError(
-                :invaliddegree, "$who: the " *
-                    "interpolating polynomials of mini-segment $i have degree $(degres[i]); the " *
-                    "valid degree range is [1, 27]"
-            )
-        )
-        isodd(winsiz) && throw(
-            SpiceError(
-                :badwindowsize, "$who: the interpolating " *
-                    "polynomials of mini-segment $i have window size $winsiz and degree $(degres[i])"
-            )
-        )
-        winsizes[i] = winsiz
-        bepix = eepix + 1
-        eepix = bepix - 1 + Int(npkts[i])
-        npk += Int(npkts[i]) * _SPK19_PKTSZS[subtyp + 1]
-        (length(ep) >= eepix && length(pk) >= npk) || throw(
-            SpiceError(
-                :badarg,
-                "$who: `epochs` or `packts` is shorter than the packet counts require"
-            )
-        )
-        for k in bepix:(eepix - 1)
-            ep[k] >= ep[k + 1] && throw(
-                SpiceError(
-                    :timesoutoforder, "$who: in mini-segment " *
-                        "$i, epoch $(ep[k]) having index $k is greater than or equal to its successor"
-                )
-            )
-        end
-        ep[bepix] > bd[i] && throw(
-            SpiceError(
-                :boundsdisagree, "$who: interpolation interval " *
-                    "$i start time $(bd[i]) precedes mini-segment's first epoch $(ep[bepix])"
-            )
-        )
-        ep[eepix] < bd[i + 1] && throw(
-            SpiceError(
-                :boundsdisagree, "$who: interpolation interval " *
-                    "$i end time $(bd[i + 1]) exceeds mini-segment's last epoch $(ep[eepix])"
-            )
-        )
-    end
-    data = Float64[]
-    pktend = 0
-    eepix = 0
-    pointers = Float64[]
-    segend = 0
-    for i in 1:nintvl                    # invariant: mini-segments 1 .. i-1 are in data
-        pktsiz = _SPK19_PKTSZS[subtps[i] + 1]
-        n = Int(npkts[i])
-        append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
-        pktend += n * pktsiz
-        bepix = eepix + 1
-        eepix = bepix - 1 + n
-        append!(data, view(ep, bepix:eepix))
-        for j in 1:((n - 1) ÷ 100)
-            push!(data, ep[bepix - 1 + 100j])
-        end
-        push!(data, Float64(subtps[i]), Float64(winsizes[i]), Float64(n))
-        minisz = n * (pktsiz + 1) + (n - 1) ÷ 100 + 3
-        push!(pointers, Float64(segend + 1))
-        segend += minisz
-    end
-    append!(data, bd)
-    for i in 1:(nintvl ÷ 100)
-        push!(data, bd[100i])
-    end
-    append!(data, pointers)
-    push!(data, Float64(segend + 1), sellst ? 1.0 : -1.0, Float64(nintvl))
     _spk_add!(h, body, center, refcod, 19, first, last, segid, data)
     return nothing
 end
@@ -1703,10 +1807,17 @@ mutable struct SPK14Writer
     open::Bool
 end
 
-Base.show(io::IO, w::SPK14Writer) = print(
-    io, "SPK14Writer(\"", w.segid, "\", ",
+Base.show(io::IO, w::SPK14Writer) = _seg_show_writer(io, w)
+
+"The `show` of a segment writer `w` (`SPK14Writer`, `PCK03Writer`, `CKW04Writer`): its type, `segid`, record count and whether it was ended."
+_seg_show_writer(io::IO, w) = print(
+    io, nameof(typeof(w)), "(\"", w.segid, "\", ",
     length(w.refs), " records", w.open ? "" : ", ended", ")"
 )
+
+"Throws `SpiceError(:segmentnotopen)` if the segment writer `w` was ended."
+_seg_check_open(who::AbstractString, w) =
+    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
 
 """
     spk14b([ctx,] handle, segid, body, center, frame, first, last, chbdeg) -> SPK14Writer
@@ -1723,7 +1834,7 @@ Throws `SpiceError`:
 - `:dafnosuchhandle` or `:dafinvalidaccess` if the file is not open for writing;
 - `:emptystring` if `frame` or `segid` is empty;
 - `:invalidargument` if `chbdeg < 0`;
-- `:segidtoolong` or `:nonprintablechars` if `segid` is not valid;
+- `:segidtoolong` or `:nonprintingchars` (the kind of the generic segment writer `sgbwfs`) if `segid` is not valid;
 - the error kinds of [`spkpds`](@ref).
 
 # Examples
@@ -1763,8 +1874,8 @@ function spk14b(
     )
     who = "spk14b"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     chbdeg < 0 && throw(
         SpiceError(
             :invalidargument, "$who: the degree of the " *
@@ -1773,7 +1884,7 @@ function spk14b(
     )
     descr = spkpds(ctx, body, center, frame, 14, first, last)
     _seg_idlen(who, segid)
-    _seg_idchars(who, segid)
+    _seg_idchars(who, segid, :nonprintingchars)     # the kind of `sgbwfs`
     return SPK14Writer(h, descr, String(segid), Int(chbdeg) + 1, Float64[], Float64[], true)
 end
 spk14b(
@@ -1808,7 +1919,7 @@ See [`spk14b`](@ref) for an example.
 """
 function spk14a(w::SPK14Writer, ncsets::Integer, coeffs, epochs)
     who = "spk14a"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    _seg_check_open(who, w)
     _daf_check_write(w.handle, who)
     ncsets <= 0 && throw(
         SpiceError(
@@ -1828,24 +1939,11 @@ function _seg_add_cheb_packets!(
         coeffs, epochs
     )
     pktsiz = 2 + 6 * ncoef
+    coeffs isa AbstractArray{<:Real} ||
+        throw(SpiceError(:badarg, "$who: `coeffs` must be an array of numbers"))
     cf = _seg_vec(who, "coeffs", vec(collect(Float64, coeffs)), n * pktsiz)
     ep = _seg_vec(who, "epochs", epochs, n)
-    if !isempty(refs) && refs[end] >= ep[1]
-        throw(
-            SpiceError(
-                :unorderedrefs, "$who: the epoch $(ep[1]) is not after the " *
-                    "last epoch $(refs[end]) of the addition of records before"
-            )
-        )
-    end
-    for i in 2:n                    # invariant: ep[1:i-1] is strictly increasing
-        ep[i - 1] >= ep[i] && throw(
-            SpiceError(
-                :unorderedrefs,
-                "$who: the epoch $(ep[i]) having index $i is not after its predecessor $(ep[i - 1])"
-            )
-        )
-    end
+    _seg_ordered_refs(who, refs, ep)
     for i in 1:n                    # invariant: records 1:i-1 are in `packets`, each after its epoch
         push!(packets, ep[i])
         append!(packets, @view cf[((i - 1) * pktsiz + 1):(i * pktsiz)])
@@ -1868,7 +1966,7 @@ function _seg_cheb_packets(ncoef::Int, packets::Vector{Float64}, refs::Vector{Fl
     data = Float64[ncoef]
     append!(data, packets)
     append!(data, refs)
-    ndir = n > 100 ? (n - 1) ÷ 100 : 0
+    ndir = (n - 1) ÷ 100                 # 0 for n = 0 too (`÷` truncates)
     _seg_directory!(data, refs, ndir)
     pktbas = 1
     refbas = pktbas + n * (pktsiz + 1)
@@ -1898,13 +1996,13 @@ Throws `SpiceError(:segmentnotopen)` if the writer was ended before, and
 `SpiceError(:dafnosuchhandle)` if the handle was closed after [`spk14b`](@ref); the
 segment is then lost.
 """
-function spk14e(w::SPK14Writer)
-    who = "spk14e"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+spk14e(w::SPK14Writer) = _seg_cheb_end!("spk14e", w)
+
+"`spk14e` and `pck03e`: write the segment of the writer `w` (`SPK14Writer` or `PCK03Writer`) and end it."
+function _seg_cheb_end!(who::AbstractString, w)
+    _seg_check_open(who, w)
     _daf_check_write(w.handle, who)
-    dafbna(w.handle, w.descr, w.segid)
-    dafada(w.handle, _seg_cheb_packets(w.ncoef, w.packets, w.refs))
-    dafena(w.handle)
+    _daf_add_descr!(w.handle, w.descr, w.segid, _seg_cheb_packets(w.ncoef, w.packets, w.refs))
     w.open = false
     return nothing
 end

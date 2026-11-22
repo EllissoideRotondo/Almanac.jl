@@ -1,8 +1,8 @@
 module AlmanacEnzymeCoreExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, spk_jet, frame_rotation, frame_jet,
-    abcorr_jet, abcorr_position, abcorr_state, _ma_to_ta, _ad_rule, _AD_CONSTANT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_rule, _AD_POINTS,
+    _AD_CONSTANT, _ad_typeof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const, Active, Duplicated,
     BatchDuplicated
 using EnzymeCore.EnzymeRules: FwdConfig, RevConfig, AugmentedReturn, needs_primal,
@@ -67,12 +67,10 @@ _epoch_cotangent(et::Active, ::NTuple{W, Type{<:Const}}, dy) where {W} =
     )
 )
 
-const POINTS = (
-    (spk_jet, 3, 6), (frame_rotation, 4, 4), (frame_jet, 4, 5),
-    (abcorr_jet, 3, 7), (abcorr_position, 3, 6), (abcorr_state, 3, 6),
-)
-
-for (f, iet, n) in POINTS
+# The rules of the derivative points (`_AD_POINTS`: the types of the arguments and the
+# position of the epoch among them).
+for (f, types, iet) in _AD_POINTS
+    n = length(types)
     args = [Symbol(:a, i) for i in 1:n]
     typed = [i == iet ? :($(args[i])::Annotation{<:Real}) : :($(args[i])::Const) for i in 1:n]
     plain = [i == iet ? :($(args[i])::Annotation{Float64}) : :($(args[i])::Const) for i in 1:n]

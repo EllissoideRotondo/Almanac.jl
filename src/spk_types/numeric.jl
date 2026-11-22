@@ -1,6 +1,6 @@
 # Numeric helpers of the SPK evaluators: elementary functions that `Taylor` does not
-# have yet, the two functions that carry derivatives through an iterative solution,
-# and the small vector routines of CSPICE in their own order of operations.
+# have yet, and the two functions that carry derivatives through an iterative solution.
+# The vector routines are the `_m_` kernels of `math/kernels.jl`.
 
 # --- Taylor series of sinh, cosh and atan ---------------------------------------------
 
@@ -95,80 +95,6 @@ change. Postcondition: `primal(result) == p`.
 @inline _with_primal(x::AbstractFloat, p::Float64) = oftype(x, p)
 @inline _with_primal(x::Taylor, p::Float64) = _taylor(_with_primal(x.v, p), x.d)
 @inline _with_primal(x::Real, p::Float64) = x + (p - primal(x))
-
-# --- vector routines of CSPICE ----------------------------------------------------------
-
-"The value of `pi_()` of CSPICE as a plain double."
-const _PI = Float64(pi)
-
-"Dot product in the order of `vdot`."
-@inline _dot(a::Vec3, b::Vec3) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
-
-"Cross product in the order of `vcrss`."
-@inline _cross(a::Vec3, b::Vec3) = Vec3(
-    a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3],
-    a[1] * b[2] - a[2] * b[1]
-)
-
-@inline _maxabs(v::Vec3) = max(abs(primal(v[1])), abs(primal(v[2])), abs(primal(v[3])))
-
-"Euclidean norm of a plain vector, scaled by its largest component as `vnorm` does."
-@inline function _vnorm(v::Vec3{Float64})
-    m = _maxabs(v)
-    m == 0.0 && return 0.0
-    a, b, c = v[1] / m, v[2] / m, v[3] / m
-    return m * sqrt(a * a + b * b + c * c)
-end
-
-"Unit vector along the plain vector `v`, or the zero vector for a zero `v` (`vhat`)."
-@inline function _vhat(v::Vec3{Float64})
-    m = _vnorm(v)
-    return m > 0.0 ? Vec3{Float64}(v[1] / m, v[2] / m, v[3] / m) : zero(Vec3{Float64})
-end
-
-"""
-    _vsep(a::Vec3{Float64}, b::Vec3{Float64}) -> Float64
-
-Angle in `[0, pi]` between two plain vectors, by the half-angle formula of `vsep`;
-zero if one of them is the zero vector.
-"""
-function _vsep(a::Vec3{Float64}, b::Vec3{Float64})
-    (_vnorm(a) == 0.0 || _vnorm(b) == 0.0) && return 0.0
-    u1, u2 = _vhat(a), _vhat(b)
-    d = _dot(u1, u2)
-    if d > 0.0
-        return asin(_vnorm(u1 - u2) * 0.5) * 2.0
-    elseif d < 0.0
-        return _PI - asin(_vnorm(u1 + u2) * 0.5) * 2.0
-    else
-        return _PI / 2.0
-    end
-end
-
-"""
-    _vrotv(v::Vec3{T}, axis::Vec3{Float64}, theta::T) -> Vec3{T}
-
-`v` rotated by the angle `theta` about `axis`, as `vrotv`: the part of `v` along the
-axis stays, the part normal to it turns. A zero `axis` gives `v`.
-"""
-@inline function _vrotv(v::Vec3{T}, axis::Vec3{Float64}, theta::T) where {T}
-    _vnorm(axis) == 0.0 && return v
-    x = _vhat(axis)
-    # Projection of `v` on `x`, with the scaling of `vproj`.
-    biga = _maxabs(v)
-    bigx = _maxabs(x)
-    p = if biga == 0.0
-        zero(Vec3{T})
-    else
-        r = x / bigx
-        t = v / biga
-        (_dot(t, r) * biga / _dot(r, r)) * r
-    end
-    v1 = v - p
-    v2 = _cross(x, v1)
-    s, c = sincos(theta)
-    return (c * v1 + s * v2) + p
-end
 
 "`|a|` with the sign of `b` (`d_sign` of f2c: a zero `b` of either sign gives `+|a|`)."
 @inline _dsign(a::Float64, b::Float64) = b >= 0.0 ? abs(a) : -abs(a)

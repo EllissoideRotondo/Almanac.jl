@@ -42,10 +42,11 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         @test isempty(fails)
         @test throws_kind(() -> uddf(f1, 1.0, 0.0), :dividebyzero)
         @test GFO.kind(() -> GFO.uddf(f1, 1.0, 0.0)) === :dividebyzero
-        # the zero step is refused before the function runs (CSPICE calls it twice first)
+        # Regression: the zero step is refused after the two calls of the function, as in
+        # uddf_ (the check is in qderiv_); it was refused before them.
         calls = Ref(0)
         @test throws_kind(() -> uddf(x -> (calls[] += 1; x), 1.0, 0.0), :dividebyzero)
-        @test calls[] == 0
+        @test calls[] == 2
     end
 
     @testset "gfuds: every relation, bit for bit" begin
@@ -210,6 +211,17 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             @test throws_kind(() -> gfuds(f1, qdec, rel, refval, adjust, step, cn), kind)
             @test GFO.kind(() -> GFO.gfuds(f1, qdec, rel, refval, adjust, step, collect(cn))) === kind
         end
+        # A NaN or infinite adjustment for a relation that takes none (adjust != 0), and a
+        # negative infinite one (adjust < 0), with the kinds that `zzgfrelx_` signals.
+        # CSPICE is not called: it aborts while it writes the value into the message
+        # (`dpstr_` indexes its table of powers with the exponent of a NaN).
+        for (kind, (rel, refval, adjust, step)) in (
+                (:invalidvalue, ("<", 0.0, NaN, 0.3)),
+                (:invalidvalue, ("=", 0.0, Inf, 0.3)),
+                (:valueoutofrange, ("ABSMIN", 0.0, -Inf, 0.3)),
+            )
+            @test throws_kind(() -> gfuds(f1, qdec, rel, refval, adjust, step, cn), kind)
+        end
         @test throws_kind(() -> gfudb(GFState(t -> true), 0.0, cn), :invalidstep)
         @test GFO.kind(() -> GFO.gfudb(t -> true, 0.0, collect(cn))) === :invalidstep
         # Differences from CSPICE (audit of 2026-11-16): a step below the spacing of the
@@ -229,8 +241,9 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         @test collect(gfudb(GFState(t -> true), 1.0e-9, Window([1.0e9, 1.0e9]))) == [1.0e9, 1.0e9]
         @test collect(gfudb(GFState(t -> true), 1.0, Window([1.0e9, nextfloat(1.0e9, 3)]))) ==
             [1.0e9, nextfloat(1.0e9, 3)]
-        @test throws_kind(() -> gfuds(f1, qdec, "ABSMIN", 0.0, NaN, 0.3, cn), :valueoutofrange)
-        @test throws_kind(() -> gfuds(f1, qdec, "ABSMAX", 0.0, Inf, 0.3, cn), :valueoutofrange)
+        # Regression: the kind was :valueoutofrange; CSPICE takes these two.
+        @test throws_kind(() -> gfuds(f1, qdec, "ABSMIN", 0.0, NaN, 0.3, cn), :invalidvalue)
+        @test throws_kind(() -> gfuds(f1, qdec, "ABSMAX", 0.0, Inf, 0.3, cn), :invalidvalue)
         @test throws_kind(() -> gfuds(f1, qdec, "<", NaN, 0.0, 0.3, cn), :invalidvalue)
         @test throws_kind(() -> gfuds(f1, qdec, "=", 0.0, 0.0, 0.3, cn; tol = 0.0), :invalidtolerance)
         @test throws_kind(() -> gfudb(GFState(t -> true), 0.3, cn; tol = -1.0), :invalidtolerance)
@@ -286,16 +299,6 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
     end
 
     @testset "window helpers of the solver" begin
-        fails = Failures()
-        for _ in 1:nsample(10, 100)
-            w = gf_random_window(rng, rand(rng, 1:6), 0.0, 10.0)
-            amount = rand(rng, (0.0, 0.5, 2.0))
-            c = GFO.cell(collect(w))
-            SPICE.wnexpd!(c, amount, amount)
-            check!(fails, collect(Almanac._gf_wnexpd(w, amount, amount)) == collect(Float64, c), "_gf_wnexpd = wnexpd", collect(w), amount)
-        end
-        @test isempty(fails)
-        @test isempty(Almanac._gf_wnexpd(Window(), 0.5, 0.5))
         inner = Window([1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 7.0, 7.0])
         @test collect(Almanac._gf_wsts(inner, Window([1.0, 3.0, 5.0, 8.0]))) == [2.0, 2.0, 7.0, 7.0]
     end

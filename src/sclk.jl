@@ -40,13 +40,19 @@ function _sclk_build(pool::AbstractDict, sc::Integer)
     (length(coef) >= 3 && length(coef) % 3 == 0) || return nothing
     (length(pstart) == length(pstop) && !isempty(pstart)) || return nothing
     (length(nf) == 1 && length(del) == 1) || return nothing
-    nfield = round(Int, nf[1])
+    # The integer items are read by `scli01_` (`gipool_`); a value outside its range
+    # leaves the clock without data.
+    nf1 = _gipool_first(nf, ""; strict = false)
+    delcde = _gipool_first(del, ""; strict = false)
+    (nf1 === nothing || delcde === nothing) && return nothing
+    nfield = Int(nf1)
     (
         1 <= nfield <= _SCLK_MXNFLD && length(moduli) >= nfield &&
             length(offsets) >= nfield
     ) || return nothing
     ts = num("SCLK01_TIME_SYSTEM")
-    timsys = (ts === nothing || isempty(ts)) ? 1 : round(Int, ts[1])
+    timsys = (ts === nothing || isempty(ts)) ? Int32(1) : _gipool_first(ts, ""; strict = false)
+    timsys === nothing && return nothing
     tikmsc = 1.0
     for i in nfield:-1:2              # invariant: tikmsc = product of moduli[i+1:nfield]
         tikmsc *= moduli[i]
@@ -57,15 +63,15 @@ function _sclk_build(pool::AbstractDict, sc::Integer)
     end
     return SclkType1(
         Int32(sc), coef, pstart, pstop, moduli, offsets, Int32(nfield),
-        Int32(round(Int, del[1])), Int32(timsys), tikmsc, mxtick
+        delcde, timsys, tikmsc, mxtick
     )
 end
 
 """
     build_sclk(pool) -> Dict{Int32,SclkType1}
 
-Type 1 clocks of the pool, by clock ID: one for each variable `SCLK_DATA_TYPE_<n>` with
-the value 1 (the clock ID is `-n`) whose `SCLK01_*` data are complete. A clock with
+Type 1 clocks of the pool, by clock ID: one for each variable `SCLK_DATA_TYPE_<n>` whose
+first value rounds to 1 (the clock ID is `-n`) whose `SCLK01_*` data are complete. A clock with
 incomplete data is left out, so that loading a kernel never fails; a conversion with
 that clock then throws `SpiceError`.
 """
@@ -76,7 +82,8 @@ function build_sclk(pool::AbstractDict)
         startswith(name, prefix) || continue
         n = tryparse(Int32, SubString(name, ncodeunits(prefix) + 1))
         n === nothing && continue
-        (value isa Vector{Float64} && length(value) == 1 && value[1] == 1) || continue
+        # The type is the first value, rounded, as `gipool_(name, 1, 1, ...)` of `scty01_`.
+        _gipool_first(value, name; strict = false) == 1 || continue
         clock = _sclk_build(pool, -n)
         clock === nothing || (out[-n] = clock)
     end
@@ -104,7 +111,7 @@ function sctype(ks::KernelSet, sc::Integer)
                 "loaded for the clock $sc"
         )
     )
-    return round(Int, v[1])
+    return Int(_gipool_first(v, name)::Int32)
 end
 
 "Throw the error that tells why the clock `sc` has no data in `ks.sclk`."
@@ -566,19 +573,20 @@ function scencd(ks::KernelSet, sc::Integer, sclkch::AbstractString)
     pstart, pstop, ptotls = _sclk_partitions(clock)
     nparts = length(pstart)
     pos = findfirst('/', sclkch)
-    # the fields are checked before the partition number, as in CSPICE
+    # As `scencd_`: a slash in the first column is BADPARTNUMBER; then the fields are
+    # converted (no fields is INVALIDSCLKSTRING), and only then is the partition number
+    # read.
+    pos == 1 && throw(
+        SpiceError(
+            :badpartnumber,
+            "unable to parse the partition number from the SCLK string '$sclkch'"
+        )
+    )
     fields = pos === nothing ? sclkch : SubString(sclkch, nextind(sclkch, pos))
     isempty(strip(fields)) && throw(
         SpiceError(
             :invalidsclkstring,
             "no SCLK components follow the slash in the SCLK string '$sclkch'"
-        )
-    )
-    pos !== nothing && isempty(strip(SubString(sclkch, 1, prevind(sclkch, pos)))) &&
-        throw(
-        SpiceError(
-            :badpartnumber,
-            "unable to parse the partition number from the SCLK string '$sclkch'"
         )
     )
     ticks = _dnint(sctiks(ks, sc, fields))

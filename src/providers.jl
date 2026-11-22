@@ -271,7 +271,7 @@ function add_frame!(
         center::NameOrID, relative::NameOrID; path::AbstractString = ""
     )
     nn = normalize_name(name)
-    isempty(nn) && throw(SpiceError(:emptystring, "add_frame!: the frame name is empty"))
+    _chkfstr("add_frame!", "frame name", nn)
     (haskey(BUILTIN_FRAMENAME2ID, nn) || haskey(BUILTIN_FRAMES, Int32(id))) &&
         throw(SpiceError(:badframe, "add_frame!: '$name' or ID $id is a built-in frame"))
     lock(ctx.lock) do

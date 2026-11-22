@@ -264,7 +264,7 @@ Throws `SpiceError(:emptystring)` if `path` is empty.
 See also [`kclear`](@ref).
 """
 function unload(ctx::SpiceContext, path::AbstractString)
-    isempty(path) && throw(SpiceError(:emptystring, "unload: the file name is empty"))
+    _chkfstr("unload", "file name", path)
     p = String(path)
     lock(ctx.lock) do
         old = kernelset(ctx).loaded
@@ -313,12 +313,9 @@ function kclear(ctx::SpiceContext)
     return nothing
 end
 
-ktotal(ctx::SpiceContext) = length(kernelset(ctx).loaded)
-
 furnsh(path::AbstractString) = furnsh(default_context(), path)
 unload(path::AbstractString) = unload(default_context(), path)
 kclear() = kclear(default_context())
-ktotal() = ktotal(default_context())
 
 const furnsh! = furnsh
 const unload! = unload

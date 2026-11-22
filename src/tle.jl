@@ -13,11 +13,8 @@
 #
 # `getelm` and `evsgp4` need the leap seconds of a kernel set, as in CSPICE.
 
-"Names of the eight geophysical constants in the order of `geophs` (the items of `BODY399_<name>`)."
-const _TLE_GEOPHS_NAMES = ("J2", "J3", "J4", "KE", "QO", "SO", "ER", "AE")
-
-"Powers of ten for the exponents of NDD60 and BSTAR, which have one digit."
-const _TLE_POWER = (1.0, 1.0e1, 1.0e2, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e9)
+# The eight geophysical constants in the order of `geophs` are the items J2, J3, J4,
+# KE, QO, SO, ER and AE of `BODY399_<name>`.
 
 "The terms of a two-line element set in the order in which `zzgetelm` parses them: name, line, first and last character."
 const _TLE_TERMS = (
@@ -44,8 +41,8 @@ function _tle_number(text::AbstractString, term::Int, integer::Bool)
     name, line, first, last = _TLE_TERMS[term]
     where = "\"$name\" (characters $first to $last of the " *
         (line == 1 ? "first" : "second") * " line of a two-line element set)"
-    x = try
-        _nparsd(text)
+    return try
+        integer ? Float64(_nparsi(text)) : _nparsd(text)
     catch err
         err isa SpiceError || rethrow()
         _tle_error(
@@ -53,13 +50,6 @@ function _tle_number(text::AbstractString, term::Int, integer::Bool)
                 "diagnostic was:  $(err.msg) "
         )
     end
-    integer || return x
-    abs(trunc(x)) <= 2147483647.0 || _tle_error(
-        "An error occurred while trying to parse " *
-            "the term $where. The diagnostic was:  NPARSI: Value entered is beyond the " *
-            "bounds of representable integers. "
-    )
-    return trunc(x)
 end
 
 """
@@ -87,13 +77,13 @@ column 1 are not read.
 
 Throws `SpiceError`:
 - `:badarg` unless `lines` holds two lines;
-- `:noleapseconds` if no leap-second kernel is loaded;
 - `:badtle`, as CSPICE, in each of these cases:
   - the satellite numbers of the two lines differ;
   - a line does not have 68 or 69 characters (blanks at the end are not counted);
   - a term is not a number, or an exponent has more than one digit;
   - a value is out of range. The ranges are [0, 360) degrees for NODE0, OMEGA and M0,
     [0, 180] degrees for INCL, and [0, 20] revolutions per day for N0.
+- `:noleapseconds` if no leap-second kernel is loaded (tested after the lines).
 
 # Examples
 The file names are those of the generic kernels of NAIF; `geophs` holds the constants of
@@ -116,7 +106,6 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
             "getelm: `lines` must hold two lines, it holds $(length(lines))"
         )
     )
-    l = _lsk(ks)
     raw = (String(lines[1]), String(lines[2]))
     (isascii(raw[1]) && isascii(raw[2])) ||
         _tle_error("A line of the TLE pair has a character that is not ASCII.")
@@ -157,7 +146,8 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
         _tle_error("INCL (inclination) expected bounds [0,180). Actual value $incl")
     (no > 20.0 || no < 0.0) &&
         _tle_error("NO (mean motion) expected bounds (0,20). Actual value $no")
-    pow10(n) = n >= 0 ? _TLE_POWER[Int(n) + 1] : 1.0 / _TLE_POWER[1 - Int(n)]
+    # The powers of ten of the one-digit exponents of NDD60 and BSTAR.
+    pow10(n) = n >= 0 ? _NPARSD_LOOKUP[Int(n) + 1] : 1.0 / _NPARSD_LOOKUP[1 - Int(n)]
     ndd60 *= pow10(nexp)
     bstar *= pow10(bexp)
     d2r = Float64(pi) / 180.0
@@ -173,6 +163,8 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
     first = Int(frstyr)
     year = div(first, 100) * 100 + Int(yr)
     year < first && (year += 100)
+    # The leap seconds are needed only now, as in zzgetelm_, after all the checks.
+    l = _lsk(ks)
     epoch = _ttrans(l, _TT_YDD, _TT_TDB, _tvec(year, day))[1]
     return epoch, SVector{10, Float64}(ndt20, ndd60, bstar, incl, node0, ecc, omega, mo, no, epoch)
 end
@@ -263,46 +255,28 @@ function spkw10(
     )
     who = "spkw10"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     con = _seg_fixed(who, "consts", consts, 8)
     el, n, _ = _seg_flat(who, "elems", elems, 10)
     ep = _seg_vec(who, "epochs", epochs, n)
     descr = spkpds(ctx, body, center, frame, 10, first, last)
     _seg_idlen(who, segid)
-    cu = codeunits(String(segid))
-    for i in 1:_daf_lastnb(segid)
-        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
-            SpiceError(
-                :nonprintingchars,
-                "$who: the segment identifier contains a nonprinting character at location $i"
-            )
-        )
-    end
+    _seg_idchars(who, segid, :nonprintingchars)
     n <= 0 && throw(
         SpiceError(
             :numpacketsnotpos,
             "$who: the number of packets to store is not positive: $n"
         )
     )
-    for i in 2:n          # invariant: ep[1:i-1] is strictly increasing
-        ep[i - 1] >= ep[i] && throw(
-            SpiceError(
-                :unorderedrefs,
-                "$who: reference values are out of order; the value $(ep[i - 1]) was found to " *
-                    "be out of order for index $(i - 1)"
-            )
-        )
-    end
+    _seg_ordered_refs(who, Float64[], ep)
     packets = Vector{Float64}(undef, 14n)
     for i in 1:n          # invariant: the packets of the sets before `i` are in `packets`
         copyto!(packets, 14(i - 1) + 1, el, 10(i - 1) + 1, 10)
-        psi, eps, dpsi, deps = _t10_wahr(ep[i])
+        psi, eps, dpsi, deps = _dyn_wahr_rates(ep[i])
         packets[(14i - 3):14i] .= (eps, psi, deps, dpsi)
     end
-    dafbna(h, descr, segid)
-    dafada(h, _t10_data(con, ep, packets))
-    dafena(h)
+    _daf_add_descr!(h, descr, segid, _t10_data(con, ep, packets))
     return nothing
 end
 spkw10(

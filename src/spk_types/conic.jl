@@ -65,15 +65,15 @@ function _prop2b(
         kind::Symbol = :badorbit
     ) where {T <: Real}
     gm > 0.0 || _conic_error("the gravitational parameter is not positive", kind)
-    (_maxabs(pos) == 0.0 || _maxabs(vel) == 0.0) &&
+    (_m_maxabs(pos) == 0.0 || _m_maxabs(vel) == 0.0) &&
         _conic_error("the initial position or velocity is zero", kind)
-    r0 = _vnorm(pos)
-    rv = _dot(pos, vel)
-    hvec = _cross(pos, vel)
-    h2 = _dot(hvec, hvec)
+    r0 = _m_norm(pos)
+    rv = _m_dot(pos, vel)
+    hvec = _m_cross(pos, vel)
+    h2 = _m_dot(hvec, hvec)
     h2 == 0.0 && _conic_error("the initial position and velocity are parallel", kind)
-    eqvec = (1.0 / gm) * _cross(vel, hvec) + (-1.0 / r0) * pos
-    e = _vnorm(eqvec)
+    eqvec = (1.0 / gm) * _m_cross(vel, hvec) + (-1.0 / r0) * pos
+    e = _m_norm(eqvec)
     q = h2 / (gm * (e + 1.0))
     f = 1.0 - e
     b = sqrt(q / gm)
@@ -246,14 +246,14 @@ function _spk15(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
         seg,
         "P = $p, ECC = $ecc, GM = $gm, radius = $rpl are not all in their ranges"
     )
-    (_maxabs(tp) == 0.0 || _maxabs(pa) == 0.0 || _maxabs(pv) == 0.0) &&
+    (_m_maxabs(tp) == 0.0 || _m_maxabs(pa) == 0.0 || _m_maxabs(pv) == 0.0) &&
         _badsegment(seg, "the trajectory pole, the periapsis vector or the body pole is zero")
-    pa, tp, pv = _vhat(pa), _vhat(tp), _vhat(pv)
-    abs(_dot(pa, tp)) > 1.0e-5 &&
+    pa, tp, pv = _m_hat(pa), _m_hat(tp), _m_hat(pv)
+    abs(_m_dot(pa, tp)) > 1.0e-5 &&
         _badsegment(seg, "the periapsis vector and the trajectory pole are not orthogonal")
     near = p / (ecc + 1.0)
     speed = sqrt(gm / p) * (ecc + 1.0)
-    q = _cross(tp, pa)
+    q = _m_cross(tp, pa)
     dt = et - epoch
     pos, vel = _prop2b(gm, near * pa, speed * q, dt)
     (j2flg != 3 && oj2 != 0.0 && ecc < 1.0 && near > rpl) || return pos, vel
@@ -270,20 +270,20 @@ function _spk15(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     end
     k2pi = manom - theta
     pos0 = map(primal, pos)
-    ta0 = _dsign(_vsep(pa, pos0), theta) + k2pi
+    ta0 = _dsign(_m_vsep(pa, pos0), theta) + k2pi
     # The same angle with derivative parts: components of the position along PA and
     # along the in-plane normal to PA.
-    ta = _with_primal(atan(_dot(pos, _vhat(q)), _dot(pos, pa)), ta0)
-    cosinc = _dot(pv, tp)
+    ta = _with_primal(atan(_m_dot(pos, _m_hat(q)), _m_dot(pos, pa)), ta0)
+    cosinc = _m_dot(pv, tp)
     d = rpl / p
     z = ta * 1.5 * oj2 * (d * d)
     dnode = -z * cosinc
     dperi = z * (cosinc * cosinc * 2.5 - 0.5)
     if j2flg != 1
-        pos, vel = _vrotv(pos, tp, dperi), _vrotv(vel, tp, dperi)
+        pos, vel = _m_vrotv(pos, tp, dperi), _m_vrotv(vel, tp, dperi)
     end
     if j2flg != 2
-        pos, vel = _vrotv(pos, pv, dnode), _vrotv(vel, pv, dnode)
+        pos, vel = _m_vrotv(pos, pv, dnode), _m_vrotv(vel, pv, dnode)
     end
     return pos, vel
 end
@@ -306,7 +306,7 @@ function _kepler_equinoctial(h::Float64, k::Float64)
     else
         return 0.0
     end
-    maxit = min(32, max(1, _round_index(1.0 / (1.0 - ecc))))
+    maxit = min(32, max(1, _nint(1.0 / (1.0 - ecc))))
     xm = 0.0
     for _ in 1:maxit          # invariant: the root is in [xl, xu]
         xm = max(xl, min(xu, (xl + xu) * 0.5))
@@ -405,8 +405,8 @@ function _eqn_state(
     r1 = Vec3(-sa, -ca * sd, ca * cd)
     r2 = Vec3(ca, -sa * sd, sa * cd)
     r3 = Vec3(0.0, cd, sd)
-    return Vec3(_dot(r1, xh), _dot(r2, xh), _dot(r3, xh)),
-        Vec3(_dot(r1, vh), _dot(r2, vh), _dot(r3, vh))
+    return Vec3(_m_dot(r1, xh), _m_dot(r2, xh), _m_dot(r3, xh)),
+        Vec3(_m_dot(r1, vh), _m_dot(r2, vh), _m_dot(r3, vh))
 end
 
 """

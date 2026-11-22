@@ -72,17 +72,22 @@ end
         trgcde::Int32, fixfid::Int32
     )
     m.dsk && return _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst)
-    return _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+    return _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
 end
 
-function _geo_subpnt(
-        ks::KernelSet, tols::DSKTolerances, method::AbstractString,
-        target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
+"""
+    _geo_sub_setup(ks, tols, method, target, et0, fixref, corr, trgcde, obscde)
+        -> (fixfid, near, sh, et, s, obspos, trgepc, radii)
+
+The part of `subpnt` and `subslr` after the checks of the bodies, in their order: the
+body-fixed frame, the method and the shape, the epoch, the observer position `obspos`
+relative to the target in the frame `fixfid`, corrected as `corr` says, the epoch
+`trgepc` of the target and the radii of the target.
+"""
+@inline function _geo_sub_setup(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString, target::NameOrID,
+        et0::Real, fixref::NameOrID, corr::Aberration, trgcde::Int32, obscde::Int32
     )
-    corr = _geo_abcorr(abcorr)
-    trgcde = _geo_body(ks, target, "target")
-    obscde = _geo_body(ks, obsrvr, "observer")
-    obscde == trgcde && _geo_same_bodies("sub-observer point", obsrvr)
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
     m = _geo_method(ks, trgcde, method)
     near = _geo_near(m, method)
@@ -93,6 +98,19 @@ function _geo_subpnt(
     obspos = -tpos
     trgepc = et + s * lt
     radii = _geo_radii(ks, trgcde)
+    return fixfid, near, sh, et, s, obspos, trgepc, radii
+end
+
+function _geo_subpnt(
+        ks::KernelSet, tols::DSKTolerances, method::AbstractString,
+        target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
+    )
+    corr = _geo_abcorr(abcorr)
+    trgcde = _geo_body(ks, target, "target")
+    obscde = _geo_body(ks, obsrvr, "observer")
+    obscde == trgcde && _geo_same_bodies("sub-observer point", obsrvr)
+    fixfid, near, sh, et, s, obspos, trgepc, radii =
+        _geo_sub_setup(ks, tols, method, target, et0, fixref, corr, trgcde, obscde)
     primal(_m_norm(obspos)) == 0 && throw(
         SpiceError(
             :noseparation,
@@ -155,16 +173,8 @@ function _geo_subslr(
             "the target body is the Sun; the sub-solar point is not defined"
         )
     )
-    fixfid = _geo_fixfid(ks, fixref, trgcde, target)
-    m = _geo_method(ks, trgcde, method)
-    near = _geo_near(m, method)
-    sh = _geo_subshape(ks, tols, m, trgcde, fixfid)
-    et = check_epoch(et0)
-    s = _geo_sign(corr)
-    tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, corr, obscde)
-    obspos = -tpos
-    trgepc = et + s * lt
-    radii = _geo_radii(ks, trgcde)
+    fixfid, near, sh, et, s, obspos, trgepc, radii =
+        _geo_sub_setup(ks, tols, method, target, et0, fixref, corr, trgcde, obscde)
     spos, _ = _geo_spkezp(ks, Int32(10), trgepc, fixfid, corr, trgcde)
     spoint, _ = _geo_subpoint(ks, sh, radii, near, spos, trgepc, "sub-solar")
     corr.uselt || return spoint, et, spoint - obspos

@@ -6,13 +6,10 @@
 # the same plate and the same point to rounding level. All of them are pure functions
 # of their arguments and none allocates.
 #
-# Private vector helpers have the prefix `_dsk_`; the public CSPICE vector names are
-# defined in another part of the package and are not used here.
+# The vector arithmetic is that of the `_m_` kernels (`math/kernels.jl`), in the
+# operation order of SPICELIB.
 
 const _DSK_DPMAX = floatmax(Float64)
-const _DSK_HALFPI = pi / 2
-const _DSK_TWOPI = 2 * Float64(pi)
-const _DSK_PI = Float64(pi)
 const _DSK_ZAXIS = Vec3{Float64}(0.0, 0.0, 1.0)
 const _DSK_ORIGIN = Vec3{Float64}(0.0, 0.0, 0.0)
 
@@ -25,115 +22,6 @@ const _DSK_MAXVXL = 50000                 # voxels of one ray that `xdda` accept
 
 "The tolerances of CSPICE at start, for calls on a `KernelSet` without a context."
 const _DSK_DEFAULT_TOLS = DSKTolerances()
-
-# ---------------------------------------------------------------------------------------
-# Vector arithmetic in the operation order of CSPICE
-# ---------------------------------------------------------------------------------------
-
-@inline _dsk_vdot(a::Vec3{Float64}, b::Vec3{Float64}) = a[1] * b[1] + a[2] * b[2] + a[3] * b[3]
-
-@inline _dsk_vcrss(a::Vec3{Float64}, b::Vec3{Float64}) = Vec3{Float64}(
-    a[2] * b[3] - a[3] * b[2], a[3] * b[1] - a[1] * b[3], a[1] * b[2] - a[2] * b[1]
-)
-
-"`vnorm`: the length of `v`, scaled by its largest component as CSPICE does."
-@inline function _dsk_vnorm(v::Vec3{Float64})
-    m = max(max(abs(v[1]), abs(v[2])), abs(v[3]))
-    m == 0.0 && return 0.0
-    a = v[1] / m
-    b = v[2] / m
-    c = v[3] / m
-    return m * sqrt(a * a + b * b + c * c)
-end
-
-"`unorm`: the unit vector of `v` and its length; the zero vector for a zero `v`."
-@inline function _dsk_unorm(v::Vec3{Float64})
-    m = _dsk_vnorm(v)
-    m > 0.0 || return _DSK_ORIGIN, m
-    return Vec3{Float64}(v[1] / m, v[2] / m, v[3] / m), m
-end
-
-@inline _dsk_vhat(v::Vec3{Float64}) = _dsk_unorm(v)[1]
-
-@inline _dsk_vsub(a::Vec3{Float64}, b::Vec3{Float64}) = Vec3{Float64}(a[1] - b[1], a[2] - b[2], a[3] - b[3])
-@inline _dsk_vadd(a::Vec3{Float64}, b::Vec3{Float64}) = Vec3{Float64}(a[1] + b[1], a[2] + b[2], a[3] + b[3])
-@inline _dsk_vscl(s::Float64, a::Vec3{Float64}) = Vec3{Float64}(s * a[1], s * a[2], s * a[3])
-@inline _dsk_vminus(a::Vec3{Float64}) = Vec3{Float64}(-a[1], -a[2], -a[3])
-@inline _dsk_vzero(a::Vec3{Float64}) = a[1] == 0.0 && a[2] == 0.0 && a[3] == 0.0
-@inline _dsk_vdist(a::Vec3{Float64}, b::Vec3{Float64}) = _dsk_vnorm(_dsk_vsub(a, b))
-
-@inline _dsk_vlcom(a::Float64, v1::Vec3{Float64}, b::Float64, v2::Vec3{Float64}) = Vec3{Float64}(
-    a * v1[1] + b * v2[1], a * v1[2] + b * v2[2], a * v1[3] + b * v2[3]
-)
-
-@inline _dsk_vlcom3(
-    a::Float64, v1::Vec3{Float64}, b::Float64, v2::Vec3{Float64}, c::Float64,
-    v3::Vec3{Float64}
-) = Vec3{Float64}(
-    a * v1[1] + b * v2[1] + c * v3[1],
-    a * v1[2] + b * v2[2] + c * v3[2], a * v1[3] + b * v2[3] + c * v3[3]
-)
-
-@inline _dsk_mxv(m::Mat3{Float64}, v::Vec3{Float64}) = Vec3{Float64}(
-    m[1, 1] * v[1] + m[1, 2] * v[2] + m[1, 3] * v[3],
-    m[2, 1] * v[1] + m[2, 2] * v[2] + m[2, 3] * v[3],
-    m[3, 1] * v[1] + m[3, 2] * v[2] + m[3, 3] * v[3]
-)
-
-@inline _dsk_mtxv(m::Mat3{Float64}, v::Vec3{Float64}) = Vec3{Float64}(
-    m[1, 1] * v[1] + m[2, 1] * v[2] + m[3, 1] * v[3],
-    m[1, 2] * v[1] + m[2, 2] * v[2] + m[3, 2] * v[3],
-    m[1, 3] * v[1] + m[2, 3] * v[2] + m[3, 3] * v[3]
-)
-
-"`vproj`: the projection of `a` onto `b`."
-@inline function _dsk_vproj(a::Vec3{Float64}, b::Vec3{Float64})
-    biga = max(max(abs(a[1]), abs(a[2])), abs(a[3]))
-    bigb = max(max(abs(b[1]), abs(b[2])), abs(b[3]))
-    (biga == 0.0 || bigb == 0.0) && return _DSK_ORIGIN
-    r = Vec3{Float64}(b[1] / bigb, b[2] / bigb, b[3] / bigb)
-    t = Vec3{Float64}(a[1] / biga, a[2] / biga, a[3] / biga)
-    scale = _dsk_vdot(t, r) * biga / _dsk_vdot(r, r)
-    return _dsk_vscl(scale, r)
-end
-
-"`vperp`: the component of `a` that is perpendicular to `b`."
-@inline function _dsk_vperp(a::Vec3{Float64}, b::Vec3{Float64})
-    biga = max(max(abs(a[1]), abs(a[2])), abs(a[3]))
-    bigb = max(max(abs(b[1]), abs(b[2])), abs(b[3]))
-    biga == 0.0 && return _DSK_ORIGIN
-    bigb == 0.0 && return a
-    t = Vec3{Float64}(a[1] / biga, a[2] / biga, a[3] / biga)
-    r = Vec3{Float64}(b[1] / bigb, b[2] / bigb, b[3] / bigb)
-    return _dsk_vscl(biga, _dsk_vsub(t, _dsk_vproj(t, r)))
-end
-
-"`ucrss`: the unit vector of `a x b`, computed from scaled copies."
-@inline function _dsk_ucrss(a::Vec3{Float64}, b::Vec3{Float64})
-    ma = max(max(abs(a[1]), abs(a[2])), abs(a[3]))
-    mb = max(max(abs(b[1]), abs(b[2])), abs(b[3]))
-    ta = ma != 0.0 ? Vec3{Float64}(a[1] / ma, a[2] / ma, a[3] / ma) : _DSK_ORIGIN
-    tb = mb != 0.0 ? Vec3{Float64}(b[1] / mb, b[2] / mb, b[3] / mb) : _DSK_ORIGIN
-    return _dsk_vhat(_dsk_vcrss(ta, tb))
-end
-
-"`vsep`: the angle between `a` and `b` in radians, 0 if one of them is zero."
-@inline function _dsk_vsep(a::Vec3{Float64}, b::Vec3{Float64})
-    u1, m1 = _dsk_unorm(a)
-    m1 == 0.0 && return 0.0
-    u2, m2 = _dsk_unorm(b)
-    m2 == 0.0 && return 0.0
-    d = _dsk_vdot(u1, u2)
-    if d > 0.0
-        return asin(_dsk_vnorm(_dsk_vsub(u1, u2)) * 0.5) * 2.0
-    elseif d < 0.0
-        return _DSK_PI - asin(_dsk_vnorm(_dsk_vadd(u1, u2)) * 0.5) * 2.0
-    end
-    return _DSK_PI / 2.0
-end
-
-@inline _dsk_brcktd(x::Float64, e1::Float64, e2::Float64) =
-    e1 < e2 ? max(e1, min(e2, x)) : max(e2, min(e1, x))
 
 "`reclat`: radius, longitude and latitude of the rectangular point `p`."
 @inline function _dsk_reclat(p::Vec3{Float64})
@@ -171,7 +59,7 @@ end
     a1 = m / a
     b1 = m / b
     c1 = m / c
-    return _dsk_vhat(Vec3{Float64}(p[1] * (a1 * a1), p[2] * (b1 * b1), p[3] * (c1 * c1)))
+    return _m_hat(Vec3{Float64}(p[1] * (a1 * a1), p[2] * (b1 * b1), p[3] * (c1 * c1)))
 end
 
 "`georec`: the rectangular point of planetodetic longitude, latitude and altitude on the spheroid `re`, `f`."
@@ -190,7 +78,7 @@ end
         scale * rp * rp * sphi
     )
     normal = _dsk_surfnm(re, re, rp, base)
-    return _dsk_vlcom(1.0, base, alt, normal)
+    return 1.0 * base + alt * normal
 end
 
 """
@@ -203,38 +91,38 @@ semi-axes `a`, `b`, `c`. Requires `u != 0` and positive axes.
         positn::Vec3{Float64}, u::Vec3{Float64}, a::Float64, b::Float64,
         c::Float64
     )
-    _dsk_vzero(u) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
+    _m_iszero(u) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
     (a > 0.0 && b > 0.0 && c > 0.0) || _dsk_throw(
         :badaxislength,
         "the ellipsoid axes must be positive"
     )
     x = Vec3{Float64}(u[1] / a, u[2] / b, u[3] / c)
     y = Vec3{Float64}(positn[1] / a, positn[2] / b, positn[3] / c)
-    p = _dsk_vperp(y, x)
-    yproj = _dsk_vsub(y, p)
-    ymag = _dsk_vnorm(y)
-    pmag = _dsk_vnorm(p)
-    ux = _dsk_vhat(x)
+    p = _m_perp(y, x, false)
+    yproj = y - p
+    ymag = _m_norm(y)
+    pmag = _m_norm(p)
+    ux = _m_hat(x)
     sign = 1.0
     if ymag > 1.0
         pmag > 1.0 && return _DSK_ORIGIN, false
-        _dsk_vdot(yproj, x) > 0.0 && return _DSK_ORIGIN, false
+        _m_dot(yproj, x) > 0.0 && return _DSK_ORIGIN, false
         pmag == 1.0 && return Vec3{Float64}(p[1] * a, p[2] * b, p[3] * c), true
         sign = -1.0
     elseif ymag == 1.0
         return positn, true
     end
     scale = sqrt(max(0.0, 1 - pmag * pmag))
-    pt = _dsk_vlcom(1.0, p, sign * scale, ux)
+    pt = 1.0 * p + (sign * scale) * ux
     return Vec3{Float64}(pt[1] * a, pt[2] * b, pt[3] * c), true
 end
 
 "`nplnpt`: the distance of `point` from the line through `linpt` along `lindir`; requires `lindir != 0`."
 @inline function _dsk_nplnpt_dist(linpt::Vec3{Float64}, lindir::Vec3{Float64}, point::Vec3{Float64})
-    _dsk_vzero(lindir) && _dsk_throw(:zerovector, "the direction of the line is the zero vector")
-    trans = _dsk_vsub(point, linpt)
-    pnear = _dsk_vadd(_dsk_vproj(trans, lindir), linpt)
-    return _dsk_vdist(pnear, point)
+    _m_iszero(lindir) && _dsk_throw(:zerovector, "the direction of the line is the zero vector")
+    trans = point - linpt
+    pnear = _m_proj(trans, lindir, false) + linpt
+    return _m_norm(pnear - point)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -243,18 +131,18 @@ end
 
 "`nvp2pl`: the plane (unit normal, constant >= 0) through `point` with the normal `normal`."
 @inline function _dsk_nvp2pl(normal::Vec3{Float64}, point::Vec3{Float64})
-    n = _dsk_vhat(normal)
-    c = _dsk_vdot(point, n)
-    c < 0.0 && return _dsk_vminus(n), -c
+    n = _m_hat(normal)
+    c = _m_dot(point, n)
+    c < 0.0 && return -n, -c
     return n, c
 end
 
 "`nvc2pl`: the plane (unit normal, constant >= 0) of `normal` and `konst`; requires `normal != 0`."
 @inline function _dsk_nvc2pl(normal::Vec3{Float64}, konst::Float64)
-    n, mag = _dsk_unorm(normal)
+    n, mag = _m_unorm(normal)
     mag == 0.0 && _dsk_throw(:zerovector, "the normal vector of the plane is the zero vector")
     c = konst / mag
-    c < 0.0 && return _dsk_vminus(n), -c
+    c < 0.0 && return -n, -c
     return n, c
 end
 
@@ -269,32 +157,32 @@ end
         konst::Float64
     )
     toobig = _DSK_DPMAX / 3.0
-    vn = _dsk_vnorm(vertex)
+    vn = _m_norm(vertex)
     (vn >= toobig || konst >= toobig) && _dsk_throw(
         :vectortoobig,
         "the ray vertex or the plane constant is too large"
     )
-    udir = _dsk_vhat(dir)
-    _dsk_vzero(udir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
+    udir = _m_hat(dir)
+    _m_iszero(udir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
     mscale = max(konst, vn)
     sclvtx = vertex
     sclcon = konst
     if mscale != 0.0
-        sclvtx = _dsk_vscl(1.0 / mscale, vertex)
+        sclvtx = (1.0 / mscale) * vertex
         sclcon = konst / mscale
     end
     mscale > 1.0 && (toobig /= mscale)
-    prjvn = _dsk_vdot(sclvtx, normal)
+    prjvn = _m_dot(sclvtx, normal)
     prjdif = sclcon - prjvn
     if prjdif == 0.0
-        return (_dsk_vdot(normal, udir) == 0.0 ? -1 : 1), vertex
+        return (_m_dot(normal, udir) == 0.0 ? -1 : 1), vertex
     end
-    prjdir = _dsk_vdot(udir, normal)
+    prjdir = _m_dot(udir, normal)
     same = (prjdir < 0.0 && prjdif < 0.0) || (prjdir > 0.0 && prjdif > 0.0)
     same || return 0, _DSK_ORIGIN
     abs(prjdif) >= abs(prjdir) * toobig && return 0, _DSK_ORIGIN
     scale = abs(prjdif) / abs(prjdir)
-    return 1, _dsk_vscl(mscale, _dsk_vlcom(1.0, sclvtx, scale, udir))
+    return 1, mscale * (1.0 * sclvtx + scale * udir)
 end
 
 """
@@ -303,7 +191,7 @@ end
 `frame`: a right-handed orthonormal frame whose first axis is the unit vector of `x`.
 """
 @inline function _dsk_frame(xin::Vec3{Float64})
-    x = _dsk_vhat(xin)
+    x = _m_hat(xin)
     a = x[1] * x[1]
     b = x[2] * x[2]
     c = x[3] * x[3]
@@ -433,21 +321,21 @@ function _dsk_cxbrut(
         apex::Vec3{Float64}, axis::Vec3{Float64}, angle::Float64,
         endpt1::Vec3{Float64}, endpt2::Vec3{Float64}
     )
-    _dsk_vzero(axis) && _dsk_throw(:zerovector, "the cone axis is the zero vector")
+    _m_iszero(axis) && _dsk_throw(:zerovector, "the cone axis is the zero vector")
     locang = angle
     locaxi = axis
-    if angle > _DSK_HALFPI
-        locang = _DSK_PI - angle
-        locaxi = _dsk_vminus(axis)
+    if angle > _HALFPI
+        locang = _PI - angle
+        locaxi = -axis
     end
-    locaxi = _dsk_vhat(locaxi)
+    locaxi = _m_hat(locaxi)
     cosang = cos(locang)
-    off1 = _dsk_vsub(endpt1, apex)
-    off2 = _dsk_vsub(endpt2, apex)
-    state1 = _dsk_vdot(_dsk_vhat(off1), locaxi) >= cosang
-    state2 = _dsk_vdot(_dsk_vhat(off2), locaxi) >= cosang
+    off1 = endpt1 - apex
+    off2 = endpt2 - apex
+    state1 = _m_dot(_m_hat(off1), locaxi) >= cosang
+    state2 = _m_dot(_m_hat(off2), locaxi) >= cosang
     state1 != state2 || return _DSK_ORIGIN, false
-    seg = _dsk_vsub(off2, off1)
+    seg = off2 - off1
     low = 0.0
     high = 1.0
     delta = abs(high - low)
@@ -457,8 +345,8 @@ function _dsk_cxbrut(
     while delta > 1.0e-15 && delta < prvdlt && nitr < 1000
         # invariant: the crossing is between the parameters low and high
         midpt = (low + high) / 2
-        x = _dsk_vlcom(1.0, off1, midpt, seg)
-        state = _dsk_vdot(_dsk_vhat(x), locaxi) >= cosang
+        x = 1.0 * off1 + midpt * seg
+        state = _m_dot(_m_hat(x), locaxi) >= cosang
         if state == state1
             low = midpt
         else
@@ -468,7 +356,7 @@ function _dsk_cxbrut(
         delta = abs(high - low)
         nitr += 1
     end
-    return _dsk_vadd(apex, x), true
+    return apex + x, true
 end
 
 """
@@ -481,17 +369,17 @@ function _dsk_sglatx(p1::Vec3{Float64}, p2::Vec3{Float64})
     lat1 = _dsk_reclat(p1)[3]
     lat2 = _dsk_reclat(p2)[3]
     minlat, maxlat, minp, maxp = lat1 <= lat2 ? (lat1, lat2, p1, p2) : (lat2, lat1, p2, p1)
-    normal = _dsk_vcrss(p1, p2)
-    _dsk_vzero(normal) && return minlat, minp, maxlat, maxp
-    normal = _dsk_vhat(normal)
-    crease = _dsk_vcrss(_DSK_ZAXIS, normal)
-    _dsk_vzero(crease) && return minlat, minp, maxlat, maxp
-    crease = _dsk_vhat(crease)
-    dp1 = _dsk_vdot(p1, crease)
-    dp2 = _dsk_vdot(p2, crease)
+    normal = _m_cross(p1, p2)
+    _m_iszero(normal) && return minlat, minp, maxlat, maxp
+    normal = _m_hat(normal)
+    crease = _m_cross(_DSK_ZAXIS, normal)
+    _m_iszero(crease) && return minlat, minp, maxlat, maxp
+    crease = _m_hat(crease)
+    dp1 = _m_dot(p1, crease)
+    dp2 = _m_dot(p2, crease)
     if (dp1 < 0.0 && dp2 > 0.0) || (dp1 > 0.0 && dp2 < 0.0)
         pn, pc = _dsk_nvc2pl(crease, 0.0)
-        nxpts, t = _dsk_inrypl(p1, _dsk_vsub(p2, p1), pn, pc)
+        nxpts, t = _dsk_inrypl(p1, p2 - p1, pn, pc)
         if nxpts == 1
             lat = _dsk_reclat(t)[3]
             if lat > maxlat
@@ -519,35 +407,35 @@ function _dsk_incnsg(
     )
     xpt1 = _DSK_ORIGIN
     xpt2 = _DSK_ORIGIN
-    uaxis, axmag = _dsk_unorm(axis)
+    uaxis, axmag = _m_unorm(axis)
     axmag == 0.0 && _dsk_throw(:zerovector, "the cone axis is the zero vector")
     angle < 0.0 && _dsk_throw(:invalidangle, "the cone angle must be non-negative")
-    udir, dmag = _dsk_unorm(_dsk_vsub(endpt2, endpt1))
+    udir, dmag = _m_unorm(endpt2 - endpt1)
     dmag == 0.0 && _dsk_throw(:endpointsmatch, "the end points of the segment coincide")
     cosang = cos(angle)
     locang = angle
     if cosang < 0.0
         cosang = -cosang
-        locang = _DSK_PI - angle
-        uaxis = _dsk_vminus(uaxis)
+        locang = _PI - angle
+        uaxis = -uaxis
     end
-    off1 = _dsk_vsub(endpt1, apex)
-    off2 = _dsk_vsub(endpt2, apex)
-    dp1 = _dsk_vdot(_dsk_vhat(off1), uaxis)
-    dp2 = _dsk_vdot(_dsk_vhat(off2), uaxis)
+    off1 = endpt1 - apex
+    off2 = endpt2 - apex
+    dp1 = _m_dot(_m_hat(off1), uaxis)
+    dp2 = _m_dot(_m_hat(off2), uaxis)
     in1 = dp1 >= cosang
     in2 = dp2 >= cosang
     ((in1 && in2) || (dp1 < 0.0 && dp2 < 0.0)) && return 0, xpt1, xpt2
     if abs(cosang) < 1.0e-14
         pn, pc = _dsk_nvp2pl(uaxis, apex)
         nplnx, plnx = _dsk_inrypl(endpt1, udir, pn, pc)
-        (nplnx == 1 && _dsk_vdist(plnx, endpt1) <= dmag) && return 1, plnx, xpt2
+        (nplnx == 1 && _m_norm(plnx - endpt1) <= dmag) && return 1, plnx, xpt2
         return 0, xpt1, xpt2
     end
-    uuax = _dsk_vdot(udir, uaxis)
-    wuax = _dsk_vdot(off1, uaxis)
-    wu = _dsk_vdot(off1, udir)
-    w2 = _dsk_vdot(off1, off1)
+    uuax = _m_dot(udir, uaxis)
+    wuax = _m_dot(off1, uaxis)
+    wu = _m_dot(off1, udir)
+    w2 = _m_dot(off1, off1)
     ca2 = cosang * cosang
     a = uuax * uuax - ca2
     b = (wuax * uuax - ca2 * wu) * 2
@@ -560,8 +448,8 @@ function _dsk_incnsg(
                 endpt1[1] + s1 * udir[1], endpt1[2] + s1 * udir[2],
                 endpt1[3] + s1 * udir[3]
             )
-            uv1, v1mag = _dsk_unorm(_dsk_vsub(xpt1, apex))
-            coserr = v1mag > 0.0 ? abs(_dsk_vdot(uv1, uaxis) - cosang) : 0.0
+            uv1, v1mag = _m_unorm(xpt1 - apex)
+            coserr = v1mag > 0.0 ? abs(_m_dot(uv1, uaxis) - cosang) : 0.0
             (v1mag == 0.0 || coserr < 1.0e-10) && (nxpts = 1)
         end
         if n == 2 && s2 >= 0.0
@@ -569,8 +457,8 @@ function _dsk_incnsg(
                 endpt1[1] + s2 * udir[1], endpt1[2] + s2 * udir[2],
                 endpt1[3] + s2 * udir[3]
             )
-            uv2, v2mag = _dsk_unorm(_dsk_vsub(xpt2, apex))
-            coserr = v2mag > 0.0 ? abs(_dsk_vdot(uv2, uaxis) - cosang) : 0.0
+            uv2, v2mag = _m_unorm(xpt2 - apex)
+            coserr = v2mag > 0.0 ? abs(_m_dot(uv2, uaxis) - cosang) : 0.0
             if v2mag == 0.0 || coserr < 1.0e-10
                 nxpts += 1
                 nxpts == 1 && (xpt1 = xpt2)
@@ -589,19 +477,19 @@ function _dsk_incnsg(
     nxpts = 0
     uaxis, fx, fy = _dsk_frame(uaxis)
     xform = Mat3{Float64}(fx[1], fy[1], uaxis[1], fx[2], fy[2], uaxis[2], fx[3], fy[3], uaxis[3])
-    xoff1 = _dsk_mxv(xform, off1)
-    xoff2 = _dsk_mxv(xform, off2)
+    xoff1 = _m_mxv(xform, off1)
+    xoff2 = _m_mxv(xform, off2)
     _, _, maxlat, maxp = _dsk_sglatx(xoff1, xoff2)
-    colat = _DSK_HALFPI - maxlat
+    colat = _HALFPI - maxlat
     if colat < locang
         vtemp, isbrck = _dsk_cxbrut(_DSK_ORIGIN, _DSK_ZAXIS, locang, xoff1, maxp)
         if isbrck
-            xpt1 = _dsk_vadd(_dsk_mtxv(xform, vtemp), apex)
+            xpt1 = _m_mtxv(xform, vtemp) + apex
             nxpts = 1
         end
         vtemp, isbrck = _dsk_cxbrut(_DSK_ORIGIN, _DSK_ZAXIS, locang, maxp, xoff2)
         if isbrck
-            xpt2 = _dsk_vadd(_dsk_mtxv(xform, vtemp), apex)
+            xpt2 = _m_mtxv(xform, vtemp) + apex
             if nxpts == 1
                 nxpts = 2
             else
@@ -618,13 +506,13 @@ end
 
 "`zzryxsph`: the first point of the ray (`udir` a unit vector) on the sphere of radius `r` about the origin."
 @inline function _dsk_ryxsph(vertex::Vec3{Float64}, udir::Vec3{Float64}, r::Float64)
-    cpar = _dsk_vdot(vertex, udir)
-    perp = _dsk_vlcom(1.0, vertex, -cpar, udir)
-    pmag2 = _dsk_vdot(perp, perp)
+    cpar = _m_dot(vertex, udir)
+    perp = 1.0 * vertex + (-cpar) * udir
+    pmag2 = _m_dot(perp, perp)
     r2 = r * r
     pmag2 > r2 && return _DSK_ORIGIN, false
     s = sqrt(max(0.0, r2 - pmag2))
-    vmag2 = _dsk_vdot(vertex, vertex)
+    vmag2 = _m_dot(vertex, vertex)
     if vmag2 > r2
         cpar > 0.0 && return _DSK_ORIGIN, false
         return Vec3{Float64}(perp[1] - s * udir[1], perp[2] - s * udir[2], perp[3] - s * udir[3]), true
@@ -639,8 +527,8 @@ end
         vertex::Vec3{Float64}, udir::Vec3{Float64}, uplnml::Vec3{Float64},
         konst::Float64, maxd::Float64
     )
-    vtxcon = _dsk_vdot(vertex, uplnml)
-    dircon = _dsk_vdot(udir, uplnml)
+    vtxcon = _m_dot(vertex, uplnml)
+    dircon = _m_dot(udir, uplnml)
     (vtxcon > konst && dircon > 0.0) && return 0, _DSK_ORIGIN
     (vtxcon < konst && dircon < 0.0) && return 0, _DSK_ORIGIN
     if vtxcon == konst
@@ -673,7 +561,7 @@ end
         :axisunderflow,
         "a scaled semi-axis length underflowed"
     )
-    _dsk_vzero(normal) && _dsk_throw(:zerovector, "the normal vector is the zero vector")
+    _m_iszero(normal) && _dsk_throw(:zerovector, "the normal vector is the zero vector")
     na2 = normal[1] * sa * sa
     nb2 = normal[2] * sb * sb
     nc2 = normal[3] * sc * sc
@@ -717,11 +605,11 @@ greater than, equal to or less than `lat`.
 function _dsk_pdcmpl(re::Float64, f::Float64, p::Vec3{Float64}, lat::Float64)
     if p[1] == 0.0 && p[2] == 0.0
         if p[3] > 0.0
-            return lat == _DSK_HALFPI ? 0 : 1
+            return lat == _HALFPI ? 0 : 1
         elseif p[3] == 0.0
             return lat > 0.0 ? -1 : lat == 0.0 ? 0 : 1
         end
-        return lat == -_DSK_HALFPI ? 0 : -1
+        return lat == -_HALFPI ? 0 : -1
     end
     rp = re * (1.0 - f)
     _, yincpt = _dsk_elnaxx(re, rp, lat)
@@ -761,7 +649,7 @@ end
 `[-2pi, 2pi]`. Throws `SpiceError` (`:valueoutofrange`, `:zeroboundsextent`).
 """
 function _dsk_nrmlon(inmin::Float64, inmax::Float64, tol::Float64)
-    pi2 = _DSK_TWOPI
+    pi2 = _TWOPI
     tol < 0.0 && _dsk_throw(:valueoutofrange, "the longitude tolerance must be non-negative")
     (inmin < -pi2 - tol || inmin > pi2 + tol) && _dsk_throw(
         :valueoutofrange,
@@ -794,21 +682,30 @@ function _dsk_nrmlon(inmin::Float64, inmax::Float64, tol::Float64)
     return outmin, outmax
 end
 
+"""
+    _dsk_lon_out0(lon, b) -> Bool
+
+The longitude test of `zzinlat0` and `zzinpdt0`: true if `lon`, moved by a turn
+toward the longitude bounds `b[1]`, `b[2]` when it is outside them, is still outside
+them by more than 1e-12. Throws as `_dsk_nrmlon` for invalid bounds.
+"""
+@inline function _dsk_lon_out0(lon::Float64, b::NTuple{6, Float64})
+    minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
+    loclon = lon
+    if lon < minlon - 1.0e-12
+        loclon = lon + _TWOPI
+    elseif lon > maxlon + 1.0e-12
+        loclon = lon - _TWOPI
+    end
+    return loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12
+end
+
 "`zzinlat0`: inclusion of (r, lon, lat) in the latitudinal element `b`, without margin; `exclud` names a coordinate to skip."
 function _dsk_inlat0(r::Float64, lon::Float64, lat::Float64, b::NTuple{6, Float64}, exclud::Int)
     (r == 0.0 && b[5] == 0.0) && return true
     exclud != 3 && (r < b[5] || r > b[6]) && return false
     exclud != 2 && (lat < b[3] || lat > b[4]) && return false
-    if exclud != 1
-        minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
-        loclon = lon
-        if lon < minlon - 1.0e-12
-            loclon = lon + _DSK_TWOPI
-        elseif lon > maxlon + 1.0e-12
-            loclon = lon - _DSK_TWOPI
-        end
-        (loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12) && return false
-    end
+    exclud != 1 && _dsk_lon_out0(lon, b) && return false
     return true
 end
 
@@ -820,9 +717,9 @@ end
     amin = minlon - dlon
     amax = maxlon + dlon
     if lon < amin
-        lon = lon < amin - 1.0e-12 ? lon + _DSK_TWOPI : amin
+        lon = lon < amin - 1.0e-12 ? lon + _TWOPI : amin
     elseif lon > amax
-        lon = lon > amax + 1.0e-12 ? lon - _DSK_TWOPI : amax
+        lon = lon > amax + 1.0e-12 ? lon - _TWOPI : amax
     end
     return !(lon < amin || lon > amax)
 end
@@ -846,12 +743,12 @@ function _dsk_inlat(p::Vec3{Float64}, b::NTuple{6, Float64}, margin::Float64, ex
         (r < aminr || r > amaxr) && return false
     end
     if exclud != 2
-        aminlt = max(-_DSK_HALFPI, b[3] - margin)
-        amaxlt = min(_DSK_HALFPI, b[4] + margin)
+        aminlt = max(-_HALFPI, b[3] - margin)
+        amaxlt = min(_HALFPI, b[4] + margin)
         (lat < aminlt || lat > amaxlt) && return false
     end
     if exclud != 1
-        if lat <= _DSK_HALFPI - 1.0e-8 && lat >= -_DSK_HALFPI + 1.0e-8
+        if lat <= _HALFPI - 1.0e-8 && lat >= -_HALFPI + 1.0e-8
             _dsk_lon_in(lon, b, margin, cos(lat)) || return false
         else
             _dsk_nrmlon(b[1], b[2], 1.0e-12)       # the bounds are still validated
@@ -885,22 +782,13 @@ function _dsk_inpdt0(
     )
     rp = re * (1.0 - f)
     if exclud != 2
-        minlat = max(b[3] - 1.0e-12, -_DSK_HALFPI)
-        maxlat = min(b[4] + 1.0e-12, _DSK_HALFPI)
+        minlat = max(b[3] - 1.0e-12, -_HALFPI)
+        maxlat = min(b[4] + 1.0e-12, _HALFPI)
         minrel = _dsk_pdcmpl(re, f, p, minlat)
         maxrel = _dsk_pdcmpl(re, f, p, maxlat)
         (minrel == -1 || maxrel == 1) && return false
     end
-    if exclud != 1
-        minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
-        loclon = lon
-        if lon < minlon - 1.0e-12
-            loclon = lon + _DSK_TWOPI
-        elseif lon > maxlon + 1.0e-12
-            loclon = lon - _DSK_TWOPI
-        end
-        (loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12) && return false
-    end
+    exclud != 1 && _dsk_lon_out0(lon, b) && return false
     if exclud != 3
         emax, pmax, emin, pmin = if f >= 0.0
             _dsk_ellbds(re, rp, b[6], b[5])
@@ -935,8 +823,8 @@ function _dsk_inpdt(
     margin == 0.0 && return _dsk_inpdt0(p, lon, b, re, f, exclud)
     margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
     if exclud != 2
-        amnlat = max(-_DSK_HALFPI - 1.0e-12, b[3] - margin)
-        amxlat = min(_DSK_HALFPI + 1.0e-12, b[4] + margin)
+        amnlat = max(-_HALFPI - 1.0e-12, b[3] - margin)
+        amxlat = min(_HALFPI + 1.0e-12, b[4] + margin)
         relmin = _dsk_pdcmpl(re, f, p, amnlat)
         relmax = _dsk_pdcmpl(re, f, p, amxlat)
         (relmin == -1 || relmax == 1) && return false
@@ -944,13 +832,13 @@ function _dsk_inpdt(
     if exclud != 3
         amnalt = b[5] - margin * abs(b[5])
         amxalt = b[6] + margin * abs(b[6])
-        altbds = (-_DSK_PI, _DSK_PI, -_DSK_HALFPI, _DSK_HALFPI, amnalt, amxalt)
+        altbds = (-_PI, _PI, -_HALFPI, _HALFPI, amnalt, amxalt)
         _dsk_inpdt0(p, lon, altbds, re, f, 1) || return false
     end
     if exclud != 1
         minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
-        relmax = _dsk_pdcmpl(re, f, p, _DSK_HALFPI - 1.0e-8)
-        relmin = _dsk_pdcmpl(re, f, p, -_DSK_HALFPI + 1.0e-8)
+        relmax = _dsk_pdcmpl(re, f, p, _HALFPI - 1.0e-8)
+        relmin = _dsk_pdcmpl(re, f, p, -_HALFPI + 1.0e-8)
         if relmax != 1 && relmin != -1
             _dsk_lon_in(lon, b, margin, cos(pcnlat)) || return false
         end
@@ -990,8 +878,8 @@ function _dsk_raybox(
         vertex::Vec3{Float64}, raydir::Vec3{Float64}, boxori::Vec3{Float64},
         extent::Vec3{Float64}
     )
-    _dsk_vzero(raydir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
-    udir = _dsk_vhat(raydir)
+    _m_iszero(raydir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
+    udir = _m_hat(raydir)
     min(min(extent[1], extent[2]), extent[3]) <= 0.0 && _dsk_throw(
         :valueoutofrange,
         "all box extents must be strictly positive"
@@ -1000,14 +888,14 @@ function _dsk_raybox(
         boxori[1] + extent[1] / 2, boxori[2] + extent[2] / 2,
         boxori[3] + extent[3] / 2
     )
-    offset = _dsk_vsub(vertex, center)
+    offset = vertex - center
     if abs(offset[1]) <= extent[1] / 2 && abs(offset[2]) <= extent[2] / 2 &&
             abs(offset[3]) <= extent[3] / 2
         return vertex, true
     end
-    r = _dsk_vnorm(extent) * 0.50049999999999994
+    r = _m_norm(extent) * 0.50049999999999994
     sphxpt = offset
-    if !(_dsk_vnorm(offset) < r)
+    if !(_m_norm(offset) < r)
         sphxpt, sphfnd = _dsk_surfpt(offset, udir, r, r, r)
         sphfnd || return _DSK_ORIGIN, false
     end
@@ -1032,7 +920,7 @@ function _dsk_raybox(
         end
     end
     maxt < 0.0 && return _DSK_ORIGIN, false
-    x = _dsk_vlcom(1.0, sphvtx, maxt, udir)
+    x = 1.0 * sphvtx + maxt * udir
     x1 = x[1]
     x2 = x[2]
     x3 = x[3]
@@ -1052,7 +940,56 @@ function _dsk_raybox(
         end
         i == 1 ? (x1 = xi) : i == 2 ? (x2 = xi) : (x3 = xi)
     end
-    return _dsk_vadd(Vec3{Float64}(x1, x2, x3), boxori), true
+    return Vec3{Float64}(x1, x2, x3) + boxori, true
+end
+
+"""
+    _dsk_ryt_lon(inside, vertex, udir, minlon, maxlon, maxr, margin, nxpts, xpt, mndist)
+        -> (nxpts, xpt, mndist)
+
+The step of `zzrytlat` and `zzrytpdt` for the two longitude boundary half-planes: an
+intercept on the west or the east plane that `inside(p)` accepts (the inclusion test of
+the element without the longitude) and that is on the side of the element replaces
+`xpt` if it is nearer than `mndist`. Nothing happens if the longitude range is a whole
+turn.
+"""
+@inline function _dsk_ryt_lon(
+        inside::F, vertex::Vec3{Float64}, udir::Vec3{Float64}, minlon::Float64,
+        maxlon::Float64, maxr::Float64, margin::Float64, nxpts::Int, xpt::Vec3{Float64},
+        mndist::Float64
+    ) where {F}
+    if cos(maxlon - minlon) < 1.0
+        smin, cmin = sincos(minlon)
+        westb = Vec3{Float64}(smin, -cmin, 0.0)
+        s = (_m_norm(vertex) + maxr) * 1.1
+        nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
+        if nx == 1 && inside(srfx)
+            wback = _m_ucrss(westb, _DSK_ZAXIS)
+            if _m_dot(srfx, wback) < margin * maxr
+                dist = _m_norm(vertex - srfx)
+                if dist < mndist
+                    xpt = srfx
+                    nxpts = 1
+                    mndist = dist
+                end
+            end
+        end
+        smax, cmax = sincos(maxlon)
+        eastb = Vec3{Float64}(-smax, cmax, 0.0)
+        nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
+        if nx == 1 && inside(srfx)
+            eback = _m_ucrss(_DSK_ZAXIS, eastb)
+            if _m_dot(srfx, eback) < margin * maxr
+                dist = _m_norm(vertex - srfx)
+                if dist < mndist
+                    xpt = srfx
+                    nxpts = 1
+                    mndist = dist
+                end
+            end
+        end
+    end
+    return nxpts, xpt, mndist
 end
 
 """
@@ -1073,7 +1010,7 @@ function _dsk_rytlat(
     maxlat = b[4]
     nxpts = 0
     xpt = _DSK_ORIGIN
-    udir = _dsk_vhat(raydir)
+    udir = _m_hat(raydir)
     mndist = _DSK_DPMAX
     srfx, found = _dsk_ryxsph(vertex, udir, maxr)
     found || return 0, xpt
@@ -1082,16 +1019,16 @@ function _dsk_rytlat(
         xpt = srfx
         nxpts = 1
         vr > maxr && return nxpts, xpt
-        mndist = _dsk_vdist(vertex, xpt)
+        mndist = _m_norm(vertex - xpt)
     end
-    s = _dsk_vnorm(vertex) + maxr * 1.1
-    endpt2 = _dsk_vlcom(1.0, vertex, s, udir)
-    if maxlat < _DSK_HALFPI
-        angle = max(0.0, _DSK_HALFPI - maxlat)
+    s = _m_norm(vertex) + maxr * 1.1
+    endpt2 = 1.0 * vertex + s * udir
+    if maxlat < _HALFPI
+        angle = max(0.0, _HALFPI - maxlat)
         nx, srfx, xpt2 = _dsk_incnsg(_DSK_ORIGIN, _DSK_ZAXIS, angle, vertex, endpt2)
         if nx >= 1
             if _dsk_inlat(srfx, b, margin, 2)
-                dist = _dsk_vdist(vertex, srfx)
+                dist = _m_norm(vertex - srfx)
                 if dist < mndist
                     xpt = srfx
                     nxpts = 1
@@ -1100,7 +1037,7 @@ function _dsk_rytlat(
                 end
             end
             if nx == 2 && _dsk_inlat(xpt2, b, margin, 2)
-                dist = _dsk_vdist(vertex, xpt2)
+                dist = _m_norm(vertex - xpt2)
                 if dist < mndist
                     xpt = xpt2
                     nxpts = 1
@@ -1109,12 +1046,12 @@ function _dsk_rytlat(
             end
         end
     end
-    if minlat > -_DSK_HALFPI
-        angle = _DSK_HALFPI - minlat
+    if minlat > -_HALFPI
+        angle = _HALFPI - minlat
         nx, srfx, xpt2 = _dsk_incnsg(_DSK_ORIGIN, _DSK_ZAXIS, angle, vertex, endpt2)
         if nx >= 1
             if _dsk_inlat(srfx, b, margin, 2)
-                dist = _dsk_vdist(vertex, srfx)
+                dist = _m_norm(vertex - srfx)
                 if dist < mndist
                     xpt = srfx
                     nxpts = 1
@@ -1123,57 +1060,30 @@ function _dsk_rytlat(
                 end
             end
             if nx == 2 && _dsk_inlat(xpt2, b, margin, 2)
-                dist = _dsk_vdist(vertex, xpt2)
+                dist = _m_norm(vertex - xpt2)
                 if dist < mndist
                     return 1, xpt2
                 end
             end
         end
     end
-    if cos(maxlon - minlon) < 1.0
-        smin, cmin = sincos(minlon)
-        westb = Vec3{Float64}(smin, -cmin, 0.0)
-        s = (_dsk_vnorm(vertex) + maxr) * 1.1
-        nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
-        if nx == 1 && _dsk_inlat(srfx, b, margin, 1)
-            wback = _dsk_ucrss(westb, _DSK_ZAXIS)
-            if _dsk_vdot(srfx, wback) < margin * maxr
-                dist = _dsk_vdist(vertex, srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-        smax, cmax = sincos(maxlon)
-        eastb = Vec3{Float64}(-smax, cmax, 0.0)
-        nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
-        if nx == 1 && _dsk_inlat(srfx, b, margin, 1)
-            eback = _dsk_ucrss(_DSK_ZAXIS, eastb)
-            if _dsk_vdot(srfx, eback) < margin * maxr
-                dist = _dsk_vdist(vertex, srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-    end
+    nxpts, xpt, mndist = _dsk_ryt_lon(
+        p -> _dsk_inlat(p, b, margin, 1), vertex, udir, minlon, maxlon, maxr, margin,
+        nxpts, xpt, mndist
+    )
     if minr > 0.0
         srfx, found = _dsk_ryxsph(vertex, udir, minr)
         if found && _dsk_inlat(srfx, b, margin, 3)
-            dist = _dsk_vdist(vertex, srfx)
+            dist = _m_norm(vertex - srfx)
             if dist < mndist
                 xpt = srfx
                 nxpts = 1
                 mndist = dist
             end
         end
-        srfx, found = _dsk_ryxsph(endpt2, _dsk_vminus(udir), minr)
+        srfx, found = _dsk_ryxsph(endpt2, -udir, minr)
         if found && _dsk_inlat(srfx, b, margin, 3)
-            dist = _dsk_vdist(vertex, srfx)
+            dist = _m_norm(vertex - srfx)
             if dist < mndist
                 xpt = srfx
                 nxpts = 1
@@ -1212,7 +1122,7 @@ end
     )
     _, yincpt = _dsk_elnaxx(re, rp, lat)
     apex = Vec3{Float64}(0.0, 0.0, yincpt)
-    vtxang = _dsk_vsep(_dsk_vsub(vertex, apex), _DSK_ZAXIS)
+    vtxang = _m_vsep(vertex - apex, _DSK_ZAXIS)
     nx, srfx, xpt2 = _dsk_incnsg(apex, _DSK_ZAXIS, angle, vertex, endpt2)
     if nx > 0
         xval1 = _dsk_pdpltc(re, f, srfx, lat)
@@ -1229,7 +1139,7 @@ end
     done = false
     if nx >= 1
         if _dsk_inpdt(srfx, b, re, f, margin, 2)
-            dist = _dsk_vdist(vertex, srfx)
+            dist = _m_norm(vertex - srfx)
             if dist < mndist
                 xpt = srfx
                 nxpts = 1
@@ -1242,7 +1152,7 @@ end
             end
         end
         if nx == 2 && _dsk_inpdt(xpt2, b, re, f, margin, 2)
-            dist = _dsk_vdist(vertex, xpt2)
+            dist = _m_norm(vertex - xpt2)
             if dist < mndist
                 xpt = xpt2
                 nxpts = 1
@@ -1266,7 +1176,7 @@ function _dsk_rytpdt(
         re::Float64, f::Float64, margin::Float64
     )
     margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
-    _dsk_vzero(raydir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
+    _m_iszero(raydir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
     _dsk_inpdt(vertex, b, re, f, margin, 0) && return 1, vertex
     rp = re * (1.0 - f)
     minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
@@ -1282,7 +1192,7 @@ function _dsk_rytpdt(
     end
     nxpts = 0
     xpt = _DSK_ORIGIN
-    udir = _dsk_vhat(raydir)
+    udir = _m_hat(raydir)
     mndist = _DSK_DPMAX
     srfx, found = _dsk_surfpt(vertex, udir, emax, emax, pmax)
     found || return 0, xpt
@@ -1293,70 +1203,43 @@ function _dsk_rytpdt(
         d2 = vertex[2] / emax
         d3 = vertex[3] / pmax
         d1 * d1 + d2 * d2 + d3 * d3 > 1.0 && return nxpts, xpt
-        mndist = _dsk_vdist(vertex, xpt)
+        mndist = _m_norm(vertex - xpt)
     end
     maxr = max(emax, pmax)
-    s = _dsk_vnorm(vertex) + maxr * 1.1
-    endpt2 = _dsk_vlcom(1.0, vertex, s, udir)
-    if maxlat < _DSK_HALFPI
-        angle = max(0.0, _DSK_HALFPI - maxlat)
+    s = _m_norm(vertex) + maxr * 1.1
+    endpt2 = 1.0 * vertex + s * udir
+    if maxlat < _HALFPI
+        angle = max(0.0, _HALFPI - maxlat)
         nxpts, xpt, mndist, done = _dsk_pdt_cone(
             vertex, endpt2, b, re, f, rp, margin, maxlat,
             angle, true, nxpts, xpt, mndist
         )
         done && return nxpts, xpt
     end
-    if minlat > -_DSK_HALFPI
-        angle = _DSK_HALFPI - minlat
+    if minlat > -_HALFPI
+        angle = _HALFPI - minlat
         nxpts, xpt, mndist, done = _dsk_pdt_cone(
             vertex, endpt2, b, re, f, rp, margin, minlat,
             angle, false, nxpts, xpt, mndist
         )
         done && return nxpts, xpt
     end
-    if cos(maxlon - minlon) < 1.0
-        smin, cmin = sincos(minlon)
-        westb = Vec3{Float64}(smin, -cmin, 0.0)
-        s = (_dsk_vnorm(vertex) + maxr) * 1.1
-        nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
-        if nx == 1 && _dsk_inpdt(srfx, b, re, f, margin, 1)
-            wback = _dsk_ucrss(westb, _DSK_ZAXIS)
-            if _dsk_vdot(srfx, wback) < margin * maxr
-                dist = _dsk_vdist(vertex, srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-        smax, cmax = sincos(maxlon)
-        eastb = Vec3{Float64}(-smax, cmax, 0.0)
-        nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
-        if nx == 1 && _dsk_inpdt(srfx, b, re, f, margin, 1)
-            eback = _dsk_ucrss(_DSK_ZAXIS, eastb)
-            if _dsk_vdot(srfx, eback) < margin * maxr
-                dist = _dsk_vdist(vertex, srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-    end
+    nxpts, xpt, mndist = _dsk_ryt_lon(
+        p -> _dsk_inpdt(p, b, re, f, margin, 1), vertex, udir, minlon, maxlon, maxr,
+        margin, nxpts, xpt, mndist
+    )
     srfx, found = _dsk_surfpt(vertex, udir, emin, emin, pmin)
     if found && _dsk_inpdt(srfx, b, re, f, margin, 3)
-        dist = _dsk_vdist(vertex, srfx)
+        dist = _m_norm(vertex - srfx)
         if dist < mndist
             xpt = srfx
             nxpts = 1
             mndist = dist
         end
     end
-    srfx, found = _dsk_surfpt(endpt2, _dsk_vminus(udir), emin, emin, pmin)
+    srfx, found = _dsk_surfpt(endpt2, -udir, emin, emin, pmin)
     if found && _dsk_inpdt(srfx, b, re, f, margin, 3)
-        dist = _dsk_vdist(vertex, srfx)
+        dist = _m_norm(vertex - srfx)
         if dist < mndist
             xpt = srfx
             nxpts = 1
@@ -1391,28 +1274,28 @@ end
     hdlon = (maxlon - minlon) / 2
     midlon = minlon + hdlon
     shd, chd = sincos(hdlon)
-    lr = hdlon <= _DSK_HALFPI ? outrad - inrad * chd : (1.0 - chd) * outrad
-    lt = hdlon > _DSK_HALFPI ? outrad * 2.0 : outrad * 2.0 * shd
+    lr = hdlon <= _HALFPI ? outrad - inrad * chd : (1.0 - chd) * outrad
+    lt = hdlon > _HALFPI ? outrad * 2.0 : outrad * 2.0 * shd
     lz = maxz - minz
     lr = max(0.0, lr)
     lt = max(0.0, lt)
     lz = max(0.0, lz)
     midr = outrad - lr / 2
     center = _dsk_cylrec(midr, midlon, minz + lz / 2)
-    return center, _dsk_vnorm(Vec3{Float64}(lr / 2, lt / 2, lz / 2))
+    return center, _m_norm(Vec3{Float64}(lr / 2, lt / 2, lz / 2))
 end
 
 "Longitude and latitude bounds of `b` as `zzlatbox` and `zzpdtbox` check and clamp them."
 function _dsk_box_lonlat(b::NTuple{6, Float64})
     minlon = b[1]
     maxlon = b[2]
-    maxlon <= minlon && (maxlon += _DSK_TWOPI)
+    maxlon <= minlon && (maxlon += _TWOPI)
     maxlon <= minlon && _dsk_throw(:badlongituderange, "the longitude bounds are out of order")
     b[3] > b[4] && _dsk_throw(:badlatitudebounds, "the latitude bounds are out of order")
-    (b[3] < -_DSK_HALFPI - 1.0e-12 || b[4] > _DSK_HALFPI + 1.0e-12) && _dsk_throw(
+    (b[3] < -_HALFPI - 1.0e-12 || b[4] > _HALFPI + 1.0e-12) && _dsk_throw(
         :badlatituderange, "a latitude bound is outside [-pi/2, pi/2]"
     )
-    return minlon, maxlon, max(b[3], -_DSK_HALFPI), min(b[4], _DSK_HALFPI)
+    return minlon, maxlon, max(b[3], -_HALFPI), min(b[4], _HALFPI)
 end
 
 "`zzlatbox`: center and radius of a sphere that contains the latitudinal volume element `b`."
@@ -1451,7 +1334,7 @@ function _dsk_recbox(b::NTuple{6, Float64})
         "the bounds of a rectangular volume element are out of order"
     )
     center = Vec3{Float64}(b[1] + l1 / 2, b[3] + l2 / 2, b[5] + l3 / 2)
-    return center, _dsk_vnorm(Vec3{Float64}(l1 / 2, l2 / 2, l3 / 2))
+    return center, _m_norm(Vec3{Float64}(l1 / 2, l2 / 2, l3 / 2))
 end
 
 "`zzpdtbox`: center and radius of a sphere that contains the planetodetic volume element `b` on the spheroid `re`, `f`."
@@ -1461,7 +1344,7 @@ function _dsk_pdtbox(b::NTuple{6, Float64}, re::Float64, f::Float64)
     minlon, maxlon, minlat, maxlat = _dsk_box_lonlat(b)
     minalt = b[5]
     maxalt = b[6]
-    xy(v) = _dsk_vnorm(Vec3{Float64}(v[1], v[2], 0.0))
+    xy(v) = _m_norm(Vec3{Float64}(v[1], v[2], 0.0))
     if minlat >= 0.0
         outrad = xy(_dsk_georec(0.0, minlat, maxalt, re, f))
         inrad = xy(_dsk_georec(0.0, maxlat, minalt, re, f))
@@ -1511,7 +1394,7 @@ end
 end
 
 @inline _dsk_pltnrm(v1::Vec3{Float64}, v2::Vec3{Float64}, v3::Vec3{Float64}) =
-    _dsk_vcrss(_dsk_vsub(v2, v1), _dsk_vsub(v3, v2))
+    _m_cross(v2 - v1, v3 - v2)
 
 """
     _dsk_insang(v, e1, e2, e3) -> (found, scale)
@@ -1520,14 +1403,14 @@ end
 `scale * v` is then the point of the ray along `v` in the plane of the three points.
 """
 @inline function _dsk_insang(v::Vec3{Float64}, e1::Vec3{Float64}, e2::Vec3{Float64}, e3::Vec3{Float64})
-    norm12 = _dsk_vcrss(e1, e2)
-    vn12 = _dsk_vdot(v, norm12)
-    en = _dsk_vdot(e3, norm12)
+    norm12 = _m_cross(e1, e2)
+    vn12 = _m_dot(v, norm12)
+    en = _m_dot(e3, norm12)
     en == 0.0 && return false, 0.0
     ((en > 0.0 && vn12 < 0.0) || (en < 0.0 && vn12 > 0.0)) && return false, 0.0
-    vn23 = _dsk_vdot(v, _dsk_vcrss(e2, e3))
+    vn23 = _m_dot(v, _m_cross(e2, e3))
     ((en > 0.0 && vn23 < 0.0) || (en < 0.0 && vn23 > 0.0)) && return false, 0.0
-    vn31 = _dsk_vdot(v, _dsk_vcrss(e3, e1))
+    vn31 = _m_dot(v, _m_cross(e3, e1))
     ((en > 0.0 && vn31 < 0.0) || (en < 0.0 && vn31 > 0.0)) && return false, 0.0
     denom = vn12 + vn23 + vn31
     denom == 0.0 && return false, 0.0
@@ -1536,42 +1419,42 @@ end
 
 "`npsgpt`: the point of the segment from `ep1` to `ep2` that is nearest to `point`, and its distance."
 function _dsk_npsgpt(ep1::Vec3{Float64}, ep2::Vec3{Float64}, point::Vec3{Float64})
-    seg = _dsk_vsub(ep2, ep1)
-    _dsk_vzero(seg) && return ep1, _dsk_vdist(ep1, point)
-    trans = _dsk_vsub(point, ep1)
-    lnear = _dsk_vadd(_dsk_vproj(trans, seg), ep1)
-    dist = _dsk_vdist(lnear, point)
-    offdot = _dsk_vdot(_dsk_vsub(lnear, ep1), seg)
-    offdot < 0.0 && return ep1, _dsk_vdist(ep1, point)
-    offdot > _dsk_vdot(seg, seg) && return ep2, _dsk_vdist(ep2, point)
+    seg = ep2 - ep1
+    _m_iszero(seg) && return ep1, _m_norm(ep1 - point)
+    trans = point - ep1
+    lnear = _m_proj(trans, seg, false) + ep1
+    dist = _m_norm(lnear - point)
+    offdot = _m_dot(lnear - ep1, seg)
+    offdot < 0.0 && return ep1, _m_norm(ep1 - point)
+    offdot > _m_dot(seg, seg) && return ep2, _m_norm(ep2 - point)
     return lnear, dist
 end
 
 "`pltnp` on `Vec3` values: the point of the plate nearest to `point`, and its distance."
 function _dsk_pltnp(point::Vec3{Float64}, v1::Vec3{Float64}, v2::Vec3{Float64}, v3::Vec3{Float64})
-    e1 = _dsk_vsub(v2, v1)
-    e2 = _dsk_vsub(v3, v2)
-    e3 = _dsk_vsub(v1, v3)
-    normal = _dsk_vcrss(e1, e2)
-    enorm1 = _dsk_vcrss(e1, normal)
-    enorm2 = _dsk_vcrss(e2, normal)
-    enorm3 = _dsk_vcrss(e3, normal)
-    if _dsk_vzero(normal) || _dsk_vzero(enorm1) || _dsk_vzero(enorm2) || _dsk_vzero(enorm3)
-        l1 = _dsk_vnorm(e1)
-        l2 = _dsk_vnorm(e2)
-        l3 = _dsk_vnorm(e3)
-        (l1 == 0.0 && l2 == 0.0) && return v1, _dsk_vdist(v1, point)
+    e1 = v2 - v1
+    e2 = v3 - v2
+    e3 = v1 - v3
+    normal = _m_cross(e1, e2)
+    enorm1 = _m_cross(e1, normal)
+    enorm2 = _m_cross(e2, normal)
+    enorm3 = _m_cross(e3, normal)
+    if _m_iszero(normal) || _m_iszero(enorm1) || _m_iszero(enorm2) || _m_iszero(enorm3)
+        l1 = _m_norm(e1)
+        l2 = _m_norm(e2)
+        l3 = _m_norm(e3)
+        (l1 == 0.0 && l2 == 0.0) && return v1, _m_norm(v1 - point)
         l1 > max(l2, l3) && return _dsk_npsgpt(v1, v2, point)
         l2 > max(l3, l1) && return _dsk_npsgpt(v2, v3, point)
         return _dsk_npsgpt(v3, v1, point)
     end
-    perp = _dsk_vperp(_dsk_vsub(point, v1), normal)
-    in1 = _dsk_vdot(perp, enorm1) <= 0.0
-    in2 = _dsk_vdot(perp, enorm2) <= _dsk_vdot(e1, enorm2)
-    in3 = _dsk_vdot(perp, enorm3) <= 0.0
+    perp = _m_perp(point - v1, normal, false)
+    in1 = _m_dot(perp, enorm1) <= 0.0
+    in2 = _m_dot(perp, enorm2) <= _m_dot(e1, enorm2)
+    in3 = _m_dot(perp, enorm3) <= 0.0
     if in1 && in2 && in3
-        pnear = _dsk_vadd(v1, perp)
-        return pnear, _dsk_vdist(pnear, point)
+        pnear = v1 + perp
+        return pnear, _m_norm(pnear - point)
     end
     (!in1 && in2 && in3) && return _dsk_npsgpt(v1, v2, point)
     (!in2 && in3 && in1) && return _dsk_npsgpt(v2, v3, point)
@@ -1788,8 +1671,8 @@ function _dsk_x02(
         tols::DSKTolerances, vertex::Vec3{Float64}, raydir::Vec3{Float64}
     )
     nohit = (0, _DSK_ORIGIN, false)
-    _dsk_vzero(raydir) && _dsk_throw(:rayiszerovector, "the ray direction is the zero vector")
-    udir = _dsk_vhat(raydir)
+    _m_iszero(raydir) && _dsk_throw(:rayiszerovector, "the ray direction is the zero vector")
+    udir = _m_hat(raydir)
     hdr = seg.hdr
     dsc = seg.dskdsc
     voxsiz = hdr.voxsiz
@@ -1838,9 +1721,9 @@ function _dsk_x02(
     ic1 = clamp(unsafe_trunc(Int, coord[ax1]) + 1, 1, vg[ax1])
     ic2 = clamp(unsafe_trunc(Int, coord[ax2]) + 1, 1, vg[ax2])
     ic3 = clamp(unsafe_trunc(Int, coord[ax3]) + 1, 1, vg[ax3])
-    vo1 = _dsk_brcktd(coord[ax1] - (ic1 - 1), 0.0, 1.0)
-    vo2 = _dsk_brcktd(coord[ax2] - (ic2 - 1), 0.0, 1.0)
-    vo3 = _dsk_brcktd(coord[ax3] - (ic3 - 1), 0.0, 1.0)
+    vo1 = _m_brcktd(coord[ax1] - (ic1 - 1), 0.0, 1.0)
+    vo2 = _m_brcktd(coord[ax2] - (ic2 - 1), 0.0, 1.0)
+    vo3 = _m_brcktd(coord[ax3] - (ic3 - 1), 0.0, 1.0)
     limit = 1.0e-20 / vg[ax1] * abs(udir[ax1])
     ax2err = _DSK_DPMAX
     ax3err = _DSK_DPMAX
@@ -1867,10 +1750,10 @@ function _dsk_x02(
     step3 = udir[ax3] > limit ? 1 : udir[ax3] < -limit ? -1 : 0
 
     # --- the vertex from which the plates are seen -----------------------------------
-    vtxoff = _dsk_vsub(vertex, voxori)
+    vtxoff = vertex - voxori
     if vtxoff[1] < -grdtol || vtxoff[1] > grdtol + grdext[1] || vtxoff[2] < -grdtol ||
             vtxoff[2] > grdtol + grdext[2] || vtxoff[3] < -grdtol || vtxoff[3] > grdtol + grdext[3]
-        vtx2 = _dsk_vlcom3(1.0, voxori, voxsiz, coord, -1.0, udir)
+        vtx2 = 1.0 * voxori + voxsiz * coord + (-1.0) * udir
     end
 
     offplt = _dsk_off_plates(seg)
@@ -1920,14 +1803,14 @@ function _dsk_x02(
                     p2 = _dsk_vertex(dps, seg, @inbounds ints[q + 2])
                     p3 = _dsk_vertex(dps, seg, @inbounds ints[q + 3])
                     e1, e2, e3 = _dsk_pltexp(
-                        _dsk_vsub(p1, vtx2), _dsk_vsub(p2, vtx2),
-                        _dsk_vsub(p3, vtx2), xpdfrc
+                        p1 - vtx2, p2 - vtx2,
+                        p3 - vtx2, xpdfrc
                     )
                     hits, scale = _dsk_insang(udir, e1, e2, e3)
                     hits || continue
-                    _dsk_vdot(udir, _dsk_pltnrm(p1, p2, p3)) <= 0.0 || continue
+                    _m_dot(udir, _dsk_pltnrm(p1, p2, p3)) <= 0.0 || continue
                     (!have || scale < near) || continue
-                    xpt2 = _dsk_vlcom(1.0, vtx2, scale, udir)
+                    xpt2 = 1.0 * vtx2 + scale * udir
                     h1 = (xpt2[1] - voxori[1]) / voxsiz
                     h2 = (xpt2[2] - voxori[2]) / voxsiz
                     h3 = (xpt2[3] - voxori[3]) / voxsiz
@@ -2057,7 +1940,7 @@ function _dsk_sph(ks::KernelSet, segs::Vector{DSKSegment}, bodyid::Int32, srflst
     for seg in segs                      # invariant: minr, maxr bound the segments before `seg`
         dsc = seg.dskdsc
         _dsk_surfok(srflst, dsc.surfce) || continue
-        offmag = _dsk_vnorm(_dsk_offset(ks, dsc))
+        offmag = _m_norm(_dsk_offset(ks, dsc))
         if dsc.corsys == 1
             sgminr = dsc.co3min
             sgmaxr = dsc.co3max
@@ -2069,8 +1952,8 @@ function _dsk_sph(ks::KernelSet, segs::Vector{DSKSegment}, bodyid::Int32, srflst
                 (rp + dsc.co3max, re + dsc.co3min)
         elseif dsc.corsys == 3
             boxctr, boxrad = _dsk_recbox(_dsk_bounds(dsc))
-            sgminr = max(_dsk_vnorm(boxctr) - boxrad, 0.0)
-            sgmaxr = _dsk_vnorm(boxctr) + boxrad
+            sgminr = max(_m_norm(boxctr) - boxrad, 0.0)
+            sgmaxr = _m_norm(boxctr) + boxrad
         else
             _dsk_throw(:notsupported, "the coordinate system $(dsc.corsys) is not supported")
         end
@@ -2089,8 +1972,8 @@ end
         vertex::Vec3{Float64}, raydir::Vec3{Float64}
     )
     xform = Mat3{Float64}(frame_rotation(ks, fixfid, Int32(dsc.frmcde), et))
-    segvtx = _dsk_vsub(_dsk_mxv(xform, vertex), _dsk_offset(ks, dsc))
-    return xform, segvtx, _dsk_mxv(xform, raydir)
+    segvtx = _m_mxv(xform, vertex) - _dsk_offset(ks, dsc)
+    return xform, segvtx, _m_mxv(xform, raydir)
 end
 
 """
@@ -2138,7 +2021,7 @@ function _dsk_scan(
             "too many segments were hit by the input ray; the buffer size is 1000"
         )
         nhit += 1
-        dist = _dsk_vdist(segvtx, xpt)
+        dist = _m_norm(segvtx - xpt)
         after = dist > pdist || (dist == pdist && i > pidx)
         if after && (bidx == 0 || dist < bdist)
             bidx = i
@@ -2176,7 +2059,7 @@ function _dsk_bux(
     _, maxrad = _dsk_sph(ks, segs, bodyid, srflst)
     maxrad *= 1.01
     sphvtx = vertex
-    if _dsk_vnorm(vertex) > maxrad
+    if _m_norm(vertex) > maxrad
         sphvtx, xfnd = _dsk_surfpt(vertex, raydir, maxrad, maxrad, maxrad)
         xfnd || return nohit
     end
@@ -2208,7 +2091,7 @@ function _dsk_bux(
         file = ks.dskfiles[seg.file]
         p, srfx, xfnd = _dsk_x02(file.ints, file.dps, seg, tols, segvtx, segdir)
         if xfnd
-            d = _dsk_vdist(srfx, segvtx)
+            d = _m_norm(srfx - segvtx)
             if !found || d < dmin
                 found = true
                 dmin = d
@@ -2230,8 +2113,8 @@ function _dsk_bux(
     if dsc.frmcde != fixfid
         xform = Mat3{Float64}(frame_rotation(ks, fixfid, Int32(dsc.frmcde), et))
         off = _dsk_offset(ks, dsc)
-        _dsk_vzero(off) || (xpt = _dsk_vadd(xpt, off))
-        xpt = _dsk_mtxv(xform, xpt)
+        _m_iszero(off) || (xpt = xpt + off)
+        xpt = _m_mtxv(xform, xpt)
     end
     return xpt, winner, plid, true
 end
@@ -2261,7 +2144,7 @@ function _dsk_ptpl02(
     limit = ptsrfm * seg.boxrad
     xpdfrc = tols.xfract
     _dsk_invelt(point, dsc.corsys, dsc.corpar, _dsk_bounds(dsc), ptsrfm, 0) || return none
-    offset = _dsk_vsub(point, hdr.voxori)
+    offset = point - hdr.voxori
     v1 = clamp(unsafe_trunc(Int, offset[1] / hdr.voxsiz) + 1, 1, hdr.vgrext[1])
     v2 = clamp(unsafe_trunc(Int, offset[2] / hdr.voxsiz) + 1, 1, hdr.vgrext[2])
     v3 = clamp(unsafe_trunc(Int, offset[3] / hdr.voxsiz) + 1, 1, hdr.vgrext[3])
@@ -2293,9 +2176,9 @@ function _dsk_ptpl02(
         p2 = _dsk_vertex(dps, seg, i2)
         p3 = _dsk_vertex(dps, seg, i3)
         x1, x2, x3 = _dsk_pltexp(p1, p2, p3, xpdfrc)
-        normal = _dsk_vhat(_dsk_pltnrm(x1, x2, x3))
+        normal = _m_hat(_dsk_pltnrm(x1, x2, x3))
         dist = _DSK_DPMAX
-        if abs(_dsk_vdot(_dsk_vsub(point, x1), normal)) <= limit
+        if abs(_m_dot(point - x1, normal)) <= limit
             _, dist = _dsk_pltnp(point, x1, x2, x3)
         end
         if dist <= limit && dist < dmin
@@ -2334,10 +2217,10 @@ function _dsk_bun(
         xform = one(Mat3{Float64})
         if dsc.frmcde != fixfid
             xform = Mat3{Float64}(frame_rotation(ks, fixfid, Int32(dsc.frmcde), et))
-            segpt = _dsk_vsub(_dsk_mxv(xform, point), _dsk_offset(ks, dsc))
+            segpt = _m_mxv(xform, point) - _dsk_offset(ks, dsc)
         end
         isnan(seg.boxrad) && _dsk_segbox(dsc)
-        _dsk_vdist(seg.boxctr, segpt) <= seg.boxrad || continue
+        _m_norm(seg.boxctr - segpt) <= seg.boxrad || continue
         (dsc.corsys == 1 || dsc.corsys == 3 || dsc.corsys == 4) ||
             _dsk_throw(:badcoordsys, "the coordinate system code $(dsc.corsys) is not recognized")
         _dsk_invelt(segpt, dsc.corsys, dsc.corpar, _dsk_bounds(dsc), sgmarg, 0) || continue
@@ -2347,8 +2230,8 @@ function _dsk_bun(
         file = ks.dskfiles[seg.file]
         _, p1, p2, p3, xfnd = _dsk_ptpl02(file.ints, file.dps, seg, tols, segpt)
         xfnd || continue
-        normal = _dsk_vhat(_dsk_pltnrm(p1, p2, p3))
-        return dsc.frmcde != fixfid ? _dsk_mtxv(xform, normal) : normal
+        normal = _m_hat(_dsk_pltnrm(p1, p2, p3))
+        return dsc.frmcde != fixfid ? _m_mtxv(xform, normal) : normal
     end
     nhit == 0 && _dsk_throw(
         :pointnotinsegment,

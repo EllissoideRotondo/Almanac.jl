@@ -1,9 +1,8 @@
 module AlmanacChainRulesCoreExt
 
 using Almanac
-using Almanac: KernelSet, Aberration, Orbit, element, elements, _orbit_property, _ORBIT_FIELDS,
-    spk_jet, frame_rotation, frame_jet, abcorr_jet,
-    abcorr_position, abcorr_state, _ma_to_ta, _ad_rule, _AD_CONSTANT, _ad_typeof
+using Almanac: Orbit, element, elements, _orbit_property, _ORBIT_FIELDS, _ma_to_ta,
+    _ad_rule, _AD_POINTS, _AD_CONSTANT, _ad_typeof
 using ChainRulesCore: ChainRulesCore
 using ChainRulesCore: AbstractZero, AbstractThunk, NoTangent, Tangent, unthunk, backing,
     RuleConfig, HasReverseMode, rrule_via_ad
@@ -30,18 +29,9 @@ _cdot(a::Number, d::Number) = a * d
 _tangent(y::Tuple, dy::Tuple, Δ) = Tangent{typeof(y)}(map((a, b) -> _tangent(a, b, Δ), y, dy)...)
 _tangent(::Any, dy, Δ) = dy * Δ
 
-# The position of the epoch in the arguments of each derivative point.
-const POINTS = (
-    (spk_jet, :(Tuple{KernelSet, Int32, Real, Int32, Int32, Val}), 3),
-    (frame_rotation, :(Tuple{KernelSet, Int32, Int32, Real}), 4),
-    (frame_jet, :(Tuple{KernelSet, Int32, Int32, Real, Val}), 4),
-    (abcorr_jet, :(Tuple{KernelSet, Int32, Real, Int32, Aberration, Int32, Val}), 3),
-    (abcorr_position, :(Tuple{KernelSet, Int32, Real, Int32, Aberration, Int32}), 3),
-    (abcorr_state, :(Tuple{KernelSet, Int32, Real, Int32, Aberration, Int32}), 3),
-)
-
-for (f, sig, iet) in POINTS
-    types = eval(sig).parameters
+# The rules of the derivative points (`_AD_POINTS`: the types of the arguments and the
+# position of the epoch among them).
+for (f, types, iet) in _AD_POINTS
     n = length(types)
     args = [Symbol(:a, i) for i in 1:n]
     typed = [:($(args[i])::$(types[i])) for i in 1:n]

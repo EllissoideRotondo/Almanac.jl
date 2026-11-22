@@ -46,8 +46,7 @@ const _EK_IPTIDX = 10             # root page of the integer data page tree
 const _EK_MFLIDX = 11             # "modified" flag
 const _EK_IFLIDX = 12             # "initialized" flag
 const _EK_SHDIDX = 13             # shadowing flag
-const _EK_CFHIDX = 14             # companion file handle
-const _EK_CSNIDX = 15             # companion segment number
+# 14 and 15: companion file handle and segment number, not used
 const _EK_LCPIDX = 16             # last character, double, integer data page: 16, 17, 18
 const _EK_LCWIDX = 19             # last word in use of those pages: 19, 20, 21
 const _EK_NMLIDX = 22             # character base of the column names
@@ -86,7 +85,6 @@ const _EK_MXKIDC = 63
 const _EK_MNKEYC = 41             # smallest number of keys of a node that is not the root
 const _EK_MNKIDC = 42
 const _EK_MNKEYR = 1
-const _EK_MNKIDR = 2
 const _EK_TRMXDP = 10             # largest depth of a tree
 
 @inline _ek_cbase(p::Integer) = (Int(p) - 1) * 1024
@@ -309,28 +307,6 @@ function _ek_column(s, mbase::Integer, i::Integer)
     )
 end
 
-"True if `a` and `b` are equal without regard to case and blanks (`eqstr`)."
-function _ek_eqstr(a::AbstractString, b::AbstractString)
-    ca = codeunits(a)
-    cb = codeunits(b)
-    i = 1
-    j = 1
-    up(c) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
-    while true                           # invariant: the non-blank characters before i and j agree
-        while i <= length(ca) && ca[i] == UInt8(' ')
-            i += 1
-        end
-        while j <= length(cb) && cb[j] == UInt8(' ')
-            j += 1
-        end
-        (i > length(ca) || j > length(cb)) && return i > length(ca) && j > length(cb)
-        up(ca[i]) == up(cb[j]) || return false
-        i += 1
-        j += 1
-    end
-    return
-end
-
 """
     _ek_find_column(s, segdsc, column) -> _EKColumn
 
@@ -342,7 +318,7 @@ function _ek_find_column(s, segdsc::AbstractVector{Int32}, column::AbstractStrin
     mbase = Int(segdsc[_EK_IMDIDX])
     for i in 1:Int(segdsc[_EK_NCIDX])    # invariant: columns before i do not have the name
         col = _ek_column(s, mbase, i)
-        _ek_eqstr(col.name, column) && return col
+        _eqstr(col.name, column) && return col
     end
     throw(
         SpiceError(

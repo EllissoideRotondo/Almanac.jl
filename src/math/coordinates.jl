@@ -6,15 +6,15 @@
 # (r, colat, slon), cylindrical (r, clon, z), geodetic and planetographic
 # (lon, lat, alt). A Jacobian `J` has `J[i, j] = d out_i / d in_j`.
 
-const _M_TWOPI = 2.0 * Float64(pi)
-const _M_HALFPI = Float64(pi) / 2
 
 # --- rectangular, latitudinal, right ascension ----------------------------------------
 
 """
 `reclat` kernel. With `scaled` the longitude comes from the components divided by the
 largest one (
-[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)); without it from the components themselves (`reclat_`).
+[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)); without it from the components themselves (`reclat_`), which
+also decide whether the point is on the z axis: `[0, 5e-324, 1e10]` has the longitude
+pi/2 there and 0 in `reclat_c`.
 """
 @inline function _m_reclat(v::SVector{3}, scaled::Bool)
     vmax = _m_maxabs(v)
@@ -25,8 +25,12 @@ largest one (
     z1 = v[3] / vmax
     radius = vmax * sqrt(x1 * x1 + y1 * y1 + z1 * z1)
     lat = atan(z1, sqrt(x1 * x1 + y1 * y1))
-    (primal(x1) == 0.0 && primal(y1) == 0.0) && return radius + z0, z0, lat
-    return radius + z0, (scaled ? atan(y1, x1) : atan(v[2], v[1])), lat
+    if scaled
+        (primal(x1) == 0.0 && primal(y1) == 0.0) && return radius + z0, z0, lat
+        return radius + z0, atan(y1, x1), lat
+    end
+    (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && return radius + z0, z0, lat
+    return radius + z0, atan(v[2], v[1]), lat
 end
 
 """
@@ -95,7 +99,7 @@ See also [`radrec`](@ref), [`reclat`](@ref).
 """
 function recrad(rectan::AbstractVector)
     range, ra, dec = _m_reclat(_m_v3(rectan), true)
-    return range, (primal(ra) < 0.0 ? ra + _M_TWOPI : ra), dec
+    return range, (primal(ra) < 0.0 ? ra + _TWOPI : ra), dec
 end
 
 """
@@ -174,7 +178,7 @@ sphrec(r::Real, colat::Real, slon::Real) = _m_sphrec(_m_f(r), _m_f(colat), _m_f(
     y = v[2] / big
     r = big * sqrt(x * x + y * y)
     clon = atan(y, x)
-    return r + z0, (primal(clon) < 0.0 ? clon + _M_TWOPI : clon), v[3] + z0
+    return r + z0, (primal(clon) < 0.0 ? clon + _TWOPI : clon), v[3] + z0
 end
 
 """
@@ -302,7 +306,7 @@ See also [`latsph`](@ref).
 """
 function sphlat(r::Real, colat::Real, slon::Real)
     r, colat, slon = promote(_m_f(r), _m_f(colat), _m_f(slon))
-    return r, slon, _M_HALFPI - colat
+    return r, slon, _HALFPI - colat
 end
 
 """
@@ -323,7 +327,7 @@ See also [`sphlat`](@ref).
 """
 function latsph(radius::Real, lon::Real, lat::Real)
     radius, lon, lat = promote(_m_f(radius), _m_f(lon), _m_f(lat))
-    return radius, _M_HALFPI - lat, lon
+    return radius, _HALFPI - lat, lon
 end
 
 # --- geodetic -------------------------------------------------------------------------
@@ -426,18 +430,18 @@ georec(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
     _m_pgrsense(ks, body) -> Int
 
 +1 if the planetographic longitude of `body` is positive east, -1 if positive west, as
-`recpgr_`: the pool variable `BODY<id>_PGR_POSITIVE_LON` (`EAST` or `WEST`) decides if
-it is present; otherwise the sign of the prime meridian rate `BODY<id>_PM[2]` does
+`recpgr_` and `pgrrec_`: the pool variable `BODY<id>_PGR_POSITIVE_LON` decides if it is a
+string variable (its first four characters without blanks, in upper case, must be `EAST`
+or `WEST`); otherwise the sign of the prime meridian rate `BODY<id>_PM[2]` does
 (retrograde rotation is positive east), with east for the Earth, the Moon and the Sun.
 """
 function _m_pgrsense(ks::KernelSet, body::NameOrID)
     id = _m_bodyid(ks, body, :idcodenotfound)
     kv = get(ks.pool, _body_key(id, "PGR_POSITIVE_LON"), nothing)
     if kv isa Vector{String} && !isempty(kv)
-        s = uppercase(filter(!isspace, kv[1]))
-        s = s[1:min(4, lastindex(s))]
-        s == "EAST" && return 1
-        s == "WEST" && return -1
+        s = _ljucrs4(kv[1])                     # the four characters of `ljucrs_`
+        s == (UInt8('E'), UInt8('A'), UInt8('S'), UInt8('T')) && return 1
+        s == (UInt8('W'), UInt8('E'), UInt8('S'), UInt8('T')) && return -1
         throw(
             SpiceError(
                 :invalidoption,
@@ -508,9 +512,9 @@ function recpgr(ks::KernelSet, body::NameOrID, rectan::AbstractVector, re::Real,
     sense = _m_pgrsense(ks, id)
     lon, lat, alt = _m_recgeo(v, _m_f(re), _m_f(f))
     lon = sense * lon
-    primal(lon) < 0.0 && (lon += _M_TWOPI)
+    primal(lon) < 0.0 && (lon += _TWOPI)
     primal(lon) < 0.0 && (lon = zero(lon))
-    primal(lon) > _M_TWOPI && (lon = _M_TWOPI - zero(lon))
+    primal(lon) > _TWOPI && (lon = _TWOPI - zero(lon))
     return lon, lat, alt
 end
 
@@ -566,23 +570,6 @@ coordinates `(r, lon, lat)`, as
 See also [`dlatdr`](@ref), [`latrec`](@ref).
 """
 drdlat(r::Real, lon::Real, lat::Real) = _m_drdlat(promote(_m_f(r), _m_f(lon), _m_f(lat))...)
-
-"Inverse of a Jacobian with orthogonal columns, with the checks of `invort_`."
-@inline function _m_invort(m::SMatrix{3, 3})
-    unit(i) = begin
-        u, len = _m_unorm(_m_col(m, i))
-        l0 = primal(len)
-        l0 == 0.0 && throw(SpiceError(:zerolengthcolumn, "column $i of the matrix has norm zero"))
-        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(
-            SpiceError(
-                :columntoosmall,
-                "the length $l0 of column $i cannot be inverted"
-            )
-        )
-        (1.0 / len) * u
-    end
-    return _m_rows(unit(1), unit(2), unit(3))
-end
 
 """
     dlatdr(x, y, z) -> SMatrix{3,3}

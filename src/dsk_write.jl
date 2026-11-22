@@ -264,12 +264,12 @@ function _dsk_mkspin!(
         k1 = 3 * pf[3i - 2]
         k2 = 3 * pf[3i - 1]
         k3 = 3 * pf[3i]
-        bxmin = _dsk_brcktd(min(min(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) - mdltol, xe[1], xe[2])
-        bxmax = _dsk_brcktd(max(max(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) + mdltol, xe[1], xe[2])
-        bymin = _dsk_brcktd(min(min(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) - mdltol, xe[3], xe[4])
-        bymax = _dsk_brcktd(max(max(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) + mdltol, xe[3], xe[4])
-        bzmin = _dsk_brcktd(min(min(vf[k1], vf[k2]), vf[k3]) - mdltol, xe[5], xe[6])
-        bzmax = _dsk_brcktd(max(max(vf[k1], vf[k2]), vf[k3]) + mdltol, xe[5], xe[6])
+        bxmin = _m_brcktd(min(min(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) - mdltol, xe[1], xe[2])
+        bxmax = _m_brcktd(max(max(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) + mdltol, xe[1], xe[2])
+        bymin = _m_brcktd(min(min(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) - mdltol, xe[3], xe[4])
+        bymax = _m_brcktd(max(max(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) + mdltol, xe[3], xe[4])
+        bzmin = _m_brcktd(min(min(vf[k1], vf[k2]), vf[k3]) - mdltol, xe[5], xe[6])
+        bzmax = _m_brcktd(max(max(vf[k1], vf[k2]), vf[k3]) + mdltol, xe[5], xe[6])
         gmin = _dsk_getvox(voxsiz, voxori, nvox, (bxmin, bymin, bzmin))
         gmax = _dsk_getvox(voxsiz, voxori, nvox, (bxmax, bymax, bzmax))
         (gmin === nothing || gmax === nothing) && _dsk_throw(
@@ -459,7 +459,7 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
     if corsys == 1
         mx = 0.0
         for i in 1:nv                    # invariant: mx is the largest norm of the vertices 1 .. i-1
-            mx = max(_dsk_vnorm(_dsk_get3(vrtces, i)), mx)
+            mx = max(_m_norm(_dsk_get3(vrtces, i)), mx)
         end
         mn = _DSK_DPMAX
         for i in 1:np                    # invariant: mn is the least distance of the plates 1 .. i-1
@@ -494,8 +494,8 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
             v1 = _dsk_get3(vrtces, i1)
             v2 = _dsk_get3(vrtces, i2)
             v3 = _dsk_get3(vrtces, i3)
-            center = _dsk_vlcom3(third, v1, third, v2, third, v3)
-            maxd = max(max(_dsk_vdist(v1, center), _dsk_vdist(v2, center)), _dsk_vdist(v3, center))
+            center = third * v1 + third * v2 + third * v3
+            maxd = max(max(_m_norm(v1 - center), _m_norm(v2 - center)), _m_norm(v3 - center))
             mn = min(mn, _dsk_altitude(center, re, f) - maxd)
         end
         return mn, mx
@@ -614,8 +614,8 @@ function dskw02(
     length(corpar) <= 10 || throw(SpiceError(:badarg, "dskw02: CORPAR has more than 10 elements"))
     par = zeros(Float64, 10)
     copyto!(par, corpar)
-    twopi_ = _DSK_TWOPI
-    hpi = _DSK_HALFPI
+    twopi_ = _TWOPI
+    hpi = _HALFPI
     if corsys == 1 || corsys == 4
         mn1 == mx1 && _dsk_throw(
             :zeroboundsextent,

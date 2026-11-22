@@ -35,9 +35,6 @@ six products from left to right, those of the transposed derivative block first.
     return (_m_mtxv(R, r), w)
 end
 
-const _GF_ZERO3 = zero(Vec3{Float64})
-const _GF_ZERO6 = zero(SVector{6, Float64})
-
 @noinline _gf_bad_method(what::String, method) = throw(
     SpiceError(
         :notsupported,
@@ -87,14 +84,14 @@ function _gf_ltstate(
         et::Float64, spoint::Vec3{Float64}, trgepc::Float64, nitr::Int, point::F
     ) where {F}
     xmit = corr.transmit
-    robs, vobs = _ssb(ks, obs, et, _GF_J2000)
-    rt0, vt0 = _ssb(ks, targ, trgepc, _GF_J2000)
-    R, dR = frame_jet(ks, _GF_J2000, ref, trgepc, Val(1))
+    robs, vobs = _ssb(ks, obs, et, _J2000_FRAME)
+    rt0, vt0 = _ssb(ks, targ, trgepc, _J2000_FRAME)
+    R, dR = frame_jet(ks, _J2000_FRAME, ref, trgepc, Val(1))
     acc = zero(vobs)
     if corr.stellar
         # `qderiv` of the velocity of the observer over one second on each side
-        acc = 0.5 * _ssb(ks, obs, et + 1.0, _GF_J2000)[2] +
-            (-0.5) * _ssb(ks, obs, et - 1.0, _GF_J2000)[2]
+        acc = 0.5 * _ssb(ks, obs, et + 1.0, _J2000_FRAME)[2] +
+            (-0.5) * _ssb(ks, obs, et - 1.0, _J2000_FRAME)[2]
     end
     pr = spoint
     pv = _GF_ZERO3
@@ -276,22 +273,22 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
     a, b, c = v.radii
     corr = v.corr
     if corr.geometric
-        Rd, dRd = frame_jet(ks, v.dref, _GF_J2000, et, Val(1))
+        Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et, Val(1))
         j2r, j2v = _gf_xf(Rd, dRd, v.dvec, _GF_ZERO3)
         _gf_fixed_frame(ks, v.ref, v.targ)
         tr, tv = _gf_pv(_gf_spkez(ks, v.targ, et, v.ref, corr, v.obs)[1])
-        R, dR = frame_jet(ks, _GF_J2000, v.ref, et, Val(1))
+        R, dR = frame_jet(ks, _J2000_FRAME, v.ref, et, Val(1))
         dr, dv = _gf_xf(R, dR, j2r, j2v)
         st = surfpv(vcat(-tr, -tv), vcat(dr, dv), a, b, c)
         st === nothing && return _GF_ZERO6, false
         return SVector{6, Float64}(st), true
     end
     if v.obs == v.dctr
-        Rd, dRd = frame_jet(ks, v.dref, _GF_J2000, et, Val(1))
+        Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et, Val(1))
     else
         s = corr.transmit ? 1.0 : -1.0
-        _, ltctr, dltctr = spkacs(ks, v.dctr, et, _GF_J2000, corr, v.obs)
-        Rd, dRd = frame_jet(ks, v.dref, _GF_J2000, et + s * ltctr, Val(1))
+        _, ltctr, dltctr = spkacs(ks, v.dctr, et, _J2000_FRAME, corr, v.obs)
+        Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et + s * ltctr, Val(1))
         dRd = (s * dltctr + 1.0) * dRd
     end
     j2r, j2v = _gf_xf(Rd, dRd, v.dvec, _GF_ZERO3)
@@ -316,23 +313,6 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
 end
 
 """
-    _gf_wncond(w, amount) -> Window
-
-Copy of `w` with each interval contracted by `amount` at both ends, as
-[`wncond_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wncond_c.html): an
-interval that is shorter than `2 amount` is removed.
-"""
-function _gf_wncond(w::Window, amount::Float64)
-    d = Float64[]
-    for i in 1:wncard(w)                 # invariant: d holds the contracted intervals before i
-        a = w.data[2i - 1] + amount
-        b = w.data[2i] - amount
-        a > b || push!(d, a, b)
-    end
-    return _window_of(d)
-end
-
-"""
 The existence window of `zzgfcslv`: the window of `cnfine` on which the state of the
 intercept exists, found with the step of the search, with each interval contracted by
 `tol + 1` seconds at both ends, so that the coordinate search stays away from the
@@ -342,7 +322,8 @@ function _gf_vecexist(v::GFInterceptVector, cnfine::Window, run::_GFRun)
     _gf_repi(run, cnfine, "Intercept existence pass 1 of 1", "done.")
     w = _gf_scan!(Window(), et -> _gf_vecstate(v, et)[2], cnfine, run, false)
     _gf_repf(run)
-    return _gf_wncond(w, run.tol + 1.0)
+    amount = run.tol + 1.0
+    return wncond!(w, amount, amount)
 end
 
 # --- the coordinate of a surface point ---------------------------------------------------
@@ -357,7 +338,7 @@ true), with the checks of `zzgfcoin` in their order: bodies (`:idcodenotfound`,
 `:bodiesnotdistinct`), correction (`:invalidoption`), system and coordinate
 (`:notsupported`), frame (`:noframe`; `:invalidframe` if `chkctr` and the frame is not
 centered on the target), radii of the center of the frame (`:badframe`, `:invalidcount`,
-`:badaxislength`; `:notsupported` for unequal equatorial radii with the geodetic and
+`:arraytoosmall`, `:badaxislength`; `:notsupported` for unequal equatorial radii with the geodetic and
 planetographic systems), and for the intercept the ray (`:zerovector`, `:noframe`).
 
 `chkctr` is the comparison that CSPICE makes with the vector definition as the caller
@@ -398,31 +379,13 @@ function _gf_surface_coordinate(
                 "Bodies {0,..,9} represent barycenters and so lack physical properties."
         )
     )
-    radii = _gf_radii(ks, center)
-    re = 0.0
-    f = 0.0
-    sense = 0
-    if sys == _GF_GEODETIC || sys == _GF_PLANETOGRAPHIC
-        radii[1] == radii[2] || throw(
-            SpiceError(
-                :notsupported, "Central body $center " *
-                    "of reference frame $frame has radii $(radii[1]) $(radii[2]) $(radii[3]). " *
-                    "Unequal equatorial ellipsoid radii are not supported for " *
-                    "$(_GF_SYSNMS[sys]) coordinates."
-            )
-        )
-        re = radii[1]
-        f = (radii[1] - radii[3]) / radii[1]
-        if sys == _GF_PLANETOGRAPHIC
-            lon = recpgr(ks, center, SVector(0.0, 1.0, 0.0), re, f)[1]
-            sense = lon > Float64(pi) ? -1 : 1
-        end
-    end
+    rad = _geo_radii(ks, center)
+    re, f, sense = (sys == _GF_GEODETIC || sys == _GF_PLANETOGRAPHIC) ?
+        _gf_geodetic(ks, center, frame, sys, rad) : (0.0, 0.0, 0)
     meth = uppercase(lstrip(method, ' '))
-    rad = (radii[1], radii[2], radii[3])
     if !intercept
-        near = _dsk_eqstr(meth, "Near point: ellipsoid") ? Int8(1) :
-            _dsk_eqstr(meth, "Intercept: ellipsoid") ? Int8(0) : Int8(-1)
+        near = _eqstr(meth, "Near point: ellipsoid") ? Int8(1) :
+            _eqstr(meth, "Intercept: ellipsoid") ? Int8(0) : Int8(-1)
         vec = GFSubObserverVector(ks, targ, obs, corr, ref, meth, near, rad)
         return GFCoordinate(vec, sys, idx, re, f, sense, center)
     end
@@ -437,7 +400,7 @@ function _gf_surface_coordinate(
     dctr, _, dfound = _geo_frinfo(ks, dfr)
     dfound || throw(SpiceError(:noframe, "Frame system did not recognize frame $dref."))
     vec = GFInterceptVector(
-        ks, targ, obs, corr, ref, meth, _dsk_eqstr(meth, "Ellipsoid"),
+        ks, targ, obs, corr, ref, meth, _eqstr(meth, "Ellipsoid"),
         rad, dfr, dctr, dv
     )
     return GFCoordinate(vec, sys, idx, re, f, sense, center)
@@ -478,8 +441,8 @@ Throws `SpiceError(:invalidstep)`, `SpiceError(:invalidtolerance)`,
 - `SpiceError(:noframe)` if `fixref` is not known, `SpiceError(:invalidframe)` if it is
   not centered on `target`, and `SpiceError(:badframe)` if its center has no radii
   loaded;
-- the kinds `:invalidcount` and `:badaxislength` of [`srfrec`](@ref) if the radii are
-  not valid;
+- the kinds `:invalidcount`, `:arraytoosmall` and `:badaxislength` of
+  [`srfrec`](@ref) if the radii are not valid;
 - `SpiceError(:degeneratecase)` if the velocity of the point is not defined at an epoch
   of the search.
 

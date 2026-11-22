@@ -214,6 +214,65 @@ function _nparsd(s::Union{AbstractString, AbstractVector{UInt8}})::Float64
 end
 
 # ---------------------------------------------------------------------------------
+# Integers: NPARSI, and the rounding of GIPOOL
+# ---------------------------------------------------------------------------------
+
+const _NPARSI_RANGE = "NPARSI: Value entered is beyond the bounds of representable integers."
+
+"""
+    _nparsi(s) -> Int
+
+Contract: the integer that `s` holds, as `nparsi`: the number of `_nparsd` cut toward
+zero (the C cast). Throws the `SpiceError` of `_nparsd` for a string that is not a
+number, and `SpiceError(:badnumber)` with the message of `nparsi` when the cut value is
+outside `intmin()` to `intmax()`.
+"""
+function _nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Int
+    t = trunc(_nparsd(s))
+    -2147483648.0 <= t <= 2147483647.0 || throw(SpiceError(:badnumber, _NPARSI_RANGE))
+    return Int(t)
+end
+
+"""
+Contract: `x` rounded to the nearest integer, a tie away from zero (`i_dnnt`), when it is
+in the range that `gipool_` accepts (`intmin()` to `intmax()`); `nothing` otherwise,
+NaN included, where `gipool_` signals SPICE(INTOUTOFRANGE).
+"""
+@inline _gipool_value(x::Float64)::Union{Int32, Nothing} =
+    -2147483648.0 <= x <= 2147483647.0 ? Int32(_nint(x)) : nothing
+
+@noinline _gipool_range_error(name::AbstractString, i::Integer, x::Float64) = throw(
+    SpiceError(
+        :intoutofrange, "the value associated with index $i of the kernel " *
+            "variable $name is outside the range of integers; the value stored was $x"
+    )
+)
+
+"""
+    _gipool_first(v, name; room = 1, single = false, strict = true) -> Union{Int32,Nothing}
+
+Contract: the first value of the pool variable `name` whose values are `v`, as
+`gipool_(name, 1, room, n, ivals, found)` gives it: `nothing` if `v` is not numeric or
+is empty (`found` false). Each of the first `room` values must be in the range of
+`gipool_`, else `SpiceError(:intoutofrange)`, or `nothing` with `strict = false` (for a
+builder of the snapshot, which does not throw). With `single`, `nothing` unless `v`
+has one value (the `n == 1` test of the caller).
+"""
+function _gipool_first(
+        v, name::AbstractString; room::Int = 1, single::Bool = false, strict::Bool = true
+    )::Union{Int32, Nothing}
+    (v isa Vector{Float64} && !isempty(v)) || return nothing
+    for i in 1:min(room, length(v))
+        if _gipool_value(@inbounds v[i]) === nothing
+            strict || return nothing
+            _gipool_range_error(name, i, v[i])
+        end
+    end
+    single && length(v) != 1 && return nothing
+    return _gipool_value(@inbounds v[1])
+end
+
+# ---------------------------------------------------------------------------------
 # Dates: the `@` forms, as TPARSE converts them
 # ---------------------------------------------------------------------------------
 
@@ -377,8 +436,8 @@ end
 const _BEGINDATA = Vector{UInt8}(codeunits("\\begindata"))
 const _BEGINTEXT = Vector{UInt8}(codeunits("\\begintext"))
 
-# The kinds are the short messages of `zzrvar`: BADVARASSIGN, BADVARNAME, TYPEMISMATCH,
-# NUMBEREXPECTED, BADTIMESPEC.
+# The kinds are the short messages of `zzrvar`: BADVARASSIGN, NONPRINTINGCHAR, BADVARNAME,
+# TYPEMISMATCH, NUMBEREXPECTED, BADTIMESPEC.
 @noinline _tk_fail(path, lineno::Int, msg, kind::Symbol = :badvarassign) =
     throw(SpiceError(kind, "$msg (line $lineno of '$path')"))
 
@@ -407,7 +466,8 @@ assignments in file order with the values CSPICE puts in the kernel pool. `path`
 used for the result and for error messages only; `yearbound` is the bound of `tsetyr`
 for a year of two digits in an `@` date, and `check` the range check of `tparch` for
 it. Throws `SpiceError` for a malformed assignment, with the kind that `zzrvar` gives
-(`:badvarassign`, `:badvarname`, `:typemismatch`, `:numberexpected`, `:badtimespec`).
+(`:badvarassign`, `:nonprintingchar`, `:badvarname`, `:typemismatch`, `:numberexpected`,
+`:badtimespec`).
 """
 function parse_text_lines(
         path::AbstractString, lines, yearbound::Int = 1969,
@@ -421,6 +481,10 @@ function parse_text_lines(
     nums = Float64[]
     strs = String[]
     kind = 0                       # 0 unknown, 1 string, 2 numeric
+    # The kinds of the variables that the earlier assignments of these lines set: `zzrvar_`
+    # stores each assignment before it reads the next one, so a `+=` takes the kind of the
+    # variable and a value of the other kind is TYPEMISMATCH on its own line.
+    kinds = Dict{String, Int}()
     lineno = 0
     for raw in lines
         lineno += 1
@@ -441,6 +505,11 @@ function parse_text_lines(
                 path, lineno, "a kernel variable assignment must have the form " *
                     "'<name> [+]= <values>'"
             )
+            # `lastpc_` of the name: the last character must be printable (33 to 126).
+            0x21 <= line[ends[1]] <= 0x7e || _tk_fail(
+                path, lineno, "the variable name ends in a nonprinting character " *
+                    "(ASCII code $(Int(line[ends[1]])))", :nonprintingchar
+            )
             ends[1] - begs[1] + 1 <= _TK_MAXNAME ||
                 _tk_fail(
                 path, lineno, "a variable name is longer than $_TK_MAXNAME characters",
@@ -452,7 +521,7 @@ function parse_text_lines(
             append = types[2] == _TOK_PLUSEQ
             nums = Float64[]
             strs = String[]
-            kind = 0
+            kind = append ? get(kinds, name, 0) : 0
             if types[3] == _TOK_LPAREN
                 nxt = 4
             else
@@ -499,9 +568,13 @@ function parse_text_lines(
             nxt += 1
         end
         # `( )`: a closing parenthesis before the first value
-        nxt <= count && kind == 0 && _tk_fail(path, lineno, "the vector assigned to '$name' has no values")
+        nxt <= count && isempty(strs) && isempty(nums) &&
+            _tk_fail(path, lineno, "the vector assigned to '$name' has no values")
         invec = nxt > count
-        invec || _tk_finish!(out, kind, name, append, strs, nums)
+        if !invec
+            _tk_finish!(out, kind, name, append, strs, nums)
+            kind == 0 || (kinds[name] = kind)
+        end
     end
     invec && _tk_finish!(out, kind, name, append, strs, nums)
     return TextKernel(String(path), out)
@@ -595,7 +668,6 @@ continuation marker; returns the logical strings, where an element that ends in
 `contin` is joined (marker removed) with the next element, as CSPICE `stpool` does.
 """
 function pool_strings_joined(values::Vector{String}, contin::AbstractString)::Vector{String}
-    isempty(contin) && throw(ArgumentError("the continuation marker is empty"))
     out = String[]
     buf = IOBuffer()
     open_string = false
@@ -615,15 +687,13 @@ function pool_strings_joined(values::Vector{String}, contin::AbstractString)::Ve
 end
 
 """
-    pool_string_joined(values, nth, contin = "//") -> Union{String,Nothing}
+    pool_string_joined(values, nth, contin) -> Union{String,Nothing}
 
 Contract: the `nth` (1-based) logical string of a string variable whose elements may
-be continued with `contin`, or `nothing` if there is none (`stpool`).
+be continued with the non-empty marker `contin`, or `nothing` if there is none
+(`stpool`).
 """
-function pool_string_joined(
-        values::Vector{String}, nth::Integer,
-        contin::AbstractString = "//"
-    )
+function pool_string_joined(values::Vector{String}, nth::Integer, contin::AbstractString)
     all = pool_strings_joined(values, contin)
     return 1 <= nth <= length(all) ? all[nth] : nothing
 end

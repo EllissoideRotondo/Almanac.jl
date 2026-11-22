@@ -70,13 +70,14 @@ function _sw_parse_checked(ks::KernelSet, fd::FrameDef)
     if list isa Vector{Float64}
         for x in list
             # `gipool_` signals INTOUTOFRANGE for a value that is not an integer of 32 bits
-            -2.147483648e9 <= x <= 2.147483647e9 || throw(
+            b = _gipool_value(x)
+            b === nothing && throw(
                 SpiceError(
                     :intoutofrange, "base frame ID $x of the switch frame $id is " *
                         "outside the range of an integer"
                 )
             )
-            push!(bases, round(Int32, x, RoundNearestTiesAway))   # `nint`
+            push!(bases, b)
         end
     else
         for name in list
@@ -130,30 +131,6 @@ end
 )
 
 """
-    _sw_ck_step(mode, ks, fd, et) -> (found::Bool, ref::Int32, rot)
-
-The link of the CK frame `fd` as `_ck_frame_step` gives it, but with `found == false`
-(and an identity matrix) instead of an error if no CK segment has a pointing at `et`,
-which is what lets a switch frame go on to its next base frame. In the state mode only
-segments with angular velocity count, as in `ckfxfm_`.
-"""
-@inline function _sw_ck_step(::_CKExact, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
-    ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
-    found, cmat, _, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, false)
-    found || return false, _J2000_FRAME, one(Mat3{T})
-    return true, ref, Mat3{T}(transpose(cmat))
-end
-
-@inline function _sw_ck_step(::_CKState, ks::KernelSet, fd::FrameDef, et::Float64)
-    ticks = _sce2c(ks, _ck_frame_clock(ks, fd, et), et)
-    found, cmat, av, _, ref = _ck_search(ks, fd.classid, ticks, 0.0, true)
-    found || return false, _J2000_FRAME, one(Mat3{Taylor{1, Float64}})
-    r = Mat3{Float64}(transpose(cmat))
-    dr = _m_mxm(_ck_skew(av), r)
-    return true, ref, map((a, b) -> Taylor((a, b)), r, dr)
-end
-
-"""
     _sw_frame_step(mode, ks, fd, et) -> (parent::Int32, rot)
 
 One link of a frame chain for the class 6 frame `fd`, as `zzswfxfm_`: the base frames
@@ -177,7 +154,9 @@ function _sw_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Re
         base = @inbounds sw.bases[i]
         class = @inbounds sw.classes[i]
         if class == 3
-            found, ref, rot = _sw_ck_step(mode, ks, frame_def(ks, base), et)
+            # A CK base without a pointing at `et` is skipped (`found == false`); in
+            # the state mode only segments with angular velocity count, as in `ckfxfm_`.
+            found, ref, rot = _ck_frame_step_found(mode, ks, frame_def(ks, base), et)
             found && return ref, rot::Mat3{S}
         elseif class == 5 || class == 6
             return base, one(Mat3{S})

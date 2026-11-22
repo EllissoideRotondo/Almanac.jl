@@ -195,22 +195,6 @@ end
 # Indexes
 # ---------------------------------------------------------------------------------------
 
-"""
-    _ekw_ixlk(s, coldsc, key) -> recptr
-
-The record pointer at position `key` of the index of the column `coldsc` (`zzekixlk`):
-from the index tree (index type 1) or from the order vector (type 2, row numbers).
-Throws `SpiceError(:invalidtype)` for another index type.
-"""
-function _ekw_ixlk(s, coldsc::AbstractVector{Int32}, key::Integer)
-    itype = coldsc[_EK_IXTIDX]
-    itype == 1 && return _ek_trdp(s.ints, coldsc[_EK_IXPIDX], key)
-    itype == 2 || throw(SpiceError(:invalidtype, "The index type $itype is not supported."))
-    q = (Int(key) - 1) ÷ _EK_IPSIZE
-    r = Int(key) - q * _EK_IPSIZE
-    return Int(s.ints[Int(coldsc[_EK_IXPIDX]) + q * 256 + r])
-end
-
 function _ekw_index1_check(s, coldsc::AbstractVector{Int32})
     itype = coldsc[_EK_IXTIDX]
     itype == -1 && throw(SpiceError(:notindexed, "Column $(_ekw_cnam(s, coldsc)) is not indexed."))
@@ -375,82 +359,6 @@ function _ekw_ixdl(h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, r
     pos = _ekw_frx(h, segdsc, coldsc, recptr)
     _ekw_trdl(h, coldsc[_EK_IXPIDX], pos)
     return nothing
-end
-
-"""
-    _ekw_llx(s, segdsc, coldsc, key, orequal) -> (prvloc, prvptr)
-
-Position in the index of the column `coldsc` of the last entry that is less than `key`
-(`orequal` false: `zzeklltc`, `zzeklltd`, `zzekllti`) or not greater than `key`
-(`orequal` true: `zzekllec`, `zzeklled`, `zzekllei`), and the record pointer at that
-position; `(0, 0)` if no entry qualifies. Works for both index types. Precondition:
-the column has an index (`:notindexed`).
-"""
-function _ekw_llx(
-        s, segdsc::AbstractVector{Int32}, coldsc::AbstractVector{Int32}, key,
-        orequal::Bool
-    )
-    coldsc[_EK_IXTIDX] == -1 && throw(
-        SpiceError(
-            :notindexed,
-            "Column $(_ekw_cnam(s, coldsc)) is not indexed."
-        )
-    )
-    nrows = Int(segdsc[_EK_NRIDX])
-    nrows == 0 && return 0, 0
-    # `before(ptr)` tells that the entry of the record is on the wanted side of the key.
-    before(ptr) = (r = _ekw_rel(s, coldsc, ptr, key, false); orequal ? r <= 0 : r < 0)
-    lo = 1
-    hi = nrows
-    before(_ekw_ixlk(s, coldsc, lo)) || return 0, 0
-    endptr = _ekw_ixlk(s, coldsc, hi)
-    before(endptr) && return nrows, endptr
-    while hi > lo + 1                    # invariant: `before` holds at `lo` and not at `hi`
-        mid = (lo + hi) ÷ 2
-        if before(_ekw_ixlk(s, coldsc, mid))
-            lo = mid
-        else
-            hi = mid
-        end
-    end
-    return lo, _ekw_ixlk(s, coldsc, lo)
-end
-
-"The key `val` in the type that the column `coldsc` compares with (`zzekillt`, `zzekille`)."
-function _ekw_index_key(coldsc::AbstractVector{Int32}, val)
-    coltyp = coldsc[_EK_TYPIDX]
-    if coltyp == _EK_CHR
-        return val isa AbstractString ? Vector{UInt8}(codeunits(rstrip(val, ' '))) : val
-    elseif coltyp == _EK_DP || coltyp == _EK_TIME
-        return Float64(val)
-    elseif coltyp == _EK_INT
-        return val isa Integer ? Int(val) : round(Int, val, RoundNearestTiesAway)
-    end
-    throw(SpiceError(:invalidsize, "The data type $coltyp is not supported."))
-end
-
-"""
-    _ekw_illt(s, segdsc, coldsc, nrows, val) -> Int
-
-Number of entries of the index of the column `coldsc` that are less than `val`
-(`zzekillt`); `val` is a string for a character column and a number else (a double is
-rounded for an integer column). Precondition: `nrows >= 1`, else `:invalidsize`.
-"""
-function _ekw_illt(
-        s, segdsc::AbstractVector{Int32}, coldsc::AbstractVector{Int32},
-        nrows::Integer, val
-    )
-    nrows < 1 && throw(SpiceError(:invalidsize, "Number of rows must be positive; was $nrows."))
-    return _ekw_llx(s, segdsc, coldsc, _ekw_index_key(coldsc, val), false)[1]
-end
-
-"As [`_ekw_illt`](@ref) for the entries that are not greater than `val` (`zzekille`)."
-function _ekw_ille(
-        s, segdsc::AbstractVector{Int32}, coldsc::AbstractVector{Int32},
-        nrows::Integer, val
-    )
-    nrows < 1 && throw(SpiceError(:invalidsize, "Number of rows must be positive; was $nrows."))
-    return _ekw_llx(s, segdsc, coldsc, _ekw_index_key(coldsc, val), true)[1]
 end
 
 # ---------------------------------------------------------------------------------------
@@ -1488,38 +1396,6 @@ function _ekw_wpal(h::DASHandle, segdsc::Vector{Int32}, lvals::AbstractVector{Bo
         if to > 1014 || from == nvals
             copyto!(h.chars, _ek_cbase(p) + 1, page, 1, 1024)
             _ekw_slnk(h, 1, p, to - 1)
-            p += 1
-            to = 1
-        end
-    end
-    return base
-end
-
-"""
-    _ekw_wpac(h, segdsc, l, cvals) -> base
-
-Store the strings `cvals`, each with exactly `l` characters, in new adjacent character
-data pages of the segment and return the base address of the first page (`zzekwpac`).
-Precondition: `1 <= l <= 1014`, else `SpiceError(:invalidsize)`.
-"""
-function _ekw_wpac(h::DASHandle, segdsc::Vector{Int32}, l::Int, cvals::Vector{Vector{UInt8}})
-    (1 <= l <= _EK_CPSIZE) || throw(
-        SpiceError(
-            :invalidsize,
-            "String length $l is just plain wrong."
-        )
-    )
-    nvals = length(cvals)
-    spp = _EK_CPSIZE ÷ l
-    p, base = _ekw_acps(h, segdsc, 1, (nvals + spp - 1) ÷ spp)
-    page = fill(UInt8(' '), 1024)
-    to = 1
-    for from in 1:nvals                  # invariant: the pages before `p` are written
-        _ekw_putc!(page, to, cvals[from], 1, l)
-        to += l
-        if to > _EK_CPSIZE - l + 1 || from == nvals
-            copyto!(h.chars, _ek_cbase(p) + 1, page, 1, 1024)
-            _ekw_slnk(h, 1, p, (to - l) ÷ l)
             p += 1
             to = 1
         end

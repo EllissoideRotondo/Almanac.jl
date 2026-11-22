@@ -480,6 +480,29 @@ end
 # --- changes of a window in place, and the comparison of two windows ------------------
 
 """
+    _wn_merge!(d, card, gap) -> d
+
+The merge loop of `wnfild_`: the intervals in `d[1:card]` (`card > 0`, in order) that
+are separated by a gap of at most `gap` are merged, and `d` is resized to the result.
+With `gap = 0` it merges the intervals that overlap or touch (`d[j] + 0.0 == d[j]`).
+"""
+function _wn_merge!(d::Vector{Float64}, card::Int, gap::Float64)
+    i = 2
+    j = 2
+    while j < card                       # invariant: d[1:i-1] is final; j is the next right endpoint
+        if d[j] + gap < d[j + 1]
+            d[i] = d[j]
+            d[i + 1] = d[j + 1]
+            i += 2
+        end
+        j += 2
+    end
+    d[i] = d[j]
+    resize!(d, i)
+    return d
+end
+
+"""
     wnexpd!(window, left, right) -> window
 
 Expand each interval of `window` and return `window`, as
@@ -519,18 +542,7 @@ function wnexpd!(w::Window, left::Real, right::Real)
     end
     # The intervals were all moved by the same amounts, so they are still in order and
     # only neighbors can overlap.
-    i = 2
-    j = 2
-    while j < card                       # invariant: d[1:i-1] is final; j is the next right endpoint
-        if d[j] < d[j + 1]
-            d[i] = d[j]
-            d[i + 1] = d[j + 1]
-            i += 2
-        end
-        j += 2
-    end
-    d[i] = d[j]
-    resize!(d, i)
+    _wn_merge!(d, card, 0.0)
     return w
 end
 
@@ -611,18 +623,7 @@ function wnfild!(w::Window, smlgap::Real)
     d = w.data
     card = length(d)
     card == 0 && return w
-    i = 2
-    j = 2
-    while j < card                       # invariant: d[1:i-1] is final; j is the next right endpoint
-        if d[j] + gap < d[j + 1]
-            d[i] = d[j]
-            d[i + 1] = d[j + 1]
-            i += 2
-        end
-        j += 2
-    end
-    d[i] = d[j]
-    resize!(d, i)
+    _wn_merge!(d, card, gap)
     return w
 end
 
@@ -690,7 +691,7 @@ julia> wnreld(a, "<", b), wnreld(a, "=", b), wnreld(a, ">=", b)
 See also [`wnincd`](@ref).
 """
 function wnreld(a::Window, op::AbstractString, b::Window)
-    isempty(op) && throw(SpiceError(:emptystring, "wnreld: the relational operator is empty"))
+    _chkfstr("wnreld", "relational operator", op)
     o = rstrip(op, ' ')
     equal = a.data == b.data
     o == "=" && return equal

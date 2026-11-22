@@ -121,6 +121,24 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 check!(fails, got == want, "cnmfrm", n)
             end
             @test isempty(fails)
+            # Regression: the frame name of `OBJECT_<body>_FRAME` is compared exactly with
+            # the built-in names (`zzhscchk_`), so `iau_saturn` and ` IAU_SATURN` are not
+            # the frame IAU_SATURN.
+            if !with_objects
+                try
+                    for v in ("iau_saturn", " IAU_SATURN", "IAU_SATURN")
+                        SPICE.pcpool("OBJECT_SATURN_FRAME", [v])
+                        pcpool(ctx, "OBJECT_SATURN_FRAME", [v])
+                        @test cidfrm(ctx, 699) == SPICE.cidfrm(699)
+                        @test cnmfrm(ctx, "SATURN") == SPICE.cnmfrm("SATURN")
+                    end
+                    pcpool(ctx, "OBJECT_SATURN_FRAME", ["iau_saturn"])
+                    @test cidfrm(ctx, 699) === nothing
+                finally
+                    SPICE.dvpool("OBJECT_SATURN_FRAME")
+                    dvpool(ctx, "OBJECT_SATURN_FRAME")
+                end
+            end
         end
 
         with_objects || @testset "ccifrm" begin
@@ -298,6 +316,28 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 Ref{Cint}(0)
             )
             @test cspice_kind() === :invalidframedef
+        finally
+            foreach(l -> SPICE.dvpool(first(split(l, " = "))), lines)
+        end
+    end
+
+    # Regression: an integer of the pool is read by `gipool_`, which rounds a tie away
+    # from zero (`i_dnnt`); the frame items and the frame of a body were rounded to
+    # even (class 2, center 398, frame 10014 here).
+    @apart @testset "integer pool values with a fraction of one half" begin
+        lines = [
+            "FRAME_HALFTEST = -1977130.5", "FRAME_-1977131_NAME = 'HALFTEST'",
+            "FRAME_-1977131_CLASS = 2.5", "FRAME_-1977131_CLASS_ID = -1977130.5",
+            "FRAME_-1977131_CENTER = 398.5", "OBJECT_-1977132_FRAME = 10014.5",
+        ]
+        c2 = SpiceContext()
+        lmpool(c2, lines)
+        try
+            SPICE.lmpool(lines)
+            @test namfrm(c2, "HALFTEST") == SPICE.namfrm("HALFTEST") == -1977131
+            @test frinfo(c2, -1977131) == SPICE.frinfo(-1977131) == (399, 3, -1977131)
+            @test cidfrm(c2, -1977132) == SPICE.cidfrm(-1977132)
+            @test cidfrm(c2, -1977132)[1] == 10015
         finally
             foreach(l -> SPICE.dvpool(first(split(l, " = "))), lines)
         end
@@ -528,8 +568,10 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         @test et2lst(ctx, 0.0, 10, 1.0, "PLANETOCENTRIC") == SPICE.et2lst(0.0, 10, 1.0, "PLANETOCENTRIC")
         @test throws_kind(() -> et2lst(ctx, 0.0, 399, 0.0, "GEODETIC"), :unknownsystem)
         # `BODY<id>_PGR_POSITIVE_LON` sets the sense of a planetographic longitude.
+        # Regression: `pgrrec_` compares the first four characters without blanks, in
+        # upper case (`ljucrs_`), so "EASTERN" is east.
         try
-            for sense in ("EAST", "WEST")
+            for sense in ("EAST", "WEST", "EASTERN", " w Est x")
                 SPICE.pcpool("BODY299_PGR_POSITIVE_LON", [sense])
                 pcpool(ctx, "BODY299_PGR_POSITIVE_LON", [sense])
                 @test et2lst(ctx, 1.0e8, 299, 0.7, "PLANETOGRAPHIC") ==

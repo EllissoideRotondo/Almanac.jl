@@ -213,8 +213,9 @@ function _spk_equal(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real
     6 * n + 4 == len || _badsegment(seg, "the state count does not agree with the length")
     degree = window - 1
     q = (primal(et) - start) / step
-    k = (isodd(window) ? _round_index(q) : _trunc_index(q)) + 1
-    first = min(max(1, k - degree ÷ 2), n - degree)
+    # `near` and `low` of `spkr08_`, in its 32-bit integer arithmetic.
+    k = (isodd(window) ? _nint(q) : _cint(q)) + 1
+    first = min(max(1, _wrap32(k - degree ÷ 2)), n - degree)
     pbase = b - 1 + 6 * (first - 1)
     x = (et - (start + (first - 1) * step)) / step + 1.0
     if seg.dtype == 8

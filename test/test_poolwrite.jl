@@ -535,8 +535,18 @@ group(
 
     @apart @testset "errors" begin
         ctx = SpiceContext()
-        @test throws_kind(() -> pdpool(ctx, "", [1.0]), :badvarname)
         @test throws_kind(() -> pdpool(ctx, "   ", [1.0]), :badvarname)
+        # Regression: an empty name is SPICE(EMPTYSTRING) of the C wrapper, and an empty
+        # list of values returns before the name check of pdpool_ and pcpool_.
+        ccall((:pdpool_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ptr{Cdouble}), "", 1, [1.0])
+        @test throws_kind(() -> pdpool(ctx, "", [1.0]), cspice_kind())
+        @test throws_kind(() -> pdpool(ctx, "", Float64[]), :emptystring)
+        @test throws_kind(() -> pcpool(ctx, "", String[]), :emptystring)
+        ccall((:pdpool_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ptr{Cdouble}), "X"^33, 0, [1.0])
+        @test cspice_kind() === :none
+        @test pdpool(ctx, "X"^33, Float64[]) === nothing
+        @test pipool(ctx, "X"^33, Int[]) === nothing
+        @test pcpool(ctx, "X"^33, String[]) === nothing
         @test throws_kind(() -> pcpool(ctx, "X"^33, ["a"]), :badvarname)
         @test throws_kind(() -> pipool(ctx, "X"^33, [1]), :badvarname)
         pdpool(ctx, "X"^32, [1.0])
@@ -565,6 +575,11 @@ group(
             ["PW_BAD = @JUNK"], ["PW_BAD = @2000 JAN 1 PST"],
             ["NAIF_BODY_NAME = 'PW_SPUD'", "NAIF_BODY_CODE = ( 1009, 1010 )"],
             ["NAIF_BODY_NAME = 'PW_SPUD'"], ["NAIF_BODY_NAME = ' '", "NAIF_BODY_CODE = 1009"],
+            # Regression: a name that ends in a nonprinting character is NONPRINTINGCHAR.
+            ["PW_BAD\x7f = 1"],
+            # Regression: a `+=` of a string to a numeric variable of an earlier line is
+            # TYPEMISMATCH on its own line, before the error of a later line.
+            ["PW_BAD = 1", "PW_BAD += 'x'", "PW_BAD = ( ABC )"],
         ]
         for (i, lines) in enumerate(cases)
             k = pw_kernel("bad$i.tpc", lines)

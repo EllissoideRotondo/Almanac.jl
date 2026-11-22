@@ -15,7 +15,7 @@ const _DSK_MAXSRF = 100                   # largest number of surfaces in a meth
 The three kernel variables of the surface name map after the checks of `zzsrfker`, or
 `nothing` if none of them is in the pool. Throws `SpiceError` (`:badsurfacemap` if only
 some are present, `:badvariabletype`, `:toomanysurfaces`, `:arraysizemismatch`,
-`:blanknameassigned`).
+`:intoutofrange`, `:blanknameassigned`).
 """
 function _dsk_surface_vars(ks::KernelSet)
     names = get(ks.pool, _DSK_SRF_VARS[1], nothing)
@@ -46,6 +46,12 @@ function _dsk_surface_vars(ks::KernelSet)
                 "$(length(names)), $(length(codes)) and $(length(bodies)); they must be equal"
         )
     )
+    # `gipool_` of the codes, then of the bodies; the users round with `_nint`, as it does
+    for (key, v) in ((_DSK_SRF_VARS[2], codes), (_DSK_SRF_VARS[3], bodies))
+        for (i, x) in enumerate(v)
+            _gipool_value(x) === nothing && _gipool_range_error(key, i, x)
+        end
+    end
     for n in names
         isempty(strip(n, ' ')) && throw(
             SpiceError(
@@ -69,8 +75,8 @@ function _dsk_surface_n2c(ks::KernelSet, name::AbstractString, bodyid::Integer)
     names, codes, bodies = vars
     nn = normalize_name(name)
     for i in length(names):-1:1          # invariant: no assignment after i matches
-        (round(Int, bodies[i]) == bodyid && normalize_name(names[i]) == nn) &&
-            return round(Int, codes[i])
+        (_nint(bodies[i]) == bodyid && normalize_name(names[i]) == nn) &&
+            return _nint(codes[i])
     end
     return nothing
 end
@@ -89,11 +95,11 @@ function _dsk_surface_c2n(ks::KernelSet, code::Integer, bodyid::Integer)
     names, codes, bodies = vars
     n = length(names)
     for i in n:-1:1                      # invariant: no unmasked assignment after i matches
-        (round(Int, bodies[i]) == bodyid && round(Int, codes[i]) == code) || continue
+        (_nint(bodies[i]) == bodyid && _nint(codes[i]) == code) || continue
         nn = normalize_name(names[i])
         masked = false
         for j in (i + 1):n
-            if round(Int, bodies[j]) == bodyid && normalize_name(names[j]) == nn
+            if _nint(bodies[j]) == bodyid && normalize_name(names[j]) == nn
                 masked = true
                 break
             end
@@ -103,24 +109,14 @@ function _dsk_surface_c2n(ks::KernelSet, code::Integer, bodyid::Integer)
     return nothing
 end
 
-"Throws `SpiceError(:emptystring)` if the string argument `name` of `who` has no character, as the C interface of CSPICE."
-function _dsk_nonempty(who::AbstractString, name::AbstractString, s::AbstractString)
-    isempty(s) && throw(SpiceError(:emptystring, "$who: the string \"$name\" has length zero"))
-    return nothing
-end
-
-"`nparsi`: the integer that the string holds, or `nothing` if it does not hold a number."
+"`nparsi` as `srfscc_` calls it: the integer that the string holds (`_nparsi`), or `nothing` if `nparsi` gives an error."
 function _dsk_parse_int(s::AbstractString)
-    t = strip(s, ' ')
-    isempty(t) && return nothing
-    v = tryparse(Int, t)
-    v === nothing || return (typemin(Int32) <= v <= typemax(Int32) ? v : nothing)
-    all(c -> isdigit(c) || c in "+-.eEdD", t) || return nothing
-    x = tryparse(Float64, replace(t, r"[dD]" => "e"))
-    (x === nothing || !isfinite(x)) && return nothing
-    x = trunc(x)                         # `nparsi` drops the fraction
-    (typemin(Int32) <= x <= typemax(Int32)) || return nothing
-    return Int(x)
+    return try
+        _nparsi(s)
+    catch err
+        err isa SpiceError || rethrow()
+        nothing
+    end
 end
 
 """
@@ -160,7 +156,7 @@ Throws `SpiceError(:emptystring)` if `bodstr` is empty, and the error kinds of
 [`srfc2s`](@ref).
 """
 function srfcss(ks::KernelSet, code::Integer, bodstr::AbstractString)
-    _dsk_nonempty("srfcss", "bodstr", bodstr)
+    _chkfstr("srfcss", "string `bodstr`", bodstr)
     bodyid = bods2c(ks, bodstr)
     bodyid === nothing && return string(code), false
     return srfc2s(ks, code, bodyid)
@@ -181,7 +177,7 @@ Throws `SpiceError(:emptystring)` if `srfstr` is empty, and the error kinds of
 [`srfc2s`](@ref).
 """
 function srfscc(ks::KernelSet, srfstr::AbstractString, bodyid::Integer)
-    _dsk_nonempty("srfscc", "srfstr", srfstr)
+    _chkfstr("srfscc", "string `srfstr`", srfstr)
     code = _dsk_surface_n2c(ks, srfstr, bodyid)
     return code === nothing ? _dsk_parse_int(srfstr) : code
 end
@@ -199,8 +195,8 @@ Throws `SpiceError(:emptystring)` if `srfstr` or `bodstr` is empty, and the erro
 kinds of [`srfc2s`](@ref).
 """
 function srfs2c(ks::KernelSet, srfstr::AbstractString, bodstr::AbstractString)
-    _dsk_nonempty("srfs2c", "srfstr", srfstr)
-    _dsk_nonempty("srfs2c", "bodstr", bodstr)
+    _chkfstr("srfs2c", "string `srfstr`", srfstr)
+    _chkfstr("srfs2c", "string `bodstr`", bodstr)
     bodyid = bods2c(ks, bodstr)
     bodyid === nothing && return nothing
     return srfscc(ks, srfstr, bodyid)
@@ -285,10 +281,6 @@ end
         "$why in the method string <$method>"
     )
 )
-
-"True if `a` and `b` are equal when case and blanks are ignored (`eqstr`)."
-_dsk_eqstr(a::AbstractString, b::AbstractString) =
-    uppercase(replace(a, ' ' => "")) == uppercase(replace(b, ' ' => ""))
 
 """
     _dsk_parse_method(ks, bodyid, method) -> (shape, subtyp, pri, srflst)
@@ -384,9 +376,9 @@ function _dsk_parse_method(ks::KernelSet, bodyid::Integer, method::AbstractStrin
         )
         return :dsk, subtyp, false, srflst
     end
-    _dsk_eqstr(method, "ELLIPSOID") && return :ellipsoid, "", true, srflst
+    _eqstr(method, "ELLIPSOID") && return :ellipsoid, "", true, srflst
     for (a, b) in (("NEARPOINT", "NEAR POINT"), ("INTERCEPT", "INTERCEPT")), sep in (":", "/")
-        (_dsk_eqstr(method, a * sep * "ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID" * sep * a)) &&
+        (_eqstr(method, a * sep * "ELLIPSOID") || _eqstr(method, "ELLIPSOID" * sep * a)) &&
             return :ellipsoid, b, true, srflst
     end
     i = 1
@@ -427,9 +419,9 @@ function _dsk_surface_setup(
         ks::KernelSet, method::AbstractString, target::NameOrID,
         fixref::NameOrID
     )
-    _dsk_nonempty("latsrf/srfnrm", "method", method)
-    target isa AbstractString && _dsk_nonempty("latsrf/srfnrm", "target", target)
-    fixref isa AbstractString && _dsk_nonempty("latsrf/srfnrm", "fixref", fixref)
+    _chkfstr("latsrf/srfnrm", "string `method`", method)
+    target isa AbstractString && _chkfstr("latsrf/srfnrm", "string `target`", target)
+    fixref isa AbstractString && _chkfstr("latsrf/srfnrm", "string `fixref`", fixref)
     trgcde = _dsk_target(ks, target)
     fixfid = _dsk_frame_code(ks, fixref)
     center = fixfid == 0 ? nothing : _dsk_frame_center(ks, fixfid)
@@ -559,14 +551,14 @@ function _dsk_latsrf(
     for i in 1:npts                      # invariant: out[1:i-1] holds the points 1 .. i-1
         lon, lat = _dsk_get2(lonlat, i)
         x = _dsk_latrec(r, lon, lat)
-        xpt, _, _, found = _dsk_bux(ks, tols, trgcde, srflst, t, fixfid, x, _dsk_vminus(x))
+        xpt, _, _, found = _dsk_bux(ks, tols, trgcde, srflst, t, fixfid, x, -x)
         found || throw(
             SpiceError(
                 :pointnotfound, "no surface point was found on body " *
                     "$trgcde at planetocentric longitude $(rad2deg(lon)) deg, latitude $(rad2deg(lat)) deg"
             )
         )
-        _dsk_vdot(x, xpt) < 0.0 && throw(
+        _m_dot(x, xpt) < 0.0 && throw(
             SpiceError(
                 :shapenotsupported, "the intercept is " *
                     "on the far side of the center of body $trgcde; such a shape is not supported"
@@ -639,7 +631,7 @@ function _dsk_srfnrm(
     end
     t = Float64(et)
     for i in 1:npts                      # invariant: out[1:i-1] holds the normals 1 .. i-1
-        out[i] = _dsk_vhat(_dsk_bun(ks, tols, trgcde, srflst, t, fixfid, _dsk_get3(srfpts, i)))
+        out[i] = _m_hat(_dsk_bun(ks, tols, trgcde, srflst, t, fixfid, _dsk_get3(srfpts, i)))
     end
     return out
 end

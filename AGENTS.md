@@ -59,7 +59,8 @@ manual or a test. The global skills hold the general rules, and the project skil
   `CKW04Writer`, `PCK03Writer`) or an atomic field of the `SpiceContext` (`ks`,
   `timedefs`, `dsktols`, `gftol`).
 - Where CSPICE computes with 32-bit integers, use `_cint`, `_wrap32`, `_dnint` and
-  `_nint` from `time.jl`, so the results are the same.
+  `_nint` from `math/kernels.jl`, so the results are the same. Integer pool values are
+  rounded as `gipool_` rounds them, through `_gipool_value` and `_gipool_first`.
 - A call that has a "found" flag in CSPICE returns `nothing` when the flag is false.
   Results are returned, not written to output arguments.
 
@@ -186,6 +187,9 @@ update that page in the same change.
   `zzekjsqz`). `compat = true` reproduces them for the tests.
 - `dafopw` refuses a write open of a file that another handle has open
   (`:fileopenconflict`).
+- Kernel pool names are stripped of the blanks around them on every write and lookup,
+  and a blank name is `:badvarname`; CSPICE keeps leading blanks and stores a blank
+  name.
 
 ## Tests
 

@@ -59,12 +59,7 @@ function gipool(ks::KernelSet, name::AbstractString)
     v = gdpool(ks, name)
     for (i, x) in enumerate(v)
         # `gipool` of CSPICE: DBLE(INTMIN()) <= x <= DBLE(INTMAX()), then NINT
-        -2147483648.0 <= x <= 2147483647.0 || throw(
-            SpiceError(
-                :intoutofrange, "the value associated with index $i of the kernel " *
-                    "variable $name is outside the range of integers; the value stored was $x"
-            )
-        )
+        _gipool_value(x) === nothing && _gipool_range_error(name, i, x)
     end
     return Int[_nint(x) for x in v]
 end
@@ -116,7 +111,7 @@ function _pool_key(
     else
         for k in 1:nmid
             c = codeunit(mid, k)
-            buf[np + k] = upper && UInt8('a') <= c <= UInt8('z') ? c - 0x20 : c
+            buf[np + k] = upper ? _upper(c) : c
         end
     end
     copyto!(buf, np + nmid + 1, codeunits(s1), 1, n1)
@@ -211,8 +206,9 @@ julia> bodn2c("MOON"), bodn2c("301")
 function bodn2c(ks::KernelSet, name::AbstractString)
     code = bods2c(ks, name)
     code === nothing && return nothing
-    # `body_code` also accepts integer strings; accept one only if it is a defined name.
-    if tryparse(Int, strip(name)) !== nothing
+    # `bods2c` also accepts integer strings (`_parse_int_name`, as `beint`); accept one
+    # only if it is a defined name.
+    if _parse_int_name(name) !== nothing
         haskey(ks.name2code, normalize_name(name)) || return nothing
     end
     return code
@@ -284,7 +280,7 @@ See also [`scid2n`](@ref).
 function scn2id(ks::KernelSet, clknam::AbstractString)
     # `ucase` into a 32-character buffer, then the last "SCLK" becomes blanks.
     s = codeunits(String(clknam))
-    b = UInt8[0x61 <= c <= 0x7a ? c - 0x20 : c for c in view(s, 1:min(length(s), 32))]
+    b = UInt8[_upper(c) for c in view(s, 1:min(length(s), 32))]
     for i in (length(b) - 3):-1:1
         if b[i] == UInt8('S') && b[i + 1] == UInt8('C') && b[i + 2] == UInt8('L') &&
                 b[i + 3] == UInt8('K')

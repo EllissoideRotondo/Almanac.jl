@@ -80,7 +80,7 @@ function dlaopn(
         path::AbstractString, ftype::AbstractString, ifname::AbstractString,
         ncomch::Integer
     )
-    isempty(path) && throw(SpiceError(:emptystring, "dlaopn: the file name is empty"))
+    _chkfstr("dlaopn", "file name", path)
     ncomch < 0 && throw(
         SpiceError(
             :badrecordcount,
@@ -100,8 +100,8 @@ Begin a new segment at the end of the DLA file, as
 [`dlabns`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dlabns.html) of SPICELIB.
 
 The segment becomes the last one of the list. The data that `dasadd`, `dasadi` and
-`dasadc` append after the call belong to it. Its descriptor gives the size zero in every
-address space until [`dlaens`](@ref) ends it.
+`dasadc` append after the call belong to it. Its descriptor gives the size -1 in every
+address space until [`dlaens`](@ref) ends it, as in SPICELIB.
 
 Throws `SpiceError(:dasnosuchaddress)` if the file is not a DLA file.
 """

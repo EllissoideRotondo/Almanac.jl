@@ -195,9 +195,9 @@ function _sgmeta(h::DAFHandle, baddr::Int, eaddr::Int)
                 "data items; every generic segment must have at least 15"
         )
     )
-    ametas = metasz == 15 ? 16 : metasz
+    m, _ = _sg_meta_base(metasz, eaddr)
     metasz = clamp(metasz, 16, 17)
-    x = dafgda(h, eaddr - ametas + 1, eaddr - ametas + metasz)
+    x = dafgda(h, m + 1, m + metasz)
     meta = Int[_nint(v) for v in x]
     length(meta) == 16 && push!(meta, 0)
     meta[17] = metasz

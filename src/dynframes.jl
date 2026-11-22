@@ -54,21 +54,14 @@ function _dyn_lookup(
     )
     k1 = "FRAME_$(id)_$(item)"
     k2 = "FRAME_$(name)_$(item)"
-    if length(k1) <= _TK_MAXNAME
-        v = get(pool, k1, nothing)
-        v === nothing || return k1, v
-    end
-    if length(k2) > _TK_MAXNAME
-        length(k1) > _TK_MAXNAME && throw(
-            SpiceError(
-                :varnametoolong,
-                "kernel variables $k1 and $k2 are longer than $_TK_MAXNAME characters"
-            )
+    kv = _frame_key(pool, k1, k2)
+    kv === nothing || return kv
+    (length(k1) > _TK_MAXNAME && length(k2) > _TK_MAXNAME) && throw(
+        SpiceError(
+            :varnametoolong,
+            "kernel variables $k1 and $k2 are longer than $_TK_MAXNAME characters"
         )
-    else
-        v = get(pool, k2, nothing)
-        v === nothing || return k2, v
-    end
+    )
     required || return nothing
     throw(
         SpiceError(
@@ -140,7 +133,7 @@ name and not an integer.
 function _dyn_frameid(ks::KernelSet, id, name, item)
     key, v = _dyn_lookup(ks.pool, id, name, item, true)
     length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
-    v isa Vector{Float64} && return round(Int32, v[1])
+    v isa Vector{Float64} && return _gipool_first(v, key)::Int32
     code = namfrm(ks, v[1])
     code != 0 && return Int32(code)
     n = tryparse(Int32, strip(v[1]))
@@ -162,7 +155,7 @@ as `zzdynbid_`. Throws `SpiceError(:notranslation)` for an unknown name.
 function _dyn_bodyid(ks::KernelSet, id, name, item)
     key, v = _dyn_lookup(ks.pool, id, name, item, true)
     length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
-    v isa Vector{Float64} && return round(Int32, v[1])
+    v isa Vector{Float64} && return _gipool_first(v, key)::Int32
     code = bods2c(ks, v[1])
     code === nothing && throw(
         SpiceError(
@@ -172,12 +165,6 @@ function _dyn_bodyid(ks::KernelSet, id, name, item)
     )
     return Int32(code)
 end
-
-"`s` without blanks and in upper case, as `cmprss_` with zero blanks and `ucase_`."
-_dyn_squeeze(s::AbstractString) = uppercase(replace(s, ' ' => ""))
-
-"True if `a` and `b` are equal when blanks and letter case are ignored, as `eqstr_`."
-_dyn_eqstr(a::AbstractString, b::AbstractString) = _dyn_squeeze(a) == _dyn_squeeze(b)
 
 """
     _dyn_degrees(units) -> Float64
@@ -219,7 +206,7 @@ both light time and stellar aberration throws `SpiceError(:invalidoption)`, as
 """
 function _dyn_abcorr(s::AbstractString, constant::Bool)
     constant || return _dyn_parse_abcorr(s)
-    u = _dyn_squeeze(s)
+    u = _squeeze(s)
     u == "S" && return _aberration(_AB_S)
     u == "XS" && return _aberration(_AB_S | _AB_X)
     c = _dyn_parse_abcorr(s)
@@ -253,7 +240,7 @@ of the two-vector frame `fd`, with the checks of `zzdynfrm_` in its order. Throw
 """
 function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
     pool, id, name = ks.pool, fd.id, fd.name
-    ax = _dyn_squeeze(_dyn_char(pool, id, name, prefix * "AXIS"))
+    ax = _squeeze(_dyn_char(pool, id, name, prefix * "AXIS"))
     negate = startswith(ax, '-')
     ax = replace(ax, '-' => "", '+' => "")
     axis = ax == "X" ? 1 : ax == "Y" ? 2 : ax == "Z" ? 3 : 0
@@ -263,7 +250,7 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
                 "axis '$ax'; the valid values are X, -X, Y, -Y, Z, -Z"
         )
     )
-    vdef = _dyn_squeeze(_dyn_char(pool, id, name, prefix * "VECTOR_DEF"))
+    vdef = _squeeze(_dyn_char(pool, id, name, prefix * "VECTOR_DEF"))
     zero3 = zero(SVector{3, Float64})
     if vdef == "OBSERVER_TARGET_POSITION"
         targ = _dyn_bodyid(ks, id, name, prefix * "TARGET")
@@ -318,7 +305,7 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
                 obs = _dyn_bodyid(ks, id, name, prefix * "OBSERVER")
             end
         end
-        spec = _dyn_squeeze(_dyn_char(pool, id, name, prefix * "SPEC"))
+        spec = _squeeze(_dyn_char(pool, id, name, prefix * "SPEC"))
         if spec == "RECTANGULAR"
             v = _dyn_nums(pool, id, name, prefix * "VECTOR", 3)
             length(v) == 3 || _dyn_badsize("FRAME_$(id)_$(prefix)VECTOR", name, 3, length(v))
@@ -375,13 +362,13 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     pool, id, name = ks.pool, fd.id, fd.name
     base = _dyn_frameid(ks, id, name, "RELATIVE")
     style = _dyn_char(pool, id, name, "DEF_STYLE")
-    _dyn_eqstr(style, "PARAMETERIZED") || throw(
+    _eqstr(style, "PARAMETERIZED") || throw(
         SpiceError(
             :notsupported,
             "dynamic frame style '$style' (in the definition of frame $name) is not supported"
         )
     )
-    family = _dyn_squeeze(_dyn_char(pool, id, name, "FAMILY"))
+    family = _squeeze(_dyn_char(pool, id, name, "FAMILY"))
     fam = family == "MEAN_EQUATOR_AND_EQUINOX_OF_DATE" ? _DYN_MEAN_EQ :
         family == "TRUE_EQUATOR_AND_EQUINOX_OF_DATE" ? _DYN_TRUE_EQ :
         family == "MEAN_ECLIPTIC_AND_EQUINOX_OF_DATE" ? _DYN_MEAN_ECL :
@@ -406,8 +393,8 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     )
     inertial = false
     if rotsta !== nothing
-        inertial = _dyn_eqstr(rotsta, "INERTIAL")
-        inertial || _dyn_eqstr(rotsta, "ROTATING") || throw(
+        inertial = _eqstr(rotsta, "INERTIAL")
+        inertial || _eqstr(rotsta, "ROTATING") || throw(
             SpiceError(
                 :notsupported,
                 "the definition of frame $name has ROTATION_STATE = '$rotsta'; the valid " *
@@ -429,7 +416,7 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
             )
             on || continue
             value = _dyn_char(pool, id, name, item)
-            _dyn_eqstr(value, model) || throw(
+            _eqstr(value, model) || throw(
                 SpiceError(
                     :notsupported, "the definition " *
                         "of frame $name has $item = '$value', which is not recognized"
@@ -459,7 +446,8 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
         key, a = _dyn_lookup(pool, id, name, "AXES", true)
         a isa Vector{Float64} || _dyn_badtype(key, name, "integer")
         length(a) == 3 || _dyn_badsize(key, name, 3, length(a))
-        axes = (round(Int32, a[1]), round(Int32, a[2]), round(Int32, a[3]))
+        _gipool_first(a, key; room = 3)      # `zzdynvai_`: `gipool_` after the size check
+        axes = map(x -> _gipool_value(x)::Int32, (a[1], a[2], a[3]))
         coef = ntuple(i -> copy(_dyn_nums(pool, id, name, "ANGLE_$(i)_COEFFS", 20)), 3)
         scale = _dyn_degrees(_dyn_char(pool, id, name, "UNITS"))
         all(x -> 1 <= x <= 3, axes) || throw(
@@ -564,35 +552,8 @@ end
 @inline _dyn_lift(::Type{S}, x::Float64) where {S <: Real} = convert(S, x)
 @inline _dyn_lift(::Type{S}, x::Taylor{1, Float64}) where {S <: Real} = convert(S, _dyn_still(x))
 
-"Unit vector along `a`, or the zero vector if `a` is zero, in any number type."
-@inline function _dyn_unit(a::Vec3{S}) where {S <: Real}
-    n = _norm3(a)
-    return primal(n) == 0 ? zero(a) : a / n
-end
-
-"Unit vector along `a × b`, as `ucrss_` and `ducrss_`, in any number type."
-@inline _dyn_ucross(a::Vec3{S}, b::Vec3{S}) where {S <: Real} = _dyn_unit(cross(a, b))
-
 "`x - m * trunc(x / m)` with the arithmetic of `d_mod` of the f2c library; the subtracted quantity is a constant, so derivatives are not changed."
 @inline _dyn_dmod(x::Real, m::Float64) = x - m * trunc(primal(x) / m)
-
-"""
-    _dyn_rot(angle, axis) -> Mat3
-
-Contract: the coordinate rotation `[angle]_axis` of `rotate_` for `axis in 1:3`, in the
-number type of `angle`.
-"""
-@inline function _dyn_rot(angle::S, axis::Integer) where {S <: Real}
-    s, c = sincos(angle)
-    o, z = one(S), zero(S)
-    axis == 1 && return Mat3{S}(o, z, z, z, c, -s, z, s, c)
-    axis == 2 && return Mat3{S}(c, z, s, z, o, z, -s, z, c)
-    return Mat3{S}(c, -s, z, s, c, z, z, z, o)
-end
-
-"`[a3]_x3 * [a2]_x2 * [a1]_x1`, as `eul2m_` and (with `Taylor{1}` angles) `eul2xf_`."
-@inline _dyn_eul(a3::S, a2::S, a1::S, x3::Integer, x2::Integer, x1::Integer) where {S <: Real} =
-    _m_mxm(_dyn_rot(a3, x3), _m_mxm(_dyn_rot(a2, x2), _dyn_rot(a1, x1)))
 
 """
     _dyn_xf(mode, ks, from, to, et) -> Mat3
@@ -622,11 +583,37 @@ of `et` (TDB seconds), `[-z]_3 [theta]_2 [-zeta]_3` of `zzeprc76_`, in the numbe
 of `et`.
 """
 @inline function _dyn_prec(et::S) where {S <: Real}
+    zeta, z, theta = _dyn_prec_angles(et)
+    return _m_eul2m_unchecked(-z, theta, -zeta, 3, 2, 3)
+end
+
+"""
+    _dyn_prec_angles(et) -> (zeta, z, theta)
+
+Contract: the precession angles of `zzeprc76_` (radians) at `et` (TDB seconds), with the
+arithmetic of `zzeprc76_`, in the number type of `et`.
+"""
+@inline function _dyn_prec_angles(et::S) where {S <: Real}
     t = et / _DYN_CENTURY
     zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
     z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
     theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
-    return _dyn_eul(-z, theta, -zeta, 3, 2, 3)
+    return zeta, z, theta
+end
+
+"""
+    _dyn_prec_rates(et) -> (dzeta, dz, dtheta)
+
+Contract: the analytic rates (radians per second) of the angles of `_dyn_prec_angles`,
+with the arithmetic of `zzeprc76_`.
+"""
+@inline function _dyn_prec_rates(et::S) where {S <: Real}
+    t = et / _DYN_CENTURY
+    ts = 1.0 / _DYN_CENTURY
+    dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * _DYN_ARCSEC
+    dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * _DYN_ARCSEC
+    dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * _DYN_ARCSEC
+    return dzeta, dz, dtheta
 end
 
 "Contract: the mean obliquity of the ecliptic of date in radians (1980 IAU), as `zzmobliq_`."
@@ -805,13 +792,14 @@ function _dyn_wahr(et::S) where {S <: Real}
 end
 
 """
-    _dyn_wahr_state(et::Float64) -> (dpsi, deps)
+    _dyn_wahr_rates(et) -> (dpsi, deps, ddpsi, ddeps)
 
-Contract: the nutation angles of `_dyn_wahr` as `Taylor{1,Float64}` values whose
-derivative parts are the rates that `zzwahr_` returns (radians per second): the rates
-of the arguments, without the change of the coefficients.
+Contract: the nutation angles of `_dyn_wahr` and the rates that `zzwahr_` returns
+(radians per second): the rates of the arguments, without the change of the
+coefficients. Generic over the number type of `et`; with a `Float64` epoch the
+arithmetic is that of `zzwahr_`.
 """
-function _dyn_wahr_state(et::Float64)
+function _dyn_wahr_rates(et::S) where {S <: Real}
     dj = et / 86400.0
     dd = dj / 1.0e4
     dddj = dd / 1.0e4
@@ -823,11 +811,10 @@ function _dyn_wahr_state(et::Float64)
     rate = map(_DYN_WAHR_ARGS) do c
         _dyn_dmod(c[2] + dddj * (c[3] * 2.0 + dd * 3.0 * c[4]), 360.0) / _DYN_RADIAN
     end
-    dpsi = deps = ddpsi = ddeps = 0.0
+    dpsi = deps = ddpsi = ddeps = zero(S)
     for i in 1:106      # invariant: the four sums hold the terms 1:i-1
         m = @inbounds _DYN_WAHR[i]
-        arg = 0.0
-        argrt = 0.0
+        arg = argrt = zero(S)
         for j in 1:5
             if m[j] != 0
                 arg += m[j] * ang[j]
@@ -835,17 +822,26 @@ function _dyn_wahr_state(et::Float64)
                 arg = _dyn_dmod(arg, _TWOPI)
             end
         end
-        cl = Float64(m[6])
-        m[7] != 0 && (cl += m[7] * t)
-        ce = Float64(m[8])
-        m[9] != 0 && (ce += m[9] * t)
+        cl = m[7] != 0 ? m[6] + m[7] * t : zero(S) + m[6]
+        ce = m[9] != 0 ? m[8] + m[9] * t : zero(S) + m[8]
         s, c = sincos(arg)
         dpsi += cl * s / _DYN_WAHR_FACTOR
         deps += ce * c / _DYN_WAHR_FACTOR
         ddpsi += cl * c * argrt / _DYN_WAHR_FACTOR
         ddeps -= ce * s * argrt / _DYN_WAHR_FACTOR
     end
-    return Taylor((dpsi, ddpsi / 86400.0)), Taylor((deps, ddeps / 86400.0))
+    return dpsi, deps, ddpsi / 86400.0, ddeps / 86400.0
+end
+
+"""
+    _dyn_wahr_state(et::Float64) -> (dpsi, deps)
+
+Contract: the nutation angles of `_dyn_wahr` as `Taylor{1,Float64}` values whose
+derivative parts are the rates of `_dyn_wahr_rates`.
+"""
+@inline function _dyn_wahr_state(et::Float64)
+    dpsi, deps, ddpsi, ddeps = _dyn_wahr_rates(et)
+    return Taylor((dpsi, ddpsi)), Taylor((deps, ddeps))
 end
 
 "Nutation angles in the number type of the mode: `_dyn_wahr` or `_dyn_wahr_state`."
@@ -864,9 +860,9 @@ function _dyn_ofdate(mode::_CKExact, ks::KernelSet, def::DynFrame, et::T) where 
     if def.family == _DYN_TRUE_EQ
         dpsi, deps = _dyn_nutation(mode, et)
         mob = _dyn_mobliq(et)
-        m = _m_mxm(_dyn_eul(-mob - deps, -dpsi, mob, 1, 3, 1), m)
+        m = _m_mxm(_m_eul2m_unchecked(-mob - deps, -dpsi, mob, 1, 3, 1), m)
     elseif def.family == _DYN_MEAN_ECL
-        m = _m_mxm(_dyn_rot(_dyn_mobliq(et), 1), m)
+        m = _m_mxm(_m_rotate(_dyn_mobliq(et), 1), m)
     end
     x = typeof(m)(transpose(m))
     def.base == _J2000_FRAME && return x
@@ -915,19 +911,13 @@ Contract: the precession matrix of `_dyn_prec` with its derivative, with the ari
 of `zzeprc76_`: the angles and their analytic rates go to `eul2xf_`.
 """
 function _dyn_prec_state(et::Float64)
-    t = et / _DYN_CENTURY
-    zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
-    z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
-    theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
-    ts = 1.0 / _DYN_CENTURY
-    dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * _DYN_ARCSEC
-    dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * _DYN_ARCSEC
-    dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * _DYN_ARCSEC
+    zeta, z, theta = _dyn_prec_angles(et)
+    dzeta, dz, dtheta = _dyn_prec_rates(et)
     return _dyn_eul2xf(-z, theta, -zeta, -dz, dtheta, -dzeta, 3, 2, 3)
 end
 
-"Contract: the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`."
-@inline function _dyn_mobliq_state(et::Float64)
+"Contract: the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`, in the number type of `et`."
+@inline function _dyn_mobliq_state(et::Real)
     t = et / 31557600.0 / 100.0
     mob = _DYN_ARCSEC * (t * (t * (t * 0.001813 - 5.9e-4) - 46.815) + 84381.448)
     dmob = _DYN_ARCSEC * (t * (t * 3 * 0.001813 - 0.0011800000000000001) - 46.815) *
@@ -964,8 +954,8 @@ sine), for any number type. Requires `p != 0` and `|v| < c`.
 @inline function _dyn_stelab(p, v)
     pm = _norm3(p)
     u = p / pm
-    vp = v - _dot3(v, u) * u
-    c = sqrt(1 - _dot3(vp, vp) / CLIGHT^2)
+    vp = v - _m_dot(v, u) * u
+    c = sqrt(1 - _m_dot(vp, vp) / CLIGHT^2)
     return c * p + (pm / CLIGHT) * vp
 end
 
@@ -994,7 +984,7 @@ function _dyn_apo(
     nos = _aberration(corr.flags & ~_AB_S)
     robs, vobs = _ssb(ks, obs, et, iref)::NTuple{2, Vec3{T}}
     r, lt = _apo(ks, targ, et, iref, nos, robs, vobs)::Tuple{Vec3{T}, T}
-    if corr.stellar && primal(_dot3(r, r)) > 0
+    if corr.stellar && primal(_m_dot(r, r)) > 0
         r = _dyn_stelab(r, corr.transmit ? -vobs : +vobs)
     end
     inertial && return r, lt
@@ -1272,7 +1262,7 @@ function _dyn_euler(mode, def::DynFrame, et::T) where {T <: Real}
 end
 
 @inline _dyn_euler_matrix(a1::S, a2::S, a3::S, axes::NTuple{3, Int32}) where {S <: Real} =
-    _dyn_eul(a1, a2, a3, axes[1], axes[2], axes[3])
+    _m_eul2m_unchecked(a1, a2, a3, axes[1], axes[2], axes[3])
 
 # State mode: the angles and their rates (the Horner scheme of a `Taylor` epoch is the
 # arithmetic of `polyds_`) go to `eul2xf_`, as in `zzdynfrm_`; the derivative of the

@@ -31,9 +31,6 @@ end
 # Load list
 # ---------------------------------------------------------------------------------------
 
-"Kernel types that `ktotal`, `kdata` and `kinfo` report, as in `keeper.f`."
-const KERNEL_KINDS = ("SPK", "CK", "PCK", "DSK", "EK", "TEXT", "META")
-
 """
     kernel_filetype(entry::Loaded) -> String
 
@@ -86,8 +83,8 @@ julia> ktotal(SpiceContext())
 See also [`kdata`](@ref), [`kinfo`](@ref).
 """
 ktotal(ks::KernelSet, kind::AbstractString = "ALL") = length(_kernels_of_kind(ks, kind))
-ktotal(ctx::SpiceContext, kind::AbstractString) = ktotal(kernelset(ctx), kind)
-ktotal(kind::AbstractString) = ktotal(default_context(), kind)
+ktotal(ctx::SpiceContext, kind::AbstractString = "ALL") = ktotal(kernelset(ctx), kind)
+ktotal(kind::AbstractString = "ALL") = ktotal(default_context(), kind)
 
 """
     kdata([ctx,] which, kind="ALL") -> Union{Nothing,Tuple{String,String,String,Int}}
@@ -137,7 +134,7 @@ the meaning that they have in [`kdata`](@ref); `handle` is always 0.
 Throws `SpiceError(:emptystring)` if `file` is empty.
 """
 function kinfo(ks::KernelSet, file::AbstractString)
-    isempty(file) && throw(SpiceError(:emptystring, "kinfo: the file name is empty"))
+    _chkfstr("kinfo", "file name", file)
     i = findfirst(e -> e.path == file, ks.loaded)
     i === nothing && return nothing
     e = ks.loaded[i]

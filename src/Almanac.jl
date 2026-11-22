@@ -1,6 +1,6 @@
 module Almanac
 
-using StaticArrays: StaticArrays, MMatrix, MVector, SMatrix, SVector, StaticArray,
+using StaticArrays: StaticArrays, MVector, SMatrix, SVector, StaticArray,
     StaticMatrix, StaticVector
 using Mmap: Mmap
 using InlineStrings: String63
@@ -88,8 +88,10 @@ include("dyntypes.jl")      # DynFrame, SwitchFrame, PoolWatch (fields of the ty
 include("dsk_types.jl")     # DLADescr, DSKDescr, DSKSegment, DSKFile, DSKTolerances
 include("ek/types.jl")      # EKColumnAttr, EKSegmentSummary, EKFile, EKTable
 include("errors.jl")         # SpiceError and its subtypes, ERROR_KINDS
+include("strings.jl")        # ASCII case, eqstr, matchi
 include("types.jl")
 include("taylor.jl")        # Taylor{N,T} truncated series, `primal`
+include("math/kernels.jl")  # _m_ vector and matrix kernels (operation order of SPICELIB)
 include("daf.jl")           # open_daf, segment descriptors
 include("spk_eval.jl")      # spk_eval, pck_eval, find_segment
 include("spk_more.jl")      # SPK types 1, 5, 8, 9, 12 to 15, 17 to 21
@@ -131,7 +133,7 @@ include("spk_types/sgp4.jl")    # SGP4/SDP4 propagation of two-line elements
 include("spk_types/type10.jl")  # SPK type 10: generic segment, TEME to J2000
 include("tle.jl")           # getelm, evsgp4, spkw10
 include("spk_segments.jl")  # spksfs, spkpvn, spkuds, spksub
-include("kernel_info.jl")   # spkobj, spkcov, ktotal(kind), kdata, kinfo, tkvrsn
+include("kernel_info.jl")   # spkobj, spkcov, ktotal, kdata, kinfo, tkvrsn
 include("math/vectors.jl")      # vadd ... vsep, mxv, mxm, invert, rotate, twovec, dvhat, g forms
 include("math/rotations.jl")    # eul2m, m2eul, m2q, q2m, qxq, axisar, raxisa, rav2xf, xf2eul
 include("math/ellipsoid.jl")    # SpicePlane, SpiceEllipse, nearpt, surfpt, edlimb, inedpl, npedln

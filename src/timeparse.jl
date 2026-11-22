@@ -185,8 +185,6 @@ function _Tokens(str::Vector{UInt8})
     )
 end
 
-@inline _upper(c::UInt8) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
-@inline _lower(c::UInt8) = (UInt8('A') <= c <= UInt8('Z')) ? c + 0x20 : c
 @inline _isdigit(c::UInt8) = UInt8('0') <= c <= UInt8('9')
 
 "Contract: returns `s[b:e]` as a `String`; empty when the range is empty or outside `s`."
@@ -385,13 +383,12 @@ function _zzvalt!(st::_Tokens, b::Int, e::Int, letter::Char)::Bool
         st.rep[i] == UInt8('i') || continue
         # `nparsi` rejects a value that is not a 32-bit integer.
         x = try
-            _nparsd(@view st.str[st.begs[i]:st.ends[i]])
+            _nparsi(@view st.str[st.begs[i]:st.ends[i]])
         catch err
             err isa SpiceError || rethrow()
             continue
         end
-        abs(trunc(x)) <= 2147483647.0 || continue
-        if b <= trunc(Int, x) <= e
+        if b <= x <= e
             st.rep[i] = UInt8(letter)
             did = true
         end
@@ -953,7 +950,7 @@ const _NOJDVALUE = "The Julian date of the string has no value: the sign and the
 # ---------------------------------------------------------------------------------
 
 "Contract: returns a year 0..99 as the year of the 100 years from `lbound` (1969..2068 at start) that it abbreviates, and another year unchanged (`texpyr`; bound)."
-function _expand_year(year::Int, lbound::Int = 1969)::Int
+function _expand_year(year::Int, lbound::Int)::Int
     (year >= 100 || year < 0) && return year
     y = year + lbound ÷ 100 * 100
     return y < lbound ? y + 100 : y
@@ -1215,7 +1212,7 @@ timout(et, "YYYY-MM-DDTHR:MN:SC.### ::UTC ::RND")    # back to a string, rounded
 See also [`timout`](@ref), [`et2utc`](@ref), [`utc2et`](@ref), [`tparse`](@ref).
 """
 function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
-    isempty(s) && throw(SpiceError(:emptystring, "str2et: the time string is empty"))
+    _chkfstr("str2et", "time string", s)
     l = _lsk(ks)
     dhoff, dmoff, _ = defs.zone == "" ? (0.0, 0.0, true) : _zone_offsets(defs.zone)
     p = _tpartv(s, 16)
@@ -1386,7 +1383,7 @@ with the check on, if a component is out of range, as CSPICE does for every such
 string, and `SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
 """
 function utc2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
-    isempty(s) && throw(SpiceError(:emptystring, "utc2et: the time string is empty"))
+    _chkfstr("utc2et", "time string", s)
     l = _lsk(ks)
     p = _tpartv(s, 8)
     p.ok || _badtime(s, p.error, :invalidtimestring)
@@ -1452,7 +1449,7 @@ julia> tparse("2 JAN 2000")
 ```
 """
 function tparse(s::AbstractString, defs::TimeDefaults)::Float64
-    isempty(s) && throw(SpiceError(:emptystring, "tparse: the time string is empty"))
+    _chkfstr("tparse", "time string", s)
     p = _tpartv(s, 8)
     p.ok || _badtime(s, p.error, :unparsedtime)
     modify = p.modify
@@ -1524,7 +1521,7 @@ julia> tpictr("2025-03-01T12:00:00.000")
 ```
 """
 function tpictr(sample::AbstractString)::String
-    isempty(sample) && throw(SpiceError(:emptystring, "tpictr: the sample is empty"))
+    _chkfstr("tpictr", "sample", sample)
     p = _tpartv(sample, 8)
     strip(p.pictur, ' ') == "" && _badtime(sample, p.error, :unparsedtime)
     return String(rstrip(p.pictur, ' '))

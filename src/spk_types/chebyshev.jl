@@ -1,10 +1,6 @@
 # Chebyshev types with their own record layout: type 14 (unequal intervals, a generic
 # segment) and type 20 (velocity series only, position by integration).
 
-"Julian date of J2000 and seconds in one day (`j2000` and `spd` of CSPICE)."
-const _J2000_JD = 2451545.0
-const _SPD = 86400.0
-
 """
     _spk14(data, seg, et::T) -> (pos, vel)
 
@@ -21,13 +17,12 @@ one throws `SpiceError(:notsupported)`.
 """
 function _spk14(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     lay = _spk14_layout(data, seg)
-    b, ncoef, stride = seg.baddr, lay.ncoef, lay.stride
-    k = clamp(_lstled(data, b - 1 + lay.refbas, lay.nref, primal(et)), 1, lay.npkt)
-    a = b + lay.pktbas + (k - 1) * stride + lay.pktoff  # address of MID
+    ncoef = lay.ncoef
+    a = _spk14_packet(data, seg, lay, primal(et))     # address of MID
     @inbounds mid, radius = data[a], data[a + 1]
     tau = (et - mid) / radius
-    (pos,) = _cheb3(data, a + 2, ncoef, tau, 1 / radius, Val(0))
-    (vel,) = _cheb3(data, a + 2 + 3 * ncoef, ncoef, tau, 1 / radius, Val(0))
+    (pos,) = _cheb3(data, a + 2, ncoef, tau, radius, Val(0))
+    (vel,) = _cheb3(data, a + 2 + 3 * ncoef, ncoef, tau, radius, Val(0))
     return pos, vel
 end
 
@@ -45,8 +40,7 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     nmeta = _seg_count(seg, @inbounds(data[e]), 15, len, "meta data count")
-    # A segment of 15 meta items was written as 16 doubles (`sgmeta`).
-    mb = e - max(nmeta, 16)                     # meta item i is data[mb+i]
+    mb, hasoff = _sg_meta_base(nmeta, e)        # meta item i is data[mb+i]
     mb >= b - 1 || _badsegment(seg, "the meta data do not fit the segment")
     @inbounds begin
         conbas = _seg_count(seg, data[mb + 1], 0, len, "constants base")
@@ -58,7 +52,7 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
         pktbas = _seg_count(seg, data[mb + 11], 0, len, "packet base")
         npkt = _seg_count(seg, data[mb + 12], 1, len, "packet count")
         pktsz = _seg_count(seg, data[mb + 15], 8, len, "packet size")
-        pktoff = nmeta >= 16 ? _seg_count(seg, data[mb + 16], 0, len, "packet offset") : 0
+        pktoff = hasoff ? _seg_count(seg, data[mb + 16], 0, len, "packet offset") : 0
     end
     (rdrtyp == 3 && pdrtyp == 0) || throw(
         SpiceError(
@@ -74,6 +68,18 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
     ncoef = _seg_count(seg, @inbounds(data[b - 1 + conbas + 1]), 1, len, "coefficient count")
     6 * ncoef + 2 == pktsz || _badsegment(seg, "the packet size is not 2 + 6*NCOEF")
     return (; conbas, refbas, nref, pktbas, npkt, pktsz, pktoff, stride, ncoef)
+end
+
+"""
+    _spk14_packet(data, seg, lay, et::Float64) -> Int
+
+Address of the first double (`MID`) of the packet of the SPK type 14 or PCK type 3
+segment `seg` with the layout `lay` for `et`: the last packet whose reference epoch is
+not after `et`, and the first packet for an epoch before them all.
+"""
+@inline function _spk14_packet(data::Vector{Float64}, seg::Segment, lay, et::Float64)
+    k = clamp(_lstled(data, seg.baddr - 1 + lay.refbas, lay.nref, et), 1, lay.npkt)
+    return seg.baddr + lay.pktbas + (k - 1) * lay.stride + lay.pktoff
 end
 
 """
@@ -142,10 +148,10 @@ function _spk20(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
             isfinite(initfr) && isfinite(intlen) && intlen > 0.0
     ) ||
         _badsegment(seg, "the scales or the interval values are not valid")
-    init = (initjd - _J2000_JD + initfr) * _SPD
+    init = (initjd - _JD2000 + initfr) * _SPD
     intrvl = intlen * _SPD
     recno = clamp(_trunc_index((primal(et) - init) / intrvl) + 1, 1, nrec)
-    recbeg = (initjd - _J2000_JD + (recno - 1) * intlen) * _SPD
+    recbeg = (initjd - _JD2000 + (recno - 1) * intlen) * _SPD
     radius = intrvl / 2.0
     mid = recbeg + initfr * _SPD + radius
     r = b + (recno - 1) * recsiz

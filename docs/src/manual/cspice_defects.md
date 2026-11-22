@@ -30,6 +30,7 @@ How to read the tables:
 | `ttrans` (`str2et`) | Day numbers are 32-bit integers and wrap: the epoch `"238409829538 JD"` gives an ET of the opposite sign | The same | `time` |
 | C casts of f2c (`(integer) x`, `i_dnnt`) | A double outside the 32-bit range, or NaN, is undefined behaviour in C: x86 gives the smallest 32-bit integer, ARM saturates | The x86 result on every machine, so it differs from CSPICE built for ARM | `time` |
 | `hx2dp` | The exponent -2³¹ overflows when negated, and the routine divides by 16 once instead of returning zero | The same | `math_vectors` |
+| `ckw06` | The second check of the bounds of a mini-segment compares its last epoch with the start of its interval, not with the end, so a mini-segment whose epochs end before its interval is written | The same check, so the same files | `dafwrite` |
 
 ## Defects that Almanac.jl fixes
 
@@ -74,6 +75,9 @@ error or the correct result.
 | `dskmi2` | Does not check that the vertex indices are in 1 to `nv` | `:badvertexindex` | `dsk` |
 | `zzgflong` (`gfposc`, `gfsubc`, `gfsntc`) | For ABSMIN or ABSMAX with `adjust` on a longitude or right ascension, reads the first interval of an empty result window | Returns the empty window | `gf_posc` |
 | GF searches | A step below the spacing of doubles at the epoch makes the search sample the same epoch forever | `:invalidstep` | `gf_solver` |
+| `zzgfrelx`, `zzgflong` (`gfuds`, `gfdist`, `gfposc` and the other GF searches with `adjust`) | Take a NaN or infinite `adjust` for ABSMIN and ABSMAX, since only `adjust < 0` and, for the other relations, `adjust != 0` are tested | `:invalidvalue` for every relation, the kind that CSPICE gives for the other relations | `gf_solver` |
+| `zzgfrelx` (`gfuds`, `gfdist` and the other GF searches with `refval`) | Takes a NaN reference value: every comparison with it is false, so `<`, `>` and `=` find no event | `:invalidvalue` for every relation | `gf_solver` |
+| `wnsumd` | Where rounding makes the variance of the interval lengths negative (intervals of equal length), the standard deviation is NaN | 0 | `windows` |
 | `vperp_c` | The header says that a zero `b` gives `a`; the code gives the zero vector | `a`, as the header says | `math_vectors` |
 | `vsepg_c` | Loses up to half the digits near 0 and π | The method of `vsep` | `math_vectors` |
 
@@ -112,6 +116,7 @@ part of the API, to show that every difference from CSPICE comes from them.
 | `ekdelr` on a fast-loaded segment | The record pages have a link count of 0, so the first deleted row frees a page and new rows overwrite the others | Correct link counts | `ek_write` |
 | `zzekac04` to `zzekac06`, `zzekde04` to `zzekde06` | A data page on which an array entry continues has no link, so an update frees it and the next entry overwrites another | Correct links | `ek_write` |
 | `zzekfrx` (`ekdelr`, `ekucec`, `ekuced`, `ekucei`) | Looks for a key at one position of the index only. The index can hold equal keys in another order (the fast writers sort unstably, and strings longer than the column are cut), so the call gives `ITEMNOTFOUND` | Looks at all equal keys | `ek_write` |
+| `zzektr1s` (`ekffld`) | For a fast load of 5167 or 5168 rows (the smallest trees of depth 3), sizes the subtrees of the middle nodes by dividing by MNKEYC in place of MNKIDC, so their leaves overlap: the record tree and the index trees hold more keys than they state, some of them twice | A valid tree | `ek_write` |
 
 ### Fixes that change only the bytes of a file
 
@@ -122,7 +127,7 @@ writes differs.
 |---|---|---|---|
 | `dafps` (binary PCK writers) | The 4 padding bytes of a summary with 5 integers keep the sixth integer of the last summary packed, often an SPK or CK address | Zero | `dafwrite` |
 | `dafarr` | Extends the file with a buffer that is not set | Zeros | `dafwrite` |
-| DAS writers (DSK, EK) | The padding of a record is whatever the buffer held before | Zeros | `dsk` |
+| DAS writers (DSK, EK) | The padding of a record is whatever the buffer held before | Blanks in a character record, zeros in a double precision or integer record | `dsk` |
 | `zzekpage` | Unused bytes of new character pages are NUL until an `ekopn` in the same process | Blanks | `ek_write` |
 
 ### Fixes that change no computed value

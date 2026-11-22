@@ -42,20 +42,29 @@ end
 Contract: frame ID and frame name for the value of an `OBJECT_<body>_FRAME` variable,
 as `cidfrm_` and `cnmfrm_` read it: a frame name (built-in, or with a `FRAME_<name>`
 variable) or a frame ID (built-in, or with a `FRAME_<id>_NAME` variable). `nothing` if
-the value does not identify a frame.
+the value does not identify a frame. A name is taken as `gcpool_` returns it into 32
+characters and compared exactly (`zzhscchk_`): `iau_mars` or ` IAU_MARS` is not the
+built-in frame `IAU_MARS`.
 """
 function _frame_of_object(ks::KernelSet, value::PoolValue)
     isempty(value) && return nothing
     if value isa Vector{String}
-        name = String(strip(value[1]))
-        code = get(BUILTIN_FRAMENAME2ID, normalize_name(name), nothing)
-        code === nothing || return Int(code), name
-        v = get(ks.pool, "FRAME_" * name, nothing)
-        (v isa Vector{Float64} && length(v) == 1) || return nothing
-        return round(Int, v[1]), name
+        raw = value[1]
+        ncodeunits(raw) > 32 && (raw = String(codeunits(raw)[1:32]))
+        name = String(rstrip(raw, ' '))
+        # The built-in names are in the form of `normalize_name`, so the exact match
+        # is a match of the normalized name by a name that is already in that form.
+        if normalize_name(name) == name
+            code = get(BUILTIN_FRAMENAME2ID, name, nothing)
+            code === nothing || return Int(code), name
+        end
+        # `gipool_(FRAME_<name>, 1, 8, ...)`, then the test of one value
+        key = "FRAME_" * name
+        fcode = _gipool_first(get(ks.pool, key, nothing), key; room = 8, single = true)
+        return fcode === nothing ? nothing : (Int(fcode), name)
     end
-    code = round(Int, value[1])
-    f = get(BUILTIN_FRAMES, Int32(clamp(code, typemin(Int32), typemax(Int32))), nothing)
+    code = Int(_gipool_first(value, "OBJECT_<body>_FRAME")::Int32)
+    f = get(BUILTIN_FRAMES, Int32(code), nothing)
     f === nothing || return code, f.name
     v = get(ks.pool, "FRAME_$(code)_NAME", nothing)
     (v isa Vector{String} && length(v) == 1) || return nothing
@@ -210,11 +219,11 @@ function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
         v = ks.pool[key]
         (v isa Vector{Float64} && !isempty(v)) ||
             bad(key, "integer class was not associated with this keyword")
-        round(Int, v[1]) == frclss || continue
+        _gipool_first(v, key) == frclss || continue
         id = get(ks.pool, key * "_ID", nothing)
         (id isa Vector{Float64} && !isempty(id)) ||
             bad(key, "associated integer class ID assignment was not found")
-        round(Int, id[1]) == clssid || continue
+        _gipool_first(id, key * "_ID") == clssid || continue
         name = get(ks.pool, key[1:(end - 6)] * "_NAME", nothing)
         (name isa Vector{String} && !isempty(name)) ||
             bad(key, "associated frame name assignment was not found")
@@ -226,7 +235,7 @@ function _ccifrm_check(ks::KernelSet, frclss::Integer, clssid::Integer)
                     "$(strip(name[1])) but associated frame ID assignment was not found"
             )
         )
-        center = "FRAME_$(round(Int, code[1]))_CENTER"
+        center = "FRAME_$(_gipool_first(code, "FRAME_" * strip(name[1])))_CENTER"
         haskey(ks.pool, center) || throw(
             SpiceError(
                 :kernelvarnotfound,
@@ -317,13 +326,10 @@ function kplfrm(ks::KernelSet, frmcls::Integer)
     pool = ks.pool
     # `gipool_` gives the first value of a numeric variable, rounded; names are 32
     # characters long in CSPICE, so a longer name is cut.
-    getint(key) = (
-        v = get(pool, first(key, 32), nothing);
-        v isa Vector{Float64} && !isempty(v) ? _nint(v[1]) : nothing
-    )
+    getint(key) = (k = first(key, 32); _gipool_first(get(pool, k, nothing), k))
     ids = Int[]
     for (key, val) in pool
-        _pool_x_match(key, "FRAME_*_NAME") || continue
+        _matchi(key, "FRAME_*_NAME") || continue
         (val isa Vector{String} && !isempty(val)) || continue
         name = strip(first(val[1], 32), ' ')
         isempty(name) && (name = " ")
@@ -606,23 +612,8 @@ julia> bodvcd(ctx, 399, "RADII")
  6356.7519
 ```
 """
-function bodvcd(ks::KernelSet, bodyid::Integer, item::AbstractString)
-    key = _body_key(bodyid, item)
-    v = get(ks.pool, key, nothing)
-    v === nothing && throw(
-        SpiceError(
-            :kernelvarnotfound,
-            "the variable $key could not be found in the kernel pool"
-        )
-    )
-    v isa Vector{Float64} || throw(
-        SpiceError(
-            :typemismatch,
-            "the data associated with variable $key are not of numeric type"
-        )
-    )
-    return copy(v)
-end
+bodvcd(ks::KernelSet, bodyid::Integer, item::AbstractString) =
+    gdpool(ks, _body_key(bodyid, item))
 
 # Context and default-context forms.
 for f in (:frinfo, :cidfrm, :tkfram)

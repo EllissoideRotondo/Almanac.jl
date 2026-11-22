@@ -15,7 +15,8 @@
 #   (f) the tolerances, kernel management, and every input check;
 #   (g) allocation, inference, time per intercept, and use from many threads;
 #   (h) `dskxsi` on segments bounded in longitude and latitude, in latitudinal and in
-#       planetodetic coordinates.
+#       planetodetic coordinates, and the volume element routines on inputs that
+#       random rays do not give.
 #
 # Kernels (frames, body constants, surface names, one SPK segment) are written by the
 # group. CSPICE is called from the main task only.
@@ -619,6 +620,9 @@ function dsk_part_7(env)
     for name in (
             "Ellipsoid One", "ellipsoid   one", " ROUGH ", "rough", "tilted cube",
             "old name", "OLD NAME", "p shape", "12", " -7 ", "nothing", " ", "1.5", "-1.5", "2e1", "x1",
+            # Regression: `nparsi_` is `nparsd_` cut toward zero, so it takes pi, commas
+            # and blanks inside the number, and the bounds of 32-bit integers after the cut.
+            "pi", "-PI", "1,000", "1 000", "2147483647.9", "-2147483648.5", "2147483648", "1d1",
         )
         for body in (499, 401, 5)
             check!(fails, srfscc(ctx, name, body) == SPICE.srfscc(name, body), "srfscc", repr(name), body)
@@ -663,8 +667,25 @@ function dsk_part_7(env)
             ("NAIF_SURFACE_NAME = ( 'A' )\nNAIF_SURFACE_CODE = ( 1 )\nNAIF_SURFACE_BODY = ( 'B' )", :badvariabletype),
             ("NAIF_SURFACE_NAME = ( 'A', 'B' )\nNAIF_SURFACE_CODE = ( 1 )\nNAIF_SURFACE_BODY = ( 499, 499 )", :arraysizemismatch),
             ("NAIF_SURFACE_NAME = ( 'A', ' ' )\nNAIF_SURFACE_CODE = ( 1, 2 )\nNAIF_SURFACE_BODY = ( 499, 499 )", :blanknameassigned),
+            ("NAIF_SURFACE_NAME = ( 'A' )\nNAIF_SURFACE_CODE = ( 3.0D9 )\nNAIF_SURFACE_BODY = ( 499 )", :intoutofrange),
         )
         @test bad_map(text) == (kind, kind, kind)
+    end
+    # Regression: the codes and bodies of the map are read by `gipool_`, which rounds a
+    # tie away from zero; they were rounded to even (body 498, both codes 2).
+    let p = joinpath(dir, "halfmap.tk")
+        write(
+            p, "KPL/FK\n\\begindata\nNAIF_SURFACE_NAME = ( 'HALF A', 'HALF B' )\n" *
+                "NAIF_SURFACE_CODE = ( 1.5, 2.5 )\nNAIF_SURFACE_BODY = ( 499, 498.5 )\n\\begintext\n"
+        )
+        c = SpiceContext()
+        furnsh(c, p)
+        SPICE.kclear()
+        SPICE.furnsh(p)
+        for (name, body) in (("HALF A", 499), ("HALF B", 499), ("HALF B", 498))
+            @test srfscc(c, name, body) == SPICE.srfscc(name, body)
+        end
+        @test srfscc(c, "HALF B", 499) == 3
     end
     oracle_load(loadlist)
     return nothing
@@ -1317,6 +1338,130 @@ function dsk_part_16(env)
     return nothing
 end
 
+"""
+Part of group 12: (h) the volume element routines on inputs that random rays do not
+give, each against its routine of CSPICE: a ray from a point of a plane (`inrypl`), a
+cone of more than pi/2 (`zzcxbrut`), points on the polar axis (`zzpdcmpl`), the
+inclusion tests without margin (`zzinlat0`, `zzinpdt0`) and a ray that crosses the
+upper latitude cone twice (`zzrytlat`).
+"""
+function dsk_part_17()
+    # The vertex is on the plane z = 1: -1 (infinitely many points) for a direction in
+    # the plane, else the vertex.
+    vtx = V3(0.3, -0.4, 1.0)
+    plane = SPICE.nvc2pl([0.0, 0.0, 1.0], 1.0)
+    for (d, want) in ((V3(1.0, 0.5, 0.0), -1), (V3(0.2, 0.0, 1.0), 1))
+        n, x = Almanac._dsk_inrypl(vtx, d, V3(0.0, 0.0, 1.0), 1.0)
+        cn, cx = SPICE.inrypl(collect(vtx), collect(d), plane)
+        @test n == cn == want
+        @test x == V3(cx) == vtx
+    end
+
+    # A cone of half-angle 2 is the cone of pi - 2 about the opposite axis.
+    function c_cxbrut(apex, axis, angle, e1, e2)
+        x = zeros(3)
+        ok = Ref{Cint}(0)
+        ccall(
+            (:zzcxbrut_, DSKLIB), Cint, (
+                Ptr{Float64}, Ptr{Float64}, Ref{Float64}, Ptr{Float64}, Ptr{Float64},
+                Ptr{Float64}, Ref{Cint},
+            ), collect(apex), collect(axis), angle, collect(e1), collect(e2), x, ok
+        )
+        c_check()
+        return V3(x), ok[] != 0
+    end
+    apex = V3(0.1, 0.2, -0.3)
+    axis = V3(0.2, -0.1, 1.0)
+    x, ok = Almanac._dsk_cxbrut(apex, axis, 2.0, apex - axis, apex + V3(1.0, 0.0, 0.0))
+    @test ok
+    @test (x, ok) == c_cxbrut(apex, axis, 2.0, apex - axis, apex + V3(1.0, 0.0, 0.0))
+    # bisection to 1e-15 of a segment of length 1.5: the angle is right to rounding
+    @test acos(dot(normalize(x - apex), -normalize(axis))) ≈ pi - 2.0 atol = 1.0e-12
+    @test !Almanac._dsk_cxbrut(apex, axis, 2.0, apex - axis, apex - 2 * axis)[2]
+    @test !c_cxbrut(apex, axis, 2.0, apex - axis, apex - 2 * axis)[2]
+
+    # Points on the polar axis against the latitudes of the poles and others.
+    function c_pdcmpl(re, f, p, lat)
+        rel = Ref{Cint}(0)
+        ccall(
+            (:zzpdcmpl_, DSKLIB), Cint,
+            (Ref{Float64}, Ref{Float64}, Ptr{Float64}, Ref{Float64}, Ref{Cint}),
+            re, f, collect(p), lat, rel
+        )
+        c_check()
+        return Int(rel[])
+    end
+    for (p, lat, want) in (
+            (V3(0.0, 0.0, 2.0), pi / 2, 0), (V3(0.0, 0.0, 2.0), 1.0, 1),
+            (V3(0.0, 0.0, -2.0), -pi / 2, 0), (V3(0.0, 0.0, -2.0), -1.0, -1),
+        )
+        @test Almanac._dsk_pdcmpl(3.0, 0.1, p, lat) == want == c_pdcmpl(3.0, 0.1, p, lat)
+    end
+
+    # The inclusion tests without margin, on the longitude: inside, outside, inside by
+    # less than 1e-12, a turn away, and bounds across the longitude pi.
+    function c_inlat0(r, lon, lat, b)
+        inside = Ref{Cint}(0)
+        ccall(
+            (:zzinlat0_, DSKLIB), Cint, (
+                Ref{Float64}, Ref{Float64}, Ref{Float64}, Ptr{Float64}, Ref{Cint},
+                Ref{Cint},
+            ), r, lon, lat, collect(b), 0, inside
+        )
+        c_check()
+        return inside[] != 0
+    end
+    function c_inpdt0(p, lon, b, re, f)
+        inside = Ref{Cint}(0)
+        corpar = [re; f; zeros(8)]
+        ccall(
+            (:zzinpdt0_, DSKLIB), Cint, (
+                Ptr{Float64}, Ref{Float64}, Ptr{Float64}, Ptr{Float64}, Ref{Cint},
+                Ref{Cint},
+            ), collect(p), lon, collect(b), corpar, 0, inside
+        )
+        c_check()
+        return inside[] != 0
+    end
+    b = (-1.0, 1.0, -0.5, 0.5, 1.0, 2.0)
+    bpi = (3.0, -3.0, -0.5, 0.5, 1.0, 2.0)
+    for (bb, lon, want) in (
+            (b, 0.5, true), (b, 1.5, false), (b, -1.0 - 5.0e-13, true),
+            (b, 2 * pi - 0.5, true), (b, 0.5 - 2 * pi, true),
+            (bpi, Float64(pi), true), (bpi, -Float64(pi), true), (bpi, 0.0, false),
+        )
+        @test Almanac._dsk_inlat0(1.5, lon, 0.2, bb, 0) == want == c_inlat0(1.5, lon, 0.2, bb)
+    end
+    bpd = (-1.0, 1.0, -0.5, 0.5, -0.1, 0.1)
+    for (plon, lon, want) in ((0.5, 0.5, true), (1.5, 1.5, false), (-0.5, 2 * pi - 0.5, true))
+        p = V3(3.0 * cos(plon), 3.0 * sin(plon), 0.0)
+        @test Almanac._dsk_inpdt0(p, lon, bpd, 3.0, 0.1, 0) == want == c_inpdt0(p, lon, bpd, 3.0, 0.1)
+    end
+
+    # From below the element (latitude 0.17 < 0.3), the ray crosses the cone of the
+    # upper latitude 0.5 twice, both times inside the element without the latitude;
+    # the sphere of the upper radius is entered below the element.
+    function c_rytlat(v, d, b, margin)
+        n = Ref{Cint}(0)
+        x = zeros(3)
+        ccall(
+            (:zzrytlat_, DSKLIB), Cint, (
+                Ptr{Float64}, Ptr{Float64}, Ptr{Float64}, Ref{Float64}, Ref{Cint},
+                Ptr{Float64},
+            ), collect(v), collect(d), collect(b), margin, n, x
+        )
+        c_check()
+        return Int(n[]), V3(x)
+    end
+    blat = (-Float64(pi), Float64(pi), 0.3, 0.5, 0.4, 2.0)
+    v = V3(-3.0, -0.2, 0.5)
+    d = V3(1.0, 0.05, 0.01)
+    n, x = Almanac._dsk_rytlat(v, d, blat, 1.0e-10)
+    @test n == 1
+    @test (n, x) == c_rytlat(v, d, blat, 1.0e-10)
+    return nothing
+end
+
 group("12. DSK type 2 against CSPICE") do
     rng = MersenneTwister(SEED + 12)
     dir = mktempdir()
@@ -1404,6 +1549,10 @@ group("12. DSK type 2 against CSPICE") do
 
     @apart @testset "(h) segments that cover a part of the body" begin
         dsk_part_16(env)
+    end
+
+    @apart @testset "(h) volume element routines on special inputs" begin
+        dsk_part_17()
     end
 end
 

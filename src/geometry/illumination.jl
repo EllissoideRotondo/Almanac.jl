@@ -82,19 +82,19 @@ function _geo_illumf(
         phase = vsep(obspos, tipos)
         incdnc = vsep(normal, tipos)
         emissn = vsep(normal, obspos)
-        return trgepc, srfvec, phase, incdnc, emissn, primal(emissn) <= _M_HALFPI,
-            primal(incdnc) <= _M_HALFPI
+        return trgepc, srfvec, phase, incdnc, emissn, primal(emissn) <= _HALFPI,
+            primal(incdnc) <= _HALFPI
     end
     # As in CSPICE, the DSK branch of `illumf` uses every surface of the target (the
     # surface list of the method string is not used) and the epoch at the point.
     sh = _geo_dskshape(ks, tols, trgcde, fixfid, _GEO_NOSURF)
     tp = _geo_plain(trgepc)
-    normal = _dsk_vhat(_dsk_bun(ks, tols, trgcde, _GEO_NOSURF, tp, fixfid, sp))
+    normal = _m_hat(_dsk_bun(ks, tols, trgcde, _GEO_NOSURF, tp, fixfid, sp))
     phase = vsep(obspos, tipos)
     incdnc = vsep(normal, tipos)
     emissn = vsep(normal, obspos)
-    visibl = emissn <= _M_HALFPI
-    lit = incdnc <= _M_HALFPI
+    visibl = emissn <= _HALFPI
+    lit = incdnc <= _HALFPI
     if lit || visibl
         # A point is hidden or in shadow if the ray from just above it meets the surface.
         vertex = sp + (sh.maxrad * 1.0e-10) * normal
@@ -287,9 +287,22 @@ function phaseq(
                 "must be three different bodies"
         )
     )
-    e = check_epoch(et)
-    pv1, lt = _geo_spkezp(ks, targ, e, Int32(1), corr, obs)
-    pv2, _ = _geo_spkezp(ks, illum, corr.geometric ? e : e - lt, Int32(1), corr, targ)
+    return _geo_phase(ks, targ, illum, obs, corr, check_epoch(et))
+end
+
+"""
+    _geo_phase(ks, targ, illum, obs, corr, et)
+
+The phase angle as `zzgfpaq` computes it, for three distinct bodies: pi minus the angle
+between the position of `targ` seen from `obs` and the position of `illum` seen from
+`targ` at the epoch `et - lt` (at `et` without correction), in J2000. `phaseq` and the
+phase angle of the geometry finder.
+"""
+@inline function _geo_phase(
+        ks::KernelSet, targ::Int32, illum::Int32, obs::Int32, corr::Aberration, et
+    )
+    pv1, lt = _geo_spkezp(ks, targ, et, _J2000_FRAME, corr, obs)
+    pv2, _ = _geo_spkezp(ks, illum, corr.geometric ? et : et - lt, _J2000_FRAME, corr, targ)
     return pi - vsep(pv1, pv2)
 end
 phaseq(

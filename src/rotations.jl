@@ -3,41 +3,13 @@
 # joins them. Everything that depends on the epoch is generic over the epoch type, so
 # an epoch of type `Taylor{N,Float64}` gives the time derivatives to order N.
 
-const _SEC_PER_DAY = 86400.0                 # seconds per day, `spd_`
-const _SEC_PER_CENTURY = _SEC_PER_DAY * 36525.0          # seconds per Julian century
-const _J2000_JED = 2451545.0         # `j2000_`
+const _SEC_PER_CENTURY = _SPD * 36525.0          # seconds per Julian century
 const _RPD = pi / 180                # radians per degree, `rpd_`
-const _TWOPI = 2 * Float64(pi)       # `twopi_`
-const _HALFPI = Float64(pi) / 2      # `halfpi_`
-const _J2000_FRAME = Int32(1)
 
 "Maximum number of frames between a frame and J2000 that `frame_rotation` follows."
 const MAX_FRAME_CHAIN = 10
 
 # --- small rotation helpers -----------------------------------------------------------
-
-"`_axis_indices(axis)`: the cyclic index triple `(i1, i2, i3)` of `rotate_` for `axis` in 1:3."
-@inline _axis_indices(axis::Integer) =
-    axis == 1 ? (1, 2, 3) : axis == 2 ? (2, 3, 1) : (3, 1, 2)
-
-"""
-    _rotate(angle, axis) -> Mat3
-
-Coordinate-system rotation by `angle` radians about axis `axis` (1, 2 or 3), as
-`rotate_` of CSPICE: the matrix that takes components in the original frame to
-components in the rotated frame.
-"""
-function _rotate(angle::Float64, axis::Integer)
-    s, c = sincos(angle)
-    i1, i2, i3 = _axis_indices(axis)
-    m = zeros(MMatrix{3, 3, Float64, 9})
-    m[i1, i1] = 1.0
-    m[i2, i2] = c
-    m[i3, i2] = -s
-    m[i2, i3] = s
-    m[i3, i3] = c
-    return Mat3{Float64}(m)
-end
 
 """
     _eul2m(a3, a2, a1, axis3, axis2, axis1) -> Mat3{Float64}
@@ -55,7 +27,7 @@ function _eul2m(
             "Euler axis numbers are $axis3, $axis2, $axis1; each must be 1, 2 or 3"
         )
     )
-    return _m_mxm(_m_mxm(_rotate(a3, axis3), _rotate(a2, axis2)), _rotate(a1, axis1))
+    return _m_eul2m_unchecked(a3, a2, a1, axis3, axis2, axis1)
 end
 
 """
@@ -143,15 +115,18 @@ function build_bodyrot(pool::AbstractDict)
         sys = _bodbry(id)
         epoch = _pool_first(
             pool,
-            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _J2000_JED
+            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _JD2000
         )
         ref = _pool_first(
             pool,
             ("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME"), 1.0
         )
         both(a, b) = _pool_numbers(pool, a) !== nothing && _pool_numbers(pool, b) !== nothing
+        # `tisbod_` reads the frame with `gipool_` after the epoch check and before the
+        # check of the two frame forms.
+        refid = _gipool_value(ref)
         specerr = both("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH") ?
-            :competingepochspec :
+            :competingepochspec : refid === nothing ? :intoutofrange :
             both("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME") ?
             :competingframespec : :none
         out[id] = BodyRot(
@@ -160,7 +135,7 @@ function build_bodyrot(pool::AbstractDict)
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_DEC"),
             _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_PM"),
             _pool_numbers_or_empty(pool, "BODY$(sys)_NUT_PREC_ANGLES"),
-            round(Int32, ref), epoch, _phase_degree(pool, sys), specerr
+            something(refid, _J2000_FRAME), epoch, _phase_degree(pool, sys), specerr
         )
     end
     return out
@@ -175,7 +150,7 @@ is absent. The value is not checked here; `_phase_ncoef` checks it at evaluation
 function _phase_degree(pool::AbstractDict, sys::Integer)
     v = _pool_numbers(pool, "BODY$(sys)_MAX_PHASE_DEGREE")
     (v === nothing || isempty(v)) && return Int32(1)
-    return round(Int32, clamp(v[1], -1.0e9, 1.0e9), RoundNearestTiesAway)
+    return Int32(_nint(v[1]))                  # `i_dnnt` of `bodvcd_`'s value
 end
 
 """
@@ -191,6 +166,12 @@ phase angles, whether or not the body has terms that use them.
         SpiceError(
             :competingepochspec, "both BODY$(sys)_CONSTANTS_JED_EPOCH and " *
                 "BODY$(sys)_CONSTS_JED_EPOCH are in the kernel pool; at most one may be"
+        )
+    )
+    br.specerr === :intoutofrange && throw(
+        SpiceError(
+            :intoutofrange, "the value of BODY$(sys)_CONSTANTS_REF_FRAME or " *
+                "BODY$(sys)_CONSTS_REF_FRAME is outside the range of integers"
         )
     )
     br.specerr === :competingframespec && throw(
@@ -220,6 +201,26 @@ Throws `SpiceError(:degreeoutofrange)` unless the degree is in 1:3.
     return deg + 1
 end
 
+"""
+    _phase_ncoef(br, body, nterm) -> Int
+
+`_phase_ncoef(br, body)` after the check of `tisbod_` that the phase angle list holds
+the `nterm` angles that the longest amplitude list needs: throws
+`SpiceError(:insufficientangles)` otherwise.
+"""
+@inline function _phase_ncoef(br::BodyRot, body::Integer, nterm::Int)
+    nco = _phase_ncoef(br, body)
+    nphase = length(br.nut_prec_angles) ÷ nco
+    nterm <= nphase || throw(
+        SpiceError(
+            :insufficientangles,
+            "insufficient number of nutation/precession angles for body $body: " *
+                "number of angles is $nphase, number required is $nterm"
+        )
+    )
+    return nco
+end
+
 "Value at `x` of the polynomial with coefficients `c` (lowest order first) by Horner's rule."
 @inline function _horner(c::Vector{Float64}, x::T) where {T <: Real}
     n = length(c)
@@ -242,8 +243,8 @@ rotation from J2000 to the reference frame of the constants. Throws
 """
 function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
     _bodyrot_check(br, body)
-    epoch = et - _SEC_PER_DAY * (br.jed_epoch - _J2000_JED)
-    td = epoch / _SEC_PER_DAY
+    epoch = et - _SPD * (br.jed_epoch - _JD2000)
+    td = epoch / _SPD
     tc = epoch / _SEC_PER_CENTURY
     ra = _horner(br.pole_ra, tc)
     dec = _horner(br.pole_dec, tc)
@@ -253,15 +254,7 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
     na, nd, nw = length(ac), length(dc), length(wc)
     nterm = max(na, nd, nw)
     if nterm > 0
-        nco = _phase_ncoef(br, body)
-        nphase = length(th) ÷ nco
-        nterm <= nphase || throw(
-            SpiceError(
-                :insufficientangles,
-                "insufficient number of nutation/precession angles for body $body: " *
-                    "number of angles is $nphase, number required is $nterm"
-            )
-        )
+        nco = _phase_ncoef(br, body, nterm)
         sa = zero(T)
         sd = zero(T)
         sw = zero(T)
@@ -343,9 +336,9 @@ too often. Throws as `_text_pck_rotation`.
 """
 function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     _bodyrot_check(br, body)
-    d = _SEC_PER_DAY
+    d = _SPD
     t = _SEC_PER_CENTURY
-    epoch = et - d * (br.jed_epoch - _J2000_JED)
+    epoch = et - d * (br.jed_epoch - _JD2000)
     td = epoch / d
     tc = epoch / t
     coef(c, i) = i <= length(c) ? @inbounds(c[i]) : 0.0
@@ -361,15 +354,7 @@ function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     na, nd, nw = length(ac), length(dc), length(wc)
     nterm = max(na, nd, nw)
     if nterm > 0
-        nco = _phase_ncoef(br, body)
-        nphase = length(th) ÷ nco
-        nterm <= nphase || throw(
-            SpiceError(
-                :insufficientangles,
-                "insufficient number of nutation/precession angles for body $body: " *
-                    "number of angles is $nphase, number required is $nterm"
-            )
-        )
+        nco = _phase_ncoef(br, body, nterm)
         sa = sd = sw = 0.0
         dsa = dsd = dsw = 0.0
         @inbounds for i in 1:nterm    # invariant: the sums hold the terms 1:i-1
@@ -550,21 +535,7 @@ function _q2m(q::AbstractVector{Float64})
     n = qmax == 0.0 ? 0.0 :
         qmax * sqrt((q[1] / qmax)^2 + (q[2] / qmax)^2 + (q[3] / qmax)^2 + (q[4] / qmax)^2)
     q0, q1, q2, q3 = n > 0 ? (q[1] / n, q[2] / n, q[3] / n, q[4] / n) : (q[1], q[2], q[3], q[4])
-    q01, q02, q03 = q0 * q1, q0 * q2, q0 * q3
-    q12, q13, q23 = q1 * q2, q1 * q3, q2 * q3
-    q1s, q2s, q3s = q1 * q1, q2 * q2, q3 * q3
-    l2 = q0 * q0 + q1s + q2s + q3s
-    if l2 != 1.0 && l2 != 0.0
-        f = 1.0 / l2
-        q01 *= f; q02 *= f; q03 *= f
-        q12 *= f; q13 *= f; q23 *= f
-        q1s *= f; q2s *= f; q3s *= f
-    end
-    return Mat3{Float64}(
-        1.0 - 2.0 * (q2s + q3s), 2.0 * (q12 + q03), 2.0 * (q13 - q02),
-        2.0 * (q12 - q03), 1.0 - 2.0 * (q1s + q3s), 2.0 * (q23 + q01),
-        2.0 * (q13 + q02), 2.0 * (q23 - q01), 1.0 - 2.0 * (q1s + q2s)
-    )
+    return _m_q2m(q0, q1, q2, q3, false)
 end
 
 """
@@ -601,8 +572,10 @@ function _tk_relative_id(pool::AbstractDict, frames::AbstractDict, name::Abstrac
     for fd in values(frames)
         normalize_name(fd.name) == key && return fd.id
     end
-    v = _pool_numbers(pool, "FRAME_" * key)
-    v !== nothing && !isempty(v) && return round(Int32, v[1])
+    # `namfrm_`: `gipool_(FRAME_<name>, 1, 8, ...)`, then the test of one value
+    k = "FRAME_" * key
+    v = _gipool_first(get(pool, k, nothing), k; room = 8, single = true)
+    v === nothing || return v
     return get(BUILTIN_FRAMENAME2ID, key, nothing)
 end
 
@@ -633,11 +606,15 @@ function _tk_matrix(
         _badkpv(pool, "TKFRAM", kang, "=", 3, 1, 'N')
         _badkpv(pool, "TKFRAM", kaxes, "=", 3, 1, 'N')
         ang, axes = pool[kang], pool[kaxes]
+        # The axes as `gipool_` reads them, before the angles are converted.
+        ax = map((1, 2, 3)) do i
+            a = _gipool_value(axes[i])
+            a === nothing ? _gipool_range_error(kaxes, i, axes[i]) : Int(a)
+        end
         # Each angle converted by `convrt_` (to degrees, then over the degrees per
         # radian), from RADIANS without a unit, as `tkfram_` does.
         u = units isa Vector{String} && !isempty(units) ? units[1] : "RADIANS"
         rad = map(x -> convrt(x, u, "RADIANS"), (ang[1], ang[2], ang[3]))
-        ax = round.(Int, axes)
         return _eul2m(Float64(rad[1]), Float64(rad[2]), Float64(rad[3]), ax[1], ax[2], ax[3])
     elseif kind == "QUATERNION"
         key = _tk_key(pool, idkey, namekey, "_Q")
@@ -827,25 +804,6 @@ end
         "the chain of frame $id does not reach J2000 in $MAX_FRAME_CHAIN steps"
     )
 )
-
-"""
-    _rotation_up(ks, id, stop, et::T) -> Mat3{T}
-
-Matrix from frame `id` to its ancestor `stop` at `et`. Requires `stop` to be `id`
-itself or a frame on the chain from `id` to J2000.
-"""
-function _rotation_up(ks::KernelSet, id::Int32, stop::Int32, et::T) where {T <: Real}
-    rot = one(Mat3{T})
-    cur = id
-    n = 0
-    while cur != stop      # invariant: rot takes vectors from frame id to frame cur
-        n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(id)
-        cur, step = _frame_step(ks, cur, et)
-        rot = n == 1 ? step : _m_mxm(step, rot)
-    end
-    return rot
-end
 
 """
     frame_rotation(ks, from, to, et::T) -> Mat3{T}

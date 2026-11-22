@@ -151,7 +151,7 @@ function conics(elts::AbstractVector, et::Real)
     if ecc < 1.0
         ainvrs = (1.0 - ecc) / rp
         n = sqrt(mu * ainvrs) * ainvrs
-        period = _M_TWOPI / n
+        period = _TWOPI / n
         w = t - t0 + m0 / n
         # the remainder of `d_mod`: the subtracted number of periods is a constant
         q = primal(w) / period
@@ -206,15 +206,15 @@ end
         n = SVector(one(z0), z0, z0)
     end
     lnode = atan(n[2], n[1])
-    primal(lnode) < 0.0 && (lnode += _M_TWOPI)
+    primal(lnode) < 0.0 && (lnode += _TWOPI)
     argp = zero(inc)
     if primal(ecc) != 0.0
         argp = vsep(n, e) - zero(inc)
         if primal(argp) != 0.0
             if primal(inc) == 0.0 || primal(inc) == Float64(pi)
-                primal(_m_dot(e, _m_ucrss(h, n))) < 0.0 && (argp = _M_TWOPI - argp)
+                primal(_m_dot(e, _m_ucrss(h, n))) < 0.0 && (argp = _TWOPI - argp)
             elseif primal(e[3]) < 0.0
-                argp = _M_TWOPI - argp
+                argp = _TWOPI - argp
             end
         end
     end
@@ -227,7 +227,7 @@ end
         sinea = rmag / rp * sqrt((1.0 - ecc) / (ecc + 1.0)) * snu
         ea = atan(sinea, cosea)
         m0 = _m_dsign(ea - ecc * sin(ea), nu)
-        primal(m0) < 0.0 && (m0 += _M_TWOPI)
+        primal(m0) < 0.0 && (m0 += _TWOPI)
     elseif primal(ecc) > 1.0
         coshf = (ecc + cnu) / (ecc * cnu + 1.0)
         x = primal(coshf) > 1.0 ? coshf : one(coshf)
@@ -325,7 +325,7 @@ function oscltx(state::AbstractVector, et::Real, mu::Real)
         xmat = _m_rows(_m_hat(eccvec), ax2, _m_ucrss(eccvec, ax2))
         rperi = _m_mxv(xmat, pos)
         _, lon, _ = _m_reclat(rperi, false)
-        nu = (primal(lon) < 0.0 ? lon + _M_TWOPI : lon) - zero(T)
+        nu = (primal(lon) < 0.0 ? lon + _TWOPI : lon) - zero(T)
     else
         nu = el[6]
     end
@@ -336,10 +336,10 @@ function oscltx(state::AbstractVector, et::Real, mu::Real)
         if abs(primal(e)) >= abs(primal(mu)) / limit
             a = -mu / (e * 2.0) - zero(T)
             if primal(el[2]) < 1.0
-                b = (limit / _M_TWOPI)^0.66666666666666663
+                b = (limit / _TWOPI)^0.66666666666666663
                 mucubr = mu^0.33333333333333331
                 cmptau = primal(mu) >= 1.0 ? primal(a / mucubr) < b : primal(a) < b * primal(mucubr)
-                cmptau && (tau = _M_TWOPI * (a / mucubr)^1.5 - zero(T))
+                cmptau && (tau = _TWOPI * (a / mucubr)^1.5 - zero(T))
             end
         end
     end

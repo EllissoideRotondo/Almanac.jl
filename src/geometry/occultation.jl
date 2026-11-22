@@ -73,7 +73,7 @@ function _geo_asryel(
     v2 = vertex - center
     extprx = domin ? 2.0 : 0.0
     extidx = 0
-    p2 = _M_TWOPI
+    p2 = _TWOPI
     delta = p2 / npt
     udir = _m_hat(dir)
     diff = zero(Vec3{Float64})
@@ -211,7 +211,7 @@ function _geo_occed(
     if minang1 + minang2 > trgsep
         # The inscribed spheres overlap as seen from the view point.
         t2sep = vsep(-tpos[1], t12pos)
-        frtidx, s = t2sep < _M_HALFPI - minang1 ? (2, -1) : (1, 1)
+        frtidx, s = t2sep < _HALFPI - minang1 ? (2, -1) : (1, 1)
         minang1 >= maxang2 + trgsep && return frtidx == 1 ? 3s : 2s
         minang2 >= maxang1 + trgsep && return frtidx == 2 ? 3s : 2s
         (minang1 + trgsep > maxang2 && minang2 + trgsep > maxang1) && return s
@@ -236,7 +236,7 @@ function _geo_occed(
     bigr = _m_norm(raydir)
     uasize = _geo_dasine(1.0 / bigr, 1.0e-12)
     minsep > uasize && return 0
-    sfront = vsep(minpt - bigctr, -raydir) <= _M_HALFPI - uasize
+    sfront = vsep(minpt - bigctr, -raydir) <= _HALFPI - uasize
     s = ((sfront && smlidx == 1) || (!sfront && smlidx == 2)) ? 1 : -1
     minsep <= -uasize && return sfront ? 3s : 2s
     xsmlvu = xview - smlctr
@@ -246,7 +246,7 @@ function _geo_occed(
     maxang = xdist >= majlen ? _geo_dasine(majlen / xdist, 1.0e-12) :
         _geo_occ_maxang(xview, smlctr, smlmaj, smlmin)
     tilt = vsep(_m_ucrss(smlmaj, smlmin), xsmlvu)
-    tilt > _M_HALFPI && (tilt = Float64(pi) - tilt)
+    tilt > _HALFPI && (tilt = Float64(pi) - tilt)
     stilt, ctilt = sincos(tilt)
     minang = atan(ctilt * minlen, stilt * minlen + xdist)
     xasep = vsep(raydir, smlctr - xview)
@@ -272,14 +272,12 @@ end
     _GeoOccBody
 
 One target of `occult`: its ID, the kind of its shape (`_GEO_OCC_POINT`,
-`_GEO_OCC_ELLIPSOID`, `_GEO_OCC_DSK`), the parsed method string and the body-fixed
-frame (0 for a point).
+`_GEO_OCC_ELLIPSOID`, `_GEO_OCC_DSK`) and the parsed method string.
 """
 struct _GeoOccBody
     id::Int32
     kind::UInt8
     m::_GeoMethod
-    frame::Int32
 end
 
 "`ljust` and `ucase` of a shape string; no allocation for the two common spellings."
@@ -287,7 +285,7 @@ end
     (shape == "ELLIPSOID" || shape == "POINT") && return shape
     return _geo_occ_upper_slow(shape)
 end
-@noinline _geo_occ_upper_slow(shape::AbstractString) = uppercase(rstrip(lstrip(shape, ' '), ' '))
+@noinline _geo_occ_upper_slow(shape::AbstractString) = _ljucase(shape)
 
 @noinline _geo_occ_bad_frame(frame, id, why) = throw(
     SpiceError(
@@ -317,21 +315,38 @@ end
 """
     _geo_occ_eval(ks, tols, front, fframe, back, bframe, bsrf, obs, corr, et) -> Int
 
-The rest of `zzgfocin` (radii, frames, bounding spheres) and `zzgfocst` for the roles
-`front` and `back`. `corr` is the correction without stellar aberration and `bsrf` the
-surface list for the bounding sphere of the back target. The result is 0 if `front`
-does not occult `back`; otherwise 1, 2 or 3 for a partial, an annular or a total
-occultation of two ellipsoids, 3 for an extended `front` and a point `back`, and 2 for
-a point `front` and an extended `back` (the codes that `occult` multiplies by the sign
-of the roles).
+The rest of `zzgfocin` (radii, frames, bounding spheres: `_geo_occ_extent`, the front
+target first) and `zzgfocst` (`_geo_occ_state`) for the roles `front` and `back`. `corr`
+is the correction without stellar aberration and `bsrf` the surface list for the
+bounding sphere of the back target.
 """
-function _geo_occ_eval(
+@inline function _geo_occ_eval(
         ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fframe,
         back::_GeoOccBody, bframe, bsrf, obs::Int32, corr::Aberration, et::Float64
     )
-    # Radii, frame and bounding spheres, the front target first.
-    frad, fmn, fmx, ffrm = _geo_occ_extent(ks, front, fframe, front.m.srflst)
-    brad, bmn, bmx, bfrm = _geo_occ_extent(ks, back, bframe, bsrf)
+    fext = _geo_occ_extent(ks, front, fframe, front.m.srflst)
+    bext = _geo_occ_extent(ks, back, bframe, bsrf)
+    return _geo_occ_state(ks, tols, front, fext, back, bext, obs, corr, et)
+end
+
+"The extent of one target of `occult`: radii, radii of the inner and the outer sphere, frame ID."
+const _GeoOccExtent = Tuple{NTuple{3, Float64}, Float64, Float64, Int32}
+
+"""
+    _geo_occ_state(ks, tols, front, fext, back, bext, obs, corr, et) -> Int
+
+`zzgfocst` for the roles `front` and `back`, whose extents `fext` and `bext` are those
+of `_geo_occ_extent`. The result is 0 if `front` does not occult `back`; otherwise 1, 2
+or 3 for a partial, an annular or a total occultation of two ellipsoids, 3 for an
+extended `front` and a point `back`, and 2 for a point `front` and an extended `back`
+(the codes that `occult` multiplies by the sign of the roles).
+"""
+function _geo_occ_state(
+        ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fext::Tuple,
+        back::_GeoOccBody, bext::Tuple, obs::Int32, corr::Aberration, et::Float64
+    )
+    frad, fmn, fmx, ffrm = fext
+    brad, bmn, bmx, bfrm = bext
     frtpos, ltfrnt = _geo_spkezp(ks, front.id, et, Int32(1), corr, obs)
     bckpos, ltback = _geo_spkezp(ks, back.id, et, Int32(1), corr, obs)
     s = _geo_sign(corr)
@@ -367,8 +382,8 @@ function _geo_occ_eval(
     if trgsep < minang
         # The point is in the cone of the inner sphere: only the order along the line
         # of sight decides.
-        pntocc && return vsep(-frtpos, -bckfrt) > _M_HALFPI - minang ? hit : 0
-        return vsep(-bckpos, bckfrt) < _M_HALFPI - minang ? hit : 0
+        pntocc && return vsep(-frtpos, -bckfrt) > _HALFPI - minang ? hit : 0
+        return vsep(-bckpos, bckfrt) < _HALFPI - minang ? hit : 0
     end
     ext = pntocc ? front : back
     sh = _geo_shape(ks, tols, ext.m, ext.id, pntocc ? ffrm : bfrm)
@@ -377,7 +392,7 @@ function _geo_occ_eval(
     return (pntocc ? _m_norm(srfvec) < bdist : _m_norm(srfvec) > fdist) ? hit : 0
 end
 
-"Radii, radii of the inner and the outer sphere, and frame of one target of `occult`."
+"The `_GeoOccExtent` of one target of `occult`: radii, inner and outer sphere, frame."
 @inline function _geo_occ_extent(ks::KernelSet, b::_GeoOccBody, frame, srflst)
     b.kind == _GEO_OCC_POINT && return (0.0, 0.0, 0.0), 0.0, 0.0, Int32(0)
     if b.kind == _GEO_OCC_ELLIPSOID
@@ -393,12 +408,12 @@ end
 "The first step of `occult` for one target: its ID (0 for a point whose name is read later) and its method."
 @inline function _geo_occ_parse(ks::KernelSet, targ::NameOrID, shape::AbstractString, what)
     shap = _geo_occ_upper(shape)
-    shap == "POINT" && return _GeoOccBody(Int32(0), _GEO_OCC_POINT, _geo_ell(0x00), Int32(0))
+    shap == "POINT" && return _GeoOccBody(Int32(0), _GEO_OCC_POINT, _geo_ell(0x00))
     id = _geo_body(ks, targ, what)
     m = _geo_method(ks, id, shap)
-    kind = m.dsk ? _GEO_OCC_DSK : (shap == "ELLIPSOID" || _dsk_eqstr(shap, "ELLIPSOID")) ?
+    kind = m.dsk ? _GEO_OCC_DSK : (shap == "ELLIPSOID" || _eqstr(shap, "ELLIPSOID")) ?
         _GEO_OCC_ELLIPSOID : 0x00
-    return _GeoOccBody(id, kind, m, Int32(0))
+    return _GeoOccBody(id, kind, m)
 end
 
 function _geo_occult(
@@ -409,8 +424,8 @@ function _geo_occult(
     _plain_epoch(et, "occult")
     b1 = _geo_occ_parse(ks, targ1, shape1, "first target")
     b2 = _geo_occ_parse(ks, targ2, shape2, "second target")
-    b1 = _GeoOccBody(_geo_body(ks, targ1, "first target"), b1.kind, b1.m, Int32(0))
-    b2 = _GeoOccBody(_geo_body(ks, targ2, "second target"), b2.kind, b2.m, Int32(0))
+    b1 = _GeoOccBody(_geo_body(ks, targ1, "first target"), b1.kind, b1.m)
+    b2 = _GeoOccBody(_geo_body(ks, targ2, "second target"), b2.kind, b2.m)
     obs = _geo_body(ks, obsrvr, "observer")
     e = Float64(check_epoch(et))
     # `zzgfocin` makes its body and shape checks before it reads the correction.
@@ -436,6 +451,18 @@ end
     return _geo_occ_roles(ks, tols, front, fframe, back, bframe, obs, abcorr, et)
 end
 
+"True if a target with DSK data is paired with a target that is not a point (`zzgfocin`)."
+@inline _geo_occ_dsk_combo(front::_GeoOccBody, back::_GeoOccBody) =
+    (front.kind == _GEO_OCC_DSK && back.kind != _GEO_OCC_POINT) ||
+    (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
+
+"The correction of `zzgfocin`: `abcorr` without stellar aberration."
+@inline function _geo_occ_corr(abcorr)
+    full = _geo_abcorr(abcorr)
+    return full.uselt ?
+        Aberration(; uselt = true, converged = full.converged, transmit = full.transmit) : full
+end
+
 function _geo_occ_roles(
         ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fframe,
         back::_GeoOccBody, bframe, obs::Int32, abcorr, et::Float64
@@ -448,17 +475,12 @@ function _geo_occ_roles(
             :invalidshapecombo, "both targets are points; one target must be extended"
         )
     )
-    (
-        (front.kind == _GEO_OCC_DSK && back.kind != _GEO_OCC_POINT) ||
-            (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
-    ) && throw(
+    _geo_occ_dsk_combo(front, back) && throw(
         SpiceError(
             :invalidshapecombo, "a target with DSK data needs a point as the other target"
         )
     )
-    full = _geo_abcorr(abcorr)
-    corr = full.uselt ? Aberration(; uselt = true, converged = full.converged, transmit = full.transmit) :
-        full
+    corr = _geo_occ_corr(abcorr)
     return _geo_occ_eval(ks, tols, front, fframe, back, bframe, bsrf, obs, corr, et)
 end
 

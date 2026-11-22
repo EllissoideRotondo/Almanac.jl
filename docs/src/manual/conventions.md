@@ -22,6 +22,10 @@ what differs.
 - **Memory arguments.** Counts, sizes, `room` and workspaces, which serve only C
   memory, are absent: [`gdpool`](@ref) takes only the name of the variable, and
   [`gfdist`](@ref) has no `nintvls`.
+- **Kernel pool names** are compared without the blanks around them:
+  `gdpool(" BODY399_RADII")` finds `BODY399_RADII`, and a blank name is refused with
+  `SpiceError(:badvarname)`. CSPICE keeps leading blanks as part of the name and stores
+  a blank name.
 - **Indices** count from 1, where CSPICE counts from 0: window intervals, EK rows.
 - **Cells.** A CSPICE cell becomes a `Vector`, kept sorted and without duplicates when
   it is a set, or a [`Window`](@ref). Both grow as needed and have no declared size. The calls that fill one ([`spkobj!`](@ref), [`spkcov!`](@ref), [`ckobj!`](@ref),

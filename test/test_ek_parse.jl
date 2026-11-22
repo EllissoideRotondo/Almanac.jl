@@ -1376,41 +1376,6 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             qt = Q._ek_encode_query(fx.tables, fx.ks, tdb, "SELECT ICOL FROM ALPHA WHERE TCOL > '2000 JAN 1 12:00:00'")[1]
             @test qt.constraints[1].dval == 0.0
         end
-
-        ek_part("column names (zzekpcol)") do
-            Q = Almanac
-            query = "SELECT A.ICOL FROM ALPHA A, BETA, GAMMA_LONG_NAME G WHERE A.ICOL > 0"
-            q = Q._ek_encode_query(fx.tables, fx.ks, fx.td, query)[1]
-            e = ekq_c_encd(query)
-            for qcol in (
-                    "DCOL", "dcol", " xcol ", "A.ICOL", "a . icol", "ALPHA.NAME", "BETA.ICOL",
-                    "G.KEY", "g.epoch", "GAMMA_LONG_NAME.VAL", "ICOL", "NAME", "NOSUCH", "A.NOSUCH",
-                    "B.ICOL", "Z.ICOL", "A.", ".ICOL", "A.ICOL.X", "A ICOL", "5", "A.5", "'x'", "A,ICOL",
-                    "A.'x'", "1.ICOL", "@", "A.ICOL B", "KEY", "G . VAL", "X"^70 * ".ICOL",
-                )
-                table, alias, column = (fill(UInt8(' '), 64) for _ in 1:3)
-                tabidx, colidx, error = Ref{Cint}(0), Ref{Cint}(0), Ref{Cint}(0)
-                errmsg = fill(UInt8(' '), EKQ_MSGLEN)
-                ccall(
-                    (:zzekpcol_, DSKLIB), Cint, (
-                        Ptr{UInt8}, Ptr{Cint}, Ptr{UInt8}, Ptr{UInt8},
-                        Ptr{UInt8}, Ref{Cint}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Cint,
-                        Cint, Cint, Cint, Cint, Cint,
-                    ), qcol, e.raw, e.c, table, alias, tabidx,
-                    column, colidx, error, errmsg, sizeof(qcol), 2000, 64, 64, 64, EKQ_MSGLEN
-                )
-                c_check()
-                r = Q._ek_qpcol(fx.tables, q, qcol)
-                @test r[6] == (error[] != 0)
-                @test r[7] == ekq_fstr(errmsg)
-                if error[] == 0 && !r[6]
-                    @test r[1:5] == (
-                        tabidx[], ekq_fstr(table), ekq_fstr(alias), colidx[],
-                        ekq_fstr(column),
-                    )
-                end
-            end
-        end
     finally
         ccall((:ekuef_c, DSKLIB), Cvoid, (Cint,), handle[])
         c_pending_kind()
