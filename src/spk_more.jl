@@ -50,36 +50,22 @@ the 17th are not used.
 
 """
     _lstltd(data, base, n, x) -> Int
-
-Number of elements of the ascending range `data[base+1:base+n]` that are less than
-`x` (the index of the last such element, as `lstltd` of CSPICE). Requires `n >= 0`
-and the range inside `data` (not checked).
-"""
-@inline function _lstltd(data::Vector{Float64}, base::Int, n::Int, x::Float64)
-    lo, hi = 0, n
-    # invariant: data[base+i] < x for 1 <= i <= lo, and data[base+i] >= x for i > hi
-    @inbounds while lo < hi
-        mid = (lo + hi + 1) >>> 1
-        if data[base + mid] < x
-            lo = mid
-        else
-            hi = mid - 1
-        end
-    end
-    return lo
-end
-
-"""
     _lstled(data, base, n, x) -> Int
 
-As `_lstltd`, for the elements that are less than or equal to `x` (`lstled`).
+Number of elements of the ascending range `data[base+1:base+n]` that are less than
+`x` (`_lstltd`), or less than or equal to `x` (`_lstled`): the index of the last such
+element, as `lstltd` and `lstled` of CSPICE. Requires `n >= 0` and the range inside
+`data` (not checked).
 """
-@inline function _lstled(data::Vector{Float64}, base::Int, n::Int, x::Float64)
+@inline _lstltd(data::Vector{Float64}, base::Int, n::Int, x::Float64) = _lstcount(<, data, base, n, x)
+@inline _lstled(data::Vector{Float64}, base::Int, n::Int, x::Float64) = _lstcount(<=, data, base, n, x)
+
+@inline function _lstcount(below::F, data::Vector{Float64}, base::Int, n::Int, x::Float64) where {F}
     lo, hi = 0, n
-    # invariant: data[base+i] <= x for 1 <= i <= lo, and data[base+i] > x for i > hi
+    # invariant: below(data[base+i], x) for 1 <= i <= lo, and not for i > hi
     @inbounds while lo < hi
         mid = (lo + hi + 1) >>> 1
-        if data[base + mid] <= x
+        if below(data[base + mid], x)
             lo = mid
         else
             hi = mid - 1
@@ -87,6 +73,16 @@ As `_lstltd`, for the elements that are less than or equal to `x` (`lstled`).
     end
     return lo
 end
+
+"""
+    _segerror(kind, seg, msg) -> Union{}
+
+Throws `SpiceError(kind)` for a value of the segment `seg` that the evaluator of CSPICE
+refuses with this kind.
+"""
+@noinline _segerror(kind::Symbol, seg::Segment, msg::String) = throw(
+    SpiceError(kind, "SPK type $(seg.dtype) segment at $(seg.baddr):$(seg.eaddr): $msg")
+)
 
 "Whole part of `x` as an `Int`, with `x` limited to a range that cannot overflow."
 @inline _trunc_index(x::Float64) = unsafe_trunc(Int, clamp(x, -1.0e15, 1.0e15))

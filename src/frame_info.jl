@@ -27,13 +27,8 @@ julia> frinfo(namfrm("IAU_EARTH")), frinfo(-999)
 See also [`namfrm`](@ref), [`ccifrm`](@ref).
 """
 function frinfo(ks::KernelSet, frcode::Integer)
-    (typemin(Int32) <= frcode <= typemax(Int32)) || return nothing
-    id = Int32(frcode)
-    f = get(BUILTIN_FRAMES, id, nothing)
-    f === nothing && (f = get(ks.frames, id, nothing))
-    f === nothing || return Int(f.center), Int(f.class), Int(f.classid)
-    13000 <= id < 14000 && return 399, 2, Int(id) - 10000
-    return nothing
+    f = _frame_def_or_nothing(ks, frcode)
+    return f === nothing ? nothing : (Int(f.center), Int(f.class), Int(f.classid))
 end
 
 """
@@ -135,7 +130,8 @@ Return `(frcode, frname)` of the frame that is associated with the body called
 
 The kernel-pool variable `OBJECT_<cname>_FRAME` (or `OBJECT_<id>_FRAME`) has priority.
 Without it the answer is the built-in frame `IAU_<CNAME>`, if it exists. `nothing`
-takes the place of the `found` flag.
+takes the place of the `found` flag. Throws `SpiceError(:emptystring)` if `cname` is
+empty.
 
 # Examples
 ```jldoctest
@@ -146,10 +142,11 @@ julia> cnmfrm("Mars"), cnmfrm("NO SUCH BODY")
 See also [`cidfrm`](@ref).
 """
 function cnmfrm(ks::KernelSet, cname::AbstractString)
+    _chkfstr("cnmfrm", "string `cname`", cname)
     name = String(strip(cname))
     v = get(ks.pool, uppercase("OBJECT_$(name)_FRAME"), nothing)
     if v === nothing
-        code = bodn2c(ks, name)
+        code = _body_name_code(ks.name2code, name)       # `bodn2c_`, without the check of `bodn2c_c`
         code === nothing || (v = get(ks.pool, "OBJECT_$(code)_FRAME", nothing))
     end
     v === nothing || return _frame_of_object(ks, v)

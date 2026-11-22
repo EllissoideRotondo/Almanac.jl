@@ -483,6 +483,7 @@ the first rule that applies:
    for retrograde rotation.
 
 Throws:
+- `SpiceError(:emptystring)` if `body` is `""`.
 - `SpiceError(:idcodenotfound)` if `body` is a name without an ID.
 - `SpiceError(:valueoutofrange)` if `re <= 0` or `f >= 1`.
 - `SpiceError(:invalidoption)` if the sense variable is not `EAST` or `WEST`.
@@ -505,6 +506,7 @@ true
 See also [`pgrrec`](@ref), [`recgeo`](@ref), [`dpgrdr`](@ref).
 """
 function recpgr(ks::KernelSet, body::NameOrID, rectan::AbstractVector, re::Real, f::Real)
+    body isa AbstractString && _chkfstr("recpgr", "string `body`", body)
     v = _m_v3(rectan)
     id = _m_bodyid(ks, body, :idcodenotfound)
     primal(re) > 0.0 || _m_badre(re)
@@ -534,6 +536,7 @@ Throws the errors of [`recpgr`](@ref).
 See also [`recpgr`](@ref), which has an example, and [`drdpgr`](@ref).
 """
 function pgrrec(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
+    body isa AbstractString && _chkfstr("pgrrec", "string `body`", body)
     id = _m_bodyid(ks, body, :idcodenotfound)
     primal(re) > 0.0 || _m_badre(re)
     primal(f) < 1.0 || _m_badflat(f)
@@ -759,6 +762,7 @@ Throws the errors of [`recpgr`](@ref).
 See also [`dpgrdr`](@ref), [`pgrrec`](@ref), [`drdgeo`](@ref).
 """
 function drdpgr(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
+    body isa AbstractString && _chkfstr("drdpgr", "string `body`", body)
     id = _m_bodyid(ks, body, :idcodenotfound)
     primal(re) > 0.0 || _m_badre(re)
     primal(f) < 1.0 || _m_badflat(f)
@@ -782,6 +786,7 @@ on the z axis.
 See also [`drdpgr`](@ref), [`recpgr`](@ref), [`dgeodr`](@ref).
 """
 function dpgrdr(ks::KernelSet, body::NameOrID, x::Real, y::Real, z::Real, re::Real, f::Real)
+    body isa AbstractString && _chkfstr("dpgrdr", "string `body`", body)
     id = _m_bodyid(ks, body, :idcodenotfound)
     primal(re) > 0.0 || _m_badre(re)
     primal(f) < 1.0 || _m_badflat(f)
@@ -853,11 +858,12 @@ input; with `"GEODETIC"` or `"PLANETOGRAPHIC"` it is in km, the unit of the radi
 
 `body` (name or ID) gives the spheroid of the last two systems, from `BODY<id>_RADII`
 in the kernel pool of `ctx`, or of [`default_context`](@ref) without `ctx`. It is not
-read for the other systems, so `""` is enough there. Each output longitude has the
-range of the conversion from rectangular coordinates to its system, such as
+read for the other systems, so any name but `""` is enough there. Each output longitude
+has the range of the conversion from rectangular coordinates to its system, such as
 [`reccyl`](@ref); the planetographic one also throws the errors of [`recpgr`](@ref).
 
 Throws:
+- `SpiceError(:emptystring)` if `icosys`, `ocosys` or a name `body` is `""`.
 - `SpiceError(:coordsysnotrec)` if a system name is not known.
 - `SpiceError(:idcodenotfound)` if `body` is needed and is a name without an ID.
 - `SpiceError(:kernelvarnotfound)` if `body` is needed and has no radii in the pool.
@@ -870,7 +876,7 @@ Throws:
 # Examples
 A point on the x axis that moves along y has a longitude rate:
 ```jldoctest
-julia> s = xfmsta([2, 0, 0, 0, 1, 0], "RECTANGULAR", "LATITUDINAL", "");
+julia> s = xfmsta([2, 0, 0, 0, 1, 0], "RECTANGULAR", "LATITUDINAL", "EARTH");
 
 julia> s == [2, 0, 0, 0, 0.5, 0]
 true
@@ -882,6 +888,9 @@ function xfmsta(
         ks::KernelSet, istate::AbstractVector, icosys::AbstractString,
         ocosys::AbstractString, body::NameOrID
     )
+    _chkfstr("xfmsta", "string `icosys`", icosys)
+    _chkfstr("xfmsta", "string `ocosys`", ocosys)
+    body isa AbstractString && _chkfstr("xfmsta", "string `body`", body)
     s = _m_v6(istate)
     isys = _m_cosys(icosys)
     osys = _m_cosys(ocosys)
@@ -1020,8 +1029,9 @@ Return the measurement `x` converted from the unit `in` to the unit `out`, as
 
 The names ignore case and trailing blanks. `YEARS` is `JULIAN_YEARS`.
 
-Throws `SpiceError(:unitsnotrec)` if a unit is not known, and
-`SpiceError(:incompatibleunits)` if the two units are of different classes.
+Throws `SpiceError(:emptystring)` if `in` or `out` is `""`, `SpiceError(:unitsnotrec)`
+if a unit is not known, and `SpiceError(:incompatibleunits)` if the two units are of
+different classes.
 
 # Examples
 ```jldoctest
@@ -1033,6 +1043,8 @@ julia> convrt(1, "km", "METERS")
 ```
 """
 function convrt(x::Real, in::AbstractString, out::AbstractString)
+    _chkfstr("convrt", "string `in`", in)
+    _chkfstr("convrt", "string `out`", out)
     i = _m_unit(in)
     j = _m_unit(out)
     (i == 0 || j == 0) && throw(

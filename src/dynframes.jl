@@ -134,7 +134,7 @@ function _dyn_frameid(ks::KernelSet, id, name, item)
     key, v = _dyn_lookup(ks.pool, id, name, item, true)
     length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
     v isa Vector{Float64} && return _gipool_first(v, key)::Int32
-    code = namfrm(ks, v[1])
+    code = _namfrm(ks, v[1])
     code != 0 && return Int32(code)
     n = tryparse(Int32, strip(v[1]))
     n === nothing && throw(
@@ -466,8 +466,8 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
                     "$(length(tnames)) \"to\" frames; these counts must match"
             )
         )
-        from = Int32[namfrm(ks, s) for s in fnames]
-        to = Int32[namfrm(ks, s) for s in tnames]
+        from = Int32[_namfrm(ks, s) for s in fnames]
+        to = Int32[_namfrm(ks, s) for s in tnames]
         k = findfirst(==(0), vcat(from, to))
         k === nothing || throw(
             SpiceError(
@@ -1471,19 +1471,6 @@ for the frames of the other classes.
         return def.base, _dyn_liftmat(S, x)
     end
     return def.base, _dyn_call(mode, inner, def, et)::Mat3{S}
-end
-
-"""
-    _dyn_base(ks, id) -> Int32
-
-Contract: the base frame of the class 5 frame `id`, without any evaluation. Throws as
-`_dyn_frame_step` does for a missing or invalid definition.
-"""
-function _dyn_base(ks::KernelSet, id::Int32)
-    def = get(ks.dyn, id, nothing)
-    def === nothing && _dyn_throw_missing(id)
-    def.errkind === :none || _dyn_throw_def(def.errkind, def.errmsg)
-    return def.base
 end
 
 """

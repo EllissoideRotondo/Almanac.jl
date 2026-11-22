@@ -96,5 +96,21 @@ change. Postcondition: `primal(result) == p`.
 @inline _with_primal(x::Taylor, p::Float64) = _taylor(_with_primal(x.v, p), x.d)
 @inline _with_primal(x::Real, p::Float64) = x + (p - primal(x))
 
-"`|a|` with the sign of `b` (`d_sign` of f2c: a zero `b` of either sign gives `+|a|`)."
-@inline _dsign(a::Float64, b::Float64) = b >= 0.0 ? abs(a) : -abs(a)
+"""
+    _ad_pin(a, p::Float64)
+
+`_with_primal(a, p)`: the value `p` of one formula with the derivatives of another, `a`.
+For a `Float64` it is `p`, and the rules of the ChainRulesCore, Enzyme and Mooncake
+extensions give it the derivative 1 with respect to `a` and 0 with respect to `p`, so
+the reverse-mode packages take the derivatives of `a`. `p` is a constant or comes from a
+function that the extensions treat as constant (`_AD_CONSTANT`), so that no derivative is
+taken through it. Not inlined: Enzyme applies its rule to a call that is still there,
+and would otherwise differentiate `a + (p - a)`, whose derivative is 0.
+"""
+@noinline _ad_pin(a::Real, p::Float64) = _with_primal(a, p)
+
+"""
+`|a|` with the sign of `b`, as `d_sign` of f2c: a zero `b` of either sign gives `+|a|`,
+and `|a|` is `a` unless `a < 0` (so `-0.0` stays). The branches are taken on `primal`.
+"""
+@inline _dsign(a::Real, b::Real) = (x = primal(a) < 0.0 ? -a : a; primal(b) >= 0.0 ? x : -x)

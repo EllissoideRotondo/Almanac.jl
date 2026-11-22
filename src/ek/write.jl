@@ -216,48 +216,14 @@ end
 @noinline _ekw_baddecl(msg::AbstractString, decl::AbstractString) =
     throw(SpiceError(:badcolumndecl, msg * " Declaration was: " * decl))
 
-"The integer that `nparsi` reads from `token`, or `nothing` if the token is not a number."
+"The integer that `nparsi` reads from `token`, or `nothing` if `nparsi` signals an error."
 function _ekw_nparsi(token::AbstractString)
-    x = try
-        _nparsd(token)
+    return try
+        _nparsi(token)
     catch e
         e isa SpiceError || rethrow()
-        return nothing
+        nothing
     end
-    (typemin(Int32) <= x <= typemax(Int32)) || return nothing
-    return trunc(Int32, x)
-end
-
-"""
-    _ekw_lparsm(list, delims, nmax) -> Vector{String}
-
-Items of `list` that the characters of `delims` (no blank among them) separate, at
-most `nmax`, as `lparsm`: blanks around an item are dropped, two delimiters in a row
-give a blank item, and a list that ends with a delimiter has a last blank item. A
-blank list has one blank item.
-"""
-function _ekw_lparsm(list::AbstractString, delims::AbstractString, nmax::Int)
-    c = codeunits(rstrip(String(list), ' '))
-    items = String[]
-    eol = length(c)
-    eol == 0 && return push!(items, "")
-    isdelim(k) = Char(c[k]) in delims
-    b = 1
-    while b <= eol
-        # invariant: `items` holds the items that end before position b
-        while b <= eol && c[b] == UInt8(' ')
-            b += 1
-        end
-        e = b
-        while e <= eol && !isdelim(e)
-            e += 1
-        end
-        push!(items, String(rstrip(String(c[b:(e - 1)]), ' ')))
-        length(items) < nmax || return items
-        b = e + 1
-    end
-    isdelim(eol) && length(items) < nmax && push!(items, "")
-    return items
 end
 
 """
@@ -278,7 +244,9 @@ rules, and `:badcolumdecl` (the spelling of CSPICE) if `DATATYPE` is absent.
 """
 function _ekw_pdec(decl::AbstractString)
     pardsc = zeros(Int32, _EK_CDSCSZ)
-    tokens = String[uppercase(String(first(t, 32))) for t in _ekw_lparsm(decl, ",=", 20)]
+    # A token is the item of `lparsm` in 32 characters, so it is cut before the blanks
+    # at its end are dropped.
+    tokens = String[uppercase(String(rstrip(first(t, 32), ' '))) for t in _lparsm(decl, ",=", 20)]
     n = length(tokens)
     keys = ("DATATYPE", "SIZE", "INDEXED", "NULLS_OK", "FIXED_COUNT")
     attloc = zeros(Int, 5)
@@ -478,8 +446,8 @@ and return its segment number, as
 [`ekbseg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekbseg_c.html) of CSPICE.
 
 Segment numbers start at 1; the C interface of CSPICE counts from 0. `cnames` holds
-the column names and `decls` one declaration for each column. A table name has at
-most 64 and a column name at most 32 characters: a letter, then letters, digits, `\$`
+the column names and `decls` one declaration for each column. A table name and a
+column name have at most 32 characters each: a letter, then letters, digits, `\$`
 and `_`. The file stores the names in upper case. Two columns with the same name are
 not refused; a call that names the column then reaches the first of them.
 
@@ -515,7 +483,8 @@ function ekbseg(
     )
     _ekw_check(h, "ekbseg")
     _chkfstr("ekbseg", "table name", tabnam)
-    _ekw_chckid("EK table name", _EK_TNAMSZ, tabnam)
+    # 32 characters, as `ekbseg` checks; the file has room for 64 (`_EK_TNAMSZ`).
+    _ekw_chckid("EK table name", 32, tabnam)
     _ekw_isident(tabnam) || throw(
         SpiceError(
             :invalidname,
@@ -712,18 +681,20 @@ _ekw_typename(types::Tuple) = types[1] == _EK_CHR ? "character" : types[1] == _E
     _ekw_locate(h, who, segno, recno, column, types) -> (segdsc, coldsc, recptr)
 
 The common start of the calls that add or replace one entry: descriptor copies of the
-segment and of the column, and the record pointer of row `recno`. Throws `SpiceError`:
-`:dasnosuchhandle`; `:emptystring`; `:invalidindex` for a bad segment number; `:bug`
-for an unknown column (as CSPICE); `:wrongdatatype` unless the data type code of the
-column is in `types`; `:indexoutofrange` for a row that does not exist;
-`:dasinvalidaccess` for a read handle.
+segment and of the column, and the record pointer of row `recno`. Throws `SpiceError`,
+in this order: `:emptystring` (the check of the C wrapper); `:dasnosuchhandle`;
+`:invalidindex` for a bad segment number; `:bug` for an unknown column (as CSPICE);
+`:wrongdatatype` unless the data type code of the column is in `types`;
+`:indexoutofrange` for a row that does not exist; with `write`, `:dasinvalidaccess`
+for a read handle (`zzekue01` checks the access first). An add leaves that check to
+`_ekw_add_checks`, because CSPICE meets it only at the first write.
 """
 function _ekw_locate(
         h::DASHandle, who::AbstractString, segno::Integer, recno::Integer,
-        column::AbstractString, types::Tuple
+        column::AbstractString, types::Tuple; write::Bool = true
     )
-    _ek_check_read(h, who)
     _chkfstr(who, "column name", column)
+    _ek_check_read(h, who)
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
     coldsc = _ekw_cdsc(h, segdsc, column)
     coldsc[_EK_TYPIDX] in types || throw(
@@ -734,8 +705,28 @@ function _ekw_locate(
         )
     )
     recptr = _ek_trdp(h.ints, segdsc[_EK_RTIDX], recno)
-    _das_check_write(h, who)
+    write && _das_check_write(h, who)
     return segdsc, coldsc, recptr
+end
+
+"""
+    _ekw_add_checks(h, who, segdsc, coldsc, recptr, isnull, nvals) -> Nothing
+
+The checks that `zzekad01` to `zzekad06` make before their first write, in their order,
+and then the write access, which CSPICE checks at that first write (`dasudi`,
+`dasudc`): a read handle gives `:badattribute`, `:invalidcount` or `:nonemptyentry`
+before `:dasinvalidaccess`, as in CSPICE. `nvals` is the number of values of an array
+entry.
+"""
+function _ekw_add_checks(
+        h::DASHandle, who::AbstractString, segdsc::Vector{Int32}, coldsc::Vector{Int32},
+        recptr::Int, isnull::Bool, nvals::Int
+    )
+    colidx = _ekw_entry_checks(segdsc, coldsc, isnull)
+    coldsc[_EK_CLSIDX] in (4, 5, 6) && _ekw_count_checks(segdsc, coldsc, nvals)
+    _ekw_empty_check(h, segdsc, colidx, recptr + _EK_DPTBAS + colidx)
+    _das_check_write(h, who)
+    return nothing
 end
 
 @noinline _ekw_noclass(h::DASHandle, coldsc, what, column, recno, segno) = throw(
@@ -767,8 +758,12 @@ function _ekw_entry_c(
         h::DASHandle, who::AbstractString, update::Bool, segno::Integer,
         recno::Integer, column::AbstractString, vals::AbstractVector, isnull::Bool
     )
-    segdsc, coldsc, recptr = _ekw_locate(h, who, segno, recno, column, (_EK_CHR,))
+    segdsc, coldsc, recptr = _ekw_locate(
+        h, who, segno, recno, column, (_EK_CHR,); write = update
+    )
     class = coldsc[_EK_CLSIDX]
+    (update || !(class == 3 || class == 6)) ||
+        _ekw_add_checks(h, who, segdsc, coldsc, recptr, isnull, length(vals))
     # An update checks the new entry before it deletes the old one, so that a call that
     # throws leaves the entry as it was. CSPICE deletes first and loses the old entry.
     if class == 3
@@ -795,8 +790,10 @@ function _ekw_entry_n(
         segno::Integer, recno::Integer, column::AbstractString, vals::AbstractVector,
         isnull::Bool
     ) where {T}
-    segdsc, coldsc, recptr = _ekw_locate(h, who, segno, recno, column, types)
+    segdsc, coldsc, recptr = _ekw_locate(h, who, segno, recno, column, types; write = update)
     class = coldsc[_EK_CLSIDX]
+    (update || !(class in (1, 2, 4, 5))) ||
+        _ekw_add_checks(h, who, segdsc, coldsc, recptr, isnull, length(vals))
     if class == 1 || class == 2
         val = _ekw_nval1(T, vals)
         if update
@@ -1077,16 +1074,16 @@ end
     _ekw_fast_locate(h, who, segno, column, rcptrs, types) -> (segdsc, coldsc)
 
 The common start of `ekaclc`, `ekacld` and `ekacli`. Throws `SpiceError`:
-`:dasnosuchhandle`, `:dasinvalidaccess`, `:emptystring`, `:invalidindex`,
-`:wrongsegment` if `rcptrs` is the state of another fast load, `:bug` for an unknown
-column, `:wrongdatatype`.
+`:emptystring`, `:dasnosuchhandle`, `:invalidindex`, `:wrongsegment` if `rcptrs` is
+the state of another fast load, `:bug` for an unknown column, `:wrongdatatype`. The
+caller checks the write access just before the first write, where CSPICE meets it.
 """
 function _ekw_fast_locate(
         h::DASHandle, who::AbstractString, segno::Integer,
         column::AbstractString, rcptrs::EKFastLoad, types::Tuple
     )
-    _ekw_check(h, who)
     _chkfstr(who, "column name", column)
+    _ek_check_read(h, who)
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
     (rcptrs.handle === h && rcptrs.segno == segno) || throw(
         SpiceError(
@@ -1247,6 +1244,7 @@ function ekaclc(
     (class == 3 || class == 6 || class == 9) || _ekw_notsupported(coldsc, column)
     _ekw_fast_counts("ekaclc", segdsc, coldsc, length(cvals), entszs, nlflgs)
     _ekw_fast_once("ekaclc", coldsc, column, rcptrs)
+    class == 9 || _das_check_write(h, "ekaclc")   # `_ekw_ac09` checks it after the size
     vals = _ekw_cvals(cvals)
     flags = _ekw_flags(nlflgs)
     if class == 3
@@ -1272,6 +1270,7 @@ function _ekw_fast_n(
     kind == 0 && _ekw_notsupported(coldsc, column)
     _ekw_fast_counts(who, segdsc, coldsc, length(nvals), entszs, nlflgs)
     _ekw_fast_once(who, coldsc, column, rcptrs)
+    _das_check_write(h, who)
     vals = _ekw_nvals(T, nvals)
     flags = _ekw_flags(nlflgs)
     if kind == 1
@@ -1407,7 +1406,7 @@ call for this segment, and `SpiceError(:invalidaddress)` if a column was not sto
 See the example of [`ekifld`](@ref).
 """
 function ekffld(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
-    _ekw_check(h, "ekffld")
+    _ek_check_read(h, "ekffld")
     segdsc = _ek_sdsc(h, segno)
     stype = segdsc[_EK_EKTIDX]
     (rcptrs.handle === h && rcptrs.segno == segno) || throw(
@@ -1419,8 +1418,9 @@ function ekffld(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
         )
     )
     if stype == 1
+        _das_check_write(h, "ekffld")    # `zzekff01` meets it after the segment check
         _ekw_ff01(h, segno, rcptrs)
-    elseif stype == 2
+    elseif stype == 2                    # `ekffld` writes nothing here
         ncols = Int(segdsc[_EK_NCIDX])
         length(rcptrs.stored) == ncols || throw(
             SpiceError(

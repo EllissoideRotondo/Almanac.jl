@@ -31,8 +31,16 @@ function _spk_mda(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     len = e - b + 1
     trailer = seg.dtype == 1 ? 1 : 2
     len > trailer || _badsegment(seg, "the segment is too short")
-    m = seg.dtype == 1 ? 15 :
-        _seg_count(seg, @inbounds(data[e - 1]), 1, _MDA_MAXDIM, "difference line order")
+    m = 15
+    if seg.dtype == 21
+        # `spkr21` refuses a table larger than its own before it reads a line.
+        m = _seg_count(seg, @inbounds(data[e - 1]), -_MAXCOUNT, _MAXCOUNT, "difference line order")
+        m > _MDA_MAXDIM && _segerror(
+            :difflinetoolarge, seg,
+            "the difference table has the dimension $m; at most $(_MDA_MAXDIM) is supported"
+        )
+        m >= 1 || _badsegment(seg, "the difference line order $m is not positive")
+    end
     nrec = _seg_count(seg, @inbounds(data[e]), 1, _MAXCOUNT, "difference line count")
     dlsize = 4 * m + 11
     nrec * (dlsize + 1) + nrec ÷ 100 + trailer == len ||
@@ -65,7 +73,11 @@ function _spk_mda(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
         fc[1] = one(T)
         for j in 1:mq2
             gj = data[g + j]
-            gj == 0.0 && _badsegment(seg, "a step size of difference line $recno is zero")
+            # `spke21` signals ZEROSTEP; `spke01` makes no check (CSPICE divides by zero).
+            if gj == 0.0
+                msg = "the step size $j of difference line $recno is zero"
+                seg.dtype == 21 ? _segerror(:zerostep, seg, msg) : _badsegment(seg, msg)
+            end
             fc[j + 1] = tp / gj
             wc[j] = delta / gj
             tp = delta + gj

@@ -28,7 +28,7 @@ Frame ID of `frame` (a name resolved in `ctx`, or an ID). Throws
 `SpiceError(:invalidrefframe)` if the name is unknown or the ID is 0.
 """
 function _seg_refcode(who::AbstractString, ctx::SegContext, frame::SegFrame)
-    code = frame isa Integer ? Int(frame) : namfrm(_seg_ks(ctx), frame)
+    code = frame isa Integer ? Int(frame) : _namfrm(_seg_ks(ctx), frame)
     code == 0 && throw(
         SpiceError(
             :invalidrefframe,

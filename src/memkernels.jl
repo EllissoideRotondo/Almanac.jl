@@ -106,7 +106,7 @@ function furnsh(ctx::SpiceContext, h::DAFHandle; name::AbstractString, bodies = 
     _chk_filename("furnsh", name)
     kb = _kernel_bodies("furnsh", bodies)
     d = _daf_from_handle(h, name, "furnsh")
-    daf = DAF(d.path, d.kind, d.data, d.segments, d.cksegments, kb)
+    daf = DAF(d.path, d.kind, d.data, d.segments, d.cksegments, d.names, kb)
     (isempty(daf.segments) && isempty(daf.cksegments)) && throw(
         SpiceError(
             :nosegmentsfound,
@@ -139,32 +139,25 @@ function _cov_daf(h::DAFHandle, who::AbstractString, kind::Symbol)
     return daf
 end
 
-function spkobj!(ids::AbstractVector{<:Integer}, h::DAFHandle)
-    daf = _cov_daf(h, "spkobj", :SPK)
-    return _add_ids!(ids, Int[s.target for s in daf.segments])
+"`spkobj!` and `pckfrm!` of a handle: the targets of the segments, for a DAF of `kind`."
+_cov_ids!(ids::AbstractVector{<:Integer}, h::DAFHandle, who::AbstractString, kind::Symbol) =
+    _add_ids!(ids, Int[s.target for s in _cov_daf(h, who, kind).segments])
+
+"`spkcov!` and `pckcov!` of a handle: the spans of the segments of `idcode`, in file order (the order of the summaries)."
+function _cov_window!(cover::Window, h::DAFHandle, idcode::Integer, who::AbstractString, kind::Symbol)
+    for s in _cov_daf(h, who, kind).segments
+        s.target == idcode && wninsd!(cover, s.t0, s.t1)
+    end
+    return cover
 end
+
+spkobj!(ids::AbstractVector{<:Integer}, h::DAFHandle) = _cov_ids!(ids, h, "spkobj", :SPK)
 spkobj(h::DAFHandle) = spkobj!(Int[], h)
-
-function spkcov!(cover::Window, h::DAFHandle, idcode::Integer)
-    for s in _cov_daf(h, "spkcov", :SPK).segments   # in file order, as the summaries
-        s.target == idcode && wninsd!(cover, s.t0, s.t1)
-    end
-    return cover
-end
+spkcov!(cover::Window, h::DAFHandle, idcode::Integer) = _cov_window!(cover, h, idcode, "spkcov", :SPK)
 spkcov(h::DAFHandle, idcode::Integer) = spkcov!(Window(), h, idcode)
-
-function pckfrm!(ids::AbstractVector{<:Integer}, h::DAFHandle)
-    daf = _cov_daf(h, "pckfrm", :PCK)
-    return _add_ids!(ids, Int[s.target for s in daf.segments])
-end
+pckfrm!(ids::AbstractVector{<:Integer}, h::DAFHandle) = _cov_ids!(ids, h, "pckfrm", :PCK)
 pckfrm(h::DAFHandle) = pckfrm!(Int[], h)
-
-function pckcov!(cover::Window, h::DAFHandle, idcode::Integer)
-    for s in _cov_daf(h, "pckcov", :PCK).segments
-        s.target == idcode && wninsd!(cover, s.t0, s.t1)
-    end
-    return cover
-end
+pckcov!(cover::Window, h::DAFHandle, idcode::Integer) = _cov_window!(cover, h, idcode, "pckcov", :PCK)
 pckcov(h::DAFHandle, idcode::Integer) = pckcov!(Window(), h, idcode)
 
 # `ckobj`, `ckobj!`, `ckcov` and `ckcov!` of `ck_api.jl` reach a handle through this method.

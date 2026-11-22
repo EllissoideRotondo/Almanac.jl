@@ -642,6 +642,8 @@ const EKQ_VALID_CORPUS = let
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_CRAFTSCLK 77'",
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_TDT SCLK 1/5:10:10'",
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_TDT SCLK 2:59.49'",
+        # `nparsi` cuts the partition number toward zero: partition 1
+        "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_CRAFT SCLK 1.6/1000:5'",
     ]
     # the limits: 10 tables, 50 SELECT columns, 10 order-by columns, long names
     push!(q, "SELECT T1.ICOL FROM " * join(("ALPHA T$k" for k in 1:10), ", "))
@@ -882,6 +884,8 @@ const EKQ_INVALID_CORPUS = let
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_CRAFT SCLK 99999999999999'",
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_TDT SCLK 0:10:10'",
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_TDT SCLK 1/5:10:10:3'",
+        # partition 0 after `nparsi` cuts 0.5 toward zero
+        "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_CRAFT SCLK 0.5/1000:5'",
         # bytes outside ASCII in a time value
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_CRAFT SCLK 1/é'",
         "SELECT ICOL FROM ALPHA WHERE TCOL > 'EKQ_CRAFT SCLK é/5'",

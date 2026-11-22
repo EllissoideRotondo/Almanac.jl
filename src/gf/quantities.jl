@@ -31,6 +31,18 @@ function _gf_body(ks::KernelSet, name::AbstractString, what::AbstractString)
 end
 _gf_body(ks::KernelSet, id::Integer, what::AbstractString) = Int32(id)
 
+"`SpiceError(:bodiesnotdistinct)` if the target `targ` is the observer `obs`; `target` and `obsrvr` are the inputs, for the message."
+function _gf_distinct(targ::Int32, obs::Int32, target, obsrvr)
+    targ == obs && throw(
+        SpiceError(
+            :bodiesnotdistinct,
+            "The observer and target must be distinct objects, but are not: " *
+                "OBSRVR = $obsrvr; TARGET = $target."
+        )
+    )
+    return nothing
+end
+
 "State (km, km/s) of `targ` relative to `obs` in frame `ref`, and the light time (`spkez`)."
 @inline _gf_spkez(
     ks::KernelSet, targ::Int32, et::Float64, ref::Int32, corr::Aberration,
@@ -65,13 +77,7 @@ Contract (`zzgfdiin`): the bodies are known (`:idcodenotfound`) and distinct
 function GFDistance(ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID)
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer object")
-    targ == obs && throw(
-        SpiceError(
-            :bodiesnotdistinct,
-            "The observer and target must be distinct objects, but are not: " *
-                "OBSRVR = $obsrvr; TARGET = $target."
-        )
-    )
+    _gf_distinct(targ, obs, target, obsrvr)
     return GFDistance(ks, targ, obs, Aberration(abcorr))
 end
 
@@ -211,13 +217,7 @@ function GFRangeRate(
     )
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer object")
-    targ == obs && throw(
-        SpiceError(
-            :bodiesnotdistinct,
-            "The observer and target must be distinct objects, but are not: " *
-                "OBSRVR = $obsrvr; TARGET = $target."
-        )
-    )
+    _gf_distinct(targ, obs, target, obsrvr)
     corr = Aberration(abcorr)
     dt == 0 && throw(
         SpiceError(
@@ -513,19 +513,36 @@ function GFCoordinate(
     return GFCoordinate(vec, sys, idx, re, f, sense, center)
 end
 
-_gf_ks(v::GFPositionVector) = v.ks
-
 _gf_label(::GFCoordinate) = "Coordinate pass # of #"
 
+"""
+    _gf_coords(q, pos) -> NTuple{3,Float64}
+
+The three coordinates of `pos` in the system of `q`, as `zzgfcoq` converts them: with
+the Fortran `reclat_` and `recrad_`, whose longitude is the arc tangent of the
+components as they are (`reclat_c` and `recrad_c` divide them by the largest one
+first, which changes the last bit of about one longitude in sixteen). The
+planetographic coordinates are those of `recpgr` with the sense `q.sense`, which the
+constructor read from the kernel pool of the snapshot, so no pool lookup is made here.
+"""
 @inline function _gf_coords(q::GFCoordinate, pos::SVector{3, Float64})
     sys = q.sys
     sys == _GF_RECTANGULAR && return (pos[1], pos[2], pos[3])
-    sys == _GF_LATITUDINAL && return reclat(pos)
-    sys == _GF_RADEC && return recrad(pos)
+    sys == _GF_LATITUDINAL && return _m_reclat(pos, false)
+    if sys == _GF_RADEC
+        r, ra, dec = _m_reclat(pos, false)
+        return r, (ra < 0.0 ? ra + _TWOPI : ra), dec
+    end
     sys == _GF_SPHERICAL && return recsph(pos)
     sys == _GF_CYLINDRICAL && return reccyl(pos)
     sys == _GF_GEODETIC && return recgeo(pos, q.re, q.f)
-    return recpgr(_gf_ks(q.vec), q.center, pos, q.re, q.f)
+    # the arithmetic of `recpgr`
+    lon, lat, alt = _m_recgeo(pos, q.re, q.f)
+    lon = q.sense * lon
+    lon < 0.0 && (lon += _TWOPI)
+    lon < 0.0 && (lon = 0.0)
+    lon > _TWOPI && (lon = _TWOPI)
+    return lon, lat, alt
 end
 
 @noinline _gf_notcomputable(et::Float64) = throw(

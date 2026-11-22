@@ -49,39 +49,6 @@ function _daf_entry(ks::KernelSet, k::Integer)
 end
 
 """
-    _daf_array_name(daf, k) -> String
-
-The name of array `k`, in file order, of the loaded DAF `daf`, as `dafgn` reads it. The
-data of a file of the other byte order hold each double converted, so the bytes of the
-file record and of the name records are swapped back first.
-"""
-function _daf_array_name(daf::DAF, k::Int)
-    d = daf.data
-    swap = String(reinterpret(UInt8, [d[12]])) != _DAF_NATIVE_BFF
-    rawrec(r) = collect(
-        reinterpret(
-            UInt8,
-            [swap ? bswap(d[a]) : d[a] for a in _daf_rwa(r):(_daf_rwa(r) + _DAF_RECWORDS - 1)]
-        )
-    )
-    little = swap ? !_DAF_NATIVE_LITTLE : _DAF_NATIVE_LITTLE
-    rec = Int(_daf_i32(rawrec(1), 76, little))
-    namsiz = 8 * _daf_sumsize(2, 6)
-    count = 0
-    while rec != 0                       # invariant: `count` arrays are in the records before `rec`
-        base = _daf_rwa(rec) - 1
-        nsum = Int(d[base + 3])
-        if k <= count + nsum
-            off = (k - count - 1) * namsiz
-            return String(rstrip(String(rawrec(rec + 1)[(off + 1):(off + namsiz)]), [' ', '\0']))
-        end
-        count += nsum
-        rec = Int(d[base + 1])
-    end
-    return @assert false "array $k is in the summary records of $(daf.path)"
-end
-
-"""
     spksfs([ctx,] body::Integer, et) -> Union{Nothing,Tuple{String,Vector{Float64},String}}
 
 Return `(file, descr, ident)` for the loaded SPK segment of the highest priority for
@@ -162,7 +129,7 @@ function spksfs(ks::KernelSet, body::Integer, et::Real)
         Float64[seg.t0, seg.t1],
         Int[seg.target, seg.center, seg.frame, seg.dtype, seg.baddr, seg.eaddr]
     )
-    return entry.path, descr, _daf_array_name(daf, k)
+    return entry.path, descr, daf.names[k]
 end
 spksfs(ctx::SpiceContext, body::Integer, et::Real) = spksfs(kernelset(ctx), body, et)
 spksfs(body::Integer, et::Real) = spksfs(default_context(), body, et)
@@ -191,21 +158,82 @@ function _spk_descr_segment(data::Vector{Float64}, descr, path::AbstractString, 
     )
 end
 
-function _spkpvn(ks::KernelSet, data::Vector{Float64}, seg::Segment, et::Real)
+"The SPK data types of CSPICE N0067, the ones that `spkpvn` dispatches on."
+const _SPKPVN_TYPES = (1, 2, 3, 5, 8, 9, 10, 12, 13, 14, 15, 17, 18, 19, 20, 21)
+
+"The first checks of `spkpvn`: `et` is finite (`:badarg`), then the type is one of N0067 (`:spktypenotsupp`), before any data is read, as `spkpvn` dispatches."
+function _spkpvn_epoch(dtype::Integer, et::Real)
     e = check_epoch(et)
+    dtype in _SPKPVN_TYPES || _unsupported("SPK", dtype)
+    return e
+end
+
+function _spkpvn_bounds(dtype::Integer, t0::Float64, t1::Float64, e::Real)
     # The readers of CSPICE for the types 8, 9, 12, 13, 14, 18 and 19 make this check; for
     # the others CSPICE extrapolates, reads outside the segment or stops the process.
     # Types 15 and 17 hold one set of elements, which CSPICE propagates to any epoch:
     # those are evaluated as CSPICE does.
-    (seg.dtype == Int32(15) || seg.dtype == Int32(17) || seg.t0 <= primal(e) <= seg.t1) || throw(
+    (dtype == 15 || dtype == 17 || t0 <= primal(e) <= t1) || throw(
         SpiceError(
             :timeoutofbounds, "spkpvn: request " *
-                "time $(primal(e)) is outside of descriptor bounds $(seg.t0) : $(seg.t1)"
+                "time $(primal(e)) is outside of descriptor bounds $t0 : $t1"
         )
     )
+    return nothing
+end
+
+function _spkpvn_state(ks::KernelSet, data::Vector{Float64}, seg::Segment, e::Real)
     p, v = seg.dtype == Int32(10) ? _t10_jet(_lsk(ks), data, seg, e, Val(1)) :
         spk_eval(data, seg, e, Val(1))
     return Int(seg.frame), vcat(p, v), Int(seg.center)
+end
+
+"""
+    _spkpvn(ks, data, descr, path, shift, e) -> (ref, state, center)
+
+`spkpvn` on the data of the segment `descr` (DAF address `a` is `data[a - shift]`),
+after `_spkpvn_epoch` has accepted `e` and the type. For type 14 the record size is
+checked before the epoch, as `spkpvn` checks it before `spkr14`.
+"""
+function _spkpvn(
+        ks::KernelSet, data::Vector{Float64}, descr, path::AbstractString, shift::Int,
+        e::Real
+    )
+    seg = _spk_descr_segment(data, descr, path, shift)
+    seg.dtype == Int32(14) && _spk14_recsize(_spk14_layout(data, seg).ncoef)
+    _spkpvn_bounds(seg.dtype, seg.t0, seg.t1, e)
+    return _spkpvn_state(ks, data, seg, e)
+end
+
+"""
+    _spkpvn_record(h, dc, ic, t) -> (rec, seg)
+
+The record of the SPK type 2 or 3 segment `(dc, ic)` of the file of `h` for the epoch `t`,
+read as `spkr02` and `spkr03` read it: the four directory values at the end of the
+segment, then the one record. `seg` describes `rec` as a segment of one record at address
+1, so `spk_eval(rec, seg, et)` is the state from the whole segment.
+"""
+function _spkpvn_record(h::DAFHandle, dc, ic, t::Float64)
+    b, e, dtype = ic[5], ic[6], Int32(ic[4])
+    b <= 0 && throw(SpiceError(:dafnegaddr, "spkpvn: negative value for the first address: $b"))
+    b > e && throw(
+        SpiceError(
+            :dafbeggtend,
+            "spkpvn: beginning address ($b) greater than ending address ($e)"
+        )
+    )
+    _daf_directory_length(h.path, dtype, b, e)
+    dir = dafgda(h, e - 3, e)
+    init, intlen, rsize, nrec = _daf_directory_values(
+        dir[1], dir[2], dir[3], dir[4], h.path, dtype, b, e
+    )
+    a = b + _cheb_index(t, init, intlen, Int(nrec)) * Int(rsize)
+    rec = dafgda(h, a, a + Int(rsize) - 1)
+    seg = Segment(
+        Int32(ic[1]), Int32(ic[2]), Int32(ic[3]), dtype, dc[1], dc[2], Int32(0),
+        1, Int(rsize), init, intlen, rsize, Int32(1)
+    )
+    return rec, seg
 end
 
 "The loaded SPK file with the path `file`; throws `SpiceError(:nosuchhandle)` if there is none."
@@ -238,28 +266,45 @@ the NAIF ID of its center, both `Int`. `state` is an `SVector{6}`: position in
 km, then velocity in km/s, in the frame `ref`. `et` is in seconds past J2000 TDB.
 
 The context gives the leap seconds that a segment of type 10 needs; the form with a
-handle reads nothing else from it.
+handle reads nothing else from it. With a handle, a call reads the directory and one
+record of a segment of type 2 or 3, and the whole segment of another type.
 
 Throws `SpiceError`:
+- `:nosuchhandle` if no SPK file with the path `file` is loaded in the context, and
+  `:dafnosuchhandle` if `handle` is closed;
+- `:badarg` if `et` is not finite;
+- `:spktypenotsupp` if the data type is not one of CSPICE version N0067, at any `et`;
+- `:spkrectoolarge` for a segment of type 14 whose series have more than 32
+  coefficients, as CSPICE, whose record buffer has 198 doubles;
 - `:timeoutofbounds` if `et` is outside the coverage of `descr`, for every type but 15
   and 17, whose single set of elements is propagated to `et` as CSPICE does. CSPICE
   signals this for the types 8, 9, 12, 13, 14, 18 and 19 only; for the other types it
   extrapolates, reads data outside the segment, or stops the process (type 1);
-- `:spktypenotsupp` if the data type is not one of CSPICE version N0067;
-- `:nosuchhandle` if no SPK file with the path `file` is loaded in the context, and
-  `:dafnosuchhandle` if `handle` is closed;
 - `:dafnegaddr`, `:dafbeggtend` or `:filereadfailed` if the addresses of `descr` are not
-  a range in the file, and `:baddaf` if the data of the segment are not consistent;
-- `:badarg` if `et` is not finite;
+  a range in the file;
+- the kinds of the evaluators of CSPICE for the values that they refuse: type 5 those of
+  [`prop2b`](@ref); type 15 `:malformedsegment`, `:badlatusrectum`, `:badeccentricity`,
+  `:nonpositivemass`, `:badvector`, `:badradius`, `:badinitstate`; type 17
+  `:malformedsegment`, `:badsemiaxis`, `:badeccentricity`, `:eccoutofbounds`; type 18
+  `:toofewstates`, `:notsupported`, `:invalidvalue`; type 19 `:notsupported`,
+  `:invalidvalue`; type 20 `:invalidcount`; type 21 `:difflinetoolarge`, `:zerostep`;
+- `:baddaf` if the data of the segment do not form a valid segment in a way that CSPICE
+  does not check;
 - `:noleapseconds` for a segment of type 10 and a context without leap seconds.
 
 See also [`spksfs`](@ref) for an example, [`spkuds`](@ref).
 """
 function spkpvn(ks::KernelSet, h::DAFHandle, descr::AbstractVector{<:Real}, et::Real)
     _daf_check_open(h, "spkpvn")
-    _, ic = dafus(descr, 2, 6)
+    dc, ic = dafus(descr, 2, 6)
+    e = _spkpvn_epoch(ic[4], et)
+    if ic[4] == 2 || ic[4] == 3             # one record, not the whole segment
+        _spkpvn_bounds(ic[4], dc[1], dc[2], e)
+        rec, seg = _spkpvn_record(h, dc, ic, primal(e))
+        return _spkpvn_state(ks, rec, seg, e)
+    end
     data = dafgda(h, ic[5], ic[6])
-    return _spkpvn(ks, data, _spk_descr_segment(data, descr, h.path, ic[5] - 1), et)
+    return _spkpvn(ks, data, descr, h.path, ic[5] - 1, e)
 end
 function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Real}, et::Real)
     i = findlast(e -> e.path == file && e.content isa EphemerisProvider, ks.loaded)
@@ -277,6 +322,7 @@ function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Rea
     end
     daf = _spk_loaded(ks, file)
     _, ic = dafus(descr, 2, 6)
+    t = _spkpvn_epoch(ic[4], et)
     b, e = ic[5], ic[6]
     b <= 0 && throw(SpiceError(:dafnegaddr, "spkpvn: negative value for the first address: $b"))
     b > e && throw(
@@ -291,7 +337,7 @@ function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Rea
             "spkpvn: the addresses $b:$e are not inside the file $file"
         )
     )
-    return _spkpvn(ks, daf.data, _spk_descr_segment(daf.data, descr, daf.path, 0), et)
+    return _spkpvn(ks, daf.data, descr, daf.path, 0, t)
 end
 spkpvn(
     ctx::SpiceContext, src::Union{DAFHandle, AbstractString}, descr::AbstractVector{<:Real},

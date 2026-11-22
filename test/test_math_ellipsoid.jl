@@ -388,6 +388,12 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
         @test throws_kind(() -> edterm(ctx, "SHADOW", "SUN", "MOON", 0.0, "IAU_MOON", "NONE", "EARTH", 3), :notsupported)
         @test throws_kind(() -> edterm(ctx, "UMBRAL", "SUN", "MOON", 0.0, "IAU_EARTH", "NONE", "EARTH", 3), :invalidfixref)
         @test throws_kind(() -> edterm(ctx, "UMBRAL", "SUN", "MOON", 0.0, "IAU_MOON", "NONE", "EARTH", 0), :invalidsize)
+        # Regression: an empty string is SPICE(EMPTYSTRING) of edterm_c, before any other check.
+        let args = ("UMBRAL", "SUN", "MOON", 0.0, "IAU_MOON", "NONE", "EARTH", 0)
+            for i in (1, 2, 3, 5, 6, 7)
+                @test throws_kind(() -> edterm(ctx, Base.setindex(args, "", i)...), :emptystring)
+            end
+        end
         SPICE.kclear()
     end
 

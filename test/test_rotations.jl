@@ -274,6 +274,89 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
             foreach(v -> dvpool(ctx, v), vars)
         end
     end
+
+    @apart @testset "frame chains longer than 10 links, cycles, centers by name" begin
+        # CHAIN_k is relative to CHAIN_(k-1), CHAIN_1 to J2000; CHAIN_SIDE to CHAIN_3.
+        # `zzrefch0_` keeps 10 frames of the first chain and folds the later links into
+        # the last one, so the chain of the second frame meets J2000 rather than
+        # CHAIN_3. Quaternions need no trigonometry, so the matrices are those of
+        # CSPICE to the last bit.
+        defs = [(-1977200 - k, "CHAIN_$k", k == 1 ? "J2000" : "CHAIN_$(k - 1)", [1.0, 0.1k, -0.05k, 0.02k]) for k in 1:14]
+        push!(defs, (-1977220, "CHAIN_SIDE", "CHAIN_3", [0.9, -0.2, 0.3, 0.1]))
+        cyc = [(-1977231, "CHAIN_CYC_A", "CHAIN_CYC_B", [1.0, 0.0, 0.0, 0.0]), (-1977232, "CHAIN_CYC_B", "CHAIN_CYC_A", [1.0, 0.0, 0.0, 0.0])]
+        vars = String[]
+        define(defs, setters) = for (id, name, rel, q) in defs
+            for (setc, seti, setd) in setters
+                seti("FRAME_$name", [id])
+                setc("FRAME_$(id)_NAME", [name])
+                seti("FRAME_$(id)_CLASS", [4])
+                seti("FRAME_$(id)_CLASS_ID", [id])
+                seti("FRAME_$(id)_CENTER", [399])
+                setc("TKFRAME_$(id)_SPEC", ["QUATERNION"])
+                setc("TKFRAME_$(id)_RELATIVE", [rel])
+                setd("TKFRAME_$(id)_Q", q)
+            end
+            append!(
+                vars, [
+                    "FRAME_$name", "FRAME_$(id)_NAME", "FRAME_$(id)_CLASS", "FRAME_$(id)_CLASS_ID",
+                    "FRAME_$(id)_CENTER", "TKFRAME_$(id)_SPEC", "TKFRAME_$(id)_RELATIVE", "TKFRAME_$(id)_Q",
+                ]
+            )
+        end
+        both = (
+            (SPICE.pcpool, SPICE.pipool, SPICE.pdpool),
+            ((k, v) -> pcpool(ctx, k, v), (k, v) -> pipool(ctx, k, v), (k, v) -> pdpool(ctx, k, v)),
+        )
+        try
+            define(defs, both)
+            define(cyc, both[2:2])          # a cycle makes CSPICE loop forever
+            for (a, b) in (
+                    ("CHAIN_14", "J2000"), ("CHAIN_14", "CHAIN_2"), ("CHAIN_14", "CHAIN_SIDE"),
+                    ("CHAIN_SIDE", "CHAIN_14"), ("CHAIN_12", "CHAIN_11"), ("GALACTIC", "CHAIN_13"),
+                )
+                @test Matrix(pxform(ctx, a, b, 0.0)) == SPICE.pxform(a, b, 0.0)
+            end
+            et = 1.0e8
+            @test isapprox(Matrix(sxform(ctx, "CHAIN_14", "IAU_EARTH", et)), SPICE.sxform("CHAIN_14", "IAU_EARTH", et); atol = 1.0e-15)
+            @test throws_kind(() -> pxform(ctx, "CHAIN_CYC_A", "J2000", 0.0), :framechain)
+            @test throws_kind(() -> sxform(ctx, "IAU_EARTH", "CHAIN_CYC_B", et), :framechain)
+            # The second frame is checked before the first link is evaluated: a class 4
+            # frame without data (`CHAIN_NODATA`) does not hide an unknown frame ID.
+            seti = (k, v) -> pipool(ctx, k, v)
+            seti("FRAME_-1977240_CLASS", [4]); seti("FRAME_-1977240_CLASS_ID", [-1977240]); seti("FRAME_-1977240_CENTER", [399])
+            pcpool(ctx, "FRAME_-1977240_NAME", ["CHAIN_NODATA"])
+            append!(vars, ["FRAME_-1977240_CLASS", "FRAME_-1977240_CLASS_ID", "FRAME_-1977240_CENTER", "FRAME_-1977240_NAME"])
+            nodata = try
+                pxform(ctx, "CHAIN_NODATA", "J2000", 0.0)
+            catch e
+                e
+            end
+            @test nodata isa Almanac.SpiceError && nodata.kind !== :unknownframe
+            @test throws_kind(() -> pxform(ctx, "CHAIN_NODATA", 99999, 0.0), :unknownframe)
+            # A center given by a name of `boddef` (`zzdynbid_` calls `bods2c_`); a class
+            # given as a string is refused (`zzdynvai_`), so that frame is unknown.
+            for (setc, seti, _) in both
+                setc("FRAME_-1977241_NAME", ["CHAIN_BYNAME"])
+                seti("FRAME_-1977241_CLASS", [4]); seti("FRAME_-1977241_CLASS_ID", [-1977241])
+                setc("FRAME_-1977241_CENTER", ["ALMANAC_CHAIN_SAT"])
+            end
+            pcpool(ctx, "FRAME_-1977242_NAME", ["CHAIN_STRCLASS"]); pcpool(ctx, "FRAME_-1977242_CLASS", ["MARS"])
+            pipool(ctx, "FRAME_-1977242_CLASS_ID", [-1977242]); pipool(ctx, "FRAME_-1977242_CENTER", [399])
+            append!(
+                vars, [
+                    "FRAME_-1977241_NAME", "FRAME_-1977241_CLASS", "FRAME_-1977241_CLASS_ID", "FRAME_-1977241_CENTER",
+                    "FRAME_-1977242_NAME", "FRAME_-1977242_CLASS", "FRAME_-1977242_CLASS_ID", "FRAME_-1977242_CENTER",
+                ]
+            )
+            SPICE.boddef("ALMANAC_CHAIN_SAT", -1977241)
+            boddef(ctx, "ALMANAC_CHAIN_SAT", -1977241)
+            @test frinfo(ctx, -1977241) == SPICE.frinfo(-1977241) == (-1977241, 4, -1977241)
+            @test frinfo(ctx, -1977242) === nothing
+        finally
+            foreach(SPICE.dvpool, vars)
+            foreach(v -> dvpool(ctx, v), vars)
+        end
+    end
 end
 
 FULL || @eval Base.Experimental.@optlevel -1    # the level of the session again

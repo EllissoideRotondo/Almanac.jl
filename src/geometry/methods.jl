@@ -169,7 +169,7 @@ function _geo_body(ks::KernelSet, name::AbstractString, what::AbstractString)
 end
 
 @inline _geo_namfrm(::KernelSet, ref::Integer) = Int32(ref)
-_geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(namfrm(ks, ref))
+_geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
 
 """
     _geo_frinfo(ks, id) -> (center, class, found)
@@ -177,13 +177,9 @@ _geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(namfrm(ks, ref))
 `frinfo` without the class ID. Does not allocate.
 """
 @inline function _geo_frinfo(ks::KernelSet, id::Int32)
-    id == Int32(0) && return Int32(0), Int32(0), false
-    f = get(BUILTIN_FRAMES, id, nothing)
-    f === nothing || return f.center, f.class, true
-    f = get(ks.frames, id, nothing)
-    f === nothing || return f.center, f.class, true
-    13000 <= id < 14000 && return Int32(399), Int32(2), true
-    return Int32(0), Int32(0), false
+    f = _frame_def_or_nothing(ks, id)
+    f === nothing && return Int32(0), Int32(0), false
+    return f.center, f.class, true
 end
 
 @noinline _geo_no_frame(ref) = throw(
@@ -298,12 +294,7 @@ end
 
 "`zzdsksph` for the body `trgcde`; `SpiceError(:noloadeddskfiles)` without DSK files,
 `SpiceError(:dskdatanotfound)` without DSK data for the body."
-function _geo_dsksph(ks::KernelSet, trgcde::Int32, srflst)
-    _dsk_check_files(ks)
-    segs = get(ks.dsk, trgcde, nothing)
-    segs === nothing && _dsk_no_segments(trgcde, srflst)
-    return _dsk_sph(ks, segs, trgcde, srflst)
-end
+_geo_dsksph(ks::KernelSet, trgcde::Int32, srflst) = _dsk_body_sph(ks, trgcde, srflst)
 
 "`zzsudski`: the DSK surface of the body `trgcde` with the surfaces `srflst`."
 function _geo_dskshape(ks::KernelSet, tols::DSKTolerances, trgcde::Int32, fixfid::Int32, srflst)

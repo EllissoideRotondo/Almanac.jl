@@ -40,6 +40,7 @@ With ForwardDiff.jl loaded, the epoch can be a `ForwardDiff.Dual` in these calls
 - `spkder`, `pxder` and the table queries;
 - surface calls: `subpnt`, `subslr`, `sincpt`, `ilumin`, `illumg`, `illumf`, `phaseq`, `azlcpo`;
 - time conversions: `unitim`, `deltet`;
+- ellipsoid and conic calls: `nearpt` with a dual point or semi-axes, `prop2b` and `conics` with a dual time;
 - [orbits](@ref "Orbits and relative motion"): `orbit`, and `keplerian_orbit` with dual elements;
 - an `Orbit` with a dual epoch or state, in `element`, `keplerian`, `with_element`, `with_apsides`, `two_body`, `local_frame`, `local_frame_state`, `relative_state`, `vinf_periapsis` and `vinf_turn_angle`.
 
@@ -58,7 +59,7 @@ ForwardDiff.derivative(apparent, et)        # km/s in the rotating frame
 
 ## Differentiate with other AD packages
 
-The same calls can be differentiated with Enzyme.jl, Mooncake.jl, Zygote.jl (and other users of ChainRulesCore.jl), ReverseDiff.jl and Tracker.jl. Loading the package is enough: an extension gives it the analytical derivatives, so no package has to differentiate the evaluators, and every package returns the derivative that ForwardDiff returns. [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) selects a package by its backend type:
+The same calls can be differentiated with Enzyme.jl, Mooncake.jl, Zygote.jl (and other users of ChainRulesCore.jl), ReverseDiff.jl and Tracker.jl. Loading the package is enough: an extension gives it the analytical derivatives, so no package has to differentiate the evaluators, and every package returns the derivative that ForwardDiff returns. The bisections of `nearpt` (and so of `subpnt` and `subslr` with `NEAR POINT`) and of `prop2b` and `conics` run on plain numbers, and every package takes the derivative of their root from the equation that the root solves. [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) selects a package by its backend type:
 
 ```julia
 import DifferentiationInterface as DI

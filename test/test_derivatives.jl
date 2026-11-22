@@ -192,6 +192,15 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
         probe = spkpos(ctx, 301, ForwardDiff.Dual(epochs[1], 1.0), "J2000", "NONE", 399)[1]
         @test eltype(probe) <: ForwardDiff.Dual
         @test ForwardDiff.value.(probe) == spkpos(ctx, 301, epochs[1], "J2000", "NONE", 399)[1]
+        # Regression: the light time of a Dual epoch has the value of the plain call; it was
+        # sqrt(r.r) / c of the position in the output frame, which can differ in the last bit
+        # from the norm that CSPICE takes before the frame change. ("LT+S" takes that path;
+        # "NONE" computes the light time from the geometric position and is a guard.)
+        for et in epochs, (ref, ab) in (("J2000", "NONE"), ("IAU_EARTH", "LT+S"))
+            d = ForwardDiff.Dual(et, 1.0)
+            @test ForwardDiff.value(spkpos(ctx, 301, d, ref, ab, 399)[2]) == spkpos(ctx, 301, et, ref, ab, 399)[2]
+            @test ForwardDiff.value(spkezr(ctx, 301, d, ref, ab, 399)[2]) == spkezr(ctx, 301, et, ref, ab, 399)[2]
+        end
         for (targ, obs, ref, _) in state_cases
             generic = t -> generic_pos(ctx, targ, t, ref, obs)
             public = t -> spkpos(ctx, targ, t, ref, "NONE", obs)[1]
@@ -293,6 +302,15 @@ group("3. derivatives", Kernels.FULL_SET_FILES...) do
         jp = pxder(ctx, "J2000", "IAU_EARTH", et, Val(3))
         @test all(ForwardDiff.value.(jd[k]) == jp[k] for k in 1:3)
         @test all(ForwardDiff.partials.(jd[k], 1) == jp[k + 1] for k in 1:3)
+        # Regression: the value of `sxform` with a Dual epoch is the plain `sxform`, whose
+        # rate block follows `tisbod_` (6e-16 from the exact derivative, see above); it was
+        # the exact derivative. The partials of the rotation block are order 1 of `pxder`,
+        # and `pxder` with a Dual epoch keeps the exact order 1.
+        Xd = sxform(ctx, "J2000", "IAU_EARTH", ForwardDiff.Dual(et, 1.0))
+        @test ForwardDiff.value.(Xd) == sxform(ctx, "J2000", "IAU_EARTH", et)
+        @test ForwardDiff.partials.(Xd[SOneTo(3), SOneTo(3)], 1) == jp[2]
+        j1 = pxder(ctx, "J2000", "IAU_EARTH", ForwardDiff.Dual(et, 1.0), Val(1))
+        @test ForwardDiff.value.(j1[2]) == jp[2]
     end
 
     @apart @testset "calls without derivatives refuse a Dual epoch" begin

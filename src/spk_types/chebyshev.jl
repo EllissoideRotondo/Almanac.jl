@@ -18,6 +18,7 @@ one throws `SpiceError(:notsupported)`.
 function _spk14(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     lay = _spk14_layout(data, seg)
     ncoef = lay.ncoef
+    _spk14_recsize(ncoef)
     a = _spk14_packet(data, seg, lay, primal(et))     # address of MID
     @inbounds mid, radius = data[a], data[a + 1]
     tau = (et - mid) / radius
@@ -25,6 +26,26 @@ function _spk14(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     (vel,) = _cheb3(data, a + 2 + 3 * ncoef, ncoef, tau, radius, Val(0))
     return pos, vel
 end
+
+"""
+    _spk14_recsize(ncoef)
+
+Throws `SpiceError(:spkrectoolarge)` if a type 14 record (`6 ncoef + 3` doubles) does
+not fit the record buffer of 198 doubles of `spkpvn`, that is for series of more than
+32 coefficients.
+"""
+@inline function _spk14_recsize(ncoef::Int)
+    recsiz = 6 * ncoef + 3
+    recsiz > 198 && _spk14_toolarge(recsiz)
+    return nothing
+end
+@noinline _spk14_toolarge(recsiz::Int) = throw(
+    SpiceError(
+        :spkrectoolarge,
+        "storage for $recsiz double precision numbers is needed for an SPK data " *
+            "record and only 198 locations were available"
+    )
+)
 
 """
     _spk14_layout(data, seg) -> NamedTuple
@@ -138,9 +159,11 @@ function _spk20(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     recsiz, nrec = Int(seg.rsize), Int(seg.nrec)
     (nrec >= 1 && recsiz >= 1 && e - b + 1 == Int128(recsiz) * nrec + 7) ||
         _badsegment(seg, "the record size and count do not agree with the length")
-    nterms = recsiz ÷ 3
-    ncof = nterms - 1
-    (ncof >= 1 && 3 * nterms == recsiz) || _badsegment(seg, "the record size $recsiz is not valid")
+    # `spke20` takes NCOF = (RSIZE - 3) / 3 and refuses a count below 1.
+    ncof = (recsiz - 3) ÷ 3
+    ncof < 1 && _segerror(:invalidcount, seg, "the coefficient count $ncof is not positive")
+    nterms = ncof + 1
+    3 * nterms == recsiz || _badsegment(seg, "the record size $recsiz is not 3 (NCOF + 1)")
     @inbounds dscale, tscale, initjd, initfr, intlen = data[e - 6], data[e - 5], data[e - 4],
         data[e - 3], data[e - 2]
     (

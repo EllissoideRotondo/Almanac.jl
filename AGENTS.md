@@ -105,8 +105,10 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
   code that reads `ks.daf[seg.file]` must test for this first. A `FrameProvider` frame
   has class 7, so dispatch on dynamic frames with `class == 5 || class == 6`, never
   `class >= 5`.
-- **Frame chains.** A chain is followed to its first common frame, as in `refchg_`,
-  for at most `MAX_FRAME_CHAIN` (10) links. Dynamic frames recurse through
+- **Frame chains.** A chain is followed to its first common frame, as in `zzrefch0_`:
+  the chain of the first frame keeps `MAX_FRAME_CHAIN` (10) frames and folds later
+  links into the last, and a chain of `_FRAME_CHAIN_LIMIT` (1000) links is taken to be
+  a cycle (`:framechain`; CSPICE loops). Dynamic frames recurse through
   `ks.inner`, which is `_DYN_LEVELS` (2) deep, and throw `:recursiontoodeep` below
   that.
 - **CK rates.** `_CKState()` takes its derivative from the angular velocity of the
@@ -148,14 +150,21 @@ it. The shared types are in `types.jl`, `dyntypes.jl`, `dsk_types.jl` and
   jet. The Orbit layer has one more, the Kepler solver `_ma_to_ta(M, e)` of
   `analysis/brouwer.jl`, whose rules take the partials of the implicit function at the
   converged anomaly (ForwardDiff and the tracked numbers get them from the carried
-  Newton step `_carry`). `AlmanacForwardDiffExt` assembles `Dual` results from the jet
+  Newton step `_carry`). The bisections of `nearpt` and `prop2b` (`_m_nearpt_plain`,
+  `_prop2b_root`) are in `_AD_CONSTANT`; their callers take the derivative of the root
+  by Newton steps in the number type, one for `Float64` through `_ad_pin(a, p)` (value
+  `p`, derivative of `a`, with a rule in the ChainRulesCore, Enzyme and Mooncake
+  extensions), so the plain value stays bit for bit. The angles `:ta`, `:aop` and
+  `:raan` use `_ad_pin` too: the arc cosine of ANISE for the value
+  (`_AD_CONSTANT_ORBIT`), the arc tangent for the derivative. `AlmanacForwardDiffExt` assembles `Dual` results from the jet
   at `primal(et)`; `src/ad.jl` gives `_ad_rule` (value and derivative, for the rules of
   ChainRulesCore, Enzyme and Mooncake) and `_ad_lift` (for the tracked numbers of
   ReverseDiff and Tracker). A new derivative point, or a new path to the epoch that
   bypasses them, needs a method in every extension. Lookups and string parsing on the
   way to a derivative point go into `_AD_CONSTANT`. Enzyme compiles the bodies of the
   derivative points too, and fails when two calls of different result types share a
-  storage slot (see `_ssbpos_still` in `aberration.jl`); the groups `ad_enzyme`,
+  storage slot (see `_ssbpos_still` in `aberration.jl`), and applies a rule only to a
+  call that is not inlined (`_ad_pin` is `@noinline`); the groups `ad_enzyme`,
   `ad_mooncake`, `ad_zygote` and `ad_tracked` (fixture `test/adfixtures.jl`) cover every
   backend. `element` and the properties of an `Orbit` take the name at run time:
   `getproperty` stays `@inline` (so that Mooncake and Enzyme see one branch), and the

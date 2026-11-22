@@ -46,8 +46,9 @@ on a circular orbit, no angular momentum for a zero position or velocity) it thr
 A state of `ForwardDiff.Dual` numbers whose value is exactly a zero radius, a zero
 velocity, a rectilinear orbit (`:hmag`) or an exactly circular orbit (`:ecc` and what is
 built on it) throws too, where a `Float64` state gives 0, because the derivative of a norm
-is undefined there. The derivative of `:ta` is NaN at an exact apsis (the arc cosine at
-+-1, as in ANISE), and so is that of the calls built on it; the value is not.
+is undefined there. `:ta`, `:raan` and `:aop` have the value of the arc cosine of ANISE
+and the derivative of the same angle as an arc tangent, which is finite at an apsis and
+at a node, where the arc cosine has an infinite slope.
 
 Throws `SpiceError(:badarg)` if `name` is not in [`elements`](@ref) (the vectors
 `position`, `velocity`, `hvec` and `evec` are properties only), or if the quantity needs
@@ -215,29 +216,61 @@ function _acos_or_fallback(c::T) where {T}
     return acos(c)
 end
 
-function _el_aop(o::Orbit{T}) where {T}
+# The angles :aop, :raan and :ta of ANISE are arc cosines, whose derivative is infinite
+# where the angle is 0 or π (at an apsis for :ta). Their value is the arc cosine of ANISE,
+# computed from the plain numbers by `_el_aop_acos`, `_el_raan_acos` and `_el_ta_acos`
+# (constants for the AD extensions, `_AD_CONSTANT_ORBIT`), and `_ad_pin` gives it the
+# derivatives of the same angle as a two-argument arc tangent, finite everywhere.
+function _el_aop_acos(n::SVector{3, Float64}, e::SVector{3, Float64})
+    aop = acos(dot(n, e) / (norm(n) * norm(e)))
+    return e[3] < 0 ? 2 * Float64(π) - aop : aop
+end
+
+function _el_raan_acos(n::SVector{3, Float64})
+    raan = acos(n[1] / norm(n))
+    return n[2] < 0 ? 2 * Float64(π) - raan : raan
+end
+
+function _el_ta_acos(e::SVector{3, Float64}, r::SVector{3, Float64}, v::SVector{3, Float64})
+    ta = acos(clamp(dot(e, r) / (norm(e) * norm(r)), -1, 1))
+    return dot(r, v) < 0 ? 2 * Float64(π) - ta : ta
+end
+
+const _AD_CONSTANT_ORBIT = (_el_aop_acos, _el_raan_acos, _el_ta_acos)
+
+_el_plain(v::SVector{3}) = SVector(primal(v[1]), primal(v[2]), primal(v[3]))
+
+# The angle `a` in (-π, π], moved by a turn to the side of `p` in [0, 2π] (so that the
+# plain value of a tracked number moves by rounding only).
+_el_near(a, p::Float64) = primal(a) < p - π ? a + 2 * Float64(π) : a
+
+function _el_aop(o::Orbit)
     h = _hvec_for(:aop, o)
     e = _evec_for(:aop, o)
     n = _node(h)
     c = dot(n, e) / (norm(n) * norm(e))
     (isnan(c) || abs(primal(c)) > 1) && return _acos_or_fallback(c)
-    aop = acos(c)
-    return primal(e[3]) < 0 ? 2 * T(π) - aop : aop
+    aop = _el_aop_acos(_el_plain(n), _el_plain(e))
+    # the angle from the node to the periapsis about h
+    return _ad_pin(_el_near(atan(dot(h, cross(n, e)), norm(h) * dot(n, e)), aop), aop)
 end
 
-function _el_raan(o::Orbit{T}) where {T}
+function _el_raan(o::Orbit)
     n = _node(_hvec_for(:raan, o))
     c = n[1] / norm(n)
     (isnan(c) || abs(primal(c)) > 1) && return _acos_or_fallback(c)
-    raan = acos(c)
-    return primal(n[2]) < 0 ? 2 * T(π) - raan : raan
+    raan = _el_raan_acos(_el_plain(n))
+    return _ad_pin(_el_near(atan(n[2], n[1]), raan), raan)
 end
 
-function _el_ta(o::Orbit{T}) where {T}
-    ecc = _el_ecc_for(:ta, o)
+function _el_ta(o::Orbit)
+    _el_ecc_for(:ta, o)                 # throws for a circular orbit
     e = _evec_for(:ta, o)
-    ta = acos(clamp(dot(e, o.position) / (ecc * _el_rmag(o)), -1, 1))
-    return primal(dot(o.position, o.velocity)) < 0 ? 2 * T(π) - ta : ta
+    r, v = o.position, o.velocity
+    ta = _el_ta_acos(_el_plain(e), _el_plain(r), _el_plain(v))
+    # the angle from the periapsis to the position about h
+    h = cross(r, v)
+    return _ad_pin(_el_near(atan(dot(h, cross(e, r)), norm(h) * dot(e, r)), ta), ta)
 end
 
 # The eccentricity, and the circular-orbit error of the anomalies built on the true one.

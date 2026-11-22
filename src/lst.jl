@@ -39,6 +39,7 @@ data for the body.
 
 Throws `SpiceError`, with the checks in this order, as in CSPICE after the first:
 - `:badarg` if `et` is a `ForwardDiff.Dual`;
+- `:emptystring` if `type` is the empty string;
 - `:invalidoption`, for `"PLANETOGRAPHIC"`, if `BODY<body>_PGR_POSITIVE_LON` is not
   `EAST` or `WEST`;
 - `:missingdata`, for `"PLANETOGRAPHIC"`, if `BODY<body>_PGR_POSITIVE_LON` and
@@ -58,6 +59,7 @@ hr, mn, sc, time, ampm = et2lst(et, 399, deg2rad(-118.0), "PLANETOCENTRIC")
 """
 function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::AbstractString)
     _plain_epoch(et, "et2lst")
+    _chkfstr("et2lst", "coordinate system", type)          # CHKFSTR of et2lst_c
     system = strip(type)
     if _eqci(system, "PLANETOGRAPHIC", true)
         g = _m_pgrsense(ks, body) * Float64(lon)    # the sense of `pgrrec_`

@@ -330,6 +330,21 @@ function throws_kind(f, kind::Symbol)
     return false
 end
 
+"""
+`bodc2n_c` with room for a name of 36 characters and the NUL, or `nothing`: `SPICE.bodc2n`
+passes a buffer of 36, which cuts a name of 36 characters to 35.
+"""
+function c_bodc2n(code)
+    buf = zeros(UInt8, 37)
+    found = Ref{Cint}(0)
+    ccall(
+        (:bodc2n_c, SPICE.libcspice), Cvoid, (Cint, Cint, Ptr{UInt8}, Ref{Cint}),
+        code, 37, buf, found
+    )
+    found[] == 0 && return nothing
+    return String(buf[1:(findfirst(==(0x00), buf) - 1)])
+end
+
 "The short message of the error that CSPICE signalled, as a lower-case symbol (`:none` without one); resets the error state."
 function cspice_kind()
     ccall((:failed_c, SPICE.libcspice), Cint, ()) == 0 && return :none

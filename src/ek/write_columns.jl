@@ -132,26 +132,6 @@ _ekw_cnam(s, coldsc::AbstractVector{Int32}) =
     _ek_rstr(s.chars, Int(coldsc[_EK_NAMIDX]) + 1, Int(coldsc[_EK_NAMIDX]) + _EK_CNAMSZ)
 
 """
-    _ekw_cmpc(a, b) -> Int
-
-Order of two strings as Fortran compares them: byte by byte, the shorter one continued
-with blanks. Returns -1, 0 or 1.
-"""
-function _ekw_cmpc(a::AbstractVector{UInt8}, b::AbstractVector{UInt8})
-    la = length(a)
-    lb = length(b)
-    for k in 1:max(la, lb)               # invariant: the characters before k are equal
-        ca = k <= la ? a[k] : UInt8(' ')
-        cb = k <= lb ? b[k] : UInt8(' ')
-        ca == cb || return ca < cb ? -1 : 1
-    end
-    return 0
-end
-
-"The first `min(length, 1024)` bytes of a character key, as `zzekscmp` uses them."
-@inline _ekw_key1024(key::AbstractVector{UInt8}) = view(key, 1:min(length(key), 1024))
-
-"""
     _ekw_rel(s, coldsc, row, key, null) -> Int
 
 Relation of the first element of the entry of the column `coldsc` in the row `row` (a
@@ -172,7 +152,7 @@ function _ekw_rel(s, coldsc::AbstractVector{Int32}, row::Integer, key, null::Boo
         null && return 1
         key isa AbstractVector{UInt8} || _ekw_bug("Column type is $dtype; value type is not character.")
         elt = codeunits(cv)
-        return _ekw_cmpc(view(elt, 1:min(length(elt), 1024)), _ekw_key1024(key))
+        return _ek_bcmp(elt, key, min(length(elt), _EK_MAXSTR), min(length(key), _EK_MAXSTR))
     elseif dtype == _EK_DP || dtype == _EK_TIME
         dv, enull, _ = _ek_elt_d(s, col, row, 1)
         enull && return null ? 0 : -1
@@ -969,7 +949,7 @@ _ekw_order_n(vals::AbstractVector, n::Int, nullok::Bool, nlflgs) = _ekw_order(
 
 "Order vector of strings (`zzekordc`): equal strings are not swapped."
 _ekw_order_c(vals::Vector{Vector{UInt8}}, n::Int, nullok::Bool, nlflgs) =
-    _ekw_order(n, nullok, nlflgs, (a, b) -> _ekw_cmpc(vals[a], vals[b]) <= 0)
+    _ekw_order(n, nullok, nlflgs, (a, b) -> _ek_bcmp(vals[a], vals[b], length(vals[a]), length(vals[b])) <= 0)
 
 # ---------------------------------------------------------------------------------------
 # Fast writers: one whole column (classes 1 to 9)
@@ -1493,6 +1473,7 @@ function _ekw_ac09(
             "String length $l is just plain wrong."
         )
     )
+    _das_check_write(h, "ekaclc")        # CSPICE meets it at the first write
     spp = _EK_CPSIZE ÷ l
     nrows = Int(segdsc[_EK_NRIDX])
     p, datbas = _ekw_acps(h, segdsc, 1, (nrows + spp - 1) ÷ spp)

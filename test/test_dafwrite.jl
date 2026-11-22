@@ -2278,6 +2278,17 @@ group("9. DAF access, SPK and CK writers") do
         @test throws_kind(() -> Almanac.dafonw(joinpath(dir, "p.daf"), "SPK", 124, 6, "X", 0), :dafinvalidparams)
         @test throws_kind(() -> Almanac.dafonw(joinpath(dir, "p.daf"), "SPK", 2, 6, "X", -1), :dafnoresv)
         @test !ispath(joinpath(dir, "p.daf"))
+        # Regression: a blank name was refused before the other checks; `dafonw` checks
+        # the file type first and the name in `zzddhopn`.
+        @test throws_kind(() -> Almanac.dafonw("  ", " ", 2, 6, "X", 0), :blankfiletype)
+        # `dafonw` has no C wrapper: the f2c routine, every argument by reference and the
+        # string lengths (`ftnlen`, `Cint`) at the end.
+        ccall(
+            (:dafonw_, SPICE.libcspice), Cint,
+            (Cstring, Cstring, Ref{Cint}, Ref{Cint}, Cstring, Ref{Cint}, Ref{Cint}, Cint, Cint, Cint),
+            "  ", " ", 2, 6, "X", 0, Ref{Cint}(0), 2, 1, 1
+        )
+        @test cspice_kind() === :blankfiletype
         # (fault fixed: dafopw or spkopa of a file that a handle had open gave a second
         # handle, and arrays that the two handles added overwrote each other; CSPICE
         # signals FILEOPENCONFLICT, for a file open for write and for one open for read)
@@ -2510,6 +2521,9 @@ group("9. DAF access, SPK and CK writers") do
             SPICE.furnsh(pz)
             try
                 @test SPICE.spkgeo(body, et, "J2000", center)[1] ≈ want[1] rtol = 1.0e-15
+                # Regression: the name of a file of the other byte order without the
+                # string came out with its bytes swapped.
+                @test spksfs(neo_context([pz]), body, et)[3] == SPICE.spksfs(body, et)[3]
             finally
                 SPICE.unload(pz)
             end
@@ -3008,6 +3022,91 @@ group("9. DAF access, SPK and CK writers") do
             dafcls(newh)
             dafcls(src)
         end
+    end
+
+    # Regressions of spkpvn and spkgeo against CSPICE: the type was checked after the
+    # time bounds (B5), a type 14 record larger than the buffer of `spkpvn` was read
+    # (B2), and the observer chain went on past the barycenter (B6).
+    @apart @testset "spkpvn and spkgeo: the checks of CSPICE" begin
+        r2 = MersenneTwister(SEED + 1208)                   # own stream
+        # Kind of the error of `spkpvn_c` on the first segment of `p` at `et`, after
+        # `descr` maps its descriptor.
+        function cspice_pvn_kind(p, et; descr = identity)
+            hc = SPICE.dafopr(p)
+            try
+                SPICE.dafbfs(hc)
+                SPICE.daffna()
+                ccall(
+                    (:spkpvn_c, SPICE.libcspice), Cvoid,
+                    (Cint, Ptr{Cdouble}, Cdouble, Ref{Cint}, Ptr{Cdouble}, Ref{Cint}),
+                    hc, descr(SPICE.dafgs(5)), et, Ref{Cint}(0), zeros(6), Ref{Cint}(0)
+                )
+                return cspice_kind()
+            finally
+                SPICE.dafcls(hc)
+            end
+        end
+        # Kind of the error of `spkgeo_c` with `p` loaded.
+        function cspice_geo_kind(p, targ, et, obs)
+            SPICE.furnsh(p)
+            try
+                ccall(
+                    (:spkgeo_c, SPICE.libcspice), Cvoid,
+                    (Cint, Cdouble, Cstring, Cint, Ptr{Cdouble}, Ref{Cdouble}),
+                    targ, et, "J2000", obs, zeros(6), Ref(0.0)
+                )
+                return cspice_kind()
+            finally
+                SPICE.unload(p)
+            end
+        end
+        first_descr(h) = (dafbfs(h); daffna(h); dafgs(h))
+        c14 = writer_case("spk14")
+        b = c14.gen(r2, 1)
+        mid = (b.first + b.last) / 2
+        # A degree of 32: 33 coefficients, a record of 201 doubles.
+        coeffs32 = randn(r2, 2 + 6 * 33, size(b.coeffs, 2))
+        coeffs32[1:2, :] = b.coeffs[1:2, :]
+        p32 = joinpath(dir, "pvn14_degree32.bsp")
+        h = spkopn(p32, "CHECK", 0)
+        c14.neo(h, merge(b, (degree = 32, coeffs = coeffs32)))
+        spkcls(h)
+        ctx = neo_context([p32])
+        hn = dafopr(p32)
+        try
+            dn = first_descr(hn)
+            @test throws_kind(() -> spkpvn(ctx, hn, dn, mid), :spkrectoolarge)
+            @test throws_kind(() -> spkpvn(ctx, p32, dn, mid), :spkrectoolarge)
+            @test cspice_pvn_kind(p32, mid) === :spkrectoolarge
+            @test throws_kind(() -> spkgeo(ctx, b.body, mid, "J2000", b.center), :spkrectoolarge)
+            @test cspice_geo_kind(p32, b.body, mid, b.center) === :spkrectoolarge
+            # A type that N0067 does not have is refused at any epoch, before the bounds.
+            type4(d) = (x = dafus(d, 2, 6); dafps(x[1], [x[2][1:3]; 4; x[2][5:6]]))
+            late = b.last + 1.0e6
+            @test throws_kind(() -> spkpvn(ctx, hn, type4(dn), late), :spktypenotsupp)
+            @test throws_kind(() -> spkpvn(ctx, p32, type4(dn), late), :spktypenotsupp)
+            @test cspice_pvn_kind(p32, late; descr = type4) === :spktypenotsupp
+        finally
+            dafcls(hn)
+        end
+        # A segment of the barycenter (0) relative to a body without other data: CSPICE
+        # ends the observer chain at 0, so the state of that body relative to 0 is not
+        # found, and the segment is not used. The body and the center of a type 13
+        # segment are changed in its summary to 0 and -77001.
+        c13 = writer_case("spkw13")
+        p0 = joinpath(dir, "pvn_target0.bsp")
+        h = spkopn(p0, "CHECK", 0)
+        c13.neo(h, c13.gen(r2, 1))
+        spkcls(h)
+        bytes = read(p0)
+        fward = Int(reinterpret(Int32, bytes[77:80])[1])
+        off = (fward - 1) * 1024 + 24 + 2 * 8               # the integers of the first summary
+        bytes[(off + 1):(off + 8)] = reinterpret(UInt8, Int32[0, -77001])
+        write(p0, bytes)
+        cov = spkcov(p0, 0)
+        et0 = (first(cov) + last(cov)) / 2
+        @test throws_kind(() -> spkgeo(neo_context([p0]), -77001, et0, "J2000", 0), :spkinsuffdata)
+        @test cspice_geo_kind(p0, -77001, et0, 0) === :spkinsuffdata
     end
 
     @apart @testset "a closed or unloaded file can be deleted" begin

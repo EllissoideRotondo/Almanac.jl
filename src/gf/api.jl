@@ -109,8 +109,10 @@ Every search takes these keywords; [`gfevnt`](@ref), [`gfocce`](@ref) and
   and `report(:final)` at the end of the pass. `prefix` and `suffix` are the two strings
   of the progress message of CSPICE, such as `"Distance pass 1 of 2"` and `"done."`.
 - `threads`: if `true`, each interval that is searched runs in its own task. The result
-  does not change. The callbacks, and the functions of [`gfuds`](@ref) and
-  [`gfudb`](@ref), are then called from several threads.
+  does not change, and an error is thrown as it is without the keyword: the error of
+  the first interval that fails, or the `InterruptException` of `bail`. The callbacks,
+  and the functions of [`gfuds`](@ref) and [`gfudb`](@ref), are then called from
+  several threads.
 
 A search uses the kernels that are loaded when it starts. A `furnsh` or an `unload` on
 another thread does not change a search that runs, and several searches can run at the
@@ -328,15 +330,9 @@ function _gf_position_coordinate(
     )
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer")
-    targ == obs && throw(
-        SpiceError(
-            :bodiesnotdistinct,
-            "The observer and target must be distinct objects, but are not: " *
-                "OBSRVR = $obsrvr; TARGET = $target."
-        )
-    )
+    _gf_distinct(targ, obs, target, obsrvr)
     corr = Aberration(abcorr)
-    ref = Int32(0)                       # 0: the frame is not known
+    ref = Int32(0)                      # 0: the frame is not known
     try
         ref = _gf_frame(ks, frame isa AbstractString ? String(strip(frame, ' ')) : frame)
     catch e

@@ -263,16 +263,23 @@ interval (the second pass of `zzgfrelx`, on intervals where the quantity is mono
 Contract: with `run.threads` each interval of `w` is searched in its own task and the
 results are inserted in the order of `w`; the searches of different intervals share no
 state, so the window is the one of the serial run, bit for bit. `cond` and the
-callbacks of `run` must then be safe to call from several threads.
+callbacks of `run` must then be safe to call from several threads. A task that throws
+does not stop the others; when all have ended, the exception of `_gf_task_error` is
+thrown, not the `CompositeException` of `Threads.@threads`.
 """
 function _gf_scan!(result::Window, cond::F, w::Window, run::_GFRun, cstep::Bool) where {F}
     n = wncard(w)
     if run.threads && n > 1 && Threads.nthreads() > 1
         parts = Vector{Window}(undef, n)
-        Threads.@threads for i in 1:n
-            a = w.data[2i - 1]
-            b = w.data[2i]
-            parts[i] = _gf_solve!(Window(), cond, run, cstep, b - a, a, b)
+        try
+            Threads.@threads for i in 1:n
+                a = w.data[2i - 1]
+                b = w.data[2i]
+                parts[i] = _gf_solve!(Window(), cond, run, cstep, b - a, a, b)
+            end
+        catch e
+            e isa CompositeException || rethrow()
+            throw(_gf_task_error(e))
         end
         for p in parts                   # invariant: result holds the parts before p
             d = p.data
@@ -291,6 +298,20 @@ function _gf_scan!(result::Window, cond::F, w::Window, run::_GFRun, cstep::Bool)
 end
 
 """
+    _gf_task_error(e::CompositeException) -> Exception
+
+The exception that a threaded `_gf_scan!` throws for the failed tasks of `e`, in the
+order of the intervals: the first `InterruptException` (the `bail` callback stopped the
+search), else the exception of the first failed task, which the serial search would
+have thrown.
+"""
+function _gf_task_error(e::CompositeException)
+    errs = map(x -> x isa TaskFailedException ? x.task.exception : x, e.exceptions)
+    k = findfirst(x -> x isa InterruptException, errs)
+    return errs[something(k, 1)]
+end
+
+"""
     _gf_wsts(w1, w2) -> Window
 
 The intervals of `w1` that lie in the interior of an interval of `w2`, as `zzgfwsts`
@@ -299,7 +320,8 @@ with the inclusion flag `"()"`: both ends of the interval of `w1` are strictly i
 function _gf_wsts(w1::Window, w2::Window)
     a, b = w1.data, w2.data
     na, nb = length(a), length(b)
-    out = Float64[]
+    result = Window()
+    out = result.data                    # the kept intervals are in order and disjoint
     p1 = 1
     p2 = 1
     while p1 < na && p2 < nb             # invariant: intervals before p1 and p2 are sifted
@@ -319,7 +341,7 @@ function _gf_wsts(w1::Window, w2::Window)
             end
         end
     end
-    return _window_of(out)
+    return result
 end
 
 # Relations, as small integers.
@@ -376,6 +398,24 @@ function _gf_checkadjust(rel::Int, adjust::Real)
     return nothing
 end
 
+"""
+    _gf_checkref(refval)
+
+`SpiceError(:invalidvalue)` if the reference value is NaN, for every relation, before
+the test for an empty confinement window (`zzgfrelx` and `zzgflong`). CSPICE takes a
+NaN, and finds no event for the relations `<`, `>` and `=`.
+"""
+function _gf_checkref(refval::Real)
+    isnan(refval) && throw(
+        SpiceError(
+            :invalidvalue,
+            "the reference value is NaN; CSPICE takes it, and finds no event for " *
+                "the relations <, > and ="
+        )
+    )
+    return nothing
+end
+
 "The binary state \"the quantity is less than the reference value\" (`zzgfudlt`)."
 struct _GFLess{V}
     value::V
@@ -415,13 +455,7 @@ function _gf_relx(
     ) where {V, D}
     rel = _gf_relcode(relate)
     _gf_checkadjust(rel, adjust)
-    isnan(refval) && throw(
-        SpiceError(
-            :invalidvalue,
-            "the reference value is NaN; CSPICE takes it, and finds no event for " *
-                "the relations <, > and ="
-        )
-    )
+    _gf_checkref(refval)
     card(cnfine) == 0 && return Window()
     # CSPICE compares the relation as it was given with "=", so an equality relation
     # with a leading blank gets no expansion; this is kept.

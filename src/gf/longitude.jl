@@ -104,7 +104,7 @@ reference value `2 pi - refval`). The proxy searches use the tolerance
   searched with a function without a jump there, and the regions that lie wholly below
   the reference value are added.
 
-Contract: the checks of `_gf_checkadjust`. An inequality whose reference value is on
+Contract: the checks of `_gf_checkadjust` and `_gf_checkref`. An inequality whose reference value is on
 the branch cut is decided without a search: for a coordinate in [0, 2 pi) with
 `cos(refval) == 1`, `<` gives the empty window and `>` gives `cnfine`; for a coordinate
 in (-pi, pi] with `cos(refval) == -1`, `<` gives `cnfine` and `>` the empty window. The
@@ -117,6 +117,7 @@ function _gf_long(
     loctol = max(1.0e-7, run0.tol / 10.0)
     run = _gf_withtol(run0, loctol)
     _gf_checkadjust(rel, adjust)
+    _gf_checkref(refval)
     card(cnfine) == 0 && return Window()
     sys = q.sys
     if sys == _GF_CYLINDRICAL || sys == _GF_PLANETOGRAPHIC || sys == _GF_RADEC

@@ -50,7 +50,9 @@ motion about a mass with the gravitational parameter `gm`, as
 The units must be consistent, for example km, km/s, seconds and km³/s². `gm` and
 `pvinit` are converted to `Float64`. `dt` can be a `ForwardDiff.Dual` or an
 `Almanac.Taylor` number (the truncated Taylor series of [`spkder`](@ref)); the result
-then holds the derivatives with respect to `dt`.
+then holds the derivatives with respect to `dt`. The reverse-mode packages of
+[Differentiate with other AD packages](@ref) take the same derivative with respect to a
+`Float64` `dt`.
 
 Throws:
 - `SpiceError(:nonpositivemass)` if `gm <= 0`.
@@ -114,7 +116,9 @@ Return the state at the epoch `et` of a body on the conic orbit with the element
 
 The units must be consistent, for example km, seconds past J2000 TDB for `et` and `t0`,
 and km³/s². The elements are converted to `Float64`. `et` can be a `ForwardDiff.Dual`
-or an `Almanac.Taylor` number (the truncated Taylor series of [`spkder`](@ref)).
+or an `Almanac.Taylor` number (the truncated Taylor series of [`spkder`](@ref)), and the
+packages of [Differentiate with other AD packages](@ref) differentiate with respect to
+a `Float64` `et`.
 
 Throws:
 - `SpiceError(:badeccentricity)` if `ecc < 0`.
@@ -167,9 +171,6 @@ function conics(elts::AbstractVector, et::Real)
     p, vv = _prop2b(mu, rp * basisp, v * basisq, dt, :dtoutofrange)
     return _m_state(p, vv)
 end
-
-"`|a|` with the sign of `b`, as `d_sign` of the f2c library (a zero `b` counts as positive)."
-@inline _m_dsign(a, b) = (x = _m_abs(a); primal(b) >= 0.0 ? x : -x)
 
 @inline function _m_oscelt(state::SVector{6}, et, mu)
     primal(mu) > 0.0 || throw(
@@ -226,16 +227,16 @@ end
         cosea = (ecc + cnu) / (ecc * cnu + 1.0)
         sinea = rmag / rp * sqrt((1.0 - ecc) / (ecc + 1.0)) * snu
         ea = atan(sinea, cosea)
-        m0 = _m_dsign(ea - ecc * sin(ea), nu)
+        m0 = _dsign(ea - ecc * sin(ea), nu)
         primal(m0) < 0.0 && (m0 += _TWOPI)
     elseif primal(ecc) > 1.0
         coshf = (ecc + cnu) / (ecc * cnu + 1.0)
         x = primal(coshf) > 1.0 ? coshf : one(coshf)
         ea = log(x + x * sqrt(1.0 - 1.0 / x / x))
-        m0 = _m_dsign(ecc * sinh(ea) - ea, nu)
+        m0 = _dsign(ecc * sinh(ea) - ea, nu)
     else
         ea = tan(nu / 2.0)
-        m0 = _m_dsign(ea + ea * (ea * ea) / 3.0, nu)
+        m0 = _dsign(ea + ea * (ea * ea) / 3.0, nu)
     end
     return SVector(promote(rp, ecc, inc, lnode, argp, m0, _m_f(et), mu)...)
 end

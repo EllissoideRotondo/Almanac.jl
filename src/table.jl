@@ -20,7 +20,7 @@ array type; the table is then an `isbits` value on a GPU.
 | Field              | Meaning                                                              |
 |:-------------------|:---------------------------------------------------------------------|
 | `target`, `observer`, `frame` | NAIF IDs of the bodies and ID of the frame                |
-| `t0`, `dt`, `nint` | the table covers `t0 <= et <= t0 + nint * dt`, seconds past J2000 TDB |
+| `t0`, `dt`, `nint` | the table covers `0 <= et - t0 <= nint * dt`, seconds past J2000 TDB |
 | `ncoef`            | Chebyshev coefficients for each component and interval               |
 | `coef`             | the coefficients, km                                                 |
 | `maxerr`           | largest difference from `spkpos` that `ephemeris_table` measured, km   |
@@ -90,10 +90,33 @@ EphemerisTable{T}(tab::EphemerisTable) where {T <: AbstractFloat} =
 Return the first and the last epoch of the table `tab`, in seconds past J2000 TDB.
 
 `tab` is an [`EphemerisTable`](@ref) or a [`RotationTable`](@ref). A query is valid
-for `first <= et <= last`. A table that [`ephemeris_table`](@ref) made from the records
-of the kernels covers whole records, so its span can be wider than the requested one.
+for `first <= et <= last`. A table that [`ephemeris_table`](@ref) or
+[`rotation_table`](@ref) made covers at least the requested `t0` to `t1`; one made from
+the records of the kernels covers whole records, so its span can be wider.
+
+`last` is the last epoch with `et - first <= nint * dt`, which can differ from
+`first + nint * dt` by a few units of rounding.
 """
-@inline table_span(tab::EphemerisTable) = (tab.t0, tab.t0 + tab.nint * tab.dt)
+@inline table_span(tab::EphemerisTable) = (tab.t0, _tab_last(tab.t0, tab.nint * tab.dt))
+
+# A query at `et` is in the table if `0 <= et - t0 <= nint * dt`. The test is on the
+# difference, because `t0 + nint * dt` can round below the `t1` of `ephemeris_table` and
+# `rotation_table`: their `dt = (t1 - t0) / nint` (`nint` a power of 2) gives
+# `t1 - t0 == nint * dt` exactly, but `t0 + nint * dt < t1` when `t1 - t0` is rounded
+# (for example when `t0 < 0 < t1`).
+@inline _tab_inside(t0::Float64, len::Float64, t::Float64) = 0.0 <= t - t0 <= len
+
+# The last epoch `et` with `et - t0 <= len`, the end of the span of a table.
+function _tab_last(t0::Float64, len::Float64)
+    stop = t0 + len
+    while stop - t0 > len                      # rounded up: step back
+        stop = prevfloat(stop)
+    end
+    while nextfloat(stop) - t0 <= len          # invariant: stop - t0 <= len
+        stop = nextfloat(stop)
+    end
+    return stop
+end
 
 Base.show(io::IO, tab::EphemerisTable{T}) where {T} = print(
     io, "EphemerisTable{", T, "}(",
@@ -128,7 +151,7 @@ See also [`table_position`](@ref), [`table_state`](@ref).
 """
 Base.@propagate_inbounds function table_jet(tab::EphemerisTable{T}, et::Real, v::Val{N}) where {T, N}
     t = primal(et)
-    @boundscheck (tab.t0 <= t <= tab.t0 + tab.nint * tab.dt) || _throw_table_range()
+    @boundscheck _tab_inside(tab.t0, tab.nint * tab.dt, t) || _throw_table_range()
     i = clamp(unsafe_trunc(Int, (t - tab.t0) / tab.dt), 0, tab.nint - 1)
     radius = tab.dt / 2
     s = (et - (tab.t0 + (2i + 1) * radius)) / radius
@@ -517,7 +540,7 @@ Chebyshev polynomials that need no kernel to evaluate: the counterpart of
 | Field              | Meaning                                                              |
 |:-------------------|:---------------------------------------------------------------------|
 | `from`, `to`       | frame IDs; the matrix rotates a vector from `from` to `to`           |
-| `t0`, `dt`, `nint` | the table covers `t0 <= et <= t0 + nint * dt`, seconds past J2000 TDB |
+| `t0`, `dt`, `nint` | the table covers `0 <= et - t0 <= nint * dt`, seconds past J2000 TDB |
 | `ncoef`            | Chebyshev coefficients for each matrix element and interval          |
 | `coef`             | the coefficients                                                     |
 | `maxerr`           | largest Frobenius norm of the difference from `pxform` that `rotation_table` measured   |
@@ -560,7 +583,7 @@ RotationTable{T}(tab::RotationTable) where {T <: AbstractFloat} =
     tab.maxerr
 )
 
-@inline table_span(tab::RotationTable) = (tab.t0, tab.t0 + tab.nint * tab.dt)
+@inline table_span(tab::RotationTable) = (tab.t0, _tab_last(tab.t0, tab.nint * tab.dt))
 
 Base.show(io::IO, tab::RotationTable{T}) where {T} = print(
     io, "RotationTable{", T, "}(frame ",
@@ -585,7 +608,7 @@ Throws `SpiceError(:spkinsuffdata)` if `et` is outside [`table_span`](@ref)`(tab
 """
 Base.@propagate_inbounds function table_rotation_jet(tab::RotationTable{T}, et::Real, v::Val{N}) where {T, N}
     t = primal(et)
-    @boundscheck (tab.t0 <= t <= tab.t0 + tab.nint * tab.dt) || _throw_table_range()
+    @boundscheck _tab_inside(tab.t0, tab.nint * tab.dt, t) || _throw_table_range()
     i = clamp(unsafe_trunc(Int, (t - tab.t0) / tab.dt), 0, tab.nint - 1)
     radius = tab.dt / 2
     s = _tab_arg(T, (et - (tab.t0 + (2i + 1) * radius)) / radius)

@@ -39,7 +39,8 @@ end
 
 Return the leap-second data of `ks`; throws `SpiceError(kind)` if no leap-second kernel
 is loaded. CSPICE signals another message by call: NOLEAPSECONDS in `ttrans` and what
-calls it, MISSINGTIMEINFO in `unitim`, `timout`, `et2utc` and the spacecraft clocks,
+calls it (`et2utc` with the format `J` too), MISSINGTIMEINFO in `unitim`, `timout`, the
+other formats of `et2utc` and the spacecraft clocks,
 KERNELVARNOTFOUND in `deltet`.
 """
 function _lsk(ks::KernelSet, kind::Symbol = :noleapseconds)::LeapSeconds
@@ -62,10 +63,12 @@ Return the difference ET - UTC in seconds at `epoch`, as
 
 `eptype` says how `epoch` is measured: `"UTC"` for UTC seconds past J2000, counted from 2000
 JAN 01 12:00:00 UTC with 86400 seconds in every day (the result of [`tparse`](@ref)), or
-`"ET"` for seconds past J2000 TDB; letter case is ignored. A leap-second kernel must be
-loaded.
+`"ET"` for seconds past J2000 TDB; letter case and trailing blanks are ignored. As in
+CSPICE, only the first four characters count and a leading blank is not ignored. A
+leap-second kernel must be loaded.
 
-Throws `SpiceError(:kernelvarnotfound)` if no leap-second kernel is loaded and
+Throws `SpiceError(:emptystring)` if `eptype` is the empty string,
+`SpiceError(:kernelvarnotfound)` if no leap-second kernel is loaded and
 `SpiceError(:invalidepoch)` if `eptype` is not `"UTC"` or `"ET"`.
 
 # Examples
@@ -77,10 +80,13 @@ deltet(0.0, "ET")       # seconds, at J2000
 See also [`unitim`](@ref), [`str2et`](@ref).
 """
 function deltet(ks::KernelSet, epoch::Real, eptype::AbstractString)::Float64
+    _chkfstr("deltet", "epoch type", eptype)                # CHKFSTR of deltet_c
     l = _lsk(ks, :kernelvarnotfound)
-    typ = strip(eptype)
-    isutc = _eqci(typ, "UTC")
-    isutc || _eqci(typ, "ET") || throw(
+    # `ucase_` into the four characters of `type`, then a comparison that ignores the
+    # trailing blanks; there is no `ljust_`.
+    typ = _cut_bytes(eptype, 4)
+    isutc = _eqci(typ, "UTC", true)
+    isutc || _eqci(typ, "ET", true) || throw(
         SpiceError(
             :invalidepoch,
             "the epoch type '$eptype' is neither 'UTC' nor 'ET'"
@@ -513,8 +519,9 @@ constants for TDB - TDT and for TDT - TAI. The result has the number type of
 `epoch * 1.0`, so a dual-number epoch keeps its derivatives. The call does not
 allocate.
 
-Throws `SpiceError(:badtimetype)` if a scale is not one of the above and
-`SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded.
+Throws `SpiceError(:emptystring)` if `insys` or `outsys` is the empty string,
+`SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded and
+`SpiceError(:badtimetype)` if a scale is not one of the above.
 
 # Examples
 ```julia
@@ -527,6 +534,8 @@ tt = unitim(et, "TDB", "TT")        # seconds past J2000, TT
 See also [`deltet`](@ref).
 """
 function unitim(ks::KernelSet, epoch::Real, insys::AbstractString, outsys::AbstractString)
+    _chkfstr("unitim", "input time scale", insys)           # CHKFSTR of unitim_c
+    _chkfstr("unitim", "output time scale", outsys)
     l = _lsk(ks, :missingtimeinfo)
     i = _unitim_code(insys)
     o = _unitim_code(outsys)

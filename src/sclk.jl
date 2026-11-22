@@ -373,16 +373,18 @@ end
     _lparsm(list, delims, nmax) -> Vector{SubString{String}}
 
 Items of `list` separated by any character of `delims`, at most `nmax`, as `lparsm_`:
-blanks around an item are dropped, two delimiters in a row give a blank item, a run of
-blanks counts as one delimiter and joins a non-blank delimiter next to it, and a list
-that ends with a delimiter has a last blank item. A blank list has one blank item.
+leading blanks of an item are dropped, two delimiters in a row give a blank item, and a
+list that ends with a delimiter has a last blank item. A blank list has one blank item.
+A blank is a delimiter only if `delims` holds one; then a run of blanks counts as one
+delimiter and joins a non-blank delimiter next to it. Without a blank in `delims` an
+item keeps the blanks before the delimiter that ends it, as the item of `lparsm_` does.
 """
 function _lparsm(list::AbstractString, delims::AbstractString, nmax::Int)
     s = String(rstrip(list, ' '))
     items = SubString{String}[]
     isempty(s) && return push!(items, SubString(s, 1, 0))
     c = codeunits(s)
-    isdelim(k) = UInt8(' ') == c[k] || Char(c[k]) in delims
+    isdelim(k) = Char(c[k]) in delims
     eol = length(c)
     b = 1
     while b <= eol
@@ -430,7 +432,8 @@ Return the tick count of the clock string `clkstr` of the clock `sc`, as
 `clkstr` has no partition number. Its fields are given most significant first and are
 separated by `.`, `:`, `-`, `,` or blanks. Each field counts from its offset, the
 value of `SCLK01_OFFSETS` in the SCLK kernel (the value of the field when the count is
-zero). A blank field counts as its offset. The result is a count inside one partition,
+zero). A blank field counts as its offset. Only the first 30 characters of a field are
+read, as in CSPICE. The result is a count inside one partition,
 not an encoded clock value; see [`scencd`](@ref).
 
 Throws `SpiceError(:invalidsclkstring)` if the string is blank, has too many fields,
@@ -451,7 +454,9 @@ function sctiks(ks::KernelSet, sc::Integer, clkstr::AbstractString)
         )
     )
     ticks = 0.0
-    for (i, item) in enumerate(items)       # invariant: ticks = sum over the fields 1:i-1
+    for (i, field) in enumerate(items)      # invariant: ticks = sum over the fields 1:i-1
+        # `sctk01` parses the fields from items of 30 characters (`CMP`).
+        item = _cut_bytes(field, 30)
         value = if isempty(strip(item))
             clock.offsets[i]
         else
@@ -488,7 +493,8 @@ partition number, as
 [`scfmt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scfmt_c.html).
 
 `ticks` is rounded to a whole number and split into the fields of the clock. Each
-field is written with leading zeros to the width of its largest value, with the
+field is written with leading zeros to the width of its largest value (a field of
+1e14 or more with its first 14 significant digits only, as in CSPICE), with the
 output delimiter of the clock between the fields: the character `.`, `:`, `-`, `,` or
 blank that `SCLK01_OUTPUT_DELIM_<-sc>` selects with 1 to 5. This is the inverse of
 [`sctiks`](@ref).
@@ -527,9 +533,23 @@ function scfmt(ks::KernelSet, sc::Integer, ticks::Real)
         end
         width = trunc(Int, log10(clock.moduli[i] + clock.offsets[i] - 1.0 + 0.5)) + 1
         i > 1 && print(io, delim)
-        print(io, lpad(string(trunc(BigInt, abs(value))), width, '0'))
+        print(io, lpad(_sclk_field_digits(value), width, '0'))
     end
     return String(take!(io))
+end
+
+"""
+    _sclk_field_digits(value) -> String
+
+The digits that `scfm01` writes for a field: the characters before the decimal point of
+`dpstrf_(value, 30, 'F')` without its sign. `dpstrf` keeps at most 14 significant
+digits, so a field of 1e14 or more is rounded to them and ends in zeros.
+"""
+function _sclk_field_digits(value::Float64)
+    abs(value) < 1.0e14 && return string(trunc(Int, abs(value)))    # all digits are exact
+    s = String(_inline(_dpstrf(_ByteBuf(), value, 30)))
+    dot = something(findfirst(==('.'), s), ncodeunits(s) + 1)
+    return s[2:(dot - 1)]
 end
 
 "Rounded partition bounds and rounded running totals of `clock` (`scencd_`, `scdecd_`)."

@@ -412,15 +412,24 @@ function _string_value(line::Vector{UInt8}, b::Int, e::Int)::String
     return String(out)
 end
 
-"Contract: `raw` is one physical line; returns the line as `rdkdat` hands it on (cut at 132 characters, tabs replaced by blanks, blanks removed at both ends)."
-function _clean_line(raw::AbstractString)::Vector{UInt8}
+"""
+    _clean_line(raw, tabs=true) -> Vector{UInt8}
+
+Contract: `raw` is one physical line; returns the line as `rdkdat` hands it on (cut at
+132 characters, tabs replaced by blanks if `tabs`, blanks removed at both ends). The
+lines of `lmpool` keep their tabs (`tabs = false`): `zzrvbf` reads a tab as a separator
+and keeps it inside a quoted string.
+"""
+function _clean_line(raw::AbstractString, tabs::Bool = true)::Vector{UInt8}
     b = Vector{UInt8}(String(raw))     # one copy; `Vector{UInt8}(codeunits(raw))` of a SubString iterates byte by byte
     while !isempty(b) && (b[end] == UInt8('\r') || b[end] == UInt8('\n'))
         pop!(b)
     end
     length(b) > _TK_LINLEN && resize!(b, _TK_LINLEN)
-    for i in eachindex(b)
-        b[i] == 0x09 && (b[i] = UInt8(' '))
+    if tabs
+        for i in eachindex(b)
+            b[i] == 0x09 && (b[i] = UInt8(' '))
+        end
     end
     hi = length(b)
     while hi > 0 && b[hi] == UInt8(' ')
@@ -459,22 +468,24 @@ function _tk_finish!(out::Vector{Assignment}, kind::Int, name, append::Bool, str
 end
 
 """
-    parse_text_lines(path, lines, yearbound=1969, check=false) -> TextKernel
+    parse_text_lines(path, lines, yearbound=1969, check=false; buffer=false) -> TextKernel
 
 Contract: `lines` iterates the physical lines of a text kernel; returns the
 assignments in file order with the values CSPICE puts in the kernel pool. `path` is
 used for the result and for error messages only; `yearbound` is the bound of `tsetyr`
 for a year of two digits in an `@` date, and `check` the range check of `tparch` for
-it. Throws `SpiceError` for a malformed assignment, with the kind that `zzrvar` gives
-(`:badvarassign`, `:nonprintingchar`, `:badvarname`, `:typemismatch`, `:numberexpected`,
-`:badtimespec`).
+it. With `buffer`, the lines are those of `lmpool`, read as `zzrvbf` reads them: every
+line is data (`\\begindata` and `\\begintext` are not markers, so such a line is a
+malformed assignment) and a tab stays a tab. Throws `SpiceError` for a malformed
+assignment, with the kind that `zzrvar` gives (`:badvarassign`, `:nonprintingchar`,
+`:badvarname`, `:typemismatch`, `:numberexpected`, `:badtimespec`).
 """
 function parse_text_lines(
         path::AbstractString, lines, yearbound::Int = 1969,
-        check::Bool = false
+        check::Bool = false; buffer::Bool = false
     )::TextKernel
     out = Assignment[]
-    indata = false
+    indata = buffer
     invec = false
     name = ""
     append = false
@@ -488,11 +499,11 @@ function parse_text_lines(
     lineno = 0
     for raw in lines
         lineno += 1
-        line = _clean_line(raw)
-        if line == _BEGINTEXT
+        line = _clean_line(raw, !buffer)
+        if !buffer && line == _BEGINTEXT
             indata = false
             continue
-        elseif line == _BEGINDATA
+        elseif !buffer && line == _BEGINDATA
             indata = true
             continue
         end

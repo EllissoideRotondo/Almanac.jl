@@ -12,6 +12,16 @@
 _squeeze(s::AbstractString) = uppercase(replace(s, ' ' => ""))
 
 """
+    _cut_bytes(s, n) -> SubString
+
+`s` cut to its first `n` bytes, as a Fortran string of length `n` holds it; a character
+of several bytes that does not fit whole is left out. All of `s` if it is not longer.
+Always a `SubString`, so that the callers are type stable.
+"""
+_cut_bytes(s::AbstractString, n::Int) =
+    ncodeunits(s) <= n ? SubString(s) : SubString(s, 1, prevind(s, thisind(s, n + 1)))
+
+"""
     _ljucase(s) -> String
 
 Contract: `s` without leading and trailing blanks, with ASCII letters in upper case, as

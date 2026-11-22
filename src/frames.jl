@@ -267,7 +267,9 @@ end
 
 Contract: value of the frame definition variable `FRAME_<id>_<item>`, or of
 `FRAME_<name>_<item>` if the first is absent (the two forms of `zzdynbid`). A string
-value is translated as a body name. `nothing` if neither form gives one integer.
+value of `CENTER` is translated as a body name, as `zzdynbid` does with `bods2c`; a
+string `CLASS` or `CLASS_ID` is refused, as by `zzdynvai`. `nothing` if neither form
+gives one integer.
 """
 function _frame_item(
         pool::AbstractDict{String, PoolValue}, name2code, id::Int32,
@@ -277,24 +279,23 @@ function _frame_item(
     kv === nothing && return nothing
     key, v = kv
     length(v) == 1 || return nothing
-    v isa Vector{String} && return _body_code_lookup(name2code, v[1])
+    v isa Vector{String} && return item == "CENTER" ? _body_code_lookup(name2code, v[1]) : nothing
     return _pool_int(pool, key)
 end
 
 """
-    build_frames(pool) -> (frames, framename2id)
+    build_frames(pool, name2code) -> (frames, framename2id)
 
 Contract: reads the frame definitions of a frame kernel from `pool`. A frame exists
 for each `FRAME_<id>_NAME` that has its class, class ID and center, each under the
 `FRAME_<id>_<item>` key or the `FRAME_<name>_<item>` key; a center may be a body
-name. Returns `frames::Dict{Int32,FrameDef}` and `framename2id::Dict{String,Int32}`
+name of `name2code`, which holds the names of the pool, of the kernels and of `boddef`. Returns `frames::Dict{Int32,FrameDef}` and `framename2id::Dict{String,Int32}`
 keyed by normalized name, the latter from the `FRAME_<NAME> = id` variables and from
 the frame names. An incomplete definition is left out, so the frame is unknown.
 """
-function build_frames(pool::AbstractDict{String, PoolValue})
+function build_frames(pool::AbstractDict{String, PoolValue}, name2code::AbstractDict{String, Int32})
     frames = Dict{Int32, FrameDef}()
     framename2id = Dict{String, Int32}()
-    name2code, _ = build_names(pool)
     for (key, val) in pool
         (startswith(key, "FRAME_") && endswith(key, "_NAME") && length(key) > 11) || continue
         (val isa Vector{String} && length(val) == 1) || continue
@@ -339,14 +340,8 @@ with class ID `id - 10000`. Throws `SpiceError(:unknownframe)` otherwise. Reads
 `ks.frames` only.
 """
 function frame_def(ks::KernelSet, id::Integer)::FrameDef
-    if typemin(Int32) <= id <= typemax(Int32)
-        i = Int32(id)
-        f = get(BUILTIN_FRAMES, i, nothing)
-        f === nothing || return f
-        f = get(ks.frames, i, nothing)
-        f === nothing || return f
-        13000 <= i < 14000 && return FrameDef(i, "", 2, i - Int32(10000), 399)
-    end
+    f = _frame_def_or_nothing(ks, id)
+    f === nothing || return f
     throw(SpiceError(:unknownframe, "there is no definition of the frame with ID $id"))
 end
 
@@ -379,4 +374,21 @@ function frame_name(ks::KernelSet, id::Integer)::Union{String, Nothing}
     f === nothing || return f.name
     f = get(ks.frames, i, nothing)
     return f === nothing ? nothing : f.name
+end
+
+"""
+    _frame_def_or_nothing(ks, id) -> Union{FrameDef,Nothing}
+
+`frame_def` with `nothing` for an unknown frame (`frinfo` with FOUND false), in the same
+order. Does not allocate.
+"""
+@inline function _frame_def_or_nothing(ks::KernelSet, id::Integer)
+    typemin(Int32) <= id <= typemax(Int32) || return nothing
+    i = Int32(id)
+    f = get(BUILTIN_FRAMES, i, nothing)
+    f === nothing || return f
+    f = get(ks.frames, i, nothing)
+    f === nothing || return f
+    13000 <= i < 14000 && return FrameDef(i, "", 2, i - Int32(10000), 399)
+    return nothing
 end

@@ -154,8 +154,9 @@ One opened binary DAF kernel. `data[a]` is the double at DAF address `a` (the wh
 file viewed as doubles, memory-mapped when the byte order is native and converted
 into an owned array when it is not). `kind` is `:SPK`, `:PCK` or `:CK`. `segments`
 (SPK and PCK) and `cksegments` (CK) are in file order, so a later segment has priority
-over an earlier one; the vector that does not fit `kind` is empty. `bodies` are the body
-names of a kernel loaded from memory (`furnsh` of a `DAFHandle`), empty for a file.
+over an earlier one; the vector that does not fit `kind` is empty. `names[k]` is the
+name of array `k` (`dafgn`), in the same order. `bodies` are the body names of a kernel
+loaded from memory (`furnsh` of a `DAFHandle`), empty for a file.
 """
 struct DAF
     path::String
@@ -163,13 +164,12 @@ struct DAF
     data::Vector{Float64}
     segments::Vector{Segment}
     cksegments::Vector{CKSegment}
+    names::Vector{String}
     bodies::Vector{Tuple{String, Int32}}   # body names of the kernel (in memory only)
 end
 
-DAF(path, kind, data, segments::Vector{Segment}) =
-    DAF(path, kind, data, segments, CKSegment[])
-DAF(path, kind, data, segments::Vector{Segment}, cksegments::Vector{CKSegment}) =
-    DAF(path, kind, data, segments, cksegments, Tuple{String, Int32}[])
+DAF(path, kind, data, segments::Vector{Segment}, cksegments::Vector{CKSegment}, names::Vector{String}) =
+    DAF(path, kind, data, segments, cksegments, names, Tuple{String, Int32}[])
 
 "Value of a kernel-pool variable: numeric or character, always a vector."
 const PoolValue = Union{Vector{Float64}, Vector{String}}

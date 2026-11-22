@@ -475,6 +475,12 @@ group("11. DAS files and DLA segment lists") do
             @test neo_kind(() -> f(h)) === :dasnosuchhandle
         end
         @test neo_kind(() -> dasrdi(h, 1, 1)) === :dasnosuchhandle
+        # (fault fixed: the updates checked the addresses first, against the emptied
+        # address spaces of the closed handle, and gave `invalidaddress`; `dasudd` calls
+        # `daslla` first, which signals DASNOSUCHHANDLE)
+        @test neo_kind(() -> dasudd(h, 1, 1, [1.0])) === :dasnosuchhandle
+        @test neo_kind(() -> dasudi(h, 1, 1, Cint[1])) === :dasnosuchhandle
+        @test neo_kind(() -> dasudc(h, 1, 1, "a")) === :dasnosuchhandle
         @test occursin("closed", sprint(show, h))
 
         @test neo_kind(() -> dasonw(cfile, "TEST", "x", 0)) === :fileopenfail

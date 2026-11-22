@@ -800,10 +800,12 @@ group("9. SPK data types against CSPICE") do
             @test p ≈ ref[1:3] rtol = 1.0e-13
             @test v ≈ ref[4:6] rtol = 1.0e-13
         end
-        @test throws_kind(() -> Almanac._prop2b(-1.0, r0, v0, 1.0), :badorbit)
-        @test throws_kind(() -> Almanac._prop2b(GM_EARTH, zero(r0), v0, 1.0), :badorbit)
-        @test throws_kind(() -> Almanac._prop2b(GM_EARTH, r0, 2.0 * r0, 1.0), :badorbit)
-        @test throws_kind(() -> Almanac._prop2b(GM_EARTH, r0, 3.0 * v0, 1.0e308), :badorbit)
+        # The kinds of `prop2b`, in its order.
+        @test throws_kind(() -> Almanac._prop2b(-1.0, zero(r0), v0, 1.0), :nonpositivemass)
+        @test throws_kind(() -> Almanac._prop2b(GM_EARTH, zero(r0), zero(v0), 1.0), :zeroposition)
+        @test throws_kind(() -> Almanac._prop2b(GM_EARTH, r0, zero(v0), 1.0), :zerovelocity)
+        @test throws_kind(() -> Almanac._prop2b(GM_EARTH, r0, 2.0 * r0, 1.0), :nonconicmotion)
+        @test throws_kind(() -> Almanac._prop2b(GM_EARTH, r0, 3.0 * v0, 1.0e308), :dtoutofrange)
         @test Almanac._kepler_equinoctial(0.0, 0.3) == 0.0
         @test throws_kind(() -> Almanac._kepler_equinoctial(0.8, 0.8), :badorbit)
     end
@@ -846,24 +848,124 @@ group("9. SPK data types against CSPICE") do
             "type 13, degree 7, J2000", :baddaf,
             (d, s) -> d[(b(s) + 6 * 230):(b(s) + 7 * 230 - 1)] .= 0.0
         )
-        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s) - 1] = 3.0)  # odd window
-        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s) - 1] = 10.0)
-        @test refuses("type 18, subtype 0, degree 7", :baddaf, (d, s) -> d[e(s) - 2] = 2.0)  # subtype
+        # The values that the readers and evaluators of CSPICE check have their kinds.
+        @test refuses("type 18, subtype 0, degree 7", :invalidvalue, (d, s) -> d[e(s) - 1] = 3.0)  # odd window
+        @test refuses("type 18, subtype 0, degree 7", :invalidvalue, (d, s) -> d[e(s) - 1] = 10.0)
+        @test refuses("type 18, subtype 0, degree 7", :notsupported, (d, s) -> d[e(s) - 2] = 2.0)  # subtype
         @test refuses("type 19, 130 intervals", :baddaf, (d, s) -> d[(e(s) - 2 - 131):(e(s) - 2)] .= 1.0)
         @test refuses("type 1, order 15", :baddaf, (d, s) -> d[b(s):(b(s) + 71 * 130 - 1)] .= 0.0)
-        @test refuses("type 21, order 25", :baddaf, (d, s) -> d[e(s) - 1] = 26.0)
+        @test refuses("type 21, order 25", :difflinetoolarge, (d, s) -> d[e(s) - 1] = 26.0)
         @test refuses("type 14, degree 9", :notsupported, (d, s) -> d[e(s) - 12] = 2.0)       # RDRTYP
         @test refuses("type 14, degree 9", :baddaf, (d, s) -> d[e(s) - 2] = 7.0)             # PKTSZ
         @test refuses("type 20, degree 8", :baddaf, (d, s) -> d[e(s) - 5] = 0.0)             # TSCALE
-        @test refuses("type 15, flag 0, ecc 0.2", :baddaf, (d, s) -> d[b(s) + 7] = -1.0)     # P
-        @test refuses("type 15, flag 0, ecc 0.2", :baddaf, (d, s) -> d[(b(s) + 1):(b(s) + 3)] .= 0.0)
+        @test refuses("type 15, flag 0, ecc 0.2", :badlatusrectum, (d, s) -> d[b(s) + 7] = -1.0)   # P
+        @test refuses("type 15, flag 0, ecc 0.2", :badvector, (d, s) -> d[(b(s) + 1):(b(s) + 3)] .= 0.0)
         @test refuses(
-            "type 15, flag 0, ecc 0.2", :baddaf,                                # PA along TP
+            "type 15, flag 0, ecc 0.2", :badinitstate,                          # PA along TP
             (d, s) -> d[(b(s) + 4):(b(s) + 6)] .= d[(b(s) + 1):(b(s) + 3)]
         )
-        @test refuses("type 17, h 0.12, k -0.09", :baddaf, (d, s) -> d[b(s) + 2] = 0.95)     # H
-        @test refuses("type 17, h 0.12, k -0.09", :baddaf, (d, s) -> d[b(s) + 1] = 0.0)      # A
-        @test refuses("type 5, ellipse", :badorbit, (d, s) -> d[e(s) - 1] = 0.0)             # GM
+        @test refuses("type 17, h 0.12, k -0.09", :badeccentricity, (d, s) -> d[b(s) + 2] = 0.95)  # H
+        @test refuses("type 17, h 0.12, k -0.09", :badsemiaxis, (d, s) -> d[b(s) + 1] = 0.0)       # A
+        @test refuses("type 5, ellipse", :nonpositivemass, (d, s) -> d[e(s) - 1] = 0.0)            # GM
+        # Type 20: a record size of 3 leaves no coefficient (`spke20` INVALIDCOUNT). The
+        # loader refuses such a directory, so the segment is built here.
+        rec20 = [0.0, 0.0, 0.0, 1.0, 1.0, 2451545.0, 0.0, 1.0, 3.0, 1.0]
+        seg20 = Almanac.Segment(
+            Int32(-1), Int32(399), Int32(1), Int32(20), 0.0, 86400.0, Int32(0),
+            1, 10, 0.0, 86400.0, Int32(3), Int32(1)
+        )
+        @test throws_kind(() -> Almanac.spk_eval(rec20, seg20, 100.0, Val(1)), :invalidcount)
+    end
+
+    # Regression: the evaluators threw `:baddaf` for the values that CSPICE refuses with
+    # kinds of its own, and type 19 compared its selection flag with 1.0 where `spkr19`
+    # rounds it. Each case writes a copy of the file with `change(words, seg)` applied to
+    # the words of the file (word `a` is DAF address `a`) and queries both engines in the
+    # middle of the segment.
+    @apart @testset "segment values refused with the kinds of CSPICE" begin
+        dir = mktempdir()
+        function bad_file(label, tag, change)
+            c = cases[findfirst(x -> x.label == label, cases)]
+            bytes = read(path)
+            change(reinterpret(Float64, bytes), ks.spk[Int32(c.body)][1])
+            file = joinpath(dir, tag * ".bsp")
+            write(file, bytes)
+            return c, file
+        end
+        function both_kinds(label, tag, change)
+            c, file = bad_file(label, tag, change)
+            et = (c.t0 + c.t1) / 2
+            kn = try
+                spkgeo(neo_context([file]), c.body, et, "J2000", EARTH)
+                :none
+            catch err
+                err isa Almanac.SpiceError || rethrow()
+                err.kind
+            end
+            SPICE.furnsh(file)
+            kc = try
+                ccall(
+                    (:spkgeo_c, LIBCSPICE), Cvoid,
+                    (CInt, Cdouble, Cstring, CInt, Ptr{Cdouble}, Ref{Cdouble}),
+                    c.body, et, "J2000", EARTH, zeros(6), Ref(0.0)
+                )
+                cspice_kind()
+            finally
+                SPICE.unload(file)
+            end
+            return kn, kc
+        end
+        e(seg) = seg.eaddr
+        b(seg) = seg.baddr
+        function zero_steps(d, s)                   # G(1) of every difference line
+            m, nrec = Int(d[e(s) - 1]), Int(d[e(s)])
+            for i in 0:(nrec - 1)
+                d[b(s) + i * (4m + 11) + 1] = 0.0
+            end
+        end
+        function mini_subtypes(d, s)                # the subtype of every mini-segment
+            n = Int(d[e(s)])
+            pbas = e(s) - 2 - (n + 1)
+            for i in 1:n
+                d[Int(d[pbas + i + 1]) + b(s) - 4] = 3.0
+            end
+        end
+        for (label, tag, change, kind) in (
+                ("type 21, order 25", "t21_dim", (d, s) -> d[e(s) - 1] = 26.0, :difflinetoolarge),
+                ("type 21, order 25", "t21_step", zero_steps, :zerostep),
+                ("type 18, subtype 0, degree 7", "t18_count", (d, s) -> d[e(s)] = 1.0, :toofewstates),
+                ("type 18, subtype 0, degree 7", "t18_subtype", (d, s) -> d[e(s) - 2] = 2.0, :notsupported),
+                ("type 18, subtype 0, degree 7", "t18_window", (d, s) -> d[e(s) - 1] = 10.0, :invalidvalue),
+                ("type 19, 130 intervals", "t19_subtype", mini_subtypes, :notsupported),
+                ("type 15, flag 0, ecc 0.2", "t15_p", (d, s) -> d[b(s) + 7] = -1.0, :badlatusrectum),
+                ("type 17, h 0.12, k -0.09", "t17_a", (d, s) -> d[b(s) + 1] = 0.0, :badsemiaxis),
+                ("type 5, ellipse", "t5_gm", (d, s) -> d[e(s) - 1] = 0.0, :nonpositivemass),
+            )
+            kn, kc = both_kinds(label, tag, change)
+            @test (tag, kn) == (tag, kind)
+            @test (tag, kc) == (tag, kind)
+        end
+        # Type 19: a flag of 1.2 rounds to 1 (the later interval at a bound), as in `spkr19`.
+        c = cases[findfirst(x -> x.label == "type 19, 130 intervals", cases)]
+        seg = ks.spk[Int32(c.body)][1]
+        d0 = ks.daf[seg.file]
+        n = Int(d0[e(seg)])
+        ivbas = e(seg) - 2 - (n + 1) - n ÷ 100 - (n + 1)
+        bound = d0[ivbas + n ÷ 2]                   # a bound between two intervals
+        flag(x) = (d, s) -> d[e(s) - 1] = x
+        _, f1 = bad_file(c.label, "t19_flag1", flag(1.0))
+        _, f12 = bad_file(c.label, "t19_flag12", flag(1.2))
+        s1 = spkgeo(neo_context([f1]), c.body, bound, "J2000", EARTH)[1]
+        s12 = spkgeo(neo_context([f12]), c.body, bound, "J2000", EARTH)[1]
+        @test s12 == s1
+        SPICE.furnsh(f12)
+        try
+            ref = SPICE.spkgeo(c.body, bound, "J2000", EARTH)[1]
+            @test type_reldiff(s12[SOneTo(3)], ref[1:3]) <= c.rtol
+            @test type_reldiff(s12[SVector(4, 5, 6)], ref[4:6]) <= c.rtol
+        finally
+            SPICE.unload(f12)
+        end
     end
 
     # Regression: the counts of a segment were rounded with ties away from zero, where

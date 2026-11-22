@@ -119,6 +119,18 @@ group("ephemeris table", Kernels.FULL_SET_FILES...) do
             @test all(isfinite, table_unchecked(tab, hi + 1.0))   # extrapolation, by contract
         end
         @test occursin("EphemerisTable{Float64}", sprint(show, tab))
+        # Regression: with t0 < 0 < t1 the interpolation path has dt = (t1 - t0) / nint, and
+        # t0 + nint * dt rounds below t1 (here by 6e-8 s), which made a query at t1 throw.
+        a, b = -693100438.6067185, 99924979.28518063
+        @assert a + 32 * ((b - a) / 32) < b
+        edge = Almanac.EphemerisTable(collect(1.0:(3 * 2 * 32)), a, (b - a) / 32, 32, 2, 301, 399, 1, 0.0)
+        @test table_span(edge) == (a, b)
+        @test table_position(edge, b) isa SVector{3, Float64}
+        @test throws_kind(() -> table_position(edge, nextfloat(b)), :spkinsuffdata)
+        redge = Almanac.RotationTable(collect(1.0:(9 * 2 * 32)), a, (b - a) / 32, 32, 2, 1, 10013, 0.0)
+        @test table_span(redge) == (a, b)
+        @test table_rotation(redge, b) isa SMatrix{3, 3, Float64}
+        @test throws_kind(() -> table_rotation(redge, nextfloat(b)), :spkinsuffdata)
     end
 
     @apart @testset "derivatives, allocation, types" begin

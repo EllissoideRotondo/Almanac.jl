@@ -1099,8 +1099,8 @@ defaults: a system clears the zone and a zone clears the system, as in CSPICE. T
 another value. Pure.
 """
 function _timdef_set(defs::TimeDefaults, item::AbstractString, value::AbstractString)
-    it = uppercase(strip(item, ' '))
-    val = uppercase(first(strip(value, ' '), 16))
+    it = _ljucase(item)
+    val = first(_ljucase(value), 16)
     if it == "SYSTEM"
         val in ("TDB", "TDT", "TT", "UTC") || throw(
             SpiceError(
@@ -1141,7 +1141,7 @@ end
 
 "Contract: returns the value of the default `item` (`CALENDAR`, `SYSTEM` or `ZONE`, any case) in `defs`; throws `SpiceError(:badtimeitem)` for another item."
 function _timdef_get(defs::TimeDefaults, item::AbstractString)::String
-    it = uppercase(strip(item, ' '))
+    it = _ljucase(item)
     it == "CALENDAR" && return defs.calendar
     it == "SYSTEM" && return defs.system
     it == "ZONE" && return defs.zone

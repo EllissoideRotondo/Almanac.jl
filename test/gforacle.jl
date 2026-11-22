@@ -284,6 +284,26 @@ module GFO
         return :none
     end
 
+    """
+        reclat_f(p) -> (radius, lon, lat)
+        recrad_f(p) -> (range, ra, dec)
+
+    The Fortran `reclat_` and `recrad_` of the f2c library, which `zzgfcoq` calls for
+    the coordinates of a search; `reclat_c` and `recrad_c` divide the components by
+    the largest one before the arc tangent of the longitude.
+    """
+    function reclat_f(p::AbstractVector{<:Real}, name::Symbol = :reclat_)
+        v = collect(Float64, p)
+        a, b, c = Ref(0.0), Ref(0.0), Ref(0.0)
+        ccall(
+            Libdl.dlsym(HANDLE, name), Cint,
+            (Ptr{SpiceDouble}, Ref{SpiceDouble}, Ref{SpiceDouble}, Ref{SpiceDouble}),
+            v, a, b, c
+        )
+        return a[], b[], c[]
+    end
+    recrad_f(p::AbstractVector{<:Real}) = reclat_f(p, :recrad_)
+
 end # module GFO
 
 # ---------------------------------------------------------------------------------------

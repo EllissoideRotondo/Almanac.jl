@@ -53,13 +53,7 @@ function GFIllumination(
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer")
     illum = _gf_body(ks, illmn, "illumination source")
-    targ == obs && throw(
-        SpiceError(
-            :bodiesnotdistinct,
-            "The observer and target must be distinct objects, but are not: " *
-                "OBSRVR = $obsrvr; TARGET = $target."
-        )
-    )
+    _gf_distinct(targ, obs, target, obsrvr)
     targ == illum && throw(
         SpiceError(
             :bodiesnotdistinct,

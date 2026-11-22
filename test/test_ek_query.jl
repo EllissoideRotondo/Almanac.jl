@@ -480,6 +480,10 @@ const EK_HAND_QUERIES = [
     "SELECT ID, VAL FROM EVENTS WHERE VAL >= 10",
     "SELECT GID, WEIGHT FROM GROUPS WHERE WEIGHT = 5",
     "SELECT GID, WEIGHT FROM GROUPS WHERE WEIGHT BETWEEN -3 AND 3",
+    # An integer value outside the 32-bit range (defect of CSPICE: `i_dnnt`)
+    "SELECT ID, VAL FROM EVENTS WHERE VAL < 10000000000",
+    "SELECT ID, VAL FROM EVENTS WHERE VAL > 10000000000",
+    "SELECT ID FROM EVENTS WHERE ID > 3000000000",
     # LIKE and NOT LIKE
     "SELECT ID, NAME FROM EVENTS WHERE NAME LIKE 'a*'",
     "SELECT ID, NAME FROM EVENTS WHERE NAME LIKE 'A*'",
@@ -693,7 +697,7 @@ function ek_compare_query(ctx, query::String)
 end
 
 "True if one of the defects of CSPICE can change the result of the query `q`."
-ek_defect_possible(q::String) = occursin(r"\bOR\b|NOT|\d\.\d*[1-9]|BETWEEN"i, q)
+ek_defect_possible(q::String) = occursin(r"\bOR\b|NOT|\d\.\d*[1-9]|BETWEEN|\d{10}"i, q)
 
 group("EK queries: catalogue, query corpus against CSPICE and against the model", Kernels.LSK) do
     model, paths = ek_standard_files(SEED + 1; scale = 0.15)
@@ -931,6 +935,22 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         gids = [r[1][1] for r in groups.rows]
         res, _, _ = ekfind(ctx, "SELECT GID FROM GROUPS WHERE GID > 100 OR GID > 50")
         @test sort(ekcolumn(res, 1)) == sort(filter(>(50), gids))
+        # (d) An integer value outside the 32-bit range is compared as a double; CSPICE
+        # and the compatibility mode compare with the smallest 32-bit integer.
+        ks = Almanac.kernelset(ctx)
+        vcol = findfirst(c -> c.name == "VAL", events.cols)
+        vals = Float64[r[vcol][1] for r in events.rows if r[vcol] !== nothing]
+        nnull = length(events.rows) - length(vals)      # a null is below every value
+        for (q, n, nc) in (
+                ("SELECT ID FROM EVENTS WHERE VAL < 10000000000", count(<(1.0e10), vals) + nnull, nnull),
+                ("SELECT ID FROM EVENTS WHERE VAL > 10000000000", count(>(1.0e10), vals), length(vals)),
+                ("SELECT ID FROM EVENTS WHERE ID > 3000000000", 0, length(ids)),
+            )
+            res, err, _ = ekfind(ctx, q)
+            @test !err && res.nmrows == n
+            eq, _, _ = Almanac._ek_encode_query(ks.ektables, ks, Almanac.timedefaults(ctx), q)
+            @test Almanac._ek_search(ks, eq; compat = true).nmrows == nc == c_ekfind(q)[1]
+        end
     end
 
     ek_part("a number of a query: correctly rounded in ekfind, as nparsd in the compatibility mode") do
@@ -1102,7 +1122,17 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
         other = copy(EK_LINK_COLS)
         other[2] = EKColSpec("GID", :DP)
         retyped = c_ek_write(joinpath(d2, "retyped.bes"), [ek_random_segment(rng2, "LINKS", other, 5)])
-        for bad in (fewer, renamed, retyped)
+        # (fault fixed: the duplicate column names of a later segment were reported
+        # first.) `eklef` checks one segment completely before the next one: the missing
+        # column of segment 1 comes before the duplicate names of segment 2.
+        other = copy(EK_LINK_COLS)
+        other[2] = EKColSpec("OTHER", :INT)
+        dup = [EKColSpec("A", :INT), EKColSpec("A", :INT)]
+        twofaults = c_ek_write(
+            joinpath(d2, "twofaults.bes"),
+            [ek_random_segment(rng2, "LINKS", other, 5), EKSegSpec("DUP", dup, Vector{Any}[], false)]
+        )
+        for bad in (fewer, renamed, retyped, twofaults)
             SPICE.kclear()
             SPICE.furnsh(base)
             ccall((:furnsh_c, EKLIB), Cvoid, (Cstring,), bad)

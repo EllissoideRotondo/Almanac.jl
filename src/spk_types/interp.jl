@@ -313,10 +313,18 @@ function _spk18(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 10 || _badsegment(seg, "the segment is too short")
-    subtyp = _seg_count(seg, @inbounds(data[e - 2]), 0, 1, "subtype")
-    wnd = _seg_count(seg, @inbounds(data[e - 1]), 2, subtyp == 0 ? 8 : 16, "window size")
-    iseven(wnd) || _badsegment(seg, "the window size is odd")
-    n = _seg_count(seg, @inbounds(data[e]), 2, _MAXCOUNT, "packet count")
+    # The checks and kinds of `spkr18`, in its order: the count, the subtype, the window.
+    subtyp = _seg_count(seg, @inbounds(data[e - 2]), -_MAXCOUNT, _MAXCOUNT, "subtype")
+    wnd = _seg_count(seg, @inbounds(data[e - 1]), -_MAXCOUNT, _MAXCOUNT, "window size")
+    n = _seg_count(seg, @inbounds(data[e]), -_MAXCOUNT, _MAXCOUNT, "packet count")
+    n < 2 && _segerror(:toofewstates, seg, "the packet count $n is less than 2")
+    (subtyp == 0 || subtyp == 1) ||
+        _segerror(:notsupported, seg, "the subtype $subtyp is not supported")
+    maxwnd = subtyp == 0 ? 8 : 16
+    (0 < wnd <= maxwnd && iseven(wnd)) || _segerror(
+        :invalidvalue, seg,
+        "the window size $wnd is not even and in 2:$maxwnd for subtype $subtyp"
+    )
     psize = _packet_size(subtyp)
     n * (psize + 1) + (n - 1) ÷ 100 + 3 == len ||
         _badsegment(seg, "the packet count does not agree with the length")
@@ -345,7 +353,8 @@ function _spk19(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 6 || _badsegment(seg, "the segment is too short")
-    later = @inbounds(data[e - 1]) == 1.0         # the writer of CSPICE stores -1 for "earlier"
+    # `spkr19` rounds the flag (ISEL = i_dnnt); the writer stores -1 for "earlier".
+    later = _seg_count(seg, @inbounds(data[e - 1]), -_MAXCOUNT, _MAXCOUNT, "selection flag") == 1
     n = _seg_count(seg, @inbounds(data[e]), 1, _MAXCOUNT, "interval count")
     pbas = e - 2 - (n + 1)                      # pointer i is data[pbas+i]
     ivbas = pbas - n ÷ 100 - (n + 1)            # interval bound i is data[ivbas+i]
@@ -360,9 +369,15 @@ function _spk19(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     minie = _seg_count(seg, p2, 1, len, "mini-segment pointer") + b - 2
     (minie - minib >= 3 && minie <= ivbas) ||
         _badsegment(seg, "the pointers of mini-segment $mini are not valid")
-    subtyp = _seg_count(seg, @inbounds(data[minie - 2]), 0, 2, "subtype")
-    wnd = _seg_count(seg, @inbounds(data[minie - 1]), 2, subtyp == 0 ? 14 : 28, "window size")
-    iseven(wnd) || _badsegment(seg, "the window size is odd")
+    # The checks and kinds of `spkr19`, in its order: the subtype, then the window.
+    subtyp = _seg_count(seg, @inbounds(data[minie - 2]), -_MAXCOUNT, _MAXCOUNT, "subtype")
+    wnd = _seg_count(seg, @inbounds(data[minie - 1]), -_MAXCOUNT, _MAXCOUNT, "window size")
+    0 <= subtyp <= 2 || _segerror(:notsupported, seg, "the subtype $subtyp is not supported")
+    maxwnd = subtyp == 0 ? 14 : 28
+    (2 <= wnd <= maxwnd && iseven(wnd)) || _segerror(
+        :invalidvalue, seg,
+        "the window size $wnd is not even and in 2:$maxwnd for subtype $subtyp"
+    )
     npkt = _seg_count(seg, @inbounds(data[minie]), 1, _MAXCOUNT, "packet count")
     psize = _packet_size(subtyp)
     npkt * (psize + 1) + (npkt - 1) ÷ 100 + 3 == minie - minib + 1 ||

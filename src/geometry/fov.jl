@@ -304,7 +304,8 @@ function _geo_hullax(bounds::Vector{Vec3{Float64}})
     for k in 1:n                         # invariant: the extreme longitudes of 1 .. k-1
         (k == xidx || k == next) && continue
         b = bounds[k]
-        _, lon, _ = reclat(Vec3{Float64}(_m_dot(xvec, b), _m_dot(yvec, b), _m_dot(zvec, b)))
+        # the Fortran `reclat_` of `zzhullax`: the arc tangent of the components themselves
+        _, lon, _ = _m_reclat(Vec3{Float64}(_m_dot(xvec, b), _m_dot(yvec, b), _m_dot(zvec, b)), false)
         lon < minlon && (minlon = lon)
         lon > maxlon && (maxlon = lon)
     end

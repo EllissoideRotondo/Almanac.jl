@@ -387,8 +387,8 @@ Open the EK file at `path` for `furnsh` and decode its segments, as the first pa
 `eklef`. Contract: `path` names a DAS file that holds a paged EK of architecture 8 with
 at least one segment, of either byte order. In the result the address spaces are
 memory-mapped where the file allows it. Throws `SpiceError` with the kinds of `dasopr`,
-`:wrongarchitecture`, `:invalidformat`, `:eknosegments`, and `:ekcolnummismatch` for a
-segment with two columns of the same name.
+`:wrongarchitecture`, `:invalidformat` and `:eknosegments`. The columns of the segments
+are checked by `_ek_build_tables`.
 """
 function open_ek(path::AbstractString)
     h = _das_load(path, "furnsh", false)
@@ -396,17 +396,7 @@ function open_ek(path::AbstractString)
         _ek_check(h, path, "furnsh")
         nseg = _ek_nseg(h)
         nseg < 1 && throw(SpiceError(:eknosegments, "The EK file $path contains no segments."))
-        segs = _EKSegment[_ek_segment(h, i) for i in 1:nseg]
-        for seg in segs
-            allunique(c.name for c in seg.columns) || throw(
-                SpiceError(
-                    :ekcolnummismatch,
-                    "The EK file $path could not be loaded; the segment $(seg.segno) contains " *
-                        "duplicate column names in table $(seg.table)."
-                )
-            )
-        end
-        segs
+        _EKSegment[_ek_segment(h, i) for i in 1:nseg]
     catch
         _das_release!(h)                 # see `_unmap!`
         rethrow()

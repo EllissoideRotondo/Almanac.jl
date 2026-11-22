@@ -379,8 +379,8 @@ group(
             @test r !== nothing && clkout == r[2] == tk[ib]
             @test maximum(abs.(cmat .- r[1])) <= CK_TOL_CMAT
         end
-        @test throws_kind(() -> ckgp(ctx, -77003, 1.0e6, -1.0, "J2000"), :valueoutofrange)
-        @test throws_kind(() -> ckgpav(ctx, -77003, 1.0e6, -1.0, "J2000"), :valueoutofrange)
+        @test ckgp(ctx, -77003, 1.0e6, -1.0, "J2000") === SPICE.ckgp(-77003, 1.0e6, -1.0, "J2000") === nothing
+        @test ckgpav(ctx, -77003, 1.0e6, -1.0, "J2000") === SPICE.ckgpav(-77003, 1.0e6, -1.0, "J2000") === nothing
         @test throws_kind(() -> ckgp(ctx, -77003, 1.0e6, 0.0, "NO_SUCH_FRAME"), :unknownframe)
         @test ckgp(ctx, -12345, 1.0e6, 10.0, "J2000") === nothing
         @test ckgp(ctx, -77003, 1.0e11, 10.0, "J2000") === nothing

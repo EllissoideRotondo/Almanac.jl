@@ -1,8 +1,8 @@
 module AlmanacEnzymeCoreExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_rule, _AD_POINTS,
-    _AD_CONSTANT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_pin, _ad_rule,
+    _ad_scale, _AD_POINTS, _AD_CONSTANT, _AD_CONSTANT_ORBIT, _ad_typeof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const, Active, Duplicated,
     BatchDuplicated
 using EnzymeCore.EnzymeRules: FwdConfig, RevConfig, AugmentedReturn, needs_primal,
@@ -15,10 +15,8 @@ using LinearAlgebra: dot
 # In forward mode the epoch is any real number, so that ForwardDiff over Enzyme (a `Dual`
 # epoch) takes its derivative from the ForwardDiff extension.
 
-# The derivative `dy` times the epoch tangent `s`, and the dot product of a cotangent of
-# the result with `dy`, over the whole structure (tuples of vectors, matrices, numbers).
-_scale(dy::Tuple, s) = map(d -> _scale(d, s), dy)
-_scale(dy, s) = dy * s
+# The dot product of a cotangent of the result with the derivative `dy`, over the whole
+# structure (tuples of vectors, matrices, numbers).
 _edot(a::Tuple, d::Tuple) = sum(map(_edot, a, d))
 _edot(a::AbstractArray, d::AbstractArray) = dot(a, d)
 _edot(a::Number, d::Number) = a * d
@@ -34,7 +32,7 @@ _lanes(et::Annotation, ::Val{W}) where {W} = ntuple(i -> et.dval[i], Val(W))
 function _forward(config::FwdConfig, f, iet::Int, args::Tuple)
     y, dy = _ad_rule(f, map(_val, args)...)
     W = width(config)
-    return _fwd_return(config, y, map(s -> _scale(dy, s), _lanes(args[iet], Val(W))))
+    return _fwd_return(config, y, map(s -> _ad_scale(dy, s), _lanes(args[iet], Val(W))))
 end
 
 # The result of a forward rule with the value `y` and the shadows of each lane.
@@ -129,12 +127,33 @@ EnzymeRules.reverse(
 ) =
     (_epoch_cotangent(m, dret, dy[1]), _epoch_cotangent(e, dret, dy[2]))
 
+# The value of one formula with the derivatives of another (see `src/ad.jl`): the
+# derivative is 1 with respect to `a` and 0 with respect to `p`.
+function EnzymeRules.forward(
+        config::FwdConfig, ::Const{typeof(_ad_pin)}, ::Type,
+        a::Annotation{<:Real}, p::Annotation{Float64}
+    )
+    return _fwd_return(config, _ad_pin(a.val, p.val), _lanes(a, Val(width(config))))
+end
+EnzymeRules.augmented_primal(
+    ::RevConfig, ::Const{typeof(_ad_pin)}, ::Type,
+    a::Annotation{<:Real}, p::Annotation{Float64}
+) = _no_nested_reverse(a)
+EnzymeRules.augmented_primal(
+    config::RevConfig, ::Const{typeof(_ad_pin)}, ::Type,
+    a::Annotation{Float64}, p::Annotation{Float64}
+) = AugmentedReturn(needs_primal(config) ? _ad_pin(a.val, p.val) : nothing, nothing, nothing)
+EnzymeRules.reverse(
+    config::RevConfig, ::Const{typeof(_ad_pin)}, dret, tape,
+    a::Annotation{Float64}, p::Annotation{Float64}
+) = (_epoch_cotangent(a, dret, 1.0), _epoch_cotangent(p, dret, 0.0))
+
 # The snapshot, the context and the correction are data without derivatives, and the
 # lookups and the parsing of strings have no derivative.
 EnzymeRules.inactive_type(::Type{<:KernelSet}) = true
 EnzymeRules.inactive_type(::Type{<:SpiceContext}) = true
 EnzymeRules.inactive_type(::Type{Aberration}) = true
-for f in _AD_CONSTANT
+for f in (_AD_CONSTANT..., _AD_CONSTANT_ORBIT...)
     @eval EnzymeRules.inactive(::$(_ad_typeof(f)), args...) = nothing
 end
 

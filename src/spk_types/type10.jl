@@ -242,16 +242,8 @@ function _t10_state(data::Vector{Float64}, seg::Segment, et::T, l::LeapSeconds) 
     p1, v1 = _t10_propagate(l, geophs, e1, et)
     t1 == t2 && return _t10_to_j2000(et, p1, v1)
     p2, v2 = _t10_propagate(l, geophs, e2, et)
-    denom = t2 - t1
-    arg = (et - t1) * _PI / denom
-    dargdt = _PI / denom
-    s, c = sincos(arg)
-    w = c * 0.5 + 0.5
-    dwdt = s * -0.5 * dargdt
-    return _t10_to_j2000(
-        et, w * p1 + (1.0 - w) * p2,
-        (w * v1 + (1.0 - w) * v2) + (dwdt * p1 + (-dwdt) * p2)
-    )
+    pos, vel = _cos_blend(et, t1, t2, p1, v1, p2, v2)
+    return _t10_to_j2000(et, pos, vel)
 end
 
 """

@@ -6,13 +6,15 @@
 # well), so the batched forward rule is checked with a pushforward of two tangents. In
 # reverse mode the cotangent of a `Dual` is not a `Dual`, so the rules refuse a `Dual`
 # epoch, and ForwardDiff runs over forward mode only. Enzyme cannot prove the combined
-# function of the fixture (a tuple of ten closures) read-only, so the backends declare it
+# function of the fixture (a tuple of closures) read-only, so the backends declare it
 # constant (`function_annotation=Enzyme.Const`); each closure on its own passes without
-# it (measured), but compiling the ten one by one takes more than 4 GB. The default run
+# it (measured), but compiling them one by one takes more than 4 GB. The default run
 # also leaves out the three cases that Enzyme differentiates without a rule (`subpnt`,
-# `unitim`, `table_position`: 9.5 min and 4.4 GB with them); each passes on its own, and
-# the exhaustive run takes them. Run time of the group (default tier, one process, 2
-# threads): 448 s and 3.6 GB, of which the Orbit cases about 50 s.
+# `unitim`, `table_position`: 9.5 min and 4.4 GB with them; each passes on its own), and
+# `subpnt NEAR POINT` for the same reason; the exhaustive run takes them. `prop2b` (the
+# root of the Kepler equation through `_ad_pin`) stays in the default run. Run time of the
+# group (default tier, one process, 2 threads): 448 s and 3.6 GB, of which the Orbit cases
+# about 50 s, before `prop2b` and the Orbit angles at pi were added.
 isdefined(@__MODULE__, :ad_check) || include("adfixtures.jl")
 
 import Enzyme
@@ -20,7 +22,7 @@ using ADTypes: AutoEnzyme
 
 group("ad enzyme", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
     ctx, epochs, default, full = ad_setup()
-    skip = ("subpnt", "unitim", "table_position")
+    skip = ("subpnt", "unitim", "table_position", "subpnt NEAR POINT")
     ad_check(
         "Enzyme forward", AutoEnzyme(; mode = Enzyme.Forward, function_annotation = Enzyme.Const), ctx, epochs, default, full;
         gradient = false, batched = true, nested = true, skip

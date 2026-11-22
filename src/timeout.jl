@@ -870,10 +870,12 @@ ignored:
 date, as in CSPICE. The fraction is rounded. The seconds are 60 inside a leap second. A year
 before 1000 has `A.D.` or `B.C.` in the formats `C` and `D`.
 
-Throws `SpiceError(:emptystring)` if `format` is empty, `SpiceError(:invalidtimeformat)`
-if it is not one of the five,
-`SpiceError(:yearoutofrange)` if the year is before 1 A.D. in an ISO format, and
-`SpiceError(:missingtimeinfo)` if no leap-second kernel is loaded.
+Throws `SpiceError`:
+- `:emptystring` if `format` is empty;
+- `:invalidtimeformat` if it is not one of the five;
+- `:noleapseconds` (format `"J"`) or `:missingtimeinfo` (the other formats) if no
+  leap-second kernel is loaded, as in CSPICE;
+- `:yearoutofrange` if the year is before 1 A.D. in an ISO format.
 
 # Examples
 ```julia
@@ -892,7 +894,9 @@ function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer):
             "the format '$format' is not one of 'C', 'D', 'J', 'ISOC', 'ISOD'"
         )
     )
-    l = _lsk(ks, :missingtimeinfo)
+    # The Julian date comes from `ttrans_` (NOLEAPSECONDS), the other forms start with
+    # `unitim_` (MISSINGTIMEINFO).
+    l = _lsk(ks, fmt == 3 ? :noleapseconds : :missingtimeinfo)
     p = Int(clamp(prec, 0, 14))
     x = primal(et)
     buf = _ByteBuf()

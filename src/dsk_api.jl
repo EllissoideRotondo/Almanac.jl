@@ -518,8 +518,8 @@ Rounding decides between the plates, so [`dskxsi`](@ref) can return another of t
 the same ray.
 
 Throws `SpiceError(:rayiszerovector)` if `raydir` is zero, `:typenotsupported` if the
-segment does not have the data type 2, and `:arraytoosmall` if a ray that meets no plate
-crosses more than 50000 voxels.
+segment does not have the data type 2, and `:arraytoosmall` if the ray crosses 50000
+voxels or more of the voxel grid of the segment, whether it meets a plate or not.
 
 See also [`dskxsi`](@ref), and [`dskw02`](@ref) for an example.
 """
@@ -661,16 +661,6 @@ function _dsk_target(ks::KernelSet, target::AbstractString)
     return Int32(code)
 end
 
-"Center of the frame `id`, or `nothing` if the frame is unknown. Does not allocate."
-@inline function _dsk_frame_center(ks::KernelSet, id::Int32)
-    f = get(BUILTIN_FRAMES, id, nothing)
-    f === nothing || return f.center
-    f = get(ks.frames, id, nothing)
-    f === nothing || return f.center
-    13000 <= id < 14000 && return Int32(399)
-    return nothing
-end
-
 @noinline _dsk_bad_frame(kind::Symbol, fixref, target) = throw(
     SpiceError(
         kind,
@@ -690,13 +680,13 @@ center is the target (`:invalidframe`).
 @inline function _dsk_fixfid(ks::KernelSet, fixref, trgcde::Int32, target)
     fixfid = _dsk_frame_code(ks, fixref)
     fixfid == 0 && _dsk_bad_frame(:idcodenotfound, fixref, target)
-    center = _dsk_frame_center(ks, fixfid)
-    center === nothing && _dsk_bad_frame(:noframeinfo, fixref, target)
-    center == trgcde || _dsk_bad_frame(:invalidframe, fixref, target)
+    fd = _frame_def_or_nothing(ks, fixfid)
+    fd === nothing && _dsk_bad_frame(:noframeinfo, fixref, target)
+    fd.center == trgcde || _dsk_bad_frame(:invalidframe, fixref, target)
     return fixfid
 end
 @inline _dsk_frame_code(::KernelSet, fixref::Integer) = Int32(fixref)
-_dsk_frame_code(ks::KernelSet, fixref::AbstractString) = Int32(namfrm(ks, fixref))
+_dsk_frame_code(ks::KernelSet, fixref::AbstractString) = Int32(_namfrm(ks, fixref))
 
 @noinline _dsk_bad_pri() = throw(
     SpiceError(
@@ -747,7 +737,8 @@ Throws `SpiceError`:
   of the frame is not known, `:invalidframe` if the frame is not centered on the target;
 - `:noloadeddskfiles` if no DSK file is loaded, `:nodsksegments` if no DSK segment of
   the target is loaded, `:dskdatanotfound` if no loaded segment has a surface of `srflst`;
-- `:rayiszerovector` if `raydir` is zero.
+- `:zerovector` if `raydir` is zero, unless `vertex` is inside the bounding sphere of
+  the surface and no segment with a surface of `srflst` covers `et`.
 
 See also [`dskxv`](@ref), [`dskx02`](@ref), [`latsrf`](@ref), and [`dskw02`](@ref) for an
 example.
@@ -837,9 +828,11 @@ function _dsk_xv!(
     trgcde = _dsk_target(ks, target)
     fixfid = _dsk_fixfid(ks, fixref, trgcde, target)
     t = Float64(et)
+    segs = _dsk_body_segments(ks, trgcde)
+    _, maxrad = _dsk_sph(ks, segs, trgcde, srflst)
     for i in 1:nrays                     # invariant: the results of the rays 1 .. i-1 are stored
-        xpt, _, _, found = _dsk_bux(
-            ks, tols, trgcde, srflst, t, fixfid, _dsk_get3(vtxarr, i),
+        xpt, _, _, found = _dsk_bux_ray(
+            ks, tols, segs, maxrad, trgcde, srflst, t, fixfid, _dsk_get3(vtxarr, i),
             _dsk_get3(dirarr, i)
         )
         xptarr[begin + i - 1] = xpt

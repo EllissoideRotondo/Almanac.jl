@@ -784,6 +784,10 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         tparch(cctx, "Y")                                         # only "YES" turns it on
         @test tparse(cctx, "1996-02-30") == tparse("1996-03-01")
         @test throws_kind(() -> tparch(cctx, ""), :emptystring)
+        # Regression: the argument was put in upper case with the Unicode rules, so that
+        # "YEſ" (long s) turned the check on; `eqstr_` compares ASCII letters only.
+        tparch(cctx, "YEſ")
+        @test tparse(cctx, "1996-02-30") == tparse("1996-03-01")
 
         # Regression for a defect of CSPICE N0067: `str2et` of a second 60 in a time zone
         # turns on the range check of `tparch` for the rest of the process (see
@@ -1038,6 +1042,16 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         lt = Ref(0.0)
         ccall((:deltet_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Ref{Cdouble}), 0.0, "TDB", lt)
         @test throws_kind(() -> deltet(ctx, 0.0, "TDB"), cspice_kind())
+        # Regression: the epoch type was stripped and compared whole. `deltet_` reads its
+        # first four characters and does not ignore a leading blank.
+        @test deltet(ctx, 1.0e8, "UTC  x") == SPICE.deltet(1.0e8, "UTC  x") == deltet(ctx, 1.0e8, "UTC")
+        @test deltet(ctx, 1.0e8, "et  x") == SPICE.deltet(1.0e8, "et  x") == deltet(ctx, 1.0e8, "ET")
+        for t in (" UTC", " ET", "ETX", "")
+            ccall((:deltet_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Ref{Cdouble}), 0.0, t, lt)
+            kind = cspice_kind()
+            @test kind === (t == "" ? :emptystring : :invalidepoch)
+            @test throws_kind(() -> deltet(ctx, 0.0, t), kind)
+        end
     end
 
     @apart @testset "ttrans against the CSPICE library" begin
@@ -1187,6 +1201,10 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             end
             @test throws_kind(() -> timdef(ctx, "PUT", "ZONE", "PST"), cspice_timdef("PUT", "ZONE", "PST"))
             @test throws_kind(() -> timdef(ctx, "GET", "YEAR"), cspice_timdef("GET", "YEAR", ""))
+            # Regression: the action and the item were put in upper case with the Unicode
+            # rules, so that a long s (U+017F) was an S; `ucase_` changes ASCII letters only.
+            @test throws_kind(() -> timdef(ctx, "GET", "ſYSTEM"), cspice_timdef("GET", "ſYSTEM", ""))
+            @test throws_kind(() -> timdef(ctx, "ſET", "SYSTEM", "TDB"), cspice_timdef("ſET", "SYSTEM", "TDB"))
             # The defaults belong to one context: another context keeps its own.
             other = neo_context([Kernels.LSK])
             timdef(ctx, "SET", "SYSTEM", "TDB")

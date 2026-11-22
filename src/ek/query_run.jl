@@ -20,7 +20,7 @@
 # CSPICE keeps these row sets in a global scratch file. Here they are local arrays, and
 # the search is a pure function of the snapshot and the query: it runs on many threads.
 #
-# Three defects of CSPICE N0067 change results; the search has a switch `compat` that
+# Four defects of CSPICE N0067 change results; the search has a switch `compat` that
 # reproduces them, and the tests use it to show that every difference from CSPICE comes
 # from these defects. With `compat = false` (the public calls) the results are correct.
 #
@@ -39,8 +39,12 @@
 #       segment vector of the conjunction gets the rows of the one before it: the rows
 #       of the next segment are lost, and the rows after it are read from a wrong
 #       segment.
+#   (d) `zzekqcon` converts an integer value of a query with `i_dnnt`, which gives the
+#       smallest 32-bit integer for a value outside the 32-bit range, and `zzekscmp`
+#       compares with that integer: `DCOL > 10000000000` holds for every row that is
+#       not null. The public search compares such a value as a double.
 #
-# A fourth difference is not a defect of the search. The scanner of CSPICE reads a number
+# A fifth difference is not a defect of the search. The scanner of CSPICE reads a number
 # of a query with `nparsd`, whose result can be one unit in the last place away from the
 # correctly rounded double ("2.756" gives the double after 2.756), so that a row with
 # the value 2.756 is not equal to the number 2.756 of a query. The public calls compare
@@ -72,23 +76,27 @@ end
 # ---------------------------------------------------------------------------------------
 
 """
-    _ek_fcmp(a, b) -> Int
+    _ek_bcmp(a, b, na, nb) -> Int
 
-Compare two strings as Fortran does (`l_lt`, `l_gt`): by character code, the shorter one
-padded with blanks; only the first 1024 characters of each take part. Returns the
-relation code `_EK_LT`, `_EK_EQ` or `_EK_GT`.
+Order of the first `na` bytes of `a` and the first `nb` bytes of `b` as Fortran compares
+strings (`l_lt`, `l_gt`): byte by byte, the shorter one continued with blanks. Returns
+-1, 0 or 1.
 """
+function _ek_bcmp(a::AbstractVector{UInt8}, b::AbstractVector{UInt8}, na::Int, nb::Int)
+    for i in 1:max(na, nb)               # invariant: the characters before i are equal
+        x = i <= na ? a[i] : UInt8(' ')
+        y = i <= nb ? b[i] : UInt8(' ')
+        x == y || return x < y ? -1 : 1
+    end
+    return 0
+end
+
+"Relation code (`_EK_LT`, `_EK_EQ`, `_EK_GT`) of two strings; the first 1024 characters count."
 function _ek_fcmp(a::AbstractString, b::AbstractString)
     ca = codeunits(a)
     cb = codeunits(b)
-    na = min(length(ca), _EK_MAXSTR)
-    nb = min(length(cb), _EK_MAXSTR)
-    for i in 1:max(na, nb)               # invariant: the characters before i are equal
-        x = i <= na ? ca[i] : UInt8(' ')
-        y = i <= nb ? cb[i] : UInt8(' ')
-        x == y || return x < y ? _EK_LT : _EK_GT
-    end
-    return _EK_EQ
+    r = _ek_bcmp(ca, cb, min(length(ca), _EK_MAXSTR), min(length(cb), _EK_MAXSTR))
+    return r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
 end
 
 @inline _ek_ncmp(x, y) = x < y ? _EK_LT : x > y ? _EK_GT : _EK_EQ
@@ -857,16 +865,29 @@ _ek_empty_result() = EKResult(
     Matrix{Int32}(undef, 0, 0), Int[], Int[], Symbol[], String[]
 )
 
-"Contract: returns `c` with the correctly rounded value `c.dexact` in place of `c.dval`."
-_ek_exact_constraint(c::_EKQConstraint) = c.dval === c.dexact ? c :
-    _EKQConstraint(c.cnstyp, c.lhs, c.opcode, c.rhs, c.dtype, c.cval, c.dexact, c.ival, c.dexact)
+"""
+    _ek_exact_constraint(c) -> _EKQConstraint
+
+`c` as the public search compares it: with the correctly rounded value `c.dexact` in
+place of `c.dval`, and an integer value outside the 32-bit range as a double. CSPICE
+compares such a value through `i_dnnt`, which gives the smallest 32-bit integer (defect
+(d) of the file header).
+"""
+function _ek_exact_constraint(c::_EKQConstraint)
+    big = c.dtype == _EK_INT && !(-2147483648.0 <= c.dexact <= 2147483647.0)
+    (c.dval === c.dexact && !big) && return c
+    return _EKQConstraint(
+        c.cnstyp, c.lhs, c.opcode, c.rhs, big ? _EK_DP : c.dtype, c.cval, c.dexact,
+        c.ival, c.dexact
+    )
+end
 
 """
     _ek_search(ks, q; compat=false) -> EKResult
 
 Port of `eksrch`: run the encoded query `q` (the result of `_ek_encode_query` for the
 tables of `ks`) on the snapshot `ks`. Pure function of its arguments. `compat = true`
-reproduces three defects of CSPICE (see the file header); it exists for the tests.
+reproduces four defects of CSPICE (see the file header); it exists for the tests.
 """
 function _ek_search(ks::KernelSet, q; compat::Bool = false)
     ntab = length(q.tables)

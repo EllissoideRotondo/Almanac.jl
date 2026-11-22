@@ -1941,31 +1941,6 @@ function _ek_scn2id(ks::KernelSet, clknam::AbstractString)
 end
 
 """
-    _ek_qsclkfields(clkstr) -> Vector{String}
-
-Contract: returns the fields of the clock string `clkstr` as `lparsm_` gives them with
-the clock delimiters. `_lparsm` takes byte positions and so accepts ASCII text only:
-each other byte is replaced by a placeholder for the split and put back afterwards, in
-order, so that the fields hold the bytes of `clkstr` unchanged.
-"""
-function _ek_qsclkfields(clkstr::AbstractString)
-    isascii(clkstr) && return String.(_lparsm(clkstr, _SCLK_DELIMS, _SCLK_MXNFLD))
-    bytes = Vector{UInt8}(codeunits(String(clkstr)))
-    held = filter(b -> b >= 0x80 || b == 0x01, bytes)
-    safe = String(map(b -> b >= 0x80 ? 0x01 : b, bytes))
-    k = 0
-    fields = String[]
-    for item in _lparsm(safe, _SCLK_DELIMS, _SCLK_MXNFLD)
-        raw = Vector{UInt8}(codeunits(String(item)))
-        for j in eachindex(raw)             # invariant: k placeholders are put back
-            raw[j] == 0x01 && (k += 1; raw[j] = held[k])
-        end
-        push!(fields, String(raw))
-    end
-    return fields
-end
-
-"""
     _ek_qscps01(clock, clkstr) -> (ticks, error)
 
 Contract: `clkstr` is a clock string without partition number. Returns its ticks and
@@ -1975,7 +1950,7 @@ function _ek_qscps01(clock::SclkType1, clkstr::AbstractString)
     isempty(strip(clkstr, ' ')) &&
         return 0.0, "Non partition part of the input clock string is blank."
     cmptks = _sclk_cmptks(clock)
-    items = _ek_qsclkfields(clkstr)
+    items = _lparsm(clkstr, _SCLK_DELIMS, _SCLK_MXNFLD)
     n = length(items)
     n > clock.nfield && return 0.0, _ek_qrep(
             _ek_qrep(
@@ -2037,14 +2012,13 @@ function _ek_qscpars(ks::KernelSet, sc::Int, sclkch::AbstractString)
     isempty(pserr) || return 0.0, pserr
     part = 1
     if pos > 1
-        x = try
-            _nparsd(SubString(sclkch, 1, prevind(sclkch, pos)))
+        # `nparsi`: the number cut toward zero, so "1.6/..." is partition 1.
+        part = try
+            _nparsi(SubString(sclkch, 1, prevind(sclkch, pos)))
         catch err
             err isa SpiceError || rethrow()
             return 0.0, _ek_qrep(badpart, sclkch)
         end
-        abs(x) < 2.0^31 || return 0.0, _ek_qrep(badpart, sclkch)
-        part = Int(_dnint(x))
         (part <= 0 || part > nparts) && return 0.0, _ek_qrep(
                 _ek_qrep(
                     _ek_qrep(

@@ -65,7 +65,7 @@ function timdef(
             "timdef: the action and the item must not be empty strings"
         )
     )
-    act = uppercase(strip(action, ' '))
+    act = _ljucase(action)
     act == "GET" && return _timdef_get(timedefaults(ctx), item)
     act == "SET" && isempty(value) && throw(
         SpiceError(
@@ -190,7 +190,7 @@ julia> try
 """
 function tparch(ctx::SpiceContext, type::AbstractString)
     _chkfstr("tparch", "argument type", type)
-    check = uppercase(replace(type, ' ' => "")) == "YES"
+    check = _eqstr(type, "YES")                     # `eqstr_` of `tparch_`
     lock(ctx.lock) do
         d = timedefaults(ctx)
         @atomic ctx.timedefs = TimeDefaults(d.calendar, d.system, d.zone, d.yearbound, check)

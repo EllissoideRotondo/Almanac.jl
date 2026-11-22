@@ -81,7 +81,7 @@ function _sw_parse_checked(ks::KernelSet, fd::FrameDef)
         end
     else
         for name in list
-            code = namfrm(ks, name)
+            code = _namfrm(ks, name)
             code == 0 && throw(
                 SpiceError(
                     :framenamenotfound, "base frame name $name of " *

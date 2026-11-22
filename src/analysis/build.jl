@@ -104,7 +104,8 @@ function keplerian_orbit(
     end
     a, e = sma !== nothing ? (sma, ecc) : _apsides_to_sma_ecc(periapsis, apoapsis)
     # `try_keplerian_mean_anomaly`: the true anomaly of the mean one, with the given ecc
-    nu = ta !== nothing ? ta : _ma_to_ta(promote(ma, e)...)
+    # (in floating point: an integer anomaly would make the solver take Int(π))
+    nu = ta !== nothing ? ta : _ma_to_ta(promote(ma, e, 0.0)[1:2]...)
     return _orbit_from_kep(a, e, inc, raan, aop, nu, et, c, f, gm, radii)
 end
 keplerian_orbit(ctx::SpiceContext, et::Real, center::NameOrID, frame::NameOrID; kw...) =

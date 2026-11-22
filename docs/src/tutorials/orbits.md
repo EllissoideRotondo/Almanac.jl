@@ -103,6 +103,6 @@ v = ForwardDiff.derivative(t -> two_body(o, t).position, later)
 maximum(abs.(v - p.velocity))
 ```
 
-The derivative throws where the value throws, as for the anomalies at `ecc < 1e-11`. A dual state of exactly zero radius, velocity, angular momentum or eccentricity vector throws `SpiceError(:degeneratecase)`, where a `Float64` state gives the value 0. The derivative of `:ta`, and of the calls built on it, is NaN at an exact apsis, where the arc cosine has an infinite slope; the value is not NaN.
+The derivative throws where the value throws, as for the anomalies at `ecc < 1e-11`. A dual state of exactly zero radius, velocity, angular momentum or eccentricity vector throws `SpiceError(:degeneratecase)`, where a `Float64` state gives the value 0. `:ta`, `:raan` and `:aop` have the value of the arc cosine of ANISE and the derivative of the same angle as an arc tangent, so the derivative is finite at an apsis and at a node, where the arc cosine has an infinite slope.
 
 The other AD packages differentiate the same calls; see [Differentiate with other AD packages](@ref).

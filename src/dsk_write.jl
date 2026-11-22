@@ -543,9 +543,12 @@ Throws `SpiceError`, with the kinds of CSPICE:
 - `:notsupported` unless `corsys` is 1, 3 or 4 and `dclass` is 1 or 2;
 - `:valueoutofrange` or `:incompatiblescale` if a count or a parameter of the spatial
   index is out of range;
-- `:badvertexindex` if a vertex number is not in `1:nv`.
+- `:badvertexindex` if a vertex number is not in `1:nv`;
+- `:dasnosuchhandle` or `:dasinvalidaccess` if `h` is closed or open for read, after the
+  checks above.
 
-Throws `SpiceError(:badarg)` if `corpar` has more than 10 elements or `spaixd` or
+Throws `SpiceError(:valueoutofrange)` if an element of `spaixi` that is written does not
+fit in 32 bits, and `SpiceError(:badarg)` if `corpar` has more than 10 elements or `spaixd` or
 `spaixi` is too short.
 
 # Examples
@@ -602,8 +605,7 @@ function dskw02(
         mncor2::Real, mxcor2::Real, mncor3::Real, mxcor3::Real, first::Real, last::Real,
         vrtces, plates, spaixd, spaixi
     )
-    _das_check_write(h, "dskw02")
-    frmcde = frame isa Integer ? Int(frame) : namfrm(kernelset(ctx), frame)
+    frmcde = frame isa Integer ? Int(frame) : _namfrm(kernelset(ctx), frame)
     frmcde == 0 && _dsk_throw(:frameidnotfound, "the frame name $frame could not be mapped to an ID code")
     last <= first && _dsk_throw(
         :timesoutoforder,
@@ -691,7 +693,7 @@ function dskw02(
         :valueoutofrange,
         "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
     )
-    pf = _dsk_flat(Int32, plates)
+    pf = _dsk_flat(Int, plates)          # Int, so that an index beyond Int32 is `badvertexindex`
     for k in eachindex(pf)               # invariant: the vertex numbers before k are valid
         (1 <= pf[k] <= nv) || _dsk_throw(
             :badvertexindex, "vertex index $(k - 3 * ((k - 1) ÷ 3)) " *
@@ -749,6 +751,13 @@ function dskw02(
     pvoxpl = pvoxpt + voxnpt
     pvtxpt = pvoxpl + voxnpl
     pvtxpl = pvtxpt + nv
+    # every integer fits in 32 bits before the first word is written, so that an error
+    # leaves no partial segment; `dlabns` makes the check of the handle (`dassih`), after
+    # the checks of the inputs as in SPICELIB
+    _das_check_int32("dskw02", (voxnpt, voxnpl, vtxnpl))
+    for (p, n) in ((pvoxpt, voxnpt), (pvoxpl, voxnpl), (pvtxpt, nv), (pvtxpl, vtxnpl), (ix0 + 7, ncgr))
+        _das_check_int32("dskw02", view(spaixi, (p + 1):(p + n)))
+    end
 
     dlabns(h)
     descr = zeros(Float64, 24)

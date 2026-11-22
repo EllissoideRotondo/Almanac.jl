@@ -68,6 +68,8 @@ Contract: add the name and code pairs of `boddef` to the name tables of the kern
 pool. A later pair for the same name replaces an earlier one; a name or a code that
 the kernel pool defines keeps the definition of the pool. These tables are searched
 before the built-in table, so a `boddef` pair masks a built-in name, as in CSPICE.
+As in `zzboddef`, the key is the normalized name cut to 36 characters (`_body_norm`)
+and the name that `bodc2n` returns is the first 36 characters of the name as given.
 """
 function _pool_x_bodydefs!(
         name2code::Dict{String, Int32}, code2name::Dict{Int32, String},
@@ -76,17 +78,17 @@ function _pool_x_bodydefs!(
     isempty(bodydefs) && return nothing
     final = Dict{String, Int32}()
     for (name, code) in bodydefs
-        final[normalize_name(name)] = code
+        final[_body_norm(name)] = code
     end
     names = Dict{Int32, String}()
     for (name, code) in bodydefs    # invariant: `names` holds the latest valid name per code
-        final[normalize_name(name)] == code && (names[code] = name)
+        final[_body_norm(name)] == code && (names[code] = name)
     end
     # A name of `boddef` that the pool defines too is the pool's: its code keeps no name
     # from `boddef` (the pool masks it, as in `zzbodc2n` of CSPICE).
     for (code, name) in names
-        (haskey(code2name, code) || haskey(name2code, normalize_name(name))) && continue
-        code2name[code] = name
+        (haskey(code2name, code) || haskey(name2code, _body_norm(name))) && continue
+        code2name[code] = String(rstrip(_cut_bytes(name, _BODY_MAXL), ' '))
     end
     for (nn, code) in final
         haskey(name2code, nn) || (name2code[nn] = code)
@@ -320,8 +322,11 @@ Delete the kernel-pool variable `name`, as
 
 A name that is not in the pool changes nothing. The deletion is a direct edit of the
 pool, with the rules of [`pdpool`](@ref).
+
+Throws `SpiceError(:emptystring)` if `name` is the empty string.
 """
 function dvpool(ctx::SpiceContext, name::AbstractString)
+    _chkfstr("dvpool", "variable name", name)     # CHKFSTR of dvpool_c
     n = String(strip(name))
     return _pool_x_edit!(ctx) do pool
         haskey(pool, n) || return ()
@@ -357,9 +362,11 @@ Load the text lines `cvals` into the kernel pool as the data section of a text k
 as [`lmpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lmpool_c.html).
 
 Each line holds text-kernel assignments (`NAME = value`, `NAME += value`); an
-assignment can continue on the next line. The lines start in a data section, and
-`\\begintext` and `\\begindata` work as in a file. The variables are direct edits of
-the pool, with the rules of [`pdpool`](@ref).
+assignment can continue on the next line. Every line is data: `\\begintext` and
+`\\begindata` are not markers here, as in CSPICE, so such a line is a malformed
+assignment. A tab separates values, as a blank does, and stays a tab inside a quoted
+string. The variables are direct edits of the pool, with the rules of
+[`pdpool`](@ref).
 
 Throws the errors of a malformed assignment that [`ldpool`](@ref) lists; the pool is
 then unchanged.
@@ -378,10 +385,7 @@ See also [`ldpool`](@ref), [`furnsh`](@ref).
 """
 function lmpool(ctx::SpiceContext, cvals::AbstractVector{<:AbstractString})
     defs = timedefaults(ctx)
-    tk = parse_text_lines(
-        "lmpool", vcat(["\\begindata"], String[String(s) for s in cvals]),
-        defs.yearbound, defs.check
-    )
+    tk = parse_text_lines("lmpool", cvals, defs.yearbound, defs.check; buffer = true)
     return _pool_x_edit!(pool -> _pool_x_apply!(pool, tk), ctx)
 end
 
@@ -424,9 +428,12 @@ The pair has priority over the built-in names. A name or a code that the kernel 
 defines (`NAIF_BODY_NAME`, `NAIF_BODY_CODE`) keeps the definition of the pool. The
 pair stays through [`furnsh`](@ref), [`unload`](@ref) and [`kclear`](@ref), as in
 CSPICE. A lookup ignores letter case and blanks around the name;
-[`bodc2n`](@ref) returns the name as given here.
+[`bodc2n`](@ref) returns the name as given here, without the blanks around it. Only
+the first 36 characters of a name count, as in CSPICE: a longer name is stored and
+looked up by them.
 
-Throws `SpiceError(:badarg)` if `name` is blank.
+Throws `SpiceError(:emptystring)` if `name` is the empty string and
+`SpiceError(:blanknameassigned)` if it is blank.
 
 # Examples
 ```jldoctest
@@ -439,8 +446,14 @@ julia> bodn2c(ctx, "my probe"), bodc2n(ctx, -999)
 ```
 """
 function boddef(ctx::SpiceContext, name::AbstractString, code::Integer)
+    _chkfstr("boddef", "body name", name)              # CHKFSTR of boddef_c
     nm = String(strip(name))
-    isempty(nm) && throw(SpiceError(:badarg, "boddef: the body name is blank"))
+    isempty(nm) && throw(
+        SpiceError(
+            :blanknameassigned,
+            "boddef: an attempt to assign the code $code to a blank string was made"
+        )
+    )
     lock(ctx.lock) do
         old = kernelset(ctx)
         defs = copy(old.bodydefs)
@@ -463,9 +476,13 @@ Return `true` if `name` is a numeric variable of the kernel pool, as
 
 A character variable gives `false`, as in CSPICE. Use [`dtpool`](@ref) to find a
 variable of any type.
+
+Throws `SpiceError(:emptystring)` if `name` is the empty string.
 """
-expool(ks::KernelSet, name::AbstractString) =
-    get(ks.pool, String(strip(name)), nothing) isa Vector{Float64}
+function expool(ks::KernelSet, name::AbstractString)
+    _chkfstr("expool", "variable name", name)     # CHKFSTR of expool_c
+    return get(ks.pool, strip(name), nothing) isa Vector{Float64}
+end
 
 """
     dtpool([ctx,] name) -> (n::Int, type::Symbol)
@@ -475,6 +492,8 @@ Return the number of values and the type of the kernel-pool variable `name`, as
 
 `type` is `:N` for numbers and `:C` for strings. A variable that is not in the pool
 gives `(0, :X)`; this takes the place of the `found` flag of CSPICE, as in SPICE.jl.
+
+Throws `SpiceError(:emptystring)` if `name` is the empty string.
 
 # Examples
 ```jldoctest
@@ -487,7 +506,8 @@ julia> dtpool(ctx, "NAMES"), dtpool(ctx, "ABSENT")
 ```
 """
 function dtpool(ks::KernelSet, name::AbstractString)
-    v = get(ks.pool, String(strip(name)), nothing)
+    _chkfstr("dtpool", "variable name", name)     # CHKFSTR of dtpool_c
+    v = get(ks.pool, strip(name), nothing)
     v === nothing && return 0, :X
     return length(v), v isa Vector{Float64} ? :N : :C
 end
@@ -615,7 +635,8 @@ case is ignored. The result holds at most `room` names, from match number `start
 ascending order of the name; CSPICE returns them in the order of its hash table. The
 result is empty if nothing matches; there is no `found` flag.
 
-Throws `SpiceError(:badarraysize)` if `room < 1`.
+Throws `SpiceError(:emptystring)` if `name` is the empty string and
+`SpiceError(:badarraysize)` if `room < 1`.
 
 # Examples
 ```jldoctest
@@ -630,6 +651,7 @@ julia> gnpool(ctx, "BODY%%%_GM")
 ```
 """
 function gnpool(ks::KernelSet, name::AbstractString, start::Integer = 1, room::Integer = typemax(Int))
+    _chkfstr("gnpool", "template", name)          # CHKFSTR of gnpool_c, before the room check of gnpool_
     room >= 1 || throw(
         SpiceError(
             :badarraysize, "the amount of room specified as " *
@@ -654,9 +676,12 @@ The names are `MAXVAR`, `MAXVAL`, `MAXLIN`, `MAXCHR`, `MXNOTE`, `MAXLEN` and `MA
 letter case and blanks are ignored. Of these limits the package has only `MAXLEN`
 (32 characters in a variable name) and `MAXCHR` (80 characters in a string value). The
 other values are reported for programs that read them and limit nothing here.
+
+Throws `SpiceError(:emptystring)` if `name` is the empty string.
 """
 function szpool(name::AbstractString)
-    key = uppercase(replace(name, ' ' => ""))
+    _chkfstr("szpool", "parameter name", name)    # CHKFSTR of szpool_c
+    key = _squeeze(name)
     for (k, v) in _POOL_X_SIZES
         k == key && return v
     end
@@ -676,6 +701,8 @@ strings from 1, as in SPICE.jl; CSPICE counts from 0. The result is `nothing` if
 variable is absent, is numeric, or has fewer strings; this takes the place of the
 `found` flag.
 
+Throws `SpiceError(:emptystring)` if `item` or `contin` is the empty string.
+
 # Examples
 ```jldoctest
 julia> ctx = SpiceContext();
@@ -687,6 +714,8 @@ julia> stpool(ctx, "PATH", 1, "+"), stpool(ctx, "PATH", 2, "+"), stpool(ctx, "PA
 ```
 """
 function stpool(ks::KernelSet, item::AbstractString, nth::Integer, contin::AbstractString)
+    _chkfstr("stpool", "variable name", item)     # CHKFSTR of stpool_c, item then contin
+    _chkfstr("stpool", "continuation marker", contin)
     v = get(ks.pool, String(strip(item)), nothing)
     v isa Vector{String} || return nothing
     mark = rstrip(contin, ' ')
@@ -710,6 +739,8 @@ After this call, and after every later change of one of the variables,
 that the agent watches already. A watch belongs to one context: CSPICE keeps one
 table for the process, and here two contexts do not see the watches of each other.
 
+Throws `SpiceError(:emptystring)` if `agent` is the empty string.
+
 # Examples
 ```jldoctest
 julia> ctx = SpiceContext();
@@ -728,6 +759,7 @@ true
 See also [`poolversion`](@ref).
 """
 function swpool(ctx::SpiceContext, agent::AbstractString, names::AbstractVector{<:AbstractString})
+    _chkfstr("swpool", "agent name", agent)       # CHKFSTR of swpool_c
     a = String(strip(agent))
     lock(ctx.lock) do
         watched = get!(() -> String[], ctx.watch.agents, a)
@@ -752,8 +784,11 @@ The call clears the pending update. A change is an assignment by [`furnsh`](@ref
 [`pipool`](@ref), or a deletion by [`dvpool`](@ref). [`clpool`](@ref),
 [`kclear`](@ref) and the [`unload`](@ref) of a text kernel count as a change of every
 watched variable, as in CSPICE. An agent without a watch gives `false`.
+
+Throws `SpiceError(:emptystring)` if `agent` is the empty string.
 """
 function cvpool(ctx::SpiceContext, agent::AbstractString)
+    _chkfstr("cvpool", "agent name", agent)       # CHKFSTR of cvpool_c
     a = String(strip(agent))
     return lock(ctx.lock) do
         a in ctx.watch.notify || return false

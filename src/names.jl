@@ -703,6 +703,8 @@ const BUILTIN_BODIES = Tuple{Int32, String}[
     (399069, "DSS-69"),
 ]
 
+const _BODY_MAXL = 36      # MAXL of `zzbodtrn`: the characters of a body name that count
+
 """
     normalize_name(s) -> String
 
@@ -901,11 +903,13 @@ end
 
 Contract: reads `NAIF_BODY_NAME` and `NAIF_BODY_CODE` from `pool`; returns
 `name2code::Dict{String,Int32}` keyed by normalized name and
-`code2name::Dict{Int32,String}` with the name as the kernel wrote it (trailing blanks
-removed; leading blanks kept, as in CSPICE). A later element has priority over an
-earlier one. Both are empty if neither variable exists. Throws, with the kinds of
-`zzbodker`, `SpiceError(:missingkpv)` if only one variable exists or one has the wrong
-type, `SpiceError(:baddimensions)` if the sizes differ, and
+`code2name::Dict{Int32,String}` with the name as the kernel wrote it (cut to its first
+36 characters, trailing blanks removed; leading blanks kept, as in CSPICE). A later
+element has priority over an earlier one. Both are empty if neither variable exists
+with its type (strings for the names, numbers for the codes), as `zzbodker` finds them
+with `gcpool_` and `gipool_`. Throws, with the kinds of `zzbodker`,
+`SpiceError(:missingkpv)` if only one of the two is found,
+`SpiceError(:baddimensions)` if the sizes differ, and
 `SpiceError(:blanknameassigned)` if a name is blank; first, as `gipool_`,
 `SpiceError(:intoutofrange)` if a code is not a 32-bit integer.
 """
@@ -914,19 +918,24 @@ function build_names(pool::AbstractDict{String, PoolValue})
     code2name = Dict{Int32, String}()
     names = get(pool, "NAIF_BODY_NAME", nothing)
     codes = get(pool, "NAIF_BODY_CODE", nothing)
-    names === nothing && codes === nothing && return name2code, code2name
     # `zzbodker_` reads the codes with `gipool_` (room 14983) before its checks.
     if codes isa Vector{Float64}
         for i in 1:min(length(codes), 14983)
             _gipool_value(codes[i]) === nothing && _gipool_range_error("NAIF_BODY_CODE", i, codes[i])
         end
     end
-    names isa Vector{String} && codes isa Vector{Float64} || throw(
+    # `gcpool_` finds only a string variable and `gipool_` only a numeric one; with
+    # neither found `zzbodker_` returns without names and without an error.
+    hasnames, hascodes = names isa Vector{String}, codes isa Vector{Float64}
+    hasnames == hascodes || throw(
         SpiceError(
             :missingkpv,
             "NAIF_BODY_NAME (strings) and NAIF_BODY_CODE (numbers) must both be present"
         )
     )
+    hasnames || return name2code, code2name
+    # `gcpool_` reads each name into 36 characters.
+    names = String[_cut_bytes(n, _BODY_MAXL) for n in names]
     length(names) == length(codes) || throw(
         SpiceError(
             :baddimensions,
@@ -958,11 +967,38 @@ function _parse_int_name(s::AbstractString)
     return tryparse(Int32, t)
 end
 
+"""
+    _body_norm(s) -> String
+
+The key of the body name `s`: `normalize_name(s)` cut to 36 characters and without the
+blanks that the cut leaves at the end, as `ljucrs_(1, s, tmpnam)` writes it into the
+`tmpnam` of 36 characters of `zzbodtrn` (the cut comes after the compression).
+"""
+function _body_norm(s::AbstractString)
+    k = normalize_name(s)
+    ncodeunits(k) <= _BODY_MAXL && return k
+    return String(rstrip(_cut_bytes(k, _BODY_MAXL), ' '))
+end
+
+"""
+    _body_name_code(name2code, name) -> Union{Int32,Nothing}
+
+Code of the body name `name` from the pool-defined table `name2code` (kernel pool,
+`boddef`, kernels), then from the built-in table; `nothing` if neither has it (the
+`bodn2c` rule: an integer string is not a name). Only the first 36 characters of the
+normalized name count, as in `zzbodtrn`. No allocation for an ASCII name of at most 36
+bytes.
+"""
+function _body_name_code(name2code::AbstractDict{String, Int32}, name::AbstractString)
+    key = ncodeunits(name) > _BODY_MAXL ? _body_norm(name) : name
+    c = _pool_name_lookup(name2code, key)
+    c === nothing || return c
+    return name_lookup(BUILTIN_NAME2CODE, key)
+end
+
 "Contract: code of `name` from the pool-defined dictionary `name2code`, then from the built-in table, then as an integer string; `nothing` if none applies (the `bods2c` rule)."
 function _body_code_lookup(name2code::AbstractDict{String, Int32}, name::AbstractString)
-    c = _pool_name_lookup(name2code, name)
-    c === nothing || return c
-    c = name_lookup(BUILTIN_NAME2CODE, name)
+    c = _body_name_code(name2code, name)
     c === nothing || return c
     return _parse_int_name(name)
 end
