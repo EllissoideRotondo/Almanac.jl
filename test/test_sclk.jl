@@ -175,6 +175,12 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         @test throws_kind(() -> scencd(ctx, sc, "1/"), :invalidsclkstring)
         # no fields and no partition: the fields are checked first, as CSPICE (F_SCLK0)
         @test throws_kind(() -> scencd(ctx, sc, " /"), :invalidsclkstring)
+        # Regression: a slash in the first column is BADPARTNUMBER before the fields are
+        # read, and a blank partition number is read after the fields, as in scencd_.
+        for str in ("/", "/  ", "  /x", "  /100.5")
+            ccall((:scencd_c, SPICE.libcspice), Cvoid, (Cint, Cstring, Ref{Cdouble}), sc, str, Ref(0.0))
+            @test throws_kind(() -> scencd(ctx, sc, str), cspice_kind())
+        end
         # A character of several bytes in a field is an error of the string, not of the code.
         @test all(
             s -> try

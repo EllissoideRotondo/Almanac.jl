@@ -573,19 +573,20 @@ function scencd(ks::KernelSet, sc::Integer, sclkch::AbstractString)
     pstart, pstop, ptotls = _sclk_partitions(clock)
     nparts = length(pstart)
     pos = findfirst('/', sclkch)
-    # the fields are checked before the partition number, as in CSPICE
+    # As `scencd_`: a slash in the first column is BADPARTNUMBER; then the fields are
+    # converted (no fields is INVALIDSCLKSTRING), and only then is the partition number
+    # read.
+    pos == 1 && throw(
+        SpiceError(
+            :badpartnumber,
+            "unable to parse the partition number from the SCLK string '$sclkch'"
+        )
+    )
     fields = pos === nothing ? sclkch : SubString(sclkch, nextind(sclkch, pos))
     isempty(strip(fields)) && throw(
         SpiceError(
             :invalidsclkstring,
             "no SCLK components follow the slash in the SCLK string '$sclkch'"
-        )
-    )
-    pos !== nothing && isempty(strip(SubString(sclkch, 1, prevind(sclkch, pos)))) &&
-        throw(
-        SpiceError(
-            :badpartnumber,
-            "unable to parse the partition number from the SCLK string '$sclkch'"
         )
     )
     ticks = _dnint(sctiks(ks, sc, fields))
