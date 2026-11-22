@@ -884,7 +884,7 @@ et2utc(0.0, "ISOC", 3)      # UTC at the epoch J2000 TDB
 See also [`timout`](@ref), [`str2et`](@ref).
 """
 function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer)::String63
-    isempty(format) && throw(SpiceError(:emptystring, "et2utc: the format is an empty string"))
+    _chkfstr("et2utc", "format", format)                   # CHKFSTR of et2utc_c
     fmt = _et2utc_format(format)
     fmt == 0 && throw(
         SpiceError(

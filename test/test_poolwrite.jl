@@ -535,8 +535,18 @@ group(
 
     @apart @testset "errors" begin
         ctx = SpiceContext()
-        @test throws_kind(() -> pdpool(ctx, "", [1.0]), :badvarname)
         @test throws_kind(() -> pdpool(ctx, "   ", [1.0]), :badvarname)
+        # Regression: an empty name is SPICE(EMPTYSTRING) of the C wrapper, and an empty
+        # list of values returns before the name check of pdpool_ and pcpool_.
+        ccall((:pdpool_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ptr{Cdouble}), "", 1, [1.0])
+        @test throws_kind(() -> pdpool(ctx, "", [1.0]), cspice_kind())
+        @test throws_kind(() -> pdpool(ctx, "", Float64[]), :emptystring)
+        @test throws_kind(() -> pcpool(ctx, "", String[]), :emptystring)
+        ccall((:pdpool_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Ptr{Cdouble}), "X"^33, 0, [1.0])
+        @test cspice_kind() === :none
+        @test pdpool(ctx, "X"^33, Float64[]) === nothing
+        @test pipool(ctx, "X"^33, Int[]) === nothing
+        @test pcpool(ctx, "X"^33, String[]) === nothing
         @test throws_kind(() -> pcpool(ctx, "X"^33, ["a"]), :badvarname)
         @test throws_kind(() -> pipool(ctx, "X"^33, [1]), :badvarname)
         pdpool(ctx, "X"^32, [1.0])

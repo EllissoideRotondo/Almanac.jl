@@ -220,7 +220,15 @@ function _pool_x_edit!(f!, ctx::SpiceContext)
     return nothing
 end
 
-"Contract: the variable name `name` without outer blanks; throws `SpiceError(:badvarname)` if it is empty or longer than 32 characters, as `pdpool_`."
+"""
+    _pool_x_name(name) -> String
+
+Contract: the variable name `name` without outer blanks; throws
+`SpiceError(:badvarname)` if that is empty or longer than 32 characters, as `pdpool_`
+for the length (`pdpool_` accepts a blank name). The callers test an empty `name`
+(`CHKFSTR` of the C wrapper) and the empty value list (`pdpool_` returns before the
+name check) first.
+"""
 function _pool_x_name(name::AbstractString)
     n = String(strip(name))
     (1 <= length(n) <= _TK_MAXNAME) || throw(
@@ -250,7 +258,9 @@ edit. The edit stays through a later
 [`furnsh`](@ref) and through the [`unload`](@ref) of a binary kernel. It is lost at
 [`kclear`](@ref) and at the `unload` of a text kernel or a meta-kernel, as in CSPICE.
 
-Throws `SpiceError(:badvarname)` if `name` is blank or longer than 32 characters.
+Throws `SpiceError(:emptystring)` if `name` is the empty string and
+`SpiceError(:badvarname)`, if `values` is not empty, when `name` is blank or longer than
+32 characters.
 
 # Examples
 ```jldoctest
@@ -266,8 +276,9 @@ julia> gdpool(ctx, "BODY999_GM")
 See also [`pipool`](@ref), [`pcpool`](@ref), [`dvpool`](@ref), [`lmpool`](@ref).
 """
 function pdpool(ctx::SpiceContext, name::AbstractString, values::AbstractVector{<:Real})
-    n = _pool_x_name(name)
+    _chkfstr("pdpool", "variable name", name)     # CHKFSTR of pdpool_c
     isempty(values) && return nothing
+    n = _pool_x_name(name)
     v = _vec_of(Float64, values)
     return _pool_x_edit!(pool -> (pool[n] = v; (n,)), ctx)
 end
@@ -294,8 +305,9 @@ A string longer than 80 characters is cut to 80, as in the kernel pool of CSPICE
 rules and the error are those of [`pdpool`](@ref).
 """
 function pcpool(ctx::SpiceContext, name::AbstractString, cvals::AbstractVector{<:AbstractString})
-    n = _pool_x_name(name)
+    _chkfstr("pcpool", "variable name", name)     # CHKFSTR of pcpool_c
     isempty(cvals) && return nothing
+    n = _pool_x_name(name)
     v = _vec_of(String, cvals, s -> first(String(s), _TK_MAXSTR))
     return _pool_x_edit!(pool -> (pool[n] = v; (n,)), ctx)
 end
