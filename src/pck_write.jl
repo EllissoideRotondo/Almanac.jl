@@ -126,22 +126,8 @@ function pckw02(
         segid::AbstractString, intlen::Real, cdata, btime::Real
     )
     who = "pckw02"
-    _daf_check_write(h, who)
-    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
-    _chkfstr(who, "string `segid`", segid)
-    cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
-    first, last, intlen, btime = Float64(first), Float64(last), Float64(intlen), Float64(btime)
-    n <= 0 && throw(
-        SpiceError(
-            :numcoeffsnotpos,
-            "$who: the number of sets of Euler angle coefficients is not positive: $n"
-        )
-    )
-    ninrec % 3 == 0 && ninrec > 0 || throw(
-        SpiceError(
-            :badarg, "$who: every record of " *
-                "`cdata` must hold 3 * (degree + 1) coefficients, it holds $ninrec"
-        )
+    cd, n, ninrec, first, last, intlen, btime = _seg_cheb_args(
+        who, "Euler angle", 3, h, frame, first, last, segid, intlen, cdata, btime
     )
     intlen <= 0.0 && throw(SpiceError(:intlennotpos, "$who: the interval length is not positive: $intlen"))
     refcod = _pck_irfnum(frame)
@@ -384,48 +370,10 @@ function pckw20(
         last::Real, segid::AbstractString, intlen::Real, cdata, ascale::Real, tscale::Real,
         initjd::Real, initfr::Real
     )
-    who = "pckw20"
-    _daf_check_write(h, who)
-    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
-    _chkfstr(who, "string `segid`", segid)
-    cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
-    first, last, intlen = Float64(first), Float64(last), Float64(intlen)
-    ascale, tscale, initjd, initfr = Float64(ascale), Float64(tscale), Float64(initjd), Float64(initfr)
-    n <= 0 && throw(
-        SpiceError(
-            :invalidcount,
-            "$who: the number of sets of coordinate coefficients is not positive: $n"
-        )
+    refcod, data = _seg_cheb20(
+        "pckw20", "PCK", ctx, h, frame, first, last, segid, intlen, cdata, ascale, tscale,
+        initjd, initfr
     )
-    (ninrec % 3 == 0 && ninrec >= 6) || throw(
-        SpiceError(
-            :badarg, "$who: every record of " *
-                "`cdata` must hold 3 * (degree + 2) values, it holds $ninrec"
-        )
-    )
-    polydg = ninrec ÷ 3 - 2
-    polydg > 50 && throw(
-        SpiceError(
-            :invaliddegree, "$who: the interpolating polynomials " *
-                "have degree $polydg; the valid degree range is [0, 50]"
-        )
-    )
-    intlen <= 0.0 && throw(SpiceError(:intlennotpos, "$who: the interval length is not positive: $intlen"))
-    refcod = _seg_refcode(who, ctx, frame)
-    first >= last && throw(
-        SpiceError(
-            :baddescrtimes,
-            "$who: the segment start time $first is not less than the segment end time $last"
-        )
-    )
-    ascale <= 0.0 && throw(SpiceError(:nonpositivescale, "$who: the angle scale is not positive: $ascale"))
-    tscale <= 0.0 && throw(SpiceError(:nonpositivescale, "$who: the time scale is not positive: $tscale"))
-    btime = 86400.0 * (initjd - 2451545.0 + initfr)
-    ltime = btime + n * intlen * 86400.0
-    tol = max(abs(btime), abs(ltime)) * 1.0e-13
-    _seg_coverage_gap(who, first, last, btime, ltime, tol)
-    _seg_chckid(who, segid, "PCK")
-    data = append!(cd, (ascale, tscale, initjd, initfr, intlen, Float64(ninrec), Float64(n)))
     _daf_add_array!(h, Float64[first, last], Int[clssid, refcod, 20, 0, 0], segid, data)
     return nothing
 end
