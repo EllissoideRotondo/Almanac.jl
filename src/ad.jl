@@ -43,6 +43,20 @@ const _AD_CONSTANT = (
 "The type to dispatch on for the callable `f`: `Type{f}` for a type, `typeof(f)` otherwise."
 _ad_typeof(f) = f isa Type ? Type{f} : typeof(f)
 
+"""
+The derivative points, each with the types of its arguments and the position of the
+epoch among them (`Real` there). The extensions for ChainRulesCore, Enzyme and Mooncake
+generate their rules from this table; Mooncake takes the epoch as `Float64`.
+"""
+const _AD_POINTS = (
+    (spk_jet, (KernelSet, Int32, Real, Int32, Int32, Val), 3),
+    (frame_rotation, (KernelSet, Int32, Int32, Real), 4),
+    (frame_jet, (KernelSet, Int32, Int32, Real, Val), 4),
+    (abcorr_jet, (KernelSet, Int32, Real, Int32, Aberration, Int32, Val), 3),
+    (abcorr_position, (KernelSet, Int32, Real, Int32, Aberration, Int32), 3),
+    (abcorr_state, (KernelSet, Int32, Real, Int32, Aberration, Int32), 3),
+)
+
 # --- value and first derivative at an epoch ---------------------------------------------
 
 """

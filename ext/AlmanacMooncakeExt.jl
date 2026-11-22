@@ -1,8 +1,8 @@
 module AlmanacMooncakeExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, spk_jet, frame_rotation, frame_jet,
-    abcorr_jet, abcorr_position, abcorr_state, _ma_to_ta, _ad_rule, _AD_CONSTANT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_rule, _AD_POINTS,
+    _AD_CONSTANT, _ad_typeof
 using Mooncake: Mooncake
 using Mooncake: DefaultCtx, CoDual, Dual, NoTangent, NoRData, RData, @is_primitive,
     @zero_derivative, zero_fcodual
@@ -27,16 +27,9 @@ _mdot(a::RData, d::StaticArray) = _mdot(a.data.data, Tuple(d))
 _mdot(a::Tuple, d::Tuple) = sum(map(_mdot, a, d))
 _mdot(a::Number, d::Number) = a * d
 
-const POINTS = (
-    (spk_jet, :(Tuple{typeof(spk_jet), KernelSet, Int32, Float64, Int32, Int32, Val}), 3),
-    (frame_rotation, :(Tuple{typeof(frame_rotation), KernelSet, Int32, Int32, Float64}), 4),
-    (frame_jet, :(Tuple{typeof(frame_jet), KernelSet, Int32, Int32, Float64, Val}), 4),
-    (abcorr_jet, :(Tuple{typeof(abcorr_jet), KernelSet, Int32, Float64, Int32, Aberration, Int32, Val}), 3),
-    (abcorr_position, :(Tuple{typeof(abcorr_position), KernelSet, Int32, Float64, Int32, Aberration, Int32}), 3),
-    (abcorr_state, :(Tuple{typeof(abcorr_state), KernelSet, Int32, Float64, Int32, Aberration, Int32}), 3),
-)
-
-for (f, sig, iet) in POINTS
+# The rules of the derivative points (`_AD_POINTS`), for a `Float64` epoch.
+for (f, types, iet) in _AD_POINTS
+    sig = Tuple{typeof(f), ntuple(i -> i == iet ? Float64 : types[i], length(types))...}
     @eval begin
         @is_primitive DefaultCtx $sig
         function Mooncake.frule!!(::Dual{typeof($f)}, args::Vararg{Dual})
