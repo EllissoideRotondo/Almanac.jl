@@ -3,9 +3,7 @@
 # calendars (`jul2gr.c`) and the constants. `timeparse.jl` has the strings to ET and
 # `timeout.jl` the ET to strings.
 
-const _SPD = 86400.0
-const _HALFD = 43200.0
-const _JD2000 = 2451545.0
+const _HALFD = 43200.0        # `_SPD` and `_JD2000` are in math/kernels.jl
 
 # ---------------------------------------------------------------------------------
 # Leap-second kernel

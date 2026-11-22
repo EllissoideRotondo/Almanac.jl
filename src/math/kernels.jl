@@ -13,6 +13,10 @@ const _HALFPI = Float64(pi) / 2
 "The ID of the frame J2000."
 const _J2000_FRAME = Int32(1)
 
+"Seconds per day (`spd_()`) and the Julian date of J2000 (`j2000_()`)."
+const _SPD = 86400.0
+const _JD2000 = 2451545.0
+
 # --- input conversion ---------------------------------------------------------------
 
 @inline _m_f(x::Integer) = Float64(x)
