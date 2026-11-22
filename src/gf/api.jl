@@ -120,8 +120,9 @@ Throws `SpiceError` with the kind
 - `:invalidstep` if `step <= 0` or a step does not advance the time (CSPICE then
   loops for ever), `:invalidtolerance` if `tol <= 0`;
 - `:notrecognized` if `relate` is not a relation;
-- `:valueoutofrange` if `adjust < 0` or is not finite, `:invalidvalue` if `adjust` is
-  not zero with a relation other than `"ABSMIN"` and `"ABSMAX"` or `refval` is NaN;
+- `:valueoutofrange` if `adjust < 0`, `:invalidvalue` if `adjust` is NaN or infinite,
+  or not zero with a relation other than `"ABSMIN"` and `"ABSMAX"`, or if `refval` is
+  NaN;
 - `:idcodenotfound` if a body name is not known, `:bodiesnotdistinct` if the two bodies
   are the same;
 - `:invalidoption` if `abcorr` is not a correction.
@@ -462,9 +463,9 @@ the start of the search.
 Throws `SpiceError(:invalidstep)` if `step <= 0` or a step does not advance the time
 (CSPICE then loops for ever), `SpiceError(:invalidtolerance)` if
 `tol <= 0`, `SpiceError(:notrecognized)` if `relate` is not a relation,
-`SpiceError(:valueoutofrange)` if `adjust < 0` or is not finite, and
-`SpiceError(:invalidvalue)` if `adjust` is not zero with a relation other than
-`"ABSMIN"` and `"ABSMAX"` or `refval` is NaN.
+`SpiceError(:valueoutofrange)` if `adjust < 0`, and `SpiceError(:invalidvalue)` if
+`adjust` is NaN or infinite, or not zero with a relation other than `"ABSMIN"` and
+`"ABSMAX"`, or if `refval` is NaN.
 
 # Examples
 ```jldoctest

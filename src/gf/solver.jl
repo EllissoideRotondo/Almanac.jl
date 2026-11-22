@@ -351,17 +351,19 @@ end
 """
     _gf_checkadjust(rel, adjust)
 
-The checks of `zzgfrelx` on the adjustment value: `SpiceError(:valueoutofrange)` if it
-is negative, `SpiceError(:invalidvalue)` if it is not zero and the relation is not an
-absolute extremum.
+The checks of `zzgfrelx` and `zzgflong` on the adjustment value:
+`SpiceError(:valueoutofrange)` if it is negative, `SpiceError(:invalidvalue)` if it is
+not zero and the relation is not an absolute extremum. A NaN or infinite value is
+`SpiceError(:invalidvalue)` for every relation: CSPICE refuses it with that kind for a
+relation other than ABSMIN and ABSMAX (the test `adjust != 0` is true) and takes it for
+those two.
 """
 function _gf_checkadjust(rel::Int, adjust::Real)
-    # NaN and Inf are refused too: CSPICE takes them and finds no event
-    (isfinite(adjust) && adjust >= 0) || throw(
-        SpiceError(
-            :valueoutofrange,
-            "ADJUST was $adjust; must be non-negative and finite."
-        )
+    adjust < 0 && throw(
+        SpiceError(:valueoutofrange, "ADJUST was $adjust; must be non-negative.")
+    )
+    isfinite(adjust) || throw(
+        SpiceError(:invalidvalue, "ADJUST was $adjust; must be finite.")
     )
     (rel == _GF_ABSMIN || rel == _GF_ABSMAX || adjust == 0) || throw(
         SpiceError(
@@ -414,7 +416,8 @@ function _gf_relx(
     isnan(refval) && throw(
         SpiceError(
             :invalidvalue,
-            "the reference value is NaN; CSPICE takes it and finds no event"
+            "the reference value is NaN; CSPICE takes it, and finds no event for " *
+                "the relations <, > and ="
         )
     )
     card(cnfine) == 0 && return Window()
@@ -504,7 +507,8 @@ Return the numerical derivative of the scalar function `udfunc` at `x`, as
 The result is the central difference `(udfunc(x + dx) - udfunc(x - dx)) / (2 dx)`.
 Unlike CSPICE, `udfunc` takes the abscissa alone.
 
-Throws `SpiceError(:dividebyzero)` if `dx == 0`, before `udfunc` is called.
+Throws `SpiceError(:dividebyzero)` if `dx == 0`, after the two calls of `udfunc`, as in
+CSPICE.
 
 # Examples
 ```jldoctest
@@ -516,15 +520,15 @@ See also [`uddc`](@ref), [`gfuds`](@ref).
 """
 function uddf(udfunc::F, x::Real, dx::Real) where {F}
     h = Float64(dx)
-    # checked before `udfunc` is called; CSPICE calls it twice first
+    f0 = Float64(udfunc(Float64(x) - h))
+    f2 = Float64(udfunc(Float64(x) + h))
+    # the check of `qderiv_`, after the two calls of `uddf_`
     h == 0.0 && throw(
         SpiceError(
             :dividebyzero,
             "Delta abscissa value is zero; a non-zero value is required."
         )
     )
-    f0 = Float64(udfunc(Float64(x) - h))
-    f2 = Float64(udfunc(Float64(x) + h))
     return (0.5 / h) * f2 + (-0.5 / h) * f0
 end
 

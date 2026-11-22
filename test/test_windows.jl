@@ -185,6 +185,11 @@ group("10. windows") do
         @test_throws SPICE.SpiceError SPICE.wnreld(cell_window(w.data), " =", cell_window(w.data))
         @test throws_kind(() -> wnreld(w, "", w), :emptystring)
         @test wnsumd(Window()) == (0.0, 0.0, 0.0, 0, 0)
+        # Rounding makes the variance of these three intervals -1.1e-16: CSPICE gives a NaN
+        # standard deviation, Almanac 0 (see the page of CSPICE defects).
+        w3 = Window([0.0, 0.7, 2.0, 2.7, 4.0, 4.7])
+        @test wnsumd(w3)[3] == 0.0
+        @test isnan(SPICE.wnsumd(cell_window(w3.data))[3])
         @test card(Window()) == 0 && wncard(Window()) == 0
         # A window is a vector of its endpoints, and `copy` is independent.
         c = copy(w)

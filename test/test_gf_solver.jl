@@ -42,10 +42,11 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         @test isempty(fails)
         @test throws_kind(() -> uddf(f1, 1.0, 0.0), :dividebyzero)
         @test GFO.kind(() -> GFO.uddf(f1, 1.0, 0.0)) === :dividebyzero
-        # the zero step is refused before the function runs (CSPICE calls it twice first)
+        # Regression: the zero step is refused after the two calls of the function, as in
+        # uddf_ (the check is in qderiv_); it was refused before them.
         calls = Ref(0)
         @test throws_kind(() -> uddf(x -> (calls[] += 1; x), 1.0, 0.0), :dividebyzero)
-        @test calls[] == 0
+        @test calls[] == 2
     end
 
     @testset "gfuds: every relation, bit for bit" begin
@@ -205,6 +206,11 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
             (:valueoutofrange, ("ABSMAX", 0.0, -0.1, 0.3)),
             (:invalidvalue, ("<", 0.0, 0.1, 0.3)),
             (:invalidvalue, ("LOCMAX", 0.0, 0.1, 0.3)),
+            # A NaN or infinite adjustment for a relation that takes none (adjust != 0),
+            # and a negative infinite one (adjust < 0).
+            (:invalidvalue, ("<", 0.0, NaN, 0.3)),
+            (:invalidvalue, ("=", 0.0, Inf, 0.3)),
+            (:valueoutofrange, ("ABSMIN", 0.0, -Inf, 0.3)),
         )
         for (kind, (rel, refval, adjust, step)) in cases
             @test throws_kind(() -> gfuds(f1, qdec, rel, refval, adjust, step, cn), kind)
@@ -229,8 +235,9 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
         @test collect(gfudb(GFState(t -> true), 1.0e-9, Window([1.0e9, 1.0e9]))) == [1.0e9, 1.0e9]
         @test collect(gfudb(GFState(t -> true), 1.0, Window([1.0e9, nextfloat(1.0e9, 3)]))) ==
             [1.0e9, nextfloat(1.0e9, 3)]
-        @test throws_kind(() -> gfuds(f1, qdec, "ABSMIN", 0.0, NaN, 0.3, cn), :valueoutofrange)
-        @test throws_kind(() -> gfuds(f1, qdec, "ABSMAX", 0.0, Inf, 0.3, cn), :valueoutofrange)
+        # Regression: the kind was :valueoutofrange; CSPICE takes these two.
+        @test throws_kind(() -> gfuds(f1, qdec, "ABSMIN", 0.0, NaN, 0.3, cn), :invalidvalue)
+        @test throws_kind(() -> gfuds(f1, qdec, "ABSMAX", 0.0, Inf, 0.3, cn), :invalidvalue)
         @test throws_kind(() -> gfuds(f1, qdec, "<", NaN, 0.0, 0.3, cn), :invalidvalue)
         @test throws_kind(() -> gfuds(f1, qdec, "=", 0.0, 0.0, 0.3, cn; tol = 0.0), :invalidtolerance)
         @test throws_kind(() -> gfudb(GFState(t -> true), 0.3, cn; tol = -1.0), :invalidtolerance)
