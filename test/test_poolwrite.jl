@@ -577,6 +577,9 @@ group(
             ["NAIF_BODY_NAME = 'PW_SPUD'"], ["NAIF_BODY_NAME = ' '", "NAIF_BODY_CODE = 1009"],
             # Regression: a name that ends in a nonprinting character is NONPRINTINGCHAR.
             ["PW_BAD\x7f = 1"],
+            # Regression: a `+=` of a string to a numeric variable of an earlier line is
+            # TYPEMISMATCH on its own line, before the error of a later line.
+            ["PW_BAD = 1", "PW_BAD += 'x'", "PW_BAD = ( ABC )"],
         ]
         for (i, lines) in enumerate(cases)
             k = pw_kernel("bad$i.tpc", lines)

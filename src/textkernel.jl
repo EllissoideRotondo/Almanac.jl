@@ -481,6 +481,10 @@ function parse_text_lines(
     nums = Float64[]
     strs = String[]
     kind = 0                       # 0 unknown, 1 string, 2 numeric
+    # The kinds of the variables that the earlier assignments of these lines set: `zzrvar_`
+    # stores each assignment before it reads the next one, so a `+=` takes the kind of the
+    # variable and a value of the other kind is TYPEMISMATCH on its own line.
+    kinds = Dict{String, Int}()
     lineno = 0
     for raw in lines
         lineno += 1
@@ -517,7 +521,7 @@ function parse_text_lines(
             append = types[2] == _TOK_PLUSEQ
             nums = Float64[]
             strs = String[]
-            kind = 0
+            kind = append ? get(kinds, name, 0) : 0
             if types[3] == _TOK_LPAREN
                 nxt = 4
             else
@@ -564,9 +568,13 @@ function parse_text_lines(
             nxt += 1
         end
         # `( )`: a closing parenthesis before the first value
-        nxt <= count && kind == 0 && _tk_fail(path, lineno, "the vector assigned to '$name' has no values")
+        nxt <= count && isempty(strs) && isempty(nums) &&
+            _tk_fail(path, lineno, "the vector assigned to '$name' has no values")
         invec = nxt > count
-        invec || _tk_finish!(out, kind, name, append, strs, nums)
+        if !invec
+            _tk_finish!(out, kind, name, append, strs, nums)
+            kind == 0 || (kinds[name] = kind)
+        end
     end
     invec && _tk_finish!(out, kind, name, append, strs, nums)
     return TextKernel(String(path), out)
