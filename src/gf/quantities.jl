@@ -46,32 +46,6 @@ _gf_body(ks::KernelSet, id::Integer, what::AbstractString) = Int32(id)
 @inline _gf_pv(s::SVector{6, Float64}) =
     (SVector(s[1], s[2], s[3]), SVector(s[4], s[5], s[6]))
 
-"""
-    _gf_radii(ks, body) -> SVector{3,Float64}
-
-The three radii of `body` from the kernel pool, as `zzgftreb`. Throws
-`SpiceError(:invalidcount)` if the variable does not hold three values and
-`SpiceError(:badaxislength)` if one is not positive, and the errors of `bodvcd`.
-"""
-function _gf_radii(ks::KernelSet, body::Integer)
-    r = bodvcd(ks, body, "RADII")
-    length(r) == 3 || throw(
-        SpiceError(
-            :invalidcount,
-            "Only $(length(r)) axes were found  for ID $body. Three axes expected."
-        )
-    )
-    for i in 1:3
-        r[i] > 0.0 || throw(
-            SpiceError(
-                :badaxislength, "Degenerate case. The $i axis of " *
-                    "body $body is negative or zero.  Please check the text PCK file."
-            )
-        )
-    end
-    return SVector(r[1], r[2], r[3])
-end
-
 # --- distance --------------------------------------------------------------------------
 
 "Distance between observer and target (`zzgfdiu`)."
@@ -127,7 +101,7 @@ end
 function _gf_shape_radius(ks::KernelSet, body::Int32, shape::AbstractString)
     s = uppercase(strip(shape, ' '))
     s == "POINT" && return 0.0
-    s == "SPHERE" && return maximum(_gf_radii(ks, body))
+    s == "SPHERE" && return maximum(_geo_radii(ks, body))
     throw(
         SpiceError(
             :notrecognized,
@@ -372,6 +346,9 @@ _gf_label(::GFFunction) = ""
 
 # --- coordinates of a vector -----------------------------------------------------------
 
+const _GF_ZERO3 = zero(Vec3{Float64})
+const _GF_ZERO6 = zero(SVector{6, Float64})
+
 # Coordinate systems, in the order of `zzgfcoq`.
 const _GF_RECTANGULAR = 1
 const _GF_LATITUDINAL = 2
@@ -487,13 +464,42 @@ function _gf_sysidx(crdsys::AbstractString, crdnam::AbstractString)
 end
 
 """
+    _gf_geodetic(ks, center, ref, sys, radii) -> (re, f, sense)
+
+The geodetic and planetographic part of `zzgfcoin` and `zzgfcslv`: the equatorial
+radius `re` and the flattening `f` of the body `center` of the frame `ref` with the
+radii `radii`, and the sense of the planetographic longitude (`-1` if it increases to
+the west, else `1`; `0` for the geodetic system). Throws `SpiceError(:notsupported)` if
+the equatorial radii differ.
+"""
+function _gf_geodetic(ks::KernelSet, center::Int32, ref, sys::Int, radii::NTuple{3, Float64})
+    radii[1] == radii[2] || throw(
+        SpiceError(
+            :notsupported, "Central body $center " *
+                "of reference frame $ref has radii $(radii[1]) $(radii[2]) $(radii[3]). " *
+                "Unequal equatorial ellipsoid radii are not supported for " *
+                "$(_GF_SYSNMS[sys]) coordinates."
+        )
+    )
+    re = radii[1]
+    f = (radii[1] - radii[3]) / radii[1]
+    sense = 0
+    if sys == _GF_PLANETOGRAPHIC
+        lon = recpgr(ks, center, SVector(0.0, 1.0, 0.0), re, f)[1]
+        sense = lon > Float64(pi) ? -1 : 1
+    end
+    return re, f, sense
+end
+
+"""
     GFCoordinate(vec, ks, crdsys, crdnam)
 
 Contract (the part of `zzgfcoin` after the checks of the vector): `crdsys` is one of the
 seven systems and `crdnam` one of its three coordinates, in any case
 (`SpiceError(:notsupported)` otherwise). For the geodetic and planetographic systems the
 center of the frame of the vector has three positive radii in the kernel pool
-(`:noframe`, `:badframe`, `:invalidcount`, `:badaxislength`) with equal equatorial radii
+(`:noframe`, `:badframe`, `:invalidcount`, `:arraytoosmall`, `:badaxislength`) with equal
+equatorial radii
 (`:notsupported`).
 """
 function GFCoordinate(
@@ -501,7 +507,6 @@ function GFCoordinate(
         crdnam::AbstractString
     )
     sys, idx = _gf_sysidx(crdsys, crdnam)
-    csys = _GF_SYSNMS[sys]
     re = 0.0
     f = 0.0
     sense = 0
@@ -525,20 +530,7 @@ function GFCoordinate(
                     "the kernel pool."
             )
         )
-        radii = _gf_radii(ks, center)
-        radii[1] == radii[2] || throw(
-            SpiceError(
-                :notsupported, "Central body $center " *
-                    "of reference frame $ref has radii $(radii[1]) $(radii[2]) $(radii[3]). " *
-                    "Unequal equatorial ellipsoid radii are not supported for $csys coordinates."
-            )
-        )
-        re = radii[1]
-        f = (radii[1] - radii[3]) / radii[1]
-        if sys == _GF_PLANETOGRAPHIC
-            lon = recpgr(ks, center, SVector(0.0, 1.0, 0.0), re, f)[1]
-            sense = lon > Float64(pi) ? -1 : 1
-        end
+        re, f, sense = _gf_geodetic(ks, center, ref, sys, _geo_radii(ks, center))
     end
     return GFCoordinate(vec, sys, idx, re, f, sense, center)
 end
