@@ -138,8 +138,8 @@ end
     return sqrt(r[1] * r[1] + r[2] * r[2] + r[3] * r[3]) / CLIGHT
 end
 
-# The methods below are what an extension calls from its methods of the derivative
-# points for its number type `T`: `spk_jet(ks, targ, et::T, ...) = _ad_spk_jet(...)`.
+# The methods below are what the methods of the derivative points for the number type
+# of an extension call (see `@_ad_epoch_methods`).
 
 function _ad_spk_jet(
         ks::KernelSet, targ::Int32, et::T, ref::Int32, obs::Int32,
@@ -193,4 +193,42 @@ function _ad_abcorr_state(
     r = _ad_lift(0, Base.setindex(jet, s0[SVector(1, 2, 3)], 1), et)
     v = _ad_lift(1, Base.setindex(jet, s0[SVector(4, 5, 6)], 2), et)
     return vcat(r, v), _ad_lt(r)
+end
+
+"""
+    @_ad_epoch_methods T
+
+Define the methods of the derivative points for an epoch of the number type `T` of an
+extension (`ForwardDiff.Dual`, the `TrackedReal` of ReverseDiff and Tracker). Each one
+takes the jet at the plain epoch and assembles the result with `_ad_lift`. The method of
+`frame_jet` for `Val{0}` resolves the ambiguity with `frame_jet(..., et::Real, ::Val{0})`.
+"""
+macro _ad_epoch_methods(T)
+    A = Almanac
+    return esc(
+        quote
+            $A.spk_jet(
+                ks::$KernelSet, targ::Int32, et::$T, ref::Int32, obs::Int32,
+                v::Val
+            ) = $A._ad_spk_jet(ks, targ, et, ref, obs, v)
+            $A.frame_rotation(ks::$KernelSet, from::Int32, to::Int32, et::$T) =
+                $A._ad_frame_rotation(ks, from, to, et)
+            $A.frame_jet(ks::$KernelSet, from::Int32, to::Int32, et::$T, v::Val) =
+                $A._ad_frame_jet(ks, from, to, et, v)
+            $A.frame_jet(ks::$KernelSet, from::Int32, to::Int32, et::$T, v::Val{0}) =
+                $A._ad_frame_jet(ks, from, to, et, v)
+            $A.abcorr_jet(
+                ks::$KernelSet, targ::Int32, et::$T, ref::Int32,
+                corr::$Aberration, obs::Int32, v::Val
+            ) = $A._ad_abcorr_jet(ks, targ, et, ref, corr, obs, v)
+            $A.abcorr_position(
+                ks::$KernelSet, targ::Int32, et::$T, ref::Int32,
+                corr::$Aberration, obs::Int32
+            ) = $A._ad_abcorr_position(ks, targ, et, ref, corr, obs)
+            $A.abcorr_state(
+                ks::$KernelSet, targ::Int32, et::$T, ref::Int32,
+                corr::$Aberration, obs::Int32
+            ) = $A._ad_abcorr_state(ks, targ, et, ref, corr, obs)
+        end
+    )
 end
