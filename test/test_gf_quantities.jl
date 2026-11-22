@@ -382,6 +382,20 @@ end
         )
         cvals(vd) = ["MOON", "EARTH", "NONE", "LATITUDINAL", "LATITUDE", "IAU_EARTH", vd, " ", " ", " "]
         @test throws_kind(() -> ev("COORDINATE", cnames, cvals("VELOCITY")), :notsupported)
+        # `gfevnt` leaves the tolerance to `zzgfsolvx`, after the quantity, `adjust` and
+        # the empty window (`zzgfrelx`); for a coordinate `zzgfcslv` checks `adjust`
+        # and then the tolerance (VALUEOUTOFRANGE) before the quantity. CSPICE reads a
+        # blank quantity name as one of its two blank entries and does nothing.
+        evt(q, names, vals, tol, adjust, w; op = "=") = gfevnt(
+            ctx, GF_DAY, gfrefn, q, names, vals, nod, noi, nol, op, 1.0, tol, adjust, w
+        )
+        @test isempty(evt("DISTANCE", tpar..., 0.0, 0.0, Window()))
+        @test throws_kind(() -> evt("DISTANCE", ["TARGET", "OBSERVER", "ABCORR"], ["NOSUCHBODY", "EARTH", "NONE"], 0.0, 0.0, cn), :idcodenotfound)
+        @test throws_kind(() -> evt("DISTANCE", tpar..., 0.0, -1.0, cn; op = "ABSMIN"), :valueoutofrange)
+        @test throws_kind(() -> evt("DISTANCE", tpar..., 0.0, 1.0, cn; op = "<"), :invalidvalue)
+        @test throws_kind(() -> evt("COORDINATE", cnames, cvals("POSITION"), 0.0, 0.0, cn), :valueoutofrange)
+        @test throws_kind(() -> evt("COORDINATE", cnames, cvals("VELOCITY"), 1.0e-6, -1.0, cn; op = "ABSMAX"), :valueoutofrange)
+        @test throws_kind(() -> evt(" ", tpar..., 1.0e-6, 0.0, cn), :notrecognized)
     end
 
     @testset "errors, with the kinds of CSPICE" begin

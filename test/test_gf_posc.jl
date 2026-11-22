@@ -265,6 +265,9 @@ end
                 (:notrecognized, ("MOON", "J2000", "NONE", "EARTH", "LATITUDINAL", "LONGITUDE", "!=", 1.0, 0.0, day)),
                 (:valueoutofrange, ("MOON", "J2000", "NONE", "EARTH", "RECTANGULAR", "X", "ABSMAX", 1.0, -1.0, day)),
                 (:valueoutofrange, ("MOON", "J2000", "NONE", "EARTH", "RA/DEC", "RIGHT ASCENSION", "ABSMAX", 1.0, -1.0, day)),
+                # `zzgfcslv` checks `adjust` before it sets up the quantity
+                (:valueoutofrange, ("NOSUCHBODY", "J2000", "NONE", "EARTH", "RECTANGULAR", "X", "ABSMAX", 1.0, -1.0, day)),
+                (:valueoutofrange, ("MOON", "J2000", "NONE", "EARTH", "POLAR", "RADIUS", "ABSMAX", 1.0, -1.0, day)),
                 (:invalidvalue, ("MOON", "J2000", "NONE", "EARTH", "RECTANGULAR", "X", "<", 1.0, 1.0, day)),
                 (:invalidvalue, ("MOON", "J2000", "NONE", "EARTH", "RA/DEC", "RIGHT ASCENSION", "<", 1.0, 1.0, day)),
             )

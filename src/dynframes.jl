@@ -1176,9 +1176,6 @@ end
     )
 end
 
-"Angular separation of the vectors `a` and `b` in radians, as `vsep_` (0 if one is zero)."
-_dyn_vsep(a::Vec3{Float64}, b::Vec3{Float64}) = vsep(a, b)
-
 """
     _dyn_twovec(mode, ks, def, et) -> Mat3
 
@@ -1193,7 +1190,7 @@ function _dyn_twovec(mode, ks::KernelSet, def::DynFrame, et::T) where {T <: Real
     b = _dyn_vector(mode, ks, def.v2, et)
     def.v1.negate && (a = -a)
     def.v2.negate && (b = -b)
-    sep = _dyn_vsep(map(primal, a), map(primal, b))
+    sep = _m_vsep(map(primal, a), map(primal, b))
     sin(sep) < sin(def.minsep) && _dyn_throw_sep(def, sep, et)
     x = _dyn_twovec_axes(a, b, Int(def.v1.axis), Int(def.v2.axis))
     def.base == _J2000_FRAME && return x

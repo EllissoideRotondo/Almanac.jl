@@ -222,7 +222,7 @@ end
 
 @noinline _throw_range_rate() = throw(
     SpiceError(
-        :badarg,
+        :dividebyzero,
         "the range rate of the target is near the speed of light: the light time " *
             "derivative cannot be computed"
     )
@@ -345,7 +345,7 @@ end
 
 @noinline _throw_stelab_cos() = throw(
     SpiceError(
-        :badarg,
+        :dividebyzero,
         "the cosine of the stellar aberration angle is zero: the observer velocity is not " *
             "realistic"
     )
@@ -788,8 +788,9 @@ at most five and stop when the light time changes by less than `1e-17 * max(1, |
 Throws `SpiceError`:
 - `:invalidoption` if `abcorr` is not valid (checked first, as in CSPICE);
 - `:badframe` if `ref` is not inertial;
-- `:badarg` if `stobs` does not have 6 elements, `et` is not finite, or the range rate
-  of the target is above `(1 - 1e-10)` times the speed of light;
+- `:badarg` if `stobs` does not have 6 elements or `et` is not finite;
+- `:dividebyzero` if the range rate of the target is above `(1 - 1e-10)` times the
+  speed of light;
 - the SPK errors of [`spkgeo`](@ref).
 
 See also [`spkaps`](@ref), [`spkacs`](@ref).
@@ -829,7 +830,9 @@ velocity part of the stellar aberration.
 `state` is an `SVector{6}` in km and km/s, `lt` is in seconds and `dlt` is the time
 derivative of `lt`.
 
-Throws `SpiceError(:badarg)` if `accobs` does not have 3 elements, and the errors of
+Throws `SpiceError(:badarg)` if `accobs` does not have 3 elements,
+`SpiceError(:dividebyzero)` if (for `+S`) the component of the observer velocity normal
+to the line of sight is not below the speed of light (`zzstelab`), and the errors of
 [`spkltc`](@ref).
 
 See also [`spkacs`](@ref).
@@ -943,12 +946,17 @@ are in seconds past J2000 TDB; `elapsd = |ettarg - etobs|` is in seconds. `obs` 
 `targ` are NAIF ID codes. The call makes three iterations after the geometric start,
 as CSPICE does.
 
-Throws `SpiceError(:baddirection)` if `dir` is not `"->"` or `"<-"` (blanks are not
-ignored), `SpiceError(:badarg)` if `etobs` is not finite, and the SPK errors of
-[`spkgeo`](@ref).
+Only the first two characters of `dir` count, as in CSPICE: `"-> "` is `"->"`.
+
+Throws `SpiceError(:emptystring)` if `dir` is empty, `SpiceError(:baddirection)` if
+`dir` does not begin with `"->"` or `"<-"`, `SpiceError(:badarg)` if `etobs` is not
+finite, and the SPK errors of [`spkgeo`](@ref).
 """
 function ltime(ks::KernelSet, etobs::Real, obs::Integer, dir::AbstractString, targ::Integer)
-    s = dir == "->" ? 1 : dir == "<-" ? -1 :
+    _chkfstr("ltime", "direction", dir)
+    d = codeunits(dir)
+    head = length(d) >= 2 ? (d[1], d[2]) : (0x00, 0x00)   # s_cmp(dir, "->", 2, 2)
+    s = head == (UInt8('-'), UInt8('>')) ? 1 : head == (UInt8('<'), UInt8('-')) ? -1 :
         throw(SpiceError(:baddirection, "ltime: the direction must be \"->\" or \"<-\", not \"$dir\""))
     et = check_epoch(etobs)
     robs = _ssbpos(ks, Int32(obs), et, Int32(1))

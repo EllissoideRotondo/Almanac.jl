@@ -590,7 +590,7 @@ function _tk_matrix(
         pool::AbstractDict, idkey::AbstractString, namekey::AbstractString,
         spec::AbstractString
     )
-    kind = uppercase(strip(spec))
+    kind = uppercase(rstrip(spec, ' '))       # ucase_, then s_cmp: trailing blanks only
     if kind == "MATRIX"
         key = _tk_key(pool, idkey, namekey, "_MATRIX")
         _badkpv(pool, "TKFRAM", key, "=", 9, 1, 'N')
