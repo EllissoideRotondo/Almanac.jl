@@ -116,6 +116,7 @@ part of the API, to show that every difference from CSPICE comes from them.
 | `ekdelr` on a fast-loaded segment | The record pages have a link count of 0, so the first deleted row frees a page and new rows overwrite the others | Correct link counts | `ek_write` |
 | `zzekac04` to `zzekac06`, `zzekde04` to `zzekde06` | A data page on which an array entry continues has no link, so an update frees it and the next entry overwrites another | Correct links | `ek_write` |
 | `zzekfrx` (`ekdelr`, `ekucec`, `ekuced`, `ekucei`) | Looks for a key at one position of the index only. The index can hold equal keys in another order (the fast writers sort unstably, and strings longer than the column are cut), so the call gives `ITEMNOTFOUND` | Looks at all equal keys | `ek_write` |
+| `zzektr1s` (`ekffld`) | For a fast load of 5167 or 5168 rows (the smallest trees of depth 3), sizes the subtrees of the middle nodes by dividing by MNKEYC in place of MNKIDC, so their leaves overlap: the record tree and the index trees hold more keys than they state, some of them twice | A valid tree | `ek_write` |
 
 ### Fixes that change only the bytes of a file
 

@@ -527,7 +527,9 @@ group("EK write: fast trees of depth 3 whose middle nodes have the fewest childr
     # With 5167 rows (the smallest count of depth 3) the root of the record tree and of
     # the index tree has two children of 2583 keys; a middle node of 2583 keys gets 42
     # children (`reqsiz <= maxsiz` of `zzektr1s`). The 5600 and 6000 rows above give
-    # middle nodes of 2800 and 3000 keys, which take the other branch.
+    # middle nodes of 2800 and 3000 keys, which take the other branch. `zzektr1s` gives
+    # the 42 children overlapping keys here (the tree holds 5209 keys), so the file of
+    # CSPICE cannot be read; Almanac writes a valid tree.
     dir = mktempdir()
     rng = MersenneTwister(SEED + 9)
     cols = [EKColSpec("K", :INT; indexed = true)]
@@ -536,7 +538,8 @@ group("EK write: fast trees of depth 3 whose middle nodes have the fewest childr
     pc = ekw_write(EKW_C, joinpath(dir, "c_mid.bes"), segs)
     pn = ekw_write(EKW_N, joinpath(dir, "n_mid.bes"), segs)
     nd, _ = ekw_diff(pc, pn)
-    @test nd == 0
+    @test nd > 0
+    @test_throws SpiceError ekw_depths(pc)
     d = ekw_depths(pn)
     @test d.rec == 3
     @test d.idx == 3

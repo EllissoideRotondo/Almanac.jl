@@ -1323,7 +1323,8 @@ is at most 10 (`:counttoolarge`).
 CSPICE fills every node in one page buffer, and it does not clear the buffer before it
 fills a leaf, so a leaf keeps words of the node that the buffer held before (its
 parent). The lookups never read those words. The same buffer is used here, so the
-files are equal.
+files are equal, except for 5167 and 5168 keys: there `zzektr1s` gives the middle
+nodes subtrees that overlap, and this function gives them a valid tree.
 """
 function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer})
     size = length(values)
@@ -1406,7 +1407,9 @@ function _ekw_tr1s(h::DASHandle, tree::Integer, values::AbstractVector{<:Integer
             elseif level < d
                 _ekw_clear!(page, 0, 256)
                 n = subsiz - _EK_MNKEYC
-                reqsiz = (n + _EK_MNKEYC - 1) ÷ _EK_MNKEYC
+                # `zzektr1s` divides by MNKEYC here, which makes NBIG negative for the
+                # trees of 5167 and 5168 keys; 42 subtrees need the division by MNKIDC.
+                reqsiz = (n + _EK_MNKIDC - 1) ÷ _EK_MNKIDC
                 nnodes = 0
                 for _ in 1:(d - level)
                     nnodes = nnodes * _EK_MXKIDC + 1
