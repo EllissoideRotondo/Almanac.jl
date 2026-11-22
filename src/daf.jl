@@ -185,24 +185,36 @@ center, but not a valid frame of a CK segment), and for the case that stays open
 size of the segment decides between SPK type 1 and CK. Requires `length(ic) == 6`.
 """
 function _daf_ckspk(data::Vector{Float64}, ic::NTuple{6, Int32}, nwords::Int)
+    # The segment bounds matter only after the first three tests.
+    early = ic[4] == 0 || ic[4] > 1 || ic[2] == 0
+    early || (1 <= Int(ic[5]) <= Int(ic[6]) <= nwords) || return :SPK
+    return _daf_ckspk(a -> data[a], ic)
+end
+
+"""
+    _daf_ckspk(word, ic) -> Symbol
+
+The tests of `zzckspk_` on the integer part `ic` of the first summary, with `word(a)`
+the double at DAF address `a`: the core of the two forms of `_daf_ckspk`.
+"""
+function _daf_ckspk(word::F, ic) where {F}
     angvel, dtype = ic[4], ic[3]
     angvel == 0 && return :CK
     angvel > 1 && return :SPK
     ic[2] == 0 && return :SPK
     first, last = Int(ic[5]), Int(ic[6])
-    (1 <= first <= last <= nwords) || return :SPK
     size = last - first + 1
     spkok, nspk = _daf_sizeok(size - 1, 72, 100, 0)
     spkok || return :CK
-    data[last] == nspk || return :CK
+    word(last) == nspk || return :CK
     dtype == 2 || return :SPK
     ck2ok, nck2 = _daf_sizeok(size, 10, 100, 1)
     ck2ok || return :SPK
     if nck2 < 201
-        return data[first + (nspk - 1) * 71] > data[last - nspk] ? :SPK : :CK
+        return word(first + (nspk - 1) * 71) > word(last - nspk) ? :SPK : :CK
     end
     from = last - (nck2 - 1) ÷ 100
-    return data[from] > data[from + 1] ? :CK : :SPK
+    return word(from) > word(from + 1) ? :CK : :SPK
 end
 
 """

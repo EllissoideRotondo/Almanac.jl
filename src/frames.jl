@@ -246,6 +246,23 @@ _pool_int(pool::AbstractDict{String, PoolValue}, key::AbstractString) =
     _gipool_first(get(pool, key, nothing), key; single = true, strict = false)
 
 """
+    _frame_key(pool, k1, k2) -> Union{Nothing,Tuple{String,PoolValue}}
+
+Contract: the name and value of the first of the variables `k1` (`FRAME_<id>_<item>`)
+and `k2` (`FRAME_<name>_<item>`) that is in `pool`, as `zzdynbid_` and `zzdynvac_`
+choose it: a name longer than 32 characters is not searched for. `nothing` if neither
+is there.
+"""
+@inline function _frame_key(pool::AbstractDict, k1::String, k2::String)
+    for key in (k1, k2)
+        length(key) <= _TK_MAXNAME || continue
+        v = get(pool, key, nothing)
+        v === nothing || return key, v
+    end
+    return nothing
+end
+
+"""
     _frame_item(pool, name2code, id, name, item) -> Union{Int32,Nothing}
 
 Contract: value of the frame definition variable `FRAME_<id>_<item>`, or of
@@ -256,15 +273,12 @@ function _frame_item(
         pool::AbstractDict{String, PoolValue}, name2code, id::Int32,
         name::AbstractString, item::AbstractString
     )
-    for key in ("FRAME_$(id)_$(item)", "FRAME_$(name)_$(item)")
-        length(key) <= _TK_MAXNAME || continue
-        v = get(pool, key, nothing)
-        v === nothing && continue
-        length(v) == 1 || return nothing
-        v isa Vector{String} && return _body_code_lookup(name2code, v[1])
-        return _pool_int(pool, key)
-    end
-    return nothing
+    kv = _frame_key(pool, "FRAME_$(id)_$(item)", "FRAME_$(name)_$(item)")
+    kv === nothing && return nothing
+    key, v = kv
+    length(v) == 1 || return nothing
+    v isa Vector{String} && return _body_code_lookup(name2code, v[1])
+    return _pool_int(pool, key)
 end
 
 """

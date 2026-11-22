@@ -225,8 +225,7 @@ end
                 "for a PCK data record and only 130 locations were available"
         )
     )
-    k = clamp(_lstled(data, seg.baddr - 1 + lay.refbas, lay.nref, et), 1, lay.npkt)
-    return seg.baddr + lay.pktbas + (k - 1) * lay.stride + lay.pktoff, lay.ncoef
+    return _spk14_packet(data, seg, lay, et), lay.ncoef
 end
 
 """

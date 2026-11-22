@@ -565,23 +565,6 @@ See also [`dlatdr`](@ref), [`latrec`](@ref).
 """
 drdlat(r::Real, lon::Real, lat::Real) = _m_drdlat(promote(_m_f(r), _m_f(lon), _m_f(lat))...)
 
-"Inverse of a Jacobian with orthogonal columns, with the checks of `invort_`."
-@inline function _m_invort(m::SMatrix{3, 3})
-    unit(i) = begin
-        u, len = _m_unorm(_m_col(m, i))
-        l0 = primal(len)
-        l0 == 0.0 && throw(SpiceError(:zerolengthcolumn, "column $i of the matrix has norm zero"))
-        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(
-            SpiceError(
-                :columntoosmall,
-                "the length $l0 of column $i cannot be inverted"
-            )
-        )
-        (1.0 / len) * u
-    end
-    return _m_rows(unit(1), unit(2), unit(3))
-end
-
 """
     dlatdr(x, y, z) -> SMatrix{3,3}
 

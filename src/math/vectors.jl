@@ -595,22 +595,7 @@ Throws `SpiceError(:badarg)` if `m` is not 3 by 3.
 
 See also [`invert`](@ref).
 """
-function invort(m1::AbstractMatrix)
-    m = _m_m3(m1)
-    unit(i) = begin
-        u, len = _m_unorm(_m_col(m, i))
-        l0 = primal(len)
-        l0 == 0.0 && throw(SpiceError(:zerolengthcolumn, "column $i of the matrix has norm zero"))
-        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(
-            SpiceError(
-                :columntoosmall,
-                "the length $l0 of column $i cannot be inverted"
-            )
-        )
-        (1.0 / len) * u
-    end
-    return _m_rows(unit(1), unit(2), unit(3))
-end
+invort(m1::AbstractMatrix) = _m_invort(_m_m3(m1))
 
 """
     isrot(m, ntol, dtol) -> Bool

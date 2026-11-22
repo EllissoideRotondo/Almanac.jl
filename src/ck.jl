@@ -230,14 +230,11 @@ end
     ) where {T <: Real}
     s = (x - mid) / rad
     s2 = 2.0 * s
-    w0 = zero(T)
-    w1 = zero(T)
-    for j in ncf:-1:2       # invariant: w0, w1 are the Clenshaw sums of coefficients j+1:ncf
-        w2 = w1
-        w1 = w0
-        w0 = @inbounds(data[cb + j]) + (s2 * w1 - w2)
+    b1 = b2 = (zero(T),)
+    for j in ncf:-1:2       # invariant: b1, b2 are the Clenshaw terms of the coefficients j+1:ncf
+        b1, b2 = _clenshaw_step(@inbounds(data[cb + j]), s2, b1, b2), b1
     end
-    return s * w0 - w1 + @inbounds(data[cb + 1])
+    return _clenshaw_end(@inbounds(data[cb + 1]), s, b1, b2)[1]
 end
 
 """
@@ -252,8 +249,7 @@ request), which is the type that the CK type 4 writer uses.
     en = seg.eaddr
     metasz = round(Int, data[en])
     metasz >= 15 || _ck_bad(:baddaf, "generic segment with fewer than 15 meta data items")
-    ametas = metasz == 15 ? 16 : metasz
-    b = en - ametas                             # item k is data[b+k]
+    b, hasoff = _sg_meta_base(metasz, en)       # item k is data[b+k]
     b >= seg.baddr || _ck_bad(:baddaf, "generic segment shorter than its meta data")
     item(k) = round(Int, @inbounds data[b + k])
     begm1 = seg.baddr - 1
@@ -262,7 +258,7 @@ request), which is the type that the CK type 4 writer uses.
         "CK type 4 segment with a reference directory type other than 3"
     )
     return item(6) + begm1, item(7), item(8) + begm1, item(10), item(11) + begm1,
-        item(12), item(15), (ametas >= 16 ? item(16) : 0)
+        item(12), item(15), (hasoff ? item(16) : 0)
 end
 
 """

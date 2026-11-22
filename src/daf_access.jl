@@ -541,28 +541,7 @@ function _daf_ckspk(h::DAFHandle)
     dafbfs(h)
     daffna(h) || return "?"
     _, ic = dafus(dafgs(h), 2, 6)
-    angvel = ic[4]
-    dtype = ic[3]
-    angvel == 0 && return "CK"
-    angvel > 1 && return "SPK"
-    ic[2] == 0 && return "SPK"
-    first = ic[5]
-    last = ic[6]
-    size = last - first + 1
-    spkok, nspk = _daf_sizeok(size - 1, 72, 100, 0)
-    spkok || return "CK"
-    dafgda(h, last, last)[1] == nspk || return "CK"
-    dtype == 2 || return "SPK"
-    ck2ok, nck2 = _daf_sizeok(size, 10, 100, 1)
-    ck2ok || return "SPK"
-    if nck2 < 201
-        frsttm = dafgda(h, last - nspk, last - nspk)[1]
-        from = first + (nspk - 1) * 71
-        return dafgda(h, from, from)[1] > frsttm ? "SPK" : "CK"
-    end
-    from = last - (nck2 - 1) ÷ 100
-    times = dafgda(h, from, from + 1)
-    return times[1] > times[2] ? "CK" : "SPK"
+    return String(_daf_ckspk(a -> dafgda(h, a, a)[1], ic))
 end
 
 # ---------------------------------------------------------------------------------------

@@ -389,18 +389,7 @@ function _spks05(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     gm, nr = _rd(r, eaddr - 1, eaddr)
     nrec = _cint(nr)
     offe = eaddr - nrec ÷ 100 - nrec - 2
-    r2 = 1
-    ep = _rd(r, offe + r2)
-    while r2 < nrec && ep < t1           # invariant: the epochs before r2 are before t1
-        r2 += 1
-        ep = _rd(r, offe + r2)
-    end
-    r1 = nrec
-    ep = _rd(r, offe + r1)
-    while r1 > 1 && ep > t0              # invariant: the epochs after r1 are after t0
-        r1 -= 1
-        ep = _rd(r, offe + r1)
-    end
+    r1, r2 = _spks_window(r, offe, nrec, t0, t1, 0)
     out = Float64[]
     for i in r1:r2
         offset = baddr - 1 + (i - 1) * 6

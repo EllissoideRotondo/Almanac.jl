@@ -41,9 +41,9 @@ function _t10_layout(data::Vector{Float64}, seg::Segment)
     len = e - b + 1
     (b >= 1 && e <= length(data) && len >= 16) || _t10_error(seg, "the segment is too short")
     nmeta = _seg_count(seg, @inbounds(data[e]), 15, _MAXCOUNT, "meta item count")
-    span = nmeta == 15 ? 16 : nmeta          # doubles from the first meta item to the end
+    m, hasoff = _sg_meta_base(nmeta, e)      # meta item k is data[m + k]
+    span = e - m                             # doubles from the first meta item to the end
     span <= len || _t10_error(seg, "the meta data is longer than the segment")
-    m = e - span                             # meta item k is data[m + k]
     item(k, lo, what) = _seg_count(seg, @inbounds(data[m + k]), lo, _MAXCOUNT, what)
     conbas = item(1, 0, "constants base")
     ncon = item(2, 0, "constants count")
@@ -54,7 +54,7 @@ function _t10_layout(data::Vector{Float64}, seg::Segment)
     pktbas = item(11, 0, "packet base")
     npkt = item(12, 1, "packet count")
     pksz = item(15, 1, "packet size")
-    pktoff = nmeta >= 17 ? item(16, 0, "packet offset") : 0
+    pktoff = hasoff ? item(16, 0, "packet offset") : 0
     ncon >= 8 || _t10_error(seg, "the segment has $ncon constants, 8 are needed")
     pdrtyp == 0 || _t10_error(seg, "the packets do not have a fixed size")
     (pksz == 10 || pksz == 14) || _t10_error(seg, "the packet size $pksz is not 10 or 14")

@@ -262,6 +262,23 @@ are not checked; an axis outside 1:3 is taken modulo 3, as `rotate_` takes it.
 @inline _m_eul2m_unchecked(a3, a2, a1, x3::Integer, x2::Integer, x1::Integer) =
     _m_rotmat(_m_rotmat(_m_rotate(a1, x1), a2, x2), a3, x3)
 
+"Inverse of a matrix with orthogonal columns, with the checks of `invort_`: the transpose with each row divided by the squared length of its column."
+@inline function _m_invort(m::SMatrix{3, 3})
+    unit(i) = begin
+        u, len = _m_unorm(_m_col(m, i))
+        l0 = primal(len)
+        l0 == 0.0 && throw(SpiceError(:zerolengthcolumn, "column $i of the matrix has norm zero"))
+        (l0 < 1.0 && l0 * floatmax(Float64) < 1.0) && throw(
+            SpiceError(
+                :columntoosmall,
+                "the length $l0 of column $i cannot be inverted"
+            )
+        )
+        (1.0 / len) * u
+    end
+    return _m_rows(unit(1), unit(2), unit(3))
+end
+
 "True if `m` is a rotation within the tolerances, as `isrot_c` (no argument checks)."
 @inline function _m_isrot(m::SMatrix{3, 3}, ntol::Real, dtol::Real)
     u1, n1 = _m_unorm(_m_col(m, 1))

@@ -201,6 +201,26 @@ Throws `SpiceError(:degreeoutofrange)` unless the degree is in 1:3.
     return deg + 1
 end
 
+"""
+    _phase_ncoef(br, body, nterm) -> Int
+
+`_phase_ncoef(br, body)` after the check of `tisbod_` that the phase angle list holds
+the `nterm` angles that the longest amplitude list needs: throws
+`SpiceError(:insufficientangles)` otherwise.
+"""
+@inline function _phase_ncoef(br::BodyRot, body::Integer, nterm::Int)
+    nco = _phase_ncoef(br, body)
+    nphase = length(br.nut_prec_angles) ÷ nco
+    nterm <= nphase || throw(
+        SpiceError(
+            :insufficientangles,
+            "insufficient number of nutation/precession angles for body $body: " *
+                "number of angles is $nphase, number required is $nterm"
+        )
+    )
+    return nco
+end
+
 "Value at `x` of the polynomial with coefficients `c` (lowest order first) by Horner's rule."
 @inline function _horner(c::Vector{Float64}, x::T) where {T <: Real}
     n = length(c)
@@ -234,15 +254,7 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
     na, nd, nw = length(ac), length(dc), length(wc)
     nterm = max(na, nd, nw)
     if nterm > 0
-        nco = _phase_ncoef(br, body)
-        nphase = length(th) ÷ nco
-        nterm <= nphase || throw(
-            SpiceError(
-                :insufficientangles,
-                "insufficient number of nutation/precession angles for body $body: " *
-                    "number of angles is $nphase, number required is $nterm"
-            )
-        )
+        nco = _phase_ncoef(br, body, nterm)
         sa = zero(T)
         sd = zero(T)
         sw = zero(T)
@@ -342,15 +354,7 @@ function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     na, nd, nw = length(ac), length(dc), length(wc)
     nterm = max(na, nd, nw)
     if nterm > 0
-        nco = _phase_ncoef(br, body)
-        nphase = length(th) ÷ nco
-        nterm <= nphase || throw(
-            SpiceError(
-                :insufficientangles,
-                "insufficient number of nutation/precession angles for body $body: " *
-                    "number of angles is $nphase, number required is $nterm"
-            )
-        )
+        nco = _phase_ncoef(br, body, nterm)
         sa = sd = sw = 0.0
         dsa = dsd = dsw = 0.0
         @inbounds for i in 1:nterm    # invariant: the sums hold the terms 1:i-1

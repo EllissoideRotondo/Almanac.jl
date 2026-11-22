@@ -38,6 +38,17 @@ end
 const _MAXCOUNT = Int(typemax(Int32))
 
 """
+    _sg_meta_base(nmeta, e) -> (m, haspktoff)
+
+Addresses of the meta data of a generic segment that ends at the address `e` and
+reports `nmeta >= 15` items, as `sgmeta_` reads them: item k is at `m + k`. A segment
+of 15 items was written as 16 doubles. Only a segment of 17 or more items has a packet
+offset (item 16): `sgmeta_` clears item 16 of a segment of 15 or 16 items. Items after
+the 17th are not used.
+"""
+@inline _sg_meta_base(nmeta::Int, e::Int) = e - (nmeta == 15 ? 16 : nmeta), nmeta >= 17
+
+"""
     _lstltd(data, base, n, x) -> Int
 
 Number of elements of the ascending range `data[base+1:base+n]` that are less than

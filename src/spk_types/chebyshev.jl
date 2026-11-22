@@ -17,9 +17,8 @@ one throws `SpiceError(:notsupported)`.
 """
 function _spk14(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     lay = _spk14_layout(data, seg)
-    b, ncoef, stride = seg.baddr, lay.ncoef, lay.stride
-    k = clamp(_lstled(data, b - 1 + lay.refbas, lay.nref, primal(et)), 1, lay.npkt)
-    a = b + lay.pktbas + (k - 1) * stride + lay.pktoff  # address of MID
+    ncoef = lay.ncoef
+    a = _spk14_packet(data, seg, lay, primal(et))     # address of MID
     @inbounds mid, radius = data[a], data[a + 1]
     tau = (et - mid) / radius
     (pos,) = _cheb3(data, a + 2, ncoef, tau, radius, Val(0))
@@ -41,8 +40,7 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     nmeta = _seg_count(seg, @inbounds(data[e]), 15, len, "meta data count")
-    # A segment of 15 meta items was written as 16 doubles (`sgmeta`).
-    mb = e - max(nmeta, 16)                     # meta item i is data[mb+i]
+    mb, hasoff = _sg_meta_base(nmeta, e)        # meta item i is data[mb+i]
     mb >= b - 1 || _badsegment(seg, "the meta data do not fit the segment")
     @inbounds begin
         conbas = _seg_count(seg, data[mb + 1], 0, len, "constants base")
@@ -54,7 +52,7 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
         pktbas = _seg_count(seg, data[mb + 11], 0, len, "packet base")
         npkt = _seg_count(seg, data[mb + 12], 1, len, "packet count")
         pktsz = _seg_count(seg, data[mb + 15], 8, len, "packet size")
-        pktoff = nmeta >= 16 ? _seg_count(seg, data[mb + 16], 0, len, "packet offset") : 0
+        pktoff = hasoff ? _seg_count(seg, data[mb + 16], 0, len, "packet offset") : 0
     end
     (rdrtyp == 3 && pdrtyp == 0) || throw(
         SpiceError(
@@ -70,6 +68,18 @@ that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit
     ncoef = _seg_count(seg, @inbounds(data[b - 1 + conbas + 1]), 1, len, "coefficient count")
     6 * ncoef + 2 == pktsz || _badsegment(seg, "the packet size is not 2 + 6*NCOEF")
     return (; conbas, refbas, nref, pktbas, npkt, pktsz, pktoff, stride, ncoef)
+end
+
+"""
+    _spk14_packet(data, seg, lay, et::Float64) -> Int
+
+Address of the first double (`MID`) of the packet of the SPK type 14 or PCK type 3
+segment `seg` with the layout `lay` for `et`: the last packet whose reference epoch is
+not after `et`, and the first packet for an epoch before them all.
+"""
+@inline function _spk14_packet(data::Vector{Float64}, seg::Segment, lay, et::Float64)
+    k = clamp(_lstled(data, seg.baddr - 1 + lay.refbas, lay.nref, et), 1, lay.npkt)
+    return seg.baddr + lay.pktbas + (k - 1) * lay.stride + lay.pktoff
 end
 
 """

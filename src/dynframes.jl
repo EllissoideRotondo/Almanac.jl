@@ -54,21 +54,14 @@ function _dyn_lookup(
     )
     k1 = "FRAME_$(id)_$(item)"
     k2 = "FRAME_$(name)_$(item)"
-    if length(k1) <= _TK_MAXNAME
-        v = get(pool, k1, nothing)
-        v === nothing || return k1, v
-    end
-    if length(k2) > _TK_MAXNAME
-        length(k1) > _TK_MAXNAME && throw(
-            SpiceError(
-                :varnametoolong,
-                "kernel variables $k1 and $k2 are longer than $_TK_MAXNAME characters"
-            )
+    kv = _frame_key(pool, k1, k2)
+    kv === nothing || return kv
+    (length(k1) > _TK_MAXNAME && length(k2) > _TK_MAXNAME) && throw(
+        SpiceError(
+            :varnametoolong,
+            "kernel variables $k1 and $k2 are longer than $_TK_MAXNAME characters"
         )
-    else
-        v = get(pool, k2, nothing)
-        v === nothing || return k2, v
-    end
+    )
     required || return nothing
     throw(
         SpiceError(
