@@ -141,7 +141,7 @@ end
 
 let g = SUITE["ad"] = BenchmarkGroup()
     g["ForwardDiff spkpos"] = bench(
-        et -> ForwardDiff.derivative(t -> spkpos(CTX, EARTH, t, J2000, "NONE", MOON)[1], et), ETS
+        et -> ForwardDiff.derivative(t -> spkpos(CTX, EARTH, t, J2000, "NONE", MOON)[1], et)[1], ETS
     )
 end
 
