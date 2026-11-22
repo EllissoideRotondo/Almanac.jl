@@ -256,46 +256,28 @@ function spkw10(
     )
     who = "spkw10"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     con = _seg_fixed(who, "consts", consts, 8)
     el, n, _ = _seg_flat(who, "elems", elems, 10)
     ep = _seg_vec(who, "epochs", epochs, n)
     descr = spkpds(ctx, body, center, frame, 10, first, last)
     _seg_idlen(who, segid)
-    cu = codeunits(String(segid))
-    for i in 1:_daf_lastnb(segid)
-        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
-            SpiceError(
-                :nonprintingchars,
-                "$who: the segment identifier contains a nonprinting character at location $i"
-            )
-        )
-    end
+    _seg_idchars(who, segid, :nonprintingchars)
     n <= 0 && throw(
         SpiceError(
             :numpacketsnotpos,
             "$who: the number of packets to store is not positive: $n"
         )
     )
-    for i in 2:n          # invariant: ep[1:i-1] is strictly increasing
-        ep[i - 1] >= ep[i] && throw(
-            SpiceError(
-                :unorderedrefs,
-                "$who: reference values are out of order; the value $(ep[i - 1]) was found to " *
-                    "be out of order for index $(i - 1)"
-            )
-        )
-    end
+    _seg_ordered_refs(who, Float64[], ep)
     packets = Vector{Float64}(undef, 14n)
     for i in 1:n          # invariant: the packets of the sets before `i` are in `packets`
         copyto!(packets, 14(i - 1) + 1, el, 10(i - 1) + 1, 10)
         psi, eps, dpsi, deps = _dyn_wahr_rates(ep[i])
         packets[(14i - 3):14i] .= (eps, psi, deps, dpsi)
     end
-    dafbna(h, descr, segid)
-    dafada(h, _t10_data(con, ep, packets))
-    dafena(h)
+    _daf_add_descr!(h, descr, segid, _t10_data(con, ep, packets))
     return nothing
 end
 spkw10(

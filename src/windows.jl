@@ -690,7 +690,7 @@ julia> wnreld(a, "<", b), wnreld(a, "=", b), wnreld(a, ">=", b)
 See also [`wnincd`](@ref).
 """
 function wnreld(a::Window, op::AbstractString, b::Window)
-    isempty(op) && throw(SpiceError(:emptystring, "wnreld: the relational operator is empty"))
+    _chkfstr("wnreld", "relational operator", op)
     o = rstrip(op, ' ')
     equal = a.data == b.data
     o == "=" && return equal

@@ -395,7 +395,7 @@ Throws `SpiceError`:
   `:badtimespec` for an `@` time that cannot be parsed. A JSON kernel throws `:badkernel`.
 """
 function ldpool(ctx::SpiceContext, fname::AbstractString)
-    isempty(fname) && throw(SpiceError(:emptystring, "ldpool: the file name is empty"))
+    _chkfstr("ldpool", "file name", fname)
     _isfile(fname) || throw(SpiceError(:fileopenfailed, "ldpool: could not open $fname"))
     defs = timedefaults(ctx)
     tk = parse_text_kernel(String(fname), defs.yearbound, defs.check)
@@ -528,7 +528,7 @@ function badkpv(
         comp::AbstractString, size::Integer, divby::Integer, type::AbstractChar
     )
     for (arg, s) in (("caller", caller), ("name", name), ("comp", comp))
-        isempty(s) && throw(SpiceError(:emptystring, "badkpv: the argument $arg is empty"))
+        _chkfstr("badkpv", arg, s)
     end
     return _badkpv(ks.pool, caller, name, comp, size, divby, type)
 end

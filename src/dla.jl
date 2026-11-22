@@ -80,7 +80,7 @@ function dlaopn(
         path::AbstractString, ftype::AbstractString, ifname::AbstractString,
         ncomch::Integer
     )
-    isempty(path) && throw(SpiceError(:emptystring, "dlaopn: the file name is empty"))
+    _chkfstr("dlaopn", "file name", path)
     ncomch < 0 && throw(
         SpiceError(
             :badrecordcount,

@@ -874,7 +874,7 @@ function spksub(
         handle::DAFHandle, descr::AbstractVector{<:Real}, ident::AbstractString,
         start::Real, stop::Real, newh::DAFHandle
     )
-    _seg_chkfstr("spksub", "ident", ident)
+    _chkfstr("spksub", "string `ident`", ident)
     dc, ic = dafus(descr, 2, 6)
     alpha, omega = dc
     t0, t1 = Float64(start), Float64(stop)

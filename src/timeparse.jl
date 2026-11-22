@@ -1214,7 +1214,7 @@ timout(et, "YYYY-MM-DDTHR:MN:SC.### ::UTC ::RND")    # back to a string, rounded
 See also [`timout`](@ref), [`et2utc`](@ref), [`utc2et`](@ref), [`tparse`](@ref).
 """
 function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
-    isempty(s) && throw(SpiceError(:emptystring, "str2et: the time string is empty"))
+    _chkfstr("str2et", "time string", s)
     l = _lsk(ks)
     dhoff, dmoff, _ = defs.zone == "" ? (0.0, 0.0, true) : _zone_offsets(defs.zone)
     p = _tpartv(s, 16)
@@ -1385,7 +1385,7 @@ with the check on, if a component is out of range, as CSPICE does for every such
 string, and `SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
 """
 function utc2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
-    isempty(s) && throw(SpiceError(:emptystring, "utc2et: the time string is empty"))
+    _chkfstr("utc2et", "time string", s)
     l = _lsk(ks)
     p = _tpartv(s, 8)
     p.ok || _badtime(s, p.error, :invalidtimestring)
@@ -1451,7 +1451,7 @@ julia> tparse("2 JAN 2000")
 ```
 """
 function tparse(s::AbstractString, defs::TimeDefaults)::Float64
-    isempty(s) && throw(SpiceError(:emptystring, "tparse: the time string is empty"))
+    _chkfstr("tparse", "time string", s)
     p = _tpartv(s, 8)
     p.ok || _badtime(s, p.error, :unparsedtime)
     modify = p.modify
@@ -1523,7 +1523,7 @@ julia> tpictr("2025-03-01T12:00:00.000")
 ```
 """
 function tpictr(sample::AbstractString)::String
-    isempty(sample) && throw(SpiceError(:emptystring, "tpictr: the sample is empty"))
+    _chkfstr("tpictr", "sample", sample)
     p = _tpartv(sample, 8)
     strip(p.pictur, ' ') == "" && _badtime(sample, p.error, :unparsedtime)
     return String(rstrip(p.pictur, ' '))

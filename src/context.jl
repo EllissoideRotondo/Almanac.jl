@@ -264,7 +264,7 @@ Throws `SpiceError(:emptystring)` if `path` is empty.
 See also [`kclear`](@ref).
 """
 function unload(ctx::SpiceContext, path::AbstractString)
-    isempty(path) && throw(SpiceError(:emptystring, "unload: the file name is empty"))
+    _chkfstr("unload", "file name", path)
     p = String(path)
     lock(ctx.lock) do
         old = kernelset(ctx).loaded

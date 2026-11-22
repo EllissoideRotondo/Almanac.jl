@@ -148,7 +148,7 @@ the file does not exist, `SpiceError(:fileopenfail)` if it is not writable,
 See also [`ekopn`](@ref), [`ekopr`](@ref).
 """
 function ekopw(path::AbstractString)
-    isempty(path) && throw(SpiceError(:emptystring, "ekopw: the file name must not be empty"))
+    _chkfstr("ekopw", "file name", path)
     h = dasopw(path)
     try
         _ek_check(h, h.path, "ekopw")
@@ -514,7 +514,7 @@ function ekbseg(
         decls::AbstractVector{<:AbstractString}
     )
     _ekw_check(h, "ekbseg")
-    isempty(tabnam) && throw(SpiceError(:emptystring, "ekbseg: the table name is empty"))
+    _chkfstr("ekbseg", "table name", tabnam)
     _ekw_chckid("EK table name", _EK_TNAMSZ, tabnam)
     _ekw_isident(tabnam) || throw(
         SpiceError(
@@ -723,7 +723,7 @@ function _ekw_locate(
         column::AbstractString, types::Tuple
     )
     _ek_check_read(h, who)
-    isempty(column) && throw(SpiceError(:emptystring, "$who: the column name is empty"))
+    _chkfstr(who, "column name", column)
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
     coldsc = _ekw_cdsc(h, segdsc, column)
     coldsc[_EK_TYPIDX] in types || throw(
@@ -1086,7 +1086,7 @@ function _ekw_fast_locate(
         column::AbstractString, rcptrs::EKFastLoad, types::Tuple
     )
     _ekw_check(h, who)
-    isempty(column) && throw(SpiceError(:emptystring, "$who: the column name is empty"))
+    _chkfstr(who, "column name", column)
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
     (rcptrs.handle === h && rcptrs.segno == segno) || throw(
         SpiceError(

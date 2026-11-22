@@ -60,12 +60,8 @@ true
 
 See also [`dafac`](@ref) to add comments.
 """
-function pckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
-    _seg_chkfstr("pckopn", "path", path)
-    _seg_chkfstr("pckopn", "ifname", ifname)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafonw(path, "PCK", 2, 5, ifname, ncomr)
-end
+pckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0) =
+    _seg_opn("pckopn", "PCK", 5, path, ifname, ncomch)
 
 """
     pckops(ifname="", ncomch=0) -> DAFHandle
@@ -79,10 +75,7 @@ has no CSPICE counterpart; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
 """
-function pckops(ifname::AbstractString = "", ncomch::Integer = 0)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafops("PCK", 2, 5, ifname, ncomr)
-end
+pckops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("PCK", 5, ifname, ncomch)
 
 """
     pckw02(handle, clssid, frame, first, last, segid, intlen, cdata, btime) -> Nothing
@@ -134,8 +127,8 @@ function pckw02(
     )
     who = "pckw02"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
     first, last, intlen, btime = Float64(first), Float64(last), Float64(intlen), Float64(btime)
     n <= 0 && throw(
@@ -205,10 +198,7 @@ mutable struct PCK03Writer
     open::Bool
 end
 
-Base.show(io::IO, w::PCK03Writer) = print(
-    io, "PCK03Writer(\"", w.segid, "\", ",
-    length(w.refs), " records", w.open ? "" : ", ended", ")"
-)
+Base.show(io::IO, w::PCK03Writer) = _seg_show_writer(io, w)
 
 """
     pck03b(handle, segid, body, frame, first, last, chbdeg) -> PCK03Writer
@@ -290,15 +280,7 @@ function pck03b(
     )
     _daf_check_write(h, who)
     _seg_idlen(who, segid)
-    cu = codeunits(String(segid))
-    for i in 1:_daf_lastnb(segid)
-        (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
-            SpiceError(
-                :nonprintingchars,
-                "$who: the segment identifier contains a nonprinting character at location $i"
-            )
-        )
-    end
+    _seg_idchars(who, segid, :nonprintingchars)
     descr = dafps(Float64[first, last], Int[body, refcod, 3, 0, 0])
     return PCK03Writer(h, descr, String(segid), Int(chbdeg) + 1, Float64[], Float64[], true)
 end
@@ -332,7 +314,7 @@ See [`pck03b`](@ref) for an example.
 """
 function pck03a(w::PCK03Writer, ncsets::Integer, coeffs, epochs)
     who = "pck03a"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    _seg_check_open(who, w)
     ncsets <= 0 && throw(
         SpiceError(
             :invalidargument, "$who: the number of coefficient sets and epochs to be " *
@@ -360,16 +342,7 @@ Throws `SpiceError(:segmentnotopen)` if the writer was ended before, and
 `SpiceError(:dafnosuchhandle)` if the handle was closed after [`pck03b`](@ref); the
 segment is then lost.
 """
-function pck03e(w::PCK03Writer)
-    who = "pck03e"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
-    _daf_check_write(w.handle, who)
-    dafbna(w.handle, w.descr, w.segid)
-    dafada(w.handle, _seg_cheb_packets(w.ncoef, w.packets, w.refs))
-    dafena(w.handle)
-    w.open = false
-    return nothing
-end
+pck03e(w::PCK03Writer) = _seg_cheb_end!("pck03e", w)
 
 """
     pckw20([ctx,] handle, clssid, frame, first, last, segid, intlen, cdata, ascale,
@@ -413,8 +386,8 @@ function pckw20(
     )
     who = "pckw20"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
     first, last, intlen = Float64(first), Float64(last), Float64(intlen)
     ascale, tscale, initjd, initfr = Float64(ascale), Float64(tscale), Float64(initjd), Float64(initfr)

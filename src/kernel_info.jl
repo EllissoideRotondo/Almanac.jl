@@ -134,7 +134,7 @@ the meaning that they have in [`kdata`](@ref); `handle` is always 0.
 Throws `SpiceError(:emptystring)` if `file` is empty.
 """
 function kinfo(ks::KernelSet, file::AbstractString)
-    isempty(file) && throw(SpiceError(:emptystring, "kinfo: the file name is empty"))
+    _chkfstr("kinfo", "file name", file)
     i = findfirst(e -> e.path == file, ks.loaded)
     i === nothing && return nothing
     e = ks.loaded[i]

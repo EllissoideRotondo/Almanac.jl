@@ -46,12 +46,8 @@ julia> getfat(path)
 See also [`ckw01`](@ref), [`ckw02`](@ref), [`ckw03`](@ref), [`ckw05`](@ref),
 [`ckw06`](@ref), [`dafac`](@ref) to add comments.
 """
-function ckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
-    _seg_chkfstr("ckopn", "path", path)
-    _seg_chkfstr("ckopn", "ifname", ifname)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafonw(path, "CK", 2, 6, ifname, ncomr)
-end
+ckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0) =
+    _seg_opn("ckopn", "CK", 6, path, ifname, ncomch)
 
 """
     ckops(ifname="", ncomch=0) -> DAFHandle
@@ -65,10 +61,7 @@ has no CSPICE counterpart; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
 """
-function ckops(ifname::AbstractString = "", ncomch::Integer = 0)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafops("CK", 2, 6, ifname, ncomr)
-end
+ckops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("CK", 6, ifname, ncomch)
 
 """
     ckcls(handle) -> Nothing
@@ -125,18 +118,6 @@ function _ck_nonzero_quats(who::AbstractString, flat::Vector{Float64}, n::Int, s
             SpiceError(
                 :zeroquaternion,
                 "$who: the quaternion at index $i has magnitude zero"
-            )
-        )
-    end
-    return nothing
-end
-
-function _ck_increasing(who::AbstractString, what::AbstractString, t::Vector{Float64})
-    for i in 2:length(t)
-        t[i] <= t[i - 1] && throw(
-            SpiceError(
-                :timesoutoforder, "$who: the $what times are " *
-                    "not strictly increasing: $what($(i - 1)) = $(t[i - 1]) and $what($i) = $(t[i])"
             )
         )
     end
@@ -211,8 +192,8 @@ function ckw01(
     )
     who = "ckw01"
     _daf_check_write(h, who)
-    ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
-    _seg_chkfstr(who, "segid", segid)
+    ref isa AbstractString && _chkfstr(who, "string `ref`", ref)
+    _chkfstr(who, "string `segid`", segid)
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     nrec = length(t)
     q, nq, _ = _seg_flat(who, "quats", quats, 4)
@@ -240,7 +221,7 @@ function ckw01(
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
     t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
-    _ck_increasing(who, "SCLKDP", t)
+    _seg_increasing(who, t, "SCLKDP")
     _ck_nonzero_quats(who, q, nrec, 4)
     data = _ck_pointing(q, av, nrec, avflag)
     append!(data, t)
@@ -284,8 +265,8 @@ function ckw02(
     )
     who = "ckw02"
     _daf_check_write(h, who)
-    ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
-    _seg_chkfstr(who, "segid", segid)
+    ref isa AbstractString && _chkfstr(who, "string `ref`", ref)
+    _chkfstr(who, "string `segid`", segid)
     t0 = _seg_vec(who, "start", start, -1)
     nrec = length(t0)
     t1 = _seg_vec(who, "stop", stop, nrec)
@@ -395,8 +376,8 @@ function ckw03(
     )
     who = "ckw03"
     _daf_check_write(h, who)
-    ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
-    _seg_chkfstr(who, "segid", segid)
+    ref isa AbstractString && _chkfstr(who, "string `ref`", ref)
+    _chkfstr(who, "string `segid`", segid)
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     nrec = length(t)
     st = _seg_vec(who, "starts", starts, -1)
@@ -434,14 +415,14 @@ function ckw03(
     _seg_idchars(who, segid)
     _seg_idlen(who, segid)
     t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
-    _ck_increasing(who, "SCLKDP", t)
+    _seg_increasing(who, t, "SCLKDP")
     t[1] != st[1] && throw(
         SpiceError(
             :timesdontmatch, "$who: the start time of the first " *
                 "interval $(st[1]) and the time of the first pointing instance $(t[1]) are not the same"
         )
     )
-    _ck_increasing(who, "STARTS", st)
+    _seg_increasing(who, st, "STARTS")
     index = 0
     for i in 1:nints                     # invariant: starts 1 .. i-1 match records up to `index`
         match = false
@@ -497,10 +478,7 @@ mutable struct CKW04Writer
     open::Bool
 end
 
-Base.show(io::IO, w::CKW04Writer) = print(
-    io, "CKW04Writer(\"", w.segid, "\", ",
-    length(w.refs), " records", w.open ? "" : ", ended", ")"
-)
+Base.show(io::IO, w::CKW04Writer) = _seg_show_writer(io, w)
 
 """
     ckw04b([ctx,] handle, begtim, inst, ref, avflag, segid) -> CKW04Writer
@@ -600,7 +578,7 @@ See [`ckw04b`](@ref) for an example.
 """
 function ckw04a(w::CKW04Writer, npkts::Integer, pktsiz, pktdat, sclkdp)
     who = "ckw04a"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    _seg_check_open(who, w)
     n = max(Int(npkts), 0)
     sz = _seg_vec(who, "pktsiz", pktsiz, n)
     for (k, s) in enumerate(sz)
@@ -629,22 +607,7 @@ function ckw04a(w::CKW04Writer, npkts::Integer, pktsiz, pktdat, sclkdp)
                 "the value supplied was $npkts"
         )
     )
-    if !isempty(w.refs) && w.refs[end] >= ref[1]
-        throw(
-            SpiceError(
-                :unorderedrefs, "$who: the reference value $(ref[1]) is not after the " *
-                    "last reference value $(w.refs[end]) of the addition of packets before"
-            )
-        )
-    end
-    for i in 2:n                    # invariant: ref[1:i-1] is strictly increasing
-        ref[i - 1] >= ref[i] && throw(
-            SpiceError(
-                :unorderedrefs,
-                "$who: the reference value $(ref[i - 1]) was found to be out of order for index $(i - 1)"
-            )
-        )
-    end
+    _seg_ordered_refs(who, w.refs, ref)
     for k in 1:n
         sz[k] - 6 <= 0 && throw(
             SpiceError(
@@ -696,7 +659,7 @@ segment is then lost.
 """
 function ckw04e(w::CKW04Writer, endtim::Real)
     who = "ckw04e"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    _seg_check_open(who, w)
     _daf_check_write(w.handle, who)
     npkt = length(w.refs)
     data = copy(w.packets)
@@ -777,8 +740,8 @@ function ckw05(
     )
     who = "ckw05"
     _daf_check_write(h, who)
-    ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
-    _seg_chkfstr(who, "segid", segid)
+    ref isa AbstractString && _chkfstr(who, "string `ref`", ref)
+    _chkfstr(who, "string `segid`", segid)
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     n = length(t)
     allst = _seg_vec(who, "starts", starts, -1)
@@ -805,8 +768,8 @@ function ckw05(
     _seg_idlen(who, segid)
     _seg_idchars(who, segid)
     t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
-    _ck_increasing(who, "SCLKDP", t)
-    _ck_increasing(who, "STARTS", st)
+    _seg_increasing(who, t, "SCLKDP")
+    _seg_increasing(who, st, "STARTS")
     for i in 1:nints
         k = searchsortedfirst(t, st[i])
         (k <= n && t[k] == st[i]) || throw(
@@ -817,7 +780,7 @@ function ckw05(
         )
     end
     (0 <= subtyp <= 3) || throw(SpiceError(:notsupported, "$who: CK type 5 subtype <$subtyp> is not supported"))
-    packsz = (8, 4, 14, 7)[subtyp + 1]
+    packsz = _CK5_PACKSZ[subtyp + 1]
     winsiz = isodd(subtyp) ? degree + 1 : (degree + 1) ÷ 2
     pk, np, _ = _seg_flat(who, "packts", packts, packsz)
     np == n || throw(SpiceError(:badarg, "$who: `packts` must have $n elements but has $np"))
@@ -873,8 +836,6 @@ ckw05(
     sclkdp, packts, rate, nints, starts
 )
 
-const _CK06_PKTSZS = (8, 4, 14, 7)
-
 """
     ckw06([ctx,] handle, inst, ref, avflag, first, last, segid, npkts, subtps, degres,
           packts, rates, sclkdp, ivlbds, sellst) -> Nothing
@@ -927,8 +888,8 @@ function ckw06(
     )
     who = "ckw06"
     _daf_check_write(h, who)
-    ref isa AbstractString && _seg_chkfstr(who, "ref", ref)
-    _seg_chkfstr(who, "segid", segid)
+    ref isa AbstractString && _chkfstr(who, "string `ref`", ref)
+    _chkfstr(who, "string `segid`", segid)
     nmini = length(npkts)
     (length(subtps) == nmini && length(degres) == nmini) || throw(
         SpiceError(
@@ -989,7 +950,7 @@ function ckw06(
                 "$who: unexpected CK type 6 subtype $subtyp found in mini-segment $i"
             )
         )
-        pktsiz = _CK06_PKTSZS[subtyp + 1]
+        pktsiz = _CK5_PACKSZ[subtyp + 1]
         winsiz = isodd(subtyp) ? degres[i] + 1 : (degres[i] + 1) ÷ 2
         rt[i] <= 0.0 && throw(
             SpiceError(
@@ -1075,7 +1036,7 @@ function ckw06(
     pointers = Float64[]
     segend = 0
     for i in 1:nmini                     # invariant: mini-segments 1 .. i-1 are in data
-        pktsiz = _CK06_PKTSZS[subtps[i] + 1]
+        pktsiz = _CK5_PACKSZ[subtps[i] + 1]
         n = Int(npkts[i])
         append!(data, view(pk, (pktend + 1):(pktend + n * pktsiz)))
         pktend += n * pktsiz

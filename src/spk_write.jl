@@ -21,12 +21,6 @@ const SegContext = Union{SpiceContext, KernelSet}
 _seg_ks(ctx::SpiceContext) = kernelset(ctx)
 _seg_ks(ks::KernelSet) = ks
 
-"Throws `SpiceError(:emptystring)` if the string argument `what` is empty, as the macro CHKFSTR of CSPICE."
-function _seg_chkfstr(who::AbstractString, what::AbstractString, s::AbstractString)
-    isempty(s) && throw(SpiceError(:emptystring, "$who: the string `$what` is empty"))
-    return nothing
-end
-
 """
     _seg_refcode(who, ctx, frame) -> Int
 
@@ -54,13 +48,21 @@ function _seg_idlen(who::AbstractString, segid::AbstractString)
     return nothing
 end
 
-function _seg_idchars(who::AbstractString, segid::AbstractString)
+"""
+    _seg_idchars(who, segid, kind=:nonprintablechars) -> Nothing
+
+Throws `SpiceError(kind)` if a character of `segid` before its trailing blanks is not
+printable ASCII (codes 32 to 126). The segment writers of SPICELIB throw
+`:nonprintablechars`; the generic segment writer (`sgbwfs`, used by `spkw10` and
+`pck03b`) throws `:nonprintingchars`.
+"""
+function _seg_idchars(who::AbstractString, segid::AbstractString, kind::Symbol = :nonprintablechars)
     cu = codeunits(String(segid))
     for i in 1:_daf_lastnb(segid)
         (cu[i] < 0x20 || cu[i] > 0x7e) && throw(
             SpiceError(
-                :nonprintablechars,
-                "$who: the segment identifier contains nonprintable characters"
+                kind,
+                "$who: the segment identifier contains a nonprinting character at location $i"
             )
         )
     end
@@ -150,13 +152,47 @@ function _seg_fixed(who::AbstractString, what::AbstractString, v, n::Int)
     return _vec_of(Float64, v)
 end
 
-function _seg_increasing(who::AbstractString, epochs::Vector{Float64})
-    for i in 2:length(epochs)            # invariant: epochs[1:i-1] is strictly increasing
-        epochs[i] <= epochs[i - 1] && throw(
+"""
+    _seg_increasing(who, t, what="") -> Nothing
+
+Throws `SpiceError(:timesoutoforder)` unless `t` is strictly increasing. `what` names the
+times in the message of a CK writer (`"SCLKDP"`, `"STARTS"`); empty, the message speaks
+of epochs, as the SPK writers do.
+"""
+function _seg_increasing(who::AbstractString, t::Vector{Float64}, what::AbstractString = "")
+    for i in 2:length(t)                 # invariant: t[1:i-1] is strictly increasing
+        t[i] <= t[i - 1] && throw(SpiceError(:timesoutoforder, _seg_order_msg(who, what, t, i)))
+    end
+    return nothing
+end
+
+function _seg_order_msg(who::AbstractString, what::AbstractString, t::Vector{Float64}, i::Int)
+    isempty(what) &&
+        return "$who: epoch $(t[i]) having index $i is not greater than its predecessor $(t[i - 1])"
+    return "$who: the $what times are not strictly increasing: " *
+        "$what($(i - 1)) = $(t[i - 1]) and $what($i) = $(t[i])"
+end
+
+"""
+    _seg_ordered_refs(who, refs, ep) -> Nothing
+
+The checks of `sgwfpk` and `sgwvpk` on the reference values `ep` of the packets added
+to a generic segment whose packets before have the references `refs`: throws
+`SpiceError(:unorderedrefs)` unless `ep[1] > refs[end]` and `ep` is strictly increasing.
+"""
+function _seg_ordered_refs(who::AbstractString, refs::Vector{Float64}, ep::Vector{Float64})
+    (!isempty(refs) && !isempty(ep) && refs[end] >= ep[1]) && throw(
+        SpiceError(
+            :unorderedrefs, "$who: reference values are out of order; the value " *
+                "$(ep[1]) is not greater than the last reference value $(refs[end]) of the " *
+                "packets added before"
+        )
+    )
+    for i in 2:length(ep)                # invariant: ep[1:i-1] is strictly increasing
+        ep[i - 1] >= ep[i] && throw(
             SpiceError(
-                :timesoutoforder,
-                "$who: epoch $(epochs[i]) having index $i is not greater than its " *
-                    "predecessor $(epochs[i - 1])"
+                :unorderedrefs, "$who: reference values are out of order; the value " *
+                    "$(ep[i - 1]) was found to be out of order for index $(i - 1)"
             )
         )
     end
@@ -230,10 +266,7 @@ function _spk_add_pds!(
         dtype::Int, first::Real, last::Real, segid::AbstractString, data::Vector{Float64},
         ctx::SegContext
     )
-    descr = spkpds(ctx, body, center, frame, dtype, first, last)
-    dafbna(h, descr, segid)
-    dafada(h, data)
-    dafena(h)
+    _daf_add_descr!(h, spkpds(ctx, body, center, frame, dtype, first, last), segid, data)
     return nothing
 end
 
@@ -317,12 +350,31 @@ true
 See also [`spkopa`](@ref), [`spkw02`](@ref), [`spk14b`](@ref), [`dafac`](@ref) to add
 comments.
 """
-function spkopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
-    _seg_chkfstr("spkopn", "path", path)
-    _seg_chkfstr("spkopn", "ifname", ifname)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafonw(path, "SPK", 2, 6, ifname, ncomr)
+spkopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0) =
+    _seg_opn("spkopn", "SPK", 6, path, ifname, ncomch)
+
+"""
+    _seg_opn(who, type, ni, path, ifname, ncomch) -> DAFHandle
+
+`spkopn`, `ckopn` and `pckopn`: the checks of the C wrapper on `path` and `ifname`, then
+a new DAF of the type `type` with 2 doubles and `ni` integers in a summary and room for
+`ncomch` comment characters.
+"""
+function _seg_opn(
+        who::AbstractString, type::AbstractString, ni::Int, path::AbstractString,
+        ifname::AbstractString, ncomch::Integer
+    )
+    _chkfstr(who, "string `path`", path)
+    _chkfstr(who, "string `ifname`", ifname)
+    return dafonw(path, type, 2, ni, ifname, _seg_ncomr(ncomch))
 end
+
+"`spkops`, `ckops` and `pckops`: a new DAF in memory, as `_seg_opn` makes one on disk."
+_seg_ops(type::AbstractString, ni::Int, ifname::AbstractString, ncomch::Integer) =
+    dafops(type, 2, ni, ifname, _seg_ncomr(ncomch))
+
+"The number of comment records that `ncomch` characters need, as `spkopn` computes it."
+_seg_ncomr(ncomch::Integer) = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
 
 """
     spkops(ifname="", ncomch=0) -> DAFHandle
@@ -336,10 +388,7 @@ has no CSPICE counterpart; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
 """
-function spkops(ifname::AbstractString = "", ncomch::Integer = 0)
-    ncomr = ncomch > 0 ? (Int(ncomch) - 1) ÷ _DAF_CRECLEN + 1 : 0
-    return dafops("SPK", 2, 6, ifname, ncomr)
-end
+spkops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("SPK", 6, ifname, ncomch)
 
 """
     spkopa(path) -> DAFHandle
@@ -418,8 +467,8 @@ function _spk_cheby(
         frame, first, last, segid, intlen, cdata, btime, ctx
     )
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
     first, last, intlen, btime = Float64(first), Float64(last), Float64(intlen), Float64(btime)
     n <= 0 && throw(
@@ -620,8 +669,8 @@ function spkw20(
     )
     who = "spkw20"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     cd, n, ninrec = _seg_flat(who, "cdata", cdata, 0)
     first, last, intlen = Float64(first), Float64(last), Float64(intlen)
     dscale, tscale, initjd, initfr = Float64(dscale), Float64(tscale), Float64(initjd), Float64(initfr)
@@ -703,8 +752,8 @@ function spkw05(
     )
     who = "spkw05"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     ep = _seg_vec(who, "epochs", epochs, n)
     gm <= 0 && throw(SpiceError(:nonpositivemass, "$who: GM = $gm; non-positive gravitational parameter"))
@@ -769,8 +818,8 @@ function spkw08(
     )
     who = "spkw08"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     first, last, begtim, step = Float64(first), Float64(last), Float64(epoch1), Float64(step)
     refcod = _seg_refcode(who, ctx, frame)
@@ -836,8 +885,8 @@ function spkw09(
     )
     who = "spkw09"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     ep = _seg_vec(who, "epochs", epochs, n)
     refcod = _seg_refcode(who, ctx, frame)
@@ -918,8 +967,8 @@ function spkw12(
     )
     who = "spkw12"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     first, last, begtim, step = Float64(first), Float64(last), Float64(epoch1), Float64(step)
     winsiz = (degree + 1) ÷ 2
@@ -993,8 +1042,8 @@ function spkw13(
     )
     who = "spkw13"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     st, n, _ = _seg_flat(who, "states", states, 6)
     ep = _seg_vec(who, "epochs", epochs, n)
     winsiz = (degree + 1) ÷ 2
@@ -1095,8 +1144,8 @@ function spkw18(
     )
     who = "spkw18"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     sub = _spk18_subtype(subtyp)
     (sub == 0 || sub == 1) || throw(
         SpiceError(
@@ -1205,8 +1254,8 @@ function spkw15(
     )
     who = "spkw15"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     tp = _seg_fixed(who, "tp", tp, 3)
     pa = _seg_fixed(who, "pa", pa, 3)
     pv = _seg_fixed(who, "pv", pv, 3)
@@ -1283,8 +1332,8 @@ function spkw17(
     )
     who = "spkw17"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     el = _seg_fixed(who, "eqel", eqel, 9)
     record = Float64[epoch, el..., rapol, decpol]
     a = record[2]
@@ -1340,8 +1389,8 @@ function spkw01(
     )
     who = "spkw01"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     dl, n, _ = _seg_flat(who, "dlines", dlines, 71)
     ep = _seg_vec(who, "epochs", epochs, n)
     _seg_refcode(who, ctx, frame)
@@ -1406,8 +1455,8 @@ function spkw21(
     )
     who = "spkw21"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     dl, n, dlsize = _seg_flat(who, "dlines", dlines, 0)
     ep = _seg_vec(who, "epochs", epochs, n)
     dlsize > 111 && throw(
@@ -1523,8 +1572,8 @@ function spkw19(
     )
     who = "spkw19"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     nintvl = length(npkts)
     (length(subtps) == nintvl && length(degres) == nintvl) || throw(
         SpiceError(
@@ -1687,10 +1736,17 @@ mutable struct SPK14Writer
     open::Bool
 end
 
-Base.show(io::IO, w::SPK14Writer) = print(
-    io, "SPK14Writer(\"", w.segid, "\", ",
+Base.show(io::IO, w::SPK14Writer) = _seg_show_writer(io, w)
+
+"The `show` of a segment writer `w` (`SPK14Writer`, `PCK03Writer`, `CKW04Writer`): its type, `segid`, record count and whether it was ended."
+_seg_show_writer(io::IO, w) = print(
+    io, nameof(typeof(w)), "(\"", w.segid, "\", ",
     length(w.refs), " records", w.open ? "" : ", ended", ")"
 )
+
+"Throws `SpiceError(:segmentnotopen)` if the segment writer `w` was ended."
+_seg_check_open(who::AbstractString, w) =
+    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
 
 """
     spk14b([ctx,] handle, segid, body, center, frame, first, last, chbdeg) -> SPK14Writer
@@ -1747,8 +1803,8 @@ function spk14b(
     )
     who = "spk14b"
     _daf_check_write(h, who)
-    frame isa AbstractString && _seg_chkfstr(who, "frame", frame)
-    _seg_chkfstr(who, "segid", segid)
+    frame isa AbstractString && _chkfstr(who, "string `frame`", frame)
+    _chkfstr(who, "string `segid`", segid)
     chbdeg < 0 && throw(
         SpiceError(
             :invalidargument, "$who: the degree of the " *
@@ -1792,7 +1848,7 @@ See [`spk14b`](@ref) for an example.
 """
 function spk14a(w::SPK14Writer, ncsets::Integer, coeffs, epochs)
     who = "spk14a"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+    _seg_check_open(who, w)
     _daf_check_write(w.handle, who)
     ncsets <= 0 && throw(
         SpiceError(
@@ -1816,22 +1872,7 @@ function _seg_add_cheb_packets!(
         throw(SpiceError(:badarg, "$who: `coeffs` must be an array of numbers"))
     cf = _seg_vec(who, "coeffs", vec(collect(Float64, coeffs)), n * pktsiz)
     ep = _seg_vec(who, "epochs", epochs, n)
-    if !isempty(refs) && refs[end] >= ep[1]
-        throw(
-            SpiceError(
-                :unorderedrefs, "$who: the epoch $(ep[1]) is not after the " *
-                    "last epoch $(refs[end]) of the addition of records before"
-            )
-        )
-    end
-    for i in 2:n                    # invariant: ep[1:i-1] is strictly increasing
-        ep[i - 1] >= ep[i] && throw(
-            SpiceError(
-                :unorderedrefs,
-                "$who: the epoch $(ep[i]) having index $i is not after its predecessor $(ep[i - 1])"
-            )
-        )
-    end
+    _seg_ordered_refs(who, refs, ep)
     for i in 1:n                    # invariant: records 1:i-1 are in `packets`, each after its epoch
         push!(packets, ep[i])
         append!(packets, @view cf[((i - 1) * pktsiz + 1):(i * pktsiz)])
@@ -1884,13 +1925,13 @@ Throws `SpiceError(:segmentnotopen)` if the writer was ended before, and
 `SpiceError(:dafnosuchhandle)` if the handle was closed after [`spk14b`](@ref); the
 segment is then lost.
 """
-function spk14e(w::SPK14Writer)
-    who = "spk14e"
-    w.open || throw(SpiceError(:segmentnotopen, "$who: the segment '$(w.segid)' was ended"))
+spk14e(w::SPK14Writer) = _seg_cheb_end!("spk14e", w)
+
+"`spk14e` and `pck03e`: write the segment of the writer `w` (`SPK14Writer` or `PCK03Writer`) and end it."
+function _seg_cheb_end!(who::AbstractString, w)
+    _seg_check_open(who, w)
     _daf_check_write(w.handle, who)
-    dafbna(w.handle, w.descr, w.segid)
-    dafada(w.handle, _seg_cheb_packets(w.ncoef, w.packets, w.refs))
-    dafena(w.handle)
+    _daf_add_descr!(w.handle, w.descr, w.segid, _seg_cheb_packets(w.ncoef, w.packets, w.refs))
     w.open = false
     return nothing
 end

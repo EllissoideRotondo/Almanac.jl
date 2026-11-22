@@ -109,12 +109,6 @@ function _dsk_surface_c2n(ks::KernelSet, code::Integer, bodyid::Integer)
     return nothing
 end
 
-"Throws `SpiceError(:emptystring)` if the string argument `name` of `who` has no character, as the C interface of CSPICE."
-function _dsk_nonempty(who::AbstractString, name::AbstractString, s::AbstractString)
-    isempty(s) && throw(SpiceError(:emptystring, "$who: the string \"$name\" has length zero"))
-    return nothing
-end
-
 "`nparsi` as `srfscc_` calls it: the integer that the string holds (`_nparsi`), or `nothing` if `nparsi` gives an error."
 function _dsk_parse_int(s::AbstractString)
     return try
@@ -162,7 +156,7 @@ Throws `SpiceError(:emptystring)` if `bodstr` is empty, and the error kinds of
 [`srfc2s`](@ref).
 """
 function srfcss(ks::KernelSet, code::Integer, bodstr::AbstractString)
-    _dsk_nonempty("srfcss", "bodstr", bodstr)
+    _chkfstr("srfcss", "string `bodstr`", bodstr)
     bodyid = bods2c(ks, bodstr)
     bodyid === nothing && return string(code), false
     return srfc2s(ks, code, bodyid)
@@ -183,7 +177,7 @@ Throws `SpiceError(:emptystring)` if `srfstr` is empty, and the error kinds of
 [`srfc2s`](@ref).
 """
 function srfscc(ks::KernelSet, srfstr::AbstractString, bodyid::Integer)
-    _dsk_nonempty("srfscc", "srfstr", srfstr)
+    _chkfstr("srfscc", "string `srfstr`", srfstr)
     code = _dsk_surface_n2c(ks, srfstr, bodyid)
     return code === nothing ? _dsk_parse_int(srfstr) : code
 end
@@ -201,8 +195,8 @@ Throws `SpiceError(:emptystring)` if `srfstr` or `bodstr` is empty, and the erro
 kinds of [`srfc2s`](@ref).
 """
 function srfs2c(ks::KernelSet, srfstr::AbstractString, bodstr::AbstractString)
-    _dsk_nonempty("srfs2c", "srfstr", srfstr)
-    _dsk_nonempty("srfs2c", "bodstr", bodstr)
+    _chkfstr("srfs2c", "string `srfstr`", srfstr)
+    _chkfstr("srfs2c", "string `bodstr`", bodstr)
     bodyid = bods2c(ks, bodstr)
     bodyid === nothing && return nothing
     return srfscc(ks, srfstr, bodyid)
@@ -429,9 +423,9 @@ function _dsk_surface_setup(
         ks::KernelSet, method::AbstractString, target::NameOrID,
         fixref::NameOrID
     )
-    _dsk_nonempty("latsrf/srfnrm", "method", method)
-    target isa AbstractString && _dsk_nonempty("latsrf/srfnrm", "target", target)
-    fixref isa AbstractString && _dsk_nonempty("latsrf/srfnrm", "fixref", fixref)
+    _chkfstr("latsrf/srfnrm", "string `method`", method)
+    target isa AbstractString && _chkfstr("latsrf/srfnrm", "string `target`", target)
+    fixref isa AbstractString && _chkfstr("latsrf/srfnrm", "string `fixref`", fixref)
     trgcde = _dsk_target(ks, target)
     fixfid = _dsk_frame_code(ks, fixref)
     center = fixfid == 0 ? nothing : _dsk_frame_center(ks, fixfid)

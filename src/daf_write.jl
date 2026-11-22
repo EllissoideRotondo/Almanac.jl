@@ -476,12 +476,20 @@ function dafena(h::DAFHandle)
     return nothing
 end
 
-function _daf_add_array!(h::DAFHandle, dc, ic, name::AbstractString, data::Vector{Float64})
-    dafbna(h, dafps(dc, ic), name)
+"Write the array `data` with the packed summary `descr` and the name `name` to `h`: `dafbna`, `dafada`, `dafena`."
+function _daf_add_descr!(
+        h::DAFHandle, descr::AbstractVector{<:Real}, name::AbstractString,
+        data::AbstractVector{<:Real}
+    )
+    dafbna(h, descr, name)
     dafada(h, data)
     dafena(h)
     return nothing
 end
+
+"Write the array `data` with the summary of the doubles `dc` and the integers `ic` to `h`, as `_daf_add_descr!`."
+_daf_add_array!(h::DAFHandle, dc, ic, name::AbstractString, data::Vector{Float64}) =
+    _daf_add_descr!(h, dafps(dc, ic), name, data)
 
 # ---------------------------------------------------------------------------------------
 # Change summaries and names
