@@ -304,6 +304,128 @@ end
     return _m_dvhat(_m_dvcrss(a, b), false)
 end
 
+"Angle between two unit vectors `u1` and `u2`, with the two-branch arcsine of `vsep`."
+@inline function _m_usep(u1::SVector{3}, u2::SVector{3})
+    d = primal(_m_dot(u1, u2))
+    if d > 0.0
+        return 2.0 * asin(0.5 * _m_norm(u1 - u2))
+    elseif d < 0.0
+        return Float64(pi) - 2.0 * asin(0.5 * _m_norm(u1 + u2))
+    end
+    return Float64(pi) / 2 - zero(_m_dot(u1, u2))
+end
+
+"Angle between `v1` and `v2` as `vsep_`: zero if one of them is the zero vector."
+@inline function _m_vsep(v1::SVector{3}, v2::SVector{3})
+    u1, m1 = _m_unorm(v1)
+    u2, m2 = _m_unorm(v2)
+    (primal(m1) == 0.0 || primal(m2) == 0.0) && return zero(asin(_m_dot(u1, u2)))
+    return _m_usep(u1, u2)
+end
+
+# --- quaternions and axis-angle rotations ---------------------------------------------
+
+"""
+    _m_q2m(q0, q1, q2, q3, always::Bool) -> SMatrix{3,3}
+
+Rotation matrix of the SPICE quaternion `(q0, q1, q2, q3)` (scalar first), as `q2m_`:
+the products are divided by the squared length when that is not 0 and not exactly 1.
+With `always`, a number type other than `Float64` is divided by its squared length
+also when the plain part of that is 1, so that the derivatives of the length cancel.
+"""
+@inline function _m_q2m(q0, q1, q2, q3, always::Bool)
+    q01, q02, q03 = q0 * q1, q0 * q2, q0 * q3
+    q12, q13, q23 = q1 * q2, q1 * q3, q2 * q3
+    q1s, q2s, q3s = q1 * q1, q2 * q2, q3 * q3
+    l2 = q0 * q0 + q1s + q2s + q3s
+    pl = primal(l2)
+    if pl != 0.0 && (pl != 1.0 || (always && !(l2 isa Float64)))
+        f = 1.0 / l2
+        q01 *= f; q02 *= f; q03 *= f
+        q12 *= f; q13 *= f; q23 *= f
+        q1s *= f; q2s *= f; q3s *= f
+    end
+    return SMatrix{3, 3}(
+        1.0 - (q2s + q3s) * 2.0, (q12 + q03) * 2.0, (q13 - q02) * 2.0,
+        (q12 - q03) * 2.0, 1.0 - (q1s + q3s) * 2.0, (q23 + q01) * 2.0,
+        (q13 + q02) * 2.0, (q23 - q01) * 2.0, 1.0 - (q1s + q2s) * 2.0
+    )
+end
+
+"""
+    _m_m2q_unchecked(r) -> SVector{4}
+
+Unit quaternion (scalar first, scalar part not negative) of the rotation matrix `r`, as
+`m2q_` after its rotation check, which is left to the caller (`_m_m2q` makes it).
+"""
+@inline function _m_m2q_unchecked(r::SMatrix{3, 3})
+    trace = r[1] + r[5] + r[9]
+    mtrace = 1.0 - trace
+    cc4 = 1.0 + trace
+    s114 = mtrace + 2.0 * r[1]
+    s224 = mtrace + 2.0 * r[5]
+    s334 = mtrace + 2.0 * r[9]
+    # The first of the four squares that is at least 1/4 gives the divisor; the order
+    # of the tests is the one of `m2q_`.
+    if 1.0 <= primal(cc4)
+        c = sqrt(cc4 * 0.25)
+        factor = 1.0 / (c * 4.0)
+        s1 = (r[6] - r[8]) * factor
+        s2 = (r[7] - r[3]) * factor
+        s3 = (r[2] - r[4]) * factor
+    elseif 1.0 <= primal(s114)
+        s1 = sqrt(s114 * 0.25)
+        factor = 1.0 / (s1 * 4.0)
+        c = (r[6] - r[8]) * factor
+        s2 = (r[4] + r[2]) * factor
+        s3 = (r[7] + r[3]) * factor
+    elseif 1.0 <= primal(s224)
+        s2 = sqrt(s224 * 0.25)
+        factor = 1.0 / (s2 * 4.0)
+        c = (r[7] - r[3]) * factor
+        s1 = (r[4] + r[2]) * factor
+        s3 = (r[8] + r[6]) * factor
+    else
+        s3 = sqrt(s334 * 0.25)
+        factor = 1.0 / (s3 * 4.0)
+        c = (r[2] - r[4]) * factor
+        s1 = (r[7] + r[3]) * factor
+        s2 = (r[8] + r[6]) * factor
+    end
+    l2 = c * c + s1 * s1 + s2 * s2 + s3 * s3
+    if primal(l2) != 1.0
+        polish = 1.0 / sqrt(l2)
+        c *= polish
+        s1 *= polish
+        s2 *= polish
+        s3 *= polish
+    end
+    return primal(c) > 0.0 ? SVector(c, s1, s2, s3) : SVector(-c, -s1, -s2, -s3)
+end
+
+"`_m_m2q_unchecked` after the check of `m2q_`: `SpiceError(:notarotation)` unless `isrot(r, 0.1, 0.1)`."
+@inline function _m_m2q(r::SMatrix{3, 3})
+    _m_isrot(r, 0.1, 0.1) || throw(SpiceError(:notarotation, "the input matrix is not a rotation"))
+    return _m_m2q_unchecked(r)
+end
+
+"Axis and angle (in [0, pi]) of the rotation with the quaternion `q` of `m2q_`, as `raxisa_`; the axis is `(0, 0, 1)` for the identity."
+@inline function _m_raxisa_q(q::SVector{4})
+    v = SVector(q[2], q[3], q[4])
+    if _m_iszero(v)
+        return SVector(zero(q[1]), zero(q[1]), one(q[1])), zero(atan(q[1]))
+    elseif primal(q[1]) == 0.0
+        return v, Float64(pi) - zero(atan(q[1]))
+    end
+    return _m_hat(v), 2.0 * atan(_m_norm(v), q[1])
+end
+
+"Matrix that rotates vectors by `angle` about `axis`, as `axisar_`: each column is `vrotv_` of a unit vector, so a zero axis gives the identity."
+@inline _m_axisar(axis::SVector{3}, angle) = _m_cols(
+    _m_vrotv(SVector(1.0, 0.0, 0.0), axis, angle), _m_vrotv(SVector(0.0, 1.0, 0.0), axis, angle),
+    _m_vrotv(SVector(0.0, 0.0, 1.0), axis, angle)
+)
+
 """
 Quotient `a / b` with the checks of `zzdiv_`: `SpiceError(:dividebyzero)` for a zero
 `b`, `SpiceError(:numericoverflow)` if the quotient is above the largest number, and

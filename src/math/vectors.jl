@@ -164,17 +164,6 @@ See also [`vnorm`](@ref), [`vrel`](@ref), [`vdistg`](@ref).
 """
 vdist(v1::AbstractVector, v2::AbstractVector) = _m_norm(_m_v3(v1) - _m_v3(v2))
 
-"Angle between two unit vectors `u1` and `u2`, with the two-branch arcsine of `vsep`."
-@inline function _m_usep(u1::SVector{3}, u2::SVector{3})
-    d = primal(_m_dot(u1, u2))
-    if d > 0.0
-        return 2.0 * asin(0.5 * _m_norm(u1 - u2))
-    elseif d < 0.0
-        return Float64(pi) - 2.0 * asin(0.5 * _m_norm(u1 + u2))
-    end
-    return Float64(pi) / 2 - zero(_m_dot(u1, u2))
-end
-
 """
     vsep(v1, v2)
 
@@ -194,12 +183,7 @@ julia> vsep([1, 0, 0], [0, 3, 0])
 
 See also [`dvsep`](@ref), [`vsepg`](@ref).
 """
-function vsep(v1::AbstractVector, v2::AbstractVector)
-    u1, m1 = _m_unorm(_m_v3(v1))
-    u2, m2 = _m_unorm(_m_v3(v2))
-    (primal(m1) == 0.0 || primal(m2) == 0.0) && return zero(asin(_m_dot(u1, u2)))
-    return _m_usep(u1, u2)
-end
+vsep(v1::AbstractVector, v2::AbstractVector) = _m_vsep(_m_v3(v1), _m_v3(v2))
 
 """
     vrel(v1, v2)

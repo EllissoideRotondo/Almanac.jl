@@ -28,113 +28,9 @@ end
 
 # --- small rotation helpers, as the CSPICE routines of the same names --------------------
 
-"Euclidean norm with the scaling of `vnorm_`."
-@inline function _ck_vnorm(v::Vec3{Float64})
-    m = max(abs(v[1]), abs(v[2]), abs(v[3]))
-    m == 0.0 && return 0.0
-    a, b, c = v[1] / m, v[2] / m, v[3] / m
-    return m * sqrt(a * a + b * b + c * c)
-end
-
-"""
-    _ck_q2m(q0, q1, q2, q3) -> Mat3
-
-Rotation matrix of the SPICE quaternion `(q0, q1, q2, q3)` (scalar first), as `q2m_`:
-the products are divided by the squared length when that is not exactly 1 (for a number
-type other than `Float64` always, so that the derivatives of the length cancel).
-"""
-@inline function _ck_q2m(q0::T, q1::T, q2::T, q3::T) where {T <: Real}
-    q01, q02, q03 = q0 * q1, q0 * q2, q0 * q3
-    q12, q13, q23 = q1 * q2, q1 * q3, q2 * q3
-    q1s, q2s, q3s = q1 * q1, q2 * q2, q3 * q3
-    l2 = q0 * q0 + q1s + q2s + q3s
-    pl = primal(l2)
-    if pl != 0.0 && (T !== Float64 || pl != 1.0)
-        f = inv(l2)
-        q01 *= f; q02 *= f; q03 *= f
-        q12 *= f; q13 *= f; q23 *= f
-        q1s *= f; q2s *= f; q3s *= f
-    end
-    return Mat3{T}(
-        1.0 - 2.0 * (q2s + q3s), 2.0 * (q12 + q03), 2.0 * (q13 - q02),
-        2.0 * (q12 - q03), 1.0 - 2.0 * (q1s + q3s), 2.0 * (q23 + q01),
-        2.0 * (q13 + q02), 2.0 * (q23 - q01), 1.0 - 2.0 * (q1s + q2s)
-    )
-end
-
-"Matrix of the quaternion stored at `data[a:a+3]`."
+"Matrix of the quaternion stored at `data[a:a+3]`, as `q2m_` (`_m_q2m` with the scaling of a non-`Float64` length)."
 @inline _ck_q2m(data::Vector{Float64}, a::Int) =
-    @inbounds _ck_q2m(data[a], data[a + 1], data[a + 2], data[a + 3])
-
-"""
-    _ck_m2q(r) -> NTuple{4,Float64}
-
-Unit quaternion (scalar first, scalar part not negative) of the rotation matrix `r`, as
-`m2q_`. Requires `r` to be a rotation matrix (not checked).
-"""
-@inline function _ck_m2q(r::Mat3{Float64})
-    trace = r[1] + r[5] + r[9]
-    mtrace = 1.0 - trace
-    cc4 = trace + 1.0
-    s114 = mtrace + r[1] * 2.0
-    s224 = mtrace + r[5] * 2.0
-    s334 = mtrace + r[9] * 2.0
-    if 1.0 <= cc4
-        c = sqrt(cc4 * 0.25)
-        f = 1.0 / (c * 4.0)
-        s1, s2, s3 = (r[6] - r[8]) * f, (r[7] - r[3]) * f, (r[2] - r[4]) * f
-    elseif 1.0 <= s114
-        s1 = sqrt(s114 * 0.25)
-        f = 1.0 / (s1 * 4.0)
-        c, s2, s3 = (r[6] - r[8]) * f, (r[4] + r[2]) * f, (r[7] + r[3]) * f
-    elseif 1.0 <= s224
-        s2 = sqrt(s224 * 0.25)
-        f = 1.0 / (s2 * 4.0)
-        c, s1, s3 = (r[7] - r[3]) * f, (r[4] + r[2]) * f, (r[8] + r[6]) * f
-    else
-        s3 = sqrt(s334 * 0.25)
-        f = 1.0 / (s3 * 4.0)
-        c, s1, s2 = (r[2] - r[4]) * f, (r[7] + r[3]) * f, (r[8] + r[6]) * f
-    end
-    l2 = c * c + s1 * s1 + s2 * s2 + s3 * s3
-    if l2 != 1.0
-        polish = 1.0 / sqrt(l2)
-        c *= polish; s1 *= polish; s2 *= polish; s3 *= polish
-    end
-    return c > 0.0 ? (c, s1, s2, s3) : (-c, -s1, -s2, -s3)
-end
-
-"""
-    _ck_raxisa(r) -> (axis::Vec3{Float64}, angle::Float64)
-
-Axis and angle (in [0, pi]) of the rotation matrix `r`, as `raxisa_`; the axis is
-`(0, 0, 1)` for the identity.
-"""
-@inline function _ck_raxisa(r::Mat3{Float64})
-    q0, q1, q2, q3 = _ck_m2q(r)
-    v = Vec3{Float64}(q1, q2, q3)
-    (q1 == 0.0 && q2 == 0.0 && q3 == 0.0) && return Vec3{Float64}(0.0, 0.0, 1.0), 0.0
-    q0 == 0.0 && return v, Float64(pi)
-    n = _ck_vnorm(v)
-    return v / n, 2.0 * atan(n, q0)
-end
-
-"""
-    _ck_axisar(axis, angle::T) -> Mat3{T}
-
-Matrix that rotates vectors by `angle` radians about `axis`, as `axisar_` (each column
-is `vrotv_` of a unit vector); the identity for a zero axis. Generic over the angle type.
-"""
-@inline function _ck_axisar(axis::Vec3{Float64}, angle::T) where {T <: Real}
-    _ck_vnorm(axis) == 0.0 && return one(Mat3{T})
-    return Mat3{T}(
-        hcat(
-            _m_vrotv(Vec3{Float64}(1.0, 0.0, 0.0), axis, angle),
-            _m_vrotv(Vec3{Float64}(0.0, 1.0, 0.0), axis, angle),
-            _m_vrotv(Vec3{Float64}(0.0, 0.0, 1.0), axis, angle)
-        )
-    )
-end
+    @inbounds _m_q2m(data[a], data[a + 1], data[a + 2], data[a + 3], true)
 
 @inline _ck_none(::Type{T}) where {T} = (false, zero(Mat3{T}), zero(Vec3{T}), 0.0)
 
@@ -235,8 +131,10 @@ function _ck_eval02(
     a = beg + 8 * (skip + index - 1)            # quaternion, angular velocity, rate
     @inbounds av = Vec3{Float64}(data[a + 4], data[a + 5], data[a + 6])
     @inbounds rate = data[a + 7]
-    angle = ((clkout - start) * rate) * _ck_vnorm(av)
-    rot = _ck_axisar(av, angle)
+    angle = ((clkout - start) * rate) * _m_norm(av)
+    # `axisar_` gives the identity for a zero axis; a series epoch keeps the zero rates
+    # of `one`.
+    rot = _m_iszero(av) ? one(Mat3{T}) : Mat3{T}(_m_axisar(av, angle))
     cmat = Mat3{T}(_m_mxmt(_ck_q2m(data, a), rot))
     return true, cmat, Vec3{T}(av), primal(clkout)
 end
@@ -311,8 +209,8 @@ function _ck_eval03(
     frac = (sclk - lsclk) / (rsclk - lsclk)
     cmat1 = _ck_q2m(data, a1)
     cmat2 = _ck_q2m(data, a2)
-    axis, angle = _ck_raxisa(_m_mtxm(cmat2, cmat1))
-    delta = _ck_axisar(axis, angle * frac)
+    axis, angle = _m_raxisa_q(_m_m2q_unchecked(_m_mtxm(cmat2, cmat1)))
+    delta = Mat3{T}(_m_axisar(axis, angle * frac))
     cmat = Mat3{T}(_m_mxmt(cmat1, delta))
     av = zero(Vec3{T})
     if seg.avflag
@@ -430,7 +328,7 @@ function _ck_eval04(
     q2 = _ck_chbval(data, cb, ncf[3], mid, rad, clkout); cb += ncf[3]
     q3 = _ck_chbval(data, cb, ncf[4], mid, rad, clkout); cb += ncf[4]
     mag = sqrt(q0 * q0 + q1 * q1 + q2 * q2 + q3 * q3)
-    cmat = primal(mag) > 0.0 ? _ck_q2m(q0 / mag, q1 / mag, q2 / mag, q3 / mag) :
+    cmat = primal(mag) > 0.0 ? _m_q2m(q0 / mag, q1 / mag, q2 / mag, q3 / mag, true) :
         one(Mat3{T})
     av = zero(Vec3{T})
     if seg.avflag && needav
@@ -575,7 +473,7 @@ in the number type of `t` and the quaternion is normalized. `av` is zero unless
     mags = sqrt(s1 * s1 + s2 * s2 + s3 * s3 + s4 * s4)
     primal(mags) == 0.0 && _ck_zeroquat()
     q = (s1 / mags, s2 / mags, s3 / mags, s4 / mags)
-    cmat = _ck_q2m(q[1], q[2], q[3], q[4])
+    cmat = _m_q2m(q[1], q[2], q[3], q[4], true)
     av = zero(Vec3{T})
     if needav
         if subtyp == 0 || subtyp == 1

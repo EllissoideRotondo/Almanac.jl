@@ -531,21 +531,7 @@ function _q2m(q::AbstractVector{Float64})
     n = qmax == 0.0 ? 0.0 :
         qmax * sqrt((q[1] / qmax)^2 + (q[2] / qmax)^2 + (q[3] / qmax)^2 + (q[4] / qmax)^2)
     q0, q1, q2, q3 = n > 0 ? (q[1] / n, q[2] / n, q[3] / n, q[4] / n) : (q[1], q[2], q[3], q[4])
-    q01, q02, q03 = q0 * q1, q0 * q2, q0 * q3
-    q12, q13, q23 = q1 * q2, q1 * q3, q2 * q3
-    q1s, q2s, q3s = q1 * q1, q2 * q2, q3 * q3
-    l2 = q0 * q0 + q1s + q2s + q3s
-    if l2 != 1.0 && l2 != 0.0
-        f = 1.0 / l2
-        q01 *= f; q02 *= f; q03 *= f
-        q12 *= f; q13 *= f; q23 *= f
-        q1s *= f; q2s *= f; q3s *= f
-    end
-    return Mat3{Float64}(
-        1.0 - 2.0 * (q2s + q3s), 2.0 * (q12 + q03), 2.0 * (q13 - q02),
-        2.0 * (q12 - q03), 1.0 - 2.0 * (q1s + q3s), 2.0 * (q23 + q01),
-        2.0 * (q13 + q02), 2.0 * (q23 - q01), 1.0 - 2.0 * (q1s + q2s)
-    )
+    return _m_q2m(q0, q1, q2, q3, false)
 end
 
 """
