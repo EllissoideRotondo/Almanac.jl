@@ -290,7 +290,7 @@ function spkw10(
     packets = Vector{Float64}(undef, 14n)
     for i in 1:n          # invariant: the packets of the sets before `i` are in `packets`
         copyto!(packets, 14(i - 1) + 1, el, 10(i - 1) + 1, 10)
-        psi, eps, dpsi, deps = _t10_wahr(ep[i])
+        psi, eps, dpsi, deps = _dyn_wahr_rates(ep[i])
         packets[(14i - 3):14i] .= (eps, psi, deps, dpsi)
     end
     dafbna(h, descr, segid)

@@ -605,11 +605,27 @@ of `et` (TDB seconds), `[-z]_3 [theta]_2 [-zeta]_3` of `zzeprc76_`, in the numbe
 of `et`.
 """
 @inline function _dyn_prec(et::S) where {S <: Real}
+    zeta, z, theta = _dyn_prec_angles(et)
+    return _m_eul2m_unchecked(-z, theta, -zeta, 3, 2, 3)
+end
+
+"""
+    _dyn_prec_angles(et) -> (zeta, z, theta, dzeta, dz, dtheta)
+
+Contract: the precession angles of `zzeprc76_` (radians) at `et` (TDB seconds) and their
+analytic rates (radians per second), with the arithmetic of `zzeprc76_`, in the number
+type of `et`.
+"""
+@inline function _dyn_prec_angles(et::S) where {S <: Real}
     t = et / _DYN_CENTURY
     zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
     z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
     theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
-    return _m_eul2m_unchecked(-z, theta, -zeta, 3, 2, 3)
+    ts = 1.0 / _DYN_CENTURY
+    dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * _DYN_ARCSEC
+    dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * _DYN_ARCSEC
+    dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * _DYN_ARCSEC
+    return zeta, z, theta, dzeta, dz, dtheta
 end
 
 "Contract: the mean obliquity of the ecliptic of date in radians (1980 IAU), as `zzmobliq_`."
@@ -788,13 +804,14 @@ function _dyn_wahr(et::S) where {S <: Real}
 end
 
 """
-    _dyn_wahr_state(et::Float64) -> (dpsi, deps)
+    _dyn_wahr_rates(et) -> (dpsi, deps, ddpsi, ddeps)
 
-Contract: the nutation angles of `_dyn_wahr` as `Taylor{1,Float64}` values whose
-derivative parts are the rates that `zzwahr_` returns (radians per second): the rates
-of the arguments, without the change of the coefficients.
+Contract: the nutation angles of `_dyn_wahr` and the rates that `zzwahr_` returns
+(radians per second): the rates of the arguments, without the change of the
+coefficients. Generic over the number type of `et`; with a `Float64` epoch the
+arithmetic is that of `zzwahr_`.
 """
-function _dyn_wahr_state(et::Float64)
+function _dyn_wahr_rates(et::S) where {S <: Real}
     dj = et / 86400.0
     dd = dj / 1.0e4
     dddj = dd / 1.0e4
@@ -806,11 +823,10 @@ function _dyn_wahr_state(et::Float64)
     rate = map(_DYN_WAHR_ARGS) do c
         _dyn_dmod(c[2] + dddj * (c[3] * 2.0 + dd * 3.0 * c[4]), 360.0) / _DYN_RADIAN
     end
-    dpsi = deps = ddpsi = ddeps = 0.0
+    dpsi = deps = ddpsi = ddeps = zero(S)
     for i in 1:106      # invariant: the four sums hold the terms 1:i-1
         m = @inbounds _DYN_WAHR[i]
-        arg = 0.0
-        argrt = 0.0
+        arg = argrt = zero(S)
         for j in 1:5
             if m[j] != 0
                 arg += m[j] * ang[j]
@@ -818,17 +834,26 @@ function _dyn_wahr_state(et::Float64)
                 arg = _dyn_dmod(arg, _TWOPI)
             end
         end
-        cl = Float64(m[6])
-        m[7] != 0 && (cl += m[7] * t)
-        ce = Float64(m[8])
-        m[9] != 0 && (ce += m[9] * t)
+        cl = m[7] != 0 ? m[6] + m[7] * t : zero(S) + m[6]
+        ce = m[9] != 0 ? m[8] + m[9] * t : zero(S) + m[8]
         s, c = sincos(arg)
         dpsi += cl * s / _DYN_WAHR_FACTOR
         deps += ce * c / _DYN_WAHR_FACTOR
         ddpsi += cl * c * argrt / _DYN_WAHR_FACTOR
         ddeps -= ce * s * argrt / _DYN_WAHR_FACTOR
     end
-    return Taylor((dpsi, ddpsi / 86400.0)), Taylor((deps, ddeps / 86400.0))
+    return dpsi, deps, ddpsi / 86400.0, ddeps / 86400.0
+end
+
+"""
+    _dyn_wahr_state(et::Float64) -> (dpsi, deps)
+
+Contract: the nutation angles of `_dyn_wahr` as `Taylor{1,Float64}` values whose
+derivative parts are the rates of `_dyn_wahr_rates`.
+"""
+@inline function _dyn_wahr_state(et::Float64)
+    dpsi, deps, ddpsi, ddeps = _dyn_wahr_rates(et)
+    return Taylor((dpsi, ddpsi)), Taylor((deps, ddeps))
 end
 
 "Nutation angles in the number type of the mode: `_dyn_wahr` or `_dyn_wahr_state`."
@@ -898,19 +923,12 @@ Contract: the precession matrix of `_dyn_prec` with its derivative, with the ari
 of `zzeprc76_`: the angles and their analytic rates go to `eul2xf_`.
 """
 function _dyn_prec_state(et::Float64)
-    t = et / _DYN_CENTURY
-    zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
-    z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
-    theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
-    ts = 1.0 / _DYN_CENTURY
-    dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * _DYN_ARCSEC
-    dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * _DYN_ARCSEC
-    dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * _DYN_ARCSEC
+    zeta, z, theta, dzeta, dz, dtheta = _dyn_prec_angles(et)
     return _dyn_eul2xf(-z, theta, -zeta, -dz, dtheta, -dzeta, 3, 2, 3)
 end
 
-"Contract: the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`."
-@inline function _dyn_mobliq_state(et::Float64)
+"Contract: the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`, in the number type of `et`."
+@inline function _dyn_mobliq_state(et::Real)
     t = et / 31557600.0 / 100.0
     mob = _DYN_ARCSEC * (t * (t * (t * 0.001813 - 5.9e-4) - 46.815) + 84381.448)
     dmob = _DYN_ARCSEC * (t * (t * 3 * 0.001813 - 0.0011800000000000001) - 46.815) *

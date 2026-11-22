@@ -110,154 +110,6 @@ end
 
 # --- TEME to J2000 --------------------------------------------------------------------------
 
-"Seconds in a Julian century."
-const _T10_CENT = 3155760000.0
-"Radians in an arcsecond, as `rpd_() / 3600`."
-const _T10_ASEC = Float64(pi) / 180.0 / 3600.0
-
-"""
-The 106 terms of the IAU 1980 nutation series as `zzwahr.f` holds them. Each row is
-the five multipliers of the angles l, l', F, D and Ω, then the coefficient of the
-nutation in longitude and its rate per 1000 years, and the same two numbers for the
-nutation in obliquity (units of 0.0001 arcsecond).
-"""
-const _T10_NUT = (
-    (0, 0, 0, 0, 1, -171996, -1742, 92025, 89),
-    (0, 0, 0, 0, 2, 2062, 2, -895, 5),
-    (-2, 0, 2, 0, 1, 46, 0, -24, 0),
-    (2, 0, -2, 0, 0, 11, 0, 0, 0),
-    (-2, 0, 2, 0, 2, -3, 0, 1, 0),
-    (1, -1, 0, -1, 0, -3, 0, 0, 0),
-    (0, -2, 2, -2, 1, -2, 0, 1, 0),
-    (2, 0, -2, 0, 1, 1, 0, 0, 0),
-    (0, 0, 2, -2, 2, -13187, -16, 5736, -31),
-    (0, 1, 0, 0, 0, 1426, -34, 54, -1),
-    (0, 1, 2, -2, 2, -517, 12, 224, -6),
-    (0, -1, 2, -2, 2, 217, -5, -95, 3),
-    (0, 0, 2, -2, 1, 129, 1, -70, 0),
-    (2, 0, 0, -2, 0, 48, 0, 1, 0),
-    (0, 0, 2, -2, 0, -22, 0, 0, 0),
-    (0, 2, 0, 0, 0, 17, -1, 0, 0),
-    (0, 1, 0, 0, 1, -15, 0, 9, 0),
-    (0, 2, 2, -2, 2, -16, 1, 7, 0),
-    (0, -1, 0, 0, 1, -12, 0, 6, 0),
-    (-2, 0, 0, 2, 1, -6, 0, 3, 0),
-    (0, -1, 2, -2, 1, -5, 0, 3, 0),
-    (2, 0, 0, -2, 1, 4, 0, -2, 0),
-    (0, 1, 2, -2, 1, 4, 0, -2, 0),
-    (1, 0, 0, -1, 0, -4, 0, 0, 0),
-    (2, 1, 0, -2, 0, 1, 0, 0, 0),
-    (0, 0, -2, 2, 1, 1, 0, 0, 0),
-    (0, 1, -2, 2, 0, -1, 0, 0, 0),
-    (0, 1, 0, 0, 2, 1, 0, 0, 0),
-    (-1, 0, 0, 1, 1, 1, 0, 0, 0),
-    (0, 1, 2, -2, 0, -1, 0, 0, 0),
-    (0, 0, 2, 0, 2, -2274, -2, 977, -5),
-    (1, 0, 0, 0, 0, 712, 1, -7, 0),
-    (0, 0, 2, 0, 1, -386, -4, 200, 0),
-    (1, 0, 2, 0, 2, -301, 0, 129, -1),
-    (1, 0, 0, -2, 0, -158, 0, -1, 0),
-    (-1, 0, 2, 0, 2, 123, 0, -53, 0),
-    (0, 0, 0, 2, 0, 63, 0, -2, 0),
-    (1, 0, 0, 0, 1, 63, 1, -33, 0),
-    (-1, 0, 0, 0, 1, -58, -1, 32, 0),
-    (-1, 0, 2, 2, 2, -59, 0, 26, 0),
-    (1, 0, 2, 0, 1, -51, 0, 27, 0),
-    (0, 0, 2, 2, 2, -38, 0, 16, 0),
-    (2, 0, 0, 0, 0, 29, 0, -1, 0),
-    (1, 0, 2, -2, 2, 29, 0, -12, 0),
-    (2, 0, 2, 0, 2, -31, 0, 13, 0),
-    (0, 0, 2, 0, 0, 26, 0, -1, 0),
-    (-1, 0, 2, 0, 1, 21, 0, -10, 0),
-    (-1, 0, 0, 2, 1, 16, 0, -8, 0),
-    (1, 0, 0, -2, 1, -13, 0, 7, 0),
-    (-1, 0, 2, 2, 1, -10, 0, 5, 0),
-    (1, 1, 0, -2, 0, -7, 0, 0, 0),
-    (0, 1, 2, 0, 2, 7, 0, -3, 0),
-    (0, -1, 2, 0, 2, -7, 0, 3, 0),
-    (1, 0, 2, 2, 2, -8, 0, 3, 0),
-    (1, 0, 0, 2, 0, 6, 0, 0, 0),
-    (2, 0, 2, -2, 2, 6, 0, -3, 0),
-    (0, 0, 0, 2, 1, -6, 0, 3, 0),
-    (0, 0, 2, 2, 1, -7, 0, 3, 0),
-    (1, 0, 2, -2, 1, 6, 0, -3, 0),
-    (0, 0, 0, -2, 1, -5, 0, 3, 0),
-    (1, -1, 0, 0, 0, 5, 0, 0, 0),
-    (2, 0, 2, 0, 1, -5, 0, 3, 0),
-    (0, 1, 0, -2, 0, -4, 0, 0, 0),
-    (1, 0, -2, 0, 0, 4, 0, 0, 0),
-    (0, 0, 0, 1, 0, -4, 0, 0, 0),
-    (1, 1, 0, 0, 0, -3, 0, 0, 0),
-    (1, 0, 2, 0, 0, 3, 0, 0, 0),
-    (1, -1, 2, 0, 2, -3, 0, 1, 0),
-    (-1, -1, 2, 2, 2, -3, 0, 1, 0),
-    (-2, 0, 0, 0, 1, -2, 0, 1, 0),
-    (3, 0, 2, 0, 2, -3, 0, 1, 0),
-    (0, -1, 2, 2, 2, -3, 0, 1, 0),
-    (1, 1, 2, 0, 2, 2, 0, -1, 0),
-    (-1, 0, 2, -2, 1, -2, 0, 1, 0),
-    (2, 0, 0, 0, 1, 2, 0, -1, 0),
-    (1, 0, 0, 0, 2, -2, 0, 1, 0),
-    (3, 0, 0, 0, 0, 2, 0, 0, 0),
-    (0, 0, 2, 1, 2, 2, 0, -1, 0),
-    (-1, 0, 0, 0, 2, 1, 0, -1, 0),
-    (1, 0, 0, -4, 0, -1, 0, 0, 0),
-    (-2, 0, 2, 2, 2, 1, 0, -1, 0),
-    (-1, 0, 2, 4, 2, -2, 0, 1, 0),
-    (2, 0, 0, -4, 0, -1, 0, 0, 0),
-    (1, 1, 2, -2, 2, 1, 0, -1, 0),
-    (1, 0, 2, 2, 1, -1, 0, 1, 0),
-    (-2, 0, 2, 4, 2, -1, 0, 1, 0),
-    (-1, 0, 4, 0, 2, 1, 0, 0, 0),
-    (1, -1, 0, -2, 0, 1, 0, 0, 0),
-    (2, 0, 2, -2, 1, 1, 0, -1, 0),
-    (2, 0, 2, 2, 2, -1, 0, 0, 0),
-    (1, 0, 0, 2, 1, -1, 0, 0, 0),
-    (0, 0, 4, -2, 2, 1, 0, 0, 0),
-    (3, 0, 2, -2, 2, 1, 0, 0, 0),
-    (1, 0, 2, -2, 0, -1, 0, 0, 0),
-    (0, 1, 2, 0, 1, 1, 0, 0, 0),
-    (-1, -1, 0, 2, 1, 1, 0, 0, 0),
-    (0, 0, -2, 0, 1, -1, 0, 0, 0),
-    (0, 0, 2, -1, 2, -1, 0, 0, 0),
-    (0, 1, 0, 2, 0, -1, 0, 0, 0),
-    (1, 0, -2, -2, 0, -1, 0, 0, 0),
-    (0, -1, 2, 0, 1, -1, 0, 0, 0),
-    (1, 1, 0, -2, 1, -1, 0, 0, 0),
-    (1, 0, -2, 2, 0, -1, 0, 0, 0),
-    (2, 0, 0, 2, 0, 1, 0, 0, 0),
-    (0, 0, 2, 4, 2, -1, 0, 0, 0),
-    (0, 1, 0, 1, 0, 1, 0, 0, 0),
-)
-
-"""
-    _t10_rotate(angle::T, axis::Int) -> Mat3{T}
-
-Matrix of the rotation of the coordinate system by `angle` about `axis` (1, 2 or 3),
-as `rotate_`.
-"""
-@inline function _t10_rotate(angle::T, axis::Int) where {T <: Real}
-    s, c = sincos(angle)
-    o, z = one(T), zero(T)
-    return axis == 1 ? Mat3{T}(o, z, z, z, c, -s, z, s, c) :
-        axis == 2 ? Mat3{T}(c, z, s, z, o, z, -s, z, c) :
-        Mat3{T}(c, -s, z, s, c, z, z, z, o)
-end
-
-"""
-    _t10_mxm(a::Mat3{T}, b::Mat3{T}) -> Mat3{T}
-
-Product of two 3 by 3 matrices with the sums in the order of `mxm`: element (i, j) is
-`a[i,1] b[1,j] + a[i,2] b[2,j] + a[i,3] b[3,j]`, with no fused multiply-add, so a plain
-epoch and a series epoch give the same plain values.
-"""
-@inline _t10_mxm(a::Mat3{T}, b::Mat3{T}) where {T <: Real} = Mat3{T}(
-    ntuple(Val(9)) do k
-        i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
-        a[i, 1] * b[1, j] + a[i, 2] * b[2, j] + a[i, 3] * b[3, j]
-    end
-)
-
 """
     _t10_eul2xf(ang::NTuple{6,T}, a::Int, b::Int, c::Int) -> (r::Mat3{T}, dr::Mat3{T})
 
@@ -267,7 +119,7 @@ angular velocity and `r`. Requires `b != a` and `b != c` (the two uses here are 
 and 1-3-1).
 """
 @inline function _t10_eul2xf(ang::NTuple{6, T}, a::Int, b::Int, c::Int) where {T <: Real}
-    r = _t10_mxm(_t10_rotate(ang[1], a), _t10_mxm(_t10_rotate(ang[2], b), _t10_rotate(ang[3], c)))
+    r = _m_mxm(_m_rotate(ang[1], a), _m_mxm(_m_rotate(ang[2], b), _m_rotate(ang[3], c)))
     l = 6 - a - b
     d = b == a % 3 + 1 ? 1.0 : -1.0
     sa, ca = sincos(ang[1])
@@ -284,71 +136,7 @@ and 1-3-1).
                 (i == b && j == a) ? o3 : (i == a && j == b) ? -o3 : zero(T)
         end
     )
-    return r, _t10_mxm(w, r)
-end
-
-"""
-    _t10_wahr(et::T) -> (psi, eps, dpsi, deps)
-
-Nutation in longitude and in obliquity (radians) of the IAU 1980 series at `et`, and
-the rates that `zzwahr` gives (radians per second). Loop invariant: the four sums
-hold the terms of the rows before `row`.
-"""
-function _t10_wahr(et::T) where {T <: Real}
-    radian = 180.0 / Float64(pi)
-    factr = radian * 3600.0 * 1.0e4
-    oneday = 86400.0
-    # Coefficients of l, l', F, D and Ω: degrees, degrees per day, and degrees per
-    # (10000 days) squared and cubed.
-    c0 = (
-        134.96298138888886, 357.52772333333331, 93.271910277777778, 297.85036305555559,
-        125.04452222222223,
-    )
-    c1 = (
-        13.064992947243136, 0.98560028309377146, 13.229350240603848, 12.190749116495549,
-        -0.052953764841432813,
-    )
-    c2 = (
-        6.5192872572139397e-4, -1.201414483363923e-5, -2.760338267929901e-4,
-        -1.4348262053484912e-4, 1.5522608272925558e-4,
-    )
-    c3 = (
-        3.6484365631332527e-7, -6.8408185558748495e-8, 6.2707503428852773e-8,
-        1.0831296046801845e-7, 4.5605457039165659e-8,
-    )
-    dj = et / oneday
-    dd = dj / 1.0e4
-    dddj = dd / 1.0e4
-    dd2 = dd * dd
-    t = dj / 365250.0
-    angle = ntuple(
-        j -> _sgp4_mod(c0[j] + dj * c1[j] + (c2[j] + dd * c3[j]) * dd2, 360.0) /
-            radian, Val(5)
-    )
-    angrt = ntuple(
-        j -> _sgp4_mod(c1[j] + dddj * (c2[j] * 2.0 + dd * 3.0 * c3[j]), 360.0) /
-            radian, Val(5)
-    )
-    psi = eps = dpsi = deps = zero(T)
-    for row in _T10_NUT
-        arg = argrt = zero(T)
-        for j in 1:5
-            m = row[j]
-            if m != 0
-                arg = arg + m * angle[j]
-                argrt = argrt + m * angrt[j]
-                arg = _sgp4_mod(arg, _TWOPI)
-            end
-        end
-        cl = row[6] + row[7] * t
-        ce = row[8] + row[9] * t
-        sinang, cosang = sincos(arg)
-        psi = psi + cl * sinang / factr
-        eps = eps + ce * cosang / factr
-        dpsi = dpsi + cl * cosang * argrt / factr
-        deps = deps - ce * sinang * argrt / factr
-    end
-    return psi, eps, dpsi / oneday, deps / oneday
+    return r, _m_mxm(w, r)
 end
 
 """
@@ -358,15 +146,7 @@ Rotation from J2000 to the mean equator and equinox of date by the IAU 1976
 precession, and its time derivative, as `zzeprc76`.
 """
 @inline function _t10_precession(et::T) where {T <: Real}
-    t = et / _T10_CENT
-    scale = _T10_ASEC
-    zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * scale
-    z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * scale
-    theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * scale
-    ts = 1.0 / _T10_CENT
-    dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * scale
-    dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * scale
-    dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * scale
+    zeta, z, theta, dzeta, dz, dtheta = _dyn_prec_angles(et)
     return _t10_eul2xf((-z, theta, -zeta, -dz, dtheta, -dzeta), 3, 2, 3)
 end
 
@@ -378,59 +158,10 @@ nutation, and its time derivative, as `zzenut80` with the mean obliquity of
 `zzmobliq`.
 """
 @inline function _t10_nutation(et::T) where {T <: Real}
-    psi, eps, dpsi, deps = _t10_wahr(et)
-    year = 31557600.0
-    persec = 1.0 / (year * 100.0)
-    t = et / year / 100.0
-    rad = Float64(pi) / 180.0
-    mob = rad / 3600.0 * (t * (t * (t * 0.001813 - 5.9e-4) - 46.815) + 84381.448)
-    dmob = rad / 3600.0 * (t * (t * 3 * 0.001813 - 0.0011800000000000001) - 46.815) * persec
+    psi, eps, dpsi, deps = _dyn_wahr_rates(et)
+    mob, dmob = _dyn_mobliq_state(et)
     return _t10_eul2xf((-mob - eps, -psi, mob, -dmob - deps, -dpsi, dmob), 1, 3, 1)
 end
-
-"Norm of `v` scaled by its largest plain component, as `vnorm`."
-@inline function _t10_vnorm(v::Vec3{T}) where {T <: Real}
-    m = _m_maxabs(v)
-    m == 0.0 && return zero(T)
-    a, b, c = v[1] / m, v[2] / m, v[3] / m
-    return m * sqrt(a * a + b * b + c * c)
-end
-
-"Component of `a` normal to `b`, with the scaling of `vperp` and `vproj`."
-@inline function _t10_vperp(a::Vec3{T}, b::Vec3{T}) where {T <: Real}
-    biga, bigb = _m_maxabs(a), _m_maxabs(b)
-    biga == 0.0 && return zero(Vec3{T})
-    bigb == 0.0 && return a
-    t = a / biga
-    r = b / bigb
-    bt, br = _m_maxabs(t), _m_maxabs(r)
-    r2 = r / br
-    t2 = t / bt
-    v = (_m_dot(t2, r2) * bt / _m_dot(r2, r2)) * r2
-    return biga * (t - v)
-end
-
-"Unit vector along `p` and its time derivative for the rate `v` of `p`, as `dvhat`."
-@inline function _t10_dvhat(p::Vec3{T}, v::Vec3{T}) where {T <: Real}
-    len = _t10_vnorm(p)
-    primal(len) > 0.0 || return zero(Vec3{T}), v
-    u = p / len
-    return u, (1.0 / len) * _t10_vperp(v, u)
-end
-
-"Unit vector along the cross product of `p1` and `p2`, and its time derivative for the rates `v1` and `v2`, as `ducrss`."
-@inline function _t10_ducrss(p1::Vec3{T}, v1::Vec3{T}, p2::Vec3{T}, v2::Vec3{T}) where {T <: Real}
-    f1, f2 = _m_maxabs(p1), _m_maxabs(p2)
-    if f1 > 0.0
-        p1, v1 = (1.0 / f1) * p1, (1.0 / f1) * v1
-    end
-    if f2 > 0.0
-        p2, v2 = (1.0 / f2) * p2, (1.0 / f2) * v2
-    end
-    return _t10_dvhat(_m_cross(p1, p2), _m_cross(v1, p2) + _m_cross(p1, v2))
-end
-
-@inline _t10_row(m::Mat3{T}, i::Int) where {T} = Vec3{T}(m[i, 1], m[i, 2], m[i, 3])
 
 """
     _t10_teme(et::T) -> (x, y, z, dx, dy, dz)
@@ -443,19 +174,22 @@ equinox, and the frame is made from the two vectors as `zztwovxf` makes it.
 @inline function _t10_teme(et::T) where {T <: Real}
     r1, dr1 = _t10_precession(et)
     r2, dr2 = _t10_nutation(et)
-    xj, dxj = _t10_row(r1, 1), _t10_row(dr1, 1)       # mean equinox in J2000
-    zp, zv = _t10_row(r2, 3), _t10_row(dr2, 3)        # true pole in the mean frame
+    xj, dxj = _m_row(r1, 1), _m_row(dr1, 1)           # mean equinox in J2000
+    zp, zv = _m_row(r2, 3), _m_row(dr2, 3)            # true pole in the mean frame
     # The pole in J2000: the product with the inverse state matrix of the precession.
-    zj = Vec3{T}(ntuple(i -> r1[1, i] * zp[1] + r1[2, i] * zp[2] + r1[3, i] * zp[3], Val(3)))
+    zj = _m_mtxv(r1, zp)
     dzj = Vec3{T}(
         ntuple(
             i -> dr1[1, i] * zp[1] + dr1[2, i] * zp[2] + dr1[3, i] * zp[3] +
                 r1[1, i] * zv[1] + r1[2, i] * zv[2] + r1[3, i] * zv[3], Val(3)
         )
     )
-    z, dz = _t10_dvhat(zj, dzj)
-    y, dy = _t10_ducrss(zj, dzj, xj, dxj)
-    x, dx = _t10_ducrss(y, dy, zj, dzj)
+    # `zztwovxf_`: the f2c `dvhat_` and `ducrss_` (`_m_dvhat` with a division).
+    sz = _m_state(zj, dzj)
+    z, dz = _m_pv(_m_dvhat(sz, false))
+    sy = _m_ducrss(sz, _m_state(xj, dxj))
+    y, dy = _m_pv(sy)
+    x, dx = _m_pv(_m_ducrss(sy, sz))
     return x, y, z, dx, dy, dz
 end
 
