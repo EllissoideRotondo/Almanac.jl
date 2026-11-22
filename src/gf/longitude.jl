@@ -36,24 +36,37 @@ _gf_relx_sin(q::GFCoordinate, relate, refval, cnfine::Window, run::_GFRun, prefi
 )
 
 """
-    _gf_search(q::GFCoordinate, relate, refval, adjust, cnfine, run) -> Window
+    _gf_cslv_checks(adjust, tol)
 
-The coordinate solver `zzgfcslv`: the search is confined to the window on which the
-vector exists, and a longitude or a right ascension goes to `_gf_long`.
-
-Contract: `adjust >= 0` (`SpiceError(:valueoutofrange)`), a known relation
-(`:notrecognized`); the result is a new window that is a subset of `cnfine`.
+The first checks of `zzgfcslv`, which come before the coordinate quantity is set up:
+`SpiceError(:valueoutofrange)` if `adjust < 0` or `tol <= 0`. `gfposc`, `gfsubc`,
+`gfsntc` and `gfevnt` make them before they build the quantity.
 """
-function _gf_search(
-        q::GFCoordinate, relate::AbstractString, refval::Real, adjust::Real,
-        cnfine::Window, run::_GFRun
-    )
+function _gf_cslv_checks(adjust::Real, tol::Real)
     adjust < 0 && throw(
         SpiceError(
             :valueoutofrange,
             "ADJUST was $adjust; must be non-negative."
         )
     )
+    tol <= 0 && throw(SpiceError(:valueoutofrange, "TOL was $tol; must be positive."))
+    return nothing
+end
+
+"""
+    _gf_search(q::GFCoordinate, relate, refval, adjust, cnfine, run) -> Window
+
+The coordinate solver `zzgfcslv`: the search is confined to the window on which the
+vector exists, and a longitude or a right ascension goes to `_gf_long`.
+
+Contract: `adjust >= 0` and `run.tol > 0` (`SpiceError(:valueoutofrange)`), a known
+relation (`:notrecognized`); the result is a new window that is a subset of `cnfine`.
+"""
+function _gf_search(
+        q::GFCoordinate, relate::AbstractString, refval::Real, adjust::Real,
+        cnfine::Window, run::_GFRun
+    )
+    _gf_cslv_checks(adjust, run.tol)
     rel = _gf_relcode(relate)
     exist = _gf_vecexist(q.vec, cnfine, run)
     name = _GF_CRDNMS[q.sys][q.idx]

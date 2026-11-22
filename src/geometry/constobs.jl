@@ -40,14 +40,6 @@ end
     return r + rc, v + vc
 end
 
-@noinline _geo_throw_rate() = throw(
-    SpiceError(
-        :dividebyzero,
-        "the range rate of the target is near the speed of light: the light time " *
-            "derivative cannot be computed"
-    )
-)
-
 """
     _geo_flt(ks, f, et, iref, corr, robs, vobs) -> (; r, v, lt, dlt)
 
@@ -85,7 +77,7 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
     a = 1 / (CLIGHT * _m_norm(r))
     b = _m_dot(r, v)
     c = _m_dot(r, vt)
-    primal(s * c * a) > 1 - 1.0e-10 && _geo_throw_rate()
+    primal(s * c * a) > 1 - 1.0e-10 && _throw_range_rate()
     dlt = a * b / (1 - s * c * a)
     v = (1 + s * dlt) * vt - vobs
     return (; r, v, lt, dlt)

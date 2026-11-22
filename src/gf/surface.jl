@@ -470,6 +470,7 @@ function gfsubc(
     )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
+    _gf_cslv_checks(adjust, run.tol)
     q = _gf_surface_coordinate(
         ks, false, true, target, fixref, method, abcorr, obsrvr, 0,
         _GF_ZERO3, crdsys, coord
@@ -538,6 +539,7 @@ function gfsntc(
     )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
+    _gf_cslv_checks(adjust, run.tol)
     q = _gf_surface_coordinate(
         ks, true, true, target, fixref, method, abcorr, obsrvr,
         dref, dvec, crdsys, coord

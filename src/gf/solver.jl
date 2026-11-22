@@ -62,15 +62,18 @@ struct _GFRun{S, R, B, P}
 end
 
 """
-    _gf_run(step, tol; refine=gfrefn, bail=nothing, report=nothing, threads=false) -> _GFRun
+    _gf_run(step, tol; refine=gfrefn, bail=nothing, report=nothing, threads=false,
+            checktol=true) -> _GFRun
 
 Check the step and the tolerance as `gfsstp` and `zzgfsolv` do and build the controls.
 Throws `SpiceError(:invalidstep)` for a constant step that is not positive and
-`SpiceError(:invalidtolerance)` for a tolerance that is not positive.
+`SpiceError(:invalidtolerance)` for a tolerance that is not positive. With
+`checktol = false` (`gfevnt`) the tolerance is checked later, where `zzgflong` and
+`zzgfsolvx` check it.
 """
 function _gf_run(
         step, tol::Real; refine = gfrefn, bail = nothing, report = nothing,
-        threads::Bool = false
+        threads::Bool = false, checktol::Bool = true
     )
     st = step isa Real ? Float64(step) : step
     st isa Float64 && !(st > 0.0) && throw(
@@ -79,14 +82,16 @@ function _gf_run(
             "Step has value $st; step size must be positive."
         )
     )
-    tol > 0 || throw(
-        SpiceError(
-            :invalidtolerance,
-            "Tolerance must be positive but was $tol."
-        )
-    )
+    checktol && !(tol > 0) && _gf_throw_tol(tol)
     return _GFRun(st, refine, bail, report, Float64(tol), threads)
 end
+
+@noinline _gf_throw_tol(tol) = throw(
+    SpiceError(
+        :invalidtolerance,
+        "Tolerance must be positive but was $tol."
+    )
+)
 
 _gf_withtol(run::_GFRun, tol::Float64) =
     _GFRun(run.step, run.refine, run.bail, run.report, tol, run.threads)
@@ -157,6 +162,7 @@ function _gf_solve!(
         start::Float64, finish::Float64
     ) where {F}
     tol = run.tol
+    tol <= 0 && _gf_throw_tol(tol)       # zzgfsolvx; for `gfevnt` the first check of `tol`
     start > finish && throw(
         SpiceError(
             :badtimecase,

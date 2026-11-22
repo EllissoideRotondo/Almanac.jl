@@ -209,6 +209,7 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             (-1000, [head; rel("TKA"); spec("MATRIX"); unit]),              # badframespec2
             (-1000, [head; rel("J2000"); "TKFRAME_TKA_RELATIVE = 'J2000'"; spec("MATRIX"); unit]),
             (-1000, [head; rel("J2000"); spec("EULER")]),                   # unknownframespec
+            (-1000, [head; rel("J2000"); spec(" MATRIX"); unit]),           # a leading blank counts
             (-1000, [head; rel("J2000"); spec("MATRIX"); "TKFRAME_-1000_MATRIX = (1, 0, 0)"]),
             (-1000, [head; angles("FURLONGS", "(3, 1, 3)")]),               # unitsnotrec
             (-1000, [head; angles("DEGREES", "(3, 4, 3)")]),                # badaxisnumbers

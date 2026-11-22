@@ -368,6 +368,42 @@ group("9. aberration corrections", Kernels.FULL_SET_FILES...) do
         @test throws_kind(() -> stelab(SVector(1.0, 0.0, 0.0), SVector(3.0e5, 0.0, 0.0)), :valueoutofrange)
         @test throws_kind(() -> stlabx(SVector(1.0, 0.0, 0.0), SVector(3.0e5, 0.0, 0.0)), :valueoutofrange)
         @test throws_kind(() -> stelab([1.0, 0.0], [0.0, 0.0, 0.0]), :badarg)
+        # `ltime` reads the first two characters of the direction (`ltime.c`), and an
+        # empty direction is EMPTYSTRING (`ltime_c`)
+        @test ltime(ctx, 0.0, 399, "-> ", 301) == ltime(ctx, 0.0, 399, "->", 301)
+        @test SPICE.ltime(0.0, 399, "-> ", 301)[2] == SPICE.ltime(0.0, 399, "->", 301)[2]
+        @test ltime(ctx, 0.0, 399, "<-x", 301) == ltime(ctx, 0.0, 399, "<-", 301)
+        @test throws_kind(() -> ltime(ctx, 0.0, 399, "-", 301), :baddirection)
+        @test throws_kind(() -> ltime(ctx, 0.0, 399, "", 301), :emptystring)
+        ccall(
+            (:ltime_c, SPICE.libcspice), Cvoid,
+            (Cdouble, Cint, Cstring, Cint, Ref{Cdouble}, Ref{Cdouble}),
+            0.0, 399, "", 301, Ref(0.0), Ref(0.0)
+        )
+        @test cspice_kind() === :emptystring
+        # `zzstelab` signals DIVIDEBYZERO when the part of the observer velocity normal
+        # to the line of sight is not below the speed of light
+        fast = [st[1], st[2], st[3], 0.0, 0.0, 2 * clight()]
+        @test throws_kind(() -> spkaps(ctx, 301, 0.0, "J2000", "LT+S", fast, zeros(3)), :dividebyzero)
+        ccall(
+            (:spkaps_c, SPICE.libcspice), Cvoid,
+            (
+                Cint, Cdouble, Cstring, Cstring, Ptr{Cdouble}, Ptr{Cdouble}, Ptr{Cdouble},
+                Ref{Cdouble}, Ref{Cdouble},
+            ),
+            301, 0.0, "J2000", "LT+S", fast, zeros(3), zeros(6), Ref(0.0), Ref(0.0)
+        )
+        @test cspice_kind() === :dividebyzero
+        # `spkltc` signals DIVIDEBYZERO for a range rate near the speed of light: a
+        # target in memory that comes towards the barycenter at (1 - 1e-11) c, which
+        # CSPICE cannot load (the kind is the one of `spkltc.c`)
+        fctx = SpiceContext()
+        vfast = (1 - 1.0e-11) * clight()
+        load_function!(
+            fctx, "fast", t -> [1.0e8 - vfast * t, 0.0, 0.0, -vfast, 0.0, 0.0], -1000, 0,
+            "J2000", -1000.0, 1000.0
+        )
+        @test throws_kind(() -> spkltc(fctx, -1000, 0.0, "J2000", "LT", zeros(6)), :dividebyzero)
         # extreme magnitudes: the unit vector is scaled as in `vhat` (audit of 2026-11-16)
         for mag in (1.0e-300, 1.0e-200, 1.0e200, 1.0e300), d in ((1.0, 0.0, 0.0), (0.6, 0.8, 0.0))
             p = mag .* collect(d)

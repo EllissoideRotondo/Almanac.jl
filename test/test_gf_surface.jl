@@ -543,6 +543,8 @@ gfs_constant(target, sys, crd) = crd == "ALTITUDE" ||
                 (:notsupported, with(7, "ALTITUDE")),
                 (:notrecognized, with(8, "==")),
                 (:valueoutofrange, with(10, -1.0)),
+                # `zzgfcslv` checks `adjust` before it sets up the quantity
+                (:valueoutofrange, ("NOSUCHBODY", good[2:9]..., -1.0, good[11])),
                 (:invalidvalue, with(10, 1.0)),
                 (:invalidstep, with(11, 0.0)),
                 (:invalidstep, with(11, -1.0)),

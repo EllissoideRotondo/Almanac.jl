@@ -417,6 +417,7 @@ function gfposc(
     )
     run = _gf_run(step, tol; bail, report, threads)
     _gf_relcode(relate)
+    _gf_cslv_checks(adjust, run.tol)
     q = _gf_position_coordinate(ks, target, frame, abcorr, obsrvr, crdsys, coord)
     return _gf_search(q, relate, refval, adjust, cnfine, run)
 end
@@ -636,7 +637,10 @@ Throws `SpiceError` with the kind
 - `:invalidcount` if there are more than 10 parameter names, fewer values in `qcpars`
   than names, or fewer than 3 values in `qdpars` where a vector is needed;
 - `:missingvalue` if a parameter of the quantity is not in `qpnams`;
-- `:notsupported` if the vector definition is not known.
+- `:notsupported` if the vector definition is not known;
+- `:invalidtolerance` if `tol <= 0`, checked as in CSPICE after the quantity and
+  `adjust`, and not at all for an empty `cnfine`; for `COORDINATE`,
+  `:valueoutofrange` if `adjust < 0` or `tol <= 0`, before the quantity.
 
 Also throws the errors of the search for the quantity: [`gfdist`](@ref),
 [`gfrr`](@ref), [`gfpa`](@ref), [`gfsep`](@ref), [`gfposc`](@ref), [`gfsubc`](@ref),
@@ -691,7 +695,7 @@ function gfevnt(
     end
     par(name) = String(strip(qcpars[findfirst(==(name), pnames)], ' '))
     _gf_relcode(op)
-    run = _gf_run(udstep, tol; refine = udrefn, bail, report, threads)
+    run = _gf_run(udstep, tol; refine = udrefn, bail, report, threads, checktol = false)
     if quant == "DISTANCE"
         q = GFDistance(ks, par("TARGET"), par("ABCORR"), par("OBSERVER"))
         return _gf_search(q, op, refval, adjust, cnfine, run)
@@ -708,6 +712,7 @@ function gfevnt(
         )
         return _gf_search(q, op, refval, adjust, cnfine, run)
     elseif quant == "COORDINATE"
+        _gf_cslv_checks(adjust, tol)     # zzgfcslv, before the quantity is set up
         rawdef = qcpars[findfirst(==("VECTOR DEFINITION"), pnames)]
         vecdef = normalize_name(rawdef)
         if vecdef == "POSITION"

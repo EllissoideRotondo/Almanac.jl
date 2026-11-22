@@ -74,6 +74,7 @@ error or the correct result.
 | `dski02` | For item 1 (the number of vertices) with `start > 1`, gives `INDEXOUTOFRANGE`, `DASNOSUCHADDRESS` or no error, depending on earlier calls | `:indexoutofrange` | `dsk` |
 | `dskmi2` | Does not check that the vertex indices are in 1 to `nv` | `:badvertexindex` | `dsk` |
 | `zzgflong` (`gfposc`, `gfsubc`, `gfsntc`) | For ABSMIN or ABSMAX with `adjust` on a longitude or right ascension, reads the first interval of an empty result window | Returns the empty window | `gf_posc` |
+| `gfevnt` | A blank quantity name matches one of the two blank entries of the table of quantities, whose search does nothing: the call returns with no error and the result is left as it was | `:notrecognized` | `gf_quantities` |
 | GF searches | A step below the spacing of doubles at the epoch makes the search sample the same epoch forever | `:invalidstep` | `gf_solver` |
 | `zzgfrelx`, `zzgflong` (`gfuds`, `gfdist`, `gfposc` and the other GF searches with `adjust`) | Take a NaN or infinite `adjust` for ABSMIN and ABSMAX, since only `adjust < 0` and, for the other relations, `adjust != 0` are tested | `:invalidvalue` for every relation, the kind that CSPICE gives for the other relations | `gf_solver` |
 | `zzgfrelx` (`gfuds`, `gfdist` and the other GF searches with `refval`) | Takes a NaN reference value: every comparison with it is false, so `<`, `>` and `=` find no event | `:invalidvalue` for every relation | `gf_solver` |
