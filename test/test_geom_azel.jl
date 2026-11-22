@@ -60,10 +60,13 @@ az_alloc_rd(a, b, c) = @allocated drdazl(a, b, c, true, false)
                 check!(fails, isapprox(jf, drdazl(range, az, el, ccw, plsz); rtol = 1.0e-12), "drdazl = ForwardDiff", k, range, az, el, ccw, plsz)
             end
         end
-        # Special points: the axes, zero angles with each sense, the origin.
+        # Special points: the axes, zero angles with each sense, the origin. Regression
+        # (the last one): `reclat_` tests the components themselves, not the scaled ones
+        # that underflow to 0, for a point on the z axis, so the azimuth is not 0.
         for v in (
                     [1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0], [0.0, 0.0, -2.0], [-1.0, 0.0, 0.0],
                     [0.0, -1.0, 0.0], [0.0, 0.0, 0.0], [1.0, -0.0, 0.0], [1.0, 1.0e-300, 0.0],
+                    [0.0, 5.0e-324, 1.0e10],
                 ), ccw in (true, false),
                 plsz in (true, false)
 

@@ -12,7 +12,9 @@
 """
 `reclat` kernel. With `scaled` the longitude comes from the components divided by the
 largest one (
-[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)); without it from the components themselves (`reclat_`).
+[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)); without it from the components themselves (`reclat_`), which
+also decide whether the point is on the z axis: `[0, 5e-324, 1e10]` has the longitude
+pi/2 there and 0 in `reclat_c`.
 """
 @inline function _m_reclat(v::SVector{3}, scaled::Bool)
     vmax = _m_maxabs(v)
@@ -23,8 +25,12 @@ largest one (
     z1 = v[3] / vmax
     radius = vmax * sqrt(x1 * x1 + y1 * y1 + z1 * z1)
     lat = atan(z1, sqrt(x1 * x1 + y1 * y1))
-    (primal(x1) == 0.0 && primal(y1) == 0.0) && return radius + z0, z0, lat
-    return radius + z0, (scaled ? atan(y1, x1) : atan(v[2], v[1])), lat
+    if scaled
+        (primal(x1) == 0.0 && primal(y1) == 0.0) && return radius + z0, z0, lat
+        return radius + z0, atan(y1, x1), lat
+    end
+    (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && return radius + z0, z0, lat
+    return radius + z0, atan(v[2], v[1]), lat
 end
 
 """
