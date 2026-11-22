@@ -1870,7 +1870,7 @@ function _seg_cheb_packets(ncoef::Int, packets::Vector{Float64}, refs::Vector{Fl
     data = Float64[ncoef]
     append!(data, packets)
     append!(data, refs)
-    ndir = n > 100 ? (n - 1) ÷ 100 : 0
+    ndir = (n - 1) ÷ 100                 # 0 for n = 0 too (`÷` truncates)
     _seg_directory!(data, refs, ndir)
     pktbas = 1
     refbas = pktbas + n * (pktsiz + 1)

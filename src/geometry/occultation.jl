@@ -272,14 +272,12 @@ end
     _GeoOccBody
 
 One target of `occult`: its ID, the kind of its shape (`_GEO_OCC_POINT`,
-`_GEO_OCC_ELLIPSOID`, `_GEO_OCC_DSK`), the parsed method string and the body-fixed
-frame (0 for a point).
+`_GEO_OCC_ELLIPSOID`, `_GEO_OCC_DSK`) and the parsed method string.
 """
 struct _GeoOccBody
     id::Int32
     kind::UInt8
     m::_GeoMethod
-    frame::Int32
 end
 
 "`ljust` and `ucase` of a shape string; no allocation for the two common spellings."
@@ -393,12 +391,12 @@ end
 "The first step of `occult` for one target: its ID (0 for a point whose name is read later) and its method."
 @inline function _geo_occ_parse(ks::KernelSet, targ::NameOrID, shape::AbstractString, what)
     shap = _geo_occ_upper(shape)
-    shap == "POINT" && return _GeoOccBody(Int32(0), _GEO_OCC_POINT, _geo_ell(0x00), Int32(0))
+    shap == "POINT" && return _GeoOccBody(Int32(0), _GEO_OCC_POINT, _geo_ell(0x00))
     id = _geo_body(ks, targ, what)
     m = _geo_method(ks, id, shap)
     kind = m.dsk ? _GEO_OCC_DSK : (shap == "ELLIPSOID" || _dsk_eqstr(shap, "ELLIPSOID")) ?
         _GEO_OCC_ELLIPSOID : 0x00
-    return _GeoOccBody(id, kind, m, Int32(0))
+    return _GeoOccBody(id, kind, m)
 end
 
 function _geo_occult(
@@ -409,8 +407,8 @@ function _geo_occult(
     _plain_epoch(et, "occult")
     b1 = _geo_occ_parse(ks, targ1, shape1, "first target")
     b2 = _geo_occ_parse(ks, targ2, shape2, "second target")
-    b1 = _GeoOccBody(_geo_body(ks, targ1, "first target"), b1.kind, b1.m, Int32(0))
-    b2 = _GeoOccBody(_geo_body(ks, targ2, "second target"), b2.kind, b2.m, Int32(0))
+    b1 = _GeoOccBody(_geo_body(ks, targ1, "first target"), b1.kind, b1.m)
+    b2 = _GeoOccBody(_geo_body(ks, targ2, "second target"), b2.kind, b2.m)
     obs = _geo_body(ks, obsrvr, "observer")
     e = Float64(check_epoch(et))
     # `zzgfocin` makes its body and shape checks before it reads the correction.

@@ -536,7 +536,7 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
     path = ekw_write(EKW_N, joinpath(dir, "query.bes"), [k1, k2, fx])
     nent, bad = ekw_read_check(path, [k1, k2, fx])
     @test bad == 0
-    # The index searches of the write layer (`zzekillt`, `zzekille`) count as the model does.
+    # The index searches (`zzekillt`, `zzekille`) count on the written files as the model does.
     h = ekopr(path)
     searches = 0
     fails = Failures()
@@ -550,12 +550,15 @@ group("EK write: CSPICE loads and queries files that Almanac wrote") do
         vals = [r[c][1] for r in seg.rows if r[c] !== nothing]
         nnull = length(seg.rows) - length(vals)
         key isa String && (vals = [String(rstrip(v)) for v in vals])
-        check!(fails, Almanac._ekw_illt(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<(key), vals), "_ekw_illt", segno, c, key)
-        check!(fails, Almanac._ekw_ille(h, segdsc, coldsc, length(seg.rows), key) == nnull + count(<=(key), vals), "_ekw_ille", segno, c, key)
+        col = Almanac._ekw_col(coldsc)
+        val = key isa String ? (Almanac._EK_CHR, key, 0.0, 0) :
+            key isa Integer ? (Almanac._EK_INT, "", 0.0, key) : (Almanac._EK_DP, "", key, 0)
+        nrows = length(seg.rows)
+        check!(fails, Almanac._ek_ixlast(h, col, nrows, true, val...) == nnull + count(<(key), vals), "zzekillt", segno, c, key)
+        check!(fails, Almanac._ek_ixlast(h, col, nrows, false, val...) == nnull + count(<=(key), vals), "zzekille", segno, c, key)
         searches += 2
     end
     @test isempty(fails)
-    @test neo_kind(() -> Almanac._ekw_illt(h, h.ints[1:24], h.ints[1:11], 0, 1)) === :invalidsize
     ekcls(h)
     SPICE.kclear()
     SPICE.furnsh(path)

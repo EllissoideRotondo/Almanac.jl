@@ -31,9 +31,6 @@ end
 # Load list
 # ---------------------------------------------------------------------------------------
 
-"Kernel types that `ktotal`, `kdata` and `kinfo` report, as in `keeper.f`."
-const KERNEL_KINDS = ("SPK", "CK", "PCK", "DSK", "EK", "TEXT", "META")
-
 """
     kernel_filetype(entry::Loaded) -> String
 

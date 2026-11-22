@@ -72,8 +72,8 @@ function _gf_occultation(
     pf.kind == 0x00 && _geo_occ_bad_shape(fshape)
     pb = _geo_occ_parse(ks, idb, bshape, "back target")
     pb.kind == 0x00 && _geo_occ_bad_shape(bshape)
-    fb = _GeoOccBody(idf, pf.kind, pf.m, Int32(0))
-    bb = _GeoOccBody(idb, pb.kind, pb.m, Int32(0))
+    fb = _GeoOccBody(idf, pf.kind, pf.m)
+    bb = _GeoOccBody(idb, pb.kind, pb.m)
     # CSPICE translates the surface names of the back target with the ID of the front
     # target; the surfaces here are those of the back target.
     bsrf = bb.m.srflst

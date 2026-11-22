@@ -46,8 +46,7 @@ const _EK_IPTIDX = 10             # root page of the integer data page tree
 const _EK_MFLIDX = 11             # "modified" flag
 const _EK_IFLIDX = 12             # "initialized" flag
 const _EK_SHDIDX = 13             # shadowing flag
-const _EK_CFHIDX = 14             # companion file handle
-const _EK_CSNIDX = 15             # companion segment number
+# 14 and 15: companion file handle and segment number, not used
 const _EK_LCPIDX = 16             # last character, double, integer data page: 16, 17, 18
 const _EK_LCWIDX = 19             # last word in use of those pages: 19, 20, 21
 const _EK_NMLIDX = 22             # character base of the column names

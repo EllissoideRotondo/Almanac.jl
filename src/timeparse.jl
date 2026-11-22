@@ -952,7 +952,7 @@ const _NOJDVALUE = "The Julian date of the string has no value: the sign and the
 # ---------------------------------------------------------------------------------
 
 "Contract: returns a year 0..99 as the year of the 100 years from `lbound` (1969..2068 at start) that it abbreviates, and another year unchanged (`texpyr`; bound)."
-function _expand_year(year::Int, lbound::Int = 1969)::Int
+function _expand_year(year::Int, lbound::Int)::Int
     (year >= 100 || year < 0) && return year
     y = year + lbound ÷ 100 * 100
     return y < lbound ? y + 100 : y

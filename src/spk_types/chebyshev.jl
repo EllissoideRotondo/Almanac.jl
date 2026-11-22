@@ -26,8 +26,8 @@ function _spk14(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     a = b + lay.pktbas + (k - 1) * stride + lay.pktoff  # address of MID
     @inbounds mid, radius = data[a], data[a + 1]
     tau = (et - mid) / radius
-    (pos,) = _cheb3(data, a + 2, ncoef, tau, 1 / radius, Val(0))
-    (vel,) = _cheb3(data, a + 2 + 3 * ncoef, ncoef, tau, 1 / radius, Val(0))
+    (pos,) = _cheb3(data, a + 2, ncoef, tau, radius, Val(0))
+    (vel,) = _cheb3(data, a + 2 + 3 * ncoef, ncoef, tau, radius, Val(0))
     return pos, vel
 end
 

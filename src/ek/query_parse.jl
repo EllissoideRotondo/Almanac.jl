@@ -41,7 +41,6 @@ const _EKQ_MAXNUM = 100     # Largest number of numeric tokens of a query (`MAXN
 const _EKQ_MAXTAB = 10      # Largest number of tables in a FROM clause (`MAXTAB`)
 const _EKQ_MAXORD = 10      # Largest number of order-by columns (`MAXORD`)
 const _EKQ_MAXSEL = 50      # Largest number of SELECT columns (`MAXSEL`)
-const _EKQ_MAXCON = 1000    # Largest number of constraints of a normalized WHERE clause (`MAXCON`)
 const _EKQ_ISIZE = 27869    # Size of the integer cell of an encoded query (`EQIMIN`)
 const _EKQ_CSIZE = 2000     # Size of the character buffer of an encoded query (`MAXCLN`)
 const _EKQ_TNAMSZ = 64      # Length of a table name or an alias in name resolution (`TNAMSZ`)
@@ -91,9 +90,10 @@ const _EKQ_KWWHER = 29
 
 "Special character strings of the scanner with their token codes and keyword codes."
 const _EKQ_SPECIAL = (
-    ("!=", 1, 22), ("^=", 1, 22), ("<>", 1, 22), ("<=", 1, 17),
-    (">=", 1, 12), ("<", 1, 19), (">", 1, 14), ("=", 1, 10), ("(", 6, 0), (")", 7, 0),
-    (",", 8, 0), (".", 9, 0), ("*", 10, 0),
+    ("!=", _EKQ_TKKEY, _EKQ_KWNE), ("^=", _EKQ_TKKEY, _EKQ_KWNE), ("<>", _EKQ_TKKEY, _EKQ_KWNE),
+    ("<=", _EKQ_TKKEY, _EKQ_KWLE), (">=", _EKQ_TKKEY, _EKQ_KWGE), ("<", _EKQ_TKKEY, _EKQ_KWLT),
+    (">", _EKQ_TKKEY, _EKQ_KWGT), ("=", _EKQ_TKKEY, _EKQ_KWEQ), ("(", _EKQ_TKLPAR, 0),
+    (")", _EKQ_TKRPAR, 0), (",", _EKQ_TKCOMA, 0), (".", _EKQ_TKDOT, 0), ("*", _EKQ_TKSTAR, 0),
 )
 
 # Operator codes of `ekopcd.inc`.

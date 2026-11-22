@@ -72,7 +72,7 @@ end
         trgcde::Int32, fixfid::Int32
     )
     m.dsk && return _geo_dskshape(ks, tols, trgcde, fixfid, m.srflst)
-    return _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
+    return _GeoShape(false, trgcde, fixfid, 1.0, 1.0, 1.0, 1.0, _GEO_NOSURF, tols)
 end
 
 function _geo_subpnt(

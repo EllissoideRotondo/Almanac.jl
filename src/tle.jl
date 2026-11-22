@@ -13,8 +13,8 @@
 #
 # `getelm` and `evsgp4` need the leap seconds of a kernel set, as in CSPICE.
 
-"Names of the eight geophysical constants in the order of `geophs` (the items of `BODY399_<name>`)."
-const _TLE_GEOPHS_NAMES = ("J2", "J3", "J4", "KE", "QO", "SO", "ER", "AE")
+# The eight geophysical constants in the order of `geophs` are the items J2, J3, J4,
+# KE, QO, SO, ER and AE of `BODY399_<name>`.
 
 "Powers of ten for the exponents of NDD60 and BSTAR, which have one digit."
 const _TLE_POWER = (1.0, 1.0e1, 1.0e2, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e9)

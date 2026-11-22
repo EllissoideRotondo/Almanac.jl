@@ -127,14 +127,24 @@ const _DPBEGL = (0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335)
 "Contract: `year >= 1`; returns 1 for a Gregorian leap year and 0 otherwise."
 _leap(year::Int) = (year % 4 == 0) - (year % 100 == 0) + (year % 400 == 0)
 
-"Contract: `year >= 1`, `1 <= month <= 12`; returns the number of days from 0001-01-01 (day 0) to the given Gregorian date, as the `DAYNUM` of `ttrans`."
-function _daynum(year::Int, month::Int, day::Int)::Int
+"Contract: `1 <= month <= 12`, any `year`; returns the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles."
+function _tt_daynum(year::Int, month::Int, day::Int)::Int
+    doffst = 0
+    if year <= 0
+        yr400, year = fldmod(year, 400)
+        if year == 0
+            year += 400
+            yr400 -= 1
+        end
+        doffst = yr400 * 146097
+    end
     y = year - 1
-    return y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
-        (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1
+    n = y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
+        (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1 + doffst
+    return Int(n % Int32)
 end
 
-const _DN2000 = _daynum(2000, 1, 1)
+const _DN2000 = _tt_daynum(2000, 1, 1)
 const _JD1101 = _JD2000 - Float64(_DN2000) - 0.5
 
 "Contract: returns (year, month, day, day of year) of day number `daynum` in the Gregorian calendar, as `ttrans` computes them."
@@ -339,24 +349,7 @@ dpr() = 180.0 / Float64(pi)
 # The calendar arithmetic of TTRANS and JUL2GR
 # ---------------------------------------------------------------------------------
 
-# `_cint`, `_wrap32`, `_nint` and `_dnint` are in math/kernels.jl.
-
-"Contract: `1 <= month <= 12`, any `year`; returns the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles."
-function _tt_daynum(year::Int, month::Int, day::Int)::Int
-    doffst = 0
-    if year <= 0
-        yr400, year = fldmod(year, 400)
-        if year == 0
-            year += 400
-            yr400 -= 1
-        end
-        doffst = yr400 * 146097
-    end
-    y = year - 1
-    n = y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
-        (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1 + doffst
-    return Int(n % Int32)
-end
+# `_cint`, `_wrap32`, `_nint` and `_dnint` are in math/kernels.jl, `_tt_daynum` is above.
 
 "Day number of 1991 JAN 06, a Sunday (`SUNDAY` of `ttrans`)."
 const _SUNDAY = _tt_daynum(1991, 1, 6)

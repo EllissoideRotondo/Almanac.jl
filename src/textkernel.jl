@@ -654,7 +654,6 @@ continuation marker; returns the logical strings, where an element that ends in
 `contin` is joined (marker removed) with the next element, as CSPICE `stpool` does.
 """
 function pool_strings_joined(values::Vector{String}, contin::AbstractString)::Vector{String}
-    isempty(contin) && throw(ArgumentError("the continuation marker is empty"))
     out = String[]
     buf = IOBuffer()
     open_string = false
@@ -674,15 +673,13 @@ function pool_strings_joined(values::Vector{String}, contin::AbstractString)::Ve
 end
 
 """
-    pool_string_joined(values, nth, contin = "//") -> Union{String,Nothing}
+    pool_string_joined(values, nth, contin) -> Union{String,Nothing}
 
 Contract: the `nth` (1-based) logical string of a string variable whose elements may
-be continued with `contin`, or `nothing` if there is none (`stpool`).
+be continued with the non-empty marker `contin`, or `nothing` if there is none
+(`stpool`).
 """
-function pool_string_joined(
-        values::Vector{String}, nth::Integer,
-        contin::AbstractString = "//"
-    )
+function pool_string_joined(values::Vector{String}, nth::Integer, contin::AbstractString)
     all = pool_strings_joined(values, contin)
     return 1 <= nth <= length(all) ? all[nth] : nothing
 end

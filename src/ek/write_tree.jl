@@ -474,7 +474,7 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         rpage[key + 87] = 0
         nkeys += 1
         _ekw_pgwi(h, root, rpage)
-        return nkeys == 83
+        return nkeys == _EK_MXKEYR + 1
     elseif key == totkey + 1
         _, target, _, _, _ = _ek_trlk(h.ints, tree, key - 1)
         tpage = _ekw_pgri(h, target)
@@ -489,7 +489,7 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         rpage[2] = totkey + 1
         _ekw_pgwi(h, root, rpage)
         _ekw_pgwi(h, target, tpage)
-        return nkeys == 62
+        return nkeys == _EK_MXKEYC
     end
     _, target, _, next, level = _ek_trlk(h.ints, tree, key)
     local tpage::_ekw_Page, tnkeys::Int, parent::Int, pkey::Int, rpidx::Int
@@ -497,7 +497,7 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         parent, pkey, _, _, _, _, rpidx, _, _ = _ekw_trpi(h, tree, key)
         tpage = _ekw_pgri(h, target)
         tnkeys = tpage[0]
-        tnkeys > 62 && throw(
+        tnkeys > _EK_MXKEYC && throw(
             SpiceError(
                 :nodetoofull, "Node = $target. Tree = $tree. File = " *
                     "$(h.path). Key count = $tnkeys; max allowed, including overflow, is 63."
@@ -520,7 +520,7 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         parent, pkey, _, _, _, _, rpidx, _, _ = _ekw_trpi(h, tree, key - 1)
         tpage = _ekw_pgri(h, target)
         tnkeys = tpage[0]
-        tnkeys > 63 && throw(
+        tnkeys > _EK_MXKEYC + 1 && throw(
             SpiceError(
                 :nodetoofull, "Node = $target. Tree = $tree. File = " *
                     "$(h.path). Key count = $tnkeys; max allowed, including overflow, is 63."
@@ -531,7 +531,7 @@ function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
         tpage[prev + 65] = 0
     end
     tpage[0] = tnkeys + 1
-    overfl = tnkeys == 62
+    overfl = tnkeys == _EK_MXKEYC
     _ekw_pgwi(h, target, tpage)
     while parent != root
         # invariant: the nodes below `parent` on the path hold the new key; in `parent`
@@ -568,22 +568,22 @@ function _ekw_tr13(h::DASHandle, tree::Integer)
     root = Int(tree)
     rpage = _ekw_pgri(h, root)
     nrkeys = rpage[4]
-    nrkeys == 83 || _ekw_bug("Number of keys in root = $nrkeys; should be 83.")
+    nrkeys == _EK_MXKEYR + 1 || _ekw_bug("Number of keys in root = $nrkeys; should be 83.")
     child1, _ = _ekw_pgal(h, 3)
     child2, _ = _ekw_pgal(h, 3)
     c1page = _ekw_Page()
-    c1page[0] = 41
-    _ekw_move!(c1page, 1, rpage, 5, 41)
-    _ekw_move!(c1page, 128, rpage, 172, 41)
-    _ekw_move!(c1page, 64, rpage, 88, 42)
+    c1page[0] = _EK_MNKEYC
+    _ekw_move!(c1page, 1, rpage, 5, _EK_MNKEYC)
+    _ekw_move!(c1page, 128, rpage, 172, _EK_MNKEYC)
+    _ekw_move!(c1page, 64, rpage, 88, _EK_MNKIDC)
     c2page = _ekw_Page()
-    c2page[0] = 41
-    middle = 42
-    _ekw_move!(c2page, 1, rpage, middle + 5, 41)
-    _ekw_move!(c2page, 128, rpage, middle + 172, 41)
-    _ekw_move!(c2page, 64, rpage, middle + 88, 42)
+    c2page[0] = _EK_MNKEYC
+    middle = _EK_MNKEYC + 1
+    _ekw_move!(c2page, 1, rpage, middle + 5, _EK_MNKEYC)
+    _ekw_move!(c2page, 128, rpage, middle + 172, _EK_MNKEYC)
+    _ekw_move!(c2page, 64, rpage, middle + 88, _EK_MNKIDC)
     delta = rpage[middle + 4]
-    for i in 1:41
+    for i in 1:_EK_MNKEYC
         c2page[i] = c2page[i] - delta
     end
     rpage[5] = rpage[middle + 4]
@@ -593,9 +593,9 @@ function _ekw_tr13(h::DASHandle, tree::Integer)
     rpage[4] = 1
     rpage[3] = rpage[3] + 1
     rpage[1] = rpage[1] + 2
-    _ekw_clear!(rpage, 6, 82)
-    _ekw_clear!(rpage, 173, 82)
-    _ekw_clear!(rpage, 90, 82)
+    _ekw_clear!(rpage, 6, _EK_MXKEYR)
+    _ekw_clear!(rpage, 173, _EK_MXKEYR)
+    _ekw_clear!(rpage, 90, _EK_MXKEYR)
     _ekw_pgwi(h, root, rpage)
     _ekw_pgwi(h, child1, c1page)
     _ekw_pgwi(h, child2, c2page)
@@ -638,9 +638,9 @@ the position in `parent` of the key between the siblings. The result tells that 
 parent now holds one key more than its capacity.
 """
 function _ekw_tr23(h::DASHandle, tree::Integer, left::Int, right::Int, parent::Int, pkidx::Int)
-    lsize = 41
-    msize = 41
-    rsize = 42
+    lsize = _EK_MNKEYC
+    msize = _EK_MNKEYC
+    rsize = _EK_MNKEYC + 1
     c1page = _ekw_pgri(h, left)
     c2page = _ekw_pgri(h, right)
     ppage = _ekw_pgri(h, parent)
@@ -649,7 +649,7 @@ function _ekw_tr23(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     _ekw_sibling_check(ppage, kidbas, pkidx, left, right, parent)
     nlkeys = c1page[0]
     nrkeys = c2page[0]
-    nlkeys + nrkeys == 125 || _ekw_bug(
+    nlkeys + nrkeys == 2 * _EK_MXKEYC + 1 || _ekw_bug(
         "Number of keys in LEFT = $nlkeys; number of keys " *
             "in right = $nrkeys; but sum should be 125."
     )

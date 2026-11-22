@@ -279,8 +279,8 @@ end
 
 The target shape of a geometry call, the saved values of `zzsinutl`: `dsk` (DSK data,
 else the ellipsoid with the radii `a`, `b`, `c`), the target `trgcde`, its body-fixed
-frame `fixfid`, the radii of the inner and the outer bounding sphere `minrad` and
-`maxrad`, the surface list and the DSK tolerances.
+frame `fixfid`, the radius `maxrad` of the outer bounding sphere, the surface list and
+the DSK tolerances.
 """
 struct _GeoShape
     dsk::Bool
@@ -289,7 +289,6 @@ struct _GeoShape
     a::Float64
     b::Float64
     c::Float64
-    minrad::Float64
     maxrad::Float64
     srflst::Vector{Int}
     tols::DSKTolerances
@@ -299,7 +298,7 @@ end
 @inline function _geo_ellshape(ks::KernelSet, trgcde::Int32, fixfid::Int32)
     a, b, c = _geo_radii(ks, trgcde)
     return _GeoShape(
-        false, trgcde, fixfid, a, b, c, min(min(a, b), c), max(max(a, b), c),
+        false, trgcde, fixfid, a, b, c, max(max(a, b), c),
         _GEO_NOSURF, _DSK_DEFAULT_TOLS
     )
 end
@@ -315,8 +314,8 @@ end
 
 "`zzsudski`: the DSK surface of the body `trgcde` with the surfaces `srflst`."
 function _geo_dskshape(ks::KernelSet, tols::DSKTolerances, trgcde::Int32, fixfid::Int32, srflst)
-    minrad, maxrad = _geo_dsksph(ks, trgcde, srflst)
-    return _GeoShape(true, trgcde, fixfid, 0.0, 0.0, 0.0, minrad, maxrad, srflst, tols)
+    _, maxrad = _geo_dsksph(ks, trgcde, srflst)
+    return _GeoShape(true, trgcde, fixfid, 0.0, 0.0, 0.0, maxrad, srflst, tols)
 end
 
 @inline _geo_shape(ks::KernelSet, tols::DSKTolerances, m::_GeoMethod, trgcde::Int32, fixfid::Int32) =
