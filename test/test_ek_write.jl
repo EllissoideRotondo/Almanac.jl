@@ -523,6 +523,27 @@ group("EK write: trees of depth 3 (records, indexes, data pages)") do
     measured("ek_write: deep files, $words words equal")
 end
 
+group("EK write: fast trees of depth 3 whose middle nodes have the fewest children") do
+    # With 5167 rows (the smallest count of depth 3) the root of the record tree and of
+    # the index tree has two children of 2583 keys; a middle node of 2583 keys gets 42
+    # children (`reqsiz <= maxsiz` of `zzektr1s`). The 5600 and 6000 rows above give
+    # middle nodes of 2800 and 3000 keys, which take the other branch.
+    dir = mktempdir()
+    rng = MersenneTwister(SEED + 9)
+    cols = [EKColSpec("K", :INT; indexed = true)]
+    rows = Vector{Any}[Any[Any[rand(rng, -1000:1000)]] for _ in 1:5167]
+    segs = [EKSegSpec("MID", cols, rows, true)]
+    pc = ekw_write(EKW_C, joinpath(dir, "c_mid.bes"), segs)
+    pn = ekw_write(EKW_N, joinpath(dir, "n_mid.bes"), segs)
+    nd, _ = ekw_diff(pc, pn)
+    @test nd == 0
+    d = ekw_depths(pn)
+    @test d.rec == 3
+    @test d.idx == 3
+    _, bad = ekw_read_check(pn, segs)
+    @test bad == 0
+end
+
 # ---------------------------------------------------------------------------------------
 # (b) CSPICE loads and queries the files of Almanac
 # ---------------------------------------------------------------------------------------
