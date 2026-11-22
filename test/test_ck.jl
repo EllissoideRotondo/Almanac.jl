@@ -1064,9 +1064,9 @@ group(
         dafada(hw, [1.0, 0.0, 0.0, 0.0, 5.0, NaN])
         dafena(hw)
         ckcls(hw)
-        ctx = SpiceContext()
-        furnsh(ctx, p)
-        @test throws_kind(() -> ckgp(ctx, -77001, 5.0, 0.0, 1), :baddaf)
+        nanctx = SpiceContext()
+        furnsh(nanctx, p)
+        @test throws_kind(() -> ckgp(nanctx, -77001, 5.0, 0.0, 1), :baddaf)
     end
 
     @apart @testset "concurrent readers" begin
