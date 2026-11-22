@@ -876,17 +876,64 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
     end
 
     @apart @testset "allocations of the conversions to and from strings" begin
+        # `et2utc` and `etcal` return a `String63` and allocate nothing, in every format
+        # and at the extremes of their range.
+        zs = (
+            () -> et2utc(ks, 8.0e8, "ISOC", 3), () -> et2utc(ks, 8.0e8, "C", 14),
+            () -> et2utc(ks, -3.0e13, "D", 9), () -> et2utc(ks, 8.0e8, "J", 7),
+            () -> et2utc(ks, 8.0e8, "isod", 0), () -> etcal(8.0e8), () -> etcal(-1.0e300),
+        )
+        foreach(f -> f(), zs)
+        @test [@allocations(f()) for f in zs] == zeros(Int, length(zs))
         # Upper bounds on the count, a little above the count measured on Julia 1.13: the
         # returned String and the work buffers. Before the byte buffers, `str2et` made 81
         # allocations and `timout` more than 100.
         fs = (
-            () -> et2utc(ks, 8.0e8, "ISOC", 3), () -> et2utc(ks, 8.0e8, "J", 7), () -> etcal(8.0e8),
             () -> timout(ks, 8.0e8, "YYYY-MM-DDTHR:MN:SC.### ::TDB"),
             () -> str2et(ks, "2025 MAR 01 12:00:00.000"),
         )
         foreach(f -> f(), fs)
-        n = [@allocations(f()) for f in fs]
-        @test all(n .<= [4, 4, 4, 30, 40])
+        @test all([@allocations(f()) for f in fs] .<= [30, 40])
+    end
+
+    @apart @testset "String63: a String in all but its storage" begin
+        s = et2utc(ks, 8.0e8, "ISOC", 3)
+        @test s isa Almanac.String63 && isbitstype(typeof(s))
+        @test s == "2025-05-08T18:12:10.815" == String(s) && String(s) isa String
+        @test (length(s), sizeof(s), s[1:4], s[end], "<$s>") == (23, 23, "2025", '5', "<2025-05-08T18:12:10.815>")
+        @test hash(s) == hash(String(s)) && sprint(print, s) == String(s)
+        @test collect(s) == collect(String(s)) && occursin(r"T18:12", s) && startswith(s, "2025-")
+        @test str2et(ctx, s) == str2et(ctx, String(s))
+        # Equal strings are identical: no byte past the length differs.
+        @test s === Almanac.String63(String(s)) && et2utc(ks, 8.0e8, "C", 14) === Almanac.String63(String(et2utc(ks, 8.0e8, "C", 14)))
+        @test etcal(8.0e8) === Almanac.String63(String(etcal(8.0e8)))
+        # The build buffer holds what a `String63` holds, and no more.
+        b = Almanac._puts(Almanac._ByteBuf(), "x"^63)
+        @test Almanac._inline(b) == "x"^63
+        @test throws_kind(() -> Almanac._bpush(b, UInt8('x')), :buffertoosmall)
+    end
+
+    @apart @testset "et2utc and etcal: at most 45 bytes, at any epoch" begin
+        # The longest results: 42 bytes in format C or D (a year of 7 digits, B.C. and 13
+        # decimals) and 45 bytes from `etcal` at the limit of its 32-bit day numbers, well
+        # inside the 63 bytes of a `String63`. An epoch that cannot be written throws.
+        ets = [s * 10.0^e for e in -20:0.25:308 for s in (-1.0, 1.0)]
+        append!(ets, [0.0, -0.0, NaN, Inf, -Inf, floatmax(), -floatmax(), nextfloat(0.0)])
+        function nbytes(f, et)
+            r = try
+                f(et)
+            catch
+                nothing
+            end
+            return r === nothing ? 0 : ncodeunits(r)
+        end
+        utc = [
+            maximum(et -> nbytes(t -> et2utc(ks, t, fmt, p), et), ets)
+                for fmt in ("C", "D", "J", "ISOC", "ISOD") for p in (-1, 0, 3, 14, 20)
+        ]
+        @test maximum(utc) == 42
+        @test maximum(et -> nbytes(etcal, et), ets) == 45
+        @test ncodeunits(etcal(NaN)) <= 45 && ncodeunits(etcal(Inf)) <= 45 && ncodeunits(etcal(-Inf)) <= 45
     end
 
     @apart @testset "timout, pictures of the header and random pictures" begin

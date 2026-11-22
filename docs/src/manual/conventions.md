@@ -104,3 +104,6 @@ places:
   [`dskp02`](@ref) count `start` from 1, as the routines they port; [`termpt`](@ref)
   returns only the points found; [`et2utc`](@ref) returns the whole string, which
   SPICE.jl can cut when `prec` is small.
+- [`et2utc`](@ref) and [`etcal`](@ref) return a `String63` of
+  [InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl), a string stored
+  inline, so that they allocate nothing; `String(s)` gives a `String`.
