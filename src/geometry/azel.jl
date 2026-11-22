@@ -175,7 +175,7 @@ function azlcpo(
     center, _, found = _geo_frinfo(ks, fxfcde)
     found || _geo_unknown_frame(obsref)
     center == obscde || _geo_bad_center(obsref, obsctr, center)
-    (method == "ELLIPSOID" || _dsk_eqstr(method, "ELLIPSOID")) || throw(
+    (method == "ELLIPSOID" || _eqstr(method, "ELLIPSOID")) || throw(
         SpiceError(
             :invalidmethod, "the method <$method> is not supported; use ELLIPSOID"
         )

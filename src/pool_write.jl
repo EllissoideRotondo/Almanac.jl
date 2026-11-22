@@ -592,37 +592,6 @@ function _badkpv(
 end
 
 """
-    _pool_x_match(s, t) -> Bool
-
-Contract: true if the string `s` matches the template `t`, as `matchi_` with the
-wild cards of `gnpool_`: `*` stands for any substring, `%` for any one character, and
-letter case does not matter.
-"""
-function _pool_x_match(s::AbstractString, t::AbstractString)
-    a, b = collect(uppercase(s)), collect(uppercase(t))
-    i, j, star, mark = 1, 1, 0, 0
-    while i <= length(a)    # invariant: a[1:i-1] matches b[1:j-1]
-        if j <= length(b) && (b[j] == '%' || (b[j] != '*' && b[j] == a[i]))
-            i += 1
-            j += 1
-        elseif j <= length(b) && b[j] == '*'
-            star, mark = j, i
-            j += 1
-        elseif star != 0
-            j = star + 1
-            mark += 1
-            i = mark
-        else
-            return false
-        end
-    end
-    while j <= length(b) && b[j] == '*'
-        j += 1
-    end
-    return j > length(b)
-end
-
-"""
     gnpool([ctx,] name, start=1, room=typemax(Int)) -> Vector{String}
 
 Return the names of the kernel-pool variables that match the template `name`, as
@@ -656,7 +625,7 @@ function gnpool(ks::KernelSet, name::AbstractString, start::Integer = 1, room::I
         )
     )
     t = String(strip(name))
-    hits = sort!(String[k for k in keys(ks.pool) if _pool_x_match(k, t)])
+    hits = sort!(String[k for k in keys(ks.pool) if _matchi(k, t)])
     first = max(1, Int(start))
     first > length(hits) && return String[]
     return hits[first:min(length(hits), first + min(Int(room), length(hits)) - 1)]

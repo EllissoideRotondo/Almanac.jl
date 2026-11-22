@@ -16,9 +16,6 @@
 # The eight geophysical constants in the order of `geophs` are the items J2, J3, J4,
 # KE, QO, SO, ER and AE of `BODY399_<name>`.
 
-"Powers of ten for the exponents of NDD60 and BSTAR, which have one digit."
-const _TLE_POWER = (1.0, 1.0e1, 1.0e2, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0e8, 1.0e9)
-
 "The terms of a two-line element set in the order in which `zzgetelm` parses them: name, line, first and last character."
 const _TLE_TERMS = (
     ("YEAR", 1, 19, 20), ("DAY", 1, 21, 32), ("NDT20", 1, 34, 43),
@@ -150,7 +147,8 @@ function getelm(ks::KernelSet, frstyr::Integer, lines)
         _tle_error("INCL (inclination) expected bounds [0,180). Actual value $incl")
     (no > 20.0 || no < 0.0) &&
         _tle_error("NO (mean motion) expected bounds (0,20). Actual value $no")
-    pow10(n) = n >= 0 ? _TLE_POWER[Int(n) + 1] : 1.0 / _TLE_POWER[1 - Int(n)]
+    # The powers of ten of the one-digit exponents of NDD60 and BSTAR.
+    pow10(n) = n >= 0 ? _NPARSD_LOOKUP[Int(n) + 1] : 1.0 / _NPARSD_LOOKUP[1 - Int(n)]
     ndd60 *= pow10(nexp)
     bstar *= pow10(bexp)
     d2r = Float64(pi) / 180.0

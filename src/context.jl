@@ -313,12 +313,9 @@ function kclear(ctx::SpiceContext)
     return nothing
 end
 
-ktotal(ctx::SpiceContext) = length(kernelset(ctx).loaded)
-
 furnsh(path::AbstractString) = furnsh(default_context(), path)
 unload(path::AbstractString) = unload(default_context(), path)
 kclear() = kclear(default_context())
-ktotal() = ktotal(default_context())
 
 const furnsh! = furnsh
 const unload! = unload

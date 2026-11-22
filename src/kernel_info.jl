@@ -83,8 +83,8 @@ julia> ktotal(SpiceContext())
 See also [`kdata`](@ref), [`kinfo`](@ref).
 """
 ktotal(ks::KernelSet, kind::AbstractString = "ALL") = length(_kernels_of_kind(ks, kind))
-ktotal(ctx::SpiceContext, kind::AbstractString) = ktotal(kernelset(ctx), kind)
-ktotal(kind::AbstractString) = ktotal(default_context(), kind)
+ktotal(ctx::SpiceContext, kind::AbstractString = "ALL") = ktotal(kernelset(ctx), kind)
+ktotal(kind::AbstractString = "ALL") = ktotal(default_context(), kind)
 
 """
     kdata([ctx,] which, kind="ALL") -> Union{Nothing,Tuple{String,String,String,Int}}

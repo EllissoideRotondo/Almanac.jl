@@ -346,7 +346,7 @@ function gftfov(
         tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, step::Real, cnfine::Window;
         tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
     )
-    _dsk_eqstr(tshape, "RAY") && _gf_ray_in_gftfov()
+    _eqstr(tshape, "RAY") && _gf_ray_in_gftfov()
     run = _gf_run(step, tol; bail, report, threads)
     return _gf_fove(ks, inst, tshape, _GF_ZERO3, target, tframe, abcorr, obsrvr, cnfine, run)
 end

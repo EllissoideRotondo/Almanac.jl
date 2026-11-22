@@ -282,10 +282,6 @@ end
     )
 )
 
-"True if `a` and `b` are equal when case and blanks are ignored (`eqstr`)."
-_dsk_eqstr(a::AbstractString, b::AbstractString) =
-    uppercase(replace(a, ' ' => "")) == uppercase(replace(b, ' ' => ""))
-
 """
     _dsk_parse_method(ks, bodyid, method) -> (shape, subtyp, pri, srflst)
 
@@ -380,9 +376,9 @@ function _dsk_parse_method(ks::KernelSet, bodyid::Integer, method::AbstractStrin
         )
         return :dsk, subtyp, false, srflst
     end
-    _dsk_eqstr(method, "ELLIPSOID") && return :ellipsoid, "", true, srflst
+    _eqstr(method, "ELLIPSOID") && return :ellipsoid, "", true, srflst
     for (a, b) in (("NEARPOINT", "NEAR POINT"), ("INTERCEPT", "INTERCEPT")), sep in (":", "/")
-        (_dsk_eqstr(method, a * sep * "ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID" * sep * a)) &&
+        (_eqstr(method, a * sep * "ELLIPSOID") || _eqstr(method, "ELLIPSOID" * sep * a)) &&
             return :ellipsoid, b, true, srflst
     end
     i = 1

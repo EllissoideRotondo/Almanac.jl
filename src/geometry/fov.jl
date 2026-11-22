@@ -83,7 +83,7 @@ function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
     spec = _geo_fov_text(ks, instid, "_FOV_CLASS_SPEC")
     spec === nothing && (spec = "CORNERS")
     bounds = Vec3{Float64}[]
-    if _dsk_eqstr(spec, "CORNERS")
+    if _eqstr(spec, "CORNERS")
         v = _geo_fov_var(ks, instid, "_FOV_BOUNDARY")
         v === nothing && (v = _geo_fov_var(ks, instid, "_FOV_BOUNDARY_CORNERS"))
         v isa Vector{Float64} || _geo_fov_error(
@@ -111,7 +111,7 @@ function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
         for i in 1:n                     # invariant: bounds holds the vectors 1 .. i-1
             @inbounds push!(bounds, Vec3{Float64}(v[3i - 2], v[3i - 1], v[3i]))
         end
-    elseif _dsk_eqstr(spec, "ANGLES")
+    elseif _eqstr(spec, "ANGLES")
         shape == "POLYGON" && _geo_fov_error(
             :shapenotsupported,
             "the shape POLYGON of the instrument $instid cannot be given by angles"
@@ -523,9 +523,9 @@ const _GEO_FOV_RAY = 3
 
 "The correction of a ray: `(stellar, transmit)`; a correction with light time is not valid."
 function _geo_fov_raycorr(abcorr::AbstractString)
-    _dsk_eqstr(abcorr, "NONE") && return false, false
-    _dsk_eqstr(abcorr, "S") && return true, false
-    _dsk_eqstr(abcorr, "XS") && return true, true
+    _eqstr(abcorr, "NONE") && return false, false
+    _eqstr(abcorr, "S") && return true, false
+    _eqstr(abcorr, "XS") && return true, true
     _geo_fov_error(
         :invalidoption, "the aberration correction <$abcorr> is not valid " *
             "for a ray: use NONE, S or XS"
@@ -747,7 +747,7 @@ function fovtrg(
         ks::KernelSet, inst::NameOrID, target::NameOrID, tshape::AbstractString,
         tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, et::Real
     )
-    _dsk_eqstr(tshape, "RAY") && _geo_fov_error(
+    _eqstr(tshape, "RAY") && _geo_fov_error(
         :invalidoption,
         "the target shape RAY is not valid in fovtrg; use fovray"
     )

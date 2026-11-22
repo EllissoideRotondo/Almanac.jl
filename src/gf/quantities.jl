@@ -429,8 +429,6 @@ end
 _gf_vecframe(v::GFPositionVector) = v.ref
 _gf_vecexist(::GFPositionVector, cnfine::Window, run::_GFRun) = copy(cnfine)
 
-"Left-justified upper-case copy of `s` with every blank removed (`cmprss` with 0)."
-_gf_squeeze(s::AbstractString) = uppercase(replace(s, ' ' => ""))
 "Left-justified upper-case copy of `s` with blank runs compressed to one (`cmprss` with 1)."
 _gf_compress(s::AbstractString) = uppercase(replace(strip(s, ' '), r" +" => " "))
 
@@ -469,7 +467,7 @@ three coordinates, in any case (`zzgfcoin`). Throws `SpiceError(:notsupported)` 
 another system or coordinate. Postcondition: `1 <= sys <= 7` and `1 <= idx <= 3`.
 """
 function _gf_sysidx(crdsys::AbstractString, crdnam::AbstractString)
-    csys = _gf_squeeze(crdsys)
+    csys = _squeeze(crdsys)
     sys = something(findfirst(==(csys), _GF_SYSNMS), 0)
     sys == 0 && throw(
         SpiceError(

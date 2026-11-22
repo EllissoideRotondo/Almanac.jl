@@ -185,8 +185,6 @@ function _Tokens(str::Vector{UInt8})
     )
 end
 
-@inline _upper(c::UInt8) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
-@inline _lower(c::UInt8) = (UInt8('A') <= c <= UInt8('Z')) ? c + 0x20 : c
 @inline _isdigit(c::UInt8) = UInt8('0') <= c <= UInt8('9')
 
 "Contract: returns `s[b:e]` as a `String`; empty when the range is empty or outside `s`."

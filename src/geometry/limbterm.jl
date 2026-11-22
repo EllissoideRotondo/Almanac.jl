@@ -1030,7 +1030,7 @@ function tangpt(
     _plain_epoch(et0, "tangpt")
     corr = _geo_abcorr(abcorr)
     s = _geo_sign(corr)
-    (method == "ELLIPSOID" || _dsk_eqstr(method, "ELLIPSOID")) || throw(
+    (method == "ELLIPSOID" || _eqstr(method, "ELLIPSOID")) || throw(
         SpiceError(
             :notsupported, "the method <$method> is not supported; use ELLIPSOID"
         )
@@ -1151,8 +1151,8 @@ tangpt(
     return _geo_tanloc_slow(corloc)
 end
 @noinline function _geo_tanloc_slow(corloc::AbstractString)
-    _dsk_eqstr(corloc, "TANGENTPOINT") && return true
-    _dsk_eqstr(corloc, "SURFACEPOINT") && return false
+    _eqstr(corloc, "TANGENTPOINT") && return true
+    _eqstr(corloc, "SURFACEPOINT") && return false
     throw(
         SpiceError(
             :notsupported, "the aberration correction locus <$corloc> is not " *

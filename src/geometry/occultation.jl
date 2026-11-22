@@ -394,7 +394,7 @@ end
     shap == "POINT" && return _GeoOccBody(Int32(0), _GEO_OCC_POINT, _geo_ell(0x00))
     id = _geo_body(ks, targ, what)
     m = _geo_method(ks, id, shap)
-    kind = m.dsk ? _GEO_OCC_DSK : (shap == "ELLIPSOID" || _dsk_eqstr(shap, "ELLIPSOID")) ?
+    kind = m.dsk ? _GEO_OCC_DSK : (shap == "ELLIPSOID" || _eqstr(shap, "ELLIPSOID")) ?
         _GEO_OCC_ELLIPSOID : 0x00
     return _GeoOccBody(id, kind, m)
 end

@@ -301,10 +301,10 @@ function _ekw_pdec(decl::AbstractString)
     if tok == "INTEGER"
         pardsc[_EK_TYPIDX] = _EK_INT
         pardsc[_EK_LENIDX] = 1
-    elseif _ek_eqstr(tok, "DOUBLE PRECISION")
+    elseif _eqstr(tok, "DOUBLE PRECISION")
         pardsc[_EK_TYPIDX] = _EK_DP
         pardsc[_EK_LENIDX] = 1
-    elseif _ek_eqstr(tok, "TIME")
+    elseif _eqstr(tok, "TIME")
         pardsc[_EK_TYPIDX] = _EK_TIME
         pardsc[_EK_LENIDX] = 1
     elseif startswith(tok, "CHARACTER")

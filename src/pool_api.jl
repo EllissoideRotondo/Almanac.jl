@@ -111,7 +111,7 @@ function _pool_key(
     else
         for k in 1:nmid
             c = codeunit(mid, k)
-            buf[np + k] = upper && UInt8('a') <= c <= UInt8('z') ? c - 0x20 : c
+            buf[np + k] = upper ? _upper(c) : c
         end
     end
     copyto!(buf, np + nmid + 1, codeunits(s1), 1, n1)
@@ -280,7 +280,7 @@ See also [`scid2n`](@ref).
 function scn2id(ks::KernelSet, clknam::AbstractString)
     # `ucase` into a 32-character buffer, then the last "SCLK" becomes blanks.
     s = codeunits(String(clknam))
-    b = UInt8[0x61 <= c <= 0x7a ? c - 0x20 : c for c in view(s, 1:min(length(s), 32))]
+    b = UInt8[_upper(c) for c in view(s, 1:min(length(s), 32))]
     for i in (length(b) - 3):-1:1
         if b[i] == UInt8('S') && b[i + 1] == UInt8('C') && b[i + 2] == UInt8('L') &&
                 b[i + 3] == UInt8('K')

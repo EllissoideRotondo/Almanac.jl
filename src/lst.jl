@@ -107,11 +107,11 @@ hr, mn, sc, time, ampm = et2lst(et, 399, deg2rad(-118.0), "PLANETOCENTRIC")
 function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::AbstractString)
     _plain_epoch(et, "et2lst")
     system = strip(type)
-    if _eqsys(system, "PLANETOGRAPHIC")
+    if _eqci(system, "PLANETOGRAPHIC", true)
         g = _lst_sense(ks, body) * Float64(lon)
         y, x = sincos(g)
         mylong = (x == 0.0 && y == 0.0) ? 0.0 : atan(y, x)
-    elseif _eqsys(system, "PLANETOCENTRIC")
+    elseif _eqci(system, "PLANETOCENTRIC", true)
         mylong = Float64(lon)
     else
         throw(

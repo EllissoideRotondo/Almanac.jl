@@ -321,7 +321,7 @@ function kplfrm(ks::KernelSet, frmcls::Integer)
     getint(key) = (k = first(key, 32); _gipool_first(get(pool, k, nothing), k))
     ids = Int[]
     for (key, val) in pool
-        _pool_x_match(key, "FRAME_*_NAME") || continue
+        _matchi(key, "FRAME_*_NAME") || continue
         (val isa Vector{String} && !isempty(val)) || continue
         name = strip(first(val[1], 32), ' ')
         isempty(name) && (name = " ")
@@ -604,23 +604,8 @@ julia> bodvcd(ctx, 399, "RADII")
  6356.7519
 ```
 """
-function bodvcd(ks::KernelSet, bodyid::Integer, item::AbstractString)
-    key = _body_key(bodyid, item)
-    v = get(ks.pool, key, nothing)
-    v === nothing && throw(
-        SpiceError(
-            :kernelvarnotfound,
-            "the variable $key could not be found in the kernel pool"
-        )
-    )
-    v isa Vector{Float64} || throw(
-        SpiceError(
-            :typemismatch,
-            "the data associated with variable $key are not of numeric type"
-        )
-    )
-    return copy(v)
-end
+bodvcd(ks::KernelSet, bodyid::Integer, item::AbstractString) =
+    gdpool(ks, _body_key(bodyid, item))
 
 # Context and default-context forms.
 for f in (:frinfo, :cidfrm, :tkfram)

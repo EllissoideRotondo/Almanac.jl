@@ -421,8 +421,8 @@ function _gf_surface_coordinate(
     meth = uppercase(lstrip(method, ' '))
     rad = (radii[1], radii[2], radii[3])
     if !intercept
-        near = _dsk_eqstr(meth, "Near point: ellipsoid") ? Int8(1) :
-            _dsk_eqstr(meth, "Intercept: ellipsoid") ? Int8(0) : Int8(-1)
+        near = _eqstr(meth, "Near point: ellipsoid") ? Int8(1) :
+            _eqstr(meth, "Intercept: ellipsoid") ? Int8(0) : Int8(-1)
         vec = GFSubObserverVector(ks, targ, obs, corr, ref, meth, near, rad)
         return GFCoordinate(vec, sys, idx, re, f, sense, center)
     end
@@ -437,7 +437,7 @@ function _gf_surface_coordinate(
     dctr, _, dfound = _geo_frinfo(ks, dfr)
     dfound || throw(SpiceError(:noframe, "Frame system did not recognize frame $dref."))
     vec = GFInterceptVector(
-        ks, targ, obs, corr, ref, meth, _dsk_eqstr(meth, "Ellipsoid"),
+        ks, targ, obs, corr, ref, meth, _eqstr(meth, "Ellipsoid"),
         rad, dfr, dctr, dv
     )
     return GFCoordinate(vec, sys, idx, re, f, sense, center)

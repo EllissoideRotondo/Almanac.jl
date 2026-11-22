@@ -754,7 +754,7 @@ function _normalize_ascii(s::Union{String, SubString{String}})::String
             gap = i > 0
         else
             gap && unsafe_store!(p, UInt8(' '), i += 1)
-            unsafe_store!(p, UInt8('a') <= b <= UInt8('z') ? b - 0x20 : b, i += 1)
+            unsafe_store!(p, _upper(b), i += 1)
             gap = false
         end
     end
@@ -766,9 +766,6 @@ end
 # The hash and the comparison read the bytes that `normalize_name` would make (upper
 # case, blanks trimmed and compressed) from the bytes of the name as given. A key is
 # normalized, so it reads as itself; a name that is not ASCII is normalized first.
-
-"Contract: byte `b` in upper case if it is an ASCII lower-case letter, else `b`."
-@inline _upper_byte(b::UInt8) = UInt8('a') <= b <= UInt8('z') ? b - 0x20 : b
 
 """
     _name_hash(cu) -> (h::UInt64, ascii::Bool)
@@ -788,7 +785,7 @@ byte of `cu` is ASCII.
             gap = started
         else
             gap && (h = (h ⊻ UInt64(' ')) * 0x00000100000001b3)
-            h = (h ⊻ UInt64(_upper_byte(b))) * 0x00000100000001b3
+            h = (h ⊻ UInt64(_upper(b))) * 0x00000100000001b3
             started, gap = true, false
         end
     end
@@ -810,7 +807,7 @@ end
                 (i <= m && kc[i] == UInt8(' ')) || return false
             end
             i += 1
-            (i <= m && kc[i] == _upper_byte(b)) || return false
+            (i <= m && kc[i] == _upper(b)) || return false
             gap = false
         end
     end

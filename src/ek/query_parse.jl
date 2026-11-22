@@ -387,7 +387,6 @@ end
     (UInt8('A') <= c <= UInt8('Z')) || (UInt8('a') <= c <= UInt8('z'))
 @inline _ek_qisidtail(c::UInt8) =
     _ek_qisalpha(c) || _ek_qisdigit(c) || c == UInt8('$') || c == UInt8('_')
-@inline _ek_qupper(c::UInt8) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
 
 "Contract: returns `(last, nchar)` of the unsigned integer that starts at `s[first]`, as `lx4uns_`; `nchar == 0` and `last == first - 1` if there is none."
 function _ek_qlx4uns(s::Vector{UInt8}, first::Int)
@@ -703,7 +702,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
                     "chars needed; only # are available."
                 return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), nchars), room)
             end
-            name = map(_ek_qupper, view(tq, cptr:last))
+            name = map(_upper, view(tq, cptr:last))
             kw = nchars <= 8 ? findfirst(==(String(copy(name))), _EKQ_KEYWORDS) : nothing
             if kw !== nothing
                 token!(_EKQ_TKKEY, kw, cptr, last)
@@ -2090,7 +2089,7 @@ function _ek_qtcnv(ks::KernelSet, td::TimeDefaults, timstr::AbstractVector{UInt8
     loc = UInt8[]
     for c in timstr
         (c == UInt8(' ') && (isempty(loc) || loc[end] == UInt8(' '))) && continue
-        push!(loc, _ek_qupper(c))
+        push!(loc, _upper(c))
     end
     (!isempty(loc) && loc[end] == UInt8(' ')) && pop!(loc)
     locstr = String(loc)

@@ -98,7 +98,7 @@ function GFIllumination(
                 "centered at the target body $target. The ID code of the frame center is $center."
         )
     )
-    idx = something(findfirst(n -> _dsk_eqstr(angtyp, n), _GF_ANGNMS), 0)
+    idx = something(findfirst(n -> _eqstr(angtyp, n), _GF_ANGNMS), 0)
     idx == 0 && throw(
         SpiceError(
             :notsupported,

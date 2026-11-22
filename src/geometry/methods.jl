@@ -96,11 +96,11 @@ end
     legacy = shape === :ellipsoid && (
         sub == _GEO_NEARPOINT || (
             sub == 0x00 &&
-                _dsk_eqstr(method, "ELLIPSOID")
+                _eqstr(method, "ELLIPSOID")
         ) || (
             sub == _GEO_INTERCEPT && (
-                _dsk_eqstr(method, "INTERCEPT:ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID:INTERCEPT") ||
-                    _dsk_eqstr(method, "INTERCEPT/ELLIPSOID") || _dsk_eqstr(method, "ELLIPSOID/INTERCEPT")
+                _eqstr(method, "INTERCEPT:ELLIPSOID") || _eqstr(method, "ELLIPSOID:INTERCEPT") ||
+                    _eqstr(method, "INTERCEPT/ELLIPSOID") || _eqstr(method, "ELLIPSOID/INTERCEPT")
             )
         )
     )

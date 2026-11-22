@@ -166,12 +166,6 @@ function _dyn_bodyid(ks::KernelSet, id, name, item)
     return Int32(code)
 end
 
-"`s` without blanks and in upper case, as `cmprss_` with zero blanks and `ucase_`."
-_dyn_squeeze(s::AbstractString) = uppercase(replace(s, ' ' => ""))
-
-"True if `a` and `b` are equal when blanks and letter case are ignored, as `eqstr_`."
-_dyn_eqstr(a::AbstractString, b::AbstractString) = _dyn_squeeze(a) == _dyn_squeeze(b)
-
 """
     _dyn_degrees(units) -> Float64
 
@@ -212,7 +206,7 @@ both light time and stellar aberration throws `SpiceError(:invalidoption)`, as
 """
 function _dyn_abcorr(s::AbstractString, constant::Bool)
     constant || return _dyn_parse_abcorr(s)
-    u = _dyn_squeeze(s)
+    u = _squeeze(s)
     u == "S" && return _aberration(_AB_S)
     u == "XS" && return _aberration(_AB_S | _AB_X)
     c = _dyn_parse_abcorr(s)
@@ -246,7 +240,7 @@ of the two-vector frame `fd`, with the checks of `zzdynfrm_` in its order. Throw
 """
 function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
     pool, id, name = ks.pool, fd.id, fd.name
-    ax = _dyn_squeeze(_dyn_char(pool, id, name, prefix * "AXIS"))
+    ax = _squeeze(_dyn_char(pool, id, name, prefix * "AXIS"))
     negate = startswith(ax, '-')
     ax = replace(ax, '-' => "", '+' => "")
     axis = ax == "X" ? 1 : ax == "Y" ? 2 : ax == "Z" ? 3 : 0
@@ -256,7 +250,7 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
                 "axis '$ax'; the valid values are X, -X, Y, -Y, Z, -Z"
         )
     )
-    vdef = _dyn_squeeze(_dyn_char(pool, id, name, prefix * "VECTOR_DEF"))
+    vdef = _squeeze(_dyn_char(pool, id, name, prefix * "VECTOR_DEF"))
     zero3 = zero(SVector{3, Float64})
     if vdef == "OBSERVER_TARGET_POSITION"
         targ = _dyn_bodyid(ks, id, name, prefix * "TARGET")
@@ -311,7 +305,7 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
                 obs = _dyn_bodyid(ks, id, name, prefix * "OBSERVER")
             end
         end
-        spec = _dyn_squeeze(_dyn_char(pool, id, name, prefix * "SPEC"))
+        spec = _squeeze(_dyn_char(pool, id, name, prefix * "SPEC"))
         if spec == "RECTANGULAR"
             v = _dyn_nums(pool, id, name, prefix * "VECTOR", 3)
             length(v) == 3 || _dyn_badsize("FRAME_$(id)_$(prefix)VECTOR", name, 3, length(v))
@@ -368,13 +362,13 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     pool, id, name = ks.pool, fd.id, fd.name
     base = _dyn_frameid(ks, id, name, "RELATIVE")
     style = _dyn_char(pool, id, name, "DEF_STYLE")
-    _dyn_eqstr(style, "PARAMETERIZED") || throw(
+    _eqstr(style, "PARAMETERIZED") || throw(
         SpiceError(
             :notsupported,
             "dynamic frame style '$style' (in the definition of frame $name) is not supported"
         )
     )
-    family = _dyn_squeeze(_dyn_char(pool, id, name, "FAMILY"))
+    family = _squeeze(_dyn_char(pool, id, name, "FAMILY"))
     fam = family == "MEAN_EQUATOR_AND_EQUINOX_OF_DATE" ? _DYN_MEAN_EQ :
         family == "TRUE_EQUATOR_AND_EQUINOX_OF_DATE" ? _DYN_TRUE_EQ :
         family == "MEAN_ECLIPTIC_AND_EQUINOX_OF_DATE" ? _DYN_MEAN_ECL :
@@ -399,8 +393,8 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     )
     inertial = false
     if rotsta !== nothing
-        inertial = _dyn_eqstr(rotsta, "INERTIAL")
-        inertial || _dyn_eqstr(rotsta, "ROTATING") || throw(
+        inertial = _eqstr(rotsta, "INERTIAL")
+        inertial || _eqstr(rotsta, "ROTATING") || throw(
             SpiceError(
                 :notsupported,
                 "the definition of frame $name has ROTATION_STATE = '$rotsta'; the valid " *
@@ -422,7 +416,7 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
             )
             on || continue
             value = _dyn_char(pool, id, name, item)
-            _dyn_eqstr(value, model) || throw(
+            _eqstr(value, model) || throw(
                 SpiceError(
                     :notsupported, "the definition " *
                         "of frame $name has $item = '$value', which is not recognized"
