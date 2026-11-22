@@ -12,6 +12,8 @@
 # table compares the same computation.
 #
 # Further cases: the same epochs in random order (defeats a cache of the last record),
+# 100 epochs 60 s apart (one record of the kernel, so CSPICE reads the file once and
+# then answers from the record it keeps: the case least favourable to Almanac),
 # the Moon relative to the Sun (longer chain: 301 -> 3 -> 0 <- 10), and the throughput
 # of Almanac on all threads (through a context and on a `KernelSet` snapshot). CSPICE is
 # not thread safe and is never called from a task.
@@ -145,6 +147,7 @@ end
 function main()
     epochs = anise_epochs()
     shuffled = shuffle(MersenneTwister(20261011), epochs)
+    dense = [7.0e8 + 60.0 * k for k in 0:99]
     n = length(epochs)
 
     SPICE.kclear(); SPICE.furnsh(Kernels.DE440S)
@@ -191,6 +194,13 @@ function main()
     push!(rows, bench_row(g, "CSPICE spkgeo (SPICE.jl, integer IDs)", loop_cspice_geo, shuffled, EARTH, MOON; n))
     alm === nothing ||
         push!(rows, bench_row(g, "ANISE spk_ezr (C interface)", loop_anise, alm, shuffled, EARTH, MOON, out; n))
+
+    g = "Earth rel. Moon, 60 s apart"
+    push!(rows, bench_row(g, "Almanac spkezr, integer IDs, context", loop_neo_ids, ctx, dense, EARTH, MOON; n))
+    push!(rows, bench_row(g, "CSPICE spkezr (SPICE.jl, names)", loop_cspice_ezr, dense, "EARTH", "MOON"; n))
+    push!(rows, bench_row(g, "CSPICE spkgeo (SPICE.jl, integer IDs)", loop_cspice_geo, dense, EARTH, MOON; n))
+    alm === nothing ||
+        push!(rows, bench_row(g, "ANISE spk_ezr (C interface)", loop_anise, alm, dense, EARTH, MOON, out; n))
 
     g = "Moon rel. Sun, ordered"
     push!(rows, bench_row(g, "Almanac spkezr, integer IDs, context", loop_neo_ids, ctx, epochs, MOON, SUN; n))
