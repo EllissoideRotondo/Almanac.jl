@@ -641,7 +641,7 @@ ellipsoid has three positive radii; a ray is not zero (`:zerovector`); the instr
 is known (`:idcodenotfound`) and its field of view is in the kernel pool (the errors of
 `getfov`), with an angular radius below 90 degrees minus 1e-6 radians (`:fovtoowide`)
 and the errors of the axis of a polygon (`:degeneratecase`, `:facenotfound`,
-`:notsupported`). The frame of the instrument is looked up at the test.
+`:notsupported`). The frame of the instrument is checked at the test.
 """
 function _geo_fov_setup(
         ks::KernelSet, inst::NameOrID, shp::Int, raydir::Vec3{Float64},

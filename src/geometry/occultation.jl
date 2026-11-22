@@ -342,8 +342,8 @@ extended `front` and a point `back`, and 2 for a point `front` and an extended `
 (the codes that `occult` multiplies by the sign of the roles).
 """
 function _geo_occ_state(
-        ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fext::_GeoOccExtent,
-        back::_GeoOccBody, bext::_GeoOccExtent, obs::Int32, corr::Aberration, et::Float64
+        ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fext::Tuple,
+        back::_GeoOccBody, bext::Tuple, obs::Int32, corr::Aberration, et::Float64
     )
     frad, fmn, fmx, ffrm = fext
     brad, bmn, bmx, bfrm = bext
@@ -454,7 +454,7 @@ end
 "True if a target with DSK data is paired with a target that is not a point (`zzgfocin`)."
 @inline _geo_occ_dsk_combo(front::_GeoOccBody, back::_GeoOccBody) =
     (front.kind == _GEO_OCC_DSK && back.kind != _GEO_OCC_POINT) ||
-    (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
+        (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
 
 "The correction of `zzgfocin`: `abcorr` without stellar aberration."
 @inline function _geo_occ_corr(abcorr)
