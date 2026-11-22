@@ -106,7 +106,7 @@ let g = SUITE["geometry"] = BenchmarkGroup()
     for method in ("NEAR POINT/ELLIPSOID", "INTERCEPT/ELLIPSOID")
         g["subpnt $method"] = bench(et -> subpnt(CTX, method, "EARTH", et, "IAU_EARTH", "LT+S", "MOON")[1][1], ETS)
     end
-    rays = [(et, -spkpos(CTX, EARTH, et, J2000, "NONE", MOON)[1]) for et in ETS]
+    rays = [(et, spkpos(CTX, EARTH, et, J2000, "NONE", MOON)[1]) for et in ETS]
     g["sincpt"] = bench(((et, d),) -> sincpt(CTX, "ELLIPSOID", "EARTH", et, "IAU_EARTH", "CN+S", "MOON", "J2000", d)[1][1], rays)
     spoints = [(et, subpnt(CTX, "NEAR POINT/ELLIPSOID", "EARTH", et, "IAU_EARTH", "LT+S", "MOON")[1]) for et in ETS]
     g["ilumin"] = bench(((et, p),) -> ilumin(CTX, "ELLIPSOID", "EARTH", et, "IAU_EARTH", "LT+S", "MOON", p)[3], spoints)
@@ -129,7 +129,7 @@ end
 
 let g = SUITE["tables"] = BenchmarkGroup()
     t0 = ETS[60]; t1 = t0 + 30 * DAY
-    span = collect(range(t0, t1; length = 100))
+    span = collect(range(t0, t1 - 1.0; length = 100))
     moon = ephemeris_table(CTX, "MOON", t0, t1, "J2000", "NONE", "EARTH")
     earth = rotation_table(CTX, "J2000", "IAU_EARTH", t0, t1)
     g["ephemeris_table 30 days"] = @benchmarkable(
