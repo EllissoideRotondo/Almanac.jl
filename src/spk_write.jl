@@ -53,8 +53,8 @@ end
 
 Throws `SpiceError(kind)` if a character of `segid` before its trailing blanks is not
 printable ASCII (codes 32 to 126). The segment writers of SPICELIB throw
-`:nonprintablechars`; the generic segment writer (`sgbwfs`, used by `spkw10` and
-`pck03b`) throws `:nonprintingchars`.
+`:nonprintablechars`; the generic segment writer (`sgbwfs`, used by `spkw10`, `spk14b`
+and `pck03b`) throws `:nonprintingchars`.
 """
 function _seg_idchars(who::AbstractString, segid::AbstractString, kind::Symbol = :nonprintablechars)
     cu = codeunits(String(segid))
@@ -1834,7 +1834,7 @@ Throws `SpiceError`:
 - `:dafnosuchhandle` or `:dafinvalidaccess` if the file is not open for writing;
 - `:emptystring` if `frame` or `segid` is empty;
 - `:invalidargument` if `chbdeg < 0`;
-- `:segidtoolong` or `:nonprintablechars` if `segid` is not valid;
+- `:segidtoolong` or `:nonprintingchars` (the kind of the generic segment writer `sgbwfs`) if `segid` is not valid;
 - the error kinds of [`spkpds`](@ref).
 
 # Examples
@@ -1884,7 +1884,7 @@ function spk14b(
     )
     descr = spkpds(ctx, body, center, frame, 14, first, last)
     _seg_idlen(who, segid)
-    _seg_idchars(who, segid)
+    _seg_idchars(who, segid, :nonprintingchars)     # the kind of `sgbwfs`
     return SPK14Writer(h, descr, String(segid), Int(chbdeg) + 1, Float64[], Float64[], true)
 end
 spk14b(

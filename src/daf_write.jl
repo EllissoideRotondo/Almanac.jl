@@ -450,19 +450,22 @@ function dafena(h::DAFHandle)
     narray += 1
     free = h.afree
     last = bward
+    # The records are those of `dafena`, written in another order: the name before the
+    # summary that makes the array visible, and a new summary record before the forward
+    # link to it, so that the file is a valid DAF after each write.
     if narray < 125 ÷ ss
-        _daf_write_drec!(h, bward, sumrec)
         _daf_write_crec!(h, bward + 1, namrec)
+        _daf_write_drec!(h, bward, sumrec)
     else
         # The summary record is full: a new summary record and name record follow the data.
         next = _daf_arw(h.afree - 1)[1] + 1
-        sumrec[1] = Float64(next)
-        _daf_write_drec!(h, bward, sumrec)
-        _daf_write_crec!(h, bward + 1, namrec)
         newrec = zeros(Float64, _DAF_RECWORDS)
         newrec[2] = Float64(bward)
         _daf_write_drec!(h, next, newrec)
         _daf_write_crec!(h, next + 1, fill(UInt8(' '), _DAF_CRECLEN))
+        sumrec[1] = Float64(next)
+        _daf_write_crec!(h, bward + 1, namrec)
+        _daf_write_drec!(h, bward, sumrec)
         last = next
         free = _daf_rwa(next + 2)
     end

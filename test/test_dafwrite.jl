@@ -131,7 +131,7 @@ function c_spkw19(h, a)
     SPICE.handleerror()
 end
 
-function c_ckw06(h, a)
+function c_ckw06(h, a; check::Bool = true)
     ccall(
         (:ckw06_, LIBCSPICE), Cint, (
             Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Ref{Cint},
@@ -142,7 +142,7 @@ function c_ckw06(h, a)
         Cint.(a.npkts), Cint.(a.subtps), Cint.(a.degres), a.packts, a.rates, a.sclkdp,
         a.ivlbds, Cint(a.sellst), sizeof(a.ref), sizeof(a.segid)
     )
-    SPICE.handleerror()
+    return check ? SPICE.handleerror() : nothing
 end
 
 function c_ckw01(h, a)
@@ -460,11 +460,14 @@ struct WriterCase
 end
 
 "The frame and identifier checks that all SPK writers share."
-function bad_ids(a; long::Symbol = :segidtoolong, fname::Symbol = :frame, empty_both::Bool = true)
+function bad_ids(
+        a; long::Symbol = :segidtoolong, nonprint::Symbol = :nonprintablechars,
+        fname::Symbol = :frame, empty_both::Bool = true
+    )
     out = Any[
         ("unknown frame", merge(a, NamedTuple{(fname,)}(("NO_SUCH_FRAME",))), :invalidrefframe, true),
         ("identifier of 41 characters", merge(a, (segid = "A"^41,)), long, true),
-        ("nonprintable identifier", merge(a, (segid = "BAD\tID",)), :nonprintablechars, true),
+        ("nonprintable identifier", merge(a, (segid = "BAD\tID",)), nonprint, true),
         ("empty frame", merge(a, NamedTuple{(fname,)}(("",))), :emptystring, empty_both),
         ("empty identifier", merge(a, (segid = "",)), :emptystring, empty_both),
     ]
@@ -504,7 +507,8 @@ function gen_w14(rng, k)
 end
 function bad_w14(a)
     out = Any[
-        bad_ids(a)..., bad_pds(a)...,
+        # Regression: spk14b gave :nonprintablechars; `sgbwfs_` signals NONPRINTINGCHARS.
+        bad_ids(a; nonprint = :nonprintingchars)..., bad_pds(a)...,
         ("negative degree", merge(a, (degree = -1,)), :invalidargument, true),
     ]
     if length(a.epochs) >= 3
@@ -1854,6 +1858,33 @@ group("9. DAF access, SPK and CK writers") do
         bds[end] += 0.5
         pc, pn = write_both(writer_case("ckw06"), dir, "ckw06_short", [merge(a, (ivlbds = bds,))])
         @test padless(pn) == padless(pc)
+    end
+
+    # Regression: the sign check of the Hermite quaternions of `ckw06` compared sums of
+    # squares, which underflow for a quaternion of magnitude 1e-200; `vdistg_` scales
+    # the differences first, so CSPICE finds (-1e-200, 0, 0, 0) farther from
+    # (1e-200, 0, 0, 0) than its negative. Own random stream.
+    @apart @testset "ckw06: the sign check of tiny quaternions" begin
+        r2 = MersenneTwister(SEED + 1207)
+        a = gen_ckw06(r2, 1; nmini = 1)
+        while isodd(a.subtps[1])
+            a = gen_ckw06(r2, 1; nmini = 1)
+        end
+        pktsiz = a.subtps[1] == 0 ? 8 : 14
+        pk = copy(a.packts)
+        pk[1:4] = [1.0e-200, 0.0, 0.0, 0.0]
+        pk[pktsiz .+ (1:4)] = [-1.0e-200, 0.0, 0.0, 0.0]
+        b = merge(a, (packts = pk,))
+        hn = ckopn(joinpath(dir, "quatsign_n.bc"), "Q", 0)
+        hc = SPICE.ckopn(joinpath(dir, "quatsign_c.bc"), "Q", 0)
+        try
+            @test throws_kind(() -> writer_case("ckw06").neo(hn, b), :badquatsign)
+            c_ckw06(hc, b; check = false)
+            @test cspice_kind() === :badquatsign
+        finally
+            dafcls(hn)
+            SPICE.dafcls(hc)
+        end
     end
 
     @apart @testset "spk14: the writer object" begin
