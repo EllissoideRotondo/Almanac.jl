@@ -85,8 +85,10 @@ function main()
     ]
     @assert all(et -> et2utc(ctx, et, "C", 3) == SPICE.et2utc(et, "C", 3), epochs)
     @assert all(et -> timout(ctx, et, pict) == SPICE.timout(et, pict), epochs)
-    @assert all(et -> occult(ctx, "MOON", "ELLIPSOID", "IAU_MOON", "SUN", "ELLIPSOID", "IAU_SUN", "CN", "EARTH", et) ==
-        SPICE.occult("MOON", "ELLIPSOID", "IAU_MOON", "SUN", "ELLIPSOID", "IAU_SUN", "CN", "EARTH", et), epochs)
+    @assert all(
+        et -> occult(ctx, "MOON", "ELLIPSOID", "IAU_MOON", "SUN", "ELLIPSOID", "IAU_SUN", "CN", "EARTH", et) ==
+            SPICE.occult("MOON", "ELLIPSOID", "IAU_MOON", "SUN", "ELLIPSOID", "IAU_SUN", "CN", "EARTH", et), epochs
+    )
 
     # The search: the maxima of the Earth-Moon distance over one year, step 5 days.
     t0 = epochs[60]; t1 = t0 + 365.25 * DAY; step = 5 * DAY

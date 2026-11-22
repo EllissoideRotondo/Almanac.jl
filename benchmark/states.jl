@@ -234,11 +234,13 @@ function main()
         i -> spkezr(ks, EARTH, @inbounds(epochs[i % n + 1]), J2000, "NONE", MOON)[1][1]
     )
     if alm !== nothing && get(ENV, "ALMANAC_BENCH_ANISE_THREADS", "0") == "1"
-        throughput_rows("ANISE spk_ezr", function (i)
-            o = Ref(AniseState())
-            anise_spk_ezr(alm, EARTH, @inbounds(epochs[i % n + 1]), J2000, MOON, o)
-            return o[].position_km[1]
-        end)
+        throughput_rows(
+            "ANISE spk_ezr", function (i)
+                o = Ref(AniseState())
+                anise_spk_ezr(alm, EARTH, @inbounds(epochs[i % n + 1]), J2000, MOON, o)
+                return o[].position_km[1]
+            end
+        )
     end
     nt == 1 && println("one thread only: run with --threads=8 for the throughput on threads")
 
