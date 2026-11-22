@@ -1,53 +1,5 @@
 # Local solar time (`et2lst`) and planetocentric longitude of the Sun (`lspcn`).
 
-"Quotient and remainder of `num / den` with a remainder in `[0, den)`, as `rmaind_`."
-function _lst_rmaind(num::Float64, den::Float64)
-    q = trunc(num / den)
-    r = num - q * den
-    if r < 0.0
-        q -= 1.0
-        r += den
-    end
-    return q, r
-end
-
-"""
-    _lst_sense(ks, body) -> Int
-
-Contract: the sign that turns a planetographic longitude of `body` into a
-planetocentric one, as `pgrrec_`: `BODY<body>_PGR_POSITIVE_LON` (`EAST` gives 1, `WEST`
-gives -1) if it exists; otherwise 1 for a retrograde body and -1 for a prograde body
-(sign of the prime meridian rate), and 1 for the Earth, the Moon and the Sun. Throws
-`SpiceError(:invalidoption)` for another value of the variable and
-`SpiceError(:missingdata)` if the rate is needed and `BODY<body>_PM` is not available.
-"""
-function _lst_sense(ks::KernelSet, body::Integer)
-    key = _body_key(body, "PGR_POSITIVE_LON")
-    v = get(ks.pool, key, nothing)
-    if v isa Vector{String} && !isempty(v)
-        s = uppercase(replace(v[1], ' ' => ""))
-        s == "EAST" && return 1
-        s == "WEST" && return -1
-        throw(
-            SpiceError(
-                :invalidoption,
-                "kernel variable $key may have the values EAST or WEST; the value was $(v[1])"
-            )
-        )
-    end
-    body == 399 && return 1
-    pm = get(ks.pool, _body_key(body, "PM"), nothing)
-    (pm isa Vector{Float64} && length(pm) >= 2) || throw(
-        SpiceError(
-            :missingdata,
-            "the prime meridian rate of kernel variable BODY$(body)_PM is required but not " *
-                "available for body $body"
-        )
-    )
-    (body == 301 || body == 10) && return 1
-    return pm[2] < 0.0 ? 1 : -1
-end
-
 "`HH:MM:SS` of the numbers `0 <= h, m, s <= 99`, then `suffix`, in one buffer."
 function _lst_clock(h::Int, m::Int, s::Int, suffix::String)
     buf = Base.StringVector(8 + ncodeunits(suffix))
@@ -108,7 +60,7 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     _plain_epoch(et, "et2lst")
     system = strip(type)
     if _eqci(system, "PLANETOGRAPHIC", true)
-        g = _lst_sense(ks, body) * Float64(lon)
+        g = _m_pgrsense(ks, body) * Float64(lon)    # the sense of `pgrrec_`
         y, x = sincos(g)
         mylong = (x == 0.0 && y == 0.0) ? 0.0 : atan(y, x)
     elseif _eqci(system, "PLANETOCENTRIC", true)
@@ -132,7 +84,7 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     )
     state, _ = spkezr(ks, 10, et, fix[1], Aberration("LT+S"), body)
     slong = (state[1] == 0.0 && state[2] == 0.0) ? 0.0 : atan(state[2], state[1])
-    _, angle = _lst_rmaind(mylong - slong, _TWOPI)
+    _, angle = _rmaind(mylong - slong, _TWOPI)
     angle > pi && (angle -= _TWOPI)
     pm = get(ks.pool, _body_key(body, "PM"), nothing)
     (pm isa Vector{Float64} && length(pm) >= 2) || throw(
@@ -145,8 +97,8 @@ function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::Abstrac
     )
     pm[2] < 0.0 && (angle = -angle)
     secnds = clamp(angle * 86400.0 / _TWOPI, -43200.0, 43200.0)
-    hours, rest = _lst_rmaind(secnds, 3600.0)
-    mins, secnds = _lst_rmaind(rest, 60.0)
+    hours, rest = _rmaind(secnds, 3600.0)
+    mins, secnds = _rmaind(rest, 60.0)
     hr, mn, sc = trunc(Int, hours) + 12, trunc(Int, mins), trunc(Int, secnds)
     hr == 24 && (hr = 0)
     h12 = hr == 0 ? 12 : hr > 12 ? hr - 12 : hr

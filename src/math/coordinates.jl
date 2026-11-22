@@ -424,18 +424,18 @@ georec(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
     _m_pgrsense(ks, body) -> Int
 
 +1 if the planetographic longitude of `body` is positive east, -1 if positive west, as
-`recpgr_`: the pool variable `BODY<id>_PGR_POSITIVE_LON` (`EAST` or `WEST`) decides if
-it is present; otherwise the sign of the prime meridian rate `BODY<id>_PM[2]` does
+`recpgr_` and `pgrrec_`: the pool variable `BODY<id>_PGR_POSITIVE_LON` decides if it is a
+string variable (its first four characters without blanks, in upper case, must be `EAST`
+or `WEST`); otherwise the sign of the prime meridian rate `BODY<id>_PM[2]` does
 (retrograde rotation is positive east), with east for the Earth, the Moon and the Sun.
 """
 function _m_pgrsense(ks::KernelSet, body::NameOrID)
     id = _m_bodyid(ks, body, :idcodenotfound)
     kv = get(ks.pool, _body_key(id, "PGR_POSITIVE_LON"), nothing)
     if kv isa Vector{String} && !isempty(kv)
-        s = uppercase(filter(!isspace, kv[1]))
-        s = s[1:min(4, lastindex(s))]
-        s == "EAST" && return 1
-        s == "WEST" && return -1
+        s = _ljucrs4(kv[1])                     # the four characters of `ljucrs_`
+        s == (UInt8('E'), UInt8('A'), UInt8('S'), UInt8('T')) && return 1
+        s == (UInt8('W'), UInt8('E'), UInt8('S'), UInt8('T')) && return -1
         throw(
             SpiceError(
                 :invalidoption,

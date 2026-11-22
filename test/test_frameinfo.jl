@@ -550,8 +550,10 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
         @test et2lst(ctx, 0.0, 10, 1.0, "PLANETOCENTRIC") == SPICE.et2lst(0.0, 10, 1.0, "PLANETOCENTRIC")
         @test throws_kind(() -> et2lst(ctx, 0.0, 399, 0.0, "GEODETIC"), :unknownsystem)
         # `BODY<id>_PGR_POSITIVE_LON` sets the sense of a planetographic longitude.
+        # Regression: `pgrrec_` compares the first four characters without blanks, in
+        # upper case (`ljucrs_`), so "EASTERN" is east.
         try
-            for sense in ("EAST", "WEST")
+            for sense in ("EAST", "WEST", "EASTERN", " w Est x")
                 SPICE.pcpool("BODY299_PGR_POSITIVE_LON", [sense])
                 pcpool(ctx, "BODY299_PGR_POSITIVE_LON", [sense])
                 @test et2lst(ctx, 1.0e8, 299, 0.7, "PLANETOGRAPHIC") ==

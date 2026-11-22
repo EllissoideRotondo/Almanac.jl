@@ -11,6 +11,25 @@
 "`s` without blanks and in upper case, as `cmprss_` with zero blanks and `ucase_`."
 _squeeze(s::AbstractString) = uppercase(replace(s, ' ' => ""))
 
+"""
+    _ljucrs4(s) -> NTuple{4,UInt8}
+
+Contract: the first four characters of `s` after its blanks are removed, ASCII letters in
+upper case and blanks after the end, as `ljucrs_(0, s, out)` writes them into an `out` of
+four characters. Does not allocate.
+"""
+function _ljucrs4(s::AbstractString)
+    b = (UInt8(' '), UInt8(' '), UInt8(' '), UInt8(' '))
+    j = 0
+    for c in codeunits(s)                # invariant: b[1:j] holds the first j non-blanks
+        c == UInt8(' ') && continue
+        j += 1
+        b = Base.setindex(b, _upper(c), j)
+        j == 4 && break
+    end
+    return b
+end
+
 "Contract: true if `a` and `b` are equal without regard to ASCII case and blanks, as `eqstr_`. Does not allocate."
 function _eqstr(a::AbstractString, b::AbstractString)
     ca = codeunits(a)
