@@ -123,7 +123,7 @@ writes differs.
 |---|---|---|---|
 | `dafps` (binary PCK writers) | The 4 padding bytes of a summary with 5 integers keep the sixth integer of the last summary packed, often an SPK or CK address | Zero | `dafwrite` |
 | `dafarr` | Extends the file with a buffer that is not set | Zeros | `dafwrite` |
-| DAS writers (DSK, EK) | The padding of a record is whatever the buffer held before | Zeros | `dsk` |
+| DAS writers (DSK, EK) | The padding of a record is whatever the buffer held before | Blanks in a character record, zeros in a double precision or integer record | `dsk` |
 | `zzekpage` | Unused bytes of new character pages are NUL until an `ekopn` in the same process | Blanks | `ek_write` |
 
 ### Fixes that change no computed value
