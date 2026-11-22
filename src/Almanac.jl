@@ -1,6 +1,6 @@
 module Almanac
 
-using StaticArrays: StaticArrays, MMatrix, MVector, SMatrix, SVector, StaticArray,
+using StaticArrays: StaticArrays, MVector, SMatrix, SVector, StaticArray,
     StaticMatrix, StaticVector
 using Mmap: Mmap
 using LinearAlgebra: LinearAlgebra, I, cond, cross, dot, norm, tr
