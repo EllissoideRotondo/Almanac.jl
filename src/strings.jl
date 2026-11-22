@@ -29,7 +29,6 @@ function _eqstr(a::AbstractString, b::AbstractString)
         i += 1
         j += 1
     end
-    return
 end
 
 """
@@ -96,9 +95,10 @@ function _matchi(string::AbstractString, templ::AbstractString)
         tcur += 1
     end
     right = tcur - 1
-    while left <= tlast
+    while true
         # invariant: the template before `left` matches the string before `scur`, and
-        # `left:right` is the next part of the template without a wild string
+        # `left:right` (with `left <= tlast`) is the next part of the template without a
+        # wild string; each pass returns or moves to the next part
         slast - scur < right - left && return false
         if right == tlast
             i = slast
@@ -136,5 +136,4 @@ function _matchi(string::AbstractString, templ::AbstractString)
         end
         right = tcur - 1
     end
-    return false
 end

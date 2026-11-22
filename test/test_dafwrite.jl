@@ -2483,6 +2483,21 @@ group("9. DAF access, SPK and CK writers") do
                 SPICE.unload(pz)
             end
         end
+        # The tests of `zzckspk` on the first summary of an old file with NI = 6,
+        # `ic = (body, center, type, angvel, first, last)`, past the first three tests
+        # (angvel 1, center not 0). Size 10: 9 doubles are no SPK type 1 records
+        # (`zzsizeok`), so CK. Size 73 (one SPK record, last double 1): not of the
+        # size of a CK type 2 segment, so SPK. Size 3313 (46 SPK records, 331 CK
+        # type 2 packets, so 3 CK directory values): the double at `last - 3` and the
+        # next one decide, CK if they decrease.
+        ckspk_word(w) = a -> w[a]
+        ckspk_ic(first, last) = Int32.((1, 1, 2, 1, first, last))
+        @test Almanac._daf_ckspk(ckspk_word(Dict{Int, Float64}()), ckspk_ic(1, 10)) === :CK
+        @test Almanac._daf_ckspk(ckspk_word(Dict(73 => 1.0)), ckspk_ic(1, 73)) === :SPK
+        for (w1, w2, want) in ((2.0, 1.0, :CK), (1.0, 2.0, :SPK))
+            w = Dict(3313 => 46.0, 3310 => w1, 3311 => w2)
+            @test Almanac._daf_ckspk(ckspk_word(w), ckspk_ic(1, 3313)) === want
+        end
         # Without the string, a DAF without summaries has no byte order.
         pe = joinpath(dir, "no_bff_empty.bsp")
         dafcls(spkopn(pe, "EMPTY", 0))
