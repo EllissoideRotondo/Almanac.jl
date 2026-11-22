@@ -327,7 +327,7 @@ function _dsk_cxbrut(
     _m_iszero(axis) && _dsk_throw(:zerovector, "the cone axis is the zero vector")
     locang = angle
     locaxi = axis
-    if angle > _DSK_HALFPI
+    if angle > _HALFPI
         locang = _PI - angle
         locaxi = -axis
     end
@@ -483,7 +483,7 @@ function _dsk_incnsg(
     xoff1 = _m_mxv(xform, off1)
     xoff2 = _m_mxv(xform, off2)
     _, _, maxlat, maxp = _dsk_sglatx(xoff1, xoff2)
-    colat = _DSK_HALFPI - maxlat
+    colat = _HALFPI - maxlat
     if colat < locang
         vtemp, isbrck = _dsk_cxbrut(_DSK_ORIGIN, _DSK_ZAXIS, locang, xoff1, maxp)
         if isbrck
@@ -608,11 +608,11 @@ greater than, equal to or less than `lat`.
 function _dsk_pdcmpl(re::Float64, f::Float64, p::Vec3{Float64}, lat::Float64)
     if p[1] == 0.0 && p[2] == 0.0
         if p[3] > 0.0
-            return lat == _DSK_HALFPI ? 0 : 1
+            return lat == _HALFPI ? 0 : 1
         elseif p[3] == 0.0
             return lat > 0.0 ? -1 : lat == 0.0 ? 0 : 1
         end
-        return lat == -_DSK_HALFPI ? 0 : -1
+        return lat == -_HALFPI ? 0 : -1
     end
     rp = re * (1.0 - f)
     _, yincpt = _dsk_elnaxx(re, rp, lat)
@@ -685,21 +685,30 @@ function _dsk_nrmlon(inmin::Float64, inmax::Float64, tol::Float64)
     return outmin, outmax
 end
 
+"""
+    _dsk_lon_out0(lon, b) -> Bool
+
+The longitude test of `zzinlat0` and `zzinpdt0`: true if `lon`, moved by a turn
+toward the longitude bounds `b[1]`, `b[2]` when it is outside them, is still outside
+them by more than 1e-12. Throws as `_dsk_nrmlon` for invalid bounds.
+"""
+@inline function _dsk_lon_out0(lon::Float64, b::NTuple{6, Float64})
+    minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
+    loclon = lon
+    if lon < minlon - 1.0e-12
+        loclon = lon + _TWOPI
+    elseif lon > maxlon + 1.0e-12
+        loclon = lon - _TWOPI
+    end
+    return loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12
+end
+
 "`zzinlat0`: inclusion of (r, lon, lat) in the latitudinal element `b`, without margin; `exclud` names a coordinate to skip."
 function _dsk_inlat0(r::Float64, lon::Float64, lat::Float64, b::NTuple{6, Float64}, exclud::Int)
     (r == 0.0 && b[5] == 0.0) && return true
     exclud != 3 && (r < b[5] || r > b[6]) && return false
     exclud != 2 && (lat < b[3] || lat > b[4]) && return false
-    if exclud != 1
-        minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
-        loclon = lon
-        if lon < minlon - 1.0e-12
-            loclon = lon + _TWOPI
-        elseif lon > maxlon + 1.0e-12
-            loclon = lon - _TWOPI
-        end
-        (loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12) && return false
-    end
+    exclud != 1 && _dsk_lon_out0(lon, b) && return false
     return true
 end
 
@@ -737,12 +746,12 @@ function _dsk_inlat(p::Vec3{Float64}, b::NTuple{6, Float64}, margin::Float64, ex
         (r < aminr || r > amaxr) && return false
     end
     if exclud != 2
-        aminlt = max(-_DSK_HALFPI, b[3] - margin)
-        amaxlt = min(_DSK_HALFPI, b[4] + margin)
+        aminlt = max(-_HALFPI, b[3] - margin)
+        amaxlt = min(_HALFPI, b[4] + margin)
         (lat < aminlt || lat > amaxlt) && return false
     end
     if exclud != 1
-        if lat <= _DSK_HALFPI - 1.0e-8 && lat >= -_DSK_HALFPI + 1.0e-8
+        if lat <= _HALFPI - 1.0e-8 && lat >= -_HALFPI + 1.0e-8
             _dsk_lon_in(lon, b, margin, cos(lat)) || return false
         else
             _dsk_nrmlon(b[1], b[2], 1.0e-12)       # the bounds are still validated
@@ -776,22 +785,13 @@ function _dsk_inpdt0(
     )
     rp = re * (1.0 - f)
     if exclud != 2
-        minlat = max(b[3] - 1.0e-12, -_DSK_HALFPI)
-        maxlat = min(b[4] + 1.0e-12, _DSK_HALFPI)
+        minlat = max(b[3] - 1.0e-12, -_HALFPI)
+        maxlat = min(b[4] + 1.0e-12, _HALFPI)
         minrel = _dsk_pdcmpl(re, f, p, minlat)
         maxrel = _dsk_pdcmpl(re, f, p, maxlat)
         (minrel == -1 || maxrel == 1) && return false
     end
-    if exclud != 1
-        minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
-        loclon = lon
-        if lon < minlon - 1.0e-12
-            loclon = lon + _TWOPI
-        elseif lon > maxlon + 1.0e-12
-            loclon = lon - _TWOPI
-        end
-        (loclon < minlon - 1.0e-12 || loclon > maxlon + 1.0e-12) && return false
-    end
+    exclud != 1 && _dsk_lon_out0(lon, b) && return false
     if exclud != 3
         emax, pmax, emin, pmin = if f >= 0.0
             _dsk_ellbds(re, rp, b[6], b[5])
@@ -826,8 +826,8 @@ function _dsk_inpdt(
     margin == 0.0 && return _dsk_inpdt0(p, lon, b, re, f, exclud)
     margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
     if exclud != 2
-        amnlat = max(-_DSK_HALFPI - 1.0e-12, b[3] - margin)
-        amxlat = min(_DSK_HALFPI + 1.0e-12, b[4] + margin)
+        amnlat = max(-_HALFPI - 1.0e-12, b[3] - margin)
+        amxlat = min(_HALFPI + 1.0e-12, b[4] + margin)
         relmin = _dsk_pdcmpl(re, f, p, amnlat)
         relmax = _dsk_pdcmpl(re, f, p, amxlat)
         (relmin == -1 || relmax == 1) && return false
@@ -835,13 +835,13 @@ function _dsk_inpdt(
     if exclud != 3
         amnalt = b[5] - margin * abs(b[5])
         amxalt = b[6] + margin * abs(b[6])
-        altbds = (-_PI, _PI, -_DSK_HALFPI, _DSK_HALFPI, amnalt, amxalt)
+        altbds = (-_PI, _PI, -_HALFPI, _HALFPI, amnalt, amxalt)
         _dsk_inpdt0(p, lon, altbds, re, f, 1) || return false
     end
     if exclud != 1
         minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
-        relmax = _dsk_pdcmpl(re, f, p, _DSK_HALFPI - 1.0e-8)
-        relmin = _dsk_pdcmpl(re, f, p, -_DSK_HALFPI + 1.0e-8)
+        relmax = _dsk_pdcmpl(re, f, p, _HALFPI - 1.0e-8)
+        relmin = _dsk_pdcmpl(re, f, p, -_HALFPI + 1.0e-8)
         if relmax != 1 && relmin != -1
             _dsk_lon_in(lon, b, margin, cos(pcnlat)) || return false
         end
@@ -947,6 +947,55 @@ function _dsk_raybox(
 end
 
 """
+    _dsk_ryt_lon(inside, vertex, udir, minlon, maxlon, maxr, margin, nxpts, xpt, mndist)
+        -> (nxpts, xpt, mndist)
+
+The step of `zzrytlat` and `zzrytpdt` for the two longitude boundary half-planes: an
+intercept on the west or the east plane that `inside(p)` accepts (the inclusion test of
+the element without the longitude) and that is on the side of the element replaces
+`xpt` if it is nearer than `mndist`. Nothing happens if the longitude range is a whole
+turn.
+"""
+@inline function _dsk_ryt_lon(
+        inside::F, vertex::Vec3{Float64}, udir::Vec3{Float64}, minlon::Float64,
+        maxlon::Float64, maxr::Float64, margin::Float64, nxpts::Int, xpt::Vec3{Float64},
+        mndist::Float64
+    ) where {F}
+    if cos(maxlon - minlon) < 1.0
+        smin, cmin = sincos(minlon)
+        westb = Vec3{Float64}(smin, -cmin, 0.0)
+        s = (_m_norm(vertex) + maxr) * 1.1
+        nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
+        if nx == 1 && inside(srfx)
+            wback = _m_ucrss(westb, _DSK_ZAXIS)
+            if _m_dot(srfx, wback) < margin * maxr
+                dist = _m_norm(vertex - srfx)
+                if dist < mndist
+                    xpt = srfx
+                    nxpts = 1
+                    mndist = dist
+                end
+            end
+        end
+        smax, cmax = sincos(maxlon)
+        eastb = Vec3{Float64}(-smax, cmax, 0.0)
+        nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
+        if nx == 1 && inside(srfx)
+            eback = _m_ucrss(_DSK_ZAXIS, eastb)
+            if _m_dot(srfx, eback) < margin * maxr
+                dist = _m_norm(vertex - srfx)
+                if dist < mndist
+                    xpt = srfx
+                    nxpts = 1
+                    mndist = dist
+                end
+            end
+        end
+    end
+    return nxpts, xpt, mndist
+end
+
+"""
     _dsk_rytlat(vertex, raydir, b, margin) -> (nxpts, xpt)
 
 `zzrytlat`: the nearest point of the ray on the surface of the latitudinal volume
@@ -977,8 +1026,8 @@ function _dsk_rytlat(
     end
     s = _m_norm(vertex) + maxr * 1.1
     endpt2 = 1.0 * vertex + s * udir
-    if maxlat < _DSK_HALFPI
-        angle = max(0.0, _DSK_HALFPI - maxlat)
+    if maxlat < _HALFPI
+        angle = max(0.0, _HALFPI - maxlat)
         nx, srfx, xpt2 = _dsk_incnsg(_DSK_ORIGIN, _DSK_ZAXIS, angle, vertex, endpt2)
         if nx >= 1
             if _dsk_inlat(srfx, b, margin, 2)
@@ -1000,8 +1049,8 @@ function _dsk_rytlat(
             end
         end
     end
-    if minlat > -_DSK_HALFPI
-        angle = _DSK_HALFPI - minlat
+    if minlat > -_HALFPI
+        angle = _HALFPI - minlat
         nx, srfx, xpt2 = _dsk_incnsg(_DSK_ORIGIN, _DSK_ZAXIS, angle, vertex, endpt2)
         if nx >= 1
             if _dsk_inlat(srfx, b, margin, 2)
@@ -1021,37 +1070,10 @@ function _dsk_rytlat(
             end
         end
     end
-    if cos(maxlon - minlon) < 1.0
-        smin, cmin = sincos(minlon)
-        westb = Vec3{Float64}(smin, -cmin, 0.0)
-        s = (_m_norm(vertex) + maxr) * 1.1
-        nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
-        if nx == 1 && _dsk_inlat(srfx, b, margin, 1)
-            wback = _m_ucrss(westb, _DSK_ZAXIS)
-            if _m_dot(srfx, wback) < margin * maxr
-                dist = _m_norm(vertex - srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-        smax, cmax = sincos(maxlon)
-        eastb = Vec3{Float64}(-smax, cmax, 0.0)
-        nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
-        if nx == 1 && _dsk_inlat(srfx, b, margin, 1)
-            eback = _m_ucrss(_DSK_ZAXIS, eastb)
-            if _m_dot(srfx, eback) < margin * maxr
-                dist = _m_norm(vertex - srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-    end
+    nxpts, xpt, mndist = _dsk_ryt_lon(
+        p -> _dsk_inlat(p, b, margin, 1), vertex, udir, minlon, maxlon, maxr, margin,
+        nxpts, xpt, mndist
+    )
     if minr > 0.0
         srfx, found = _dsk_ryxsph(vertex, udir, minr)
         if found && _dsk_inlat(srfx, b, margin, 3)
@@ -1189,53 +1211,26 @@ function _dsk_rytpdt(
     maxr = max(emax, pmax)
     s = _m_norm(vertex) + maxr * 1.1
     endpt2 = 1.0 * vertex + s * udir
-    if maxlat < _DSK_HALFPI
-        angle = max(0.0, _DSK_HALFPI - maxlat)
+    if maxlat < _HALFPI
+        angle = max(0.0, _HALFPI - maxlat)
         nxpts, xpt, mndist, done = _dsk_pdt_cone(
             vertex, endpt2, b, re, f, rp, margin, maxlat,
             angle, true, nxpts, xpt, mndist
         )
         done && return nxpts, xpt
     end
-    if minlat > -_DSK_HALFPI
-        angle = _DSK_HALFPI - minlat
+    if minlat > -_HALFPI
+        angle = _HALFPI - minlat
         nxpts, xpt, mndist, done = _dsk_pdt_cone(
             vertex, endpt2, b, re, f, rp, margin, minlat,
             angle, false, nxpts, xpt, mndist
         )
         done && return nxpts, xpt
     end
-    if cos(maxlon - minlon) < 1.0
-        smin, cmin = sincos(minlon)
-        westb = Vec3{Float64}(smin, -cmin, 0.0)
-        s = (_m_norm(vertex) + maxr) * 1.1
-        nx, srfx = _dsk_zzinrypl(vertex, udir, westb, 0.0, s)
-        if nx == 1 && _dsk_inpdt(srfx, b, re, f, margin, 1)
-            wback = _m_ucrss(westb, _DSK_ZAXIS)
-            if _m_dot(srfx, wback) < margin * maxr
-                dist = _m_norm(vertex - srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-        smax, cmax = sincos(maxlon)
-        eastb = Vec3{Float64}(-smax, cmax, 0.0)
-        nx, srfx = _dsk_zzinrypl(vertex, udir, eastb, 0.0, s)
-        if nx == 1 && _dsk_inpdt(srfx, b, re, f, margin, 1)
-            eback = _m_ucrss(_DSK_ZAXIS, eastb)
-            if _m_dot(srfx, eback) < margin * maxr
-                dist = _m_norm(vertex - srfx)
-                if dist < mndist
-                    xpt = srfx
-                    nxpts = 1
-                    mndist = dist
-                end
-            end
-        end
-    end
+    nxpts, xpt, mndist = _dsk_ryt_lon(
+        p -> _dsk_inpdt(p, b, re, f, margin, 1), vertex, udir, minlon, maxlon, maxr,
+        margin, nxpts, xpt, mndist
+    )
     srfx, found = _dsk_surfpt(vertex, udir, emin, emin, pmin)
     if found && _dsk_inpdt(srfx, b, re, f, margin, 3)
         dist = _m_norm(vertex - srfx)
@@ -1282,8 +1277,8 @@ end
     hdlon = (maxlon - minlon) / 2
     midlon = minlon + hdlon
     shd, chd = sincos(hdlon)
-    lr = hdlon <= _DSK_HALFPI ? outrad - inrad * chd : (1.0 - chd) * outrad
-    lt = hdlon > _DSK_HALFPI ? outrad * 2.0 : outrad * 2.0 * shd
+    lr = hdlon <= _HALFPI ? outrad - inrad * chd : (1.0 - chd) * outrad
+    lt = hdlon > _HALFPI ? outrad * 2.0 : outrad * 2.0 * shd
     lz = maxz - minz
     lr = max(0.0, lr)
     lt = max(0.0, lt)
@@ -1300,10 +1295,10 @@ function _dsk_box_lonlat(b::NTuple{6, Float64})
     maxlon <= minlon && (maxlon += _TWOPI)
     maxlon <= minlon && _dsk_throw(:badlongituderange, "the longitude bounds are out of order")
     b[3] > b[4] && _dsk_throw(:badlatitudebounds, "the latitude bounds are out of order")
-    (b[3] < -_DSK_HALFPI - 1.0e-12 || b[4] > _DSK_HALFPI + 1.0e-12) && _dsk_throw(
+    (b[3] < -_HALFPI - 1.0e-12 || b[4] > _HALFPI + 1.0e-12) && _dsk_throw(
         :badlatituderange, "a latitude bound is outside [-pi/2, pi/2]"
     )
-    return minlon, maxlon, max(b[3], -_DSK_HALFPI), min(b[4], _DSK_HALFPI)
+    return minlon, maxlon, max(b[3], -_HALFPI), min(b[4], _HALFPI)
 end
 
 "`zzlatbox`: center and radius of a sphere that contains the latitudinal volume element `b`."
