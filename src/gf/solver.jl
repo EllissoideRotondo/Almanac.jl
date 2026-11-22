@@ -289,47 +289,6 @@ function _gf_scan!(result::Window, cond::F, w::Window, run::_GFRun, cstep::Bool)
 end
 
 """
-    _gf_wnexpd(w, left, right) -> Window
-
-Copy of `w` with each interval expanded by `left` at its left end and by `right` at its
-right end, and overlapping intervals merged, as
-[`wnexpd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/wnexpd_c.html) (the amounts are not
-negative here).
-"""
-function _gf_wnexpd(w::Window, left::Float64, right::Float64)
-    d = copy(w.data)
-    card = length(d)
-    card == 0 && return Window()
-    for i in 1:2:card                    # invariant: intervals before i are expanded
-        d[i] -= left
-        d[i + 1] += right
-    end
-    i = 2
-    j = 2
-    while j < card                       # invariant: d[1:i-1] is final but for its last end
-        if d[j] < d[j + 1]
-            d[i] = d[j]
-            d[i + 1] = d[j + 1]
-            i += 2
-        end
-        j += 2
-    end
-    d[i] = d[j]
-    resize!(d, i)
-    return _window_of(d)
-end
-
-"Window of the singleton intervals at the left (`side == 1`) or right (`side == 2`) ends of `w` (`wnextd_c`)."
-function _gf_wnextd(w::Window, side::Int)
-    d = Float64[]
-    for i in 1:wncard(w)                 # invariant: d holds the ends of intervals before i
-        x = w.data[2i - 2 + side]
-        push!(d, x, x)
-    end
-    return _window_of(d)
-end
-
-"""
     _gf_wsts(w1, w2) -> Window
 
 The intervals of `w1` that lie in the interior of an interval of `w2`, as `zzgfwsts`
@@ -462,7 +421,7 @@ function _gf_relx(
     # CSPICE compares the relation as it was given with "=", so an equality relation
     # with a leading blank gets no expansion; this is kept.
     addw = rstrip(relate, ' ') == "=" ? _GF_ADDWIN : 0.0
-    confin = _gf_wnexpd(cnfine, addw, addw)
+    confin = wnexpd!(copy(cnfine), addw, addw)
     refer2 = Float64(refval)
 
     # Pass 1: the window on which the quantity decreases.
@@ -472,8 +431,8 @@ function _gf_relx(
 
     # The right ends of `decres` are local minima and the left ends local maxima; the
     # ones in the interior of the confinement window are kept.
-    rel == _GF_LOCMIN && return _gf_wsts(_gf_wnextd(decres, 2), cnfine)
-    rel == _GF_LOCMAX && return _gf_wsts(_gf_wnextd(decres, 1), cnfine)
+    rel == _GF_LOCMIN && return _gf_wsts(wnextd!(decres, 'R'), cnfine)
+    rel == _GF_LOCMAX && return _gf_wsts(wnextd!(decres, 'L'), cnfine)
 
     if rel == _GF_ABSMIN || rel == _GF_ABSMAX
         dec = wnintd(cnfine, decres)

@@ -286,16 +286,6 @@ gfv_d3(t) = 1.0e-3 * ((t - 11.0) * (t - 17.5) + (t - 3.0) * (t - 17.5) + (t - 3.
     end
 
     @testset "window helpers of the solver" begin
-        fails = Failures()
-        for _ in 1:nsample(10, 100)
-            w = gf_random_window(rng, rand(rng, 1:6), 0.0, 10.0)
-            amount = rand(rng, (0.0, 0.5, 2.0))
-            c = GFO.cell(collect(w))
-            SPICE.wnexpd!(c, amount, amount)
-            check!(fails, collect(Almanac._gf_wnexpd(w, amount, amount)) == collect(Float64, c), "_gf_wnexpd = wnexpd", collect(w), amount)
-        end
-        @test isempty(fails)
-        @test isempty(Almanac._gf_wnexpd(Window(), 0.5, 0.5))
         inner = Window([1.0, 1.0, 2.0, 2.0, 3.0, 3.0, 7.0, 7.0])
         @test collect(Almanac._gf_wsts(inner, Window([1.0, 3.0, 5.0, 8.0]))) == [2.0, 2.0, 7.0, 7.0]
     end
