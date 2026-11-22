@@ -537,7 +537,7 @@ _geo_fov_raycorr(c::Aberration) = c.uselt ? _geo_fov_error(
     ) : (c.stellar, c.transmit)
 
 function _geo_fov_tshape(tshape::AbstractString)
-    s = uppercase(rstrip(lstrip(tshape, ' '), ' '))
+    s = _ljucase(tshape)
     s == "POINT" && return _GEO_FOV_POINT
     s == "ELLIPSOID" && return _GEO_FOV_ELLIPSOID
     s == "RAY" && return _GEO_FOV_RAY

@@ -99,7 +99,7 @@ struct GFSeparation <: GFQuantity
 end
 
 function _gf_shape_radius(ks::KernelSet, body::Int32, shape::AbstractString)
-    s = uppercase(strip(shape, ' '))
+    s = _ljucase(shape)
     s == "POINT" && return 0.0
     s == "SPHERE" && return maximum(_geo_radii(ks, body))
     throw(
@@ -141,23 +141,12 @@ end
 
 _gf_label(::GFSeparation) = "Angular separation pass # of #"
 
-"Angular radius of a sphere of radius `r` at the range `range` (`zzsepq`)."
-@inline function _gf_angrad(q::GFSeparation, body::Int32, r::Float64, range::Float64)
-    range > r || throw(
-        SpiceError(
-            :insidebody, "Observer object $(q.obs) located within " *
-                "surface of target object $body. Range to target $range, radius of target $r"
-        )
-    )
-    return asin(clamp(r / range, -1.0, 1.0))
-end
-
 "Separation of the limbs: the angle between the positions minus the two angular radii (`zzsepq`)."
 @inline function _gf_value(q::GFSeparation, et::Float64)
     p1 = _gf_spkezp(q.ks, q.bod1, et, _J2000_FRAME, q.corr, q.obs)[1]
     p2 = _gf_spkezp(q.ks, q.bod2, et, _J2000_FRAME, q.corr, q.obs)[1]
-    a1 = _gf_angrad(q, q.bod1, q.rad1, vnorm(p1))
-    a2 = _gf_angrad(q, q.bod2, q.rad2, vnorm(p2))
+    a1 = _geo_angrad(q.rad1, vnorm(p1), q.obs, q.bod1, 1)
+    a2 = _geo_angrad(q.rad2, vnorm(p2), q.obs, q.bod2, 2)
     return vsep(p1, p2) - a1 - a2
 end
 
@@ -305,17 +294,9 @@ end
 
 _gf_label(::GFPhase) = "Phase angle search pass # of #"
 
-"""
-The phase angle as `zzgfpaq` computes it: pi minus the angle between the position of the
-target seen from the observer and the position of the illuminator seen from the target
-at the epoch `et - lt` (at `et` without correction).
-"""
-@inline function _gf_value(q::GFPhase, et::Float64)
-    p1, lt = _gf_spkezp(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)
-    ett = q.corr.geometric ? et : et - lt
-    p2 = _gf_spkezp(q.ks, q.illum, ett, _J2000_FRAME, q.corr, q.targ)[1]
-    return Float64(pi) - vsep(p1, p2)
-end
+"The phase angle as `zzgfpaq` computes it (`_geo_phase`)."
+@inline _gf_value(q::GFPhase, et::Float64) =
+    _geo_phase(q.ks, q.targ, q.illum, q.obs, q.corr, et)
 
 "The phase angle decreases if the angle of `_gf_value` increases (`dvsep`); the velocity of the illuminator is scaled by the rate of the epoch `et - lt`."
 @inline function _gf_decreasing(q::GFPhase, et::Float64)
@@ -406,9 +387,6 @@ end
 _gf_vecframe(v::GFPositionVector) = v.ref
 _gf_vecexist(::GFPositionVector, cnfine::Window, run::_GFRun) = copy(cnfine)
 
-"Left-justified upper-case copy of `s` with blank runs compressed to one (`cmprss` with 1)."
-_gf_compress(s::AbstractString) = uppercase(replace(strip(s, ' '), r" +" => " "))
-
 """
     GFCoordinate
 
@@ -452,7 +430,7 @@ function _gf_sysidx(crdsys::AbstractString, crdnam::AbstractString)
             "The coordinate system $crdsys is not supported."
         )
     )
-    crd = _gf_compress(crdnam)
+    crd = normalize_name(crdnam)
     idx = something(findfirst(==(crd), _GF_CRDNMS[sys]), 0)
     idx == 0 && throw(
         SpiceError(

@@ -663,7 +663,7 @@ function gfevnt(
         qlpars::AbstractVector{Bool}, op::AbstractString, refval::Real, tol::Real,
         adjust::Real, cnfine::Window; bail = nothing, report = nothing, threads::Bool = false
     )
-    quant = uppercase(strip(gquant, ' '))
+    quant = _ljucase(gquant)
     k = findfirst(p -> p.first == quant, _GF_QPARS)
     k === nothing && throw(
         SpiceError(
@@ -679,7 +679,7 @@ function gfevnt(
             "Number of quantity definition parameters = $n;  must be in range 0:10."
         )
     )
-    pnames = String[uppercase(strip(s, ' ')) for s in qpnams]
+    pnames = String[_ljucase(s) for s in qpnams]
     for p in _GF_QPARS[k].second         # invariant: the parameters before p are supplied
         p in pnames || throw(
             SpiceError(
@@ -709,7 +709,7 @@ function gfevnt(
         return _gf_search(q, op, refval, adjust, cnfine, run)
     elseif quant == "COORDINATE"
         rawdef = qcpars[findfirst(==("VECTOR DEFINITION"), pnames)]
-        vecdef = _gf_compress(rawdef)
+        vecdef = normalize_name(rawdef)
         if vecdef == "POSITION"
             q = _gf_position_coordinate(
                 ks, par("TARGET"), par("REFERENCE FRAME"),

@@ -285,7 +285,7 @@ end
     (shape == "ELLIPSOID" || shape == "POINT") && return shape
     return _geo_occ_upper_slow(shape)
 end
-@noinline _geo_occ_upper_slow(shape::AbstractString) = uppercase(rstrip(lstrip(shape, ' '), ' '))
+@noinline _geo_occ_upper_slow(shape::AbstractString) = _ljucase(shape)
 
 @noinline _geo_occ_bad_frame(frame, id, why) = throw(
     SpiceError(

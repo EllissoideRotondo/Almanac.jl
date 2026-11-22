@@ -77,7 +77,7 @@ function GFIllumination(
     a, b, c = _geo_radii(ks, targ)
     sp = _geo_pos(spoint)
     normal = _m_surfnm(a, b, c, sp)
-    uppercase(lstrip(rstrip(method, ' '), ' ')) == "ELLIPSOID" || throw(
+    _ljucase(method) == "ELLIPSOID" || throw(
         SpiceError(
             :invalidmethod, "The only supported computation method is ELLIPSOID; the input " *
                 "method was $method."

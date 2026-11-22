@@ -287,9 +287,22 @@ function phaseq(
                 "must be three different bodies"
         )
     )
-    e = check_epoch(et)
-    pv1, lt = _geo_spkezp(ks, targ, e, Int32(1), corr, obs)
-    pv2, _ = _geo_spkezp(ks, illum, corr.geometric ? e : e - lt, Int32(1), corr, targ)
+    return _geo_phase(ks, targ, illum, obs, corr, check_epoch(et))
+end
+
+"""
+    _geo_phase(ks, targ, illum, obs, corr, et)
+
+The phase angle as `zzgfpaq` computes it, for three distinct bodies: pi minus the angle
+between the position of `targ` seen from `obs` and the position of `illum` seen from
+`targ` at the epoch `et - lt` (at `et` without correction), in J2000. `phaseq` and the
+phase angle of the geometry finder.
+"""
+@inline function _geo_phase(
+        ks::KernelSet, targ::Int32, illum::Int32, obs::Int32, corr::Aberration, et
+    )
+    pv1, lt = _geo_spkezp(ks, targ, et, _J2000_FRAME, corr, obs)
+    pv2, _ = _geo_spkezp(ks, illum, corr.geometric ? et : et - lt, _J2000_FRAME, corr, targ)
     return pi - vsep(pv1, pv2)
 end
 phaseq(

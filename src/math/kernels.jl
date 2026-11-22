@@ -324,6 +324,10 @@ end
     return _m_dvhat(_m_dvcrss(a, b), false)
 end
 
+"`brcktd_`: `x` bracketed between the two ends `e1` and `e2`, in either order."
+@inline _m_brcktd(x::Float64, e1::Float64, e2::Float64) =
+    e1 < e2 ? max(e1, min(e2, x)) : max(e2, min(e1, x))
+
 """
     _m_vdistg(v1, v2)
 

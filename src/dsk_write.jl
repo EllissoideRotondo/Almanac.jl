@@ -264,12 +264,12 @@ function _dsk_mkspin!(
         k1 = 3 * pf[3i - 2]
         k2 = 3 * pf[3i - 1]
         k3 = 3 * pf[3i]
-        bxmin = _dsk_brcktd(min(min(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) - mdltol, xe[1], xe[2])
-        bxmax = _dsk_brcktd(max(max(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) + mdltol, xe[1], xe[2])
-        bymin = _dsk_brcktd(min(min(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) - mdltol, xe[3], xe[4])
-        bymax = _dsk_brcktd(max(max(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) + mdltol, xe[3], xe[4])
-        bzmin = _dsk_brcktd(min(min(vf[k1], vf[k2]), vf[k3]) - mdltol, xe[5], xe[6])
-        bzmax = _dsk_brcktd(max(max(vf[k1], vf[k2]), vf[k3]) + mdltol, xe[5], xe[6])
+        bxmin = _m_brcktd(min(min(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) - mdltol, xe[1], xe[2])
+        bxmax = _m_brcktd(max(max(vf[k1 - 2], vf[k2 - 2]), vf[k3 - 2]) + mdltol, xe[1], xe[2])
+        bymin = _m_brcktd(min(min(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) - mdltol, xe[3], xe[4])
+        bymax = _m_brcktd(max(max(vf[k1 - 1], vf[k2 - 1]), vf[k3 - 1]) + mdltol, xe[3], xe[4])
+        bzmin = _m_brcktd(min(min(vf[k1], vf[k2]), vf[k3]) - mdltol, xe[5], xe[6])
+        bzmax = _m_brcktd(max(max(vf[k1], vf[k2]), vf[k3]) + mdltol, xe[5], xe[6])
         gmin = _dsk_getvox(voxsiz, voxori, nvox, (bxmin, bymin, bzmin))
         gmax = _dsk_getvox(voxsiz, voxori, nvox, (bxmax, bymax, bzmax))
         (gmin === nothing || gmax === nothing) && _dsk_throw(

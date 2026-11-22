@@ -23,9 +23,6 @@ const _DSK_MAXVXL = 50000                 # voxels of one ray that `xdda` accept
 "The tolerances of CSPICE at start, for calls on a `KernelSet` without a context."
 const _DSK_DEFAULT_TOLS = DSKTolerances()
 
-@inline _dsk_brcktd(x::Float64, e1::Float64, e2::Float64) =
-    e1 < e2 ? max(e1, min(e2, x)) : max(e2, min(e1, x))
-
 "`reclat`: radius, longitude and latitude of the rectangular point `p`."
 @inline function _dsk_reclat(p::Vec3{Float64})
     big = max(max(abs(p[1]), abs(p[2])), abs(p[3]))
@@ -1724,9 +1721,9 @@ function _dsk_x02(
     ic1 = clamp(unsafe_trunc(Int, coord[ax1]) + 1, 1, vg[ax1])
     ic2 = clamp(unsafe_trunc(Int, coord[ax2]) + 1, 1, vg[ax2])
     ic3 = clamp(unsafe_trunc(Int, coord[ax3]) + 1, 1, vg[ax3])
-    vo1 = _dsk_brcktd(coord[ax1] - (ic1 - 1), 0.0, 1.0)
-    vo2 = _dsk_brcktd(coord[ax2] - (ic2 - 1), 0.0, 1.0)
-    vo3 = _dsk_brcktd(coord[ax3] - (ic3 - 1), 0.0, 1.0)
+    vo1 = _m_brcktd(coord[ax1] - (ic1 - 1), 0.0, 1.0)
+    vo2 = _m_brcktd(coord[ax2] - (ic2 - 1), 0.0, 1.0)
+    vo3 = _m_brcktd(coord[ax3] - (ic3 - 1), 0.0, 1.0)
     limit = 1.0e-20 / vg[ax1] * abs(udir[ax1])
     ax2err = _DSK_DPMAX
     ax3err = _DSK_DPMAX

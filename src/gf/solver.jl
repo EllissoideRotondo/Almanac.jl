@@ -37,12 +37,8 @@ See also [`gfevnt`](@ref), [`gfocce`](@ref), [`gffove`](@ref).
 @inline function gfrefn(t1::Real, t2::Real, s1::Bool = false, s2::Bool = true)
     a = Float64(t1)
     b = Float64(t2)
-    return _gf_brcktd(a * 0.5 + b * 0.5, a, b)
+    return _m_brcktd(a * 0.5 + b * 0.5, a, b)
 end
-
-"`brcktd`: `x` bracketed between the two ends `a` and `b`, in either order."
-@inline _gf_brcktd(x::Float64, a::Float64, b::Float64) =
-    a < b ? max(a, min(b, x)) : max(b, min(a, x))
 
 """
     _GFRun(step, refine, bail, report, tol, threads)
@@ -219,7 +215,7 @@ function _gf_solve!(
                     )
                 )
                 _gf_bail(run)
-                t = _gf_brcktd(Float64(run.refine(t1, t2, l1, l2))::Float64, t1, t2)
+                t = _m_brcktd(Float64(run.refine(t1, t2, l1, l2))::Float64, t1, t2)
                 if t == t1
                     t2 = t
                 elseif t == t2
@@ -237,7 +233,7 @@ function _gf_solve!(
                 prvdif = diff
                 diff = abs(t2 - t1)
             end
-            trnstn = _gf_brcktd((t1 + t2) * 0.5, t1, t2)
+            trnstn = _m_brcktd((t1 + t2) * 0.5, t1, t2)
             if instat
                 wninsd!(result, begtim, trnstn)
             else
@@ -332,7 +328,7 @@ const _GF_ABSMAX = 7
 _gf_relname(rel::Int) = ("<", "=", ">", "LOCMIN", "ABSMIN", "LOCMAX", "ABSMAX")[rel]
 
 function _gf_relcode(relate::AbstractString)
-    s = uppercase(strip(relate, ' '))
+    s = _ljucase(relate)
     s == "<" && return _GF_LT
     s == "=" && return _GF_EQ
     s == ">" && return _GF_GT

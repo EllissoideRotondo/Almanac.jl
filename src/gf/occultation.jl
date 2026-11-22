@@ -80,7 +80,7 @@ function _gf_occultation(
                 "be POINT."
         )
     )
-    typ = uppercase(lstrip(rstrip(occtyp, ' '), ' '))
+    typ = _ljucase(occtyp)
     k = findfirst(p -> p.first == typ, _GF_OCCTYPES)
     k === nothing && throw(
         SpiceError(

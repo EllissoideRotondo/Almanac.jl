@@ -12,6 +12,19 @@
 _squeeze(s::AbstractString) = uppercase(replace(s, ' ' => ""))
 
 """
+    _ljucase(s) -> String
+
+Contract: `s` without leading and trailing blanks, with ASCII letters in upper case, as
+`ljust_` and `ucase_` give it before a comparison with a constant (which ignores the
+trailing blanks). Other characters are not changed.
+"""
+function _ljucase(s::AbstractString)
+    t = strip(s, ' ')
+    any(c -> 'a' <= c <= 'z', t) || return String(t)
+    return map(c -> 'a' <= c <= 'z' ? c - 32 : c, t)
+end
+
+"""
     _ljucrs4(s) -> NTuple{4,UInt8}
 
 Contract: the first four characters of `s` after its blanks are removed, ASCII letters in
