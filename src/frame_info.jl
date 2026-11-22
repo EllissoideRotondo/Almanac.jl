@@ -42,14 +42,22 @@ end
 Contract: frame ID and frame name for the value of an `OBJECT_<body>_FRAME` variable,
 as `cidfrm_` and `cnmfrm_` read it: a frame name (built-in, or with a `FRAME_<name>`
 variable) or a frame ID (built-in, or with a `FRAME_<id>_NAME` variable). `nothing` if
-the value does not identify a frame.
+the value does not identify a frame. A name is taken as `gcpool_` returns it into 32
+characters and compared exactly (`zzhscchk_`): `iau_mars` or ` IAU_MARS` is not the
+built-in frame `IAU_MARS`.
 """
 function _frame_of_object(ks::KernelSet, value::PoolValue)
     isempty(value) && return nothing
     if value isa Vector{String}
-        name = String(strip(value[1]))
-        code = get(BUILTIN_FRAMENAME2ID, normalize_name(name), nothing)
-        code === nothing || return Int(code), name
+        raw = value[1]
+        ncodeunits(raw) > 32 && (raw = String(codeunits(raw)[1:32]))
+        name = String(rstrip(raw, ' '))
+        # The built-in names are in the form of `normalize_name`, so the exact match
+        # is a match of the normalized name by a name that is already in that form.
+        if normalize_name(name) == name
+            code = get(BUILTIN_FRAMENAME2ID, name, nothing)
+            code === nothing || return Int(code), name
+        end
         # `gipool_(FRAME_<name>, 1, 8, ...)`, then the test of one value
         key = "FRAME_" * name
         fcode = _gipool_first(get(ks.pool, key, nothing), key; room = 8, single = true)

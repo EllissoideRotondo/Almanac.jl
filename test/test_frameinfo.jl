@@ -121,6 +121,24 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 check!(fails, got == want, "cnmfrm", n)
             end
             @test isempty(fails)
+            # Regression: the frame name of `OBJECT_<body>_FRAME` is compared exactly with
+            # the built-in names (`zzhscchk_`), so `iau_saturn` and ` IAU_SATURN` are not
+            # the frame IAU_SATURN.
+            if !with_objects
+                try
+                    for v in ("iau_saturn", " IAU_SATURN", "IAU_SATURN")
+                        SPICE.pcpool("OBJECT_SATURN_FRAME", [v])
+                        pcpool(ctx, "OBJECT_SATURN_FRAME", [v])
+                        @test cidfrm(ctx, 699) == SPICE.cidfrm(699)
+                        @test cnmfrm(ctx, "SATURN") == SPICE.cnmfrm("SATURN")
+                    end
+                    pcpool(ctx, "OBJECT_SATURN_FRAME", ["iau_saturn"])
+                    @test cidfrm(ctx, 699) === nothing
+                finally
+                    SPICE.dvpool("OBJECT_SATURN_FRAME")
+                    dvpool(ctx, "OBJECT_SATURN_FRAME")
+                end
+            end
         end
 
         with_objects || @testset "ccifrm" begin
