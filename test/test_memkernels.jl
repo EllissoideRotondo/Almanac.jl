@@ -1,6 +1,6 @@
 # Group: kernels built in memory (`dafops`, `spkops`, `ckops`, `pckops`, `furnsh` of a
-# handle, names of a kernel, `load_samples!`, `load_function!`; src/daf_write.jl,
-# src/memkernels.jl).
+# handle, names of a kernel, `load_samples!`, `load_function!`; src/files/daf_write.jl,
+# src/kernels/memkernels.jl).
 #
 # Invariant layer: the writers write the same bytes to a handle in memory as to a file
 # (group `dafwrite` compares the files with CSPICE), so a kernel loaded from a handle

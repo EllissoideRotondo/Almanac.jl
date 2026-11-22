@@ -84,65 +84,65 @@ export EKFastLoad, ekopn, ekopw, ekops, ekbseg, ekappr, ekinsr, ekdelr, ekacec, 
 export ekifld, ekaclc, ekacld, ekacli, ekffld
 export EKResult, eklef, ekuef, ekntab, ektnam, ekccnt, ekcii, ekpsel, ekfind, eknelt, ekgc, ekgd, ekgi, ekcolumn
 
-include("dyntypes.jl")      # DynFrame, SwitchFrame, PoolWatch (fields of the types below)
-include("dsk_types.jl")     # DLADescr, DSKDescr, DSKSegment, DSKFile, DSKTolerances
-include("ek/types.jl")      # EKColumnAttr, EKSegmentSummary, EKFile, EKTable
-include("errors.jl")         # SpiceError and its subtypes, ERROR_KINDS
-include("strings.jl")        # ASCII case, eqstr, matchi
-include("types.jl")
-include("taylor.jl")        # Taylor{N,T} truncated series, `primal`
-include("math/kernels.jl")  # _m_ vector and matrix kernels (operation order of SPICELIB)
-include("daf.jl")           # open_daf, segment descriptors
-include("spk_eval.jl")      # spk_eval, pck_eval, find_segment
-include("spk_more.jl")      # SPK types 1, 5, 8, 9, 12 to 15, 17 to 21
-include("textkernel.jl")    # parse_text_kernel, kernel_arch, metakernel_files
-include("jsonkernel.jl")    # parse_json_kernel, is_json_kernel
-include("names.jl")         # body names and codes, built-in and pool-defined
-include("frames.jl")        # frame definitions, built-in and pool-defined
-include("bytebuf.jl")      # the build buffer and byte writers of the formats
-include("time.jl")          # leap seconds, deltet, unitim, ttrans, calendars, constants
-include("timeparse.jl")     # tpartv, str2et, utc2et, tparse, tpictr, timdef rules
-include("timeout.jl")       # number formats, timout, et2utc, etcal
-include("rotations.jl")     # build_tk, build_bodyrot, frame_rotation
-include("sclk.jl")          # type 1 spacecraft clocks: build_sclk, sct2e, sce2c, ...
-include("ck.jl")            # CK segment evaluation, types 1 to 6; class 3 frames
-include("dynframes.jl")     # dynamic frames (class 5): parsing and evaluation
-include("switchframes.jl")  # switch frames (class 6)
-include("pool_write.jl")    # pdpool, pcpool, pipool, dvpool, lmpool, ldpool, clpool, boddef, watchers
-include("context.jl")       # build_kernelset, SpiceContext, furnsh, unload, kclear
-include("spk_api.jl")       # spkgeo, spkezr, spkpos, spkder
-include("aberration.jl")    # Aberration, light time, stellar aberration, spkltc, ...
-include("frame_api.jl")     # pxform, pxfrm2, sxform, pxder
-include("pool_api.jl")      # gdpool, gcpool, gipool, bodvrd, bodn2c, ...
-include("time_api.jl")      # context forms of the time calls, timdef
-include("windows.jl")       # Window, wninsd!, wnunid, wnintd, wndifd, wncomd, wnexpd!, wnreld, ...
-include("ck_api.jl")        # ckgp, ckgpav, ckcov, ckcov!, ckobj, ckmeta; CSPICE state rotation
-include("daf_access.jl")    # DAFHandle, dafopr, dafbfs, daffna, dafgs, dafgda, dafec, getfat
-include("daf_write.jl")     # dafonw, dafopw, dafbna, dafada, dafena, dafac, dafdc
-include("spk_write.jl")     # spkopn, spkopa, spkcls, spkw01 ... spkw21
-include("ck_write.jl")      # ckopn, ckcls, ckw01 ... ckw06, ckw04b/a/e
-include("pck_write.jl")     # pckopn, pckw02, pck03b/a/e, pckw20, pckcls
-include("ck_records.jl")    # cknr01 ... cknr05, ckgr01 ... ckgr06, cknm06, ckmp06
-include("das.jl")           # DASHandle, dasopr, dasonw, dascls, dasrdi, dasadi, dasudc, dasac, dasec
-include("dla.jl")           # dlaopn, dlabns, dlaens, dlabfs, dlafns, dlabbs, dlafps
-include("dsk.jl")           # type 2 geometry, open_dsk, intercept and segment selection
-include("dsk_api.jl")       # dskgtl, dskstl, dskgd, dskb02 ... dskx02, dskxsi, dskxv, plt*
-include("dsk_write.jl")     # dskopn, dskmi2, dskrb2, dskw02, dskcls
-include("surfaces.jl")      # srfc2s, srfs2c, srfcss, srfscc, latsrf, srfnrm
-include("spk_types/sgp4.jl")    # SGP4/SDP4 propagation of two-line elements
-include("spk_types/type10.jl")  # SPK type 10: generic segment, TEME to J2000
-include("tle.jl")           # getelm, evsgp4, spkw10
-include("spk_segments.jl")  # spksfs, spkpvn, spkuds, spksub
-include("kernel_info.jl")   # spkobj, spkcov, ktotal, kdata, kinfo, tkvrsn
-include("math/vectors.jl")      # vadd ... vsep, mxv, mxm, invert, rotate, twovec, dvhat, g forms
-include("math/rotations.jl")    # eul2m, m2eul, m2q, q2m, qxq, axisar, raxisa, rav2xf, xf2eul
-include("math/ellipsoid.jl")    # SpicePlane, SpiceEllipse, nearpt, surfpt, edlimb, inedpl, npedln
-include("math/coordinates.jl")  # reclat, recgeo, recpgr, ..., Jacobians, xfmsta, convrt
-include("math/conics.jl")       # stmp03, prop2b, conics, oscelt, oscltx, eqncpv
-include("math/polynomials.jl")  # chbval ... chbigr, lgrint ... hrmesp, polyds, qderiv, rquad, diags2
-include("hex.jl")               # dp2hx, hx2dp: base 16 strings of doubles
-include("frame_info.jl")    # frinfo, cidfrm, cnmfrm, ccifrm, bltfrm, kplfrm, tkfram, tipbod, tisbod, pckfrm, pckcov, bodfnd, bodvcd
-include("lst.jl")           # et2lst, lspcn
+include("frames/dyntypes.jl")        # DynFrame, SwitchFrame, PoolWatch (fields of the types below)
+include("dsk/dsk_types.jl")          # DLADescr, DSKDescr, DSKSegment, DSKFile, DSKTolerances
+include("ek/types.jl")               # EKColumnAttr, EKSegmentSummary, EKFile, EKTable
+include("core/errors.jl")            # SpiceError and its subtypes, ERROR_KINDS
+include("core/strings.jl")           # ASCII case, eqstr, matchi
+include("core/types.jl")
+include("core/taylor.jl")            # Taylor{N,T} truncated series, `primal`
+include("math/kernels.jl")           # _m_ vector and matrix kernels (operation order of SPICELIB)
+include("files/daf.jl")              # open_daf, segment descriptors
+include("spk/spk_eval.jl")           # spk_eval, pck_eval, find_segment
+include("spk/spk_more.jl")           # SPK types 1, 5, 8, 9, 12 to 15, 17 to 21
+include("kernels/textkernel.jl")     # parse_text_kernel, kernel_arch, metakernel_files
+include("kernels/jsonkernel.jl")     # parse_json_kernel, is_json_kernel
+include("kernels/names.jl")          # body names and codes, built-in and pool-defined
+include("frames/frames.jl")          # frame definitions, built-in and pool-defined
+include("core/bytebuf.jl")           # the build buffer and byte writers of the formats
+include("time/time.jl")              # leap seconds, deltet, unitim, ttrans, calendars, constants
+include("time/timeparse.jl")         # tpartv, str2et, utc2et, tparse, tpictr, timdef rules
+include("time/timeout.jl")           # number formats, timout, et2utc, etcal
+include("frames/rotations.jl")       # build_tk, build_bodyrot, frame_rotation
+include("time/sclk.jl")              # type 1 spacecraft clocks: build_sclk, sct2e, sce2c, ...
+include("ck/ck.jl")                  # CK segment evaluation, types 1 to 6; class 3 frames
+include("frames/dynframes.jl")       # dynamic frames (class 5): parsing and evaluation
+include("frames/switchframes.jl")    # switch frames (class 6)
+include("kernels/pool_write.jl")     # pdpool, pcpool, pipool, dvpool, lmpool, ldpool, clpool, boddef, watchers
+include("kernels/context.jl")        # build_kernelset, SpiceContext, furnsh, unload, kclear
+include("spk/spk_api.jl")            # spkgeo, spkezr, spkpos, spkder
+include("spk/aberration.jl")         # Aberration, light time, stellar aberration, spkltc, ...
+include("frames/frame_api.jl")       # pxform, pxfrm2, sxform, pxder
+include("kernels/pool_api.jl")       # gdpool, gcpool, gipool, bodvrd, bodn2c, ...
+include("time/time_api.jl")          # context forms of the time calls, timdef
+include("math/windows.jl")           # Window, wninsd!, wnunid, wnintd, wndifd, wncomd, wnexpd!, wnreld, ...
+include("ck/ck_api.jl")              # ckgp, ckgpav, ckcov, ckcov!, ckobj, ckmeta; CSPICE state rotation
+include("files/daf_access.jl")       # DAFHandle, dafopr, dafbfs, daffna, dafgs, dafgda, dafec, getfat
+include("files/daf_write.jl")        # dafonw, dafopw, dafbna, dafada, dafena, dafac, dafdc
+include("spk/spk_write.jl")          # spkopn, spkopa, spkcls, spkw01 ... spkw21
+include("ck/ck_write.jl")            # ckopn, ckcls, ckw01 ... ckw06, ckw04b/a/e
+include("frames/pck_write.jl")       # pckopn, pckw02, pck03b/a/e, pckw20, pckcls
+include("ck/ck_records.jl")          # cknr01 ... cknr05, ckgr01 ... ckgr06, cknm06, ckmp06
+include("files/das.jl")              # DASHandle, dasopr, dasonw, dascls, dasrdi, dasadi, dasudc, dasac, dasec
+include("files/dla.jl")              # dlaopn, dlabns, dlaens, dlabfs, dlafns, dlabbs, dlafps
+include("dsk/dsk.jl")                # type 2 geometry, open_dsk, intercept and segment selection
+include("dsk/dsk_api.jl")            # dskgtl, dskstl, dskgd, dskb02 ... dskx02, dskxsi, dskxv, plt*
+include("dsk/dsk_write.jl")          # dskopn, dskmi2, dskrb2, dskw02, dskcls
+include("dsk/surfaces.jl")           # srfc2s, srfs2c, srfcss, srfscc, latsrf, srfnrm
+include("spk/types/sgp4.jl")         # SGP4/SDP4 propagation of two-line elements
+include("spk/types/type10.jl")       # SPK type 10: generic segment, TEME to J2000
+include("spk/tle.jl")                # getelm, evsgp4, spkw10
+include("spk/spk_segments.jl")       # spksfs, spkpvn, spkuds, spksub
+include("kernels/kernel_info.jl")    # spkobj, spkcov, ktotal, kdata, kinfo, tkvrsn
+include("math/vectors.jl")           # vadd ... vsep, mxv, mxm, invert, rotate, twovec, dvhat, g forms
+include("math/rotations.jl")         # eul2m, m2eul, m2q, q2m, qxq, axisar, raxisa, rav2xf, xf2eul
+include("math/ellipsoid.jl")         # SpicePlane, SpiceEllipse, nearpt, surfpt, edlimb, inedpl, npedln
+include("math/coordinates.jl")       # reclat, recgeo, recpgr, ..., Jacobians, xfmsta, convrt
+include("math/conics.jl")            # stmp03, prop2b, conics, oscelt, oscltx, eqncpv
+include("math/polynomials.jl")       # chbval ... chbigr, lgrint ... hrmesp, polyds, qderiv, rquad, diags2
+include("core/hex.jl")               # dp2hx, hx2dp: base 16 strings of doubles
+include("frames/frame_info.jl")      # frinfo, cidfrm, cnmfrm, ccifrm, bltfrm, kplfrm, tkfram, tipbod, tisbod, pckfrm, pckcov, bodfnd, bodvcd
+include("time/lst.jl")               # et2lst, lspcn
 include("geometry/methods.jl")       # method strings, corrections, bodies, frames, radii, shapes
 include("geometry/constobs.jl")      # spkcpo, spkcpt, spkcvo, spkcvt
 include("geometry/subpoints.jl")     # subpnt, subslr
@@ -152,32 +152,32 @@ include("geometry/occultation.jl")   # occult
 include("geometry/limbterm.jl")      # limbpt, termpt, tangpt
 include("geometry/fov.jl")           # getfov, getfvn, fovray, fovtrg
 include("geometry/azel.jl")          # azlrec, recazl, dazldr, drdazl, azlcpo
-include("gf/solver.jl")      # geometry finder: zzgfsolv, zzgfrelx, gfrefn, uddc, uddf
-include("gf/quantities.jl")  # distance, separation, range rate, phase angle, coordinates
-include("gf/longitude.jl")   # zzgfcslv, zzgflong: longitude and right-ascension searches
-include("gf/api.jl")         # gfdist, gfsep, gfposc, gfrr, gfpa, gfuds, gfudb, gfevnt, gfstol
-include("gf/surface.jl")     # gfsubc, gfsntc: sub-observer point and surface intercept
-include("gf/illumination.jl")  # gfilum: illumination angles at a surface point
-include("gf/occultation.jl") # gfoclt, gfocce: occultations and transits
-include("gf/fov.jl")         # gftfov, gfrfov, gffove: visibility in a field of view
-include("providers.jl")     # EphemerisProvider evaluation, add_ephemeris!
-include("queries.jl")       # StateQuery, state_query, RotationQuery, rotation_query
-include("table.jl")         # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
-include("memkernels.jl")    # furnsh of a DAF in memory, load_samples!, load_function!
-include("ad.jl")            # derivative rules for the AD package extensions
-include("analysis/orbit.jl")     # Orbit, orbit: a state about a central body
-include("analysis/elements.jl")  # element, elements: the scalar quantities of an Orbit
-include("analysis/brouwer.jl")   # Brouwer mean elements of an Orbit
-include("analysis/build.jl")     # keplerian_orbit, with_element, with_apsides, two_body
+include("gf/solver.jl")              # geometry finder: zzgfsolv, zzgfrelx, gfrefn, uddc, uddf
+include("gf/quantities.jl")          # distance, separation, range rate, phase angle, coordinates
+include("gf/longitude.jl")           # zzgfcslv, zzgflong: longitude and right-ascension searches
+include("gf/api.jl")                 # gfdist, gfsep, gfposc, gfrr, gfpa, gfuds, gfudb, gfevnt, gfstol
+include("gf/surface.jl")             # gfsubc, gfsntc: sub-observer point and surface intercept
+include("gf/illumination.jl")        # gfilum: illumination angles at a surface point
+include("gf/occultation.jl")         # gfoclt, gfocce: occultations and transits
+include("gf/fov.jl")                 # gftfov, gfrfov, gffove: visibility in a field of view
+include("queries/providers.jl")      # EphemerisProvider evaluation, add_ephemeris!
+include("queries/queries.jl")        # StateQuery, state_query, RotationQuery, rotation_query
+include("queries/table.jl")          # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
+include("kernels/memkernels.jl")     # furnsh of a DAF in memory, load_samples!, load_function!
+include("ad.jl")                     # derivative rules for the AD package extensions
+include("analysis/orbit.jl")         # Orbit, orbit: a state about a central body
+include("analysis/elements.jl")      # element, elements: the scalar quantities of an Orbit
+include("analysis/brouwer.jl")       # Brouwer mean elements of an Orbit
+include("analysis/build.jl")         # keplerian_orbit, with_element, with_apsides, two_body
 include("analysis/local_frames.jl")  # local_frame, local_frame_state, relative_state
-include("ek/file.jl")       # EK pages, trees, segment and column descriptors
-include("ek/columns.jl")    # EK column entries of classes 1 to 9
-include("ek/query_parse.jl")  # EK query language: scan, parse, resolve names and times, check
-include("ek/query_run.jl")  # EK search: key selection, joins, union, ORDER BY
-include("ek/api.jl")        # ekopr, ekssum, ekrcec, ..., ekntab, ekfind, ekgc, ekgd, ekgi
-include("ek/write_tree.jl")     # EK writers: page allocator and tree insert, delete, build
-include("ek/write_columns.jl")  # EK writers: data pages, column classes 1 to 9, indexes
-include("ek/write.jl")          # ekopn, ekbseg, ekappr, ekace*, ekuce*, ekifld, ekacl*, ekffld
-include("precompile.jl")    # precompile directives for the common signatures
+include("ek/file.jl")                # EK pages, trees, segment and column descriptors
+include("ek/columns.jl")             # EK column entries of classes 1 to 9
+include("ek/query_parse.jl")         # EK query language: scan, parse, resolve names and times, check
+include("ek/query_run.jl")           # EK search: key selection, joins, union, ORDER BY
+include("ek/api.jl")                 # ekopr, ekssum, ekrcec, ..., ekntab, ekfind, ekgc, ekgd, ekgi
+include("ek/write_tree.jl")          # EK writers: page allocator and tree insert, delete, build
+include("ek/write_columns.jl")       # EK writers: data pages, column classes 1 to 9, indexes
+include("ek/write.jl")               # ekopn, ekbseg, ekappr, ekace*, ekuce*, ekifld, ekacl*, ekffld
+include("precompile.jl")             # precompile directives for the common signatures
 
 end # module

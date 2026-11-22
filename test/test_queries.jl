@@ -1,4 +1,4 @@
-# Group 53: prepared queries (`state_query`, `rotation_query`, src/queries.jl).
+# Group 53: prepared queries (`state_query`, `rotation_query`, src/queries/queries.jl).
 #
 # Invariant layer: a query gives what `spkezr`, `spkpos`, `pxform` and `sxform` give for
 # the same arguments, to the last bit, for every aberration correction, an inertial and

@@ -4,8 +4,8 @@
 #
 # The recurrences are those of the SPK and CK evaluators: the Clenshaw steps of
 # `spk_eval.jl` (`_clenshaw_step`, `_clenshaw_end`), the integral of `_chbigr` in
-# `spk_types/chebyshev.jl`, and the kernels `_neville!`, `_neville_d!` and
-# `_hermite_table!` of `spk_types/interp.jl`, and the roots and the diagonalization
+# `spk/types/chebyshev.jl`, and the kernels `_neville!`, `_neville_d!` and
+# `_hermite_table!` of `spk/types/interp.jl`, and the roots and the diagonalization
 # `_m_rquad` and `_m_diags2` of `math/ellipsoid.jl`. Here the data come from the vectors
 # of the caller, and a work vector is `similar` to the input, so that a static input
 # allocates nothing.

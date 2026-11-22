@@ -5,7 +5,7 @@
 # Elements are in the CSPICE order: perifocal distance `rp`, eccentricity `ecc`,
 # inclination `inc`, longitude of the ascending node `lnode`, argument of periapsis
 # `argp`, mean anomaly at epoch `m0`, epoch `t0` and gravitational parameter `mu`.
-# The propagator is the private `_prop2b` of `spk_types/conic.jl`, which SPK types 5
+# The propagator is the private `_prop2b` of `spk/types/conic.jl`, which SPK types 5
 # and 15 use, and the state from equinoctial elements of `eqncpv` is the private
 # `_eqn_state` of SPK type 17; nothing of them is repeated here.
 
