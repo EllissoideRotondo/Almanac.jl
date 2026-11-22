@@ -913,6 +913,29 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test throws_kind(() -> Almanac._bpush(b, UInt8('x')), :buffertoosmall)
     end
 
+    @apart @testset "et2utc and etcal: at most 45 bytes, at any epoch" begin
+        # The longest results: 42 bytes in format C or D (a year of 7 digits, B.C. and 13
+        # decimals) and 45 bytes from `etcal` at the limit of its 32-bit day numbers, well
+        # inside the 63 bytes of a `String63`. An epoch that cannot be written throws.
+        ets = [s * 10.0^e for e in -20:0.25:308 for s in (-1.0, 1.0)]
+        append!(ets, [0.0, -0.0, NaN, Inf, -Inf, floatmax(), -floatmax(), nextfloat(0.0)])
+        function nbytes(f, et)
+            r = try
+                f(et)
+            catch
+                nothing
+            end
+            return r === nothing ? 0 : ncodeunits(r)
+        end
+        utc = [
+            maximum(et -> nbytes(t -> et2utc(ks, t, fmt, p), et), ets)
+                for fmt in ("C", "D", "J", "ISOC", "ISOD") for p in (-1, 0, 3, 14, 20)
+        ]
+        @test maximum(utc) == 42
+        @test maximum(et -> nbytes(etcal, et), ets) == 45
+        @test ncodeunits(etcal(NaN)) <= 45 && ncodeunits(etcal(Inf)) <= 45 && ncodeunits(etcal(-Inf)) <= 45
+    end
+
     @apart @testset "timout, pictures of the header and random pictures" begin
         sub = vcat(epochs[1:40:end], dense[1:7:end])
         cases = [(et, pic) for pic in TS_PICTURES for et in sub]
