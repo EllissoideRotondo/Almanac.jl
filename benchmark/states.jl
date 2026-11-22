@@ -1,9 +1,9 @@
 # State benchmark: Almanac against CSPICE (SPICE.jl) against ANISE (anise_jll).
 #
-#     julia --startup-file=no --threads=8 --project=bench bench/states.jl
+#     julia --startup-file=no --threads=8 --project=benchmark benchmark/states.jl
 #
-# ANISE is optional: `anise_jll` is a local build and is not in `bench/Project.toml`.
-# Without it the ANISE rows are left out; `bench/anise.jl` says how to add it.
+# ANISE is optional: `anise_jll` is a local build and is not in `benchmark/Project.toml`.
+# Without it the ANISE rows are left out; `benchmark/anise.jl` says how to add it.
 #
 # The main case mirrors the benchmark of ANISE itself: 100 epochs evenly spaced from
 # 1900-01-01 12:00 ET to 2099-01-01 12:00 ET (end excluded) on de440s.bsp, the Earth
@@ -13,7 +13,8 @@
 #
 # Further cases: the same epochs in random order (defeats a cache of the last record),
 # the Moon relative to the Sun (longer chain: 301 -> 3 -> 0 <- 10), and the throughput
-# of Almanac on all threads (through a context and on a `KernelSet` snapshot). CSPICE is not thread safe and is never called from a task.
+# of Almanac on all threads (through a context and on a `KernelSet` snapshot). CSPICE is
+# not thread safe and is never called from a task.
 # Set ALMANAC_BENCH_ANISE_THREADS=1 to add the threaded throughput of ANISE.
 
 include("common.jl")
@@ -173,7 +174,6 @@ function main()
     rows = Row[]
     g = "Earth rel. Moon, ordered"
     push!(rows, bench_row(g, "Almanac spkezr, integer IDs, context", loop_neo_ids, ctx, epochs, EARTH, MOON; n))
-    base = rows[end]
     push!(rows, bench_row(g, "Almanac spkezr, names, context", loop_neo_names, ctx, epochs; n))
     push!(rows, bench_row(g, "Almanac spkezr, integer IDs, default context", loop_neo_default, epochs; n))
     push!(rows, bench_row(g, "Almanac spkezr, integer IDs, KernelSet", loop_neo_ks, ks, epochs; n))
@@ -202,30 +202,33 @@ function main()
     # Throughput on threads. Each task queries its own sequence of the 100 epochs.
     total = 4_000_000
     nt = Threads.nthreads()
-    qneo(i) = spkezr(ctx, EARTH, @inbounds(epochs[i % n + 1]), J2000, "NONE", MOON)[1][1]
-    t1 = throughput(qneo, total, 1)
-    tn = nt > 1 ? throughput(qneo, total, nt) : t1
     thr = IOBuffer()
     println(thr, "| Engine | threads | queries/s | speed-up |")
     println(thr, "|---|---:|---:|---:|")
-    @printf(thr, "| Almanac spkezr, integer IDs, context | 1 | %.3e | 1.00 |\n", t1)
-    nt > 1 && @printf(thr, "| Almanac spkezr, integer IDs, context | %d | %.3e | %.2f |\n", nt, tn, tn / t1)
+    function throughput_rows(label, query)
+        t1 = throughput(query, total, 1)
+        @printf(thr, "| %s | 1 | %.3e | 1.00 |\n", label, t1)
+        if nt > 1
+            tn = throughput(query, total, nt)
+            @printf(thr, "| %s | %d | %.3e | %.2f |\n", label, nt, tn, tn / t1)
+        end
+        return nothing
+    end
+    throughput_rows(
+        "Almanac spkezr, integer IDs, context",
+        i -> spkezr(ctx, EARTH, @inbounds(epochs[i % n + 1]), J2000, "NONE", MOON)[1][1]
+    )
     # The same queries on the snapshot itself: no read of the context reference per query.
-    qks(i) = spkezr(ks, EARTH, @inbounds(epochs[i % n + 1]), J2000, "NONE", MOON)[1][1]
-    k1 = throughput(qks, total, 1)
-    kn = nt > 1 ? throughput(qks, total, nt) : k1
-    @printf(thr, "| Almanac spkezr, integer IDs, KernelSet | 1 | %.3e | 1.00 |\n", k1)
-    nt > 1 && @printf(thr, "| Almanac spkezr, integer IDs, KernelSet | %d | %.3e | %.2f |\n", nt, kn, kn / k1)
+    throughput_rows(
+        "Almanac spkezr, integer IDs, KernelSet",
+        i -> spkezr(ks, EARTH, @inbounds(epochs[i % n + 1]), J2000, "NONE", MOON)[1][1]
+    )
     if alm !== nothing && get(ENV, "ALMANAC_BENCH_ANISE_THREADS", "0") == "1"
-        qanise(i) = begin
+        throughput_rows("ANISE spk_ezr", function (i)
             o = Ref(AniseState())
             anise_spk_ezr(alm, EARTH, @inbounds(epochs[i % n + 1]), J2000, MOON, o)
-            o[].position_km[1]
-        end
-        a1 = throughput(qanise, total, 1)
-        an = nt > 1 ? throughput(qanise, total, nt) : a1
-        @printf(thr, "| ANISE spk_ezr | 1 | %.3e | 1.00 |\n", a1)
-        nt > 1 && @printf(thr, "| ANISE spk_ezr | %d | %.3e | %.2f |\n", nt, an, an / a1)
+            return o[].position_km[1]
+        end)
     end
     nt == 1 && println("one thread only: run with --threads=8 for the throughput on threads")
 
@@ -243,11 +246,11 @@ function main()
 
         ## Time per query
 
-        """ * markdown_table(rows; base) * "\n## Throughput on threads ($(total) queries)\n\n" *
+        """ * markdown_table(rows) * "\n## Throughput on threads ($(total) queries)\n\n" *
         String(take!(thr))
     println()
     println(text)
-    write_results("states", text)
+    write_results("states", text, rows)
     alm === nothing || anise_free(alm)
     SPICE.kclear(); kclear()
     return rows

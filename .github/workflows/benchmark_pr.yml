@@ -1,0 +1,47 @@
+name: Benchmark a pull request
+
+# AirspeedVelocity.jl runs `benchmark/benchmarks.jl` of the pull request on `main` and on
+# the pull request, and comments the times and their ratios on the pull request.
+on:
+  pull_request_target:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "ext/**"
+      - "benchmark/**"
+      - "Project.toml"
+      - ".github/workflows/benchmark_pr.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  pull-requests: write
+
+jobs:
+  bench:
+    # `pull_request_target` runs the code of the pull request in the context of this
+    # repository (write access to comments, the Actions cache), so only the pull
+    # requests of members of the organization and of collaborators are benchmarked. No
+    # workflow runs in a private repository.
+    if: >-
+      github.event.repository.private == false &&
+      contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.pull_request.author_association)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      # The action checks out the pull request and cleans the workspace, so the kernels
+      # of the tests live outside it.
+      - name: Kernel directory
+        run: echo "ALMANAC_KERNEL_DIR=$RUNNER_TEMP/kernels" >> "$GITHUB_ENV"
+      - name: Cache the test kernels
+        uses: actions/cache@v4
+        with:
+          path: ${{ runner.temp }}/kernels
+          key: benchmark-kernels-v1
+      - uses: MilesCranmer/AirspeedVelocity.jl@action-v1
+        with:
+          julia-version: "1"
+          # The script of the pull request, on both revisions.
+          bench-on: ${{ github.event.pull_request.head.sha }}

@@ -1,6 +1,6 @@
 # Rotation benchmark: Almanac against CSPICE (SPICE.jl).
 #
-#     julia --startup-file=no --project=bench bench/rotations.jl
+#     julia --startup-file=no --project=benchmark benchmark/rotations.jl
 #
 # `pxform` from J2000 to IAU_EARTH (text PCK: polynomials and trigonometric terms) and to
 # MOON_PA (fixed-offset frame on a binary PCK Chebyshev segment), `sxform`, and `pxder`
@@ -67,15 +67,19 @@ function main()
         )
         @assert d <= 1.0e-8 "Almanac differs from CSPICE for J2000 to $to: $d"
         push!(agreement, @sprintf("| J2000 to %s | %.2e |", to, d))
-        g = "J2000 to $to"
+        g = "pxform J2000 to $to"
         push!(rows, bench_row(g, "Almanac pxform, integer IDs", loop_neo_pxform, ctx, epochs, 1, toid; n))
         push!(rows, bench_row(g, "Almanac pxform, names", loop_neo_pxform, ctx, epochs, "J2000", to; n))
+        push!(rows, bench_row(g, "Almanac pxder Val(0)", loop_neo_pxder, ctx, epochs, 1, toid, Val(0); n))
+        push!(rows, bench_row(g, "CSPICE pxform (SPICE.jl, names)", loop_cspice_pxform, epochs, "J2000", to; n))
+        g = "sxform J2000 to $to"
         push!(rows, bench_row(g, "Almanac sxform, integer IDs", loop_neo_sxform, ctx, epochs, 1, toid; n))
-        for N in 0:3
-            push!(rows, bench_row(g, "Almanac pxder Val($N)", loop_neo_pxder, ctx, epochs, 1, toid, Val(N); n))
+        push!(rows, bench_row(g, "Almanac sxform, names", loop_neo_sxform, ctx, epochs, "J2000", to; n))
+        push!(rows, bench_row(g, "Almanac pxder Val(1)", loop_neo_pxder, ctx, epochs, 1, toid, Val(1); n))
+        push!(rows, bench_row(g, "CSPICE sxform (SPICE.jl, names)", loop_cspice_sxform, epochs, "J2000", to; n))
+        for N in 2:3
+            push!(rows, bench_row("pxder J2000 to $to", "Almanac pxder Val($N)", loop_neo_pxder, ctx, epochs, 1, toid, Val(N); n))
         end
-        push!(rows, bench_row(g, "CSPICE pxform (SPICE.jl)", loop_cspice_pxform, epochs, "J2000", to; n))
-        push!(rows, bench_row(g, "CSPICE sxform (SPICE.jl)", loop_cspice_sxform, epochs, "J2000", to; n))
     end
 
     text = run_header("Rotation benchmark: Almanac, CSPICE") * """
@@ -94,7 +98,7 @@ function main()
         """ * markdown_table(rows)
     println()
     println(text)
-    write_results("rotations", text)
+    write_results("rotations", text, rows)
     SPICE.kclear()
     return rows
 end

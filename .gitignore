@@ -1,6 +1,6 @@
 Manifest*.toml
 /test/data
-/bench/results/
+/benchmark/results/
 *.cov
 test/.group_seconds
 /docs/build/
