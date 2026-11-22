@@ -70,8 +70,8 @@ end
 """
     build_sclk(pool) -> Dict{Int32,SclkType1}
 
-Type 1 clocks of the pool, by clock ID: one for each variable `SCLK_DATA_TYPE_<n>` with
-the value 1 (the clock ID is `-n`) whose `SCLK01_*` data are complete. A clock with
+Type 1 clocks of the pool, by clock ID: one for each variable `SCLK_DATA_TYPE_<n>` whose
+first value rounds to 1 (the clock ID is `-n`) whose `SCLK01_*` data are complete. A clock with
 incomplete data is left out, so that loading a kernel never fails; a conversion with
 that clock then throws `SpiceError`.
 """
@@ -82,7 +82,8 @@ function build_sclk(pool::AbstractDict)
         startswith(name, prefix) || continue
         n = tryparse(Int32, SubString(name, ncodeunits(prefix) + 1))
         n === nothing && continue
-        (value isa Vector{Float64} && length(value) == 1 && value[1] == 1) || continue
+        # The type is the first value, rounded, as `gipool_(name, 1, 1, ...)` of `scty01_`.
+        _gipool_first(value, name; strict = false) == 1 || continue
         clock = _sclk_build(pool, -n)
         clock === nothing || (out[-n] = clock)
     end

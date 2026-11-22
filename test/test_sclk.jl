@@ -217,6 +217,24 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         finally
             foreach(l -> SPICE.dvpool(String(strip(first(split(l, '='))))), lines)
         end
+        # Regression: the type of a clock is the first value of SCLK_DATA_TYPE_<n>,
+        # rounded, as `gipool_` of `scty01_` reads it; a clock was built only for one
+        # value equal to 1.
+        lines = [
+            "SCLK_DATA_TYPE_93 = ( 1.2 7 )", "SCLK01_TIME_SYSTEM_93 = ( 1 )",
+            "SCLK01_N_FIELDS_93 = ( 2 )", "SCLK01_MODULI_93 = ( 4294967296 256 )",
+            "SCLK01_OFFSETS_93 = ( 0 0 )", "SCLK01_OUTPUT_DELIM_93 = ( 1 )",
+            "SCLK_PARTITION_START_93 = ( 0.0 )", "SCLK_PARTITION_END_93 = ( 2560000.0 )",
+            "SCLK01_COEFFICIENTS_93 = ( 0.0 0.0 1.0 )",
+        ]
+        lmpool(other, lines)
+        SPICE.lmpool(lines)
+        try
+            @test sctype(other, -93) == 1
+            @test sct2e(other, -93, 1000.0) == SPICE.sct2e(-93, 1000.0)
+        finally
+            foreach(l -> SPICE.dvpool(String(strip(first(split(l, '='))))), lines)
+        end
         # The TDT clock needs the leap-second kernel; the TDB clock does not.
         bare = neo_context([CKFix.sclk_kernel()])
         @test throws_kind(() -> sct2e(bare, CKFix.SC_TDT, 1000.0), :missingtimeinfo)
