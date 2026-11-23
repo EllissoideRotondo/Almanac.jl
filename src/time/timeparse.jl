@@ -956,6 +956,13 @@ function _expand_year(year::Int, lbound::Int)::Int
     return y < lbound ? y + 100 : y
 end
 
+"The year of `utc2et_` and `tparse_`: `1 - year` in the era B.C., else a year below 100 without the era A.D. expanded by `_expand_year`."
+function _era_year(year::Int, era::AbstractString, lbound::Int)::Int
+    era == "B.C." && return 1 - year
+    (era != "A.D." && year < 100) && return _expand_year(year, lbound)
+    return year
+end
+
 """
     _zzutcpm(str, start) -> (hoff, moff, last, ok)
 
@@ -1420,12 +1427,7 @@ function utc2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefau
     p.type == "JD" && isnan(tvec[1]) && _badtime(s, _NOJDVALUE, :invalidtimestring)
     p.type == "JD" && return _ttrans(l, _TT_JDUTC, _TT_TDB, _tvec(tvec[1]))[1]
     _tparch_check(s, defs, p, :invalidtimestring)
-    year = _nint(tvec[1])
-    if modify[_MOD_ERA] == "B.C."
-        year = 1 - year
-    elseif modify[_MOD_ERA] != "A.D." && year < 100
-        year = _expand_year(year, defs.yearbound)
-    end
+    year = _era_year(_nint(tvec[1]), modify[_MOD_ERA], defs.yearbound)
     tv = _tvec(year, tvec[2], tvec[3], tvec[4], tvec[5], tvec[6])
     return _ttrans(l, p.type == "YD" ? _TT_YD : _TT_YMD, _TT_TDB, tv)[1]
 end
@@ -1490,12 +1492,8 @@ function tparse(s::AbstractString, defs::TimeDefaults)::Float64
         tvec[3] = tvec[2]
         tvec[2] = 1.0
     end
-    year, month, day = _nint(tvec[1]), _nint(tvec[2]), _nint(tvec[3])
-    if modify[_MOD_ERA] == "B.C."
-        year = 1 - year
-    elseif modify[_MOD_ERA] != "A.D." && year < 100
-        year = _expand_year(year, defs.yearbound)
-    end
+    year = _era_year(_nint(tvec[1]), modify[_MOD_ERA], defs.yearbound)
+    month, day = _nint(tvec[2]), _nint(tvec[3])
     q = 0
     adjust = year < 1
     if adjust
