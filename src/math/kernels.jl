@@ -737,8 +737,26 @@ end
     return r, d
 end
 
-# `ednmpt_`; the scale factor is `pow_dd(arg, -0.5)`, which `^` matches more often than
-# `1 / sqrt` does.
+"""
+    _m_rsqrt(x)
+
+`x^(-0.5)`, rounded once for a `Float64`: `1 / sqrt(x)` with one correction by `fma`.
+`pow_dd(x, -0.5)` of CSPICE calls the `pow` of the C library, which glibc rounds
+correctly in all but rare cases; `1 / sqrt(x)` rounds twice and `x^(-0.5)` of Julia is
+not always correctly rounded.
+"""
+@inline function _m_rsqrt(x::Float64)
+    (isfinite(x) && x > 0.0) || return 1.0 / sqrt(x)
+    k = exponent(x) >> 1
+    m = ldexp(x, -2k)                         # x = m 4^k with m in [1, 4)
+    r = 1.0 / sqrt(m)
+    h = r * r
+    e = fma(-m, h, 1.0) - m * fma(r, r, -h)   # 1 - m r^2, without the rounding of r^2
+    return ldexp(fma(0.5 * r, e, r), -k)
+end
+@inline _m_rsqrt(x::Real) = x^(-0.5)
+
+# `ednmpt_`.
 function _m_ednmpt(a, b, c, n::SVector{3})
     _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
     scale = _m_max(_m_max(a, b), c)
@@ -762,6 +780,6 @@ function _m_ednmpt(a, b, c, n::SVector{3})
             "the reciprocal of the square of the scale factor is not positive"
         )
     )
-    lambda = arg^(-0.5) * scale
+    lambda = _m_rsqrt(arg) * scale
     return SVector(lambda * na2, lambda * nb2, lambda * nc2)
 end

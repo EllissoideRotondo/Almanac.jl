@@ -141,6 +141,11 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
         @test nearpt([0.0, 0.0, 7.0], 3.0, 2.0, 1.0) == ([0.0, 0.0, 1.0], 6.0)
         @test surfpt([10.0, 0, 0], [-1.0, 0, 0], 3.0, 2.0, 1.0) == [3.0, 0.0, 0.0]
         @test surfpt([10.0, 0, 0], [1.0, 0, 0], 3.0, 2.0, 1.0) === nothing
+        # The scale factor of `ednmpt` is `pow_dd(arg, -0.5)`: one rounding of x^(-1/2).
+        @test all(
+            x -> Almanac._m_rsqrt(x) == Float64(setprecision(() -> 1 / sqrt(big(x)), 256)),
+            (0.3, 2.0, 3.7, 1.0e-300, 7.5e12, 0.9999999999999999)
+        )
         # A point on the surface or in the plane is returned as given, as `vequ_` copies it.
         @test signbit(surfpt([3.0, -0.0, 0.0], [-1.0, 0, 0], 3.0, 2.0, 1.0)[2])
         @test signbit(inrypl([1.0, -0.0, 0.0], [0.0, 0.0, 1.0], nvc2pl([0.0, 0.0, 1.0], 0.0))[2][2])
