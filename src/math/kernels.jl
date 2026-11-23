@@ -736,3 +736,32 @@ end
     d = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
     return r, d
 end
+
+# `ednmpt_`; the scale factor is `pow_dd(arg, -0.5)`, which `^` matches more often than
+# `1 / sqrt` does.
+function _m_ednmpt(a, b, c, n::SVector{3})
+    _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
+    scale = _m_max(_m_max(a, b), c)
+    sa = a / scale
+    sb = b / scale
+    sc = c / scale
+    _m_axes_ok(sa, sb, sc) || throw(
+        SpiceError(
+            :axisunderflow,
+            "a scaled semi-axis length is not positive"
+        )
+    )
+    _m_iszero(n) && throw(SpiceError(:zerovector, "the input normal vector is the zero vector"))
+    na2 = n[1] * sa * sa
+    nb2 = n[2] * sb * sb
+    nc2 = n[3] * sc * sc
+    arg = na2 * n[1] + nb2 * n[2] + nc2 * n[3]
+    primal(arg) > 0.0 || throw(
+        SpiceError(
+            :degeneratecase,
+            "the reciprocal of the square of the scale factor is not positive"
+        )
+    )
+    lambda = arg^(-0.5) * scale
+    return SVector(lambda * na2, lambda * nb2, lambda * nc2)
+end

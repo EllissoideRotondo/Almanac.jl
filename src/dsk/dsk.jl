@@ -391,35 +391,11 @@ end
 # Spheroids
 # ---------------------------------------------------------------------------------------
 
-"`ednmpt`: the point of the ellipsoid `a`, `b`, `c` whose outward normal is parallel to `normal`."
-@inline function _dsk_ednmpt(a::Float64, b::Float64, c::Float64, normal::Vec3{Float64})
-    (a > 0.0 && b > 0.0 && c > 0.0) || _dsk_throw(
-        :badaxislength,
-        "all ellipsoid semi-axis lengths must be strictly positive"
-    )
-    scale = max(max(a, b), c)
-    sa = a / scale
-    sb = b / scale
-    sc = c / scale
-    (sa > 0.0 && sb > 0.0 && sc > 0.0) || _dsk_throw(
-        :axisunderflow,
-        "a scaled semi-axis length underflowed"
-    )
-    _m_iszero(normal) && _dsk_throw(:zerovector, "the normal vector is the zero vector")
-    na2 = normal[1] * sa * sa
-    nb2 = normal[2] * sb * sb
-    nc2 = normal[3] * sc * sc
-    arg = na2 * normal[1] + nb2 * normal[2] + nc2 * normal[3]
-    arg > 0.0 || _dsk_throw(:degeneratecase, "the scale factor of the normal is not positive")
-    lambda = arg^(-0.5) * scale
-    return Vec3{Float64}(lambda * na2, lambda * nb2, lambda * nc2)
-end
-
 "`zzelnaxx`: the x and y intercepts of the normal line of the ellipse `a`, `b` at planetodetic latitude `lat`."
 @inline function _dsk_elnaxx(a::Float64, b::Float64, lat::Float64)
     (a > 0.0 && b > 0.0) || _dsk_throw(:nonpositiveaxis, "the semi-axis lengths must be positive")
     slat, clat = sincos(lat)
-    ept = _dsk_ednmpt(a, b, b, Vec3{Float64}(clat, slat, 0.0))
+    ept = _m_ednmpt(a, b, b, Vec3{Float64}(clat, slat, 0.0))
     d1 = b / a
     d2 = a / b
     return (1.0 - d1 * d1) * ept[1], (1.0 - d2 * d2) * ept[2]

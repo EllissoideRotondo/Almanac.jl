@@ -151,34 +151,8 @@ true
 
 See also [`surfnm`](@ref).
 """
-function ednmpt(a::Real, b::Real, c::Real, normal::AbstractVector)
-    n = _m_v3(normal)
-    a, b, c = _m_f(a), _m_f(b), _m_f(c)
-    _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
-    scale = _m_max(_m_max(a, b), c)
-    sa = a / scale
-    sb = b / scale
-    sc = c / scale
-    _m_axes_ok(sa, sb, sc) || throw(
-        SpiceError(
-            :axisunderflow,
-            "a scaled semi-axis length is not positive"
-        )
-    )
-    _m_iszero(n) && throw(SpiceError(:zerovector, "the input normal vector is the zero vector"))
-    na2 = n[1] * sa * sa
-    nb2 = n[2] * sb * sb
-    nc2 = n[3] * sc * sc
-    arg = na2 * n[1] + nb2 * n[2] + nc2 * n[3]
-    primal(arg) > 0.0 || throw(
-        SpiceError(
-            :degeneratecase,
-            "the reciprocal of the square of the scale factor is not positive"
-        )
-    )
-    lambda = (1.0 / sqrt(arg)) * scale
-    return SVector(lambda * na2, lambda * nb2, lambda * nc2)
-end
+ednmpt(a::Real, b::Real, c::Real, normal::AbstractVector) =
+    _m_ednmpt(_m_f(a), _m_f(b), _m_f(c), _m_v3(normal))
 
 # --- nearest point on an ellipsoid ------------------------------------------------------
 
