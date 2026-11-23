@@ -35,15 +35,12 @@ end
 """
     GFIllumination(ks, method, angtyp, target, illmn, fixref, abcorr, obsrvr, spoint)
 
-Contract (`zzgfilin`, in its order): the three bodies are known (`:idcodenotfound`);
-the target differs from the observer and from the source (`:bodiesnotdistinct`; the
-source can be the observer); `abcorr` is a correction of `spkezr` (`:invalidoption`)
-for reception (`:notsupported` for transmission); the target has three positive radii
-(`:kernelvarnotfound`, `:invalidcount`, `:badaxislength`); `method` is `ELLIPSOID`
-(`:invalidmethod`); `fixref` is known (`:unknownframe`) and centered on the target
-(`:invalidframe`); `angtyp` is `PHASE`, `INCIDENCE` or `EMISSION`, case and blanks
-ignored (`:notsupported`). `spoint` has 3 elements (`:badarg`) and is taken as a point
-of the surface without a check.
+The checks of `zzgfilin`, in its order: `:idcodenotfound`, `:bodiesnotdistinct` (the
+source can be the observer), `:invalidoption` and `:notsupported` (transmission) for the
+correction, `:kernelvarnotfound`, `:invalidcount` and `:badaxislength` for the radii,
+`:invalidmethod`, `:unknownframe` and `:invalidframe` for `fixref`, and `:notsupported`
+for `angtyp`. `spoint` must have 3 elements (`:badarg`); it is not checked to be on the
+surface.
 """
 function GFIllumination(
         ks::KernelSet, method::AbstractString, angtyp::AbstractString,
@@ -133,8 +130,8 @@ function _gf_ilurate(q::GFIllumination, et::Float64)
     etsurf = et + _geo_sign(corr) * lt
     srcsta, _ = _geo_cvo(ks, q.illum, etsurf, _J2000_FRAME, _GEO_AT_OBSERVER, corr, f)
     R, dR = frame_jet(ks, q.ref, _J2000_FRAME, etsurf, Val(1))
-    tr, tv = _gf_pv(starg)
-    sr, sv = _gf_pv(srcsta)
+    tr, tv = _m_pv(starg)
+    sr, sv = _m_pv(srcsta)
     if corr.uselt
         dlt = vdot(tv, vhat(tr)) / clight()
         dR = (1.0 - dlt) * dR

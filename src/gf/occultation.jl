@@ -120,8 +120,7 @@ end
 
 `gfocce` after the checks of the step and of the tolerance: the checks of
 `_gf_occultation`, then the search of each interval of `cnfine` for the intervals on
-which the state `_gf_occulted` is true. Postcondition: a new window, a subset of
-`cnfine`.
+which the state `_gf_occulted` is true.
 """
 function _gf_oclt(
         ks::KernelSet, tols::DSKTolerances, occtyp::AbstractString,
@@ -153,9 +152,8 @@ The result is a new `Window` that is a subset of the confinement window `cnfine`
 `cnfine` is not modified. The test at each epoch is the one of [`occult`](@ref).
 
 # Arguments
-- `occtyp`: `"FULL"` (the back target is hidden), `"ANNULAR"` (the front target lies
-  wholly within the disk of the back target), `"PARTIAL"` (the disks overlap in part) or
-  `"ANY"` (one of the three), in any case. With a point target only `"ANY"` is valid.
+- `occtyp`: `"FULL"`, `"ANNULAR"`, `"PARTIAL"` or `"ANY"`, in any case; only `"ANY"`
+  with a point target.
 - `front`, `back`, `obsrvr`: names or IDs of three different bodies.
 - `fshape`, `bshape`: `"ELLIPSOID"`, `"POINT"` or
   `"DSK/UNPRIORITIZED[/SURFACES = <list>]"`. At least one target must be extended, and
@@ -166,11 +164,8 @@ The result is a new `Window` that is a subset of the confinement window `cnfine`
   target is not read; a blank string is enough.
 - `abcorr`: `"NONE"` or a light time correction. Stellar aberration is not applied, as
   in CSPICE: `"LT+S"` acts as `"LT"`.
-- `step`: step of the search in seconds, positive. The search samples the occultation
-  state from the start of each interval of `cnfine` at this step, so `step` must be
-  shorter than the shortest occultation of the type asked for, and than the shortest
-  gap between two of them. Each change of state is then bisected until the bracket is
-  not longer than `tol`.
+- `step`: step of the search in seconds, positive; it must be shorter than the shortest
+  occultation and the shortest gap between two of them.
 
 The keywords are those of [`gfdist`](@ref). A DSK shape uses the tolerances that
 [`dskstl`](@ref) set on the context. An observer on the surface of a target, such as a

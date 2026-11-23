@@ -43,21 +43,6 @@ function _gf_distinct(targ::Int32, obs::Int32, target, obsrvr)
     return nothing
 end
 
-"State (km, km/s) of `targ` relative to `obs` in frame `ref`, and the light time (`spkez`)."
-@inline _gf_spkez(
-    ks::KernelSet, targ::Int32, et::Float64, ref::Int32, corr::Aberration,
-    obs::Int32
-) = spkezr(ks, targ, et, ref, corr, obs)
-
-"Position (km) of `targ` relative to `obs` in frame `ref`, and the light time (`spkezp`)."
-@inline _gf_spkezp(
-    ks::KernelSet, targ::Int32, et::Float64, ref::Int32, corr::Aberration,
-    obs::Int32
-) = spkpos(ks, targ, et, ref, corr, obs)
-
-@inline _gf_pv(s::SVector{6, Float64}) =
-    (SVector(s[1], s[2], s[3]), SVector(s[4], s[5], s[6]))
-
 # --- distance --------------------------------------------------------------------------
 
 "Distance between observer and target (`zzgfdiu`)."
@@ -71,8 +56,8 @@ end
 """
     GFDistance(ks, target, abcorr, obsrvr)
 
-Contract (`zzgfdiin`): the bodies are known (`:idcodenotfound`) and distinct
-(`:bodiesnotdistinct`), and `abcorr` is a correction of `spkezr`.
+The checks of `zzgfdiin`: `:idcodenotfound`, `:bodiesnotdistinct`, and the kinds of
+`Aberration`.
 """
 function GFDistance(ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID)
     targ = _gf_body(ks, target, "target object")
@@ -84,10 +69,10 @@ end
 _gf_label(::GFDistance) = "Distance pass # of # "
 
 @inline _gf_value(q::GFDistance, et::Float64) =
-    vnorm(_gf_spkezp(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
+    vnorm(spkpos(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
 
 @inline function _gf_decreasing(q::GFDistance, et::Float64)
-    r, v = _gf_pv(_gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
+    r, v = _m_pv(spkezr(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
     return vdot(r, v) < 0.0
 end
 
@@ -119,10 +104,9 @@ end
 """
     GFSeparation(ks, targ1, shape1, frame1, targ2, shape2, frame2, abcorr, obsrvr)
 
-Contract (`zzgfspin`): the three bodies are known (`:idcodenotfound`) and distinct
-(`:bodiesnotdistinct`), `abcorr` is a correction of `spkezr`, and each shape is `POINT`
-or `SPHERE` (`:notrecognized`); a sphere takes the largest of the radii of its body.
-The frames are not used by these shapes, as in CSPICE.
+The checks of `zzgfspin`: `:idcodenotfound`, `:bodiesnotdistinct`, the kinds of
+`Aberration`, and `:notrecognized` for a shape other than `POINT` and `SPHERE`. A sphere
+takes the largest radius of its body; the frames are not read, as in CSPICE.
 """
 function GFSeparation(
         ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1,
@@ -149,8 +133,8 @@ _gf_label(::GFSeparation) = "Angular separation pass # of #"
 
 "Separation of the limbs: the angle between the positions minus the two angular radii (`zzsepq`)."
 @inline function _gf_value(q::GFSeparation, et::Float64)
-    p1 = _gf_spkezp(q.ks, q.bod1, et, _J2000_FRAME, q.corr, q.obs)[1]
-    p2 = _gf_spkezp(q.ks, q.bod2, et, _J2000_FRAME, q.corr, q.obs)[1]
+    p1 = spkpos(q.ks, q.bod1, et, _J2000_FRAME, q.corr, q.obs)[1]
+    p2 = spkpos(q.ks, q.bod2, et, _J2000_FRAME, q.corr, q.obs)[1]
     a1 = _geo_angrad(q.rad1, vnorm(p1), q.obs, q.bod1, 1)
     a2 = _geo_angrad(q.rad2, vnorm(p2), q.obs, q.bod2, 2)
     return vsep(p1, p2) - a1 - a2
@@ -165,7 +149,7 @@ observer, for the state `state` of its center, as `dhfa`. Throws
 observer is not outside the sphere.
 """
 @inline function _gf_dhfa(state::SVector{6, Float64}, bodyr::Float64)
-    r, v = _gf_pv(state)
+    r, v = _m_pv(state)
     rmag = vnorm(r)
     rmag == 0.0 && throw(
         SpiceError(
@@ -186,8 +170,8 @@ observer is not outside the sphere.
 end
 
 @inline function _gf_decreasing(q::GFSeparation, et::Float64)
-    s1 = _gf_spkez(q.ks, q.bod1, et, _J2000_FRAME, q.corr, q.obs)[1]
-    s2 = _gf_spkez(q.ks, q.bod2, et, _J2000_FRAME, q.corr, q.obs)[1]
+    s1 = spkezr(q.ks, q.bod1, et, _J2000_FRAME, q.corr, q.obs)[1]
+    s2 = spkezr(q.ks, q.bod2, et, _J2000_FRAME, q.corr, q.obs)[1]
     dtheta = dvsep(s1, s2)
     dtheta = dtheta - _gf_dhfa(s1, q.rad1) - _gf_dhfa(s2, q.rad2)
     return dtheta < 0.0
@@ -195,7 +179,7 @@ end
 
 # --- range rate ------------------------------------------------------------------------
 
-"Range rate of the target relative to the observer (`zzgfrru`); `dt` is the half interval of the numerical derivative."
+"Range rate of the target relative to the observer (`zzgfrru`)."
 struct GFRangeRate <: GFQuantity
     ks::KernelSet
     targ::Int32
@@ -207,9 +191,9 @@ end
 """
     GFRangeRate(ks, target, abcorr, obsrvr, dt=1.0)
 
-Contract (`zzgfrrin`): the bodies are known (`:idcodenotfound`) and distinct
-(`:bodiesnotdistinct`), `abcorr` is a correction of `spkezr`, and `dt != 0`
-(`:invalidvalue`); `gfevnt` of CSPICE uses one second.
+The checks of `zzgfrrin`: `:idcodenotfound`, `:bodiesnotdistinct`, the kinds of
+`Aberration`, and `:invalidvalue` for `dt == 0`. `dt` is the half interval of the
+numerical derivative.
 """
 function GFRangeRate(
         ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
@@ -231,7 +215,7 @@ end
 _gf_label(::GFRangeRate) = "Range Rate pass # of #"
 
 @inline _gf_value(q::GFRangeRate, et::Float64) =
-    dvnorm(_gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
+    dvnorm(spkezr(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1])
 
 """
 The range rate decreases if its derivative is negative. CSPICE has no acceleration, so
@@ -240,12 +224,12 @@ the derivative of the state is the difference quotient of the states at `et - dt
 `acc . rhat + vel . d(rhat)/dt`.
 """
 @inline function _gf_decreasing(q::GFRangeRate, et::Float64)
-    s0 = _gf_spkez(q.ks, q.targ, et - q.dt, _J2000_FRAME, q.corr, q.obs)[1]
-    s2 = _gf_spkez(q.ks, q.targ, et + q.dt, _J2000_FRAME, q.corr, q.obs)[1]
+    s0 = spkezr(q.ks, q.targ, et - q.dt, _J2000_FRAME, q.corr, q.obs)[1]
+    s2 = spkezr(q.ks, q.targ, et + q.dt, _J2000_FRAME, q.corr, q.obs)[1]
     dfdt = (0.5 / q.dt) * s2 + (-0.5 / q.dt) * s0
-    s = _gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1]
+    s = spkezr(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)[1]
     srhat = _m_dvhat(SVector{6, Float64}(s), false)   # f2c `dvhat_`: division, as zzgfrru
-    drvel = vdot(_gf_pv(dfdt)[2], _gf_pv(srhat)[1]) + vdot(_gf_pv(s)[2], _gf_pv(srhat)[2])
+    drvel = vdot(_m_pv(dfdt)[2], _m_pv(srhat)[1]) + vdot(_m_pv(s)[2], _m_pv(srhat)[2])
     return drvel < 0.0
 end
 
@@ -263,9 +247,8 @@ end
 """
     GFPhase(ks, target, illmn, abcorr, obsrvr)
 
-Contract (`zzgfpain`): the three bodies are known (`:idcodenotfound`) and distinct
-(`:bodiesnotdistinct`), and `abcorr` is a reception correction of `spkezr`; a
-transmission correction throws `SpiceError(:invalidoption)`.
+The checks of `zzgfpain`: `:idcodenotfound`, `:bodiesnotdistinct`, and `:invalidoption`
+for a correction that is not a reception correction.
 """
 function GFPhase(
         ks::KernelSet, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
@@ -300,14 +283,14 @@ _gf_label(::GFPhase) = "Phase angle search pass # of #"
 
 "The phase angle decreases if the angle of `_gf_value` increases (`dvsep`); the velocity of the illuminator is scaled by the rate of the epoch `et - lt`."
 @inline function _gf_decreasing(q::GFPhase, et::Float64)
-    s1, lt = _gf_spkez(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)
+    s1, lt = spkezr(q.ks, q.targ, et, _J2000_FRAME, q.corr, q.obs)
     if q.corr.geometric
-        s2 = _gf_spkez(q.ks, q.illum, et, _J2000_FRAME, q.corr, q.targ)[1]
+        s2 = spkezr(q.ks, q.illum, et, _J2000_FRAME, q.corr, q.targ)[1]
     else
-        s = _gf_spkez(q.ks, q.illum, et - lt, _J2000_FRAME, q.corr, q.targ)[1]
-        r1, v1 = _gf_pv(s1)
+        s = spkezr(q.ks, q.illum, et - lt, _J2000_FRAME, q.corr, q.targ)[1]
+        r1, v1 = _m_pv(s1)
         dlt = vdot(vhat(r1), v1) / clight()
-        r2, v2 = _gf_pv(s)
+        r2, v2 = _m_pv(s)
         s2 = vcat(r2, (1.0 - dlt) * v2)
     end
     return -dvsep(s1, s2) < 0.0
@@ -381,9 +364,9 @@ struct GFPositionVector <: GFVector
 end
 
 @inline _gf_vecpos(v::GFPositionVector, et::Float64) =
-    (_gf_spkezp(v.ks, v.targ, et, v.ref, v.corr, v.obs)[1], true)
+    (spkpos(v.ks, v.targ, et, v.ref, v.corr, v.obs)[1], true)
 @inline _gf_vecstate(v::GFPositionVector, et::Float64) =
-    (_gf_spkez(v.ks, v.targ, et, v.ref, v.corr, v.obs)[1], true)
+    (spkezr(v.ks, v.targ, et, v.ref, v.corr, v.obs)[1], true)
 _gf_vecframe(v::GFPositionVector) = v.ref
 _gf_vecexist(::GFPositionVector, cnfine::Window, run::_GFRun) = copy(cnfine)
 
@@ -407,19 +390,11 @@ struct GFCoordinate{V <: GFVector} <: GFQuantity
 end
 
 """
-    _gf_frame(ks, ref) -> Int32
-
-Frame ID of `ref` for a coordinate search. Throws `SpiceError(:unknownframe)` for an
-unknown frame, the error of `spkez` in CSPICE.
-"""
-_gf_frame(ks::KernelSet, ref::NameOrID) = frame_id(ks, ref)
-
-"""
     _gf_sysidx(crdsys, crdnam) -> (sys, idx)
 
 Code of the coordinate system `crdsys` and place of the coordinate `crdnam` among its
 three coordinates, in any case (`zzgfcoin`). Throws `SpiceError(:notsupported)` for
-another system or coordinate. Postcondition: `1 <= sys <= 7` and `1 <= idx <= 3`.
+another system or coordinate.
 """
 function _gf_sysidx(crdsys::AbstractString, crdnam::AbstractString)
     csys = _squeeze(crdsys)
@@ -472,13 +447,10 @@ end
 """
     GFCoordinate(vec, ks, crdsys, crdnam)
 
-Contract (the part of `zzgfcoin` after the checks of the vector): `crdsys` is one of the
-seven systems and `crdnam` one of its three coordinates, in any case
-(`SpiceError(:notsupported)` otherwise). For the geodetic and planetographic systems the
-center of the frame of the vector has three positive radii in the kernel pool
-(`:noframe`, `:badframe`, `:invalidcount`, `:arraytoosmall`, `:badaxislength`) with equal
-equatorial radii
-(`:notsupported`).
+The part of `zzgfcoin` after the checks of the vector: `:notsupported` for an unknown
+system or coordinate. For the geodetic and planetographic systems the center of the
+frame of the vector needs three positive radii with equal equatorial radii (`:noframe`,
+`:badframe`, `:invalidcount`, `:arraytoosmall`, `:badaxislength`, `:notsupported`).
 """
 function GFCoordinate(
         vec::GFVector, ks::KernelSet, crdsys::AbstractString,
@@ -595,7 +567,7 @@ function _gf_cprx(state::SVector{6, Float64}, sys::Int, re::Float64, f::Float64,
     if sys == _GF_PLANETOGRAPHIC && sense != 1 && sense != -1
         throw(SpiceError(:valueoutofrange, "Longitude sense $sense should be 1 or -1."))
     end
-    pos, v = _gf_pv(state)
+    pos, v = _m_pv(state)
     (v[1] == 0.0 && v[2] == 0.0 && v[3] == 0.0) && return (0, 0, 0)
     vel = SVector{3, Float64}(vhat(v))
     sys == _GF_RECTANGULAR &&
@@ -644,13 +616,13 @@ end
 
 @inline function _gf_cosdecreasing(q::GFCoordinate, et::Float64)
     state = _gf_cstate(q, et)
-    value = _gf_coords(q, _gf_pv(state)[1])[q.idx]::Float64
+    value = _gf_coords(q, _m_pv(state)[1])[q.idx]::Float64
     return -sin(value) * _gf_cprx(state, q.sys, q.re, q.f, q.sense)[q.idx] < 0.0
 end
 
 @inline function _gf_sindecreasing(q::GFCoordinate, et::Float64)
     state = _gf_cstate(q, et)
-    value = _gf_coords(q, _gf_pv(state)[1])[q.idx]::Float64
+    value = _gf_coords(q, _m_pv(state)[1])[q.idx]::Float64
     return cos(value) * _gf_cprx(state, q.sys, q.re, q.f, q.sense)[q.idx] < 0.0
 end
 
@@ -669,9 +641,7 @@ end
 """
     _gf_search(q, relate, refval, adjust, cnfine, run) -> Window
 
-Window of `cnfine` on which the quantity `q` satisfies the relation: the call of
-`zzgfrelx` that `gfevnt` makes for `q`. The method for a `GFCoordinate` is in
-`gf/longitude.jl`.
+Window of `cnfine` on which the quantity `q` satisfies the relation (`zzgfrelx`).
 """
 function _gf_search(
         q::GFQuantity, relate::AbstractString, refval::Real, adjust::Real,

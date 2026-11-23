@@ -14,7 +14,7 @@
 (the observer, then `tshape`, which is `POINT`, `ELLIPSOID` or `RAY`
 (`:invalidshape`), then those of `_geo_fov_setup`, which projects the vertices of a
 polygon here), then the search of each interval of `cnfine` for the intervals on which
-the state `_geo_fov_visible` is true. Postcondition: a new window, a subset of `cnfine`.
+the state `_geo_fov_visible` is true.
 """
 function _gf_fove(
         ks::KernelSet, inst::NameOrID, tshape::AbstractString,

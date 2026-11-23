@@ -80,20 +80,13 @@ result cell, a workspace and an interval count; this call needs none.
 - `abcorr`: any aberration correction of [`spkezr`](@ref), a string or an
   [`Aberration`](@ref).
 - `relate`: `"<"`, `"="`, `">"`, `"LOCMIN"`, `"LOCMAX"`, `"ABSMIN"` or `"ABSMAX"`, in any
-  case. An inequality gives the intervals on which it holds. `"="` and the extrema with
-  `adjust = 0` give intervals of zero length, one for each event. A local extremum is
-  reported only if it is strictly inside an interval of `cnfine`; an absolute extremum
-  can be at an end.
-- `refval`: reference value in the unit of the quantity. The extrema do not use it.
-- `adjust`: zero, except for `"ABSMIN"` and `"ABSMAX"`. There a positive value gives the
-  window on which the quantity is within `adjust` of the absolute extremum.
-- `step`: step of the search in seconds, positive. The search samples the direction of
-  change of the quantity at this step to find its local extrema, so `step` must be
-  shorter than the shortest interval, inside `cnfine`, on which the quantity is
-  monotone. A longer step can miss events. A shorter step costs time and gives no
-  accuracy: `tol` sets the accuracy.
+  case.
+- `refval`: reference value in the unit of the quantity.
+- `adjust`: zero, except for `"ABSMIN"` and `"ABSMAX"`.
+- `step`: step of the search in seconds, positive; it must be shorter than the shortest
+  interval on which the quantity is monotone.
 - `cnfine`: the `Window` to search in. For `"="` the quantity is also evaluated up to
-  $(_GF_ADDWIN) s outside each interval, so the kernels must cover that margin.
+  $(_GF_ADDWIN) s outside each interval.
 
 # Keywords
 Every search takes these keywords; [`gfevnt`](@ref), [`gfocce`](@ref) and
@@ -319,10 +312,7 @@ gfpa(
     _gf_position_coordinate(ks, target, frame, abcorr, obsrvr, crdsys, coord) -> GFCoordinate
 
 The coordinate `coord` of the system `crdsys` of the position of `target` relative to
-`obsrvr` in `frame`, with the checks of `zzgfcoin` in their order: bodies
-(`:idcodenotfound`, `:bodiesnotdistinct`), correction, system and coordinate
-(`:notsupported`), frame (`:unknownframe`; `:noframe` for the systems that need the
-radii of its center).
+`obsrvr` in `frame`, with the checks of `zzgfcoin` in their order.
 """
 function _gf_position_coordinate(
         ks::KernelSet, target::NameOrID, frame::NameOrID,
@@ -334,7 +324,7 @@ function _gf_position_coordinate(
     corr = Aberration(abcorr)
     ref = Int32(0)                      # 0: the frame is not known
     try
-        ref = _gf_frame(ks, frame isa AbstractString ? String(strip(frame, ' ')) : frame)
+        ref = frame_id(ks, frame isa AbstractString ? String(strip(frame, ' ')) : frame)
     catch e
         (e isa SpiceError && e.kind === :unknownframe) || rethrow()
     end

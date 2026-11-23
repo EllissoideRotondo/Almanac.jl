@@ -696,12 +696,11 @@ function wnreld(a::Window, op::AbstractString, b::Window)
     equal = a.data == b.data
     o == "=" && return equal
     o == "<>" && return !equal
-    if o == "<=" || o == "<"
-        sub = all(i -> wnincd(b, a.data[i], a.data[i + 1]), 1:2:length(a.data))
-        return o == "<=" ? sub : sub && !equal
-    elseif o == ">=" || o == ">"
-        sub = all(i -> wnincd(a, b.data[i], b.data[i + 1]), 1:2:length(b.data))
-        return o == ">=" ? sub : sub && !equal
+    if o in ("<=", "<", ">=", ">")
+        inner, outer = o[1] == '<' ? (a, b) : (b, a)
+        d = inner.data
+        sub = all(i -> wnincd(outer, d[i], d[i + 1]), 1:2:length(d))
+        return length(o) == 2 ? sub : sub && !equal
     end
     throw(
         SpiceError(

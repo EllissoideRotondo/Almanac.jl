@@ -43,14 +43,9 @@ end
 """
     _GFRun(step, refine, bail, report, tol, threads)
 
-Controls of one search. `step` is the search step in seconds, a `Float64` or a function
-of the epoch (`udstep`); `refine` is the refinement function `(t1, t2, s1, s2) -> t`
-(`udrefn`); `bail` is `nothing` or a function without arguments that returns `true` to
-stop the search (`udbail`); `report` is `nothing` or the progress callback (`udrepi`,
-`udrepu`, `udrepf`); `tol` is the convergence tolerance in seconds; `threads` asks for
-one task for each interval that is searched.
-
-Invariant: `tol > 0`, and a constant `step` is positive.
+Controls of one search: the step in seconds or a function of the epoch (`udstep`), the
+refinement function (`udrefn`), the `bail` and `report` callbacks or `nothing`, the
+convergence tolerance in seconds, and whether each interval gets its own task.
 """
 struct _GFRun{S, R, B, P}
     step::S
@@ -65,11 +60,9 @@ end
     _gf_run(step, tol; refine=gfrefn, bail=nothing, report=nothing, threads=false,
             checktol=true) -> _GFRun
 
-Check the step and the tolerance as `gfsstp` and `zzgfsolv` do and build the controls.
-Throws `SpiceError(:invalidstep)` for a constant step that is not positive and
-`SpiceError(:invalidtolerance)` for a tolerance that is not positive. With
-`checktol = false` (`gfevnt`) the tolerance is checked later, where `zzgflong` and
-`zzgfsolvx` check it.
+Build the controls with the checks of `gfsstp` and `zzgfsolv`: `:invalidstep` for a
+constant step and `:invalidtolerance` for a tolerance that is not positive. With
+`checktol = false` (`gfevnt`) the tolerance is checked later, as in CSPICE.
 """
 function _gf_run(
         step, tol::Real; refine = gfrefn, bail = nothing, report = nothing,
@@ -126,8 +119,7 @@ end
     _gf_advance(t, step, finish) -> Float64
 
 The next sample `min(t + step, finish)` after `t < finish`. Throws
-`SpiceError(:invalidstep)` if it is not after `t`: a step below the spacing of the
-floating-point numbers at `t`. CSPICE samples `t` again for ever.
+`SpiceError(:invalidstep)` if it is not after `t`, where CSPICE samples `t` for ever.
 """
 @inline function _gf_advance(t::Float64, step::Float64, finish::Float64)
     nxt = min(t + step, finish)
@@ -146,16 +138,12 @@ end
 
 The search of `zzgfsolvx`: insert into `result` the intervals of [`start`, `finish`] on
 which the binary state `cond(et)::Bool` is true. The state is sampled from `start` in
-steps (`step` if `cstep`, else the step of `run`), the last sample is at `finish`, and
-each change of state between two samples is refined with `run.refine` until the bracket
-is not longer than `run.tol`; the transition is the midpoint of the last bracket.
+steps (`step` if `cstep`, else the step of `run`), and each change of state is refined
+with `run.refine` until the bracket is not longer than `run.tol`. `cond` is evaluated at
+the epochs of CSPICE, except the second evaluation at `finish`.
 
-Contract: precondition `start <= finish`, else `SpiceError(:badtimecase)`. The sequence
-of epochs at which `cond` is evaluated is the sequence of CSPICE, but for the second
-evaluation at `finish` that CSPICE makes when the last sample changes nothing.
-Postcondition: `result` is a valid window that holds its old value and the new
-intervals, which lie in [`start`, `finish`]. Throws `SpiceError(:noconverg)` after
-$(_GF_MXLOOP) refinement steps of one transition.
+Throws `SpiceError(:badtimecase)` if `start > finish`, and `SpiceError(:noconverg)`
+after $(_GF_MXLOOP) refinement steps of one transition.
 """
 function _gf_solve!(
         result::Window, cond::F, run::_GFRun, cstep::Bool, step::Float64,
@@ -260,12 +248,10 @@ Run `_gf_solve!` on each interval of the window `w` and collect the intervals on
 `cond` is true in `result`. With `cstep` the step of each search is the length of its
 interval (the second pass of `zzgfrelx`, on intervals where the quantity is monotone).
 
-Contract: with `run.threads` each interval of `w` is searched in its own task and the
-results are inserted in the order of `w`; the searches of different intervals share no
-state, so the window is the one of the serial run, bit for bit. `cond` and the
-callbacks of `run` must then be safe to call from several threads. A task that throws
-does not stop the others; when all have ended, the exception of `_gf_task_error` is
-thrown, not the `CompositeException` of `Threads.@threads`.
+With `run.threads` each interval of `w` is searched in its own task, and the results are
+inserted in the order of `w`, so the window is the one of the serial run, bit for bit;
+`cond` and the callbacks must then be thread safe. A failed task throws the exception of
+`_gf_task_error`, not the `CompositeException` of `Threads.@threads`.
 """
 function _gf_scan!(result::Window, cond::F, w::Window, run::_GFRun, cstep::Bool) where {F}
     n = wncard(w)
@@ -377,10 +363,8 @@ end
 
 The checks of `zzgfrelx` and `zzgflong` on the adjustment value:
 `SpiceError(:valueoutofrange)` if it is negative, `SpiceError(:invalidvalue)` if it is
-not zero and the relation is not an absolute extremum. A NaN or infinite value is
-`SpiceError(:invalidvalue)` for every relation: CSPICE refuses it with that kind for a
-relation other than ABSMIN and ABSMAX (the test `adjust != 0` is true) and takes it for
-those two.
+not zero and the relation is not an absolute extremum, or if it is NaN or infinite
+(CSPICE takes such a value for ABSMIN and ABSMAX).
 """
 function _gf_checkadjust(rel::Int, adjust::Real)
     adjust < 0 && throw(
@@ -442,11 +426,8 @@ that a root at an end of `cnfine` is found, and the result is the set of ends of
 value at the ends of the monotone intervals in `cnfine`; with `adjust > 0` the result
 is the window on which the quantity is within `adjust` of that value.
 
-Contract: `adjust >= 0`, and `adjust == 0` unless the relation is an absolute
-extremum; the errors are those of `_gf_relcode` and `_gf_checkadjust`. An empty
-`cnfine` gives an empty window. `cnfine` is not modified. The result is a new valid
-window that is a subset of `cnfine`. `prefix` holds the progress messages of the two
-passes.
+The errors are those of `_gf_relcode`, `_gf_checkadjust` and `_gf_checkref`. `cnfine`
+is not modified. `prefix` holds the progress messages of the two passes.
 """
 function _gf_relx(
         value::V, decreasing::D, relate::AbstractString, refval::Real,
