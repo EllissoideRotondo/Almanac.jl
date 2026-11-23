@@ -40,7 +40,7 @@ const INERTIAL_FRAME_DEFS = (
 
 const N_INERTIAL_FRAMES = length(INERTIAL_FRAME_DEFS)
 
-"Contract: returns the 21 matrices that rotate vectors from J2000 to each built-in inertial frame, composed from the base-frame chain as the initialization of `irfrot` composes them."
+"Return the 21 matrices that rotate vectors from J2000 to each built-in inertial frame, composed from the base-frame chain as the initialization of `irfrot` composes them."
 function _build_inertial_rotations()
     dpr = 180.0 / acos(-1.0)
     arcsec = 2.7777777777777778e-4
@@ -66,8 +66,7 @@ const INERTIAL_ROTATIONS = _build_inertial_rotations()
 """
     inertial_rotation(id) -> Mat3{Float64}
 
-Contract: `1 <= id <= 21`; returns the constant matrix that rotates vectors from
-J2000 (frame 1) to the built-in inertial frame `id`, equal to what CSPICE
+Return the constant matrix that rotates vectors from J2000 (frame 1) to the built-in inertial frame `id`, equal to what CSPICE
 `irfrot(1, id)` returns. Throws `SpiceError(:unknownframe)` for another ID.
 """
 function inertial_rotation(id::Integer)::Mat3{Float64}
@@ -217,7 +216,7 @@ const BUILTIN_NONINERTIAL_FRAMES = FrameDef[
     FrameDef(10124, "IAU_MENOETIUS", 2, 120000617, 120000617),
 ]
 
-"Contract: returns the (ID => definition, normalized name => ID) dictionaries of all built-in frames, inertial first; a later table entry overrides an earlier one."
+"Return the (ID => definition, normalized name => ID) dictionaries of all built-in frames, inertial first; a later table entry overrides an earlier one."
 function _builtin_frame_dicts()
     frames = Dict{Int32, FrameDef}()
     name2id = Dict{String, Int32}()
@@ -240,14 +239,14 @@ end
 # Frames defined in the kernel pool
 # ---------------------------------------------------------------------------------
 
-"Contract: returns the single integer value of pool variable `key`, rounded as `gipool_` rounds it, or `nothing` if the variable is missing, is not numeric, has more than one element, or is outside the range of `gipool_`."
+"Return the single integer value of pool variable `key`, rounded as `gipool_` rounds it, or `nothing` if the variable is missing, is not numeric, has more than one element, or is outside the range of `gipool_`."
 _pool_int(pool::AbstractDict{String, PoolValue}, key::AbstractString) =
     _gipool_first(get(pool, key, nothing), key; single = true, strict = false)
 
 """
     _frame_key(pool, k1, k2) -> Union{Nothing,Tuple{String,PoolValue}}
 
-Contract: the name and value of the first of the variables `k1` (`FRAME_<id>_<item>`)
+Return the name and value of the first of the variables `k1` (`FRAME_<id>_<item>`)
 and `k2` (`FRAME_<name>_<item>`) that is in `pool`, as `zzdynbid_` and `zzdynvac_`
 choose it: a name longer than 32 characters is not searched for. `nothing` if neither
 is there.
@@ -264,7 +263,7 @@ end
 """
     _frame_item(pool, name2code, id, name, item) -> Union{Int32,Nothing}
 
-Contract: value of the frame definition variable `FRAME_<id>_<item>`, or of
+Return the value of the frame definition variable `FRAME_<id>_<item>`, or of
 `FRAME_<name>_<item>` if the first is absent (the two forms of `zzdynbid`). A string
 value of `CENTER` is translated as a body name, as `zzdynbid` does with `bods2c`; a
 string `CLASS` or `CLASS_ID` is refused, as by `zzdynvai`. `nothing` if neither form
@@ -285,7 +284,7 @@ end
 """
     build_frames(pool, name2code) -> (frames, framename2id)
 
-Contract: reads the frame definitions of a frame kernel from `pool`. A frame exists
+Read the frame definitions of a frame kernel from `pool`. A frame exists
 for each `FRAME_<id>_NAME` that has its class, class ID and center, each under the
 `FRAME_<id>_<item>` key or the `FRAME_<name>_<item>` key; a center may be a body
 name of `name2code`, which holds the names of the pool, of the kernels and of `boddef`. Returns `frames::Dict{Int32,FrameDef}` and `framename2id::Dict{String,Int32}`
@@ -333,7 +332,7 @@ end
 """
     frame_def(ks, id) -> FrameDef
 
-Contract: definition of frame `id`: a built-in frame first, then a pool-defined
+Return the definition of frame `id`: a built-in frame first, then a pool-defined
 frame (the order of `frinfo`, so a kernel cannot redefine a built-in frame), then the rule of `frinfo` that an ID in 13000..13999 is a class 2 Earth frame
 with class ID `id - 10000`. Throws `SpiceError(:unknownframe)` otherwise. Reads
 `ks.frames` only.
@@ -347,7 +346,7 @@ end
 """
     frame_id(ks, name) -> Int32
 
-Contract: ID of the frame `name` (case and outer blanks do not matter): a
+Return the ID of the frame `name` (case and outer blanks do not matter): a
 built-in frame first, then a pool-defined frame (the order of `namfrm`). Throws `SpiceError(:unknownframe)`
 otherwise. An integer argument is returned as `Int32`. Reads `ks.framename2id` only.
 """

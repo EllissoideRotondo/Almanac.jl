@@ -295,7 +295,7 @@ end
 """
     _body_state(ks, classid, et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the matrix of `_body_rotation` with its time derivative as `tisbod_` gives
+Return the matrix of `_body_rotation` with its time derivative as `tisbod_` gives
 them: from a binary PCK segment if one covers `et` (`_binary_pck_state`), else from the
 text PCK constants (`_text_pck_state`). Throws as `_body_rotation`.
 """
@@ -328,7 +328,7 @@ end
 """
     _text_pck_state(br, body, et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the matrix of `_text_pck_rotation` with its time derivative, with the
+Return the matrix of `_text_pck_rotation` with its time derivative, with the
 arithmetic of `tisbod_` of CSPICE: the rates of RA, DEC and W from the derivatives of
 their polynomials and trigonometric terms, written out as `tisbod_` writes them, and the
 derivative of the matrix from these angles and rates by `eul2xf_`. The derivative of
@@ -431,7 +431,7 @@ end
 """
     _binary_pck_state(data, seg, et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the matrix of `_binary_pck_rotation` with its time derivative, with the
+Return the matrix of `_binary_pck_rotation` with its time derivative, with the
 arithmetic of `pckmat_` and `tisbod_`: the angles and their rates of the segment
 (`chbint_` for type 2, `spke20_` for type 20; W reduced by whole turns as `pcke02_`
 and `pcke20_` do) go to `eul2xf_`, and both blocks are multiplied on the right by the
@@ -792,16 +792,11 @@ end
 """
     frame_rotation(ks, from, to, et::T) -> Mat3{T}
 
-Matrix that rotates vectors from frame `from` to frame `to` at `et` (ET seconds),
-generic over the epoch type. The chain of `from` is evaluated link by link (class 4 to
-its relative frame, class 3 to the reference frame of its CK segment for `et`, classes 1
-and 2 to J2000) until it reaches `to` or J2000, then the chain of `to` until it meets it,
-as `zzrefch0_` of CSPICE does (`_chain_rotation`).
-`from == to` gives the identity.
-A class 3 (CK) frame is evaluated as `ckfrot_` does, see `_ck_frame_step`; with a
-`Taylor` epoch the result holds the derivatives of the interpolated rotation. Class 5
-(dynamic) and class 6 (switch) frames are evaluated as `zzdynrot_` and `zzswfxfm_` do,
-see `dynframes.jl` and `switchframes.jl`.
+Return the matrix that rotates vectors from frame `from` to frame `to` at `et` (ET
+seconds), generic over the epoch type. The frame chains are followed as `zzrefch0_` of
+CSPICE follows them; `from == to` gives the identity. A CK frame is evaluated as
+`ckfrot_` does; with a `Taylor` epoch the result holds the derivatives of the
+interpolated rotation.
 """
 function frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
     from == to && return one(Mat3{T})
@@ -819,7 +814,7 @@ frame_rotation(ks::KernelSet, from::Integer, to::Integer, et::Real) =
 """
     _inertial_pair(T, from, to) -> Mat3{T}
 
-Contract: `frame_rotation` from the built-in inertial frame `from` to the built-in
+Return `frame_rotation` from the built-in inertial frame `from` to the built-in
 inertial frame `to != from`, without the lookups of the chains: both chains are one link
 to J2000, so the operations are those of the general path (`_frame_step` gives the
 transposed `inertial_rotation`, and the two links meet at J2000).

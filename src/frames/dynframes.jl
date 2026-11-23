@@ -41,7 +41,7 @@ const _DYN_NOVECTOR = DynVector(0, 1, false, 0x00, 0, 0, 0, 0, 0, zero(SVector{3
 """
     _dyn_lookup(pool, id, name, item, required) -> Union{Nothing,Tuple{String,PoolValue}}
 
-Contract: name and value of the frame definition variable `FRAME_<id>_<item>`, or of
+Return the name and value of the frame definition variable `FRAME_<id>_<item>`, or of
 `FRAME_<name>_<item>` if the first is absent, with the rules of `zzdynvac_`: a name
 longer than 32 characters is not searched for. Throws
 `SpiceError(:varnametoolong)` if both names are too long and
@@ -85,7 +85,7 @@ end
     )
 )
 
-"Contract: the character values (at most `maxn`) of a required definition item, as `zzdynvac_`."
+"Return the character values (at most `maxn`) of a required definition item, as `zzdynvac_`."
 function _dyn_chars(pool, id, name, item, maxn::Int)
     key, v = _dyn_lookup(pool, id, name, item, true)
     v isa Vector{String} || _dyn_badtype(key, name, "character")
@@ -95,7 +95,7 @@ end
 
 _dyn_char(pool, id, name, item) = _dyn_chars(pool, id, name, item, 1)[1]
 
-"Contract: the single character value of an optional definition item, or `nothing`, as `zzdynoac_`."
+"Return the single character value of an optional definition item, or `nothing`, as `zzdynoac_`."
 function _dyn_optchar(pool, id, name, item)
     r = _dyn_lookup(pool, id, name, item, false)
     r === nothing && return nothing
@@ -105,7 +105,7 @@ function _dyn_optchar(pool, id, name, item)
     return v[1]
 end
 
-"Contract: the numeric values (at most `maxn`) of a required definition item, as `zzdynvad_`."
+"Return the numeric values (at most `maxn`) of a required definition item, as `zzdynvad_`."
 function _dyn_nums(pool, id, name, item, maxn::Int)
     key, v = _dyn_lookup(pool, id, name, item, true)
     v isa Vector{Float64} || _dyn_badtype(key, name, "numeric")
@@ -113,7 +113,7 @@ function _dyn_nums(pool, id, name, item, maxn::Int)
     return v
 end
 
-"Contract: the single numeric value of an optional definition item, or `nothing`, as `zzdynoad_`."
+"Return the single numeric value of an optional definition item, or `nothing`, as `zzdynoad_`."
 function _dyn_optnum(pool, id, name, item)
     r = _dyn_lookup(pool, id, name, item, false)
     r === nothing && return nothing
@@ -126,7 +126,7 @@ end
 """
     _dyn_frameid(ks, id, name, item) -> Int32
 
-Contract: frame ID of a required definition item that holds a frame name or a frame
+Return the frame ID of a required definition item that holds a frame name or a frame
 ID, as `zzdynfid_`. Throws `SpiceError(:notranslation)` for a name that is not a frame
 name and not an integer.
 """
@@ -149,7 +149,7 @@ end
 """
     _dyn_bodyid(ks, id, name, item) -> Int32
 
-Contract: body ID of a required definition item that holds a body name or a body ID,
+Return the body ID of a required definition item that holds a body name or a body ID,
 as `zzdynbid_`. Throws `SpiceError(:notranslation)` for an unknown name.
 """
 function _dyn_bodyid(ks::KernelSet, id, name, item)
@@ -169,7 +169,7 @@ end
 """
     _dyn_degrees(units) -> Float64
 
-Contract: the number of degrees in one angle unit `units`, the factor of `convrt_`.
+Return the number of degrees in one angle unit `units`, the factor of `convrt_`.
 An angle `x` is converted to radians as `x * f / (180 / pi)`, the two operations of
 `convrt_`, so that the result has the bits of CSPICE. Throws `SpiceError(:unitsnotrec)`
 for a name that is not an angle unit, as `convrt_`.
@@ -199,7 +199,7 @@ end
 """
     _dyn_abcorr(s, constant::Bool) -> Aberration
 
-Contract: the correction of a vector definition. For an observer-target vector the
+Return the correction of a vector definition. For an observer-target vector the
 nine values of `spkezr`. For a constant vector also `S` and `XS`, and a value with
 both light time and stellar aberration throws `SpiceError(:invalidoption)`, as
 `zzdynfrm_` does.
@@ -234,7 +234,7 @@ end
 """
     _dyn_parse_vector(ks, fd, prefix) -> DynVector
 
-Contract: the vector definition `FRAME_<id>_<prefix>*` (`prefix` is `PRI_` or `SEC_`)
+Return the vector definition `FRAME_<id>_<prefix>*` (`prefix` is `PRI_` or `SEC_`)
 of the two-vector frame `fd`, with the checks of `zzdynfrm_` in its order. Throws the
 `SpiceError` of the first check that fails.
 """
@@ -339,7 +339,7 @@ end
 """
     _dyn_parse(ks, fd) -> DynFrame
 
-Contract: the definition of the class 5 frame `fd` from the pool of `ks`, with the
+Return the definition of the class 5 frame `fd` from the pool of `ks`, with the
 checks of `zzdynfrm_` in its order. The function does not throw: a definition that is
 not valid gives a `DynFrame` with `errkind !== :none`, and an evaluation of the frame
 throws that error, as CSPICE reports it at evaluation time.
@@ -357,7 +357,7 @@ function _dyn_parse(ks::KernelSet, fd::FrameDef)
     end
 end
 
-"Contract: as `_dyn_parse`, but throws the `SpiceError` of the first check that fails."
+"Like `_dyn_parse`, but throw the `SpiceError` of the first check that fails."
 function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     pool, id, name = ks.pool, fd.id, fd.name
     base = _dyn_frameid(ks, id, name, "RELATIVE")
@@ -494,7 +494,7 @@ end
     KernelSet(loaded, daf, spk, pck, pool, name2code, code2name, frames, framename2id, tk,
         bodyrot, lsk, ck, sclk, ckmeta)
 
-Contract: the snapshot with these fields, no dynamic or switch frame definitions, no
+Return the snapshot with these fields, no dynamic or switch frame definitions, no
 inner snapshot, no pool edits and no `boddef` pairs. `_dyn_levels` completes it.
 """
 KernelSet(
@@ -510,7 +510,7 @@ KernelSet(
 """
     _dyn_levels(base, edited, bodydefs) -> KernelSet
 
-Contract: the snapshot with the data of `base`, the parsed definitions of its class 5
+Return the snapshot with the data of `base`, the parsed definitions of its class 5
 and class 6 frames, and the flags `edited` and `bodydefs`. If a dynamic frame exists,
 the result has a chain of `_DYN_LEVELS` inner snapshots (`inner.ks`) with the same data,
 the innermost with `inner === nothing`; otherwise `inner === nothing`. No data are
@@ -555,7 +555,7 @@ end
 """
     _dyn_xf(mode, ks, from, to, et) -> Mat3
 
-Contract: the matrix from frame `from` to frame `to` at `et`: `frame_rotation` in the
+Return the matrix from frame `from` to frame `to` at `et`: `frame_rotation` in the
 exact mode (`zzrefch0_`), `_ck_state_rotation` in the state mode (`zzfrmch0_`).
 """
 @inline _dyn_xf(::_CKExact, ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real} =
@@ -573,7 +573,7 @@ const _DYN_ARCSEC = (pi / 180) / 3600.0
 """
     _dyn_prec(et) -> Mat3
 
-Contract: the 1976 IAU precession matrix from J2000 to the mean equator and equinox
+Return the 1976 IAU precession matrix from J2000 to the mean equator and equinox
 of `et` (TDB seconds), `[-z]_3 [theta]_2 [-zeta]_3` of `zzeprc76_`, in the number type
 of `et`.
 """
@@ -585,7 +585,7 @@ end
 """
     _dyn_prec_angles(et) -> (zeta, z, theta)
 
-Contract: the precession angles of `zzeprc76_` (radians) at `et` (TDB seconds), with the
+Return the precession angles of `zzeprc76_` (radians) at `et` (TDB seconds), with the
 arithmetic of `zzeprc76_`, in the number type of `et`.
 """
 @inline function _dyn_prec_angles(et::S) where {S <: Real}
@@ -599,7 +599,7 @@ end
 """
     _dyn_prec_rates(et) -> (dzeta, dz, dtheta)
 
-Contract: the analytic rates (radians per second) of the angles of `_dyn_prec_angles`,
+Return the analytic rates (radians per second) of the angles of `_dyn_prec_angles`,
 with the arithmetic of `zzeprc76_`.
 """
 @inline function _dyn_prec_rates(et::S) where {S <: Real}
@@ -611,7 +611,7 @@ with the arithmetic of `zzeprc76_`.
     return dzeta, dz, dtheta
 end
 
-"Contract: the mean obliquity of the ecliptic of date in radians (1980 IAU), as `zzmobliq_`."
+"Return the mean obliquity of the ecliptic of date in radians (1980 IAU), as `zzmobliq_`."
 @inline function _dyn_mobliq(et::S) where {S <: Real}
     t = et / 31557600.0 / 100.0
     return _DYN_ARCSEC * (t * (t * (t * 0.001813 - 5.9e-4) - 46.815) + 84381.448)
@@ -751,7 +751,7 @@ const _DYN_WAHR_FACTOR = _DYN_RADIAN * 3600.0 * 1.0e4
 """
     _dyn_wahr(et) -> (dpsi, deps)
 
-Contract: nutation in longitude and in obliquity (radians) of the 1980 IAU theory at
+Return the nutation in longitude and in obliquity (radians) of the 1980 IAU theory at
 `et` (TDB seconds), with the operations of `zzwahr_`, in the number type of `et`. With
 a `Taylor` epoch the derivatives are those of the series, including the slow change
 of the coefficients that the rates of `zzwahr_` leave out.
@@ -789,7 +789,7 @@ end
 """
     _dyn_wahr_rates(et) -> (dpsi, deps, ddpsi, ddeps)
 
-Contract: the nutation angles of `_dyn_wahr` and the rates that `zzwahr_` returns
+Return the nutation angles of `_dyn_wahr` and the rates that `zzwahr_` returns
 (radians per second): the rates of the arguments, without the change of the
 coefficients. Generic over the number type of `et`; with a `Float64` epoch the
 arithmetic is that of `zzwahr_`.
@@ -831,7 +831,7 @@ end
 """
     _dyn_wahr_state(et::Float64) -> (dpsi, deps)
 
-Contract: the nutation angles of `_dyn_wahr` as `Taylor{1,Float64}` values whose
+Return the nutation angles of `_dyn_wahr` as `Taylor{1,Float64}` values whose
 derivative parts are the rates of `_dyn_wahr_rates`.
 """
 @inline function _dyn_wahr_state(et::Float64)
@@ -846,7 +846,7 @@ end
 """
     _dyn_ofdate(mode, ks, def, et) -> Mat3
 
-Contract: the matrix from the of-date frame `def` (families 1 to 3) to its base frame
+Return the matrix from the of-date frame `def` (families 1 to 3) to its base frame
 at `et`: the transpose of the precession matrix, of nutation times precession, or of
 the obliquity rotation times precession, then the rotation from J2000 to the base.
 """
@@ -885,7 +885,7 @@ end
 """
     _dyn_eul2xf(a3, a2, a1, d3, d2, d1, x3, x2, x1) -> Mat3{Taylor{1,Float64}}
 
-Contract: the state transformation of `eul2xf_` for the angles `a3`, `a2`, `a1` about
+Return the state transformation of `eul2xf_` for the angles `a3`, `a2`, `a1` about
 the axes `x3`, `x2`, `x1` and their rates `d3`, `d2`, `d1`, as a matrix of
 `Taylor{1,Float64}` (value: the rotation block; derivative: the derivative block).
 """
@@ -902,7 +902,7 @@ end
 """
     _dyn_prec_state(et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the precession matrix of `_dyn_prec` with its derivative, with the arithmetic
+Return the precession matrix of `_dyn_prec` with its derivative, with the arithmetic
 of `zzeprc76_`: the angles and their analytic rates go to `eul2xf_`.
 """
 function _dyn_prec_state(et::Float64)
@@ -911,7 +911,7 @@ function _dyn_prec_state(et::Float64)
     return _dyn_eul2xf(-z, theta, -zeta, -dz, dtheta, -dzeta, 3, 2, 3)
 end
 
-"Contract: the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`, in the number type of `et`."
+"Return the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`, in the number type of `et`."
 @inline function _dyn_mobliq_state(et::Real)
     t = et / 31557600.0 / 100.0
     mob = _dyn_mobliq(et)
@@ -923,7 +923,7 @@ end
 """
     _dyn_enut80_state(et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the nutation matrix of the true of-date frame with its derivative, with the
+Return the nutation matrix of the true of-date frame with its derivative, with the
 arithmetic of `zzenut80_`: the angles of `zzwahr_` (`_dyn_wahr_state`) and
 `zzmobliq_` with their rates go to `eul2xf_`.
 """
@@ -942,7 +942,7 @@ end
 """
     _dyn_stelab(p, v) -> Vec3
 
-Contract: the position `p` with the stellar aberration for the observer velocity `v`,
+Return the position `p` with the stellar aberration for the observer velocity `v`,
 `cos(phi) p + |p| v_perp / c`, the rotation of `stelab_` in closed form (no inverse
 sine), for any number type. Requires `p != 0` and `|v| < c`.
 """
@@ -957,7 +957,7 @@ end
 """
     _dyn_apo(ks, targ, et, ref, corr, obs) -> (r, lt)
 
-Contract: position of `targ` relative to `obs` in frame `ref` with the correction
+Return the position of `targ` relative to `obs` in frame `ref` with the correction
 `corr`, and the light time, as `zzspkzp0_` (`spkpos`). For a `Float64` epoch the values
 are those of `spkpos`. For another number type the same algorithm runs on that type
 (one light-time iteration for `LT`, three for `CN`, stellar aberration in closed form),
@@ -992,7 +992,7 @@ end
 """
     _dyn_spkez(ks, targ, et, ref, corr, obs) -> (r, v, lt)
 
-Contract: position, velocity and light time of `targ` relative to `obs` in frame `ref`
+Return the position, velocity and light time of `targ` relative to `obs` in frame `ref`
 with the correction `corr`, as `zzspkez0_` (`spkezr`), in the number type of `et`. The
 velocity is the one of CSPICE (see `spkder` for its difference from the derivative of
 the position). No allocation.
@@ -1012,7 +1012,7 @@ end
 """
     _dyn_nearpt(p, radii) -> Vec3
 
-Contract: the point of the ellipsoid with the semi-axes `radii` (all positive) that is
+Return the point of the ellipsoid with the semi-axes `radii` (all positive) that is
 nearest to the point `p`, in the number type of `p`: the near point of `nearpt`
 (`_m_nearpt`), so the plain value is the one of CSPICE and each derivative order comes
 from the stationarity condition. Postcondition: the result is on the ellipsoid to
@@ -1024,7 +1024,7 @@ rounding.
 """
     _dyn_dnearp(s, radii, vd) -> Vec3{Taylor{1,Float64}}
 
-Contract: the state of the near point on the ellipsoid with the semi-axes `radii` for
+Return the state of the near point on the ellipsoid with the semi-axes `radii` for
 the state `s`, as `dnearp_` gives it to `zzdynfrm_` (`dnearp`: the velocity from
 `zzdnpt_`). Throws `SpiceError(:degeneratecase)` where `dnearp_` finds no velocity of
 the near point, as `zzdynfrm_` does.
@@ -1049,7 +1049,7 @@ end
 """
     _dyn_vector(mode, ks, vd, et) -> Vec3
 
-Contract: the defining vector `vd` of a two-vector frame in J2000 at `et`, before the
+Return the defining vector `vd` of a two-vector frame in J2000 at `et`, before the
 sign of the axis is applied.
 
 Exact mode (`zzdynrot_`), in the number type of `et`: the position of `spkpos`; the
@@ -1174,7 +1174,7 @@ end
 """
     _dyn_twovec(mode, ks, def, et) -> Mat3
 
-Contract: the matrix from the two-vector frame `def` to its base frame at `et`. The
+Return the matrix from the two-vector frame `def` to its base frame at `et`. The
 columns are the frame axes in J2000 as `zztwovxf_` and `twovec_` build them: the axis
 of the primary vector along that vector, the axis of the secondary vector in the
 half-plane of the two vectors. Throws `SpiceError(:degeneratecase)` if the sine of the
@@ -1195,7 +1195,7 @@ end
 """
     _dyn_twovec_axes(a, b, i1, ip) -> Mat3
 
-Contract: the matrix whose columns are the axes, in the frame of `a` and `b`, of the
+Return the matrix whose columns are the axes, in the frame of `a` and `b`, of the
 frame with axis `i1` along `a` and axis `ip` in the half-plane of `a` and `b`, with the
 arithmetic of CSPICE: for vectors with a derivative (`Taylor{1,Float64}`) that of
 `zztwovxf_` (`dvhat_`, `ducrss_`), which `zzdynfrm_` calls, for any other number type
@@ -1242,7 +1242,7 @@ end
 """
     _dyn_euler(mode, def, et) -> Mat3
 
-Contract: the matrix from the Euler frame `def` to its base frame at `et`,
+Return the matrix from the Euler frame `def` to its base frame at `et`,
 `[a1]_x1 [a2]_x2 [a3]_x3` with the angles `a_i` polynomials in `et - def.epoch`.
 """
 function _dyn_euler(mode, def::DynFrame, et::T) where {T <: Real}
@@ -1269,7 +1269,7 @@ end
 """
     _dyn_product(mode, ks, def, et) -> Mat3
 
-Contract: the matrix from the product frame `def` to its base frame at `et`: the
+Return the matrix from the product frame `def` to its base frame at `et`: the
 product, last factor on the left, of the matrices from `def.to[i]` to `def.from[i]`.
 """
 function _dyn_product(mode, ks::KernelSet, def::DynFrame, et::T) where {T <: Real}
@@ -1283,7 +1283,7 @@ end
 """
     _dyn_inert(mode, ks, def, et, x) -> Mat3
 
-Contract: `x` with the derivative part that `ROTATION_STATE = 'INERTIAL'` defines, as
+Return `x` with the derivative part that `ROTATION_STATE = 'INERTIAL'` defines, as
 `zzdynfrm_`: zero relative to J2000, so zero if the base is a built-in inertial frame
 and otherwise the derivative of the rotation from J2000 to the base, applied to the
 fixed orientation. The exact mode has no derivative part to replace and returns `x`.
@@ -1305,7 +1305,7 @@ end
 """
     _dyn_eval(mode, ks, def, et) -> Mat3
 
-Contract: the matrix from the dynamic frame `def` to its base frame at `et`, evaluated
+Return the matrix from the dynamic frame `def` to its base frame at `et`, evaluated
 with the states and frames of `ks` (the inner snapshot of the one that holds `def`).
 Requires `def.errkind === :none`. No allocation.
 """
@@ -1365,7 +1365,7 @@ _dyn_cfunction(::Type{Tuple{_CKState, Float64}}) = @cfunction(
 """
     _dyn_pointer_slow(F) -> Ptr{Cvoid}
 
-Contract: make the pointer for `F`, publish a new table that has it, and return it. The
+Make the pointer for `F`, publish a new table that has it, and return it. The
 table is replaced under a lock, so a reader without the lock sees the old table or the
 new one, both complete. The compiler does not follow the call that makes the pointer.
 """
@@ -1397,8 +1397,7 @@ end
 """
     _dyn_call(mode, lev, def, et) -> Mat3
 
-Contract: `_dyn_eval(mode, lev.ks, def, et)`, called through the typed function pointer
-of the mode and of the number type of `et` (see "The recursion barrier"). A number type
+Return `_dyn_eval(mode, lev.ks, def, et)` through the typed function pointer of the mode and of the number type of `et` (see "The recursion barrier"). A number type
 that is not plain bits is evaluated with a direct call. No allocation.
 """
 @generated function _dyn_call(
@@ -1435,7 +1434,9 @@ end
     )
 )
 
-"Contract: returns the matrix `x` with each element in the number type `S` (`_dyn_lift`). The type is an argument with a type parameter: a closure that captures a type is not compiled for it in Julia 1.10, and then allocates."
+# `::Type{S}` with a type parameter: Julia 1.10 does not specialize a closure that
+# captures a type, and the call then allocates.
+"Return the matrix `x` with each element in the number type `S` (`_dyn_lift`)."
 @inline _dyn_liftmat(::Type{S}, x::Mat3) where {S} = Mat3{S}(ntuple(i -> _dyn_lift(S, x[i]), Val(9)))
 
 """

@@ -187,18 +187,18 @@ end
 
 @inline _isdigit(c::UInt8) = UInt8('0') <= c <= UInt8('9')
 
-"Contract: returns `s[b:e]` as a `String`; empty when the range is empty or outside `s`."
+"Return `s[b:e]` as a `String`; empty when the range is empty or outside `s`."
 _sub(s::Vector{UInt8}, b::Int, e::Int) =
     (b >= 1 && e <= length(s) && b <= e) ? String(s[b:e]) : ""
 
-"Contract: `1 <= b`; returns the text of `s` with `<` before position `b` and `>` after position `e`, the marking of the CSPICE messages."
+"Return the text of `s` with `<` before position `b` and `>` after position `e`, the marking of the CSPICE messages. Requires `1 <= b`."
 function _marked(s::Vector{UInt8}, b::Int, e::Int)
     b = clamp(b, 1, length(s) + 1)
     e = clamp(e, b - 1, length(s))
     return string(String(s[1:(b - 1)]), '<', String(s[b:e]), '>', String(s[(e + 1):end]))
 end
 
-"Contract: `dest` is a blank-padded buffer; writes `text` into `dest[from:to]`, cut or blank padded to that length (the Fortran substring assignment)."
+"Write `text` into `dest[from:to]` of the blank-padded buffer `dest`, cut or blank padded to that length (the Fortran substring assignment)."
 function _assign!(dest::AbstractVector{UInt8}, from::Int, to::Int, text)
     t = text isa AbstractString ? codeunits(text) : text
     # Loop invariant: `dest[from:i-1]` holds the first characters of `text`, blank padded.
@@ -212,7 +212,7 @@ end
 """
     _repsub!(buf, left, right, text, ndec=-1) -> buf
 
-Contract: replaces `buf[left:right]` of the fixed-length buffer `buf` by `text`, in
+Replace `buf[left:right]` of the fixed-length buffer `buf` by `text`, in
 place, cut or blank padded to the length of `buf` (`zzrepsub`). With `ndec >= 0`,
 `text` is followed by a decimal point and `ndec` characters `#` (the mark of
 `zzmkpc`). `text` is a `String` or a tuple of bytes.
@@ -236,7 +236,7 @@ function _repsub!(buf::AbstractVector{UInt8}, left::Int, right::Int, text, ndec:
     return buf
 end
 
-"Contract: returns the first position `b` in `1:n` at which `pat` starts inside `rep[1:n]`, or 0 (`pos`)."
+"Return the first position `b` in `1:n` at which `pat` starts inside `rep[1:n]`, or 0 (`pos`)."
 function _pos(rep::AbstractVector{UInt8}, n::Int, pat)::Int
     p = codeunits(pat)
     for b in 1:(n - length(p) + 1)
@@ -245,7 +245,7 @@ function _pos(rep::AbstractVector{UInt8}, n::Int, pat)::Int
     return 0
 end
 
-"Contract: returns the last position `b <= start` at which `pat` starts inside `rep[1:n]`, or 0 (`posr`)."
+"Return the last position `b <= start` at which `pat` starts inside `rep[1:n]`, or 0 (`posr`)."
 function _posr(rep::AbstractVector{UInt8}, n::Int, start::Int, pat)::Int
     p = codeunits(pat)
     for b in min(n - length(p) + 1, start):-1:1
@@ -254,7 +254,7 @@ function _posr(rep::AbstractVector{UInt8}, n::Int, start::Int, pat)::Int
     return 0
 end
 
-"Contract: `get > put`; moves the position records of tokens `get:size` down to `put...` (the common loop of `zzcmbt` and `zznote`)."
+"Move the position records of tokens `get:size` down to `put...` (the common loop of `zzcmbt` and `zznote`). Requires `get > put`."
 function _shift!(st::_Tokens, put::Int, get::Int)
     # Loop invariant: records `get0:g-1` are at `put0:p-1`.
     for g in get:st.size
@@ -267,7 +267,7 @@ function _shift!(st::_Tokens, put::Int, get::Int)
     return nothing
 end
 
-"Contract: combines the first (`l2r`) or last occurrence of the token run `pat` into the one token `letter`; returns whether it did (`zzcmbt`)."
+"Combine the first (`l2r`) or last occurrence of the token run `pat` into the one token `letter`; return whether it did (`zzcmbt`)."
 function _zzcmbt!(st::_Tokens, pat::String, letter::Char, l2r::Bool)::Bool
     n = ncodeunits(pat)
     from = l2r ? _pos(st.rep, st.size, pat) : _posr(st.rep, st.size, st.size, pat)
@@ -281,13 +281,13 @@ function _zzcmbt!(st::_Tokens, pat::String, letter::Char, l2r::Bool)::Bool
     return true
 end
 
-"Contract: returns the 12-character key of the token list (`zzgrep` into the 12-character variable of `tpartv`): longer lists are cut."
+"Return the 12-character key of the token list (`zzgrep` into the 12-character variable of `tpartv`): longer lists are cut."
 _zzgrep(st::_Tokens) = String(@view st.rep[1:12])
 
-"Contract: returns whether the token list has a token of class `letter` (`zzist`)."
+"Return whether the token list has a token of class `letter` (`zzist`)."
 _zzist(st::_Tokens, letter::Char) = UInt8(letter) in @view st.rep[1:st.size]
 
-"Contract: returns (found, b, e): whether two tokens in a row both have a class in `chars`, and the range of the pair in the string (`zzispt`)."
+"Return (found, b, e): whether two tokens in a row both have a class in `chars`, and the range of the pair in the string (`zzispt`)."
 function _zzispt(st::_Tokens, chars::String)
     c = codeunits(chars)
     from = findfirst(in(c), st.rep)
@@ -301,7 +301,7 @@ function _zzispt(st::_Tokens, chars::String)
     return false, 0, 0
 end
 
-"Contract: removes the first token of class `letter`; returns (found, b, e) with its range in the string, or (false, 0, 0) (`zznote`)."
+"Remove the first token of class `letter`; return (found, b, e) with its range in the string, or (false, 0, 0) (`zznote`)."
 function _zznote!(st::_Tokens, letter::Char)
     put = findfirst(==(UInt8(letter)), st.rep)
     put === nothing && return false, 0, 0
@@ -316,7 +316,7 @@ function _zznote!(st::_Tokens, letter::Char)
     return true, b, e
 end
 
-"Contract: removes every token of class `letter`; returns whether one was removed (`zzremt`)."
+"Remove every token of class `letter`; return whether one was removed (`zzremt`)."
 function _zzremt!(st::_Tokens, letter::Char)::Bool
     put = 0
     did = false
@@ -342,7 +342,7 @@ end
 """
     _zzsubt!(st, pat, transl, l2r) -> Bool
 
-Contract: replaces the letters of the first (`l2r`) or last occurrence of `pat` by
+Replace the letters of the first (`l2r`) or last occurrence of `pat` by
 `transl` and returns whether it did (`zzsubt`). A `pat` that starts with `<` must
 match at the start of the list and one that ends with `>` at its end; in these two
 forms the replaced range has the length of the pattern without the mark, and a shorter
@@ -369,14 +369,14 @@ function _zzsubt!(st::_Tokens, pat::String, transl::String, l2r::Bool)::Bool
     return true
 end
 
-"Contract: `_zzsubt!` and then the removal of every `*` token; returns whether the substitution was made (`zzrept`)."
+"Apply `_zzsubt!`, then remove every `*` token; return whether the substitution was made (`zzrept`)."
 function _zzrept!(st::_Tokens, pat::String, transl::String, l2r::Bool)::Bool
     did = _zzsubt!(st, pat, transl, l2r)
     _zzremt!(st, '*')
     return did
 end
 
-"Contract: gives class `letter` to every integer token whose value is in `b..e`; returns whether one changed (`zzvalt`)."
+"Give class `letter` to every integer token whose value is in `b..e`; return whether one changed (`zzvalt`)."
 function _zzvalt!(st::_Tokens, b::Int, e::Int, letter::Char)::Bool
     did = false
     for i in 1:st.size
@@ -396,7 +396,7 @@ function _zzvalt!(st::_Tokens, b::Int, e::Int, letter::Char)::Bool
     return did
 end
 
-"Contract: returns whether characters `from:to` of `s` exist and equal `text[1:to-from+1]` when case is ignored (`samsbi`)."
+"Return whether characters `from:to` of `s` exist and equal `text[1:to-from+1]` when case is ignored (`samsbi`)."
 function _samsbi(s::Vector{UInt8}, from::Int, to::Int, text::String)::Bool
     to <= length(s) || return false
     t = codeunits(text)
@@ -409,7 +409,7 @@ end
 """
     _zztokns(str) -> (st, error)
 
-Contract: returns the token list of `str` and `""`, or `nothing` and a message that
+Return the token list of `str` and `""`, or `nothing` and a message that
 says which part of the string is not a recognized token (`zztokns`). Integers, runs of
 blanks, tabs, punctuation, month and weekday names (three letters or more of the
 name), eras, A.M./P.M., time zones, `UTC+`/`UTC-`, time systems, `JD`, `T` and `Z` are
@@ -549,13 +549,13 @@ function _zztokns(str::AbstractString)
     return st, ""
 end
 
-"Contract: the number of `#` that `zzmkpc` writes after the picture mark of the token text `token`: one for each decimal (14 at most), or -1 if the token has no decimal point."
+"Return the number of `#` that `zzmkpc` writes after the picture mark of the token text `token`: one for each decimal (14 at most), or -1 if the token has no decimal point."
 function _zzmkpc(token::AbstractVector{UInt8})
     point = findfirst(==(UInt8('.')), token)
     return point === nothing ? -1 : min(14, length(token) - point)
 end
 
-"Contract: the month number of the first three characters of `s[j:k]` (blank padded, any case) as `_MONTH_ABBR` lists them, or `nothing`."
+"Return the month number of the first three characters of `s[j:k]` (blank padded, any case) as `_MONTH_ABBR` lists them, or `nothing`."
 function _month_abbr_index(s::Vector{UInt8}, j::Int, k::Int)
     c1, c2, c3 = ntuple(n -> j + n - 1 <= min(k, j + 2) ? _upper(s[j + n - 1]) : _BLANK, Val(3))
     for (i, m) in enumerate(_MONTH_ABBR)
@@ -564,7 +564,7 @@ function _month_abbr_index(s::Vector{UInt8}, j::Int, k::Int)
     return nothing
 end
 
-"Contract: returns the value of the number in `s[j:k]` as `nparsd` computes it, or `old` if the text is not a number (`nparsd` leaves its output unchanged then)."
+"Return the value of the number in `s[j:k]` as `nparsd` computes it, or `old` if the text is not a number (`nparsd` leaves its output unchanged then)."
 function _tokval(s::Vector{UInt8}, j::Int, k::Int, old::Float64)::Float64
     try
         return _nparsd(@view s[j:k])
@@ -577,11 +577,11 @@ end
 """
     _zzunpck(st, yabbrv) -> (ok, tvec, ntvec, type, pictur, error)
 
-Contract: every token of `st` must be one of the resolved classes `Y m D y H M S J`.
-Returns the time vector `tvec` (eight components, the absent ones 0), the number of
+Return the time vector `tvec` (eight components, the absent ones 0), the number of
 components `ntvec` that the string gives, the type `"YMD"`, `"YD"` or `"JD"`, and the
 `timout` picture of the string; or `ok == false` and a message that says which token
-has no meaning or which component is absent or given twice (`zzunpck`). The picture is
+has no meaning or which component is absent or given twice (`zzunpck`). Every token of
+`st` is one of the resolved classes `Y m D y H M S J`. The picture is
 blank when a token has no meaning, and it is set in every other case.
 """
 function _zzunpck(st::_Tokens, yabbrv::Bool)
@@ -738,7 +738,7 @@ struct _TimeParts
     error::String
 end
 
-"Contract: returns `text` after `pictur` without its trailing blanks and `spaces` blanks (`suffix`)."
+"Return `text` after `pictur` without its trailing blanks and `spaces` blanks (`suffix`)."
 function _suffix(pictur::String, text::String, spaces::Int)
     head = rstrip(pictur, ' ')
     buf = Base.StringVector(ncodeunits(head) + spaces + ncodeunits(text))
@@ -748,7 +748,7 @@ function _suffix(pictur::String, text::String, spaces::Int)
     return String(buf)
 end
 
-"Contract: returns `pictur` with the marks that `tpartv` adds after it: `::RND` when `needle` occurs in it, then the zone (if `zone`) and the system modifiers."
+"Return `pictur` with the marks that `tpartv` adds after it: `::RND` when `needle` occurs in it, then the zone (if `zone`) and the system modifiers."
 function _picture_suffix(pictur::String, needle::String, modify::Vector{String}, zone::Bool)
     occursin(needle, pictur) && (pictur = _suffix(pictur, "::RND", 1))
     if zone && modify[_MOD_ZONE] != ""
@@ -763,14 +763,14 @@ end
 """
     _tpartv(str, modlen) -> _TimeParts
 
-Contract: `modlen` is the length of the modifier variables of the calling routine of
-CSPICE (16 in `str2et`, 8 in the other callers); a longer modifier is cut to it.
-Returns the components of the time string, its modifiers and its picture, or `ok ==
+Return the components of the time string, its modifiers and its picture, or `ok ==
 false` and a message, with the rules of `tpartv` in their order: combine `UTC+h:mm`,
 find one decimal number, handle a Julian date, mark integers of 1000 or more as years,
 match the ISO patterns if a `T` is present, extract the modifiers, match the built-in
 patterns (again after the removal of commas, dashes and slashes, one kind at a time),
 and at last resolve hours, minutes, seconds and the integers next to a month name.
+A modifier is cut to `modlen` characters, the length of the modifier variables of the
+CSPICE caller (16 in `str2et`, 8 in the others).
 """
 function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
     modify = fill("", 5)
@@ -949,7 +949,7 @@ const _NOJDVALUE = "The Julian date of the string has no value: the sign and the
 # Checks and small rules: TCHECK, TEXPYR, ZZUTCPM
 # ---------------------------------------------------------------------------------
 
-"Contract: returns a year 0..99 as the year of the 100 years from `lbound` (1969..2068 at start) that it abbreviates, and another year unchanged (`texpyr`; bound)."
+"Return a year 0..99 as the year of the 100 years from `lbound` (1969..2068 at start) that it abbreviates, and another year unchanged (`texpyr`; bound)."
 function _expand_year(year::Int, lbound::Int)::Int
     (year >= 100 || year < 0) && return year
     y = year + lbound ÷ 100 * 100
@@ -959,10 +959,9 @@ end
 """
     _zzutcpm(str, start) -> (hoff, moff, last, ok)
 
-Contract: `str[start:]` should have the form `::UTC+h[:mm]` or `::UTC-h[:mm]`
-with one or two digits in each number, `h < 13` and `mm <= 59`. Returns the signed
-hour and minute offsets, the position of the last character used and whether the
-hours were read (`zzutcpm`); minutes that cannot be read count as 0.
+Return the signed hour and minute offsets of `str[start:]`, of the form `::UTC+h[:mm]`
+or `::UTC-h[:mm]` with one or two digits in each number, `h < 13` and `mm <= 59`,
+the position of the last character used and whether the hours were read (`zzutcpm`); minutes that cannot be read count as 0.
 """
 function _zzutcpm(str::AbstractVector{UInt8}, start::Int)
     n = length(str)
@@ -993,7 +992,7 @@ function _zzutcpm(str::AbstractVector{UInt8}, start::Int)
     return hoff, sign * x, unsto, true
 end
 
-"Contract: `zone` is `\"\"` or a zone such as `UTC-7:30`; returns (hoff, moff, ok) of `_zzutcpm` for the zone as `str2et` holds it in a 16-character variable after `::`."
+"Return (hoff, moff, ok) of `_zzutcpm` for the zone `zone` (`\"\"` or a zone such as `UTC-7:30`) as `str2et` holds it in a 16-character variable after `::`."
 function _zone_offsets(zone::AbstractString)
     field = codeunits(first(string("::", zone), 16))
     hoff, moff, _, ok = _zzutcpm(field, 1)
@@ -1005,9 +1004,8 @@ _num(x::Float64) = isinteger(x) && abs(x) < 1.0e15 ? string(Int(x)) : string(x)
 """
     _tcheck(tvec, type, mods, modify) -> (ok, error)
 
-Contract: `type` is `"YMD"` or `"YD"` and `tvec` its components. Returns whether the
-components are in the ranges of a calendar date (`tcheck` with checking on): a whole
-year, a month 1..12, a day of that month or of that year, hours 0..23 (1..12 with an
+Return whether the components `tvec` of type `"YMD"` or `"YD"` are in the ranges of a
+calendar date (`tcheck` with checking on): a whole year, a month 1..12, a day of that month or of that year, hours 0..23 (1..12 with an
 A.M./P.M. modifier), minutes 0..59, seconds below 60, or below 61 in the last minute
 of June 30 and December 31; and a fraction only in the last component that is not
 zero. `error` says which component is out of range.
@@ -1108,9 +1106,9 @@ end
 """
     _timdef_set(defs, item, value) -> TimeDefaults
 
-Contract: `item` is `"CALENDAR"`, `"SYSTEM"` or `"ZONE"` and `value` a value that
-`timdef` accepts for it, both in any case with leading blanks allowed. Returns the new
-defaults: a system clears the zone and a zone clears the system, as in CSPICE. Throws
+Return `defs` with the default `item` (`"CALENDAR"`, `"SYSTEM"` or `"ZONE"`) set to
+`value`, both in any case with leading blanks allowed: a system clears the zone and a
+zone clears the system, as in CSPICE. Throws
 `SpiceError(:badtimeitem)` for another item and `SpiceError(:baddefaultvalue)` for
 another value. Pure.
 """
@@ -1155,7 +1153,7 @@ function _timdef_set(defs::TimeDefaults, item::AbstractString, value::AbstractSt
     )
 end
 
-"Contract: returns the value of the default `item` (`CALENDAR`, `SYSTEM` or `ZONE`, any case) in `defs`; throws `SpiceError(:badtimeitem)` for another item."
+"Return the value of the default `item` (`CALENDAR`, `SYSTEM` or `ZONE`, any case) in `defs`; throws `SpiceError(:badtimeitem)` for another item."
 function _timdef_get(defs::TimeDefaults, item::AbstractString)::String
     it = _timdef_field(item)
     it == "CALENDAR" && return defs.calendar

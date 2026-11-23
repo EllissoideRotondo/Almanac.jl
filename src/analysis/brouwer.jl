@@ -30,9 +30,8 @@ const _MA_EPSILON = 1.0e-12
 # Newton step doubles the number of exact orders, so the step is taken twice: orders 1 to 3, which
 # nested ForwardDiff (Hessians) needs up to the second. The residual `r0` of the converged value
 # (up to 1e-12) is taken out of the steps: they solve the equation for M - r0, whose root is
-# exactly `x0`, so the derivative carries no residual times the derivative of the denominator
-# (that was the error of d nu/de, 4.7e-12). The old loop returned an iterate whose dual part lagged the solution by one step, a derivative
-# error up to 5e-8. A plain Float64 has no derivative, and `_carry` returns `x0`.
+# exactly `x0`, so the derivative carries no residual times the derivative of the denominator.
+# A plain Float64 has no derivative, and `_carry` returns `x0`.
 _carry(x0::Float64, step::Float64) = x0
 _carry(x0, step) = x0 + (step - primal(step))
 

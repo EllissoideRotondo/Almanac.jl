@@ -10,9 +10,7 @@ Return the matrix that rotates a position vector from frame `from` to frame `to`
 
 For the matrix `R`, `R * v` gives in `to` the components of a vector `v` given in
 `from`. `from` and `to` are frame names or frame IDs. `et` is in seconds past J2000
-TDB. The frame classes of CSPICE are supported: inertial, PCK, CK, fixed offset,
-dynamic and switch frames (a switch frame takes one of several base frames by epoch).
-Two inertial frames need no kernel. With ForwardDiff loaded, `et` can be a dual number.
+TDB. All frame classes of CSPICE are supported. Two inertial frames need no kernel. With ForwardDiff loaded, `et` can be a dual number.
 
 Throws `SpiceError`:
 - `:unknownframe` if a frame name is not known;
@@ -62,9 +60,7 @@ Return the matrix that rotates a position vector from frame `from` at the epoch
 [`pxfrm2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pxfrm2_c.html) of CSPICE.
 
 The matrix is the product of the rotation from `from` to J2000 at `etfrom` and the
-rotation from J2000 to `to` at `etto`. It is the rotation that the light-time
-corrections need, where the frames of the observer and of the target are evaluated
-at different epochs. The arguments and the errors are those of [`pxform`](@ref); with
+rotation from J2000 to `to` at `etto`. The arguments and the errors are those of [`pxform`](@ref); with
 `etfrom == etto` the result is the matrix of `pxform` to rounding.
 
 # Examples

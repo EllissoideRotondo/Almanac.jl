@@ -5,7 +5,7 @@
 """
     timedefaults(ctx::SpiceContext) -> TimeDefaults
 
-Contract: returns the current time defaults of `ctx` with one atomic read; the result
+Return the current time defaults of `ctx` with one atomic read; the result
 never changes.
 """
 timedefaults(ctx::SpiceContext) = @atomic ctx.timedefs
