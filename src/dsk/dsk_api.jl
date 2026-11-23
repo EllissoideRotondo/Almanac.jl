@@ -518,8 +518,12 @@ Rounding decides between the plates, so [`dskxsi`](@ref) can return another of t
 the same ray.
 
 Throws `SpiceError(:rayiszerovector)` if `raydir` is zero, `:typenotsupported` if the
-segment does not have the data type 2, and `:arraytoosmall` if the ray crosses 50000
-voxels or more of the voxel grid of the segment, whether it meets a plate or not.
+segment does not have the data type 2, and `:arraytoosmall` where `dskx02_c` runs out of
+room, whether the ray meets a plate or not: if the ray crosses 50000 voxels or more of
+the voxel grid of the segment, or if the plate lists of the voxels that `dskx02_c`
+collects before it tests a plate have more than 256000 entries. These are the voxels of
+the first half of the ray, then, without a hit there, those of the second half; a voxel
+counts if its coarse voxel is not empty.
 
 See also [`dskxsi`](@ref), and [`dskw02`](@ref) for an example.
 """

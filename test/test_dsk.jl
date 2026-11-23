@@ -437,6 +437,73 @@ function dsk_part_3(env)
         c_dascls(lch)
         dascls(lh)
     end
+    dsk_plate_buffer(dir)
+    return nothing
+end
+
+"""
+    dsk_plate_buffer(dir)
+
+The plate buffer of `dskx02`. CSPICE splits the voxels of the ray that are not in an
+empty coarse voxel into two groups (the first half, then the rest), collects the plate
+lists of a group with their repetitions, and signals ARRAYTOOSMALL from 256001 plates
+on, before it tests a plate; the second group is collected only if the first has no
+hit. The plates are 1200 wedges in the planes y = const of a row of about 440 voxels of
+2 km along x: 600 reach along the whole row, 600 along the half x < 440, so a voxel
+of that half lists 1200 plates and a voxel of the other half 600. The rays run along
+the row beside the wedges; a plate at x = 800 faces the rays along -x at z = 0.5.
+"""
+function dsk_plate_buffer(dir)
+    len = 880.0
+    verts = V3[]
+    plates = P3[]
+    for (i, reach) in enumerate((len, len / 2)), k in 1:600
+        y = 0.1 + 0.8 * (k - 1) / 599 + 1.0e-4 * (i - 1)
+        append!(verts, (V3(0.0, y, 0.0), V3(reach, y, 0.0), V3(0.0, y, 1.0)))
+        push!(plates, P3(length(verts) - 2, length(verts) - 1, length(verts)))
+    end
+    append!(verts, (V3(800.0, 1.2, 0.2), V3(800.0, 1.8, 0.5), V3(800.0, 1.2, 0.8)))
+    push!(plates, P3(length(verts) - 2, length(verts) - 1, length(verts)))
+    avext = sum(plates) do p
+        a, b, c = verts[p[1]], verts[p[2]], verts[p[3]]
+        sum(i -> maximum((a[i], b[i], c[i])) - minimum((a[i], b[i], c[i])), 1:3)
+    end / (3 * length(plates))
+    xd, xi = dskmi2(verts, plates, 2.0 / avext, 1, 1_000_000, 10_000, 1_000_000, false, 1_200_000)
+    mn, mx = dskrb2(verts, plates, 3, zeros(10))
+    path = joinpath(dir, "plates.bds")
+    rm(path; force = true)
+    w = dskopn(path, "plates", 0)
+    dskw02(w, 499, 1, 2, "IAU_MARS", 3, zeros(10), -1.0, len + 1, 0.0, 2.0, mn, mx, -1.0e9, 1.0e9, verts, plates, xd, xi)
+    dskcls(w)
+    h = dasopr(path)
+    ch = c_dasopr(path)
+    try
+        d = dlabfs(h)
+        cd = SPICE.dlabfs(ch)
+        voxsiz, voxori, ext = dskb02(h, d)[5:7]
+        @test 400 < ext[1] < 480 && ext[2] <= 3 && ext[3] <= 3     # a row of voxels along x
+        px, mx_ = V3(1.0, 0.0, 0.0), V3(-1.0, 0.0, 0.0)
+        # A ray along +x from the voxel `k` of the row.
+        from(k) = V3(voxori[1] + (k - 0.5) * voxsiz, 1.5, 0.5)
+        cases = [
+            (from(1), px, :arraytoosmall),                    # the first group
+            (V3(len + 1.0, 1.5, 0.5), mx_, nothing),          # a hit in the first group
+            (V3(len + 1.0, 1.5, 1.5), mx_, :arraytoosmall),   # the second group
+            [(from(k), px, nothing) for k in 8:16]...,        # about the limit
+        ]
+        kinds = [c_kind(() -> c_dskx02(ch, cd, v, r)) for (v, r) in cases]
+        @test (kinds[1], kinds[3]) == (:arraytoosmall, :arraytoosmall) && kinds[2] === nothing
+        @test any(isnothing, kinds[4:end]) && any(==(:arraytoosmall), kinds[4:end])
+        @test [neo_kind(() -> dskx02(h, d, v, r)) for (v, r) in cases] == kinds
+        @test dskx02(h, d, cases[2][1], mx_) == c_dskx02(ch, cd, cases[2][1], mx_)[2:3]
+        # A loaded segment bounds the plates of the rest of the ray by its largest lists.
+        ctx = neo_context([path])
+        seg = Almanac.kernelset(ctx).dsk[Int32(499)][1]
+        @test [neo_kind(() -> dskx02(ctx, seg, v, r)) for (v, r) in cases] == kinds
+    finally
+        c_dascls(ch)
+        dascls(h)
+    end
     return nothing
 end
 

@@ -1531,18 +1531,20 @@ const _DSK_NO_HEADER = DSK02Header(
 @inline _dsk_ncgr(hdr::DSK02Header) = hdr.nvxtot ÷ (hdr.cgscal * (hdr.cgscal * hdr.cgscal))
 
 """
-    _dsk_segment(ints, dps, d, file, path) -> DSKSegment
+    _dsk_segment(ints, dps, d, file, path, scan = false) -> DSKSegment
 
 The descriptor of the segment `d` of a DSK file with the arrays `ints`, `dps`. For a
 type 2 segment the sizes of the header are checked against the sizes of the DLA
 segment, so that only the pointers inside the data can be out of range later; throws
 `SpiceError(:invalidformat)` if they do not fit. The bounding sphere has a NaN radius
 if the coordinate system is not 1, 3 or 4 or its bounds are not valid; a query on
-such a segment then throws the error that CSPICE throws.
+such a segment then throws the error that CSPICE throws. With `scan`, the voxel
+pointers of a type 2 segment are read once for its `voxtop` (`_dsk_voxtop`); else its
+elements are -1.
 """
 function _dsk_segment(
         ints::Vector{Int32}, dps::Vector{Float64}, d::DLADescr, file::Integer,
-        path::AbstractString
+        path::AbstractString, scan::Bool = false
     )
     dsc = _dsk_descr(dps, d, path)
     (
@@ -1577,7 +1579,86 @@ function _dsk_segment(
             )
         )
     end
-    return DSKSegment(Int32(file), d, dsc, ctr, rad, hdr)
+    seg = DSKSegment(Int32(file), d, dsc, ctr, rad, hdr, _DSK_NOTOP)
+    (scan && dsc.dtype == 2) || return seg
+    return DSKSegment(Int32(file), d, dsc, ctr, rad, hdr, _dsk_voxtop(ints, seg))
+end
+
+"""
+    _dsk_voxtop(ints, seg) -> NTuple{17,Int}
+
+Element `i`: the sum of the `min(2^(i-1), k)` largest plate counts of the voxels of
+the type 2 segment `seg`, where `k` is the sum of its grid extents (more voxels than a
+ray crosses); the sum of all counts if fewer voxels have a positive count. A voxel is
+an entry of the voxel pointer array that points into the voxel-plate list, so voxels
+that share a list count once each. See `_dsk_top_bound`.
+"""
+function _dsk_voxtop(ints::Vector{Int32}, seg::DSKSegment)
+    offptr = _dsk_off_voxptr(seg)
+    offlst = _dsk_off_voxlst(seg)
+    voxnpl = seg.hdr.voxnpl
+    k = sum(seg.hdr.vgrext)
+    heap = Int[]                         # a min-heap of the largest counts so far
+    sizehint!(heap, k)
+    for j in 1:seg.hdr.voxnpt
+        # invariant: heap holds the min(k, m) largest positive counts of the pointers
+        # 1 .. j-1, of which m are positive
+        p = Int(@inbounds ints[offptr + j])
+        1 <= p <= voxnpl || continue
+        c = Int(@inbounds ints[offlst + p])
+        c > 0 || continue
+        if length(heap) < k
+            push!(heap, c)
+            _dsk_sift_up!(heap, length(heap))
+        elseif c > @inbounds heap[1]
+            @inbounds heap[1] = c
+            _dsk_sift_down!(heap, 1)
+        end
+    end
+    top = cumsum(sort!(heap; rev = true))
+    @assert length(top) <= k && issorted(top)
+    isempty(top) && return ntuple(_ -> 0, 17)
+    return ntuple(i -> top[min(1 << (i - 1), length(top))], 17)
+end
+
+"""
+    _dsk_top_bound(top, left) -> Int
+
+An upper bound of the plate counts of any `left` voxels of a segment with the
+`voxtop` `top`. For `2^(i-1) = a <= left`, the counts of the ranks after `a` are at
+most the smallest count of the ranks `a/2 + 1` to `a`, so at most their mean.
+"""
+function _dsk_top_bound(top::NTuple{17, Int}, left::Int)
+    @assert left >= 0 && top[1] >= 0
+    left == 0 && return 0
+    i = min(8 * sizeof(Int) - leading_zeros(left), 17)     # 2^(i-1) <= left
+    i == 1 && return top[1]
+    a = 1 << (i - 1)
+    per = (top[i] - top[i - 1]) ÷ (a ÷ 2)
+    b = top[i] + (left - a) * per
+    @assert b >= top[i]
+    return b
+end
+
+function _dsk_sift_up!(h::Vector{Int}, i::Int)
+    while i > 1 && h[i ÷ 2] > h[i]       # invariant: h is a min-heap but for the node i
+        h[i ÷ 2], h[i] = h[i], h[i ÷ 2]
+        i ÷= 2
+    end
+    return h
+end
+
+function _dsk_sift_down!(h::Vector{Int}, i::Int)
+    n = length(h)
+    while true                           # invariant: h is a min-heap but for the node i
+        m = i
+        2i <= n && h[2i] < h[m] && (m = 2i)
+        2i + 1 <= n && h[2i + 1] < h[m] && (m = 2i + 1)
+        m == i && return h
+        h[i], h[m] = h[m], h[i]
+        i = m
+    end
+    return
 end
 
 """
@@ -1601,7 +1682,7 @@ function open_dsk(path::AbstractString)
                 "the DAS file $path has the ID word $(repr(h.idword)), not DAS/DSK"
             )
         )
-        DSKSegment[_dsk_segment(h.ints, h.dps, d, 0, path) for d in _dla_segments(h.ints, path)]
+        DSKSegment[_dsk_segment(h.ints, h.dps, d, 0, path, true) for d in _dla_segments(h.ints, path)]
     catch
         _das_release!(h)                 # see `_unmap!`
         rethrow()
@@ -1665,10 +1746,11 @@ tested (within the tolerance `xfract`) and in the volume element of the segment
 (within `sgreed`), and the nearest hit of the first voxel that has one is returned.
 CSPICE first collects the voxels and the plates in buffers, splits the voxels in two
 groups and removes the plates that occur twice. The result here is the same, because
-a second test of a plate has the same outcome as the first; the buffers and their
-limits are not needed, with one exception: `xdda` lists every voxel of the ray before
-a plate is tested, so a ray with 50000 voxels or more in the grid throws
-`SpiceError(:arraytoosmall)`, whether it meets a plate or not (`_dsk_xdda_rest`).
+a second test of a plate has the same outcome as the first. The limits of two buffers
+are kept, and both throw `SpiceError(:arraytoosmall)`, whether the ray meets a plate or
+not: `xdda` lists every voxel of the ray before a plate is tested, so a ray with 50000
+voxels or more in the grid throws (`_dsk_xdda_rest`); and the plate lists of a group of
+voxels hold 256000 plates at most (`_dsk_plate_buffer`).
 """
 function _dsk_x02(
         ints::Vector{Int32}, dps::Vector{Float64}, seg::DSKSegment,
@@ -1767,11 +1849,14 @@ function _dsk_x02(
     corsys = dsc.corsys
     bounds = _dsk_bounds(dsc)
 
+    start = (ic1, ic2, ic3, ax2err, ax3err)
     have = false
     near = 0.0
     plid = 0
     xpt = _DSK_ORIGIN
     nvx = 0
+    nc = 0                           # voxels of the walk that are in a non-empty coarse voxel
+    nref = 0                         # entries of their plate lists
     while true
         # invariant: (ic1, ic2, ic3) is voxel number nvx + 1 of the ray in the axis order
         # (ax1, ax2, ax3), and it is inside the grid; no voxel before it has a valid hit
@@ -1786,6 +1871,7 @@ function _dsk_x02(
         (1 <= cvid <= ncgr) || _dsk_bad_pointer("coarse voxel number", cvid, ncgr)
         cgrptr = Int(@inbounds ints[offcgr + cvid])
         if cgrptr > 0
+            nc += 1
             fx = vx1 - cgscal * (g1 - 1)
             fy = vx2 - cgscal * (g2 - 1)
             fz = vx3 - cgscal * (g3 - 1)
@@ -1797,6 +1883,7 @@ function _dsk_x02(
                 nplate = Int(@inbounds ints[offlst + voxptr])
                 (nplate <= 0 || voxptr + nplate <= hdr.voxnpl) ||
                     _dsk_bad_pointer("voxel-plate list end", voxptr + nplate, hdr.voxnpl)
+                nref += max(nplate, 0)
                 for k in 1:nplate
                     # invariant: (have, near, plid, xpt) is the nearest valid hit among
                     # the plates 1 .. k-1 of this voxel
@@ -1832,6 +1919,10 @@ function _dsk_x02(
                         nvx, ic1, ic2, ic3, ax2err, ax3err, s12, s13, step1, step2, step3,
                         vg[ax1], vg[ax2], vg[ax3]
                     )
+                    _dsk_plate_buffer(
+                        ints, seg, (ax1, ax2, ax3), (s12, s13), (step1, step2, step3), start,
+                        nc, nref, (ic1, ic2, ic3, ax2err, ax3err)
+                    )
                     return plid, xpt, true
                 end
             end
@@ -1843,7 +1934,142 @@ function _dsk_x02(
         nvx + 1 > _DSK_MAXVXL && _dsk_xdda_full()
         (1 <= ic1 <= vg[ax1] && 1 <= ic2 <= vg[ax2] && 1 <= ic3 <= vg[ax3]) || break
     end
+    _dsk_plate_buffer(
+        ints, seg, (ax1, ax2, ax3), (s12, s13), (step1, step2, step3), start, nc, nref, nothing
+    )
     return nohit
+end
+
+"The room of the plate buffer of `dskx02` (`PLATID`, `SOURCE`, `ORDVEC`)."
+const _DSK_PLTBUF = 256000
+
+"The fixed quantities of the voxel walk of `dskx02` on one ray: the axis order, the
+steps and slopes of `xdda`, the grid extents in that order, the coarse grid, the
+offsets of the arrays of the segment and its `voxtop`."
+struct _DSKWalk
+    ax1::Int
+    ax2::Int
+    ax3::Int
+    s12::Float64
+    s13::Float64
+    step1::Int
+    step2::Int
+    step3::Int
+    n1::Int
+    n2::Int
+    n3::Int
+    cgscal::Int
+    cg1::Int
+    cg2::Int
+    ncgr::Int
+    offcgr::Int
+    offptr::Int
+    offlst::Int
+    voxnpt::Int
+    voxnpl::Int
+    voxtop::NTuple{17, Int}
+end
+
+"""
+    _dsk_walk_plates(ints, w, state, first, maxnc) -> (nc, nref)
+
+Walk the voxels of the ray from the voxel `state` (indices and errors of `xdda` in the
+axis order of `w`), that voxel itself if `first`, to the end of the grid or until `nc`
+reaches `maxnc`: `nc` voxels in a non-empty coarse voxel, whose plate lists have
+`nref` entries in all. A pointer out of range counts as an empty list; the walk does
+not throw.
+"""
+function _dsk_walk_plates(ints::Vector{Int32}, w::_DSKWalk, state, first::Bool, maxnc::Int)
+    ic1, ic2, ic3, ax2err, ax3err = state
+    nc = 0
+    nref = 0
+    if !first
+        ic1, ic2, ic3, ax2err, ax3err = _dsk_xdda_step(
+            ic1, ic2, ic3, ax2err, ax3err, w.s12, w.s13, w.step1, w.step2, w.step3
+        )
+    end
+    cgscl2 = w.cgscal * w.cgscal
+    while nc < maxnc && 1 <= ic1 <= w.n1 && 1 <= ic2 <= w.n2 && 1 <= ic3 <= w.n3
+        # invariant: (nc, nref) count the voxels of the walk before (ic1, ic2, ic3)
+        vx1 = w.ax1 == 1 ? ic1 : w.ax2 == 1 ? ic2 : ic3
+        vx2 = w.ax1 == 2 ? ic1 : w.ax2 == 2 ? ic2 : ic3
+        vx3 = w.ax1 == 3 ? ic1 : w.ax2 == 3 ? ic2 : ic3
+        g1 = (vx1 - 1) ÷ w.cgscal + 1
+        g2 = (vx2 - 1) ÷ w.cgscal + 1
+        g3 = (vx3 - 1) ÷ w.cgscal + 1
+        cvid = g1 + w.cg1 * (g2 + g3 * w.cg2 - (w.cg2 + 1))
+        cgrptr = 1 <= cvid <= w.ncgr ? Int(@inbounds ints[w.offcgr + cvid]) : 0
+        if cgrptr > 0
+            nc += 1
+            j = cgrptr + (
+                vx1 - w.cgscal * (g1 - 1) + w.cgscal * (vx2 - w.cgscal * (g2 - 1) - 1) +
+                    cgscl2 * (vx3 - w.cgscal * (g3 - 1) - 1)
+            ) - 1
+            voxptr = 1 <= j <= w.voxnpt ? Int(@inbounds ints[w.offptr + j]) : -1
+            if 1 <= voxptr <= w.voxnpl
+                nref += max(Int(@inbounds ints[w.offlst + voxptr]), 0)
+            end
+        end
+        ic1, ic2, ic3, ax2err, ax3err = _dsk_xdda_step(
+            ic1, ic2, ic3, ax2err, ax3err, w.s12, w.s13, w.step1, w.step2, w.step3
+        )
+    end
+    return nc, nref
+end
+
+@noinline _dsk_plate_buffer_full(n::Int) = _dsk_throw(
+    :arraytoosmall,
+    "the plate lists of a group of voxels of the ray have $n entries; the plate " *
+        "buffer of dskx02 has room for $_DSK_PLTBUF"
+)
+
+"""
+    _dsk_plate_buffer(ints, seg, axes, slopes, steps, start, nc, nref, hit)
+
+The plate buffer of `dskx02` for the ray whose walk in the segment `seg` (axis order,
+slopes and steps of `xdda`) begins at the voxel `start`: `nc`
+voxels of the walk, to the voxel `hit` of the first valid hit (`nothing`: to the end of
+the grid), are in a non-empty coarse voxel and have `nref` plate list entries. CSPICE
+splits the `n` such voxels of the whole ray into a first group of `max(1, (n + 1) ÷ 2)`
+and a second group of the rest, collects the plate lists of the first group, then, if
+the first group has no hit, those of the second, and throws
+`SpiceError(:arraytoosmall)` for a group with more than `_DSK_PLTBUF` entries. After a
+hit, the rest of the ray is walked unless the voxels left (at most the steps left in
+the three axes) are bound by `voxtop` to keep the whole ray within `_DSK_PLTBUF`; the
+first group is walked again only if the ray has more than `_DSK_PLTBUF` entries in all.
+"""
+@noinline function _dsk_plate_buffer(
+        ints::Vector{Int32}, seg::DSKSegment, axes::NTuple{3, Int},
+        slopes::NTuple{2, Float64}, steps::NTuple{3, Int}, start, nc::Int, nref::Int, hit
+    )
+    @assert nc >= 0 && nref >= 0
+    hdr = seg.hdr
+    vg = hdr.vgrext
+    cgscal = hdr.cgscal
+    w = _DSKWalk(
+        axes..., slopes..., steps..., vg[axes[1]], vg[axes[2]], vg[axes[3]], cgscal,
+        vg[1] ÷ cgscal, vg[2] ÷ cgscal, _dsk_ncgr(hdr), _dsk_off_cgrptr(seg),
+        _dsk_off_voxptr(seg), _dsk_off_voxlst(seg), hdr.voxnpt, hdr.voxnpl, seg.voxtop
+    )
+    n, total = nc, nref
+    if hit !== nothing && w.voxtop[1] >= 0
+        left = _dsk_moves_left(hit[1], w.step1, w.n1) + _dsk_moves_left(hit[2], w.step2, w.n2) +
+            _dsk_moves_left(hit[3], w.step3, w.n3)
+        nref + _dsk_top_bound(w.voxtop, left) <= _DSK_PLTBUF && return nothing
+    end
+    if hit !== nothing
+        rc, rref = _dsk_walk_plates(ints, w, hit, false, typemax(Int))
+        n += rc
+        total += rref
+    end
+    total <= _DSK_PLTBUF && return nothing
+    ngrp1 = max(1, (n + 1) ÷ 2)
+    _, ref1 = _dsk_walk_plates(ints, w, start, true, ngrp1)
+    ref1 > _DSK_PLTBUF && _dsk_plate_buffer_full(ref1)
+    # The second group is collected if it exists and the first group has no hit.
+    (n > ngrp1 && (hit === nothing || nc > ngrp1) && total - ref1 > _DSK_PLTBUF) &&
+        _dsk_plate_buffer_full(total - ref1)
+    return nothing
 end
 
 "One step of `xdda`: the indices (axis order of the walk) and errors of the next voxel."
