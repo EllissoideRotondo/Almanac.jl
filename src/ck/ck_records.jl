@@ -66,7 +66,8 @@ end
 
 Return the pointing record `recno` of the CK type 2 segment with the descriptor `descr`
 in the file of `handle`, as
-[`ckgr02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr02_c.html). Records count from 1, as in CSPICE.
+[`ckgr02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr02_c.html).
+Records count from 1, as in CSPICE.
 
 The record has 10 doubles: the start and the stop of its interval (ticks), the clock rate
 (seconds per tick), the quaternion of the C-matrix at the start (SPICE form, scalar
@@ -101,7 +102,8 @@ end
 
 Return the number of pointing instances in the CK type 3 segment with the descriptor
 `descr` in the file of `handle`, as
-[`cknr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cknr03_c.html). `descr` is as in [`cknr02`](@ref).
+[`cknr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cknr03_c.html).
+`descr` is as in [`cknr02`](@ref).
 
 Throws `SpiceError(:ckwrongdatatype)` if the segment is not of type 3,
 `:dafnosuchhandle` if the handle is closed, and `:dafinvalidparams` if `descr` has fewer
@@ -117,7 +119,8 @@ end
 
 Return the pointing instance `recno` of the CK type 3 segment with the descriptor `descr`
 in the file of `handle`, as
-[`ckgr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr03_c.html). Records count from 1, as in CSPICE.
+[`ckgr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr03_c.html).
+Records count from 1, as in CSPICE.
 
 The record is the time tag (ticks) and the quaternion of the C-matrix (SPICE form, scalar
 first): 5 doubles for a segment without angular velocity, and 8 doubles, the last three

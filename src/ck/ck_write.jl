@@ -56,8 +56,7 @@ Open a new CK file that lives in memory, for writing: [`ckopn`](@ref) without th
 path. No file is made. The writers (such as [`ckw03`](@ref)) take the handle as they take
 one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
 and [`save_kernel`](@ref) writes them to a file; [`ckcls`](@ref) discards them, so load or
-save before the close. This call
-has no CSPICE counterpart; see [`dafops`](@ref).
+save before the close. CSPICE has no such call; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
 """
@@ -67,9 +66,9 @@ ckops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("CK", 6, ifna
     ckcls(handle) -> Nothing
 
 Close the CK file of `handle`, as
-[`ckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcls_c.html). The call does nothing if the handle is closed
-already. The close writes no data: every write call puts its bytes on disk before it
-returns. Load the file with [`furnsh`](@ref) after the close. For a handle in memory
+[`ckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcls_c.html).
+The call does nothing if the handle is closed already. The close writes no data: every
+write call puts its bytes on disk before it returns. For a handle in memory
 (from [`ckops`](@ref)), the close discards the bytes: load it with [`furnsh`](@ref) or
 save it with [`save_kernel`](@ref) before the close.
 
@@ -885,7 +884,8 @@ end
           packts, rates, sclkdp, ivlbds, sellst) -> Nothing
 
 Write a CK segment of type 6 (mini-segments of Hermite or Lagrange interpolation), as
-[`ckw06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw06.html) of SPICELIB. CSPICE has no C wrapper for it.
+[`ckw06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw06.html)
+of SPICELIB. CSPICE has no C wrapper for it.
 
 A mini-segment is a set of packets with its own subtype, degree and clock rate, valid on
 its own interval. The number of mini-segments is `length(npkts)`. The subtypes, their

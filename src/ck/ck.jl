@@ -507,6 +507,8 @@ in the number type of `t` and the quaternion is normalized. `av` is zero unless
 end
 
 """
+    _ck_check05(subtyp, wndsiz, kind=:notsupported) -> Nothing
+
 Throw `SpiceError` unless `subtyp` is in 0:3 and `wndsiz` is a valid window size for it.
 A bad subtype is `kind`: `:notsupported` in `ckr05_`, `:invalidsubtype` in `ckr06_`.
 """
@@ -666,7 +668,6 @@ function _ck_eval06seg(
         )
         return true, cmat, av, t
     end
-    return
 end
 
 # --- one segment, and the segment search -------------------------------------------------
@@ -681,8 +682,7 @@ frame in `seg.frame` (radians per second, zero if the segment has none or `needa
 false and the type computes it separately), and `clkout` is the clock time of the
 result. `found` is false if the segment has no pointing within `tol` of `sclk`.
 `cmat` and `av` are functions of `sclk` in its number type where the data type
-interpolates, and constants where it takes a stored instance. Does not allocate.
-Throws `SpiceError(:ckunknowndatatype)` for a data type outside 1:6.
+interpolates, and constants where it takes a stored instance. Throws `SpiceError(:ckunknowndatatype)` for a data type outside 1:6.
 """
 @inline function _ck_eval(
         data::Vector{Float64}, seg::CKSegment, sclk::T, tol::Float64,
@@ -705,7 +705,7 @@ Pointing of the instrument `inst` for the encoded SCLK `sclk`, from the first se
 priority order that gives one, as the search of `ckbss_`/`cksns_` with `ckpfs_`: a
 segment is tried if its coverage meets `[sclk - tol, sclk + tol]` and, if `needav`, it
 has angular velocity. `ref` is the reference frame of that segment (0 if not found).
-Requires `tol >= 0`. Does not allocate.
+Requires `tol >= 0`.
 """
 function _ck_search(
         ks::KernelSet, inst::Int32, sclk::T, tol::Float64,
@@ -739,8 +739,8 @@ end
     build_ckmeta(pool) -> Dict{Int32,NTuple{2,Int32}}
 
 The pair (clock ID, SPK ID) for each CK ID that has a numeric variable `CK_<id>_SCLK`
-or `CK_<id>_SPK` in the pool (its first value, rounded by `gipool_`); the one of the two that is absent holds
-the default of `ckmeta_`.
+or `CK_<id>_SPK` in the pool (its first value, rounded by `gipool_`); the one of the two
+that is absent holds the default of `ckmeta_`.
 """
 function build_ckmeta(pool::AbstractDict)
     out = Dict{Int32, NTuple{2, Int32}}()
@@ -758,7 +758,7 @@ function build_ckmeta(pool::AbstractDict)
     return out
 end
 
-"Clock ID of the CK ID `ckid` (`ckmeta_` with `SCLK`); does not allocate."
+"Clock ID of the CK ID `ckid` (`ckmeta_` with `SCLK`)."
 @inline function _ck_sclkid(ks::KernelSet, ckid::Int32)
     m = get(ks.ckmeta, ckid, nothing)
     return m === nothing ? _ckmeta_default(ckid) : m[1]
@@ -803,7 +803,7 @@ velocity, `et::Float64`, and `rot::Mat3{Taylor{1,Float64}}` holds the rotation `
 the derivative `[av]ₓ R` that CSPICE builds from the angular velocity `av` of the
 segment (`rav2xf_`, `invstm_`).
 
-Throws `SpiceError(:noframeconnect)` if no segment gives a pointing. Does not allocate.
+Throws `SpiceError(:noframeconnect)` if no segment gives a pointing.
 """
 @inline function _ck_frame_step(mode, ks::KernelSet, fd::FrameDef, et::Real)
     found, ref, rot = _ck_frame_step_found(mode, ks, fd, et)
@@ -838,7 +838,7 @@ end
 """
     _sx_mxm(a, b) -> Mat3{Taylor{1,Float64}}
 
-Contract: the product `a * b` of two rotations with their derivatives, with the
+The product `a * b` of two rotations with their derivatives, with the
 arithmetic of the 6 by 6 product of their state transformations in `zzmsxf_` and
 `mxmg_`: the value is the three products of `a.v` and `b.v` summed from left to right;
 the derivative is `a.d * b.v` and then `a.v * b.d`, the six products summed from left to
@@ -860,7 +860,7 @@ end
 """
     _sx_mxv(m, s) -> Vec3{Taylor{1,Float64}}
 
-Contract: the product of the rotation `m` with its derivative and the vector `s` with
+The product of the rotation `m` with its derivative and the vector `s` with
 its derivative, with the arithmetic of `mxvg_` applied to the 6 by 6 state
 transformation and the state: the value is the three products of `m.v` and `s.v`, the
 derivative `m.d * s.v` and then `m.v * s.d`, each sum from left to right.
@@ -962,7 +962,7 @@ other than J2000 only when it is the frame of a CK segment or of a switch base (
 static parents of those frames are J2000). As in `zzrefch0_`, the chain of `from` keeps
 `MAX_FRAME_CHAIN` frames and folds the links after them into the last one, and the chain
 of `to` meets only the frames kept; each chain throws `SpiceError(:framechain)` after
-`_FRAME_CHAIN_LIMIT` links, where CSPICE loops forever. Does not allocate.
+`_FRAME_CHAIN_LIMIT` links, where CSPICE loops forever.
 """
 function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
     S = _ck_numtype(mode, T)
@@ -1044,8 +1044,7 @@ end
     _ck_state_rotation(ks, from, to, et::Float64) -> Mat3{Taylor{1,Float64}}
 
 Matrix from frame `from` to frame `to` at `et` and its derivative as `frmchg_` of
-CSPICE gives them (the two blocks of
-[`sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html)): each CK link contributes the angular
+CSPICE gives them (the two blocks of `sxform_c`): each CK link contributes the angular
 velocity of its segment, and needs a segment that has one. The two chains are followed
 to their first common frame, as in `frame_rotation`.
 """
