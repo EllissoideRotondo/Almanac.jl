@@ -108,6 +108,10 @@ taken through it. Not inlined: Enzyme applies its rule to a call that is still t
 and would otherwise differentiate `a + (p - a)`, whose derivative is 0.
 """
 @noinline _ad_pin(a::Real, p::Float64) = _with_primal(a, p)
+# The select is always `p` (`a == p` is false for a NaN `p`), but LLVM cannot prove it.
+# A body that returns `p` itself gets the `returned` attribute, and Enzyme on Julia 1.10
+# then takes the result as constant and calls the rule for neither value nor derivative.
+@noinline _ad_pin(a::Float64, p::Float64) = ifelse(isnan(p) & (a == p), a, p)
 
 """
 `|a|` with the sign of `b`, as `d_sign` of f2c: a zero `b` of either sign gives `+|a|`,
