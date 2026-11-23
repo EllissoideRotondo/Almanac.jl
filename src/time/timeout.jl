@@ -356,8 +356,10 @@ function _to_scan(mystr::Vector{UInt8})
     while start <= n
         hit = 0
         stop = start
+        c = mystr[start]
         for (mark, id) in _TO_SCAN
             m = codeunits(mark)
+            m[1] == c || continue
             stop = start + length(m) - 1
             if stop <= n && @views(mystr[start:stop] == m)
                 hit = id
