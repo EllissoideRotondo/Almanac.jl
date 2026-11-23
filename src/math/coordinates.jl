@@ -10,11 +10,10 @@
 # --- rectangular, latitudinal, right ascension ----------------------------------------
 
 """
-`reclat` kernel. With `scaled` the longitude comes from the components divided by the
-largest one (
-[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)); without it from the components themselves (`reclat_`), which
-also decide whether the point is on the z axis: `[0, 5e-324, 1e10]` has the longitude
-pi/2 there and 0 in `reclat_c`.
+`(radius, lon, lat)` of `v`. With `scaled` the longitude comes from the components
+divided by the largest one, as in `reclat_c`; without it from the components themselves,
+as in `reclat_`, which also decide whether the point is on the z axis (`[0, 5e-324, 1e10]`
+has the longitude pi/2 in `reclat_` and 0 in `reclat_c`).
 """
 @inline function _m_reclat(v::SVector{3}, scaled::Bool)
     vmax = _m_maxabs(v)
@@ -332,9 +331,9 @@ end
 
 # --- geodetic -------------------------------------------------------------------------
 
-@noinline _m_badre(re) = throw(
+@noinline _m_badre(re, kind::Symbol = :valueoutofrange) = throw(
     SpiceError(
-        :valueoutofrange,
+        kind,
         "the equatorial radius must be positive; it is $(primal(re))"
     )
 )
@@ -429,11 +428,8 @@ georec(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
 """
     _m_pgrsense(ks, body) -> Int
 
-+1 if the planetographic longitude of `body` is positive east, -1 if positive west, as
-`recpgr_` and `pgrrec_`: the pool variable `BODY<id>_PGR_POSITIVE_LON` decides if it is a
-string variable (its first four characters without blanks, in upper case, must be `EAST`
-or `WEST`); otherwise the sign of the prime meridian rate `BODY<id>_PM[2]` does
-(retrograde rotation is positive east), with east for the Earth, the Moon and the Sun.
+`1` if the planetographic longitude of `body` is positive east, `-1` if positive west,
+by the rules of [`recpgr`](@ref), as `recpgr_` and `pgrrec_` decide it.
 """
 function _m_pgrsense(ks::KernelSet, body::NameOrID)
     id = _m_bodyid(ks, body, :idcodenotfound)
@@ -675,12 +671,7 @@ end
 
 @inline function _m_drdgeo(lon, lat, alt, re, f)
     primal(f) < 1.0 || _m_badflat(f)
-    primal(re) > 0.0 || throw(
-        SpiceError(
-            :badradius,
-            "the equatorial radius must be positive; it is $(primal(re))"
-        )
-    )
+    primal(re) > 0.0 || _m_badre(re, :badradius)
     slat, clat = sincos(lat)
     slon, clon = sincos(lon)
     flat = 1.0 - f
@@ -720,12 +711,7 @@ drdgeo(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
 
 @inline function _m_dgeodr(v::SVector{3}, re, f)
     primal(f) < 1.0 || _m_badflat(f)
-    primal(re) > 0.0 || throw(
-        SpiceError(
-            :badradius,
-            "the equatorial radius must be positive; it is $(primal(re))"
-        )
-    )
+    primal(re) > 0.0 || _m_badre(re, :badradius)
     (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && _m_onzaxis()
     lon, lat, alt = _m_recgeo(v, re, f)
     return _m_invort(_m_drdgeo(promote(lon, lat, alt, re, f)...))

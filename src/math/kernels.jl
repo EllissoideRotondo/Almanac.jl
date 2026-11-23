@@ -79,7 +79,7 @@ end
     a[1] * b[2] - a[2] * b[1]
 )
 
-"Norm without the scaling of `vnorm`, `sqrt(a ⋅ a)`, for every element type (no comparison)."
+"`sqrt(a ⋅ a)`, without the scaling of `vnorm`, for every element type (no comparison)."
 @inline _norm3(a) = sqrt(_m_dot(a, a))
 
 "Norm with the scaling by the largest component of `vnorm`."
@@ -101,11 +101,7 @@ end
 
 @inline _m_hat(v::SVector{3}) = _m_unorm(v)[1]
 
-"""
-Projection of `a` on `b`. With `recip` the scaling is a product with the reciprocal of
-the largest component (
-[`vproj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vproj_c.html)); without it the scaling is a division (`vproj_`).
-"""
+"Projection of `a` on `b`: with `recip` the scaling of `vproj_c` (a product with the reciprocal of the largest component), without it the division of `vproj_`."
 @inline function _m_proj(a::SVector{3}, b::SVector{3}, recip::Bool)
     biga = _m_maxabs(a)
     bigb = _m_maxabs(b)
@@ -116,11 +112,7 @@ the largest component (
     return scale * r
 end
 
-"""
-Component of `a` perpendicular to `b`, with the scaling choice of `_m_proj`. A zero `b`
-gives `a`, as `vperp_` of SPICELIB and the text of
-[`vperp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/vperp_c.html) say.
-"""
+"Component of `a` perpendicular to `b`, with the scaling of `_m_proj`; a zero `b` gives `a`, as `vperp_` does."
 @inline function _m_perp(a::SVector{3}, b::SVector{3}, recip::Bool)
     biga = _m_maxabs(a)
     bigb = _m_maxabs(b)
@@ -157,15 +149,12 @@ end
 """
     _m_mxv(m, v) -> SVector{3}
 
-Contract: the product of the 3 by 3 matrix `m` and the vector `v`, each component the
-sum of its three products from left to right, as
-[`mxv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/mxv_c.html). The product `m * v` of
-StaticArrays lets the compiler join a multiplication and an addition into one fused
-operation, and compilers differ in where they do so; the result of this function does
-not depend on the compiler, which matters where a component is a small difference of
-large products.
-The forms `_m_mtxv`, `_m_mxm`, `_m_mtxm` and `_m_mxmt` obey the same rule; the package uses
-them in place of `*` for each 3 by 3 product.
+Return the product of the 3 by 3 matrix `m` and the vector `v`, each component the sum
+of its three products from left to right, as `mxv_c`. The StaticArrays product `m * v`
+lets the compiler fuse a multiplication and an addition, and compilers differ in where
+they do so; this result does not depend on the compiler. `_m_mtxv`, `_m_mxm`, `_m_mtxm`
+and `_m_mxmt` follow the same rule, and every 3 by 3 product of the package uses them in
+place of `*`.
 """
 @inline _m_mxv(m::SMatrix{3, 3}, v::SVector{3}) = SVector(
     m[1, 1] * v[1] + m[1, 2] * v[2] + m[1, 3] * v[3],
@@ -254,11 +243,7 @@ end
     )
 end
 
-"""
-Contract: `[a3]_x3 * [a2]_x2 * [a1]_x1` with the arithmetic of `eul2m_` (`rotate_` of
-`a1`, then `rotmat_` of `a2` and of `a3`), in the number type of the angles. The axes
-are not checked; an axis outside 1:3 is taken modulo 3, as `rotate_` takes it.
-"""
+"`[a3]_x3 * [a2]_x2 * [a1]_x1` with the arithmetic of `eul2m_`, in the number type of the angles; the axes are not checked and are taken modulo 3."
 @inline _m_eul2m_unchecked(a3, a2, a1, x3::Integer, x2::Integer, x1::Integer) =
     _m_rotmat(_m_rotmat(_m_rotate(a1, x1), a2, x2), a3, x3)
 
@@ -291,15 +276,11 @@ end
 end
 
 """
-Unit state of `dvhat`: the unit position and its derivative. With `recip` the
-perpendicular part of the velocity is scaled by a product with a reciprocal, as the
-C function
-[`dvhat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvhat_c.html) does (through `vperp_c`). Without it the scaling is a division,
-as in the f2c routine `dvhat_` (through `vperp_`), which is the routine that `ducrss_`,
-`dvsep_`, `zztwovxf_` and `surfpv_` call. The two forms differ by rounding, and the
-reciprocal of a velocity below about 5.6e-309 is infinite, so only the division keeps
-such a velocity finite. Postcondition: a zero position gives the zero position and the
-velocity as it is.
+Unit state of `dvhat`: the unit position and its derivative; a zero position gives the
+zero position and the velocity as it is. With `recip` the velocity is scaled as
+`dvhat_c` does (through `vperp_c`); without it by the division of the f2c `dvhat_`, which
+`ducrss_`, `dvsep_`, `zztwovxf_` and `surfpv_` call. The two differ by rounding, and only
+the division keeps a velocity below about 5.6e-309 finite.
 """
 @inline function _m_dvhat(s::SVector{6}, recip::Bool = true)
     p, v = _m_pv(s)
@@ -328,14 +309,7 @@ end
 @inline _m_brcktd(x::Float64, e1::Float64, e2::Float64) =
     e1 < e2 ? max(e1, min(e2, x)) : max(e2, min(e1, x))
 
-"""
-    _m_vdistg(v1, v2)
-
-Distance between two vectors of equal length, as `vdistg_`: the differences are divided
-by the largest of their magnitudes before they are squared, so that tiny or huge
-components neither underflow nor overflow. The largest magnitude is taken with the `max`
-of f2c (`a >= b ? a : b`), which keeps the previous value when a difference is NaN.
-"""
+"Distance between two vectors of equal length, as `vdistg_`; the largest difference is taken with the `max` of f2c, which keeps the previous value at a NaN."
 function _m_vdistg(v1::AbstractVector, v2::AbstractVector)
     scale = 0.0
     @inbounds for i in eachindex(v1, v2)       # invariant: scale bounds the differences seen
@@ -375,10 +349,10 @@ end
 """
     _m_q2m(q0, q1, q2, q3, always::Bool) -> SMatrix{3,3}
 
-Rotation matrix of the SPICE quaternion `(q0, q1, q2, q3)` (scalar first), as `q2m_`:
-the products are divided by the squared length when that is not 0 and not exactly 1.
-With `always`, a number type other than `Float64` is divided by its squared length
-also when the plain part of that is 1, so that the derivatives of the length cancel.
+Rotation matrix of the SPICE quaternion `(q0, q1, q2, q3)`, as `q2m_`: the products are
+divided by the squared length unless it is 0 or 1. With `always` a number type other
+than `Float64` is divided also when the plain part is 1, so that the derivatives of the
+length cancel.
 """
 @inline function _m_q2m(q0, q1, q2, q3, always::Bool)
     q01, q02, q03 = q0 * q1, q0 * q2, q0 * q3
@@ -399,12 +373,7 @@ also when the plain part of that is 1, so that the derivatives of the length can
     )
 end
 
-"""
-    _m_m2q_unchecked(r) -> SVector{4}
-
-Unit quaternion (scalar first, scalar part not negative) of the rotation matrix `r`, as
-`m2q_` after its rotation check, which is left to the caller (`_m_m2q` makes it).
-"""
+"Unit quaternion of the rotation matrix `r`, scalar part first and not negative, as `m2q_` without its rotation check."
 @inline function _m_m2q_unchecked(r::SMatrix{3, 3})
     trace = r[1] + r[5] + r[9]
     mtrace = 1.0 - trace
@@ -450,13 +419,12 @@ Unit quaternion (scalar first, scalar part not negative) of the rotation matrix 
     return primal(c) > 0.0 ? SVector(c, s1, s2, s3) : SVector(-c, -s1, -s2, -s3)
 end
 
-"`_m_m2q_unchecked` after the check of `m2q_`: `SpiceError(:notarotation)` unless `isrot(r, 0.1, 0.1)`."
 @inline function _m_m2q(r::SMatrix{3, 3})
     _m_isrot(r, 0.1, 0.1) || throw(SpiceError(:notarotation, "the input matrix is not a rotation"))
     return _m_m2q_unchecked(r)
 end
 
-"Axis and angle (in [0, pi]) of the rotation with the quaternion `q` of `m2q_`, as `raxisa_`; the axis is `(0, 0, 1)` for the identity."
+"Axis and angle in [0, pi] of the rotation with the quaternion `q`, as `raxisa_`; the identity gives the axis `(0, 0, 1)`."
 @inline function _m_raxisa_q(q::SVector{4})
     v = SVector(q[2], q[3], q[4])
     if _m_iszero(v)
@@ -467,17 +435,13 @@ end
     return _m_hat(v), 2.0 * atan(_m_norm(v), q[1])
 end
 
-"Matrix that rotates vectors by `angle` about `axis`, as `axisar_`: each column is `vrotv_` of a unit vector, so a zero axis gives the identity."
+"Matrix that rotates vectors by `angle` about `axis`, as `axisar_`; a zero axis gives the identity."
 @inline _m_axisar(axis::SVector{3}, angle) = _m_cols(
     _m_vrotv(SVector(1.0, 0.0, 0.0), axis, angle), _m_vrotv(SVector(0.0, 1.0, 0.0), axis, angle),
     _m_vrotv(SVector(0.0, 0.0, 1.0), axis, angle)
 )
 
-"""
-Quotient `a / b` with the checks of `zzdiv_`: `SpiceError(:dividebyzero)` for a zero
-`b`, `SpiceError(:numericoverflow)` if the quotient is above the largest number, and
-zero if it is below the smallest one.
-"""
+"Quotient `a / b` with the checks of `zzdiv_`: `:dividebyzero`, `:numericoverflow`, and zero for a quotient that underflows."
 @inline function _m_div(a::Real, b::Real)
     a0 = primal(a)
     b0 = primal(b)
@@ -495,15 +459,15 @@ end
 # Integer conversions of C
 # ---------------------------------------------------------------------------------
 
-"Contract: returns `x` cut to an integer as the C cast `(integer) x` does on x86: toward zero, and the smallest 32-bit integer when `x` is NaN or out of range."
+"`x` cut toward zero as the C cast `(integer) x` on x86; the smallest 32-bit integer for NaN or out of range."
 @inline _cint(x::Float64)::Int =
     (x > -2147483649.0 && x < 2147483648.0) ? Int(trunc(Int32, x)) : Int(typemin(Int32))
 
-"Contract: returns `n` reduced to the range of a 32-bit integer, as integer arithmetic of the C code does."
+"`n` reduced to the range of a 32-bit integer, as the integer arithmetic of the C code."
 @inline _wrap32(n::Int)::Int = Int(n % Int32)
 
-"Contract: returns the integer nearest to `x`, a tie away from zero, as f2c `i_dnnt`."
+"Integer nearest to `x`, a tie away from zero, as f2c `i_dnnt`."
 @inline _nint(x::Float64)::Int = _cint(x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x))
 
-"Contract: returns `x` rounded to a whole number, a tie away from zero, as f2c `d_nint`."
+"`x` rounded to a whole number, a tie away from zero, as f2c `d_nint`."
 @inline _dnint(x::Float64)::Float64 = x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x)

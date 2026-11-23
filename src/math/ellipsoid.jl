@@ -284,10 +284,9 @@ end
 """
     _m_nearpt_plain(positn, a, b, c) -> (npoint, alt)
 
-`nearpt_` of CSPICE for `Float64` arguments: the same axis ordering, scaling, bracketing
-and bisection of the multiplier `lambda`, and the same (at most five) correction steps
-that move the solution along the error of the first one. The AD extensions treat it as
-a constant (`_AD_CONSTANT`); `_m_nearpt` gives the derivatives.
+`nearpt_` for `Float64` arguments, with its scaling, its bisection of `lambda` and its
+at most five correction steps. The AD extensions treat it as a constant
+(`_AD_CONSTANT`); `_m_nearpt` gives the derivatives.
 """
 function _m_nearpt_plain(positn::SVector{3, Float64}, a::Float64, b::Float64, c::Float64)
     (a > 0.0 && b > 0.0 && c > 0.0) || _m_badaxis(a, b, c)
@@ -536,13 +535,11 @@ end
 """
     _m_nearpt(positn, a, b, c) -> (npoint, alt)
 
-The plain result of `_m_nearpt_plain` (`nearpt_`) with derivative parts from the
-stationarity condition: the near point is `p_i a_i^2 / (a_i^2 + lambda)` where `lambda`
-is the root of `sum((p_i a_i / (a_i^2 + lambda))^2) = 1`, refined by Newton steps in
-the number type (one for `Float64`, whose derivative the reverse-mode AD packages take
-through `_ad_pin`). Where that form does not hold (the center, and the interior points
-whose near point is not unique or not smooth) the derivative parts are zero. For
-`Float64` arguments the result is that of `_m_nearpt_plain`, bit for bit.
+The result of `_m_nearpt_plain`, bit for bit, with derivative parts from the
+stationarity condition: the near point is `p_i a_i^2 / (a_i^2 + lambda)`, where
+`lambda`, the root of `sum((p_i a_i / (a_i^2 + lambda))^2) = 1`, is refined by Newton
+steps in the number type (one for `Float64`, through `_ad_pin`). The derivative parts
+are zero at the center and where the near point is not unique.
 """
 function _m_nearpt(positn::SVector{3}, a::Real, b::Real, c::Real)
     p0 = SVector(primal(positn[1]), primal(positn[2]), primal(positn[3]))
@@ -625,8 +622,8 @@ The first result is the position and the velocity of the near point. The second 
 `(alt, dalt/dt)`. The result is `nothing` where the velocity of the near point is not
 defined, for example at the center of a sphere; CSPICE returns a `found` flag.
 
-Throws as [`nearpt`](@ref), and `SpiceError(:badarg)` if `state` does not have 6
-elements.
+Throws `SpiceError(:badaxislength)` and `SpiceError(:inputstoolarge)` in the cases of
+[`nearpt`](@ref), and `SpiceError(:badarg)` if `state` does not have 6 elements.
 
 # Examples
 ```jldoctest
@@ -668,9 +665,10 @@ and its time derivative. The result is the position and the velocity of the inte
 point of [`surfpt`](@ref). The result is `nothing` if the ray misses, if it is tangent
 to the surface, or if the velocity would overflow; CSPICE returns a `found` flag.
 
-Throws `SpiceError(:invalidvertex)` if the start point is on the surface and
-`SpiceError(:badarg)` if a state does not have 6 elements; other errors as
-[`surfpt`](@ref).
+Throws `SpiceError(:invalidvertex)` if the start point is on the surface,
+`SpiceError(:zerovector)` if the direction is zero, `SpiceError(:badaxislength)` if a
+semi-axis is not positive, and `SpiceError(:badarg)` if a state does not have 6
+elements.
 
 # Examples
 ```jldoctest
@@ -800,38 +798,6 @@ as
 See also [`nvp2pl`](@ref), [`pl2nvc`](@ref), [`pl2psv`](@ref).
 """
 pl2nvp(plane::SpicePlane) = plane.normal, plane.constant * plane.normal
-
-"""
-Right-handed orthonormal frame `(x, y, z)` whose first axis is along `x`, as
-[`frame_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frame_c.html):
-`y` has a zero in the smallest component of `x`. A zero `x` gives the standard basis.
-"""
-@inline function _m_frame(x0::SVector{3})
-    x = _m_hat(x0)
-    a = x[1] * x[1]
-    b = x[2] * x[2]
-    c = x[3] * x[3]
-    z0 = zero(a)
-    o = one(a)
-    primal(a + b + c) == 0.0 &&
-        return SVector(o, z0, z0), SVector(z0, o, z0), SVector(z0, z0, o)
-    a0, b0, c0 = primal(a), primal(b), primal(c)
-    if a0 <= b0 && a0 <= c0
-        f = sqrt(b + c)
-        y2 = -x[3] / f
-        y3 = x[2] / f
-        return x, SVector(z0, y2, y3), SVector(f, -x[1] * y3, x[1] * y2)
-    elseif b0 <= a0 && b0 <= c0
-        f = sqrt(a + c)
-        y3 = -x[1] / f
-        y1 = x[3] / f
-        return x, SVector(y1, z0, y3), SVector(x[2] * y3, f, -x[2] * y1)
-    end
-    f = sqrt(a + b)
-    y1 = -x[2] / f
-    y2 = x[1] / f
-    return x, SVector(y1, y2, z0), SVector(-x[3] * y2, x[3] * y1, f)
-end
 
 """
     pl2psv(plane) -> (point::SVector{3}, span1::SVector{3}, span2::SVector{3})
@@ -968,11 +934,7 @@ end
 
 # --- ellipses -----------------------------------------------------------------------------
 
-"""
-Roots of `a x^2 + b x + c` as
-[`rquad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rquad_c.html): `((re1, im1), (re2, im2))`. Requires that `a`
-and `b` are not both zero (`SpiceError(:degeneratecase)`).
-"""
+"Roots `((re1, im1), (re2, im2))` of `a x^2 + b x + c`, as [`rquad`](@ref)."
 @inline function _m_rquad(a::T, b::T, c::T) where {T <: Real}
     (primal(a) == 0.0 && primal(b) == 0.0) && throw(
         SpiceError(
@@ -1017,12 +979,7 @@ end
     return x / vmag, y / vmag
 end
 
-"""
-Diagonalization of the symmetric matrix `[s11 s12; s12 s22]` as
-[`diags2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/diags2_c.html): the two
-diagonal values and the rotation `(c11, c12, c21, c22)` whose columns are the
-eigenvectors.
-"""
+"Diagonal values and rotation `(c11, c12, c21, c22)` of `[s11 s12; s12 s22]`, as `diags2_c`."
 @inline function _m_diags2(s11::T, s12::T, s22::T) where {T <: Real}
     o = one(T)
     z = zero(T)
@@ -1270,9 +1227,8 @@ pjelpl(elin::SpiceEllipse, plane::SpicePlane) = _m_pjelpl(elin, plane)
 """
     _m_scaled_axes(a, b, c) -> (scale, scla, sclb, sclc, scla2, sclb2, sclc2)
 
-The scaling of `edlimb_` and `npedln_`: the longest semi-axis `scale`, the semi-axes
-divided by it and their squares. Throws `SpiceError(:degeneratecase)` if a square
-underflows to zero. The semi-axes are checked by the caller.
+The scaling of `edlimb_` and `npedln_`: the longest semi-axis, the semi-axes divided by
+it, and their squares. Throws `SpiceError(:degeneratecase)` if a square underflows.
 """
 @inline function _m_scaled_axes(a, b, c)
     scale = _m_max(_m_max(a, b), c)
@@ -1375,11 +1331,8 @@ function nplnpt(linpt::AbstractVector, lindir::AbstractVector, point::AbstractVe
 end
 
 """
-    _m_nplnpt(lp, ld, p, recip) -> (pnear, dist)
-
-Nearest point of the line through `lp` along `ld` to `p`, and its distance. `recip`
-chooses the projection of `nplnpt_c` (`vproj_c`, true) or of the Fortran `nplnpt_`
-(`vproj_`, false), which the SPICELIB routines call; see `_m_proj`. `ld` is not zero.
+Nearest point of the line through `lp` along a nonzero `ld` to `p`, and its distance;
+`recip` true projects as `nplnpt_c`, false as the f2c `nplnpt_`.
 """
 @inline function _m_nplnpt(lp::SVector{3}, ld::SVector{3}, p::SVector{3}, recip::Bool)
     pnear = _m_proj(p - lp, ld, recip) + lp
@@ -1529,11 +1482,8 @@ npedln(a::Real, b::Real, c::Real, linept::AbstractVector, linedr::AbstractVector
     _m_npedln(a, b, c, _m_v3(linept), _m_v3(linedr), true)
 
 """
-    _m_npedln(a, b, c, lp, ld, recip) -> (pnear, dist)
-
-`npedln`. `recip` true follows `npedln_c`, false the Fortran `npedln_` that the SPICELIB
-routines (`tangpt_`, `zzraynp_`) call: its `pjelpl_` projects with `vperp_`, which
-divides by the largest component where `vperp_c` multiplies by its reciprocal.
+`npedln` with `recip` true as `npedln_c`, false as the f2c `npedln_` that `tangpt_` and
+`zzraynp_` call (its `pjelpl_` projects with `vperp_`).
 """
 function _m_npedln(a::Real, b::Real, c::Real, lp::SVector{3}, ld::SVector{3}, recip::Bool)
     a, b, c = _m_f(a), _m_f(b), _m_f(c)
@@ -1571,12 +1521,8 @@ end
 # --- terminator ---------------------------------------------------------------------------
 
 """
-    _m_edterm(umbral, a, b, c, srcrad, srcpos, npts) -> Vector{SVector{3,Float64}}
-
-Terminator points of `zzedterm_`: for each of `npts` directions about the axis from
-the target to the source, the point of the ellipsoid where a plane that is tangent to
-the spherical source is tangent to the ellipsoid, found by at most eleven corrections
-of the tangent angle.
+Terminator points of `zzedterm_`: for each of `npts` directions about the axis to the
+source, the point where a plane tangent to the spherical source touches the ellipsoid.
 """
 function _m_edterm(
         umbral::Bool, a::Float64, b::Float64, c::Float64, srcrad::Float64,
