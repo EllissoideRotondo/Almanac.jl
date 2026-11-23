@@ -116,7 +116,7 @@ surfnm(a::Real, b::Real, c::Real, point::AbstractVector) =
         primal(pmag) == 1.0 && return true, SVector(p[1] * a, p[2] * b, p[3] * c)
         sign = -1.0
     elseif primal(ymag) == 1.0
-        return true, positn + none
+        return true, convert(typeof(none), positn)  # `vequ_`: keeps the sign of a zero
     end
     t = 1.0 - pmag * pmag
     scale = primal(t) > 0.0 ? sqrt(t) : zero(t)
@@ -923,7 +923,7 @@ function inrypl(vertex::AbstractVector, dir::AbstractVector, plane::SpicePlane)
     prjdir = _m_dot(udir, normal)
     none = zero(1.0 * sclvtx + prjdif * udir)
     if primal(prjdif) == 0.0
-        return (primal(_m_dot(normal, udir)) == 0.0 ? -1 : 1), vtx + none
+        return (primal(_m_dot(normal, udir)) == 0.0 ? -1 : 1), convert(typeof(none), vtx)
     end
     pd, pf = primal(prjdir), primal(prjdif)
     samesign = (pd > 0.0 && pf > 0.0) || (pd < 0.0 && pf < 0.0)

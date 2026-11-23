@@ -141,6 +141,9 @@ group("15. math: ellipsoids, planes and ellipses", Kernels.FULL_SET_FILES...) do
         @test nearpt([0.0, 0.0, 7.0], 3.0, 2.0, 1.0) == ([0.0, 0.0, 1.0], 6.0)
         @test surfpt([10.0, 0, 0], [-1.0, 0, 0], 3.0, 2.0, 1.0) == [3.0, 0.0, 0.0]
         @test surfpt([10.0, 0, 0], [1.0, 0, 0], 3.0, 2.0, 1.0) === nothing
+        # A point on the surface or in the plane is returned as given, as `vequ_` copies it.
+        @test signbit(surfpt([3.0, -0.0, 0.0], [-1.0, 0, 0], 3.0, 2.0, 1.0)[2])
+        @test signbit(inrypl([1.0, -0.0, 0.0], [0.0, 0.0, 1.0], nvc2pl([0.0, 0.0, 1.0], 0.0))[2][2])
         @test surfpt([10.0, 0, 5.0], [-1.0, 0, 0], 3.0, 2.0, 1.0) === nothing
         @test edpnt([6.0, 0.0, 0.0], 3.0, 2.0, 1.0) == [3.0, 0.0, 0.0]
         @test throws_kind(() -> nearpt(p, 3.0, 0.0, 1.0), :badaxislength)
