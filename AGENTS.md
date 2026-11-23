@@ -15,29 +15,15 @@ julia --startup-file=no --project=benchmark benchmark/run.jl                    
 ```
 
 Run the tests with `--threads=8`; the groups `threads`, `gf_threads` and `ek_threads`
-skip with one thread. The code is formatted with [Runic](https://github.com/fredrikekre/Runic.jl)
-(`julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'` once); CI fails on a file that
-Runic would change.
-
-`benchmark/benchmarks.jl` is the AirspeedVelocity suite (`const SUITE`) that
-`.github/workflows/benchmark_pr.yml` runs on a pull request: the script of the pull
-request on `main` and on the pull request, with the ratios commented on the pull request.
-The other scripts in `benchmark/` compare Almanac with CSPICE call by call (`run.jl` runs
-them and lists the calls slower than CSPICE).
+skip with one thread. CI fails on a file that Runic would change. `benchmark/benchmarks.jl`
+is the AirspeedVelocity suite that CI runs on a pull request; the other scripts in
+`benchmark/` compare Almanac with CSPICE call by call.
 
 ## Skills
 
-Use the skills whenever you change an exported name, a docstring, the README, the
-manual or a test. The global skills hold the general rules, and the project skills in
-`.claude/skills/` add the rules of this repository:
-
-- `julia-docstrings`, `julia-manual`, `julia-readme`, with `almanac-docs`: docstrings,
-  the Documenter manual, the README.
-- `julia-doc-reader-review` (agent `julia-doc-reader`): independent reader review after
-  a documentation change; `almanac-docs` says what the reader gets.
-- `julia-tests`, with `almanac-tests`: test design, regression tests, trimming.
-- `julia-dependencies`: every environment (root, `test`, `docs`) on the latest versions
-  that `[compat]` allows, checked before a test run or a measurement.
+Use `julia-docstrings`, `julia-manual` and `julia-readme` for documentation,
+`julia-doc-reader-review` after a documentation change, `julia-tests` for tests, and
+`julia-dependencies` before a test run or a measurement.
 
 ## Conventions that hold everywhere
 
@@ -185,34 +171,15 @@ an atomic reference to one of them is a single word.
   ChainRulesCore extension has rules for both (so that Zygote compiles one branch, not
   all of `element`).
 
-## Deliberate deviations from CSPICE
+## Deviations from CSPICE
 
 Every known defect of CSPICE N0067 in a ported routine is listed in
-`docs/src/manual/cspice_defects.md`, with what Almanac does (copies or fixes) and the
-test group that covers it. When you find a defect, or change how Almanac treats one,
-update that page in the same change.
-
-- `SpiceContext` objects are independent. Each one has its own pool watchers
-  (`swpool`/`cvpool`), time defaults, DSK tolerances and GF tolerance.
-- Windows have no size limit, and searches return a new `Window`, so there are no
-  workspaces or result cells.
-- `ekfind` returns an `EKResult`, which the fetch calls take as their first argument.
-- `kdata`/`kinfo` return handle 0, because loaded kernels have no DAF handle. `spksfs`
-  returns a path in place of a handle.
-- CK type 6 uses the stored clock rate of the next mini-segment, which `ckr06_` rounds
-  to a whole number.
-- `spkpvn` checks the time bounds for every SPK type but 15 and 17, whose single set of
-  elements it propagates to any epoch, as CSPICE does.
-- `_spks19` throws `:spkstructureerror` where `spks19` reads `data[0]`.
-- `ckw02`/`ckw03` take the full record count, and `pckw02` takes the degree from the
-  record length. Both fix defects of SPICE.jl 0.2.5.
-- The EK query engine fixes three defects of N0067 (`zzekweed`, `zzekillt`/`zzekille`,
-  `zzekjsqz`). `compat = true` reproduces them for the tests.
-- `dafopw` refuses a write open of a file that another handle has open
-  (`:fileopenconflict`).
-- Kernel pool names are stripped of the blanks around them on every write and lookup,
-  and a blank name is `:badvarname`; CSPICE keeps leading blanks and stores a blank
-  name.
+`docs/src/manual/cspice_defects.md`, with what Almanac does and the test group that
+covers it. The other differences of the API are in `docs/src/manual/conventions.md`
+(windows without a size limit, pool names without blanks, `dafopw` conflicts, the
+writers that fix SPICE.jl), in the contexts tutorial (independent contexts) and in the
+docstrings of the calls concerned (`ekfind`, `kdata`, `spksfs`). A change that adds or
+alters a deviation updates that text in the same commit.
 
 ## Tests
 
@@ -221,16 +188,13 @@ update that page in the same change.
   `isdefined(@__MODULE__, :NAME) || include(...)`.
 - CSPICE has global state and is not thread safe. Each group calls `oracle_load` once,
   and SPICE.jl is never called from a spawned task.
-- Time, measured on CI (ubuntu, Julia 1, one process): every group takes about 17 min,
-  of which the AD groups take about 12 min (compiling the backends; `ad_enzyme` alone
-  8 min) and `static` 40 s; the other groups, which the CI test jobs run, take about
-  4.5 min. A group that grows states its new time in its header. Large samples go in the
-  exhaustive tier (`ALMANAC_TEST_FULL=1`, `nsample(fast, full)`). `ALMANAC_TEST_SEED`
-  sets the random seed. `ALMANAC_TEST_EXCLUDE` (group names separated by spaces) leaves
-  groups out of a run without group names; CI runs the AD groups and `static` on the
-  coverage job (and two AD groups on Julia 1.10) only, and every group on a tag or a
-  manual run. The job `ad-lower-bounds` runs `ad_mooncake` and `ad_enzyme` on Julia
-  1.10 with EnzymeCore and Mooncake pinned to the lower bounds of `[compat]`.
+- The AD groups take most of the suite time (`ad_enzyme` about 8 min on CI). CI runs
+  them and `static` on the coverage job and on a tag; the job `ad-lower-bounds` runs
+  `ad_mooncake` and `ad_enzyme` on Julia 1.10 at the lower bounds of `[compat]`.
+  `ALMANAC_TEST_EXCLUDE` leaves groups out, `ALMANAC_TEST_SEED` sets the seed, and large
+  samples go in the exhaustive tier (`ALMANAC_TEST_FULL=1`, `nsample(fast, full)`).
+- CI tests Julia 1.10, which can allocate where later versions do not: after changing a
+  hot path, run `quality` on Julia 1.10 too.
 - Kernels are downloaded into `test/data/` by `test/kernels.jl` (`SOURCES` lists the
   URLs and SHA-256 sums). `ALMANAC_KERNEL_DIR` overrides the location,
   `ALMANAC_DOWNLOAD_KERNELS=0` turns the download off, and `ALMANAC_REQUIRE_KERNELS=1`
