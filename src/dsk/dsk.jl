@@ -23,8 +23,6 @@ const _DSK_MAXVXL = 50000                 # voxels of one ray that `xdda` accept
 "The tolerances of CSPICE at start, for calls on a `KernelSet` without a context."
 const _DSK_DEFAULT_TOLS = DSKTolerances()
 
-@noinline _dsk_throw(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
-
 # ---------------------------------------------------------------------------------------
 # Planes, cones and quadratics (for the latitude boundaries of volume elements)
 # ---------------------------------------------------------------------------------------
@@ -69,7 +67,7 @@ are returned and `nx` are excluded. Requires `ub > 0` and coefficients below
 function _dsk_bquad(a::Float64, b::Float64, c::Float64, ub::Float64)
     big = sqrt(_DSK_DPMAX) / 100
     (abs(a) > big || abs(b) > big || abs(c) > big || abs(ub) > big || ub <= 0.0) &&
-        _dsk_throw(:valueoutofrange, "coefficients or root bound of the quadratic are out of range")
+        _throw_spice(:valueoutofrange, "coefficients or root bound of the quadratic are out of range")
     if a == 0.0
         b == 0.0 && return (c == 0.0 ? -1 : -2), 0, 0.0, 0.0
         if abs(c) <= abs(ub * b)
@@ -165,7 +163,7 @@ function _dsk_cxbrut(
         apex::Vec3{Float64}, axis::Vec3{Float64}, angle::Float64,
         endpt1::Vec3{Float64}, endpt2::Vec3{Float64}
     )
-    _m_iszero(axis) && _dsk_throw(:zerovector, "the cone axis is the zero vector")
+    _m_iszero(axis) && _throw_spice(:zerovector, "the cone axis is the zero vector")
     locang = angle
     locaxi = axis
     if angle > _HALFPI
@@ -252,10 +250,10 @@ function _dsk_incnsg(
     xpt1 = _DSK_ORIGIN
     xpt2 = _DSK_ORIGIN
     uaxis, axmag = _m_unorm(axis)
-    axmag == 0.0 && _dsk_throw(:zerovector, "the cone axis is the zero vector")
-    angle < 0.0 && _dsk_throw(:invalidangle, "the cone angle must be non-negative")
+    axmag == 0.0 && _throw_spice(:zerovector, "the cone axis is the zero vector")
+    angle < 0.0 && _throw_spice(:invalidangle, "the cone angle must be non-negative")
     udir, dmag = _m_unorm(endpt2 - endpt1)
-    dmag == 0.0 && _dsk_throw(:endpointsmatch, "the end points of the segment coincide")
+    dmag == 0.0 && _throw_spice(:endpointsmatch, "the end points of the segment coincide")
     cosang = cos(angle)
     locang = angle
     if cosang < 0.0
@@ -393,7 +391,7 @@ end
 
 "`zzelnaxx`: the x and y intercepts of the normal line of the ellipse `a`, `b` at planetodetic latitude `lat`."
 @inline function _dsk_elnaxx(a::Float64, b::Float64, lat::Float64)
-    (a > 0.0 && b > 0.0) || _dsk_throw(:nonpositiveaxis, "the semi-axis lengths must be positive")
+    (a > 0.0 && b > 0.0) || _throw_spice(:nonpositiveaxis, "the semi-axis lengths must be positive")
     slat, clat = sincos(lat)
     ept = _m_ednmpt(a, b, b, Vec3{Float64}(clat, slat, 0.0))
     d1 = b / a
@@ -403,14 +401,14 @@ end
 
 "`zzellbds`: the semi-axes of the spheroids that bound the altitude range `hmin:hmax` over the spheroid `a >= b`."
 @inline function _dsk_ellbds(a::Float64, b::Float64, hmax::Float64, hmin::Float64)
-    b > 0.0 || _dsk_throw(:nonpositiveradius, "the polar radius must be positive")
-    b > a && _dsk_throw(:radiioutoforder, "the radii are out of order")
-    b + hmin > 0.0 || _dsk_throw(:lowerboundtoolow, "the lower altitude bound is too low")
-    (hmin < 0.0 && b + a / b * hmin <= 0.0) && _dsk_throw(
+    b > 0.0 || _throw_spice(:nonpositiveradius, "the polar radius must be positive")
+    b > a && _throw_spice(:radiioutoforder, "the radii are out of order")
+    b + hmin > 0.0 || _throw_spice(:lowerboundtoolow, "the lower altitude bound is too low")
+    (hmin < 0.0 && b + a / b * hmin <= 0.0) && _throw_spice(
         :lowerboundtoolow,
         "the lower altitude bound is too low"
     )
-    hmin > hmax && _dsk_throw(:boundsoutoforder, "the altitude bounds are out of order")
+    hmin > hmax && _throw_spice(:boundsoutoforder, "the altitude bounds are out of order")
     amax, bmax = hmax >= 0.0 ? (a + hmax, b + hmax * (a / b)) : (a + hmax * (b / a), b + hmax)
     amin, bmin = hmin <= 0.0 ? (a + hmin, b + hmin * (a / b)) : (a + hmin * (b / a), b + hmin)
     return amax, bmax, amin, bmin
@@ -448,8 +446,8 @@ end
 
 "`zzpdpltc`: true if `p` is on the correct side of the equator for the latitude cone of `lat`."
 @inline function _dsk_pdpltc(re::Float64, f::Float64, p::Vec3{Float64}, lat::Float64)
-    re > 0.0 || _dsk_throw(:valueoutofrange, "the equatorial radius must be positive")
-    f < 1.0 || _dsk_throw(:valueoutofrange, "the flattening coefficient must be less than 1")
+    re > 0.0 || _throw_spice(:valueoutofrange, "the equatorial radius must be positive")
+    f < 1.0 || _throw_spice(:valueoutofrange, "the flattening coefficient must be less than 1")
     f <= 0.0 && return true
     p[3] * lat >= 0.0 && return true
     abs(lat) >= 0.01 && return false
@@ -470,17 +468,17 @@ end
 """
 function _dsk_nrmlon(inmin::Float64, inmax::Float64, tol::Float64)
     pi2 = _TWOPI
-    tol < 0.0 && _dsk_throw(:valueoutofrange, "the longitude tolerance must be non-negative")
-    (inmin < -pi2 - tol || inmin > pi2 + tol) && _dsk_throw(
+    tol < 0.0 && _throw_spice(:valueoutofrange, "the longitude tolerance must be non-negative")
+    (inmin < -pi2 - tol || inmin > pi2 + tol) && _throw_spice(
         :valueoutofrange,
         "the longitude lower bound is outside [-2*pi, 2*pi]"
     )
-    inmin == inmax && _dsk_throw(
+    inmin == inmax && _throw_spice(
         :zeroboundsextent,
         "the longitude lower bound is equal to the upper bound"
     )
     outmin = max(-pi2, min(inmin, pi2))
-    (inmax < -pi2 - tol || inmax > pi2 + tol) && _dsk_throw(
+    (inmax < -pi2 - tol || inmax > pi2 + tol) && _throw_spice(
         :valueoutofrange,
         "the longitude upper bound is outside [-2*pi, 2*pi]"
     )
@@ -495,7 +493,7 @@ function _dsk_nrmlon(inmin::Float64, inmax::Float64, tol::Float64)
     end
     delta = outmax - outmin
     delta > pi2 + tol && (outmax = outmax - pi2)
-    outmin == outmax && _dsk_throw(
+    outmin == outmax && _throw_spice(
         :zeroboundsextent,
         "after adjustment the longitude bounds are equal"
     )
@@ -554,8 +552,8 @@ coordinate that is not tested. Requires `margin >= 0`.
 function _dsk_inlat(p::Vec3{Float64}, b::NTuple{6, Float64}, margin::Float64, exclud::Int)
     r, lon, lat = _m_reclat(p, false)
     margin == 0.0 && return _dsk_inlat0(r, lon, lat, b, exclud)
-    margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
-    (0 <= exclud <= 3) || _dsk_throw(:valueoutofrange, "EXCLUD must be in the range 0:3")
+    margin < 0.0 && _throw_spice(:valueoutofrange, "the margin must be non-negative")
+    (0 <= exclud <= 3) || _throw_spice(:valueoutofrange, "EXCLUD must be in the range 0:3")
     (r <= margin && b[5] <= margin) && return true
     if exclud != 3
         aminr = max(0.0, b[5] * (1.0 - margin))
@@ -579,10 +577,10 @@ end
 
 "`zzinrec`: true if `p` is inside the rectangular volume element `b` expanded by `margin` times each edge length."
 function _dsk_inrec(p::Vec3{Float64}, b::NTuple{6, Float64}, margin::Float64, exclud::Int)
-    margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
-    (0 <= exclud <= 3) || _dsk_throw(:indexoutofrange, "EXCLUD must be in the range 0:3")
+    margin < 0.0 && _throw_spice(:valueoutofrange, "the margin must be non-negative")
+    (0 <= exclud <= 3) || _throw_spice(:indexoutofrange, "EXCLUD must be in the range 0:3")
     for i in 1:3
-        b[2i] - b[2i - 1] < 0.0 && _dsk_throw(
+        b[2i] - b[2i - 1] < 0.0 && _throw_spice(
             :boundsoutoforder,
             "the bounds of a rectangular volume element are out of order"
         )
@@ -638,10 +636,10 @@ function _dsk_inpdt(
         p::Vec3{Float64}, b::NTuple{6, Float64}, re::Float64, f::Float64,
         margin::Float64, exclud::Int
     )
-    (0 <= exclud <= 3) || _dsk_throw(:valueoutofrange, "EXCLUD must be in the range 0:3")
+    (0 <= exclud <= 3) || _throw_spice(:valueoutofrange, "EXCLUD must be in the range 0:3")
     _, lon, pcnlat = _m_reclat(p, false)
     margin == 0.0 && return _dsk_inpdt0(p, lon, b, re, f, exclud)
-    margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
+    margin < 0.0 && _throw_spice(:valueoutofrange, "the margin must be non-negative")
     if exclud != 2
         amnlat = max(-_HALFPI - 1.0e-12, b[3] - margin)
         amxlat = min(_HALFPI + 1.0e-12, b[4] + margin)
@@ -676,11 +674,11 @@ end
         p::Vec3{Float64}, corsys::Int, corpar::NTuple{10, Float64},
         bounds::NTuple{6, Float64}, margin::Float64, exclud::Int
     )
-    margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
+    margin < 0.0 && _throw_spice(:valueoutofrange, "the margin must be non-negative")
     corsys == 1 && return _dsk_inlat(p, bounds, margin, exclud)
     corsys == 4 && return _dsk_inpdt(p, bounds, corpar[1], corpar[2], margin, exclud)
     corsys == 3 && return _dsk_inrec(p, bounds, margin, exclud)
-    _dsk_throw(:notsupported, "the coordinate system code $corsys is not recognized")
+    _throw_spice(:notsupported, "the coordinate system code $corsys is not recognized")
 end
 
 # ---------------------------------------------------------------------------------------
@@ -698,9 +696,9 @@ function _dsk_raybox(
         vertex::Vec3{Float64}, raydir::Vec3{Float64}, boxori::Vec3{Float64},
         extent::Vec3{Float64}
     )
-    _m_iszero(raydir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
+    _m_iszero(raydir) && _throw_spice(:zerovector, "the ray direction is the zero vector")
     udir = _m_hat(raydir)
-    min(min(extent[1], extent[2]), extent[3]) <= 0.0 && _dsk_throw(
+    min(min(extent[1], extent[2]), extent[3]) <= 0.0 && _throw_spice(
         :valueoutofrange,
         "all box extents must be strictly positive"
     )
@@ -920,7 +918,7 @@ function _dsk_rytrec(
         margin::Float64
     )
     l = Vec3{Float64}(b[2] - b[1], b[4] - b[3], b[6] - b[5])
-    (l[1] > 0.0 && l[2] > 0.0 && l[3] > 0.0) || _dsk_throw(
+    (l[1] > 0.0 && l[2] > 0.0 && l[3] > 0.0) || _throw_spice(
         :badcoordbounds,
         "the bounds of a rectangular volume element are out of order"
     )
@@ -995,8 +993,8 @@ function _dsk_rytpdt(
         vertex::Vec3{Float64}, raydir::Vec3{Float64}, b::NTuple{6, Float64},
         re::Float64, f::Float64, margin::Float64
     )
-    margin < 0.0 && _dsk_throw(:valueoutofrange, "the margin must be non-negative")
-    _m_iszero(raydir) && _dsk_throw(:zerovector, "the ray direction is the zero vector")
+    margin < 0.0 && _throw_spice(:valueoutofrange, "the margin must be non-negative")
+    _m_iszero(raydir) && _throw_spice(:zerovector, "the ray direction is the zero vector")
     _dsk_inpdt(vertex, b, re, f, margin, 0) && return 1, vertex
     rp = re * (1.0 - f)
     minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
@@ -1113,9 +1111,9 @@ function _dsk_box_lonlat(b::NTuple{6, Float64})
     minlon = b[1]
     maxlon = b[2]
     maxlon <= minlon && (maxlon += _TWOPI)
-    maxlon <= minlon && _dsk_throw(:badlongituderange, "the longitude bounds are out of order")
-    b[3] > b[4] && _dsk_throw(:badlatitudebounds, "the latitude bounds are out of order")
-    (b[3] < -_HALFPI - 1.0e-12 || b[4] > _HALFPI + 1.0e-12) && _dsk_throw(
+    maxlon <= minlon && _throw_spice(:badlongituderange, "the longitude bounds are out of order")
+    b[3] > b[4] && _throw_spice(:badlatitudebounds, "the latitude bounds are out of order")
+    (b[3] < -_HALFPI - 1.0e-12 || b[4] > _HALFPI + 1.0e-12) && _throw_spice(
         :badlatituderange, "a latitude bound is outside [-pi/2, pi/2]"
     )
     return minlon, maxlon, max(b[3], -_HALFPI), min(b[4], _HALFPI)
@@ -1152,7 +1150,7 @@ function _dsk_recbox(b::NTuple{6, Float64})
     l1 = b[2] - b[1]
     l2 = b[4] - b[3]
     l3 = b[6] - b[5]
-    (l1 > 0.0 && l2 > 0.0 && l3 > 0.0) || _dsk_throw(
+    (l1 > 0.0 && l2 > 0.0 && l3 > 0.0) || _throw_spice(
         :boundsoutoforder,
         "the bounds of a rectangular volume element are out of order"
     )
@@ -1162,8 +1160,8 @@ end
 
 "`zzpdtbox`: center and radius of a sphere that contains the planetodetic volume element `b` on the spheroid `re`, `f`."
 function _dsk_pdtbox(b::NTuple{6, Float64}, re::Float64, f::Float64)
-    re > 0.0 || _dsk_throw(:valueoutofrange, "the equatorial radius must be positive")
-    f < 1.0 || _dsk_throw(:valueoutofrange, "the flattening coefficient must be less than 1")
+    re > 0.0 || _throw_spice(:valueoutofrange, "the equatorial radius must be positive")
+    f < 1.0 || _throw_spice(:valueoutofrange, "the flattening coefficient must be less than 1")
     minlon, maxlon, minlat, maxlat = _dsk_box_lonlat(b)
     minalt = b[5]
     maxalt = b[6]
@@ -1197,7 +1195,7 @@ function _dsk_segbox(d::DSKDescr)
     d.corsys == 1 && return _dsk_latbox(b)
     d.corsys == 3 && return _dsk_recbox(b)
     d.corsys == 4 && return _dsk_pdtbox(b, d.corpar[1], d.corpar[2])
-    _dsk_throw(:notsupported, "the coordinate system $(d.corsys) is not supported")
+    _throw_spice(:notsupported, "the coordinate system $(d.corsys) is not supported")
 end
 
 # ---------------------------------------------------------------------------------------
@@ -1512,7 +1510,7 @@ end
 
 "Vertex `vid` of the segment; requires `1 <= vid <= nv` (else `SpiceError(:indexoutofrange)`)."
 @inline function _dsk_vertex(dps::Vector{Float64}, s::DSKSegment, vid::Integer)
-    (1 <= vid <= s.hdr.nv) || _dsk_throw(
+    (1 <= vid <= s.hdr.nv) || _throw_spice(
         :indexoutofrange,
         "the vertex number $vid is not in the range 1:$(s.hdr.nv)"
     )
@@ -1522,7 +1520,7 @@ end
 
 "The three vertex numbers of plate `plid`; requires `1 <= plid <= np` (else `SpiceError(:indexoutofrange)`)."
 @inline function _dsk_plate(ints::Vector{Int32}, s::DSKSegment, plid::Integer)
-    (1 <= plid <= s.hdr.np) || _dsk_throw(
+    (1 <= plid <= s.hdr.np) || _throw_spice(
         :indexoutofrange,
         "the plate number $plid is not in the range 1:$(s.hdr.np)"
     )
@@ -1565,12 +1563,12 @@ function _dsk_x02(
         tols::DSKTolerances, vertex::Vec3{Float64}, raydir::Vec3{Float64}
     )
     nohit = (0, _DSK_ORIGIN, false)
-    _m_iszero(raydir) && _dsk_throw(:rayiszerovector, "the ray direction is the zero vector")
+    _m_iszero(raydir) && _throw_spice(:rayiszerovector, "the ray direction is the zero vector")
     udir = _m_hat(raydir)
     hdr = seg.hdr
     dsc = seg.dskdsc
     voxsiz = hdr.voxsiz
-    voxsiz == 0.0 && _dsk_throw(:invalidvalue, "the voxel size of a DSK segment is zero")
+    voxsiz == 0.0 && _throw_spice(:invalidvalue, "the voxel size of a DSK segment is zero")
     cgscal = hdr.cgscal                  # >= 1, checked by `_dsk_segment`
     vg1, vg2, vg3 = hdr.vgrext
     grdext = Vec3{Float64}(vg1 * voxsiz, vg2 * voxsiz, vg3 * voxsiz)
@@ -1579,7 +1577,7 @@ function _dsk_x02(
     cg2 = vg2 ÷ cgscal
     cgscl2 = cgscal * cgscal
     ncgr = _dsk_ncgr(hdr)
-    ncgr > _DSK_MAXCGR && _dsk_throw(:gridtoolarge, "the coarse voxel grid of a DSK segment is too large")
+    ncgr > _DSK_MAXCGR && _throw_spice(:gridtoolarge, "the coarse voxel grid of a DSK segment is too large")
     xpdfrc = tols.xfract
     greedm = tols.sgreed
     xtol = xpdfrc * max(max(abs(grdext[1]), abs(grdext[2])), abs(grdext[3]))
@@ -1592,14 +1590,14 @@ function _dsk_x02(
     )
 
     # --- the set-up of `xdda` ------------------------------------------------------
-    min(min(vg1, vg2), vg3) < 1 && _dsk_throw(
+    min(min(vg1, vg2), vg3) < 1 && _throw_spice(
         :baddimensions,
         "the voxel grid dimensions of a DSK segment must be strictly positive"
     )
     vg = (vg1, vg2, vg3)
     for i in 1:3
         (coord[i] < vg[i] * -1.0e-12 || coord[i] > vg[i] * 1.0000000000010001) &&
-            _dsk_throw(:vertexnotingrid, "the ray vertex is outside of the voxel grid")
+            _throw_spice(:vertexnotingrid, "the ray vertex is outside of the voxel grid")
     end
     ax1 = 1
     maxcmp = abs(udir[1])
@@ -1824,7 +1822,7 @@ function _dsk_walk_plates(ints::Vector{Int32}, w::_DSKWalk, state, first::Bool, 
     return nc, nref
 end
 
-@noinline _dsk_plate_buffer_full(n::Int) = _dsk_throw(
+@noinline _dsk_plate_buffer_full(n::Int) = _throw_spice(
     :arraytoosmall,
     "the plate lists of a group of voxels of the ray have $n entries; the plate " *
         "buffer of dskx02 has room for $_DSK_PLTBUF"
@@ -1900,7 +1898,7 @@ end
     return ic1, ic2, ic3, ax2err, ax3err
 end
 
-@noinline _dsk_xdda_full() = _dsk_throw(
+@noinline _dsk_xdda_full() = _throw_spice(
     :arraytoosmall,
     "the ray has $_DSK_MAXVXL voxels or more in the voxel grid of a DSK segment; " *
         "the voxel list of xdda has room for $_DSK_MAXVXL"
@@ -1976,10 +1974,10 @@ end
 
 # `zzdsksba` signals SPICE(NOFRAMEINFO) and `zzdsksph` SPICE(NOFRAMEDATA) for a segment
 # frame that `frinfo` does not know.
-@noinline _dsk_no_frame_info(id::Integer) = _dsk_throw(
+@noinline _dsk_no_frame_info(id::Integer) = _throw_spice(
     :noframeinfo, "could not look up frame info for segment frame having ID $id"
 )
-@noinline _dsk_no_frame_data(id::Integer) = _dsk_throw(
+@noinline _dsk_no_frame_data(id::Integer) = _throw_spice(
     :noframedata, "no frame specification was found for frame ID $id"
 )
 
@@ -2009,7 +2007,7 @@ end
     )
 end
 
-@noinline _dsk_no_body_segments(bodyid::Integer) = _dsk_throw(
+@noinline _dsk_no_body_segments(bodyid::Integer) = _throw_spice(
     :nodsksegments, "the input segment " *
         "list was empty. This may be due to no DSKs containing data for body $bodyid " *
         "having been loaded."
@@ -2084,7 +2082,7 @@ function _dsk_sph(ks::KernelSet, segs::Vector{DSKSegment}, bodyid::Int32, srflst
             sgminr = max(_m_norm(boxctr) - boxrad, 0.0)
             sgmaxr = _m_norm(boxctr) + boxrad
         else
-            _dsk_throw(:notsupported, "the coordinate system $(dsc.corsys) is not supported")
+            _throw_spice(:notsupported, "the coordinate system $(dsc.corsys) is not supported")
         end
         ctrmnr = offmag <= sgminr ? sgminr - offmag : offmag >= sgmaxr ? offmag - sgmaxr : 0.0
         sgmaxr += offmag
@@ -2152,11 +2150,11 @@ frame `fixfid` that come before the first segment of another frame, as in CSPICE
         elseif multfr
             segvtx = vertex
         end
-        _m_iszero(segdir) && _dsk_throw(:zerovector, "the direction of the line is the zero vector")
+        _m_iszero(segdir) && _throw_spice(:zerovector, "the direction of the line is the zero vector")
         _m_nplnpt(segvtx, segdir, seg.boxctr, false)[2] <= seg.boxrad || continue
         nxpts, xpt = _dsk_rytelt(segvtx, segdir, dsc, sgmarg)
         nxpts > 0 || continue
-        nhit == _DSK_MAXHIT && _dsk_throw(
+        nhit == _DSK_MAXHIT && _throw_spice(
             :buffertoosmall,
             "too many segments were hit by the input ray; the buffer size is $_DSK_MAXHIT"
         )
@@ -2232,7 +2230,7 @@ of the next segment. `xpt` is in the frame `fixfid`, and `segidx` indexes `segs`
         if dsc.frmcde != fixfid
             _, segvtx, segdir = _dsk_to_segment(ks, dsc, fixfid, et, vertex, raydir)
         end
-        dsc.dtype == 2 || _dsk_throw(
+        dsc.dtype == 2 || _throw_spice(
             :typenotsupported,
             "the DSK data type $(dsc.dtype) is not supported"
         )
@@ -2357,7 +2355,7 @@ function _dsk_ptpl02(
     none = (0, _DSK_ORIGIN, _DSK_ORIGIN, _DSK_ORIGIN, false)
     hdr = seg.hdr
     dsc = seg.dskdsc
-    hdr.voxsiz == 0.0 && _dsk_throw(:valueoutofrange, "the voxel size of a DSK segment is zero")
+    hdr.voxsiz == 0.0 && _throw_spice(:valueoutofrange, "the voxel size of a DSK segment is zero")
     isnan(seg.boxrad) && _dsk_segbox(dsc)
     ptsrfm = tols.ptmemm
     limit = ptsrfm * seg.boxrad
@@ -2428,10 +2426,10 @@ function _dsk_bun(
     nhit = 0
     for seg in segs                      # invariant: nhit counts the hit segments before `seg`
         _dsk_bun_inside(ks, tols, seg, bodyid, srflst, et, fixfid, point)[1] || continue
-        nhit == _DSK_MAXHIT && _dsk_throw(:toomanyhits, "too many segments contain the input point")
+        nhit == _DSK_MAXHIT && _throw_spice(:toomanyhits, "too many segments contain the input point")
         nhit += 1
     end
-    nhit == 0 && _dsk_throw(
+    nhit == 0 && _throw_spice(
         :pointnotinsegment,
         "the input point is not contained in any DSK segment for body $bodyid"
     )
@@ -2439,14 +2437,14 @@ function _dsk_bun(
         inside, xform, segpt = _dsk_bun_inside(ks, tols, seg, bodyid, srflst, et, fixfid, point)
         inside || continue
         dsc = seg.dskdsc
-        dsc.dtype == 2 || _dsk_throw(:notsupported, "the DSK data type $(dsc.dtype) is not supported")
+        dsc.dtype == 2 || _throw_spice(:notsupported, "the DSK data type $(dsc.dtype) is not supported")
         file = ks.dskfiles[seg.file]
         _, p1, p2, p3, xfnd = _dsk_ptpl02(file.ints, file.dps, seg, tols, segpt)
         xfnd || continue
         normal = _m_hat(_dsk_pltnrm(p1, p2, p3))
         return dsc.frmcde != fixfid ? _m_mtxv(xform, normal) : normal
     end
-    _dsk_throw(
+    _throw_spice(
         :pointoffsurface, "the input point is not on the surface defined by the " *
             "DSK segments for body $bodyid"
     )

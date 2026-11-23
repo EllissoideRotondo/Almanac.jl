@@ -9,8 +9,6 @@
 "Largest number of boundary vectors that `fovray` and `fovtrg` accept (`MAXVRT` of CSPICE)."
 const _GEO_MAXVRT = 10000
 
-@noinline _geo_fov_error(kind::Symbol, msg) = throw(SpiceError(kind, msg))
-
 @inline _geo_fov_var(ks::KernelSet, instid::Integer, suffix::String) =
     get(ks.pool, string("INS", instid, suffix), nothing)
 
@@ -23,11 +21,11 @@ end
 
 function _geo_fov_vec3(ks::KernelSet, instid::Integer, suffix::String, missing::Symbol, bad::Symbol)
     v = _geo_fov_var(ks, instid, suffix)
-    v === nothing && _geo_fov_error(
+    v === nothing && _throw_spice(
         missing,
         "the variable INS$(instid)$suffix is not in the kernel pool"
     )
-    (v isa Vector{Float64} && length(v) == 3) || _geo_fov_error(
+    (v isa Vector{Float64} && length(v) == 3) || _throw_spice(
         bad,
         "the variable INS$(instid)$suffix must hold 3 numbers"
     )
@@ -40,11 +38,11 @@ function _geo_fov_angle(
         units::Union{Nothing, String}
     )
     v = _geo_fov_var(ks, instid, suffix)
-    (v isa Vector{Float64} && !isempty(v)) || _geo_fov_error(
+    (v isa Vector{Float64} && !isempty(v)) || _throw_spice(
         missing,
         "the variable INS$(instid)$suffix is not in the kernel pool"
     )
-    units === nothing && _geo_fov_error(
+    units === nothing && _throw_spice(
         :unitsmissing,
         "the variable INS$(instid)_FOV_ANGLE_UNITS is not in the kernel pool"
     )
@@ -53,22 +51,22 @@ end
 
 function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
     frame = _geo_fov_text(ks, instid, "_FOV_FRAME")
-    frame === nothing && _geo_fov_error(
+    frame === nothing && _throw_spice(
         :framemissing,
         "the variable INS$(instid)_FOV_FRAME is not in the kernel pool"
     )
     shape0 = _geo_fov_text(ks, instid, "_FOV_SHAPE")
-    shape0 === nothing && _geo_fov_error(
+    shape0 === nothing && _throw_spice(
         :shapemissing,
         "the variable INS$(instid)_FOV_SHAPE is not in the kernel pool"
     )
     shape = uppercase(String(strip(shape0, ' ')))
-    shape in ("CIRCLE", "ELLIPSE", "POLYGON", "RECTANGLE") || _geo_fov_error(
+    shape in ("CIRCLE", "ELLIPSE", "POLYGON", "RECTANGLE") || _throw_spice(
         :shapenotsupported,
         "the field of view shape <$shape0> of the instrument $instid is not supported"
     )
     bsight = _geo_fov_vec3(ks, instid, "_BORESIGHT", :boresightmissing, :badboresightspec)
-    _m_iszero(bsight) && _geo_fov_error(
+    _m_iszero(bsight) && _throw_spice(
         :zeroboresight,
         "the boresight of the instrument $instid is the zero vector"
     )
@@ -78,16 +76,16 @@ function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
     if _eqstr(spec, "CORNERS")
         v = _geo_fov_var(ks, instid, "_FOV_BOUNDARY")
         v === nothing && (v = _geo_fov_var(ks, instid, "_FOV_BOUNDARY_CORNERS"))
-        v isa Vector{Float64} || _geo_fov_error(
+        v isa Vector{Float64} || _throw_spice(
             :boundarymissing,
             "the variable INS$(instid)_FOV_BOUNDARY is not in the kernel pool"
         )
         n = length(v)
-        n > 3 * room && _geo_fov_error(
+        n > 3 * room && _throw_spice(
             :boundarytoobig,
             "the boundary of the instrument $instid has $n components; the room is for $(3 * room)"
         )
-        n % 3 == 0 || _geo_fov_error(
+        n % 3 == 0 || _throw_spice(
             :badboundary,
             "the boundary of the instrument $instid has $n components, which is not a multiple of 3"
         )
@@ -96,7 +94,7 @@ function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
             (shape == "CIRCLE" && n != 1) || (shape == "ELLIPSE" && n != 2) ||
                 (shape == "RECTANGLE" && n != 4) || (shape == "POLYGON" && n < 3)
         ) &&
-            _geo_fov_error(
+            _throw_spice(
             :badboundary,
             "the boundary of the instrument $instid has $n vectors, which is not valid for the shape $shape"
         )
@@ -104,35 +102,35 @@ function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
             @inbounds push!(bounds, Vec3{Float64}(v[3i - 2], v[3i - 1], v[3i]))
         end
     elseif _eqstr(spec, "ANGLES")
-        shape == "POLYGON" && _geo_fov_error(
+        shape == "POLYGON" && _throw_spice(
             :shapenotsupported,
             "the shape POLYGON of the instrument $instid cannot be given by angles"
         )
         refvec = _geo_fov_vec3(ks, instid, "_FOV_REF_VECTOR", :refvectormissing, :badrefvectorspec)
         normal = _m_cross(bsight, refvec)
-        _m_norm(normal) == 0.0 && _geo_fov_error(
+        _m_norm(normal) == 0.0 && _throw_spice(
             :badrefvectorspec,
             "the reference vector of the instrument $instid is parallel to the boresight"
         )
         units = _geo_fov_text(ks, instid, "_FOV_ANGLE_UNITS")
         refang = _geo_fov_angle(ks, instid, "_FOV_REF_ANGLE", :refanglemissing, units)
         if shape == "CIRCLE"
-            room < 1 && _geo_fov_error(:boundarytoobig, "the room is $room; 1 vector is returned")
+            room < 1 && _throw_spice(:boundarytoobig, "the room is $room; 1 vector is returned")
             push!(bounds, _m_vrotv(bsight, normal, refang))
         elseif shape == "ELLIPSE"
             crsang = _geo_fov_angle(ks, instid, "_FOV_CROSS_ANGLE", :crossanglemissing, units)
-            room < 2 && _geo_fov_error(:boundarytoobig, "the room is $room; 2 vectors are returned")
+            room < 2 && _throw_spice(:boundarytoobig, "the room is $room; 2 vectors are returned")
             push!(bounds, _m_vrotv(bsight, normal, refang))
             push!(bounds, _m_vrotv(bsight, _m_cross(bsight, normal), crsang))
         else
             crsang = _geo_fov_angle(ks, instid, "_FOV_CROSS_ANGLE", :crossanglemissing, units)
-            room < 4 && _geo_fov_error(:boundarytoobig, "the room is $room; 4 vectors are returned")
+            room < 4 && _throw_spice(:boundarytoobig, "the room is $room; 4 vectors are returned")
             b, bmag = _m_unorm(bsight)
             b1 = _m_hat(_m_perp(refvec, bsight, true))
             b2 = _m_cross(b, b1)
             sinran, cosran = sincos(refang)
             sincan, coscan = sincos(crsang)
-            (cosran < 1.0e-15 || coscan < 1.0e-15) && _geo_fov_error(
+            (cosran < 1.0e-15 || coscan < 1.0e-15) && _throw_spice(
                 :badboundary,
                 "the half angles of the instrument $instid must be below 90 degrees"
             )
@@ -145,7 +143,7 @@ function _geo_getfov(ks::KernelSet, instid::Integer, room::Integer)
             end
         end
     else
-        _geo_fov_error(
+        _throw_spice(
             :unsupportedspec,
             "the field of view specification <$spec> of the instrument $instid is not supported"
         )
@@ -229,7 +227,7 @@ vector is less than 90 degrees from it. Throws `SpiceError` (`:invalidcount`,
 """
 function _geo_hullax(bounds::Vector{Vec3{Float64}})
     n = length(bounds)
-    n < 3 && _geo_fov_error(:invalidcount, "a polygonal field of view needs 3 boundary vectors; it has $n")
+    n < 3 && _throw_spice(:invalidcount, "a polygonal field of view needs 3 boundary vectors; it has $n")
     halfpi = _HALFPI
     found = false
     xidx = 0
@@ -262,7 +260,7 @@ function _geo_hullax(bounds::Vector{Vec3{Float64}})
     while i <= n && !found
         next = i == n ? 1 : i + 1
         cp = _m_cross(bounds[i], bounds[next])
-        _m_iszero(cp) && _geo_fov_error(
+        _m_iszero(cp) && _throw_spice(
             :degeneratecase,
             "the boundary vectors $i and $next of the field of view are parallel"
         )
@@ -284,7 +282,7 @@ function _geo_hullax(bounds::Vector{Vec3{Float64}})
             found || (i += 1)
         end
     end
-    found || _geo_fov_error(
+    found || _throw_spice(
         :facenotfound,
         "no side of the field of view has all boundary vectors on one side"
     )
@@ -301,18 +299,18 @@ function _geo_hullax(bounds::Vector{Vec3{Float64}})
         lon < minlon && (minlon = lon)
         lon > maxlon && (maxlon = lon)
     end
-    minlon < 2.0e-12 && _geo_fov_error(
+    minlon < 2.0e-12 && _throw_spice(
         :notsupported,
         "the field of view is not convex enough: the smallest longitude is $minlon"
     )
-    maxlon > Float64(pi) - 2.0e-12 && _geo_fov_error(
+    maxlon > Float64(pi) - 2.0e-12 && _throw_spice(
         :fovtoowide,
         "the field of view is too wide: the largest longitude is $maxlon"
     )
     delta = Float64(pi) - maxlon
     axis = _m_hat(_m_vrotv(yvec, zvec, -delta / 2))
     for k in 1:n
-        vsep(bounds[k], axis) > halfpi - 1.0e-12 && _geo_fov_error(
+        vsep(bounds[k], axis) > halfpi - 1.0e-12 && _throw_spice(
             :fovtoowide,
             "the boundary vector $k is 90 degrees or more from the axis of the field of view"
         )
@@ -323,9 +321,9 @@ end
 "`zzfovaxi`: the unit axis of the polygonal field of view `bounds`."
 function _geo_fovaxi(bounds::Vector{Vec3{Float64}})
     n = length(bounds)
-    n < 3 && _geo_fov_error(:invalidcount, "a polygonal field of view needs 3 boundary vectors; it has $n")
+    n < 3 && _throw_spice(:invalidcount, "a polygonal field of view needs 3 boundary vectors; it has $n")
     for i in 1:n
-        _m_iszero(_m_cross(bounds[i], bounds[i == n ? 1 : i + 1])) && _geo_fov_error(
+        _m_iszero(_m_cross(bounds[i], bounds[i == n ? 1 : i + 1])) && _throw_spice(
             :degeneratecase, "the boundary vectors $i and $(i == n ? 1 : i + 1) are parallel"
         )
     end
@@ -349,7 +347,7 @@ end
 "`zzwind2d`: the winding number of the planar polygon `poly` about `point`."
 function _geo_wind2d(poly::Vector{SVector{2, Float64}}, point::SVector{2, Float64})
     n = length(poly)
-    n < 3 && _geo_fov_error(:degeneratecase, "a polygon needs 3 vertices; it has $n")
+    n < 3 && _throw_spice(:degeneratecase, "a polygon needs 3 vertices; it has $n")
     atotal = 0.0
     rvec = poly[1] - point
     for i in 2:(n + 1)                       # invariant: atotal is the angle swept by the sides 1 .. i-2
@@ -373,7 +371,7 @@ function _geo_wind_rays(plane::SpicePlane, bounds::Vector{Vec3{Float64}}, point:
     origin = zero(Vec3{Float64})
     @inline function vertex(i)
         nx, v = inrypl(origin, bounds[i], plane)
-        nx == 1 || _geo_fov_error(
+        nx == 1 || _throw_spice(
             :bug, "the boundary vector $i does not meet the plane " *
                 "normal to the axis of the field of view, as SPICE(BUG) of CSPICE"
         )
@@ -383,7 +381,7 @@ function _geo_wind_rays(plane::SpicePlane, bounds::Vector{Vec3{Float64}}, point:
         vertex(i)
     end
     normal, _ = pl2nvc(plane)
-    _m_iszero(normal) && _geo_fov_error(:zerovector, "the normal of the plane is the zero vector")
+    _m_iszero(normal) && _throw_spice(:zerovector, "the normal of the plane is the zero vector")
     v1 = vertex(1)
     _m_dot(normal, v1) < 0.0 && (normal = -normal)
     rvec = _m_perp(v1 - point, normal, true)
@@ -412,7 +410,7 @@ function _geo_elvupy(
     n = length(bounds)
     center, gv1, gv2 = el2cgv(ellips)
     smajor, sminor = _m_saelgv(gv1, gv2)
-    (_m_iszero(smajor) || _m_iszero(sminor)) && _geo_fov_error(
+    (_m_iszero(smajor) || _m_iszero(sminor)) && _throw_spice(
         :zerovector,
         "the limb of the target is a degenerate ellipse"
     )
@@ -424,9 +422,9 @@ function _geo_elvupy(
     ellscl = _m_cgv2el(center, smajor, sminor)
     a = _m_norm(smajor)
     b = _m_norm(sminor)
-    b == 0.0 && _geo_fov_error(:degeneratecase, "the limb of the target is a degenerate ellipse")
-    _m_iszero(axis) && _geo_fov_error(:zerovector, "the axis of the field of view is the zero vector")
-    (n < 3 || n > _GEO_MAXVRT) && _geo_fov_error(
+    b == 0.0 && _throw_spice(:degeneratecase, "the limb of the target is a degenerate ellipse")
+    _m_iszero(axis) && _throw_spice(:zerovector, "the axis of the field of view is the zero vector")
+    (n < 3 || n > _GEO_MAXVRT) && _throw_spice(
         :invalidcount,
         "the field of view has $n boundary vectors; the range is 3:$_GEO_MAXVRT"
     )
@@ -434,18 +432,18 @@ function _geo_elvupy(
     pasize = 0.0
     for i in 1:n                         # invariant: pasize is the largest angle of 1 .. i-1
         asep = vsep(axis, bounds[i])
-        asep >= Float64(pi) / 2 && _geo_fov_error(
+        asep >= Float64(pi) / 2 && _throw_spice(
             :invalidfov,
             "the boundary vector $i is 90 degrees or more from the axis of the field of view"
         )
         pasize = max(pasize, asep)
         j = i < n ? i + 1 : 1
         if _m_iszero(_m_ucrss(bounds[i], bounds[j]))
-            (_m_iszero(bounds[i]) || _m_iszero(bounds[j])) && _geo_fov_error(
+            (_m_iszero(bounds[i]) || _m_iszero(bounds[j])) && _throw_spice(
                 :zerovector,
                 "a boundary vector of the field of view is the zero vector"
             )
-            _geo_fov_error(:invalidfov, "the boundary vectors $i and $j are parallel")
+            _throw_spice(:invalidfov, "the boundary vectors $i and $j are parallel")
         end
     end
     d = _m_norm(center - apex)
@@ -498,12 +496,12 @@ function _geo_fov_raycorr(abcorr::AbstractString)
     _eqstr(abcorr, "NONE") && return false, false
     _eqstr(abcorr, "S") && return true, false
     _eqstr(abcorr, "XS") && return true, true
-    _geo_fov_error(
+    _throw_spice(
         :invalidoption, "the aberration correction <$abcorr> is not valid " *
             "for a ray: use NONE, S or XS"
     )
 end
-_geo_fov_raycorr(c::Aberration) = c.uselt ? _geo_fov_error(
+_geo_fov_raycorr(c::Aberration) = c.uselt ? _throw_spice(
         :invalidoption,
         "a correction with light time is not valid for a ray"
     ) : (c.stellar, c.transmit)
@@ -513,7 +511,7 @@ function _geo_fov_tshape(tshape::AbstractString)
     s == "POINT" && return _GEO_FOV_POINT
     s == "ELLIPSOID" && return _GEO_FOV_ELLIPSOID
     s == "RAY" && return _GEO_FOV_RAY
-    _geo_fov_error(:invalidshape, "the target shape <$tshape> is not valid: use POINT or ELLIPSOID")
+    _throw_spice(:invalidshape, "the target shape <$tshape> is not valid: use POINT or ELLIPSOID")
 end
 
 """
@@ -585,7 +583,7 @@ function _geo_fov_polygon(
     fpol = Vector{SVector{2, Float64}}(undef, length(bounds))
     for i in eachindex(bounds)           # invariant: fpol[1:i-1] are the vertices in the plane
         nx, p = inrypl(zero(Vec3{Float64}), bounds[i], plane)
-        nx == 1 || _geo_fov_error(
+        nx == 1 || _throw_spice(
             :degeneratecase,
             "the boundary vector $i does not meet the plane of the field of view"
         )
@@ -620,17 +618,17 @@ function _geo_fov_setup(
     end
     tfid = Int32(0)
     if uray || etrg
-        (tframe isa AbstractString && all(==(' '), tframe)) && _geo_fov_error(
+        (tframe isa AbstractString && all(==(' '), tframe)) && _throw_spice(
             :invalidframe,
             "the name of the reference frame is blank"
         )
         tfid = _frame_code(ks, tframe)
-        tfid == Int32(0) && _geo_fov_error(
+        tfid == Int32(0) && _throw_spice(
             :invalidframe,
             "the reference frame $tframe is not recognized"
         )
         center, _, found = _geo_frinfo(ks, tfid)
-        found || _geo_fov_error(
+        found || _throw_spice(
             :frameinfonotfound,
             "no data are available for the reference frame $tframe"
         )
@@ -647,7 +645,7 @@ function _geo_fov_setup(
     trad = etrg ? _geo_radii(ks, targ) : (0.0, 0.0, 0.0)
     rdir = zero(Vec3{Float64})
     if uray
-        _m_iszero(raydir) && _geo_fov_error(:zerovector, "the direction of the ray is the zero vector")
+        _m_iszero(raydir) && _throw_spice(:zerovector, "the direction of the ray is the zero vector")
         rdir = _m_hat(raydir)
     end
     instid = _body_id(ks, inst, "instrument")
@@ -660,7 +658,7 @@ function _geo_fov_setup(
     for b in bounds                      # invariant: arad is the largest angle so far
         arad = max(arad, vsep(b, faxi))
     end
-    arad > _HALFPI - 1.0e-6 && _geo_fov_error(
+    arad > _HALFPI - 1.0e-6 && _throw_spice(
         :fovtoowide,
         "the field of view of the instrument $inst has the angular radius $(rad2deg(arad)) " *
             "degrees; the limit is $(rad2deg(_HALFPI - 1.0e-6)) degrees"
@@ -675,15 +673,15 @@ function _geo_fov_setup(
     if shape == "ELLIPSE" || (circle && etrg)
         b2 = circle ? _m_vrotv(bounds[1], faxi, _HALFPI) : bounds[2]
         nx, p = inrypl(origin, bounds[1], plane)
-        nx == 1 || _geo_fov_error(:degeneratecase, "the first boundary vector does not meet the plane of the field of view")
+        nx == 1 || _throw_spice(:degeneratecase, "the first boundary vector does not meet the plane of the field of view")
         semi1 = p - fvct
         xmag1 = _m_norm(semi1)
-        xmag1 == 0.0 && _geo_fov_error(:degeneratecase, "the field of view has a zero semi-axis")
+        xmag1 == 0.0 && _throw_spice(:degeneratecase, "the field of view has a zero semi-axis")
         nx, p = inrypl(origin, b2, plane)
-        nx == 1 || _geo_fov_error(:degeneratecase, "the second boundary vector does not meet the plane of the field of view")
+        nx == 1 || _throw_spice(:degeneratecase, "the second boundary vector does not meet the plane of the field of view")
         semi2 = p - fvct
         xmag2 = _m_norm(semi2)
-        xmag2 == 0.0 && _geo_fov_error(:degeneratecase, "the field of view has a zero semi-axis")
+        xmag2 == 0.0 && _throw_spice(:degeneratecase, "the field of view has a zero semi-axis")
     end
     edct = zero(Vec3{Float64})
     fsmx = zero(Mat3{Float64})
@@ -760,7 +758,7 @@ function _geo_fov_visible(v::_GeoFov, et::Float64)
     sep > v.arad && return false
     nx, xpt = inrypl(origin, dir, v.plane)
     nx == 0 && return false
-    nx == 1 || _geo_fov_error(:bug, "the ray is in the plane of the field of view")
+    nx == 1 || _throw_spice(:bug, "the ray is in the plane of the field of view")
     fovpt = xpt - v.fvct
     if !v.poly
         c1 = _m_dot(fovpt, v.semi1) / v.xmag1
@@ -846,7 +844,7 @@ function fovtrg(
         ks::KernelSet, inst::NameOrID, target::NameOrID, tshape::AbstractString,
         tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID, et::Real
     )
-    _eqstr(tshape, "RAY") && _geo_fov_error(
+    _eqstr(tshape, "RAY") && _throw_spice(
         :invalidoption,
         "the target shape RAY is not valid in fovtrg; use fovray"
     )

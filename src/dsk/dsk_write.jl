@@ -51,8 +51,8 @@ dskcls(h::DASHandle, optmiz::Bool = true) = dascls(h)
 
 "`zzinilnk`: all `maxp` pointers of `a[poff+1:...]` become -1 and the cell count 0."
 function _dsk_inilnk!(a::Vector{Int}, poff::Int, maxp::Int, maxc::Int)
-    maxp < 1 && _dsk_throw(:valueoutofrange, "the pointer array size MAXP = $maxp; it must be >= 1")
-    maxc < maxp && _dsk_throw(
+    maxp < 1 && _throw_spice(:valueoutofrange, "the pointer array size MAXP = $maxp; it must be >= 1")
+    maxc < maxp && _throw_spice(
         :valueoutofrange, "Cell array size MAXC = $maxc; size must " *
             "be at least as large as pointer array size $maxp."
     )
@@ -65,12 +65,12 @@ end
         a::Vector{Int}, poff::Int, aval::Int, bval::Int, maxa::Int,
         cval::Vector{Int32}, cnext::Vector{Int32}, ncell::Int
     )
-    (1 <= aval <= maxa) || _dsk_throw(
+    (1 <= aval <= maxa) || _throw_spice(
         :avaloutofrange,
         "the index AVAL is out of range: AVAL = $aval, MAXA = $maxa"
     )
     ncell += 1
-    ncell > length(cval) && _dsk_throw(
+    ncell > length(cval) && _throw_spice(
         :cellarraytoosmall,
         "NCELL is larger than the cell array size $(length(cval))"
     )
@@ -92,7 +92,7 @@ function _dsk_untngl!(
         a::Vector{Int}, poff::Int, nptr::Int, cval::Vector{Int32},
         cnext::Vector{Int32}, loff::Int, maxb::Int
     )
-    nptr > length(cval) && _dsk_throw(
+    nptr > length(cval) && _throw_spice(
         :barraytoosmall,
         "the input pointer array is larger than the cell array"
     )
@@ -100,7 +100,7 @@ function _dsk_untngl!(
     ptrdex = 0
     for aval in 1:nptr
         # invariant: a[loff+1:loff+ptrdex] holds the lists of the pointers 1 .. aval-1
-        (ptrdex + 2 > maxb || room <= 0) && _dsk_throw(
+        (ptrdex + 2 > maxb || room <= 0) && _throw_spice(
             :barraytoosmall,
             "the output list array of size $maxb is too small"
         )
@@ -109,18 +109,18 @@ function _dsk_untngl!(
         a[loff + ptrdex + 2] = 0
         ptr = a[poff + aval]
         while ptr != -1
-            (ptr < -1 || ptr == 0 || ptr > length(cval)) && _dsk_throw(
+            (ptr < -1 || ptr == 0 || ptr > length(cval)) && _throw_spice(
                 :pointeroutofrange,
                 "the cell pointer $ptr is out of range"
             )
             nb += 1
-            nb > room && _dsk_throw(
+            nb > room && _throw_spice(
                 :barraytoosmall,
                 "the output list array of size $maxb is too small"
             )
             # CSPICE stores the count in the first element after the walk; an element
             # count of `room` then does not fit, which the check above reports.
-            loff + ptrdex + 1 + nb <= length(a) || _dsk_throw(
+            loff + ptrdex + 1 + nb <= length(a) || _throw_spice(
                 :barraytoosmall,
                 "the output list array of size $maxb is too small"
             )
@@ -148,7 +148,7 @@ end
         voxsiz::Float64, voxori::NTuple{3, Float64}, nvox::NTuple{3, Int},
         xyz::NTuple{3, Float64}
     )
-    voxsiz <= 0.0 && _dsk_throw(:nonpositivevalue, "the voxel size must be positive")
+    voxsiz <= 0.0 && _throw_spice(:nonpositivevalue, "the voxel size must be positive")
     t1 = (xyz[1] - voxori[1]) / voxsiz
     (t1 < 0.0 || t1 > nvox[1]) && return nothing
     t2 = (xyz[2] - voxori[2]) / voxsiz
@@ -176,11 +176,11 @@ function _dsk_mkspin!(
         pf::Vector{Int}, np::Int, voxscl::Float64, cgscal::Int, maxptr::Int, maxvxl::Int,
         cval::Vector{Int32}, cnext::Vector{Int32}
     )
-    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(
+    (np < 1 || np > _DSK_MAXPLT) && _throw_spice(
         :valueoutofrange,
         "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
     )
-    cgscal < 1 && _dsk_throw(:valueoutofrange, "the coarse voxel scale = $cgscal; it must be >= 1")
+    cgscal < 1 && _throw_spice(:valueoutofrange, "the coarse voxel scale = $cgscal; it must be >= 1")
     avext = 0.0
     xmin = ymin = zmin = _DSK_DPMAX
     xmax = ymax = zmax = -_DSK_DPMAX
@@ -219,7 +219,7 @@ function _dsk_mkspin!(
     zvmax = _dnint(zmax / cvxsiz + 1.0)
     voxori = (xvmin * cvxsiz, yvmin * cvxsiz, zvmin * cvxsiz)
     spans = (xvmax - xvmin, yvmax - yvmin, zvmax - zvmin)
-    all(s -> isfinite(s) && s * cgscal <= _DSK_MAXVOX, spans) || _dsk_throw(
+    all(s -> isfinite(s) && s * cgscal <= _DSK_MAXVOX, spans) || _throw_spice(
         :valueoutofrange,
         "the fine voxel grid is too large or not defined; check the fine voxel scale"
     )
@@ -228,22 +228,22 @@ function _dsk_mkspin!(
     nz = Int(_dnint(spans[3])) * cgscal
     nvox = (nx, ny, nz)
     nvxtot = nx * ny * nz
-    nvxtot > _DSK_MAXVOX && _dsk_throw(
+    nvxtot > _DSK_MAXVOX && _throw_spice(
         :valueoutofrange,
         "the fine voxel count NVXTOT = $nvxtot; the count must be in the range 1:$_DSK_MAXVOX"
     )
-    cgscal > Float64(nvxtot)^0.33333333333333331 && _dsk_throw(
+    cgscal > Float64(nvxtot)^0.33333333333333331 && _throw_spice(
         :valueoutofrange,
         "the coarse voxel scale = $cgscal; the scale must be in the range " *
             "1:NVXTOT**(1/3), where NVXTOT = $nvxtot"
     )
     npcg = cgscal * (cgscal * cgscal)
-    nvxtot % npcg == 0 || _dsk_throw(
+    nvxtot % npcg == 0 || _throw_spice(
         :incompatiblescale,
         "the total number of voxels, $nvxtot, is not a multiple of the coarse scale cubed"
     )
     ncgflg = nvxtot ÷ npcg
-    ncgflg > _DSK_MAXCGR && _dsk_throw(
+    ncgflg > _DSK_MAXCGR && _throw_spice(
         :coarsegridoverflow, "the number of coarse voxels " *
             "$ncgflg is larger than the maximum $_DSK_MAXCGR"
     )
@@ -269,7 +269,7 @@ function _dsk_mkspin!(
         bzmax = _m_brcktd(max(max(vf[k1], vf[k2]), vf[k3]) + mdltol, xe[5], xe[6])
         gmin = _dsk_getvox(voxsiz, voxori, nvox, (bxmin, bymin, bzmin))
         gmax = _dsk_getvox(voxsiz, voxori, nvox, (bxmax, bymax, bzmax))
-        (gmin === nothing || gmax === nothing) && _dsk_throw(
+        (gmin === nothing || gmax === nothing) && _throw_spice(
             :bug,
             "a plate of the model is outside of the voxel grid"
         )
@@ -298,7 +298,7 @@ end
 function _dsk_check_plates(plates, nv::Int)
     for i in 1:_dsk_count3(plates), k in _dsk_plate3(plates, i)
         # invariant: the vertex numbers before k are valid
-        (1 <= k <= nv) || _dsk_throw(
+        (1 <= k <= nv) || _throw_spice(
             :badvertexindex,
             "a vertex index of plate $i was $k; vertex indices must be in the range 1:$nv"
         )
@@ -354,32 +354,32 @@ function dskmi2(
     )
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
-    finscl <= 0.0 && _dsk_throw(:badfinevoxelscale, "the fine voxel scale = $finscl; the scale must be positive")
-    corscl < 1 && _dsk_throw(:badcoarsevoxscale, "the coarse voxel scale = $corscl; the scale must be >= 1")
-    (nv < 3 || nv > _DSK_MAXVRT) && _dsk_throw(
+    finscl <= 0.0 && _throw_spice(:badfinevoxelscale, "the fine voxel scale = $finscl; the scale must be positive")
+    corscl < 1 && _throw_spice(:badcoarsevoxscale, "the coarse voxel scale = $corscl; the scale must be >= 1")
+    (nv < 3 || nv > _DSK_MAXVRT) && _throw_spice(
         :badvertexcount,
         "the vertex count NV = $nv; the count must be in the range 3:$_DSK_MAXVRT"
     )
-    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(
+    (np < 1 || np > _DSK_MAXPLT) && _throw_spice(
         :badplatecount,
         "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
     )
-    worksz < np + 1 && _dsk_throw(
+    worksz < np + 1 && _throw_spice(
         :workspacetoosmall,
         "the workspace size = $worksz; the size is too small to hold all voxel-plate associations"
     )
-    voxpsz < 1 && _dsk_throw(
+    voxpsz < 1 && _throw_spice(
         :ptrarraytoosmall, "the voxel-plate pointer array size = $voxpsz; " *
             "the size is too small to be compatible with the coarse voxel scale $corscl"
     )
-    voxlsz < np + 1 && _dsk_throw(
+    voxlsz < np + 1 && _throw_spice(
         :platelisttoosmall,
         "the voxel-plate list array size = $voxlsz; the size is too small"
     )
     reqsiz = _DSK_IXIFIX + Int(voxpsz) + Int(voxlsz)
     vtxlsz = makvtl ? nv + 3 * np : 0
     makvtl && (reqsiz += nv + vtxlsz)
-    spxisz < reqsiz && _dsk_throw(
+    spxisz < reqsiz && _throw_spice(
         :intindextoosmall,
         "the integer spatial index size = $spxisz; the required size is >= $reqsiz"
     )
@@ -406,7 +406,7 @@ function dskmi2(
     if makvtl
         vtpoff = vxlidx - 1 + spaixi[6]
         vtloff = vtpoff + nv
-        worksz < 3 * np && _dsk_throw(
+        worksz < 3 * np && _throw_spice(
             :cellarraytoosmall,
             "the cell array size = $worksz; the size must be >= 3*NP, which is $(3 * np)"
         )
@@ -428,8 +428,8 @@ end
 
 "`recgeo`: the altitude of `rectan` above the spheroid with the equatorial radius `re` and the flattening `f`."
 function _dsk_altitude(rectan::Vec3{Float64}, re::Float64, f::Float64)
-    re <= 0.0 && _dsk_throw(:valueoutofrange, "the equatorial radius was $re; it must be positive")
-    f >= 1.0 && _dsk_throw(:valueoutofrange, "the flattening coefficient was $f; it must be less than 1")
+    re <= 0.0 && _throw_spice(:valueoutofrange, "the equatorial radius was $re; it must be positive")
+    f >= 1.0 && _throw_spice(:valueoutofrange, "the flattening coefficient was $f; it must be less than 1")
     return nearpt(rectan, re, re, re - f * re)[2]
 end
 
@@ -499,7 +499,7 @@ function dskrb2(vrtces, plates, corsys::Integer, corpar)
         end
         return mn, mx
     end
-    _dsk_throw(:notsupported, "the coordinate system code $corsys is not recognized")
+    _throw_spice(:notsupported, "the coordinate system code $corsys is not recognized")
 end
 
 # ---------------------------------------------------------------------------------------
@@ -605,8 +605,8 @@ function dskw02(
         vrtces, plates, spaixd, spaixi
     )
     frmcde = frame isa Integer ? Int(frame) : _namfrm(kernelset(ctx), frame)
-    frmcde == 0 && _dsk_throw(:frameidnotfound, "the frame name $frame could not be mapped to an ID code")
-    last <= first && _dsk_throw(
+    frmcde == 0 && _throw_spice(:frameidnotfound, "the frame name $frame could not be mapped to an ID code")
+    last <= first && _throw_spice(
         :timesoutoforder,
         "the segment stop time $last must be greater than the start time $first"
     )
@@ -618,21 +618,21 @@ function dskw02(
     twopi_ = _TWOPI
     hpi = _HALFPI
     if corsys == 1 || corsys == 4
-        mn1 == mx1 && _dsk_throw(
+        mn1 == mx1 && _throw_spice(
             :zeroboundsextent,
             "the minimum and maximum longitude were both $(rad2deg(mn1)) degrees"
         )
-        (mn1 < -twopi_ - 1.0e-12 || mn1 > twopi_ - 1.0e-12) && _dsk_throw(
+        (mn1 < -twopi_ - 1.0e-12 || mn1 > twopi_ - 1.0e-12) && _throw_spice(
             :valueoutofrange,
             "the minimum longitude $(rad2deg(mn1)) degrees is out of range"
         )
-        (mx1 < -twopi_ + 1.0e-12 || mx1 > twopi_ + 1.0e-12) && _dsk_throw(
+        (mx1 < -twopi_ + 1.0e-12 || mx1 > twopi_ + 1.0e-12) && _throw_spice(
             :valueoutofrange,
             "the maximum longitude $(rad2deg(mx1)) degrees is out of range"
         )
         b1 = max(-twopi_, mn1)
         b2 = min(twopi_, mx1)
-        (mx1 > mn1 + twopi_ + 1.0e-12 || mx1 < mn1 - twopi_ - 1.0e-12) && _dsk_throw(
+        (mx1 > mn1 + twopi_ + 1.0e-12 || mx1 < mn1 - twopi_ - 1.0e-12) && _throw_spice(
             :invalidlonextent, "the longitude bounds $(rad2deg(mn1)):$(rad2deg(mx1)) " *
                 "degrees are too far apart"
         )
@@ -641,54 +641,54 @@ function dskw02(
         elseif b2 < b1
             b2 = max(b2, b1 - twopi_)
         end
-        (b2 == b1 || b2 == b1 - twopi_) && _dsk_throw(
+        (b2 == b1 || b2 == b1 - twopi_) && _throw_spice(
             :zeroboundsextent,
             "the longitude bounds have zero extent after adjustment"
         )
-        (mn2 < -hpi - 1.0e-12 || mn2 > hpi - 1.0e-12) && _dsk_throw(
+        (mn2 < -hpi - 1.0e-12 || mn2 > hpi - 1.0e-12) && _throw_spice(
             :valueoutofrange,
             "the minimum latitude $(rad2deg(mn2)) degrees is out of range"
         )
-        (mx2 < -hpi + 1.0e-12 || mx2 > hpi + 1.0e-12) && _dsk_throw(
+        (mx2 < -hpi + 1.0e-12 || mx2 > hpi + 1.0e-12) && _throw_spice(
             :valueoutofrange,
             "the maximum latitude $(rad2deg(mx2)) degrees is out of range"
         )
         b3 = max(-hpi, mn2)
         b4 = min(hpi, mx2)
-        mx2 < mn2 && _dsk_throw(:boundsoutoforder, "the latitude bounds are out of order")
+        mx2 < mn2 && _throw_spice(:boundsoutoforder, "the latitude bounds are out of order")
         if corsys == 1
-            mn3 < 0.0 && _dsk_throw(:valueoutofrange, "the radius lower bound must be non-negative but was $mn3")
-            mx3 <= 0.0 && _dsk_throw(:valueoutofrange, "the radius upper bound must be strictly positive but was $mx3")
+            mn3 < 0.0 && _throw_spice(:valueoutofrange, "the radius lower bound must be non-negative but was $mn3")
+            mx3 <= 0.0 && _throw_spice(:valueoutofrange, "the radius upper bound must be strictly positive but was $mx3")
         else
-            par[1] <= 0.0 && _dsk_throw(:valueoutofrange, "the equatorial radius was $(par[1]); it must be positive")
-            par[2] >= 1.0 && _dsk_throw(:valueoutofrange, "the flattening coefficient was $(par[2]); it must be less than 1")
+            par[1] <= 0.0 && _throw_spice(:valueoutofrange, "the equatorial radius was $(par[1]); it must be positive")
+            par[2] >= 1.0 && _throw_spice(:valueoutofrange, "the flattening coefficient was $(par[2]); it must be less than 1")
             a = par[1]
             b = a * (1 - par[2])
             altlim = max(-(a * a) / b, -(b * b) / a)
-            mn3 <= altlim && _dsk_throw(
+            mn3 <= altlim && _throw_spice(
                 :degeneratesurface,
                 "the minimum altitude $mn3 is not above the limit $altlim"
             )
         end
-        mx3 < mn3 && _dsk_throw(:boundsoutoforder, "the bounds of the third coordinate are out of order")
-        mx3 == mn3 && _dsk_throw(:zeroboundsextent, "the bounds of the third coordinate are equal")
+        mx3 < mn3 && _throw_spice(:boundsoutoforder, "the bounds of the third coordinate are out of order")
+        mx3 == mn3 && _throw_spice(:zeroboundsextent, "the bounds of the third coordinate are equal")
     elseif corsys == 3
-        (mx1 <= mn1 || mx2 <= mn2 || mx3 <= mn3) && _dsk_throw(
+        (mx1 <= mn1 || mx2 <= mn2 || mx3 <= mn3) && _throw_spice(
             :boundsoutoforder,
             "the rectangular coordinate bounds must be strictly increasing"
         )
         b1, b2, b3, b4 = mn1, mx1, mn2, mx2
     else
-        _dsk_throw(:notsupported, "the coordinate system code $corsys is not recognized")
+        _throw_spice(:notsupported, "the coordinate system code $corsys is not recognized")
     end
-    (dclass < 1 || dclass > 2) && _dsk_throw(:notsupported, "the data class code $dclass is not recognized")
+    (dclass < 1 || dclass > 2) && _throw_spice(:notsupported, "the data class code $dclass is not recognized")
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
-    (nv < 1 || nv > _DSK_MAXVRT) && _dsk_throw(
+    (nv < 1 || nv > _DSK_MAXVRT) && _throw_spice(
         :valueoutofrange,
         "the vertex count NV = $nv; the count must be in the range 1:$_DSK_MAXVRT"
     )
-    (np < 1 || np > _DSK_MAXPLT) && _dsk_throw(
+    (np < 1 || np > _DSK_MAXPLT) && _throw_spice(
         :valueoutofrange,
         "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
     )
@@ -707,27 +707,27 @@ function dskw02(
     voxnpl = Int(spaixi[ix0 + 6])
     vtxnpl = Int(spaixi[ix0 + 7])
     for i in 1:3
-        (vgrext[i] < 1 || vgrext[i] > _DSK_MAXVOX) && _dsk_throw(
+        (vgrext[i] < 1 || vgrext[i] > _DSK_MAXVOX) && _throw_spice(
             :valueoutofrange,
             "the voxel grid extents are $vgrext; all must be in the range 1:$_DSK_MAXVOX"
         )
     end
     nvxtot = vgrext[1] * vgrext[2] * vgrext[3]
-    nvxtot > _DSK_MAXVOX && _dsk_throw(
+    nvxtot > _DSK_MAXVOX && _throw_spice(
         :valueoutofrange,
         "the fine voxel count NVXTOT = $nvxtot; the count must be in the range 1:$_DSK_MAXVOX"
     )
-    (cgrscl < 1 || cgrscl > Float64(nvxtot)^0.33333333333333331) && _dsk_throw(
+    (cgrscl < 1 || cgrscl > Float64(nvxtot)^0.33333333333333331) && _throw_spice(
         :valueoutofrange,
         "the coarse voxel scale = $cgrscl; the scale must be in the range 1:NVXTOT**(1/3)"
     )
     npcg = cgrscl * (cgrscl * cgrscl)
-    nvxtot % npcg == 0 || _dsk_throw(
+    nvxtot % npcg == 0 || _throw_spice(
         :incompatiblescale,
         "the total number of voxels, $nvxtot, is not a multiple of the coarse scale cubed"
     )
     ncgr = nvxtot ÷ npcg
-    (ncgr < 1 || ncgr > _DSK_MAXCGR) && _dsk_throw(
+    (ncgr < 1 || ncgr > _DSK_MAXCGR) && _throw_spice(
         :valueoutofrange,
         "the coarse voxel count = $ncgr; the count must be in the range 1:$_DSK_MAXCGR"
     )

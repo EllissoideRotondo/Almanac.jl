@@ -1372,7 +1372,7 @@ end
     (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, Float64), lev, def, et
 )
 
-@noinline _dyn_throw_def(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
+@noinline _throw_spice(kind::Symbol, msg::AbstractString) = throw(SpiceError(kind, msg))
 @noinline _dyn_throw_missing(id) = throw(
     SpiceError(
         :framedatanotfound,
@@ -1406,7 +1406,7 @@ for the frames of the other classes.
 @noinline function _dyn_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
     def = get(ks.dyn, fd.id, nothing)
     def === nothing && _dyn_throw_missing(fd.id)
-    def.errkind === :none || _dyn_throw_def(def.errkind, def.errmsg)
+    def.errkind === :none || _throw_spice(def.errkind, def.errmsg)
     inner = ks.inner
     inner === nothing && _dyn_throw_depth(def)
     S = _ck_numtype(mode, T)

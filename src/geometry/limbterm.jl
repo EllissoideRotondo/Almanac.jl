@@ -125,8 +125,6 @@ umbral (`1`) and the penumbral (`2`) terminator it is tangent to the source sphe
     return _geo_rayx(ks, sh, apex, raydir, et)
 end
 
-@noinline _geo_tan_error(kind::Symbol, msg) = throw(SpiceError(kind, msg))
-
 """
     _geo_tangnt!(ends, pts, ks, sh, curve, srcrad, et, plnvec, axis, schstp, soltol) -> Int
 
@@ -149,21 +147,21 @@ function _geo_tangnt!(
     empty!(pts)
     refvec = curve == 2 ? _m_vrotv(plnvec, axis, Float64(pi)) : plnvec
     # `zztanini`
-    _m_iszero(axis) && _geo_tan_error(:zerovector, "the axis vector is the zero vector")
-    _m_iszero(refvec) && _geo_tan_error(:zerovector, "the reference vector is the zero vector")
-    (curve != 0 && srcrad <= 0.0) && _geo_tan_error(
+    _m_iszero(axis) && _throw_spice(:zerovector, "the axis vector is the zero vector")
+    _m_iszero(refvec) && _throw_spice(:zerovector, "the reference vector is the zero vector")
+    (curve != 0 && srcrad <= 0.0) && _throw_spice(
         :badsourceradius,
         "the radius of the source must be positive; it is $srcrad"
     )
     nrml = _m_cross(axis, refvec)
-    _m_iszero(nrml) && _geo_tan_error(
+    _m_iszero(nrml) && _throw_spice(
         :degeneratecase,
         "the reference vector and the axis vector are parallel"
     )
     nrml = _m_hat(nrml)
     uaxis = _m_hat(axis)
     maxrad = sh.maxrad * 1.001
-    maxrad <= 0.0 && _geo_tan_error(:invalidradius, "the radius of the bounding sphere is not positive")
+    maxrad <= 0.0 && _throw_spice(:invalidradius, "the radius of the bounding sphere is not positive")
     r = _m_norm(axis)
     pival = Float64(pi)
     if curve == 0
@@ -171,7 +169,7 @@ function _geo_tangnt!(
         r > maxrad * 1.0000000000010001 && (start = pival - _geo_dasine(maxrad / r, 1.0e-12))
         finish = pival
     else
-        srcrad + maxrad > r && _geo_tan_error(
+        srcrad + maxrad > r && _throw_spice(
             :objectstooclose,
             "the source touches the bounding sphere of the target"
         )
@@ -185,18 +183,18 @@ function _geo_tangnt!(
         end
     end
     # `zztanslv`
-    soltol <= 0.0 && _geo_tan_error(:invalidtolerance, "the tolerance must be positive; it is $soltol")
-    start > finish && _geo_tan_error(:boundsoutoforder, "the search bounds are out of order")
+    soltol <= 0.0 && _throw_spice(:invalidtolerance, "the tolerance must be positive; it is $soltol")
+    start > finish && _throw_spice(:boundsoutoforder, "the search bounds are out of order")
     (
         start - soltol == start || start + soltol == start || finish - soltol == finish ||
             finish + soltol == finish
-    ) && _geo_tan_error(
+    ) && _throw_spice(
         :invalidtolerance,
         "the tolerance $soltol is too small for the search bounds"
     )
-    schstp <= 0.0 && _geo_tan_error(:invalidconststep, "the search step must be positive; it is $schstp")
+    schstp <= 0.0 && _throw_spice(:invalidconststep, "the search step must be positive; it is $schstp")
     maxmag = max(abs(start), abs(finish))
-    maxmag + schstp == maxmag && _geo_tan_error(
+    maxmag + schstp == maxmag && _throw_spice(
         :invalidconststep,
         "the search step $schstp is too small for the search bounds"
     )
@@ -236,7 +234,7 @@ function _geo_tangnt!(
             # invariant: the state is `state1` at x1 and the other state at x2
             while x2 - x1 > soltol
                 nloop += 1
-                nloop >= 1000 && _geo_tan_error(
+                nloop >= 1000 && _throw_spice(
                     :noconvergence,
                     "the bisection of a state change did not converge in 1000 steps"
                 )
@@ -253,11 +251,11 @@ function _geo_tangnt!(
             end
             trnstn = max(x1, min(x2, (x1 + x2) * 0.5))
             instat = !instat
-            length(ends) >= _GEO_MAXWIN && _geo_tan_error(
+            length(ends) >= _GEO_MAXWIN && _throw_spice(
                 :arraytoosmall,
                 "more than $_GEO_MAXWIN tangent points were found on one cutting half plane"
             )
-            prvset || _geo_tan_error(
+            prvset || _throw_spice(
                 :bug, "a state change was found without a surface " *
                     "intercept in its refinement, as SPICE(BUG) of CSPICE"
             )

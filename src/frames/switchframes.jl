@@ -144,7 +144,7 @@ definition. No allocation.
 function _sw_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
     sw = get(ks.switch, fd.id, nothing)
     sw === nothing && _sw_throw_missing(fd.id)
-    sw.errkind === :none || _dyn_throw_def(sw.errkind, sw.errmsg)
+    sw.errkind === :none || _throw_spice(sw.errkind, sw.errmsg)
     S = _ck_numtype(mode, T)
     t = primal(et)
     for i in length(sw.bases):-1:1      # invariant: no base above i was selected
