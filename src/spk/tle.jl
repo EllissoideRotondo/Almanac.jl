@@ -13,9 +13,6 @@
 #
 # `getelm` and `evsgp4` need the leap seconds of a kernel set, as in CSPICE.
 
-# The eight geophysical constants in the order of `geophs` are the items J2, J3, J4,
-# KE, QO, SO, ER and AE of `BODY399_<name>`.
-
 "The terms of a two-line element set in the order in which `zzgetelm` parses them: name, line, first and last character."
 const _TLE_TERMS = (
     ("YEAR", 1, 19, 20), ("DAY", 1, 21, 32), ("NDT20", 1, 34, 43),

@@ -58,10 +58,8 @@ include("types/conic.jl")       # types 5, 15, 17
 
 Position (km) and velocity (km/s) of a segment of one of the types of this file at
 `et`, by the algorithm of CSPICE; other types throw `SpiceError(:spktypenotsupp)`.
-
-Contract: as `spk_eval`. Every discrete decision uses `primal(et)`, so with a
-series-valued `et` both results are the series of the CSPICE position and velocity
-functions of the selected record or window.
+With a `Taylor` epoch both results are series of the CSPICE functions of the record
+or window that `primal(et)` selects.
 """
 function _spk_state(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     dtype = seg.dtype
@@ -105,7 +103,6 @@ end
 
 `spk_eval` for the types of this file: order 0 is the CSPICE position, order 1 the
 CSPICE velocity, and order k >= 2 is derivative k-1 of the CSPICE velocity function.
-No allocation; the epoch type must be a bits type.
 """
 @inline _spk_more(data::Vector{Float64}, seg::Segment, et::T, ::Val{0}) where {T <: Real} =
     (_spk_state(data, seg, et)[1],)

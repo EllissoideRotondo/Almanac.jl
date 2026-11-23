@@ -33,10 +33,8 @@ end
     _t10_record(data, seg, x::Float64) -> (geophs, elems1, elems2)
 
 The eight geophysical constants and the two element sets that `spkr10` selects for
-the epoch `x`: the reference epoch closest to `x` is found (`sgfrvi` with the index
-type 4; of two epochs at the same distance the later one), and the sets are the
-ones that bracket `x`. Before the first epoch and after the last one both sets are
-the end set. Postcondition: `elems1[10] <= elems2[10]`.
+the epoch `x`: the sets that bracket `x`, in time order. Before the first epoch and
+after the last one both sets are the end set.
 """
 function _t10_record(data::Vector{Float64}, seg::Segment, x::Float64)
     lay = _t10_layout(data, seg)
@@ -170,11 +168,9 @@ term of the weight rate; outside the element epochs it is the propagation of the
 set. The state is then turned to J2000 with the state matrix of `_t10_teme`, so the
 velocity has the term of the frame rate.
 
-Contract: `seg` is a type 10 descriptor and `data` the array of its file; `l` holds
-the leap seconds of the kernel set. Discrete decisions use `primal(et)`. With a plain
-epoch the result is the CSPICE state to rounding level. Throws `SpiceError(:baddaf)`
-for a segment that is not a valid type 10 segment and the errors of `_sgp4_init` and
-`_sgp4_eval`. No allocation.
+`l` holds the leap seconds of the kernel set. Throws `SpiceError(:baddaf)` for a
+segment that is not a valid type 10 segment, and the errors of `_sgp4_init` and
+`_sgp4_eval`.
 """
 function _t10_state(data::Vector{Float64}, seg::Segment, et::T, l::LeapSeconds) where {T <: Real}
     geophs, e1, e2 = _t10_record(data, seg, primal(et))
@@ -212,7 +208,7 @@ end
 
 Jet of a type 10 segment in the convention of `spk_eval`: order 0 is the CSPICE
 position, order 1 the CSPICE velocity, and order k >= 2 is derivative k-1 of the
-CSPICE velocity function, from a Taylor epoch. No allocation.
+CSPICE velocity function, from a Taylor epoch.
 """
 @inline _t10_jet(
     l::LeapSeconds, data::Vector{Float64}, seg::Segment, et::T,
@@ -233,10 +229,8 @@ end
 """
     _t10_needs_lsk(seg) -> Union{}
 
-The type 10 branch of `spk_eval`: throws `SpiceError(:notsupported)`, because
-`spk_eval` has no kernel set and a type 10 segment needs the leap seconds. A query
-through a kernel set (`spkezr`, `spkgeo`, `spkder`, ...) evaluates the segment with
-`_t10_jet`.
+Throw `SpiceError(:notsupported)`: the type 10 branch of `spk_eval`, which has no
+kernel set and so no leap seconds.
 """
 @noinline _t10_needs_lsk(seg::Segment) = throw(
     SpiceError(

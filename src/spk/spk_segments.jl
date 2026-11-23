@@ -53,7 +53,8 @@ end
 
 Return `(file, descr, ident)` for the loaded SPK segment of the highest priority for
 `body` at `et`, as
-[`spksfs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksfs_c.html), or `nothing` if no loaded segment of `body` covers `et`.
+[`spksfs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksfs_c.html),
+or `nothing` if no loaded segment of `body` covers `et`.
 
 - `file`: the path of the loaded SPK file as it was passed to [`furnsh`](@ref) (the
   path that [`kdata`](@ref) gives). It takes the place of the handle of CSPICE: pass it
@@ -63,7 +64,7 @@ Return `(file, descr, ident)` for the loaded SPK segment of the highest priority
 
 `et` is in seconds past J2000 TDB. A segment covers its first and its last epoch. The
 priority is that of CSPICE: a file loaded later comes first, and in one file a later
-segment comes first. `nothing` takes the place of the `found` flag of CSPICE.
+segment comes first.
 
 Throws `SpiceError(:noloadedfiles)` if no SPK file is loaded.
 
@@ -277,9 +278,8 @@ Throws `SpiceError`:
 - `:spkrectoolarge` for a segment of type 14 whose series have more than 32
   coefficients, as CSPICE, whose record buffer has 198 doubles;
 - `:timeoutofbounds` if `et` is outside the coverage of `descr`, for every type but 15
-  and 17, whose single set of elements is propagated to `et` as CSPICE does. CSPICE
-  signals this for the types 8, 9, 12, 13, 14, 18 and 19 only; for the other types it
-  extrapolates, reads data outside the segment, or stops the process (type 1);
+  and 17, whose single set of elements is propagated to `et` as CSPICE does (CSPICE
+  checks only some types; see [Defects of CSPICE N0067](@ref));
 - `:dafnegaddr`, `:dafbeggtend` or `:filereadfailed` if the addresses of `descr` are not
   a range in the file;
 - the kinds of the evaluators of CSPICE for the values that they refuse: type 5 those of

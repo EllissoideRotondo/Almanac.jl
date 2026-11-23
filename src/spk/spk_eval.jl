@@ -18,9 +18,8 @@ end
 """
     find_segment(list::SegmentList, et::Float64) -> Int
 
-The index of the first segment of `list` with `t0 <= et <= t1` (0 for none), as
-`find_segment` of the vector `list.segs`, from a binary search of the index of
-`list` when it has one.
+Return `find_segment(list.segs, et)`, from a binary search of the bound index of `list`
+when it has one.
 """
 function find_segment(list::SegmentList, et::Float64)
     b = list.bounds
@@ -90,12 +89,9 @@ Sum of the three Chebyshev series whose coefficients are `data[a:a+ncoef-1]`,
 `data[a+ncoef:a+2ncoef-1]` and `data[a+2ncoef:a+3ncoef-1]` at `s`, with derivatives
 to order N; derivative `m` is divided `m` times by `radius` (`d s / d t = 1 / radius`).
 
-Requires `ncoef >= 1` and `a + 3ncoef - 1 <= length(data)` (not checked). One pass
-over the coefficients, highest first, with the Clenshaw recurrence. For a plain epoch
-the value and the first derivative come from the same floating-point operations as in
-`chbval_` and `chbint_` of CSPICE, so they are equal to the last bit; this matters for
-an angle of many turns, where a difference of one unit in the last place is large
-relative to the reduced angle.
+Requires `ncoef >= 1` and `a + 3ncoef - 1 <= length(data)` (not checked). For a plain
+epoch the value and the first derivative are equal to the last bit to those of `chbval_`
+and `chbint_` of CSPICE, which matters for an angle of many turns.
 """
 @inline function _cheb3(
         data::AbstractVector{<:Real}, a::Int, ncoef::Int, s::T, radius::Real,
@@ -163,20 +159,6 @@ end
     )
 )
 
-"""
-    spk_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
-
-Position (km) of `seg.target` relative to `seg.center` in frame `seg.frame` at `et`
-and its time derivatives to order N; order 1 is the velocity that CSPICE returns.
-
-Contract: `seg` is a descriptor from `open_daf` and `data` is the array of the same
-file; `seg.t0 <= primal(et) <= seg.t1` (not checked: outside it the nearest record is
-extrapolated). Type 2: all orders are derivatives of the position series. Type 3:
-order 0 comes from the position series and order `k >= 1` is derivative `k-1` of the
-velocity series. Types 1, 5, 8, 9, 12 to 15 and 17 to 21 (`spk_more.jl`): order
-`k >= 2` is derivative `k-1` of the velocity function that CSPICE defines. Type 10
-and unknown types throw `SpiceError(:spktypenotsupp, ...)`. No allocation.
-"""
 @noinline _empty_segment(seg) = throw(
     SpiceError(
         :baddaf,
@@ -184,6 +166,19 @@ and unknown types throw `SpiceError(:spktypenotsupp, ...)`. No allocation.
     )
 )
 
+"""
+    spk_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
+
+Position (km) of `seg.target` relative to `seg.center` in frame `seg.frame` at `et`,
+with its time derivatives to order N; order 1 is the velocity that CSPICE returns.
+
+`data` is the array of the file of `seg`. The bounds `seg.t0 <= primal(et) <= seg.t1`
+are not checked: outside them the nearest record is extrapolated. For type 3, order
+`k >= 1` is derivative `k-1` of the velocity series; for the types with a velocity
+function (1, 5, 8, 9, 12 to 15, 17 to 21), order `k >= 2` is derivative `k-1` of that
+function. Type 10, which needs the leap seconds (`_t10_jet`), throws
+`SpiceError(:notsupported)`, and an unknown type `SpiceError(:spktypenotsupp)`.
+"""
 @inline function spk_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T <: Real, N}
     seg.eaddr < seg.baddr && _empty_segment(seg)
     if seg.dtype == 2
@@ -199,15 +194,13 @@ end
     pck_eval(data::Vector{Float64}, seg::Segment, et::T, ::Val{N}) -> NTuple{N+1,Vec3{T}}
 
 Euler angles (radians) of a binary PCK type 2, 3 or 20 segment at `et` and their time
-derivatives to order N, as `pcke02` of CSPICE gives them (for type 3 the derivatives of
-the angle series, not its angular velocity series; see `_pck03_state`).
+derivatives to order N, as `pcke02` of CSPICE gives them; for type 3 these are the
+derivatives of the angle series, not its angular velocity series (see `_pck03_state`).
 
-Contract: `seg` is a PCK descriptor from `open_daf` and `data` is the array of the
-same file; `seg.t0 <= primal(et) <= seg.t1` (not checked). The three components are
-the stored 3-1-3 angles `(PHI, DELTA, W)` with `PHI = RA + pi/2` and
-`DELTA = pi/2 - DEC`, so the matrix from the inertial frame `seg.frame` to the body
-frame is `R3(W) * R1(DELTA) * R3(PHI)`. Other types throw
-`SpiceError(:notsupported, ...)`. No allocation.
+`data` is the array of the file of `seg`, and `seg.t0 <= primal(et) <= seg.t1` is not
+checked. The components are the 3-1-3 angles `(PHI, DELTA, W)`, so the matrix from
+`seg.frame` to the body frame is `R3(W) * R1(DELTA) * R3(PHI)`. Other types throw
+`SpiceError(:notsupported, ...)`.
 """
 @inline function pck_eval(data::Vector{Float64}, seg::Segment, et::T, v::Val{N}) where {T <: Real, N}
     seg.eaddr < seg.baddr && _empty_segment(seg)
