@@ -632,12 +632,8 @@ function _sclk_encode(clock::SclkType1, sc::Integer, sclkch::AbstractString, sce
     scencd && (ticks = _dnint(ticks))
     part = 1
     if pos > 1
-        part = try
-            _nparsi(SubString(sclkch, 1, prevind(sclkch, pos)))
-        catch err
-            err isa SpiceError || rethrow()
-            return 0.0, kind, _repmc(badpart, sclkch)
-        end
+        part = _try_nparsi(SubString(sclkch, 1, prevind(sclkch, pos)))
+        part === nothing && return 0.0, kind, _repmc(badpart, sclkch)
         (part <= 0 || part > nparts) && return 0.0, kind, _repmc(
                 _repmc(
                     _repmc(
