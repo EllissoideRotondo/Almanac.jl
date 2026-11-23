@@ -872,7 +872,7 @@ the last bit.
 @inline function _sx_mxm(a::Mat3{Taylor{1, Float64}}, b::Mat3{Taylor{1, Float64}})
     return Mat3{Taylor{1, Float64}}(
         ntuple(Val(9)) do k
-            i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
+            i, j = _m_rowcol(k)
             v = a[i, 1].v * b[1, j].v + a[i, 2].v * b[2, j].v + a[i, 3].v * b[3, j].v
             d = a[i, 1].d[1] * b[1, j].v + a[i, 2].d[1] * b[2, j].v + a[i, 3].d[1] * b[3, j].v +
                 a[i, 1].v * b[1, j].d[1] + a[i, 2].v * b[2, j].d[1] + a[i, 3].v * b[3, j].d[1]
