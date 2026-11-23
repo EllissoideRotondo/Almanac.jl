@@ -54,6 +54,6 @@ julia --startup-file=no --project=test/anise test/anise/runtests.jl
 - **Frame rate.** ANISE differences two frames 1 ms apart; `local_frame_state` uses the
   exact rate of two-body motion.
 - **No NaN values.** Where ANISE returns NaN, the calls throw
-  `SpiceError(:degeneratecase)`. (A derivative can still be NaN; see
-  [Dual numbers](@ref "Differentiate an orbit").) The few non-finite or fallback values
-  that are returned are listed in [`element`](@ref) and [Element names](@ref).
+  `SpiceError(:degeneratecase)`; a derivative can be NaN (see
+  [Differentiate an orbit](@ref)). [Element names](@ref) lists the few non-finite and
+  fallback values that are returned.

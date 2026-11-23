@@ -5,8 +5,8 @@ space geometry. It reads SPICE kernels and answers the questions CSPICE answers 
 a body is, how a frame is oriented, when an event occurs) in pure Julia.
 
 The calls keep the names of CSPICE without the `_c` suffix, and its argument order with
-[few exceptions](@ref "Names, arguments and results"). Each docstring links to the NAIF
-page of the routine it ports.
+[few exceptions](@ref "Names, arguments and results"); the docstring of each ported call
+links to its NAIF page.
 
 ## Installation
 
@@ -30,27 +30,87 @@ pkg> add https://github.com/Orbitology/Almanac.jl
 Use the wrapper [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl) instead when results
 must be bit-identical to the CSPICE library on every platform.
 
-## How this manual is organized
+## Contents
 
-- [Getting started](@ref) loads kernels, computes a state, a rotation and a
-  sub-observer point, and searches for events.
-- The **Tutorials** each solve one task: [contexts and threads](@ref "Contexts and
-  threads"), [time derivatives](@ref "Time derivatives"),
-  [tables](@ref "Ephemeris and rotation tables"), [bodies and frames from your own
-  functions](@ref "Bodies and frames from your own functions"), [event
-  searches](@ref "Event searches"), [writing kernels](@ref "Writing kernels") and
-  [orbits](@ref "Orbits and relative motion").
-- The **Manual** explains how Almanac.jl relates to CSPICE, and how it was checked.
-  Read [Conventions](@ref) before porting a CSPICE or SPICE.jl program.
-  [Coverage of CSPICE](@ref), [Validation](@ref) and [Validation of the orbit calls](@ref) say
-  what is available and how it was tested.
-- The **API reference** documents every exported call, grouped by subject.
+[Getting started](@ref) loads kernels, computes a state, a rotation and a sub-observer
+point, and searches for events.
+
+### Tutorials
+
+Each tutorial solves one task, from several kernel sets and threads to orbits.
+
+```@contents
+Pages = [
+    "tutorials/contexts.md",
+    "tutorials/derivatives.md",
+    "tutorials/tables.md",
+    "tutorials/providers.md",
+    "tutorials/events.md",
+    "tutorials/writing.md",
+    "tutorials/orbits.md",
+]
+Depth = 2
+```
+
+### Relation to CSPICE
+
+These pages say where Almanac.jl follows CSPICE and where it departs from it; read
+[Conventions](@ref) before porting a CSPICE or SPICE.jl program.
+
+```@contents
+Pages = [
+    "manual/conventions.md",
+    "manual/numerics.md",
+    "manual/additions.md",
+    "manual/cspice_defects.md",
+]
+Depth = 2
+```
+
+### Coverage and validation
+
+What is ported, and how the results were checked against CSPICE and ANISE.
+
+```@contents
+Pages = [
+    "manual/coverage.md",
+    "manual/validation.md",
+    "manual/orbit_validation.md",
+]
+Depth = 2
+```
+
+### API reference
+
+The docstring of every exported call, grouped by subject.
+
+```@contents
+Pages = [
+    "reference/kernels.md",
+    "reference/time.md",
+    "reference/states.md",
+    "reference/frames.md",
+    "reference/geometry.md",
+    "reference/events.md",
+    "reference/orbits.md",
+    "reference/math/vectors.md",
+    "reference/math/rotations.md",
+    "reference/math/coordinates.md",
+    "reference/math/ellipsoids.md",
+    "reference/math/conics.md",
+    "reference/files/daf.md",
+    "reference/files/writers.md",
+    "reference/files/das.md",
+    "reference/files/ek.md",
+]
+Depth = 1
+```
 
 ## The example kernels
 
 The examples run on three small kernels that the manual writes itself: leap seconds,
 constants of the Sun and the Earth with a spacecraft named `PROBE`, and two-body orbits
-of the Earth and of `PROBE`. The positions are therefore not those of the real bodies.
+of the Earth and of `PROBE`, so the positions are not those of the real bodies.
 
 ## Reporting issues
 
