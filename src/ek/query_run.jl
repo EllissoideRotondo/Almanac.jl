@@ -846,30 +846,87 @@ header), and the empty segment vectors are removed as CSPICE does it (defect (c)
 function _ek_weed!(sets::Vector{_EKRowSet}, compat::Bool)
     isempty(sets) && return sets
     nt = sets[1].nt
-    seen = Set{Tuple{Vector{Int}, Vector{Int32}}}()
+    seen = _EKRowIndex(nt)
+    tagids = Dict{Vector{Int}, Int}()   # segment vector -> tag, without `compat`
+    tags = Int[]
     for (c, rs) in enumerate(sets)
         # invariant: `seen` holds the row vectors of the row sets before c
-        newkeys = Tuple{Vector{Int}, Vector{Int32}}[]
         counts = Int[length(r) ÷ nt for r in rs.rows]
+        resize!(tags, length(rs.segvecs))
         for (pos, sv) in enumerate(rs.segvecs)
             rows = rs.rows[pos]
-            kept = Int32[]
-            tag = compat ? [pos] : sv
-            for i in 1:counts[pos]
-                rv = rows[((i - 1) * nt + 1):(i * nt)]
-                if c > 1 && (tag, rv) in seen
-                    continue
-                end
-                append!(kept, rv)
-                push!(newkeys, (tag, rv))
+            tag = compat ? pos : get!(tagids, sv, length(tagids) + 1)
+            tags[pos] = tag
+            c > 1 || continue
+            w = 0
+            for i in 1:counts[pos]       # invariant: rows[1:w*nt] holds the kept row vectors before i
+                off = (i - 1) * nt
+                _ek_rowindex_has(seen, tag, rows, off) && continue
+                w != i - 1 && copyto!(rows, w * nt + 1, rows, off + 1, nt)
+                w += 1
             end
-            rs.rows[pos] = kept
+            resize!(rows, w * nt)
         end
-        union!(seen, newkeys)
+        for (pos, rows) in enumerate(rs.rows), i in 1:(length(rows) ÷ nt)
+            _ek_rowindex_add!(seen, tags[pos], rows, (i - 1) * nt)
+        end
         compat ? _ek_squeeze_compat!(rs, counts) : _ek_squeeze!(rs)
     end
     filter!(rs -> _ek_nrows(rs) > 0, sets)
     return sets
+end
+
+"""
+    _EKRowIndex
+
+A set of tagged row vectors of `nt` record pointers each, for `_ek_weed!`: entry `k`
+has the tag `tags[k]` and the row vector `rows[(k-1)*nt+1:k*nt]`. `last[h]` is the last
+entry with the hash `h`, and `prev[k]` the entry with the hash of entry `k` before it
+(0 if none), so that a lookup allocates nothing.
+"""
+struct _EKRowIndex
+    nt::Int
+    tags::Vector{Int}
+    rows::Vector{Int32}
+    last::Dict{UInt64, Int}
+    prev::Vector{Int}
+end
+
+_EKRowIndex(nt::Int) = _EKRowIndex(nt, Int[], Int32[], Dict{UInt64, Int}(), Int[])
+
+@inline function _ek_rowhash(tag::Int, rows::Vector{Int32}, off::Int, nt::Int)
+    h = hash(tag)
+    for j in 1:nt
+        h = hash(rows[off + j], h)
+    end
+    return UInt64(h)
+end
+
+"True if `ix` holds the tag `tag` with the row vector `rows[off+1:off+nt]`."
+function _ek_rowindex_has(ix::_EKRowIndex, tag::Int, rows::Vector{Int32}, off::Int)
+    nt = ix.nt
+    k = get(ix.last, _ek_rowhash(tag, rows, off, nt), 0)
+    while k > 0                          # invariant: the entries after k with this hash differ
+        if ix.tags[k] == tag
+            same = true
+            for j in 1:nt
+                ix.rows[(k - 1) * nt + j] == rows[off + j] || (same = false; break)
+            end
+            same && return true
+        end
+        k = ix.prev[k]
+    end
+    return false
+end
+
+"Add the tag `tag` with the row vector `rows[off+1:off+nt]` to `ix`."
+function _ek_rowindex_add!(ix::_EKRowIndex, tag::Int, rows::Vector{Int32}, off::Int)
+    h = _ek_rowhash(tag, rows, off, ix.nt)
+    push!(ix.tags, tag)
+    append!(ix.rows, view(rows, (off + 1):(off + ix.nt)))
+    push!(ix.prev, get(ix.last, h, 0))
+    ix.last[h] = length(ix.tags)
+    return ix
 end
 
 # ---------------------------------------------------------------------------------------
