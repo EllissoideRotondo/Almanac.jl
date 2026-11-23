@@ -8,7 +8,7 @@
 # fails. `_daf_parse` calls `_segment_layout` once per segment: when the checks pass, it
 # stores the layout in `Segment.layout` and the evaluator reads the layout from there;
 # when they fail, the layout stays zero and the evaluator makes the checks again at each
-# call, so that it throws the same error at the same time as before. A `Segment` that
+# call, so that a bad segment throws at its evaluation, as in CSPICE. A `Segment` that
 # another constructor builds (a descriptor of `spkpvn`, a test) has a zero layout too.
 
 @noinline _badsegment(seg::Segment, msg::String) = throw(

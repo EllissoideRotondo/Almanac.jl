@@ -393,8 +393,8 @@ function _ek_index_values(s, col::_EKColumn, nrows::Int)
     (col.ixtype == 1 || col.ixtype == 2) || return _EK_NOIX
     return try
         if col.ixtype == 1
-            v = _ek_tree_values(s.ints, col.ixptr)
-            length(v) == nrows ? v : _EK_NOIX
+            # the key count of the root is checked first: a damaged count must not size a vector
+            _ek_trsz(s.ints, col.ixptr) == nrows ? _ek_tree_values(s.ints, col.ixptr) : _EK_NOIX
         else
             Int32[_ek_ordvec_value(s.ints, col.ixptr, k) for k in 1:nrows]
         end

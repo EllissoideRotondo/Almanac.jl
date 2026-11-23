@@ -140,14 +140,15 @@ it: -1 less, 0 equal, 1 greater. A null entry is less than every value and equal
 null key (`null` true). `key` is a byte vector for a character column and a number for
 the other types, which is compared as a double. Of a string, the first 1024 characters
 count. Throws `SpiceError`: `:invaliddatatype` for an unknown column type, `:bug` for a
-key of the wrong type, and the errors of the readers (`:uninitializedvalue`,
-`:uninitialized`).
+key of the wrong type, `:invalidindex` for a missing first element (as `zzekscmp`), and
+the errors of the readers (`:uninitializedvalue`, `:uninitialized`).
 """
 function _ekw_rel(s, coldsc::AbstractVector{Int32}, row::Integer, key, null::Bool)
     col = _ekw_col(coldsc)
     rel, _, _ = if key isa AbstractVector{UInt8}
         _ek_vrel(s, col, row, _EK_CHR, key, 0.0, 0, null, true)
     else
+        key isa Real || _ekw_bug("Column type is $(col.dtype); value type is $(typeof(key)).")
         _ek_vrel(s, col, row, _EK_DP, UInt8[], Float64(key), 0, null, true)
     end
     return rel == _EK_LT ? -1 : rel == _EK_GT ? 1 : 0

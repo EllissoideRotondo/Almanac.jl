@@ -1597,10 +1597,16 @@ function _dsk_voxtop(ints::Vector{Int32}, seg::DSKSegment)
     offptr = _dsk_off_voxptr(seg)
     offlst = _dsk_off_voxlst(seg)
     voxnpl = seg.hdr.voxnpl
-    k = sum(seg.hdr.vgrext)
+    voxnpt = seg.hdr.voxnpt
+    # A damaged header gives no bound; `dskx02` reports it when the segment is used.
+    (
+        all(>=(1), seg.hdr.vgrext) && voxnpt >= 0 && 0 <= offptr && 0 <= offlst &&
+            offptr + voxnpt <= length(ints) && offlst + voxnpl <= length(ints)
+    ) || return _DSK_NOTOP
+    k = min(sum(Int, seg.hdr.vgrext), voxnpt)     # no more counts than pointers
     heap = Int[]                         # a min-heap of the largest counts so far
     sizehint!(heap, k)
-    for j in 1:seg.hdr.voxnpt
+    for j in 1:voxnpt
         # invariant: heap holds the min(k, m) largest positive counts of the pointers
         # 1 .. j-1, of which m are positive
         p = Int(@inbounds ints[offptr + j])
@@ -1610,8 +1616,8 @@ function _dsk_voxtop(ints::Vector{Int32}, seg::DSKSegment)
         if length(heap) < k
             push!(heap, c)
             _dsk_sift_up!(heap, length(heap))
-        elseif c > @inbounds heap[1]
-            @inbounds heap[1] = c
+        elseif c > heap[1]
+            heap[1] = c
             _dsk_sift_down!(heap, 1)
         end
     end

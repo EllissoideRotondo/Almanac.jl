@@ -868,6 +868,8 @@ function _ek_weed!(sets::Vector{_EKRowSet}, compat::Bool)
             resize!(rows, w * nt)
         end
         for (pos, rows) in enumerate(rs.rows), i in 1:(length(rows) ÷ nt)
+            # invariant: `seen` holds the kept row vectors of the earlier sets, and those of
+            # this set before (pos, i)
             _ek_rowindex_add!(seen, tags[pos], rows, (i - 1) * nt)
         end
         compat ? _ek_squeeze_compat!(rs, counts) : _ek_squeeze!(rs)
@@ -896,7 +898,7 @@ _EKRowIndex(nt::Int) = _EKRowIndex(nt, Int[], Int32[], Dict{UInt64, Int}(), Int[
 
 @inline function _ek_rowhash(tag::Int, rows::Vector{Int32}, off::Int, nt::Int)
     h = hash(tag)
-    for j in 1:nt
+    for j in 1:nt                        # invariant: h hashes the tag and rows[off+1:off+j-1]
         h = hash(rows[off + j], h)
     end
     return UInt64(h)
@@ -909,7 +911,7 @@ function _ek_rowindex_has(ix::_EKRowIndex, tag::Int, rows::Vector{Int32}, off::I
     while k > 0                          # invariant: the entries after k with this hash differ
         if ix.tags[k] == tag
             same = true
-            for j in 1:nt
+            for j in 1:nt                # invariant: the first j-1 pointers of both agree
                 ix.rows[(k - 1) * nt + j] == rows[off + j] || (same = false; break)
             end
             same && return true

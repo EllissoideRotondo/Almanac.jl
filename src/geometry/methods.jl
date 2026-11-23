@@ -291,8 +291,9 @@ end
 "The segment list of a shape without DSK data (never modified)."
 const _GEO_NOSEGS = DSKSegment[]
 
+# A DSK shape built without its segments looks them up at each ray (`segok` false).
 _GeoShape(dsk, trgcde, fixfid, a, b, c, maxrad, srflst, tols) =
-    _GeoShape(dsk, trgcde, fixfid, a, b, c, maxrad, srflst, tols, _GEO_NOSEGS, true)
+    _GeoShape(dsk, trgcde, fixfid, a, b, c, maxrad, srflst, tols, _GEO_NOSEGS, !dsk)
 
 "`zzsuelin`: the ellipsoid of the body `trgcde`."
 @inline function _geo_ellshape(ks::KernelSet, trgcde::Int32, fixfid::Int32)

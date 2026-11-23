@@ -500,6 +500,16 @@ function dsk_plate_buffer(dir)
         ctx = neo_context([path])
         seg = Almanac.kernelset(ctx).dsk[Int32(499)][1]
         @test [neo_kind(() -> dskx02(ctx, seg, v, r)) for (v, r) in cases] == kinds
+        # Regression: a header with grid extents of zero gives no bound (and no write past
+        # the bound list) at load; `dskx02` reports the header when the segment is used.
+        hd = seg.hdr
+        bad = Almanac.DSK02Header(
+            hd.nv, hd.np, hd.nvxtot, hd.vtxbds, hd.voxsiz, hd.voxori, (0, 0, 0), hd.cgscal,
+            hd.vtxnpl, hd.voxnpt, hd.voxnpl
+        )
+        badseg = DSKSegment(seg.file, seg.dladsc, seg.dskdsc, seg.boxctr, seg.boxrad, bad, seg.voxtop)
+        ints = Almanac.kernelset(ctx).dskfiles[seg.file].ints
+        @test Almanac._dsk_voxtop(ints, badseg) == Almanac._DSK_NOTOP
     finally
         c_dascls(ch)
         dascls(h)

@@ -289,7 +289,8 @@ end
     _ek_cnext(chars, r, base, off) -> (byte, base, off)
 
 The character at stream offset `off` of the page at `base` of the element `r`, and the
-position after it. Precondition: the element has a character there.
+position after it. A position outside `chars`, which only a damaged file gives, throws
+`BoundsError`.
 """
 @inline function _ek_cnext(chars::AbstractVector{UInt8}, r::_EKCRef, base::Int, off::Int)
     if r.linked
@@ -298,7 +299,7 @@ position after it. Precondition: the element has a character there.
             off -= _EK_CPSIZE
         end
     end
-    return @inbounds(chars[base + off]), base, off + 1
+    return chars[base + off], base, off + 1
 end
 
 "The characters of the element `r` of the store `chars` as a new byte vector."
