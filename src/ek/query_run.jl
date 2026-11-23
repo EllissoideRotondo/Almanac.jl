@@ -118,41 +118,52 @@ end
     )
 )
 
-_ek_trunc(s::String) = sizeof(s) > _EK_MAXSTR ? String(codeunits(s)[1:_EK_MAXSTR]) : s
+"The first `_EK_MAXSTR` characters of the element `r` of the store `f` as a `String`."
+_ek_ctrunc(f, r::_EKCRef) = _ek_cstring(f.chars, _ek_cfirst(r, _EK_MAXSTR))
 
 """
-    _ek_scmp(op, f, col, recptr, dtype, cval, dval, ival) -> Bool
+    _ek_vrel(f, col, recptr, dtype, cval, dval, ival, keynull, writer) -> (rel, enull, cref)
 
-Port of `zzekscmp`: true if the first element of the entry of column `col` in the record
-`recptr` of the store `f` has the relation `op` to a value of type code `dtype`
-(`cval`, `dval` or `ival`). A null entry is less than every value; LIKE and UNLIKE are
-false for it. Throws `SpiceError(:bug)` for types that cannot be compared and
-`:unnaturalrelation` for an operator that the types do not have.
+Relation code (`_EK_LT`, `_EK_EQ`, `_EK_GT`) of the first element of the entry of
+column `col` in the record `recptr` of the store `f` to a value of type code `dtype`
+(the bytes `cval`, `dval` or `ival`), as `zzekscmp` finds it; `enull` tells that the
+entry is null, and `cref` is the place of the element of a character column. A null
+entry is less than every value. With `keynull` the value is null, which is equal to a
+null entry and less than the others (the index searches of the writers). Of a string,
+the first 1024 characters count.
+
+Throws `SpiceError(:bug)` for types that cannot be compared, `:invalidindex` for an
+entry without elements, and the errors of the readers. A column type other than the
+four is read as integer, or with `writer` throws `:invaliddatatype`.
 """
-function _ek_scmp(
-        op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval::String,
-        dval::Float64, ival::Int
+function _ek_vrel(
+        f, col::_EKColumn, recptr::Integer, dtype::Int, cval::AbstractVector{UInt8},
+        dval::Float64, ival::Int, keynull::Bool, writer::Bool
     )
     coltyp = Int(col.dtype)
-    eltc = ""
+    cref = _EKCRef(0)
     eltd = 0.0
     elti = 0
     if coltyp == _EK_CHR
-        eltc, enull, found = _ek_elt_c(f, col, recptr, 1)
+        cref, enull, found = _ek_cref(f, col, recptr, 1)
     elseif coltyp == _EK_DP || coltyp == _EK_TIME
         eltd, enull, found = _ek_elt_d(f, col, recptr, 1)
-    else
+    elseif coltyp == _EK_INT || !writer
         elti, enull, found = _ek_elt_i(f, col, recptr, 1)
+    else
+        throw(SpiceError(:invaliddatatype, "Data type code $coltyp not recognized."))
     end
     found || _ek_noelt(col, recptr)
-    op == _EK_ISNULL && return enull
-    op == _EK_NOTNUL && return !enull
+    enull && return (keynull ? _EK_EQ : _EK_LT), true, cref
+    keynull && return _EK_GT, false, cref
     badtype() = throw(SpiceError(:bug, "Column type is $coltyp; value type is $dtype."))
-    rel = if enull
-        _EK_LT
-    elseif coltyp == _EK_CHR
+    rel = if coltyp == _EK_CHR
         dtype == _EK_CHR || badtype()
-        _ek_fcmp(eltc, cval)
+        r = _ek_ccmp(
+            f.chars, _ek_cfirst(cref, _EK_MAXSTR), cval,
+            _EKCRef(min(length(cval), _EK_MAXSTR))
+        )
+        r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
     elseif coltyp == _EK_TIME
         (dtype == _EK_TIME || dtype == _EK_DP) || badtype()
         _ek_ncmp(eltd, dval)
@@ -163,10 +174,39 @@ function _ek_scmp(
         (dtype == _EK_INT || dtype == _EK_DP) || badtype()
         _ek_ncmp(Float64(elti), dtype == _EK_INT ? Float64(ival) : dval)
     end
+    return rel, false, cref
+end
+
+"True if the entry of `col` in the record `recptr` is null; `:invalidindex` if it has no elements."
+function _ek_isnull(f, col::_EKColumn, recptr::Integer)
+    coltyp = Int(col.dtype)
+    _, enull, found = coltyp == _EK_CHR ? _ek_cref(f, col, recptr, 1) :
+        (coltyp == _EK_DP || coltyp == _EK_TIME) ? _ek_elt_d(f, col, recptr, 1) :
+        _ek_elt_i(f, col, recptr, 1)
+    found || _ek_noelt(col, recptr)
+    return enull
+end
+
+"""
+    _ek_scmp(op, f, col, recptr, dtype, cval, dval, ival) -> Bool
+
+Port of `zzekscmp`: true if the first element of the entry of column `col` in the record
+`recptr` of the store `f` has the relation `op` to a value of type code `dtype`
+(`cval`, `dval` or `ival`), with the rules of [`_ek_vrel`](@ref). LIKE and UNLIKE are
+false for a null entry. Throws as `_ek_vrel`, and `:unnaturalrelation` for an operator
+that the types do not have.
+"""
+function _ek_scmp(
+        op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval::String,
+        dval::Float64, ival::Int
+    )
+    op == _EK_ISNULL && return _ek_isnull(f, col, recptr)
+    op == _EK_NOTNUL && return !_ek_isnull(f, col, recptr)
+    rel, enull, cref = _ek_vrel(f, col, recptr, dtype, codeunits(cval), dval, ival, false, false)
     op <= _EK_NE && return _ek_relop(op, rel)
     if (op == _EK_LIKE || op == _EK_UNLIKE) && dtype == _EK_CHR
         enull && return false
-        m = _matchi(_ek_trunc(eltc), cval)
+        m = _matchi(_ek_ctrunc(f, cref), cval)
         return op == _EK_LIKE ? m : !m
     end
     throw(
@@ -191,12 +231,15 @@ function _ek_ecmp(f1, col1::_EKColumn, row1::Integer, f2, col2::_EKColumn, row2:
     bad() = throw(SpiceError(:bug, "LHS data type is $lt; RHSTYP is $rt."))
     if lt == _EK_CHR
         rt == _EK_CHR || bad()
-        a, n1, fnd1 = _ek_elt_c(f1, col1, row1, 1)
-        b, n2, fnd2 = _ek_elt_c(f2, col2, row2, 1)
+        a, n1, fnd1 = _ek_cref(f1, col1, row1, 1)
+        b, n2, fnd2 = _ek_cref(f2, col2, row2, 1)
         fnd1 || _ek_noelt(col1, row1)
         fnd2 || _ek_noelt(col2, row2)
         (n1 || n2) && return n1 && n2 ? _EK_EQ : n1 ? _EK_LT : _EK_GT
-        return _ek_fcmp(a, b)
+        r = _ek_ccmp(
+            f1.chars, _ek_cfirst(a, _EK_MAXSTR), f2.chars, _ek_cfirst(b, _EK_MAXSTR)
+        )
+        return r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
     end
     if lt == _EK_TIME
         rt == _EK_TIME || bad()
@@ -238,11 +281,11 @@ function _ek_colmatch(
             :unnaturalrelation, "The relational operator $op was not recognized."
         )
     )
-    a, n1, fnd1 = _ek_elt_c(f1, col1, row1, 1)
-    b, n2, fnd2 = _ek_elt_c(f2, col2, row2, 1)
+    a, n1, fnd1 = _ek_cref(f1, col1, row1, 1)
+    b, n2, fnd2 = _ek_cref(f2, col2, row2, 1)
     fnd1 || _ek_noelt(col1, row1)
     fnd2 || _ek_noelt(col2, row2)
-    m = _matchi(n1 ? "" : _ek_trunc(a), n2 ? "" : _ek_trunc(b))
+    m = _matchi(n1 ? "" : _ek_ctrunc(f1, a), n2 ? "" : _ek_ctrunc(f2, b))
     return op == _EK_LIKE ? m : !m
 end
 
@@ -489,9 +532,9 @@ function _ek_pushkey!(keys::_EKKeys, f, col::_EKColumn, recptr::Integer)
         )
     )
     if keys.dtype == _EK_CHR
-        v, isnull, found = _ek_elt_c(f, col, recptr, 1)
+        r, isnull, found = _ek_cref(f, col, recptr, 1)
         found || _ek_noelt(col, recptr)
-        push!(keys.strs, _ek_trunc(v))
+        push!(keys.strs, _ek_ctrunc(f, r))
     elseif keys.dtype == _EK_INT
         v, isnull, found = _ek_elt_i(f, col, recptr, 1)
         found || _ek_noelt(col, recptr)

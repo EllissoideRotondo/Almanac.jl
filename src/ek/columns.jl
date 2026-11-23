@@ -232,35 +232,120 @@ function _ek_elt_d(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
 end
 
 """
-    _ek_elt_c(s, col, recptr, elt) -> (value, isnull, found)
+    _EKCRef
 
-Element `elt` of the entry of the character column `col` (class 3, 6 or 9), as
-`zzekrsc`: the string with all characters that the file holds for it (the stored
-length for class 3, the string length of the column for classes 6 and 9, so trailing
-blanks can be present). Results and errors as [`_ek_elt_i`](@ref), with
-`:uninitialized` for an entry that was never written.
+The place of the characters of one element of a character entry, which a comparison
+reads without making a `String`: the first character is at `base + off` of the
+character store, the element has `n` characters, and if `linked` they continue over
+the pages that the forward pointers name (classes 3 and 6); else they are adjacent
+(class 9, or a byte vector with `base = 0`, `off = 1`).
 """
-function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+struct _EKCRef
+    base::Int
+    off::Int
+    n::Int
+    linked::Bool
+end
+
+"The `_EKCRef` of all `n` bytes of a byte vector."
+_EKCRef(n::Integer) = _EKCRef(0, 1, Int(n), false)
+
+"`r` cut to its first `n` characters."
+@inline _ek_cfirst(r::_EKCRef, n::Int) = _EKCRef(r.base, r.off, min(r.n, n), r.linked)
+
+"""
+    _ek_cref(s, col, recptr, elt) -> (ref::_EKCRef, isnull, found)
+
+The place of element `elt` of the entry of the character column `col` (class 3, 6 or
+9) in the record at `recptr`, as `zzekrsc` finds it: all characters that the file holds
+for it (the stored length for class 3, the string length of the column for classes 6
+and 9). Results and errors as [`_ek_elt_c`](@ref); a null or missing element has `n = 0`.
+"""
+function _ek_cref(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
     c = col.cclass
     if c == 9
         recno = Int(recptr)
-        _ek_fixed_null(s, col, recno) && return "", true, true
+        _ek_fixed_null(s, col, recno) && return _EKCRef(0), true, true
         l = Int(col.strlen)
         spp = _EK_CPSIZE ÷ l
         q = (recno - 1) ÷ spp
         r = recno - q * spp
         a = Int(s.ints[col.metptr + 1]) + q * 1024 + (r - 1) * l + 1
-        return String(s.chars[a:(a + l - 1)]), false, true
+        return _EKCRef(a - 1, 1, l, false), false, true
     end
     (c == 3 || c == 6) || _ek_noclass(col, "character")
     datptr = _ek_datptr(s, col, recptr)
-    datptr == _EK_NULL && return "", true, true
+    datptr == _EK_NULL && return _EKCRef(0), true, true
     datptr > 0 || _ek_badptr(col, datptr, recptr)
     n = _ek_gei(s.chars, datptr)
-    c == 3 && return _ek_stream_c(s.chars, datptr, 0, n), false, true
-    (1 <= elt <= n) || return "", false, false
+    base = _ek_cbase((datptr + 1023) ÷ 1024)
+    c == 3 && return _EKCRef(base, datptr - base + 5, n, true), false, true
+    (1 <= elt <= n) || return _EKCRef(0), false, false
     l = Int(col.strlen)
-    return _ek_stream_c(s.chars, datptr, l * (Int(elt) - 1), l), false, true
+    return _EKCRef(base, datptr - base + 5 + l * (Int(elt) - 1), l, true), false, true
+end
+
+"""
+    _ek_cnext(chars, r, base, off) -> (byte, base, off)
+
+The character at stream offset `off` of the page at `base` of the element `r`, and the
+position after it. Precondition: the element has a character there.
+"""
+@inline function _ek_cnext(chars::AbstractVector{UInt8}, r::_EKCRef, base::Int, off::Int)
+    if r.linked
+        while off > _EK_CPSIZE           # invariant: the character is `off` after `base`
+            base = _ek_cbase(_ek_gei(chars, base + 1015))
+            off -= _EK_CPSIZE
+        end
+    end
+    return @inbounds(chars[base + off]), base, off + 1
+end
+
+"The characters of the element `r` of the store `chars` as a new byte vector."
+function _ek_cbytes(chars::AbstractVector{UInt8}, r::_EKCRef)
+    out = Vector{UInt8}(undef, r.n)
+    base = r.base
+    off = r.off
+    for i in 1:r.n                       # invariant: out[1:i-1] holds the first characters
+        out[i], base, off = _ek_cnext(chars, r, base, off)
+    end
+    return out
+end
+
+"The characters of the element `r` of the store `chars` as a `String`."
+_ek_cstring(chars::AbstractVector{UInt8}, r::_EKCRef) = String(_ek_cbytes(chars, r))
+
+"""
+    _ek_ccmp(ca, ra, cb, rb) -> Int
+
+Order of the element `ra` of the store `ca` and the element `rb` of `cb` as Fortran
+compares strings, as [`_ek_bcmp`](@ref) on their characters: -1, 0 or 1.
+"""
+function _ek_ccmp(ca::AbstractVector{UInt8}, ra::_EKCRef, cb::AbstractVector{UInt8}, rb::_EKCRef)
+    abase, aoff = ra.base, ra.off
+    bbase, boff = rb.base, rb.off
+    for i in 1:max(ra.n, rb.n)           # invariant: the characters before i are equal
+        x = UInt8(' ')
+        y = UInt8(' ')
+        i <= ra.n && ((x, abase, aoff) = _ek_cnext(ca, ra, abase, aoff))
+        i <= rb.n && ((y, bbase, boff) = _ek_cnext(cb, rb, bbase, boff))
+        x == y || return x < y ? -1 : 1
+    end
+    return 0
+end
+
+"""
+    _ek_elt_c(s, col, recptr, elt) -> (value, isnull, found)
+
+Element `elt` of the entry of the character column `col` (class 3, 6 or 9) in the
+record at `recptr`, as `zzekrsc`: the string with all characters that the file holds
+for it (the stored length for class 3, the string length of the column for classes 6
+and 9, so trailing blanks can be present). Results and errors as
+[`_ek_elt_i`](@ref), with `:uninitialized` for an entry that was never written.
+"""
+function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+    r, isnull, found = _ek_cref(s, col, recptr, elt)
+    return (r.n == 0 ? "" : _ek_cstring(s.chars, r)), isnull, found
 end
 
 # ---------------------------------------------------------------------------------------

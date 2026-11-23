@@ -138,37 +138,19 @@ Relation of the first element of the entry of the column `coldsc` in the row `ro
 record pointer; a row number for the classes 7 to 9) to the key, as `zzekscmp` finds
 it: -1 less, 0 equal, 1 greater. A null entry is less than every value and equal to a
 null key (`null` true). `key` is a byte vector for a character column and a number for
-the other types; an integer column is compared with a double key as doubles. Of a
-string, the first 1024 characters count. Throws `SpiceError`: `:invaliddatatype` for
-an unknown column type, `:bug` for a key of the wrong type, and the errors of the
-readers (`:uninitializedvalue`, `:uninitialized`).
+the other types, which is compared as a double. Of a string, the first 1024 characters
+count. Throws `SpiceError`: `:invaliddatatype` for an unknown column type, `:bug` for a
+key of the wrong type, and the errors of the readers (`:uninitializedvalue`,
+`:uninitialized`).
 """
 function _ekw_rel(s, coldsc::AbstractVector{Int32}, row::Integer, key, null::Bool)
     col = _ekw_col(coldsc)
-    dtype = col.dtype
-    if dtype == _EK_CHR
-        cv, enull, _ = _ek_elt_c(s, col, row, 1)
-        enull && return null ? 0 : -1
-        null && return 1
-        key isa AbstractVector{UInt8} || _ekw_bug("Column type is $dtype; value type is not character.")
-        elt = codeunits(cv)
-        return _ek_bcmp(elt, key, min(length(elt), _EK_MAXSTR), min(length(key), _EK_MAXSTR))
-    elseif dtype == _EK_DP || dtype == _EK_TIME
-        dv, enull, _ = _ek_elt_d(s, col, row, 1)
-        enull && return null ? 0 : -1
-        null && return 1
-        key isa Real || _ekw_bug("Column type is $dtype; value type is not numeric.")
-        numval = Float64(key)
-        return dv < numval ? -1 : dv > numval ? 1 : 0
-    elseif dtype == _EK_INT
-        iv, enull, _ = _ek_elt_i(s, col, row, 1)
-        enull && return null ? 0 : -1
-        null && return 1
-        key isa Real || _ekw_bug("Column type is $dtype; value type is not numeric.")
-        numval = Float64(key)
-        return iv < numval ? -1 : iv > numval ? 1 : 0
+    rel, _, _ = if key isa AbstractVector{UInt8}
+        _ek_vrel(s, col, row, _EK_CHR, key, 0.0, 0, null, true)
+    else
+        _ek_vrel(s, col, row, _EK_DP, UInt8[], Float64(key), 0, null, true)
     end
-    throw(SpiceError(:invaliddatatype, "Data type code $dtype not recognized."))
+    return rel == _EK_LT ? -1 : rel == _EK_GT ? 1 : 0
 end
 
 # ---------------------------------------------------------------------------------------
@@ -257,10 +239,8 @@ function _ekw_own_key(s, coldsc::AbstractVector{Int32}, recptr::Integer)
     col = _ekw_col(coldsc)
     dtype = col.dtype
     if dtype == _EK_CHR
-        cv, isnull, _ = _ek_elt_c(s, col, recptr, 1)
-        bytes = Vector{UInt8}(codeunits(cv))
-        length(bytes) > 1024 && resize!(bytes, 1024)
-        return bytes, isnull
+        r, isnull, _ = _ek_cref(s, col, recptr, 1)
+        return _ek_cbytes(s.chars, _ek_cfirst(r, _EK_MAXSTR)), isnull
     elseif dtype == _EK_DP || dtype == _EK_TIME
         dv, isnull, _ = _ek_elt_d(s, col, recptr, 1)
         return dv, isnull
