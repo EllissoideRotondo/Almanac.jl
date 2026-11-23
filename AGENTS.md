@@ -77,7 +77,7 @@ an atomic reference to one of them is a single word.
 | `core/` | `types.jl`, `errors.jl`, `strings.jl`, `taylor.jl` (`Taylor`, `primal`), `bytebuf.jl` (buffers of the number and time formats), `hex.jl` |
 | `files/` (DAF, DAS) | `daf.jl` (read), `daf_access.jl`, `daf_write.jl`, `das.jl`, `dla.jl` |
 | `kernels/` (contexts, pool) | `context.jl`, `textkernel.jl`, `jsonkernel.jl`, `pool_api.jl`, `pool_write.jl`, `names.jl`, `kernel_info.jl`, `memkernels.jl` (kernels built in memory: `furnsh` of a handle, `load_samples!`, `load_function!`) |
-| `spk/` | `spk_eval.jl` (types 2, 3; PCK segments, `_cheb3`, `find_segment`), `spk_more.jl`, `types/` (`conic.jl`, `interp.jl`, `mda.jl`, `sgp4.jl`, ...), `spk_api.jl`, `aberration.jl`, `spk_segments.jl`, `spk_write.jl`, `tle.jl` |
+| `spk/` | `spk_layout.jl` (layouts of types 10, 14, 19 and PCK 3, checked at load), `spk_eval.jl` (types 2, 3; PCK segments, `_cheb3`, `find_segment`), `spk_more.jl`, `types/` (`conic.jl`, `interp.jl`, `mda.jl`, `sgp4.jl`, ...), `spk_api.jl`, `aberration.jl`, `spk_segments.jl`, `spk_write.jl`, `tle.jl` |
 | `ck/` | `ck.jl`, `ck_api.jl`, `ck_records.jl`, `ck_write.jl` |
 | `frames/` | `dyntypes.jl`, `frames.jl`, `rotations.jl`, `dynframes.jl`, `switchframes.jl`, `frame_api.jl`, `frame_info.jl`, `pck_write.jl` |
 | `time/` | `time.jl`, `timeparse.jl`, `timeout.jl`, `time_api.jl`, `sclk.jl`, `lst.jl` |
@@ -122,6 +122,12 @@ an atomic reference to one of them is a single word.
   series (`_pck03_state`, as `pcke03`), through the state path of class 2 frames; an AD
   or `Taylor` epoch differentiates the angle series (`_pck03_angles`). W is not reduced
   by whole turns, as in `pcke03`.
+- **Segment layouts.** `_daf_parse` checks the meta data of SPK type 10, 14 and 19
+  and binary PCK type 3 segments once (`_segment_layout`) and stores the layout in
+  `Segment.layout`. A segment that fails the checks loads with a zero layout, as CSPICE
+  loads it, and its evaluator makes the checks at each call and throws there. Any other
+  code that builds a `Segment` over data that it did not check leaves `layout` zero, and
+  a `Segment` must not be evaluated over data other than the data it was loaded from.
 - **SPK type 3** (separate velocity series): order k >= 1 of the jet is derivative k-1
   of the velocity series, as in `spkder`.
 - **Kernels in memory.** A handle of `dafops` (`spkops`, `ckops`, `pckops`) has an

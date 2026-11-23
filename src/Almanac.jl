@@ -92,6 +92,7 @@ include("core/strings.jl")           # ASCII case, eqstr, matchi
 include("core/types.jl")
 include("core/taylor.jl")            # Taylor{N,T} truncated series, `primal`
 include("math/kernels.jl")           # _m_ vector and matrix kernels (operation order of SPICELIB)
+include("spk/spk_layout.jl")         # layouts of SPK 10, 14, 19 and PCK 3 segments, checked at load
 include("files/daf.jl")              # open_daf, segment descriptors
 include("spk/spk_eval.jl")           # spk_eval, pck_eval, find_segment
 include("spk/spk_more.jl")           # SPK types 1, 5, 8, 9, 12 to 15, 17 to 21

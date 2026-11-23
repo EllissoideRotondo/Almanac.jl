@@ -815,7 +815,7 @@ function _spks14(newh::DAFHandle, r::_SegReader, ndscr::Vector{Float64}, ident::
     dc, ic = dafus(ndscr, 2, 6)
     t0, t1 = dc
     d = r.data
-    lay = _spk14_layout(d, _spks_local(r, 14))
+    lay = _spk14_check(d, _spks_local(r, 14))
     chbdeg = _cint(d[lay.conbas + 1]) - 1
     recsiz = (chbdeg + 1) * 6 + 2
     recsiz > 128 && throw(

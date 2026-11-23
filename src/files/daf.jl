@@ -440,12 +440,11 @@ function _daf_parse(io::IO, raw::Vector{UInt8}, path::AbstractString, native)
                     init, intlen, rsize, nrec = (chebyshev && !empty) ?
                         _daf_directory(data, path, kind, dtype, b, e) :
                         (0.0, 0.0, Int32(0), Int32(0))
-                    push!(
-                        segments, Segment(
-                            target, center, frame, dtype, t0, t1, Int32(0),
-                            b, e, init, intlen, rsize, nrec
-                        )
+                    seg = Segment(
+                        target, center, frame, dtype, t0, t1, Int32(0),
+                        b, e, init, intlen, rsize, nrec
                     )
+                    push!(segments, _segment_layout(data, kind, seg))
                 end
                 rec = next
             end

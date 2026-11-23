@@ -48,50 +48,6 @@ end
 )
 
 """
-    _spk14_layout(data, seg) -> NamedTuple
-
-The parts of the SPK type 14 or binary PCK type 3 segment `seg` (the same layout) from
-its meta data, as offsets from the address
-before the segment: `conbas`, `refbas`, `pktbas`, the counts `nref` and `npkt`, the
-packet size `pktsz`, the packet offset `pktoff`, `stride = pktsz + pktoff`, and the
-coefficient count `ncoef` of a series. Throws `SpiceError(:notsupported)` for a layout
-that `spk14b` does not write and `SpiceError(:baddaf)` for one that does not fit.
-"""
-@inline function _spk14_layout(data::Vector{Float64}, seg::Segment)
-    b, e = seg.baddr, seg.eaddr
-    len = e - b + 1
-    nmeta = _seg_count(seg, @inbounds(data[e]), 15, len, "meta data count")
-    mb, hasoff = _sg_meta_base(nmeta, e)        # meta item i is data[mb+i]
-    mb >= b - 1 || _badsegment(seg, "the meta data do not fit the segment")
-    @inbounds begin
-        conbas = _seg_count(seg, data[mb + 1], 0, len, "constants base")
-        ncon = _seg_count(seg, data[mb + 2], 1, len, "constants count")
-        rdrtyp = _seg_count(seg, data[mb + 5], 0, 4, "reference directory type")
-        refbas = _seg_count(seg, data[mb + 6], 0, len, "reference base")
-        nref = _seg_count(seg, data[mb + 7], 1, len, "reference count")
-        pdrtyp = _seg_count(seg, data[mb + 10], 0, 1, "packet directory type")
-        pktbas = _seg_count(seg, data[mb + 11], 0, len, "packet base")
-        npkt = _seg_count(seg, data[mb + 12], 1, len, "packet count")
-        pktsz = _seg_count(seg, data[mb + 15], 8, len, "packet size")
-        pktoff = hasoff ? _seg_count(seg, data[mb + 16], 0, len, "packet offset") : 0
-    end
-    (rdrtyp == 3 && pdrtyp == 0) || throw(
-        SpiceError(
-            :notsupported,
-            "$(seg.dtype == 14 ? "SPK type 14" : "binary PCK type 3") segment with " *
-                "reference directory type $rdrtyp and packet " *
-                "directory type $pdrtyp is not supported"
-        )
-    )
-    stride = pktsz + pktoff
-    (nref == npkt && refbas + nref <= len && Int128(pktbas) + Int128(npkt) * stride <= len) ||
-        _badsegment(seg, "the meta data do not agree with the length")
-    ncoef = _seg_count(seg, @inbounds(data[b - 1 + conbas + 1]), 1, len, "coefficient count")
-    6 * ncoef + 2 == pktsz || _badsegment(seg, "the packet size is not 2 + 6*NCOEF")
-    return (; conbas, refbas, nref, pktbas, npkt, pktsz, pktoff, stride, ncoef)
-end
-
-"""
     _spk14_packet(data, seg, lay, et::Float64) -> Int
 
 Address of the first double (`MID`) of the packet of the SPK type 14 or PCK type 3

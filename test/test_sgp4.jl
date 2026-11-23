@@ -938,7 +938,7 @@ group("17. two-line elements and SPK type 10", Kernels.LSK, Kernels.PCK11) do
         function refuses(change)
             bad = copy(data)
             change(bad)
-            return throws_kind(() -> Almanac._t10_state(bad, seg, et, l), :baddaf)
+            return throws_kind(() -> Almanac._t10_state(bad, Almanac._segment_layout(bad, :SPK, seg), et, l), :baddaf)
         end
         @test Almanac._t10_state(copy(data), seg, et, l) == Almanac._t10_state(data, seg, et, l)
         @test refuses(d -> d[e] = 14.0)                 # count of meta items

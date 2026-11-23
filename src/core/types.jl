@@ -32,7 +32,11 @@ For an SPK segment `target` moves relative to `center` and the data are in frame
 number `file` of the owning `KernelSet` (`file == 0` until the segment is placed in a
 set). `init`, `intlen`, `rsize` and `nrec` are the four directory values that end a
 segment of the fixed-interval Chebyshev types (SPK 2, 3, 20 and PCK 2), and are zero
-for the other types.
+for the other types. `layout` is the layout of an SPK type 10, 14 or 19 or a binary PCK
+type 3 segment, checked once at load (`_segment_layout`, in `spk/spk_layout.jl`); it is
+zero for the other types, for a segment that fails the checks, and for a segment of
+the constructor without `layout`, whose evaluator then checks the meta data at each
+call.
 """
 struct Segment
     target::Int32
@@ -48,11 +52,18 @@ struct Segment
     intlen::Float64
     rsize::Int32
     nrec::Int32
+    layout::NTuple{6, Int32}
 end
+
+Segment(target, center, frame, dtype, t0, t1, file, baddr, eaddr, init, intlen, rsize, nrec) =
+    Segment(
+    target, center, frame, dtype, t0, t1, file, baddr, eaddr, init, intlen, rsize, nrec,
+    ntuple(_ -> Int32(0), Val(6))
+)
 
 withfile(s::Segment, file::Integer) = Segment(
     s.target, s.center, s.frame, s.dtype, s.t0,
-    s.t1, Int32(file), s.baddr, s.eaddr, s.init, s.intlen, s.rsize, s.nrec
+    s.t1, Int32(file), s.baddr, s.eaddr, s.init, s.intlen, s.rsize, s.nrec, s.layout
 )
 
 "Segments of one body below which `SegmentList` keeps no index: a linear scan is faster."

@@ -11,42 +11,9 @@
 #
 # A type other than 2, 3 and 20 has no directory values in its `Segment` descriptor:
 # the evaluator reads them from the end of the segment (`data[seg.eaddr - k]`) at each
-# call and checks them, because `open_daf` does not validate these types.
-
-@noinline _badsegment(seg::Segment, msg::String) = throw(
-    SpiceError(
-        :baddaf,
-        "SPK type $(seg.dtype) segment at $(seg.baddr):$(seg.eaddr): $msg"
-    )
-)
-
-"""
-    _seg_count(seg, x::Float64, lo::Int, hi::Int, what) -> Int
-
-Nearest whole number to `x` (as `i_dnnt` of f2c); throws `SpiceError(:baddaf)` that
-names `what` unless `x` is finite and the result is in `lo:hi`.
-"""
-@inline function _seg_count(seg::Segment, x::Float64, lo::Int, hi::Int, what::String)
-    (isfinite(x) && lo - 0.5 < x < hi + 0.5) || _badsegment(seg, _count_msg(what, x, lo, hi))
-    n = _nint(x)
-    (lo <= n <= hi) || _badsegment(seg, _count_msg(what, x, lo, hi))
-    return n
-end
-@noinline _count_msg(what::String, x::Float64, lo::Int, hi::Int) = "$what = $x is not in $lo:$hi"
-
-"Largest whole number that a segment count may be (the 32-bit address range of a DAF)."
-const _MAXCOUNT = Int(typemax(Int32))
-
-"""
-    _sg_meta_base(nmeta, e) -> (m, haspktoff)
-
-Addresses of the meta data of a generic segment that ends at the address `e` and
-reports `nmeta >= 15` items, as `sgmeta_` reads them: item k is at `m + k`. A segment
-of 15 items was written as 16 doubles. Only a segment of 17 or more items has a packet
-offset (item 16): `sgmeta_` clears item 16 of a segment of 15 or 16 items. Items after
-the 17th are not used.
-"""
-@inline _sg_meta_base(nmeta::Int, e::Int) = e - (nmeta == 15 ? 16 : nmeta), nmeta >= 17
+# call and checks them, because `open_daf` does not validate these types. Types 10, 14
+# and 19 read the places of their parts from `seg.layout` when the segment has one
+# (`spk/spk_layout.jl`).
 
 """
     _lstltd(data, base, n, x) -> Int
@@ -73,16 +40,6 @@ element, as `lstltd` and `lstled` of CSPICE. Requires `n >= 0` and the range ins
     end
     return lo
 end
-
-"""
-    _segerror(kind, seg, msg) -> Union{}
-
-Throws `SpiceError(kind)` for a value of the segment `seg` that the evaluator of CSPICE
-refuses with this kind.
-"""
-@noinline _segerror(kind::Symbol, seg::Segment, msg::String) = throw(
-    SpiceError(kind, "SPK type $(seg.dtype) segment at $(seg.baddr):$(seg.eaddr): $msg")
-)
 
 "Whole part of `x` as an `Int`, with `x` limited to a range that cannot overflow."
 @inline _trunc_index(x::Float64) = unsafe_trunc(Int, clamp(x, -1.0e15, 1.0e15))

@@ -816,14 +816,17 @@ group("9. SPK data types against CSPICE") do
             Int32(-1), Int32(399), Int32(1), Int32(10), 0.0, 1.0, Int32(0),
             1, 20, 0.0, 0.0, Int32(0), Int32(0)
         )
-        @test throws_kind(() -> Almanac.spk_eval(zeros(20), seg10, 0.5, Val(1)), :notsupported)        # A count at the end of a segment that does not agree with its length. (For
+        @test throws_kind(() -> Almanac.spk_eval(zeros(20), seg10, 0.5, Val(1)), :notsupported)
+        # A segment over changed data takes the layout of those data, as a load does.
+        relayout(bad, seg) = Almanac._segment_layout(bad, :SPK, seg)
+        # A count at the end of a segment that does not agree with its length. (For
         # type 3 the count is checked when the file is opened, as for type 2.)
         for c in cases
             c.dtype in (3, 15, 17, 20) && continue
             seg = ks.spk[Int32(c.body)][1]
             bad = copy(ks.daf[seg.file])
             bad[seg.eaddr] += 1.0
-            @test throws_kind(() -> Almanac.spk_eval(bad, seg, (c.t0 + c.t1) / 2, Val(1)), :baddaf)
+            @test throws_kind(() -> Almanac.spk_eval(bad, relayout(bad, seg), (c.t0 + c.t1) / 2, Val(1)), :baddaf)
         end
         # One wrong value in the segment: `change(data, seg)` makes it, and the query
         # in the middle of the segment must throw an error of `kind`.
@@ -832,7 +835,7 @@ group("9. SPK data types against CSPICE") do
             seg = ks.spk[Int32(c.body)][1]
             bad = copy(ks.daf[seg.file])
             change(bad, seg)
-            return throws_kind(() -> Almanac.spk_eval(bad, seg, (c.t0 + c.t1) / 2, Val(1)), kind)
+            return throws_kind(() -> Almanac.spk_eval(bad, relayout(bad, seg), (c.t0 + c.t1) / 2, Val(1)), kind)
         end
         e(seg) = seg.eaddr
         b(seg) = seg.baddr
@@ -875,6 +878,26 @@ group("9. SPK data types against CSPICE") do
             1, 10, 0.0, 86400.0, Int32(3), Int32(1)
         )
         @test throws_kind(() -> Almanac.spk_eval(rec20, seg20, 100.0, Val(1)), :invalidcount)
+    end
+
+    # The layouts of types 14 and 19 are checked at load, but a bad segment fails at its
+    # evaluation, as in CSPICE: the file loads, and a type 19 segment with one bad
+    # mini-segment evaluates in the others.
+    @apart @testset "bad meta data load and fail at evaluation" begin
+        c14 = cases[findfirst(x -> x.label == "type 14, degree 9", cases)]
+        c19 = cases[findfirst(x -> x.label == "type 19, 130 intervals", cases)]
+        s14, s19 = ks.spk[Int32(c14.body)][1], ks.spk[Int32(c19.body)][1]
+        @assert s14.file == s19.file
+        bad = copy(ks.daf[s14.file])
+        bad[s14.eaddr - 2] = 7.0                               # PKTSZ of type 14
+        last = Int(bad[s19.eaddr - 2]) + s19.baddr - 2         # end of the last mini-segment
+        bad[last - 2] = 5.0                                    # its subtype
+        badpath = joinpath(mktempdir(), "bad_meta.bsp")
+        write(badpath, bad)
+        cbad = neo_context([badpath])
+        @test throws_kind(() -> spkgeo(cbad, c14.body, (c14.t0 + c14.t1) / 2, 1, EARTH), :baddaf)
+        @test spkgeo(cbad, c19.body, c19.t0, 1, EARTH) == spkgeo(ctx, c19.body, c19.t0, 1, EARTH)
+        @test throws_kind(() -> spkgeo(cbad, c19.body, c19.t1, 1, EARTH), :notsupported)
     end
 
     # Regression: the evaluators threw `:baddaf` for the values that CSPICE refuses with
