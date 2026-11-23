@@ -263,7 +263,7 @@ function _ekw_pdec(decl::AbstractString)
         if length(b) >= 11 && b[11] == UInt8('*')
             pardsc[_EK_LENIDX] = -1
         else
-            len = _dsk_parse_int(String(b[11:end]))
+            len = _try_nparsi(String(b[11:end]))
             len === nothing && _ekw_baddecl(
                 "String length specification $tok didn't parse " *
                     "as an integer.", decl
@@ -286,7 +286,7 @@ function _ekw_pdec(decl::AbstractString)
             )
             pardsc[_EK_SIZIDX] = -1
         else
-            size = _dsk_parse_int(tok)
+            size = _try_nparsi(tok)
             size === nothing && _ekw_baddecl(
                 "Column element size specification $tok " *
                     "didn't parse as an integer.", decl

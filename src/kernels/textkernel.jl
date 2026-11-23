@@ -228,6 +228,16 @@ function _nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Int
     return Int(t)
 end
 
+"The integer of `s` (`_nparsi`), or `nothing` where `nparsi` signals an error."
+function _try_nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Union{Int, Nothing}
+    return try
+        _nparsi(s)
+    catch err
+        err isa SpiceError || rethrow()
+        nothing
+    end
+end
+
 """
 Return `x` rounded to the nearest integer, a tie away from zero, when it is in the range
 that `gipool_` accepts; `nothing` otherwise (NaN included), where `gipool_` signals

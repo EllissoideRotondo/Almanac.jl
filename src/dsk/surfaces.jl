@@ -109,16 +109,6 @@ function _dsk_surface_c2n(ks::KernelSet, code::Integer, bodyid::Integer)
     return nothing
 end
 
-"`nparsi` as `srfscc_` calls it: the integer that the string holds (`_nparsi`), or `nothing` if `nparsi` gives an error."
-function _dsk_parse_int(s::AbstractString)
-    return try
-        _nparsi(s)
-    catch err
-        err isa SpiceError || rethrow()
-        nothing
-    end
-end
-
 """
     srfc2s([ctx | ks,] code, bodyid) -> (srfstr, isname)
 
@@ -179,7 +169,7 @@ Throws `SpiceError(:emptystring)` if `srfstr` is empty, and the error kinds of
 function srfscc(ks::KernelSet, srfstr::AbstractString, bodyid::Integer)
     _chkfstr("srfscc", "string `srfstr`", srfstr)
     code = _dsk_surface_n2c(ks, srfstr, bodyid)
-    return code === nothing ? _dsk_parse_int(srfstr) : code
+    return code === nothing ? _try_nparsi(srfstr) : code
 end
 
 """
