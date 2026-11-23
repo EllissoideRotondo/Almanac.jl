@@ -811,12 +811,6 @@ end
     )
 end
 
-@inline function _m_blocks(x::SMatrix{6, 6})
-    r = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
-    d = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
-    return r, d
-end
-
 """
     frame(x) -> (x̂, y, z)
 

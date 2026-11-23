@@ -420,8 +420,14 @@ end
     return primal(c) > 0.0 ? SVector(c, s1, s2, s3) : SVector(-c, -s1, -s2, -s3)
 end
 
-@inline function _m_m2q(r::SMatrix{3, 3})
+"Throw `:notarotation` unless `isrot(r, 0.1, 0.1)`, the check of `m2q_` and `m2eul_`."
+@inline function _m_checkrot(r::SMatrix{3, 3})
     _m_isrot(r, 0.1, 0.1) || throw(SpiceError(:notarotation, "the input matrix is not a rotation"))
+    return nothing
+end
+
+@inline function _m_m2q(r::SMatrix{3, 3})
+    _m_checkrot(r)
     return _m_m2q_unchecked(r)
 end
 
@@ -472,3 +478,37 @@ end
 
 "`x` rounded to a whole number, a tie away from zero, as f2c `d_nint`."
 @inline _dnint(x::Float64)::Float64 = x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x)
+
+# ---------------------------------------------------------------------------------
+# Euler angles and orthonormal columns
+# ---------------------------------------------------------------------------------
+
+@noinline _m_badaxes(a, b, c) =
+    throw(SpiceError(:badaxisnumbers, "axis numbers are $a, $b, $c; each must be 1, 2 or 3"))
+
+"Throw `:badaxisnumbers` unless each of the axes `a`, `b`, `c` is 1, 2 or 3."
+@inline function _m_checkaxes(a::Integer, b::Integer, c::Integer)
+    (1 <= a <= 3 && 1 <= b <= 3 && 1 <= c <= 3) || _m_badaxes(a, b, c)
+    return nothing
+end
+
+"`[angle3]_axis3 * [angle2]_axis2 * [angle1]_axis1` as `eul2m_`, with its axis check."
+@inline function _m_eul2m(angle3, angle2, angle1, axis3::Integer, axis2::Integer, axis1::Integer)
+    _m_checkaxes(axis3, axis2, axis1)
+    return _m_eul2m_unchecked(angle3, angle2, angle1, axis3, axis2, axis1)
+end
+
+"`m` with orthonormal columns as `sharpr_`: column 1 scaled, column 3 the unit cross product of columns 1 and 2, column 2 that of columns 3 and 1."
+@inline function _m_sharpr(m::SMatrix{3, 3})
+    c1 = _m_hat(_m_col(m, 1))
+    c3 = _m_ucrss(c1, _m_col(m, 2))
+    c2 = _m_ucrss(c3, c1)
+    return _m_cols(c1, c2, c3)
+end
+
+"The upper left and lower left 3 by 3 blocks of a state transformation: the rotation and its derivative."
+@inline function _m_blocks(x::SMatrix{6, 6})
+    r = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
+    d = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+    return r, d
+end
