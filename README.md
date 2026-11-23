@@ -30,12 +30,11 @@ the [issues](https://github.com/Orbitology/Almanac.jl/issues).
 
 ## Installation
 
-Almanac.jl requires Julia 1.10 or later. It is not yet registered, so add it from its
-repository:
+Almanac.jl requires Julia 1.10 or later. Install it with the package manager:
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/Orbitology/Almanac.jl")
+Pkg.add("Almanac")
 ```
 
 ## Quickstart

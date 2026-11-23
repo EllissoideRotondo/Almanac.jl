@@ -13,7 +13,7 @@ links to its NAIF page.
 Almanac.jl needs Julia 1.10 or later. Install it from the Julia package manager:
 
 ```julia-repl
-pkg> add https://github.com/Orbitology/Almanac.jl
+pkg> add Almanac
 ```
 
 ## Features
