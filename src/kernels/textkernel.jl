@@ -416,25 +416,28 @@ replaced by blanks if `tabs`, blanks removed at both ends. The lines of `lmpool`
 their tabs (`tabs = false`), as `zzrvbf` reads them.
 """
 function _clean_line(raw::AbstractString, tabs::Bool = true)::Vector{UInt8}
-    b = Vector{UInt8}(String(raw))     # one copy; `Vector{UInt8}(codeunits(raw))` of a SubString iterates byte by byte
-    while !isempty(b) && (b[end] == UInt8('\r') || b[end] == UInt8('\n'))
-        pop!(b)
+    cu = codeunits(raw)
+    n = length(cu)
+    while n > 0 && (cu[n] == UInt8('\r') || cu[n] == UInt8('\n'))
+        n -= 1
     end
-    length(b) > _TK_LINLEN && resize!(b, _TK_LINLEN)
-    if tabs
-        for i in eachindex(b)
-            b[i] == 0x09 && (b[i] = UInt8(' '))
-        end
-    end
-    hi = length(b)
-    while hi > 0 && b[hi] == UInt8(' ')
+    n = min(n, _TK_LINLEN)
+    blank(c) = c == UInt8(' ') || (tabs && c == 0x09)
+    hi = n
+    while hi > 0 && blank(cu[hi])
         hi -= 1
     end
     lo = 1
-    while lo <= hi && b[lo] == UInt8(' ')
+    while lo <= hi && blank(cu[lo])
         lo += 1
     end
-    return b[lo:hi]
+    # One copy of the bytes `lo:hi`, with the tabs replaced.
+    b = Vector{UInt8}(undef, hi - lo + 1)
+    for i in lo:hi            # invariant: b[1:i-lo] holds the cleaned bytes lo:i-1
+        c = cu[i]
+        b[i - lo + 1] = (tabs && c == 0x09) ? UInt8(' ') : c
+    end
+    return b
 end
 
 const _BEGINDATA = Vector{UInt8}(codeunits("\\begindata"))

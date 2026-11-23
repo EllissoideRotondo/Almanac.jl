@@ -98,36 +98,36 @@ function build_bodyrot(pool::AbstractDict)
     out = Dict{Int32, BodyRot}()
     for (name, value) in pool
         value isa Vector{Float64} || continue
+        # The test of the ends spares the regular expression for most names.
+        (startswith(name, "BODY") && endswith(name, "_PM")) || continue
         m = match(r"^BODY(-?\d+)_PM$", name)
         m === nothing && continue
         id = tryparse(Int32, m.captures[1])
         id === nothing && continue
-        ra = _pool_numbers(pool, "BODY$(id)_POLE_RA")
-        dec = _pool_numbers(pool, "BODY$(id)_POLE_DEC")
+        # The names are joined from strings: `*` of strings is faster than interpolation.
+        bid = "BODY" * string(id)
+        ra = _pool_numbers(pool, bid * "_POLE_RA")
+        dec = _pool_numbers(pool, bid * "_POLE_DEC")
         (ra === nothing || dec === nothing) && continue
         sys = _bodbry(id)
-        epoch = _pool_first(
-            pool,
-            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _JD2000
-        )
-        ref = _pool_first(
-            pool,
-            ("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME"), 1.0
-        )
+        bs = "BODY" * string(sys)
+        epoch1, epoch2 = bs * "_CONSTANTS_JED_EPOCH", bs * "_CONSTS_JED_EPOCH"
+        ref1, ref2 = bs * "_CONSTANTS_REF_FRAME", bs * "_CONSTS_REF_FRAME"
+        epoch = _pool_first(pool, (epoch1, epoch2), _JD2000)
+        ref = _pool_first(pool, (ref1, ref2), 1.0)
         both(a, b) = _pool_numbers(pool, a) !== nothing && _pool_numbers(pool, b) !== nothing
         # `tisbod_` reads the frame with `gipool_` after the epoch check and before the
         # check of the two frame forms.
         refid = _gipool_value(ref)
-        specerr = both("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH") ?
-            :competingepochspec : refid === nothing ? :intoutofrange :
-            both("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME") ?
-            :competingframespec : :none
+        specerr = both(epoch1, epoch2) ? :competingepochspec :
+            refid === nothing ? :intoutofrange :
+            both(ref1, ref2) ? :competingframespec : :none
         out[id] = BodyRot(
             ra, dec, value,
-            _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_RA"),
-            _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_DEC"),
-            _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_PM"),
-            _pool_numbers_or_empty(pool, "BODY$(sys)_NUT_PREC_ANGLES"),
+            _pool_numbers_or_empty(pool, bid * "_NUT_PREC_RA"),
+            _pool_numbers_or_empty(pool, bid * "_NUT_PREC_DEC"),
+            _pool_numbers_or_empty(pool, bid * "_NUT_PREC_PM"),
+            _pool_numbers_or_empty(pool, bs * "_NUT_PREC_ANGLES"),
             something(refid, _J2000_FRAME), epoch, _phase_degree(pool, sys), specerr
         )
     end
@@ -141,7 +141,7 @@ Value of `BODY<sys>_MAX_PHASE_DEGREE` rounded as CSPICE rounds it, or 1 if the v
 is absent. The value is not checked here; `_phase_ncoef` checks it at evaluation.
 """
 function _phase_degree(pool::AbstractDict, sys::Integer)
-    v = _pool_numbers(pool, "BODY$(sys)_MAX_PHASE_DEGREE")
+    v = _pool_numbers(pool, "BODY" * string(sys) * "_MAX_PHASE_DEGREE")
     (v === nothing || isempty(v)) && return Int32(1)
     return Int32(_nint(v[1]))                  # `i_dnnt` of `bodvcd_`'s value
 end
