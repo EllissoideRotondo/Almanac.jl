@@ -1615,6 +1615,87 @@ function dsk_part_17()
     return nothing
 end
 
+"""
+Part of group 12: (h) the offsets of segments in frames centred on another body, two
+defects of CSPICE that Almanac fixes. The reference is CSPICE with the one segment
+that the call uses; CSPICE with all the files must differ, so that the fixture shows
+the defect.
+
+- `zzdsksba` looks up the offset of every segment of the body: a segment of surface 10
+  in a frame centred on Deimos (402), for which no SPK data are loaded, makes every
+  search for Mars fail, also one for surface 9 only.
+- `zzdskbux` (in the loop that collects the hit segments) and `zzdskbun` reuse the
+  offset of the segment examined before, in the same frame: segment A (surface 8,
+  searched first) and segment B (surface 9) are in `MARS_OFF`, whose centre (the Mars
+  barycentre) moves in that frame, and the middles of their coverages are a quarter of
+  a Mars day apart. With the offset of A, CSPICE finds that the ray misses B and that
+  the intercept on B is in no segment.
+"""
+function dsk_part_18(env)
+    (; dir, tk, spk) = env
+    fk = joinpath(dir, "far.tf")
+    write(
+        fk, """
+        KPL/FK
+        \\begindata
+        FRAME_MARS_FAR           = 1499004
+        FRAME_1499004_NAME       = 'MARS_FAR'
+        FRAME_1499004_CLASS      = 4
+        FRAME_1499004_CLASS_ID   = 1499004
+        FRAME_1499004_CENTER     = 402
+        TKFRAME_1499004_RELATIVE = 'IAU_MARS'
+        TKFRAME_1499004_SPEC     = 'ANGLES'
+        TKFRAME_1499004_UNITS    = 'DEGREES'
+        TKFRAME_1499004_AXES     = ( 1 2 3 )
+        TKFRAME_1499004_ANGLES   = ( 0 0 0 )
+        \\begintext
+        """
+    )
+    bv, bp = cube_shape(1.5)
+    av, ap = cube_shape(0.05)
+    av = [v + V3(0.0, 0.0, 1.3) for v in av]          # inside B, off the rays below
+    quarter = 88642.66 / 4                            # a quarter of a Mars day (s)
+    spec_b = DskSpec(499, 9, 2, "MARS_OFF", 3, Float64[], (-1.5, 1.5, -1.5, 1.5), -1.0e5, 1.0e5, 1.0, 1, bv, bp)
+    spec_a = DskSpec(
+        499, 8, 2, "MARS_OFF", 3, Float64[], (-0.05, 0.05, -0.05, 0.05), -1.0e5,
+        1.0e5 + 2quarter, 1.0, 1, av, ap
+    )
+    spec_c = DskSpec(499, 10, 2, "MARS_FAR", 3, Float64[], (-1.5, 1.5, -1.5, 1.5), -1.0e5, 1.0e5, 1.0, 1, bv, bp)
+    oracle_load([tk, spk, fk])
+    alone = c_write_dsk(joinpath(dir, "off_b.bds"), [spec_b])
+    pair = c_write_dsk(joinpath(dir, "off_ba.bds"), [spec_b, spec_a])    # A comes first in the search
+    far = c_write_dsk(joinpath(dir, "off_far.bds"), [spec_c])
+    v = V3(10.0, -1.5, 0.5)       # near the edge of B, which A's offset moves off the ray
+    d = V3(-1.0, 0.0, 0.0)
+    ray(srf) = c_dskxsi("MARS", srf, 0.0, "IAU_MARS", v, d)
+
+    oracle_load([tk, spk, fk, alone])
+    want_f, want_x = ray(Int[])[1:2]
+    want_n = c_srfnrm("DSK/UNPRIORITIZED", "MARS", 0.0, "IAU_MARS", [want_x])[1]
+    @test want_f
+
+    # zzdsksba: the segment without SPK data for the centre of its frame is not used.
+    list = [tk, spk, fk, far, alone]
+    oracle_load(list)
+    ctx = neo_context(list)
+    @test c_kind(() -> ray([9])) === :spkinsuffdata
+    @test neo_kind(() -> dskxsi(ctx, false, "MARS", [10], 0.0, "IAU_MARS", v, d)) === :spkinsuffdata ===
+        c_kind(() -> ray([10]))
+    r = dskxsi(ctx, false, "MARS", [9], 0.0, "IAU_MARS", v, d)
+    @test r !== nothing && r[1] == want_x
+
+    # zzdskbux, zzdskbun: B takes its own offset, not that of A.
+    list = [tk, spk, fk, pair]
+    oracle_load(list)
+    ctx = neo_context(list)
+    @test !ray(Int[])[1]
+    @test c_kind(() -> c_srfnrm("DSK/UNPRIORITIZED", "MARS", 0.0, "IAU_MARS", [want_x])) === :pointnotinsegment
+    r = dskxsi(ctx, false, "MARS", Int[], 0.0, "IAU_MARS", v, d)
+    @test r !== nothing && r[1] == want_x && r[2].dskdsc.surfce == 9
+    @test srfnrm(ctx, "DSK/UNPRIORITIZED", "MARS", 0.0, "IAU_MARS", [want_x])[1] == want_n
+    return nothing
+end
+
 group("12. DSK type 2 against CSPICE") do
     rng = MersenneTwister(SEED + 12)
     dir = mktempdir()
@@ -1706,6 +1787,10 @@ group("12. DSK type 2 against CSPICE") do
 
     @apart @testset "(h) volume element routines on special inputs" begin
         dsk_part_17()
+    end
+
+    @apart @testset "(h) offsets of segments in frames centred on another body" begin
+        dsk_part_18(env)
     end
 end
 
