@@ -17,10 +17,7 @@ Contract: returns the leap-second data when `pool` has all of `DELTET/DELTA_T_A`
 list of pairs) as numeric variables, and `nothing` otherwise.
 """
 function build_lsk(pool::AbstractDict{String, PoolValue})::Union{Nothing, LeapSeconds}
-    num(key) = begin
-        v = get(pool, key, nothing)
-        v isa Vector{Float64} ? v : nothing
-    end
+    num(key) = _pool_numbers(pool, key)
     dta, k, eb = num("DELTET/DELTA_T_A"), num("DELTET/K"), num("DELTET/EB")
     m, dat = num("DELTET/M"), num("DELTET/DELTA_AT")
     (

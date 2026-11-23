@@ -272,6 +272,12 @@ function _gipool_first(
     return _gipool_value(@inbounds v[1])
 end
 
+"Contract: the numeric values of the pool variable `name`, or `nothing` if it is missing or holds strings."
+function _pool_numbers(pool::AbstractDict, name::AbstractString)
+    v = get(pool, name, nothing)
+    return v isa Vector{Float64} ? v : nothing
+end
+
 # ---------------------------------------------------------------------------------
 # Dates: the `@` forms, as TPARSE converts them
 # ---------------------------------------------------------------------------------
