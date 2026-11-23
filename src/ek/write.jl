@@ -224,17 +224,11 @@ end
     _ekw_pdec(decl) -> Vector{Int32}
 
 The column descriptor (11 integers) that the declaration `decl` gives, as `zzekpdec`.
-A declaration is a list of `KEYWORD = value` items that commas separate, in any case:
-
-- `DATATYPE` (required): `INTEGER`, `DOUBLE PRECISION`, `TIME`, `CHARACTER*(n)` or
-  `CHARACTER*(*)`;
-- `SIZE`: a number or `VARIABLE` (1 if absent);
-- `INDEXED`, `NULLS_OK`, `FIXED_COUNT`: `TRUE` or `FALSE` (false if absent).
-
-Postcondition: class, type, string length, size, index type (1 or -1) and null flag
-(1 or -1) are set; name base, index pointer, position and metadata pointer are 0.
-Throws `SpiceError(:badcolumndecl)` for a declaration that does not follow these
-rules, and `:badcolumdecl` (the spelling of CSPICE) if `DATATYPE` is absent.
+The grammar of `decl` is in [`ekbseg`](@ref). The result sets class, type, string
+length, size, index type (1 or -1) and null flag (1 or -1); name base, index pointer,
+position and metadata pointer are 0. Throws `SpiceError(:badcolumndecl)` for a
+declaration that does not follow the grammar, and `:badcolumdecl` (the spelling of
+CSPICE) if `DATATYPE` is absent.
 """
 function _ekw_pdec(decl::AbstractString)
     pardsc = zeros(Int32, _EK_CDSCSZ)
@@ -374,8 +368,8 @@ adjacent integer pages with the segment descriptor and the column descriptors,
 adjacent character pages with the table name and the column names (upper case), the
 record tree (type 1 only), the three data page trees and, in a type 1 segment, an
 empty index tree for every indexed column. The segment is appended to the segment tree
-of the file. Mutates `cdscrs` (position, name base, index). Postcondition: `segno` is
-the number of segments of the file.
+of the file, and `segno` is its number. Mutates `cdscrs` (position, name base,
+index).
 """
 function _ekw_bs(
         h::DASHandle, stype::Int, tabnam::AbstractString,
@@ -516,9 +510,9 @@ end
     _ekw_segment(h, who, segno) -> (segdsc, mbase)
 
 A copy of the descriptor of segment `segno` for a routine that changes records, and
-the integer base of the segment metadata. Preconditions: write handle; valid segment
-number (`:invalidindex`); segment of type 1, else `SpiceError(:invalidtype)` (CSPICE
-has no such check and damages a type 2 segment).
+the integer base of the segment metadata. Throws the errors of `_ekw_check`,
+`SpiceError(:invalidindex)` for a bad segment number and `SpiceError(:invalidtype)` for
+a segment of type 2 (CSPICE has no such check and damages the segment).
 """
 function _ekw_segment(h::DASHandle, who::AbstractString, segno::Integer)
     _ekw_check(h, who)
@@ -992,8 +986,8 @@ of CSPICE. Return the segment number (from 1) and the state of the load.
 exactly once with [`ekaclc`](@ref), [`ekacld`](@ref) or [`ekacli`](@ref), then call
 [`ekffld`](@ref); pass `rcptrs` to each of these calls. Until `ekffld` the segment
 cannot be read or extended. [`ekcls`](@ref) before `ekffld` closes the file without an
-error, as in CSPICE, but the file then holds a segment that [`eklef`](@ref) refuses. Other segments of the file can be changed meanwhile, which
-CSPICE does not allow.
+error, as in CSPICE, but the file then holds a segment that [`eklef`](@ref) refuses.
+Other segments of the file can be changed meanwhile, which CSPICE does not allow.
 
 If the columns are declared with `FIXED_COUNT = TRUE`, the number of rows is fixed:
 [`ekappr`](@ref), [`ekinsr`](@ref) and [`ekdelr`](@ref) refuse the segment.
@@ -1328,7 +1322,7 @@ ekacli(
 End the fast load of a type 1 segment (`zzekff01`): the records get their status and
 the data pointers of all columns (from the stack of the load), the record tree is
 made, and the segment descriptor gets the tree and marks the last data pages as full.
-Precondition: every column was stored once, else `SpiceError(:invalidaddress)`.
+Throws `SpiceError(:invalidaddress)` unless every column was stored once.
 """
 function _ekw_ff01(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     _, mbase = _ek_mloc(h, segno)

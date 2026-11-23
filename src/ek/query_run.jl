@@ -107,7 +107,6 @@ end
     )
 )
 
-"The first `_EK_MAXSTR` characters of the element `r` of the store `f` as a `String`."
 _ek_ctrunc(f, r::_EKCRef) = _ek_cstring(f.chars, _ek_cfirst(r, _EK_MAXSTR))
 
 """
@@ -181,7 +180,7 @@ end
 
 Port of `zzekscmp`: true if the first element of the entry of column `col` in the record
 `recptr` of the store `f` has the relation `op` to a value of type code `dtype`
-(`cval`, `dval` or `ival`), with the rules of [`_ek_vrel`](@ref). LIKE and UNLIKE are
+(`cval`, `dval` or `ival`), with the rules of `_ek_vrel`. LIKE and UNLIKE are
 false for a null entry. Throws as `_ek_vrel`, and `:unnaturalrelation` for an operator
 that the types do not have.
 """
@@ -287,7 +286,7 @@ end
 
 Record pointer at position `key` of the index of column `col`, as `zzekixlk`. An index
 of type 1 is a tree; an index of type 2 (fast writers) is an order vector in adjacent
-integer pages. `ix` is the index decoded at load ([`_ek_ixvals`](@ref)); if it is
+integer pages. `ix` is the index decoded at load (`_ek_ixvals`); if it is
 empty the file is read. Throws `SpiceError(:invalidtype)` for another index type.
 """
 function _ek_ixlk(f, col::_EKColumn, key::Int, ix::Vector{Int32} = _EK_NOIX)
@@ -320,8 +319,8 @@ end
 
 Position of the last entry in the index of `col` that is less than (`strict`) or not
 greater than the value, 0 if there is none: the binary search of `zzeklltc`/`zzekllec`
-and their integer and double forms. `ix` as in [`_ek_ixlk`](@ref). Precondition: `col`
-has an index over `nrows` rows.
+and their integer and double forms. `ix` as in `_ek_ixlk`. `col` has an index over
+`nrows` rows.
 """
 function _ek_ixlast(
         f, col::_EKColumn, nrows::Int, strict::Bool, dtype::Int, cval::String,
@@ -380,8 +379,8 @@ Port of `zzekkey`: choose the key column of the segment `qs` for the value const
 `cons` that are `active`. Among the indexed columns that have an active constraint (in
 column order), the key is the one whose constraints with EQ, LT, LE, GT, GE leave the
 smallest range `begidx:endidx` of index positions; a range that is empty ends the
-search. Postcondition: if `found`, the EQ, LT, LE, GT and GE constraints on the key
-column are not active any more, because the range satisfies them.
+search. If `found`, the EQ, LT, LE, GT and GE constraints on the key column become
+inactive in `active`, because the range satisfies them.
 """
 function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
     nrows = Int(qs.seg.nrows)

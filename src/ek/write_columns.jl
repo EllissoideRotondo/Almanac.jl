@@ -168,9 +168,9 @@ Position in the index tree of the column `coldsc` of the last entry that is not 
 the pair (`key`, `recptr`), and the record pointer at that position; `(0, 0)` if no
 entry qualifies (`zzeklerc`, `zzeklerd`, `zzekleri` with `zzekerc1`, `zzekerd1`,
 `zzekeri1`). The index is in the order of the entry values, null entries first, and
-entries with equal values in the order of their record pointers. Precondition: index
-of type 1 (`:notindexed`, `:invalidtype`) that holds no more entries than the segment
-has rows (`:sizemismatch`).
+entries with equal values in the order of their record pointers. Throws `SpiceError`:
+`:notindexed` or `:invalidtype` unless the index has type 1, `:sizemismatch` if it
+holds more entries than the segment has rows.
 """
 function _ekw_ler(
         s, segdsc::AbstractVector{Int32}, coldsc::AbstractVector{Int32}, key,
@@ -215,7 +215,6 @@ end
 
 Insert the record `recptr`, whose entry in the indexed column `coldsc` is `key` (or
 null), into the index of the column (`zzekiii1`, `zzekiid1`, `zzekiic1`).
-Postcondition: the index is in order and has one entry more.
 """
 function _ekw_ixin(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, key,
@@ -297,9 +296,9 @@ end
 """
     _ekw_ixdl(h, segdsc, coldsc, recptr) -> Nothing
 
-Delete the record `recptr` from the index of the column `coldsc` (`zzekixdl`).
-Precondition: the column has an index (`:bug`) of type 1 (`:invalidtype`), and the
-entry of the record is not changed yet.
+Delete the record `recptr` from the index of the column `coldsc` (`zzekixdl`). The
+entry of the record must still hold its indexed value. Throws `SpiceError(:bug)` for a
+column without index and `SpiceError(:invalidtype)` for an index of another type than 1.
 """
 function _ekw_ixdl(h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Integer)
     idxtyp = coldsc[_EK_IXTIDX]
@@ -409,9 +408,10 @@ end
 Add the entry `val` (or null) of a scalar integer, double or time column (class 1 or
 2) to the record at `recptr` (`zzekad01`, `zzekad02`). The value takes the next free
 word of the last data page of its type, or the first word of a new page; an indexed
-column gets the record in its index. Preconditions (each throws `SpiceError`): valid
-column position (`:invalidindex`), null allowed (`:badattribute`), entry not written
-yet (`:nonemptyentry`). Postcondition: the segment descriptor in the file is `segdsc`.
+column gets the record in its index, and the segment descriptor in the file becomes
+`segdsc`. Throws `SpiceError`: `:invalidindex` for a bad column position,
+`:badattribute` for a null in a column without nulls, `:nonemptyentry` for an entry
+that is written already.
 """
 function _ekw_ad12(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -456,8 +456,8 @@ Add the string `cval` (or null) of a scalar character column (class 3) to the re
 without trailing blanks (at least one; at most the string length of the column); the
 string starts on the last character data page if that has room for the count and one
 character, and continues on new pages. The index compares the whole of `cval`, as in
-CSPICE, also if the column stores less of it. Preconditions: as `_ekw_ad12`; CSPICE
-does not check that the entry is empty (see `_ekw_empty_check`).
+CSPICE, also if the column stores less of it. Throws as `_ekw_ad12`; CSPICE does not
+check that the entry is empty (see `_ekw_empty_check`).
 """
 function _ekw_ad03(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -524,9 +524,8 @@ Add the array `vals` (or null) of an integer, double or time array column (class
 5) to the record at `recptr` (`zzekad04`, `zzekad05`). The file takes the element
 count and then the elements; the entry starts on the last data page of its type if
 that has two free words, and continues on new pages that the forward pointers link.
-Preconditions: valid column position (`:invalidindex`), null allowed
-(`:badattribute`), `length(vals) >= 1` and equal to a fixed entry size
-(`:invalidcount`), entry not written yet (`:nonemptyentry`).
+Throws as `_ekw_ad12`, and `SpiceError(:invalidcount)` unless `length(vals) >= 1`
+and, for a fixed entry size, equal to it.
 """
 function _ekw_ad45(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -598,7 +597,7 @@ end
 Add the array of strings `cvals` (or null) of a character array column (class 6) to the
 record at `recptr` (`zzekad06`). The file takes a five-character element count and
 then every string with exactly the string length of the column (cut or continued with
-blanks). Preconditions as `_ekw_ad45`.
+blanks). Throws as `_ekw_ad45`.
 """
 function _ekw_ad06(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -779,7 +778,7 @@ CSPICE sets the status word of the record to 2 ("updated") in these three routin
 so does this function.
 
 For a record that the fast writers made (its record page has the link count 0, see
-[`_ekw_fast_record`](@ref)) the first page of the entry loses a link and no page is
+`_ekw_fast_record`) the first page of the entry loses a link and no page is
 freed. CSPICE takes a link from every page of the entry and frees a page without
 links; after a fast load that frees pages that other entries still use.
 """
@@ -1400,7 +1399,7 @@ end
 
 Store a whole fixed-count character column (class 9) of a type 2 segment
 (`zzekac09`): every row takes exactly the string length `l` of the column, and a page
-holds `1014 ÷ l` rows. Precondition: `1 <= l <= 1014`, else `:invalidsize` (CSPICE
+holds `1014 ÷ l` rows. Throws `SpiceError(:invalidsize)` unless `1 <= l <= 1014` (CSPICE
 divides by zero for `l = 0`, and it also refuses a column whose string length is
 greater than the declared length of the input strings, which a string here does not
 have). CSPICE writes whole page buffers, so the forward pointers of these pages hold

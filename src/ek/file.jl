@@ -163,8 +163,8 @@ end
 
 Look up `key` in the tree with the root page `tree`, as `zzektrlk`: the data value, the
 page of the node that holds the key, the key offset of that node, the position of the
-key in the node, and the level of the node (1 for the root). Precondition:
-`1 <= key <= _ek_trsz(ints, tree)`, else `SpiceError(:indexoutofrange)`. Throws
+key in the node, and the level of the node (1 for the root). Throws
+`SpiceError(:indexoutofrange)` unless `1 <= key <= _ek_trsz(ints, tree)`, and
 `SpiceError(:bug)` for a damaged tree.
 """
 function _ek_trlk(ints::AbstractVector{Int32}, tree::Integer, key::Integer)
@@ -216,9 +216,9 @@ end
 """
     _ek_tree_values(ints, tree) -> Vector{Int32}
 
-All data values of the tree with the root page `tree`, in key order. Postcondition: the
-length is the number of keys of the tree. Throws `SpiceError(:bug)` for a tree whose
-nodes do not hold the number of keys that the root states.
+All data values of the tree with the root page `tree`, in key order. Throws
+`SpiceError(:bug)` for a tree whose nodes do not hold the number of keys that the root
+states.
 """
 function _ek_tree_values(ints::AbstractVector{Int32}, tree::Integer)
     n = _ek_trsz(ints, tree)
@@ -420,8 +420,8 @@ end
     open_ek(path) -> EKFile
 
 Open the EK file at `path` for `furnsh` and decode its segments, as the first part of
-`eklef`. Contract: `path` names a DAS file that holds a paged EK of architecture 8 with
-at least one segment, of either byte order. In the result the address spaces are
+`eklef`. The file is a DAS file of either byte order that holds a paged EK of
+architecture 8 with at least one segment. In the result the address spaces are
 memory-mapped where the file allows it. Throws `SpiceError` with the kinds of `dasopr`,
 `:wrongarchitecture`, `:invalidformat` and `:eknosegments`. The columns of the segments
 are checked by `_ek_build_tables`.

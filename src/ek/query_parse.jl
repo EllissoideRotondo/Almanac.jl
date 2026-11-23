@@ -247,7 +247,7 @@ struct _EKQEnc
     dx::Vector{Float64}     # the correctly rounded value of each element of `d`
 end
 
-"Contract: returns a new encoded query in the state that `zzekqini_` gives."
+"A new encoded query in the state that `zzekqini_` gives."
 function _ek_qini()
     i = zeros(Int32, 19)
     i[2] = 1
@@ -296,9 +296,10 @@ const _EKQ_NODESCR = (1, 0, 0, 0, 0, 0)
 """
     _ek_qinqc!(q, value, lxb, lxe) -> NTuple{6,Int}
 
-Contract: `value` is not empty. Stores the bytes `value` in the character buffer of `q`
-and returns the descriptor of the string with the lexeme bounds `lxb`, `lxe`
-(`zzekinqc_`). Throws `SpiceError(:buffertoosmall)` if the buffer is full.
+Store the bytes `value` in the character buffer of `q` and return the descriptor of
+the string with the lexeme bounds `lxb`, `lxe` (`zzekinqc_`). Throws
+`SpiceError(:invalidcount)` for an empty `value` and `SpiceError(:buffertoosmall)` if
+the buffer is full.
 """
 function _ek_qinqc!(q::_EKQEnc, value::AbstractVector{UInt8}, lxb::Int, lxe::Int)
     n = length(value)
@@ -317,10 +318,9 @@ end
 """
     _ek_qinqn!(q, value, type, lxb, lxe) -> NTuple{6,Int}
 
-Contract: stores the number `value` of type code `type` in the double buffer of `q` and
-returns its descriptor (`zzekinqn_`); `exact` is the correctly rounded value of the same
-text. Throws `SpiceError(:buffertoosmall)` if the
-buffer is full.
+Store the number `value` of type code `type` in the double buffer of `q` and return
+its descriptor (`zzekinqn_`); `exact` is the correctly rounded value of the same text.
+Throws `SpiceError(:buffertoosmall)` if the buffer is full.
 """
 function _ek_qinqn!(
         q::_EKQEnc, value::Float64, type::Int, lxb::Int, lxe::Int,
@@ -372,7 +372,7 @@ end
 @inline _ek_qisidtail(c::UInt8) =
     _ek_qisalpha(c) || _ek_qisdigit(c) || c == UInt8('$') || c == UInt8('_')
 
-"Contract: returns `(last, nchar)` of the unsigned integer that starts at `s[first]`, as `lx4uns_`; `nchar == 0` and `last == first - 1` if there is none."
+"`(last, nchar)` of the unsigned integer that starts at `s[first]`, as `lx4uns_`; `nchar == 0` and `last == first - 1` if there is none."
 function _ek_qlx4uns(s::Vector{UInt8}, first::Int)
     l = length(s)
     last = first - 1
@@ -385,7 +385,7 @@ function _ek_qlx4uns(s::Vector{UInt8}, first::Int)
     return last, last + 1 - first
 end
 
-"Contract: as `_ek_qlx4uns` for a signed integer (`lx4sgn_`)."
+"As `_ek_qlx4uns` for a signed integer (`lx4sgn_`)."
 function _ek_qlx4sgn(s::Vector{UInt8}, first::Int)
     (first < 1 || first > length(s)) && return first - 1, 0
     c = s[first]
@@ -396,7 +396,7 @@ function _ek_qlx4sgn(s::Vector{UInt8}, first::Int)
     return _ek_qlx4uns(s, first)
 end
 
-"Contract: as `_ek_qlx4uns` for a decimal number (`lx4dec_`); `nchar` is only exact for the forms that start with a digit or a sign and a digit, as in CSPICE."
+"As `_ek_qlx4uns` for a decimal number (`lx4dec_`); `nchar` is only exact for the forms that start with a digit or a sign and a digit, as in CSPICE."
 function _ek_qlx4dec(s::Vector{UInt8}, first::Int)
     l = length(s)
     (first < 1 || first > l) && return first - 1, 0
@@ -418,7 +418,7 @@ function _ek_qlx4dec(s::Vector{UInt8}, first::Int)
     return last, n
 end
 
-"Contract: as `_ek_qlx4uns` for a number with an optional exponent `E`, `D`, `e` or `d` (`lx4num_`)."
+"As `_ek_qlx4uns` for a number with an optional exponent `E`, `D`, `e` or `d` (`lx4num_`)."
 function _ek_qlx4num(s::Vector{UInt8}, first::Int)
     l = length(s)
     (first < 1 || first > l) && return first - 1, 0
@@ -439,8 +439,8 @@ end
 """
     _ek_qlxqstr(s, qchar, first) -> (last, nchar)
 
-Contract: finds the quoted string that starts at `s[first]` with the quote character
-`qchar`, as `lxqstr_`: the string ends at the first quote that is not doubled, and a
+Find the quoted string that starts at `s[first]` with the quote character `qchar`, as
+`lxqstr_`: the string ends at the first quote that is not doubled, and a
 quote without a partner ends it at the last complete pair. `nchar == 0` if `s[first]`
 is not `qchar` or no second quote follows.
 """
@@ -474,9 +474,9 @@ end
 """
     _ek_qparsqs(s, qchar, outlen) -> (value, error)
 
-Contract: `s` is a quoted string token with the quote character `qchar`. Returns the
-bytes between the quotes with each doubled quote as one, or the error message of
-`parsqs_` (`""` if none); `outlen` is the room for the value.
+Return the bytes between the quotes of the quoted string token `s` with each doubled
+quote `qchar` as one, and the error message of `parsqs_` (`""` if none); `outlen` is
+the room for the value.
 """
 function _ek_qparsqs(s::AbstractVector{UInt8}, qchar::UInt8, outlen::Int)
     value = UInt8[]
@@ -512,10 +512,9 @@ end
 """
     _ek_qexact(lexeme, x) -> Float64
 
-Contract: `lexeme` is a numeric token that `nparsd` reads as `x`. Returns the correctly
-rounded double of the token, or `x` if the token has a form that Julia does not read
-(the result then is the value of CSPICE). The two values differ by a few units in the
-last place at most, so a result farther from `x` is not accepted.
+Return the correctly rounded double of the numeric token `lexeme`, which `nparsd` reads
+as `x`, or `x` if Julia does not read the token or the two differ by more than 8 units
+in the last place.
 """
 function _ek_qexact(lexeme::AbstractVector{UInt8}, x::Float64)::Float64
     text = replace(String(copy(lexeme)), r"[dD]" => "e", ' ' => "", ',' => "")
@@ -527,9 +526,9 @@ end
 """
     _ek_qnparsd(s) -> (value, error, ptr)
 
-Contract: `s` is a numeric token of `_ek_qlx4num`. Returns its value with an empty
-`error`, or the message and the pointer of `nparsd_` for a number that is too large
-for a double (the only error that such a token can have).
+Return the value of the numeric token `s` of `_ek_qlx4num` with an empty `error`, or
+the message and the pointer of `nparsd_` for a number that is too large for a double
+(the only error that such a token can have).
 """
 function _ek_qnparsd(s::AbstractVector{UInt8})
     try
@@ -576,10 +575,10 @@ end
 """
     _ek_qscan(qb, maxntk, maxnum, buflen) -> (tokens, error)
 
-Contract: `qb` holds the bytes of a query of at most `_EKQ_MAXQRY` characters without
-trailing blanks. Returns the tokens of the query (`zzekscan_`) and `""`, or `nothing`
-and the error message of the scanner; `maxntk` and `maxnum` are the largest numbers of
-tokens and of numeric tokens and `buflen` the room for identifiers and strings.
+Return the tokens of the query `qb` (at most `_EKQ_MAXQRY` characters) and `""`, as
+`zzekscan_`, or `nothing` and the error message of the scanner. `maxntk` and `maxnum`
+are the largest numbers of tokens and of numeric tokens, `buflen` the room for
+identifiers and strings.
 """
 function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::Int)
     l = max(1, something(findlast(!=(UInt8(' ')), qb), 0))
@@ -729,7 +728,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         ), ""
 end
 
-"Contract: returns `(loc, found)` of the first token with the code `tokid` (and the keyword code `kwcode` for a keyword), as `zzektloc_`; `loc == n + 1` if there is none."
+"`(loc, found)` of the first token with the code `tokid` (and the keyword code `kwcode` for a keyword), as `zzektloc_`; `loc == n + 1` if there is none."
 function _ek_qtloc(tk::_EKQTokens, tokid::Int, kwcode::Int)
     for loc in 1:tk.n
         if tk.tokens[loc] == tokid && (tokid != _EKQ_TKKEY || tk.values[loc] == kwcode)
@@ -819,7 +818,7 @@ function _ek_qlnktl(node::Int, p::_EKQPool)
     return node
 end
 
-"Contract: inserts the whole list of the node `list` after the node `prev`; nothing if `prev <= 0` (`lnkila_`)."
+"Insert the whole list of the node `list` after the node `prev`; nothing if `prev <= 0` (`lnkila_`)."
 function _ek_qlnkila!(prev::Int, list::Int, p::_EKQPool)
     prev <= 0 && return nothing
     _ek_qlnkchk(prev, p)
@@ -838,7 +837,7 @@ function _ek_qlnkila!(prev::Int, list::Int, p::_EKQPool)
     return nothing
 end
 
-"Contract: inserts the whole list of the node `list` before the node `next`; nothing if `next <= 0` (`lnkilb_`)."
+"Insert the whole list of the node `list` before the node `next`; nothing if `next <= 0` (`lnkilb_`)."
 function _ek_qlnkilb!(list::Int, next::Int, p::_EKQPool)
     next <= 0 && return nothing
     _ek_qlnkchk(next, p)
@@ -857,7 +856,7 @@ function _ek_qlnkilb!(list::Int, next::Int, p::_EKQPool)
     return nothing
 end
 
-"Contract: `tail` follows `head` in one list; frees the nodes from `head` to `tail` and joins their neighbors (`lnkfsl_`)."
+"Free the nodes from `head` to `tail` of one list and join their neighbors (`lnkfsl_`)."
 function _ek_qlnkfsl!(head::Int, tail::Int, p::_EKQPool)
     _ek_qlnkchk(head, p)
     _ek_qlnkchk(tail, p)
@@ -899,10 +898,9 @@ end
 """
     _ek_qnrml!(q, qb, tk) -> Union{Nothing,String}
 
-Contract: `tk` holds the tokens of the query `qb` and has a WHERE keyword, and `q`
-holds the FROM clause. Appends the constraints of the WHERE clause in normal form (a
-disjunction of conjunctions) and the sizes of the conjunctions to `q`, as
-`zzeknrml_`, and returns `nothing`; or returns the error message of the normalizer.
+Append the constraints of the WHERE clause of the tokens `tk` of the query `qb` in
+normal form (a disjunction of conjunctions) and the sizes of the conjunctions to `q`,
+as `zzeknrml_`. Return `nothing`, or the error message of the normalizer.
 
 The WHERE clause runs from the token after the first WHERE to the token before the
 first FROM, ORDER or SELECT that follows it. Its tokens become "meta-tokens" in a
@@ -1481,10 +1479,10 @@ end
 """
     _ek_qpars!(q, qb, tk) -> Union{Nothing,String}
 
-Contract: `tk` holds the tokens of the query `qb` and `q` is a new encoded query.
-Fills `q` with the FROM clause, the normalized WHERE clause, the ORDER BY clause and
-the SELECT clause, in this order, and marks it as parsed (`zzekpars_`); returns
-`nothing`, or the error message of the parser.
+Fill the new encoded query `q` from the tokens `tk` of the query `qb` with the FROM
+clause, the normalized WHERE clause, the ORDER BY clause and the SELECT clause, in this
+order, and mark it as parsed (`zzekpars_`). Return `nothing`, or the error message of
+the parser.
 
 State machine: the states are those of the C source (0 table, 1 after a table, 3 after
 an alias, 4 WHERE, 5 ORDER, 6 to 10 order-by columns, 11 SELECT, 12 to 15 SELECT
@@ -1755,7 +1753,7 @@ end
 # Name resolution: ZZEKNRES, ZZEKCCHK
 # ---------------------------------------------------------------------------------
 
-"Contract: `1 <= n <= number of tables of q`; returns the name and the alias (`\"\"` if none) of table `n` of the FROM clause, cut to 64 characters (`zzekqtab_`)."
+"The name and the alias (`\"\"` if none) of table `n` of the FROM clause, cut to 64 characters (`zzekqtab_`)."
 function _ek_qtab(q::_EKQEnc, n::Int)
     base = (n - 1) * 12 + 19
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
@@ -1768,10 +1766,10 @@ end
 """
     _ek_qcchk!(q, tables, tabcat, table, alias, base) -> Union{Nothing,String}
 
-Contract: `base` is the C base of a pair of descriptors (qualifier, column) in `q`;
-`table`, `alias` are the names of the FROM clause and `tabcat` their catalog
-indices. Writes the table index and the column index into the pair and returns
-`nothing`, or returns the error message of `zzekcchk_`. A qualifier is looked up in
+Write the table index and the column index into the pair of descriptors (qualifier,
+column) at the C base `base` of `q` and return `nothing`, or return the error message
+of `zzekcchk_`. `table`, `alias` are the names of the FROM clause and `tabcat` their
+catalog indices. A qualifier is looked up in
 the table names first and then in the aliases; a column without a qualifier must be
 in exactly one table of the FROM clause.
 """
@@ -1825,10 +1823,9 @@ end
 """
     _ek_qnres!(q, qb, tables) -> (tabcat, error)
 
-Contract: `q` is a parsed query of the string `qb` and `tables` the catalog of
-loaded tables. Resolves the table and column names of `q` (`zzeknres_`): returns the
-catalog index of each table of the FROM clause and `nothing`, or an empty vector and
-the error message. Rules, in the order of CSPICE: aliases are distinct; an alias is not
+Resolve the table and column names of the parsed query `q` of the string `qb` against
+the catalog `tables` (`zzeknres_`). Return the catalog index of each table of the FROM
+clause and `nothing`, or an empty vector and the error message. Rules, in the order of CSPICE: aliases are distinct; an alias is not
 the name of another table of the FROM clause; each table is loaded; then the columns
 of the constraints, of the SELECT clause and of the ORDER BY clause are resolved.
 """
@@ -1905,8 +1902,8 @@ end
 """
     _ek_qtcnv(ks, td, timstr) -> (et, error)
 
-Contract: `timstr` holds the 32 bytes of a time value of a query. Returns its
-ephemeris time and `""`, or 0 and the error message of `zzektcnv_`. The string is a
+Return the ephemeris time of the 32 bytes `timstr` of a time value of a query and
+`""`, or 0 and the error message of `zzektcnv_`. The string is a
 spacecraft clock string if it contains `SCLK` (`<clock name> SCLK <clock string>`),
 and a time string of `str2et` with the defaults `td` in the other case. An error of
 the time or clock system (no leap-second kernel, no SCLK kernel, a time that
@@ -1965,10 +1962,10 @@ end
 """
     _ek_qtres!(q, tables, tabcat, ks, td) -> Union{Nothing,String}
 
-Contract: the names of `q` are resolved. For each constraint that compares a column
-of type TIME with a value, converts the value to ephemeris time, stores it in the
-double buffer and replaces the value descriptor by one of type 4 (`zzektres_`).
-Returns `nothing`, or the error message of the conversion. As in CSPICE the time
+For each constraint of the resolved query `q` that compares a column of type TIME with
+a value, convert the value to ephemeris time, store it in the double buffer and replace
+the value descriptor by one of type 4 (`zzektres_`). Return `nothing`, or the error
+message of the conversion. As in CSPICE the time
 string is cut to 32 characters, and a numeric value is converted as a blank string,
 which is an error.
 """
@@ -2010,8 +2007,8 @@ end
 """
     _ek_qsemc!(q, qb, tables, tabcat) -> Union{Nothing,String}
 
-Contract: the names and the times of `q` are resolved. Checks the constraints and the
-order-by columns (`zzeksemc_`) and returns `nothing`, or the error message. Rules: a
+Check the constraints and the order-by columns of the resolved query `q` (`zzeksemc_`)
+and return `nothing`, or the error message. Rules: a
 column of a constraint or of the ORDER BY clause is scalar (size 1); LIKE and NOT LIKE
 need a character column on the left; the two sides of a constraint have the same
 type, or both are numeric (DP and INT mix). As in CSPICE, the check stops without an
@@ -2103,7 +2100,7 @@ end
 """
     _ek_qencode(tables, ks, td, query) -> (q, tabcat, error, errmsg)
 
-Contract: as `_ek_encode_query`, but returns the encoded query in the layout of CSPICE
+As `_ek_encode_query`, but return the encoded query in the layout of CSPICE
 (`zzekencd_`) with the catalog indices of its tables; `q` is `nothing` on error.
 """
 function _ek_qencode(
@@ -2133,7 +2130,7 @@ function _ek_qencode(
     return q, tabcat, false, ""
 end
 
-"Contract: `base` is the C base of a pair of descriptors (qualifier, column) of a resolved query; returns the column reference, with the lexeme bounds by the rule of `zzekqsel_`."
+"The column reference of the pair of descriptors (qualifier, column) at the C base `base` of a resolved query, with the lexeme bounds by the rule of `zzekqsel_`."
 function _ek_qcol(q::_EKQEnc, base::Int)
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
     cb, ce = _ek_qget(q, base + 15), _ek_qget(q, base + 16)
@@ -2150,9 +2147,9 @@ const _EKQ_NOCOL = _EKQCol("", 0, "", 0, 0, 0)
 """
     _ek_qdecode(q, tabcat) -> _EKQuery
 
-Contract: `q` is an encoded query that passed all steps and `tabcat` holds the
-catalog indices of its tables. Returns the query as plain data, with the values that
-`zzekqtab_`, `zzekqcnj_`, `zzekqcon_`, `zzekqord_` and `zzekqsel_` return.
+Return the checked encoded query `q`, whose tables have the catalog indices `tabcat`,
+as plain data, with the values that `zzekqtab_`, `zzekqcnj_`, `zzekqcon_`, `zzekqord_`
+and `zzekqsel_` return.
 """
 function _ek_qdecode(q::_EKQEnc, tabcat::Vector{Int})
     ntab, ncns, ncnj, nord, nsel = (Int(q.i[k]) for k in (8, 9, 10, 11, 12))
@@ -2205,15 +2202,11 @@ end
 """
     _ek_encode_query(tables, ks, td, query) -> (query, failed, errmsg)
 
-Contract: `tables` is the catalog of loaded tables in load order, with names in
-upper case. Runs the steps of `ekfind_` that come before the search (`zzekqini_`,
-`zzekscan_`, `zzekpars_`, `zzeknres_`, `zzektres_`, `zzeksemc_`) on the string `query`
-and returns `(q::_EKQuery, false, "")`, or `(nothing, true, errmsg)` with the error
-message that
-[`ekfind_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekfind_c.html) returns in `errmsg` for a query that is not valid. Positions
-in a message are 1-based byte positions in `query`. Time values are converted with
-the leap-second and clock data of `ks` and the time defaults `td`. Pure function of
-its arguments; does not modify them.
+Run the steps of `ekfind_` that come before the search (`zzekqini_`, `zzekscan_`,
+`zzekpars_`, `zzeknres_`, `zzektres_`, `zzeksemc_`) on the string `query` against the
+catalog `tables` and return `(q::_EKQuery, false, "")`, or `(nothing, true, errmsg)`
+with the message of `ekfind_c` for a query that is not valid. Time values are
+converted with the kernels of `ks` and the time defaults `td`.
 
 Throws `SpiceError` where CSPICE signals a SPICE error: `:celltoosmall` if the
 normalized WHERE clause has more constraints than the encoded query can hold (1000
@@ -2247,16 +2240,7 @@ end
 """
     _ek_psel(tables, ks, td, query) -> NamedTuple
 
-Contract: as `_ek_encode_query` for the arguments. Analyses the SELECT clause of
-`query` as
-[`ekpsel_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekpsel_c.html) and returns `(n, xbegs, xends, xtypes, xclass, tabs, cols, failed,
-errmsg)`: the number `n` of SELECT items and for each item the first and last
-character of its expression in `query` (`xbegs`, `xends`; 1-based byte positions, one
-more than the 0-based positions of `ekpsel_c`), its data type (`xtypes`: `:CHR`,
-`:DP`, `:INT` or `:TIME`), its class (`xclass`: always `:COL`, a column), the name of
-its table (`tabs`: the table name, never the alias) and of its column (`cols`). For a
-query that is not valid, `failed` is true, `errmsg` holds the message, `n` is 0 and the
-vectors are empty.
+The SELECT clause of `query`, as [`ekpsel`](@ref) returns it.
 """
 function _ek_psel(
         tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,

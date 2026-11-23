@@ -83,9 +83,9 @@ end
 """
     _ekw_pgin(h) -> Nothing
 
-Set up the paging metadata of a new, empty DAS file (`zzekpgin`). Precondition: the
-file holds no data, else `SpiceError(:dasnotempty)`. Postcondition: the first 256
+Write the paging metadata of a new, empty DAS file (`zzekpgin`): the first 256
 integers hold the architecture code, the page sizes and the page counts (all zero).
+Throws `SpiceError(:dasnotempty)` if the file holds data.
 """
 function _ekw_pgin(h::DASHandle)
     _das_check_write(h, "zzekpgin")
@@ -112,7 +112,7 @@ end
     _ekw_pgan(h, t) -> (p, base)
 
 Append a new page of type `t` to the file (`zzekpgan`): 1024 blanks, 128 zeros or 256
-zeros. Postcondition: the page count of the type is one more, and `p` is that count.
+zeros. `p` is the new page count of the type.
 """
 function _ekw_pgan(h::DASHandle, t::Int)
     ints = h.ints
@@ -157,8 +157,8 @@ end
     _ekw_pgfr(h, t, p) -> Nothing
 
 Put page `p` of type `t` at the head of the free list of its type (`zzekpgfr`).
-Precondition: the page exists, else `SpiceError(:invalidindex)`. Only the first word
-of the page changes: it takes the old head of the list.
+Only the first word of the page changes: it takes the old head of the list. Throws
+`SpiceError(:invalidindex)` for a page that does not exist.
 """
 function _ekw_pgfr(h::DASHandle, t::Int, p::Integer)
     ints = h.ints
@@ -286,8 +286,9 @@ Parent information of the node that holds `key` (`zzektrpi`): the parent page, t
 key of the parent (absolute), the key offset of the parent, and for the keys of the
 parent that are left and right of the node their position, their value in the parent and
 the sibling of the node on that side. All are 0 if the key is in the root; the values of
-a side are 0 if the node is the first or the last child. Precondition: `1 <= key <=`
-number of keys, else `SpiceError(:indexoutofrange)`; `:itemnotfound` for a damaged tree.
+a side are 0 if the node is the first or the last child. Throws
+`SpiceError(:indexoutofrange)` for a key outside the tree and `:itemnotfound` for a
+damaged tree.
 """
 function _ekw_trpi(h::DASHandle, tree::Integer, key::Integer)
     ints = h.ints
@@ -369,7 +370,8 @@ end
     _ekw_trki(h, tree, nodkey, n) -> key
 
 The absolute value of key number `n` of the node that holds the key `nodkey`
-(`zzektrki`). Precondition: `0 <= n <=` number of keys of the node (`:invalidindex`).
+(`zzektrki`). Throws `SpiceError(:invalidindex)` unless `0 <= n <=` number of keys of
+the node.
 """
 function _ekw_trki(h::DASHandle, tree::Integer, nodkey::Integer, n::Integer)
     _, node, noffst, _, level = _ek_trlk(h.ints, tree, nodkey)
@@ -437,7 +439,7 @@ end
 
 Insert `value` at the key `key` without balancing (`zzektrui`): the keys from `key` on
 move up by one. The result tells that the node that took the key now holds one key more
-than its capacity. Precondition: `1 <= key <= nkeys + 1`, else `:invalidindex`.
+than its capacity. Throws `SpiceError(:invalidindex)` unless `1 <= key <= nkeys + 1`.
 """
 function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
     root = Int(tree)
@@ -721,8 +723,8 @@ end
     _ekw_trrk(h, tree, left, right, parent, pkidx, nrot) -> Nothing
 
 Rotate `nrot` keys from the node `left` through the parent key number `pkidx` into its
-right sibling `right` (`zzektrrk`); a negative `nrot` rotates to the left. Precondition:
-both nodes keep 40 to 63 keys, else `SpiceError(:bug)`. The words of a node after its
+right sibling `right` (`zzektrrk`); a negative `nrot` rotates to the left. Throws
+`SpiceError(:bug)` unless both nodes keep 40 to 63 keys. The words of a node after its
 last key are not cleared, as in CSPICE.
 """
 function _ekw_trrk(
@@ -824,7 +826,7 @@ end
     _ekw_trbn(h, tree, left, right, parent, pkidx) -> Nothing
 
 Balance the two siblings `left` and `right` so that their key counts differ by at most
-one (`zzektrbn`). Precondition: they hold 82 to 124 keys together, else `:bug`.
+one (`zzektrbn`). Throws `SpiceError(:bug)` unless they hold 82 to 124 keys together.
 """
 function _ekw_trbn(h::DASHandle, tree::Integer, left::Int, right::Int, parent::Int, pkidx::Int)
     (left == tree || right == tree) &&
@@ -847,9 +849,9 @@ end
 
 Insert `value` at the key `key` of the tree with the root page `tree` and restore the
 balance (`zzektrin`): an overflow is passed to a sibling that has room, else two
-siblings are split into three, else the root is split. Precondition: `1 <= key <=
-nkeys + 1` (`:invalidindex`). Postcondition: the tree has one key more; the values of
-the old keys `key`, `key + 1`, ... are now at `key + 1`, `key + 2`, ...
+siblings are split into three, else the root is split. The values of the old keys
+`key`, `key + 1`, ... move to `key + 1`, `key + 2`, ... Throws
+`SpiceError(:invalidindex)` unless `1 <= key <= nkeys + 1`.
 """
 function _ekw_trin(h::DASHandle, tree::Integer, key::Integer, value::Integer)
     root = Int(tree)
@@ -929,8 +931,8 @@ end
 Delete the key `key` without balancing (`zzektrud`): the keys after it move down by
 one. `trgkey` is a key of the node that lost a key (0 if the tree is empty now), and
 `underflow` tells that this node holds one key less than its lower bound. A key that
-is not in a leaf is replaced by its predecessor, which is taken from a leaf.
-Precondition: `1 <= key <= nkeys`, else `:invalidindex`.
+is not in a leaf is replaced by its predecessor, which is taken from a leaf. Throws
+`SpiceError(:invalidindex)` unless `1 <= key <= nkeys`.
 """
 function _ekw_trud(h::DASHandle, tree::Integer, key::Int)
     root = Int(tree)
@@ -1197,9 +1199,9 @@ end
 Delete the key `key` of the tree with the root page `tree` and restore the balance
 (`zzektrdl`): an underflow takes keys from a sibling that has spare keys (also through
 the sibling beyond, for a node at an end), else three siblings are joined into two,
-else the two children of the root are joined into the root. Precondition: `1 <= key <=
-nkeys` (`:invalidindex`). Postcondition: the tree has one key less; the values of the
-old keys `key + 1`, `key + 2`, ... are now at `key`, `key + 1`, ...
+else the two children of the root are joined into the root. The values of the old
+keys `key + 1`, `key + 2`, ... move to `key`, `key + 1`, ... Throws
+`SpiceError(:invalidindex)` unless `1 <= key <= nkeys`.
 """
 function _ekw_trdl(h::DASHandle, tree::Integer, key::Integer)
     trgkey, undrfl = _ekw_trud(h, tree, Int(key))
@@ -1318,8 +1320,8 @@ end
 
 Load the empty tree `tree` with `values` in one step (`zzektr1s`): the keys 1 to
 `length(values)` in a tree of the smallest depth, whose subtrees of one node differ in
-size by at most one. Precondition: the tree is empty (`:nonemptytree`) and the depth
-is at most 10 (`:counttoolarge`).
+size by at most one. Throws `SpiceError(:nonemptytree)` for a tree that is not empty
+and `SpiceError(:counttoolarge)` if the depth would exceed 10.
 
 CSPICE fills every node in one page buffer, and it does not clear the buffer before it
 fills a leaf, so a leaf keeps words of the node that the buffer held before (its

@@ -87,9 +87,9 @@ error or the correct result.
 
 ### EK queries
 
-The first five rows change the rows that `ekfind` returns; its docstring states the
-cases. The tests reproduce each of the five with an internal switch of the search, so
-that every difference from CSPICE is traced to one of them.
+The first five rows change the rows that `ekfind` returns. The tests reproduce each of
+the five with an internal switch of the search, so that every difference from CSPICE is
+traced to one of them.
 
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
