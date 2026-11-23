@@ -124,7 +124,7 @@ end
 function _json_number!(r::_JSONReader)::Float64
     t = r.text
     start = r.pos
-    isdig(i) = i <= length(t) && UInt8('0') <= t[i] <= UInt8('9')
+    isdig(i) = i <= length(t) && _isdigit(t[i])
     i = r.pos
     i <= length(t) && t[i] == UInt8('-') && (i += 1)
     if i <= length(t) && t[i] == UInt8('0')

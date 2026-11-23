@@ -185,8 +185,6 @@ function _Tokens(str::Vector{UInt8})
     )
 end
 
-@inline _isdigit(c::UInt8) = UInt8('0') <= c <= UInt8('9')
-
 "Return `s[b:e]` as a `String`; empty when the range is empty or outside `s`."
 _sub(s::Vector{UInt8}, b::Int, e::Int) =
     (b >= 1 && e <= length(s) && b <= e) ? String(s[b:e]) : ""

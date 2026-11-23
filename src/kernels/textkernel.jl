@@ -94,7 +94,7 @@ function _nparsd(s::Union{AbstractString, AbstractVector{UInt8}})::Float64
     l == 0 && throw(SpiceError(:badnumber, "a blank string is not a number"))
     @inbounds for i in 1:l
         c = bytes[i]
-        if UInt8('0') <= c <= UInt8('9')
+        if _isdigit(c)
             v = Float64(c - UInt8('0'))
             bpiok = epiok = signok = false
             sigchr = true
