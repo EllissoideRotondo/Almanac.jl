@@ -275,6 +275,40 @@ request), which is the type that the CK type 4 writer uses.
         item(12), item(15), (hasoff ? item(16) : 0)
 end
 
+"Address of the first value (the interval midpoint) of the fixed-size packet `k` of a generic segment, as `sgfpkt_`."
+@inline _ck04_fixed_packet(pktbas::Int, pktsz::Int, pktoff::Int, k::Int) =
+    pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff
+
+"""
+    _ck04_packet(data, meta, k) -> Int
+
+Address of the first value of packet `k` of a type 4 segment with the meta data `meta`
+of `_ck_meta04`, as `sgfpkt_`.
+"""
+@inline function _ck04_packet(data::Vector{Float64}, meta::NTuple{8, Int}, k::Int)
+    _, _, pdrbas, pdrtyp, pktbas, _, pktsz, pktoff = meta
+    return pdrtyp == 0 ? _ck04_fixed_packet(pktbas, pktsz, pktoff, k) :
+        pktbas + trunc(Int, data[pdrbas + k])
+end
+
+"""
+    _ck04_counts(packed, toint) -> NTuple{7,Int}
+
+The seven coefficient counts of a type 4 packet, packed in one double base 128, as
+`zzck4d2i_`; `toint` turns the quotient into an integer.
+"""
+@inline function _ck04_counts(packed::Float64, toint)
+    x = 128.0^6
+    ncf = ntuple(_ -> 0, Val(7))
+    for k in 7:-1:1         # invariant: counts k+1:7 are decoded, `packed` holds the rest
+        v = toint(packed / x)
+        ncf = Base.setindex(ncf, v, k)
+        packed -= v * x
+        x /= 128.0
+    end
+    return ncf
+end
+
 """
     _ck_eval04(data, seg, sclk::T, tol, needav) -> (found, cmat::Mat3{T}, av::Vec3{T}, clkout)
 
@@ -288,11 +322,10 @@ function _ck_eval04(
         needav::Bool
     ) where {T <: Real}
     p = primal(sclk)
-    refbas, nref, pdrbas, pdrtyp, pktbas, npkt, pktsz, pktoff = _ck_meta04(data, seg)
+    meta = _ck_meta04(data, seg)
+    refbas, nref, npkt = meta[1], meta[2], meta[6]
     (npkt >= 1 && nref >= 1) || _ck_bad(:baddaf, "CK type 4 segment without records")
-    # Address of the first value (the interval midpoint) of packet k, as `sgfpkt_`.
-    packet(k) = pdrtyp == 0 ? pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff :
-        pktbas + trunc(Int, @inbounds data[pdrbas + k])
+    packet(k) = _ck04_packet(data, meta, k)
     idx = _lstled(data, refbas, nref, p)
     clkout = sclk
     a = 0
@@ -323,15 +356,7 @@ function _ck_eval04(
         end
     end
     @inbounds mid, rad, packed = data[a], data[a + 1], data[a + 2]
-    # The seven coefficient counts are packed in one double, base 128 (`zzck4d2i_`).
-    x = 128.0^6
-    ncf = ntuple(_ -> 0, Val(7))
-    for k in 7:-1:1         # invariant: counts k+1:7 are decoded, `packed` holds the rest
-        v = trunc(Int, packed / x)
-        ncf = Base.setindex(ncf, v, k)
-        packed -= v * x
-        x /= 128.0
-    end
+    ncf = _ck04_counts(packed, x -> trunc(Int, x))
     cb = a + 2                                  # coefficient j of a set is data[cb+j]
     q0 = _ck_chbval(data, cb, ncf[1], mid, rad, clkout); cb += ncf[1]
     q1 = _ck_chbval(data, cb, ncf[2], mid, rad, clkout); cb += ncf[2]
@@ -668,6 +693,7 @@ function _ck_eval06seg(
         )
         return true, cmat, av, t
     end
+    return
 end
 
 # --- one segment, and the segment search -------------------------------------------------
