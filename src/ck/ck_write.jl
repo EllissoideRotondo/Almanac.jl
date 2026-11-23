@@ -127,6 +127,30 @@ end
     )
 )
 
+"The quaternions and the angular velocities (see `_ck_avvs`) of `nrec` records of `ckw01` and `ckw03`; another count of quaternions throws `SpiceError(:badarg)`."
+function _ck_quats_avvs(who::AbstractString, quats, avvs, nrec::Int)
+    q, nq, _ = _seg_flat(who, "quats", quats, 4)
+    nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
+    av, avflag = _ck_avvs(who, avvs, nrec)
+    return q, av, avflag
+end
+
+"""
+    _ck_ids_times(who, ctx, ref, segid, t) -> Int
+
+The checks of `ckw01` and `ckw03` after the descriptor times, in their order: the frame
+(whose ID it returns), the segment ID, and times `t` that are not negative
+(`SpiceError(:invalidsclktime)`) and strictly increasing.
+"""
+function _ck_ids_times(who::AbstractString, ctx, ref, segid::AbstractString, t::Vector{Float64})
+    refcod = _seg_refcode(who, ctx, ref)
+    _seg_idchars(who, segid)
+    _seg_idlen(who, segid)
+    t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
+    _seg_increasing(who, t, "SCLKDP")
+    return refcod
+end
+
 "Throws `SpiceError(:zeroquaternion)` if one of the `n` quaternions that start every `step` doubles in `flat` is zero."
 function _ck_nonzero_quats(who::AbstractString, flat::Vector{Float64}, n::Int, step::Int)
     for i in 1:n
@@ -207,9 +231,7 @@ function ckw01(
     _chkfstr(who, "string `segid`", segid)
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     nrec = length(t)
-    q, nq, _ = _seg_flat(who, "quats", quats, 4)
-    nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
-    av, avflag = _ck_avvs(who, avvs, nrec)
+    q, av, avflag = _ck_quats_avvs(who, quats, avvs, nrec)
     nrec <= 0 && throw(
         SpiceError(
             :invalidnumrec,
@@ -228,11 +250,7 @@ function ckw01(
                 "of the descriptor is invalid: DCD(2) = $endtim and SCLKDP(NREC) = $(t[nrec])"
         )
     )
-    refcod = _seg_refcode(who, ctx, ref)
-    _seg_idchars(who, segid)
-    _seg_idlen(who, segid)
-    t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
-    _seg_increasing(who, t, "SCLKDP")
+    refcod = _ck_ids_times(who, ctx, ref, segid, t)
     _ck_nonzero_quats(who, q, nrec, 4)
     data = _ck_pointing(q, av, nrec, avflag)
     append!(data, t)
@@ -393,9 +411,7 @@ function ckw03(
     nrec = length(t)
     st = _seg_vec(who, "starts", starts, -1)
     nints = length(st)
-    q, nq, _ = _seg_flat(who, "quats", quats, 4)
-    nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
-    av, avflag = _ck_avvs(who, avvs, nrec)
+    q, av, avflag = _ck_quats_avvs(who, quats, avvs, nrec)
     nrec <= 0 && throw(
         SpiceError(
             :invalidnumrec,
@@ -422,11 +438,7 @@ function ckw03(
                 "SCLKDP($nrec) = $(t[nrec])"
         )
     )
-    refcod = _seg_refcode(who, ctx, ref)
-    _seg_idchars(who, segid)
-    _seg_idlen(who, segid)
-    t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
-    _seg_increasing(who, t, "SCLKDP")
+    refcod = _ck_ids_times(who, ctx, ref, segid, t)
     t[1] != st[1] && throw(
         SpiceError(
             :timesdontmatch, "$who: the start time of the first " *
