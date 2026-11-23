@@ -18,19 +18,6 @@
 "A scalar quantity of the geometry finder; see the head of `gf/quantities.jl`."
 abstract type GFQuantity end
 
-function _gf_body(ks::KernelSet, name::AbstractString, what::AbstractString)
-    id = bods2c(ks, name)
-    id === nothing && throw(
-        SpiceError(
-            :idcodenotfound, "The $what, '$name', is not a " *
-                "recognized name for an ephemeris object. The cause of this problem may be that " *
-                "you need an updated version of the SPICE Toolkit."
-        )
-    )
-    return Int32(id)
-end
-_gf_body(ks::KernelSet, id::Integer, what::AbstractString) = Int32(id)
-
 "`SpiceError(:bodiesnotdistinct)` if the target `targ` is the observer `obs`; `target` and `obsrvr` are the inputs, for the message."
 function _gf_distinct(targ::Int32, obs::Int32, target, obsrvr)
     targ == obs && throw(
@@ -60,8 +47,8 @@ The checks of `zzgfdiin`: `:idcodenotfound`, `:bodiesnotdistinct`, and the kinds
 `Aberration`.
 """
 function GFDistance(ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID)
-    targ = _gf_body(ks, target, "target object")
-    obs = _gf_body(ks, obsrvr, "observer object")
+    targ = _body_id(ks, target, "target object")
+    obs = _body_id(ks, obsrvr, "observer object")
     _gf_distinct(targ, obs, target, obsrvr)
     return GFDistance(ks, targ, obs, Aberration(abcorr))
 end
@@ -112,9 +99,9 @@ function GFSeparation(
         ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1,
         targ2::NameOrID, shape2::AbstractString, frame2, abcorr::AbcorrArg, obsrvr::NameOrID
     )
-    b1 = _gf_body(ks, targ1, "object name for target 1")
-    b2 = _gf_body(ks, targ2, "object name for target 2")
-    obs = _gf_body(ks, obsrvr, "object name for the observer")
+    b1 = _body_id(ks, targ1, "object name for target 1")
+    b2 = _body_id(ks, targ2, "object name for target 2")
+    obs = _body_id(ks, obsrvr, "object name for the observer")
     (obs == b1 || obs == b2 || b1 == b2) && throw(
         SpiceError(
             :bodiesnotdistinct,
@@ -199,8 +186,8 @@ function GFRangeRate(
         ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
         dt::Real = 1.0
     )
-    targ = _gf_body(ks, target, "target object")
-    obs = _gf_body(ks, obsrvr, "observer object")
+    targ = _body_id(ks, target, "target object")
+    obs = _body_id(ks, obsrvr, "observer object")
     _gf_distinct(targ, obs, target, obsrvr)
     corr = Aberration(abcorr)
     dt == 0 && throw(
@@ -254,9 +241,9 @@ function GFPhase(
         ks::KernelSet, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID
     )
-    targ = _gf_body(ks, target, "target object")
-    illum = _gf_body(ks, illmn, "illuminator object")
-    obs = _gf_body(ks, obsrvr, "observer object")
+    targ = _body_id(ks, target, "target object")
+    illum = _body_id(ks, illmn, "illuminator object")
+    obs = _body_id(ks, obsrvr, "observer object")
     (targ == obs || targ == illum || obs == illum) && throw(
         SpiceError(
             :bodiesnotdistinct,

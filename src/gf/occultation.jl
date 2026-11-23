@@ -57,9 +57,9 @@ function _gf_occultation(
                 "extended object."
         )
     )
-    idf = _gf_body(ks, front, "front target object")
-    idb = _gf_body(ks, back, "back target object")
-    obs = _gf_body(ks, obsrvr, "observer")
+    idf = _body_id(ks, front, "front target object")
+    idb = _body_id(ks, back, "back target object")
+    obs = _body_id(ks, obsrvr, "observer")
     (idf == idb || idf == obs || idb == obs) && throw(
         SpiceError(
             :bodiesnotdistinct,

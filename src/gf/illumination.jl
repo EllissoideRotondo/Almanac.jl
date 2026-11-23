@@ -47,9 +47,9 @@ function GFIllumination(
         target::NameOrID, illmn::NameOrID, fixref::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, spoint::AbstractVector
     )
-    targ = _gf_body(ks, target, "target object")
-    obs = _gf_body(ks, obsrvr, "observer")
-    illum = _gf_body(ks, illmn, "illumination source")
+    targ = _body_id(ks, target, "target object")
+    obs = _body_id(ks, obsrvr, "observer")
+    illum = _body_id(ks, illmn, "illumination source")
     _gf_distinct(targ, obs, target, obsrvr)
     targ == illum && throw(
         SpiceError(

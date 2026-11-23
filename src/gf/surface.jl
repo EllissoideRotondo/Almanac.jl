@@ -341,8 +341,8 @@ function _gf_surface_coordinate(
         obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector, crdsys::AbstractString,
         coord::AbstractString
     )
-    targ = _gf_body(ks, target, "target object")
-    obs = _gf_body(ks, obsrvr, "observer")
+    targ = _body_id(ks, target, "target object")
+    obs = _body_id(ks, obsrvr, "observer")
     _gf_distinct(targ, obs, target, obsrvr)
     corr = Aberration(abcorr)
     sys, idx = _gf_sysidx(crdsys, coord)

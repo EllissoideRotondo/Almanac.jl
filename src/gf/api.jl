@@ -318,8 +318,8 @@ function _gf_position_coordinate(
         ks::KernelSet, target::NameOrID, frame::NameOrID,
         abcorr::AbcorrArg, obsrvr::NameOrID, crdsys::AbstractString, coord::AbstractString
     )
-    targ = _gf_body(ks, target, "target object")
-    obs = _gf_body(ks, obsrvr, "observer")
+    targ = _body_id(ks, target, "target object")
+    obs = _body_id(ks, obsrvr, "observer")
     _gf_distinct(targ, obs, target, obsrvr)
     corr = Aberration(abcorr)
     ref = Int32(0)                      # 0: the frame is not known
