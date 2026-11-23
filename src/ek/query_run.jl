@@ -51,17 +51,7 @@
 # with the correctly rounded double (`dexact` of a constraint); with `compat` the search
 # compares with the double of `nparsd` (`dval`).
 
-# Operator codes (`ekopcd.inc`) and the codes of a comparison result.
-const _EK_EQ = 1
-const _EK_GE = 2
-const _EK_GT = 3
-const _EK_LE = 4
-const _EK_LT = 5
-const _EK_NE = 6
-const _EK_LIKE = 7
-const _EK_UNLIKE = 8
-const _EK_ISNULL = 9
-const _EK_NOTNUL = 10
+# The operator codes `_EKQ_*` of `query_parse.jl` are also the codes of a comparison result.
 const _EK_MAXSTR = 1024           # characters of a string that take part in a comparison
 
 "One segment as the search uses it: its file, the segment, and its columns in table order."
@@ -91,24 +81,23 @@ function _ek_bcmp(a::AbstractVector{UInt8}, b::AbstractVector{UInt8}, na::Int, n
     return 0
 end
 
-"Relation code (`_EK_LT`, `_EK_EQ`, `_EK_GT`) of two strings; the first 1024 characters count."
+"Relation code (`_EKQ_LT`, `_EKQ_EQ`, `_EKQ_GT`) of two strings; the first 1024 characters count."
 function _ek_fcmp(a::AbstractString, b::AbstractString)
     ca = codeunits(a)
     cb = codeunits(b)
     r = _ek_bcmp(ca, cb, min(length(ca), _EK_MAXSTR), min(length(cb), _EK_MAXSTR))
-    return r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
+    return r < 0 ? _EKQ_LT : r > 0 ? _EKQ_GT : _EKQ_EQ
 end
 
-@inline _ek_ncmp(x, y) = x < y ? _EK_LT : x > y ? _EK_GT : _EK_EQ
+@inline _ek_ncmp(x, y) = x < y ? _EKQ_LT : x > y ? _EKQ_GT : _EKQ_EQ
 
 @inline function _ek_relop(op::Int, rel::Int)
-    op == _EK_EQ && return rel == _EK_EQ
-    op == _EK_LT && return rel == _EK_LT
-    op == _EK_LE && return rel != _EK_GT
-    op == _EK_GT && return rel == _EK_GT
-    op == _EK_GE && return rel != _EK_LT
-    op == _EK_NE && return rel != _EK_EQ
-    throw(SpiceError(:unnaturalrelation, "The relational operator $op was not recognized."))
+    op == _EKQ_EQ && return rel == _EKQ_EQ
+    op == _EKQ_LT && return rel == _EKQ_LT
+    op == _EKQ_LE && return rel != _EKQ_GT
+    op == _EKQ_GT && return rel == _EKQ_GT
+    op == _EKQ_GE && return rel != _EKQ_LT
+    return rel != _EKQ_EQ                # NE
 end
 
 @noinline _ek_noelt(col::_EKColumn, recptr::Integer) = throw(
@@ -124,7 +113,7 @@ _ek_ctrunc(f, r::_EKCRef) = _ek_cstring(f.chars, _ek_cfirst(r, _EK_MAXSTR))
 """
     _ek_vrel(f, col, recptr, dtype, cval, dval, ival, keynull, writer) -> (rel, enull, cref)
 
-Relation code (`_EK_LT`, `_EK_EQ`, `_EK_GT`) of the first element of the entry of
+Relation code (`_EKQ_LT`, `_EKQ_EQ`, `_EKQ_GT`) of the first element of the entry of
 column `col` in the record `recptr` of the store `f` to a value of type code `dtype`
 (the bytes `cval`, `dval` or `ival`), as `zzekscmp` finds it; `enull` tells that the
 entry is null, and `cref` is the place of the element of a character column. A null
@@ -154,8 +143,8 @@ function _ek_vrel(
         throw(SpiceError(:invaliddatatype, "Data type code $coltyp not recognized."))
     end
     found || _ek_noelt(col, recptr)
-    enull && return (keynull ? _EK_EQ : _EK_LT), true, cref
-    keynull && return _EK_GT, false, cref
+    enull && return (keynull ? _EKQ_EQ : _EKQ_LT), true, cref
+    keynull && return _EKQ_GT, false, cref
     badtype() = throw(SpiceError(:bug, "Column type is $coltyp; value type is $dtype."))
     rel = if coltyp == _EK_CHR
         dtype == _EK_CHR || badtype()
@@ -163,7 +152,7 @@ function _ek_vrel(
             f.chars, _ek_cfirst(cref, _EK_MAXSTR), cval,
             _EKCRef(min(length(cval), _EK_MAXSTR))
         )
-        r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
+        r < 0 ? _EKQ_LT : r > 0 ? _EKQ_GT : _EKQ_EQ
     elseif coltyp == _EK_TIME
         (dtype == _EK_TIME || dtype == _EK_DP) || badtype()
         _ek_ncmp(eltd, dval)
@@ -200,14 +189,14 @@ function _ek_scmp(
         op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval::String,
         dval::Float64, ival::Int
     )
-    op == _EK_ISNULL && return _ek_isnull(f, col, recptr)
-    op == _EK_NOTNUL && return !_ek_isnull(f, col, recptr)
+    op == _EKQ_ISNULL && return _ek_isnull(f, col, recptr)
+    op == _EKQ_NOTNUL && return !_ek_isnull(f, col, recptr)
     rel, enull, cref = _ek_vrel(f, col, recptr, dtype, codeunits(cval), dval, ival, false, false)
-    op <= _EK_NE && return _ek_relop(op, rel)
-    if (op == _EK_LIKE || op == _EK_UNLIKE) && dtype == _EK_CHR
+    op <= _EKQ_NE && return _ek_relop(op, rel)
+    if (op == _EKQ_LIKE || op == _EKQ_UNLIKE) && dtype == _EK_CHR
         enull && return false
         m = _matchi(_ek_ctrunc(f, cref), cval)
-        return op == _EK_LIKE ? m : !m
+        return op == _EKQ_LIKE ? m : !m
     end
     throw(
         SpiceError(
@@ -235,11 +224,11 @@ function _ek_ecmp(f1, col1::_EKColumn, row1::Integer, f2, col2::_EKColumn, row2:
         b, n2, fnd2 = _ek_cref(f2, col2, row2, 1)
         fnd1 || _ek_noelt(col1, row1)
         fnd2 || _ek_noelt(col2, row2)
-        (n1 || n2) && return n1 && n2 ? _EK_EQ : n1 ? _EK_LT : _EK_GT
+        (n1 || n2) && return n1 && n2 ? _EKQ_EQ : n1 ? _EKQ_LT : _EKQ_GT
         r = _ek_ccmp(
             f1.chars, _ek_cfirst(a, _EK_MAXSTR), f2.chars, _ek_cfirst(b, _EK_MAXSTR)
         )
-        return r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
+        return r < 0 ? _EKQ_LT : r > 0 ? _EKQ_GT : _EKQ_EQ
     end
     if lt == _EK_TIME
         rt == _EK_TIME || bad()
@@ -248,7 +237,7 @@ function _ek_ecmp(f1, col1::_EKColumn, row1::Integer, f2, col2::_EKColumn, row2:
     end
     x, n1 = _ek_number(f1, col1, row1)
     y, n2 = _ek_number(f2, col2, row2)
-    (n1 || n2) && return n1 && n2 ? _EK_EQ : n1 ? _EK_LT : _EK_GT
+    (n1 || n2) && return n1 && n2 ? _EKQ_EQ : n1 ? _EKQ_LT : _EKQ_GT
     (lt == _EK_INT && rt == _EK_INT) && return _ek_ncmp(Int(x), Int(y))
     return _ek_ncmp(x, y)
 end
@@ -275,8 +264,8 @@ function _ek_colmatch(
         op::Int, f1, col1::_EKColumn, row1::Integer, f2, col2::_EKColumn,
         row2::Integer
     )
-    op <= _EK_NE && return _ek_relop(op, _ek_ecmp(f1, col1, row1, f2, col2, row2))
-    ((op == _EK_LIKE || op == _EK_UNLIKE) && col1.dtype == _EK_CHR) || throw(
+    op <= _EKQ_NE && return _ek_relop(op, _ek_ecmp(f1, col1, row1, f2, col2, row2))
+    ((op == _EKQ_LIKE || op == _EKQ_UNLIKE) && col1.dtype == _EK_CHR) || throw(
         SpiceError(
             :unnaturalrelation, "The relational operator $op was not recognized."
         )
@@ -286,7 +275,7 @@ function _ek_colmatch(
     fnd1 || _ek_noelt(col1, row1)
     fnd2 || _ek_noelt(col2, row2)
     m = _matchi(n1 ? "" : _ek_ctrunc(f1, a), n2 ? "" : _ek_ctrunc(f2, b))
-    return op == _EK_LIKE ? m : !m
+    return op == _EKQ_LIKE ? m : !m
 end
 
 # ---------------------------------------------------------------------------------------
@@ -339,8 +328,8 @@ function _ek_ixlast(
         dval::Float64, ival::Int, ix::Vector{Int32} = _EK_NOIX
     )
     nrows == 0 && return 0
-    notbelow = strict ? _EK_GE : _EK_GT       # the first entry is too large
-    below = strict ? _EK_LT : _EK_LE
+    notbelow = strict ? _EKQ_GE : _EKQ_GT       # the first entry is too large
+    below = strict ? _EKQ_LT : _EKQ_LE
     cmp(op, pos) = _ek_scmp(op, f, col, _ek_ixlk(f, col, pos, ix), dtype, cval, dval, ival)
     cmp(notbelow, 1) && return 0
     cmp(below, nrows) && return nrows
@@ -416,13 +405,13 @@ function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
         for (i, c) in enumerate(cons)    # invariant: minptr:maxptr satisfies constraints before i
             (c.lhs.colidx == col && active[i]) || continue
             op = c.opcode
-            if op == _EK_LT
+            if op == _EKQ_LT
                 maxptr = min(_ek_ixbound(f, kc, nrows, true, c, compat, ix), maxptr)
                 elim = maxptr == 0
-            elseif op == _EK_LE
+            elseif op == _EKQ_LE
                 maxptr = min(_ek_ixbound(f, kc, nrows, false, c, compat, ix), maxptr)
                 elim = maxptr == 0
-            elseif op == _EK_EQ
+            elseif op == _EKQ_EQ
                 lastlt = _ek_ixbound(f, kc, nrows, true, c, compat, ix)
                 lastle = _ek_ixbound(f, kc, nrows, false, c, compat, ix)
                 if lastlt < lastle
@@ -431,11 +420,11 @@ function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
                 else
                     elim = true
                 end
-            elseif op == _EK_GT
+            elseif op == _EKQ_GT
                 lastle = _ek_ixbound(f, kc, nrows, false, c, compat, ix)
                 minptr = max(lastle + 1, minptr)
                 elim = lastle == nrows
-            elseif op == _EK_GE
+            elseif op == _EKQ_GE
                 lastlt = _ek_ixbound(f, kc, nrows, true, c, compat, ix)
                 minptr = max(lastlt + 1, minptr)
                 elim = lastlt == nrows
@@ -457,7 +446,7 @@ function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
         endidx = 0
     end
     for (i, c) in enumerate(cons)
-        if active[i] && c.lhs.colidx == key && c.opcode in (_EK_LT, _EK_LE, _EK_EQ, _EK_GE, _EK_GT)
+        if active[i] && c.lhs.colidx == key && c.opcode in (_EKQ_LT, _EKQ_LE, _EKQ_EQ, _EKQ_GE, _EKQ_GT)
             active[i] = false
         end
     end
@@ -503,7 +492,7 @@ The Shell sort of `zzekjsrt` on the order vector `ord`: `jle(a, b)` tells that i
 can stay before item `b`. The sequence of comparisons and swaps is that of CSPICE, so
 items with equal keys end in the same order.
 """
-function _ek_shellsort!(ord::Vector{Int}, jle)
+function _ek_shellsort!(ord::AbstractVector{<:Integer}, jle)
     n = length(ord)
     gap = n ÷ 2
     while gap > 0
@@ -570,7 +559,7 @@ end
 function _ek_keycmp(a::_EKKeys, i::Int, b::_EKKeys, j::Int)
     n1 = a.null[i]
     n2 = b.null[j]
-    (n1 || n2) && return n1 && n2 ? _EK_EQ : n1 ? _EK_LT : _EK_GT
+    (n1 || n2) && return n1 && n2 ? _EKQ_EQ : n1 ? _EKQ_LT : _EKQ_GT
     if a.dtype == _EK_CHR
         b.dtype == _EK_CHR || throw(SpiceError(:bug, "LHS data type is 1; RHSTYP is $(b.dtype)."))
         return _ek_fcmp(a.strs[i], b.strs[j])
@@ -677,10 +666,10 @@ function _ek_join(
     out = _EKRowSet(nt3, Vector{Int}[], Vector{Int32}[])
     # The constraint that selects the join method: the first equality, else the first
     # inequality with LT, LE, GE or GT.
-    equal = findfirst(i -> active[i] && cons[i].opcode == _EK_EQ, eachindex(cons))
+    equal = findfirst(i -> active[i] && cons[i].opcode == _EKQ_EQ, eachindex(cons))
     ordered = equal !== nothing ? nothing :
         findfirst(
-            i -> active[i] && cons[i].opcode in (_EK_LT, _EK_LE, _EK_GE, _EK_GT),
+            i -> active[i] && cons[i].opcode in (_EKQ_LT, _EKQ_LE, _EKQ_GE, _EKQ_GT),
             eachindex(cons)
         )
     cnstr = equal !== nothing ? equal : ordered
@@ -731,8 +720,8 @@ function _ek_join(
                 _ek_join_keys(segs, segvec, c.rhs.tabidx, c.rhs.colidx, rows2, nt2, nt1)
             nl = length(lkeys.null)
             nr = length(rkeys.null)
-            lov = _ek_shellsort!(collect(1:nl), (a, b) -> _ek_keycmp(lkeys, a, lkeys, b) != _EK_GT)
-            rov = _ek_shellsort!(collect(1:nr), (a, b) -> _ek_keycmp(rkeys, a, rkeys, b) != _EK_GT)
+            lov = _ek_shellsort!(collect(1:nl), (a, b) -> _ek_keycmp(lkeys, a, lkeys, b) != _EKQ_GT)
+            rov = _ek_shellsort!(collect(1:nr), (a, b) -> _ek_keycmp(rkeys, a, rkeys, b) != _EKQ_GT)
             emit(li, ri) = lfirst ? candidate(li, ri, cnstr) : candidate(ri, li, cnstr)
             lptr = 1
             lcur = 1
@@ -743,14 +732,14 @@ function _ek_join(
                     li = lov[lcur]
                     ri = rov[rptr]
                     rel = _ek_keycmp(lkeys, li, rkeys, ri)
-                    if rel == _EK_LT
+                    if rel == _EKQ_LT
                         if lptr < nl
                             lptr += 1
                             lcur = lptr
                         else
                             done = true
                         end
-                    elseif rel == _EK_EQ
+                    elseif rel == _EKQ_EQ
                         emit(li, ri)
                         if lcur < nl
                             lcur += 1
@@ -770,7 +759,7 @@ function _ek_join(
                     end
                 end
             else
-                lsmall = c.opcode == _EK_LT || c.opcode == _EK_LE
+                lsmall = c.opcode == _EKQ_LT || c.opcode == _EKQ_LE
                 while !done
                     li = lov[lptr]
                     ri = rov[rptr]
@@ -1107,9 +1096,9 @@ function _ek_order(
     function jle(a::Int, b::Int)
         for (k, sense) in zip(keys, senses)   # invariant: the keys before this one are equal
             rel = _ek_keycmp(k, a, k, b)
-            rel == _EK_EQ && continue
-            sense == 1 && (rel = rel == _EK_LT ? _EK_GT : _EK_LT)
-            return rel != _EK_GT
+            rel == _EKQ_EQ && continue
+            sense == 1 && (rel = rel == _EKQ_LT ? _EKQ_GT : _EKQ_LT)
+            return rel != _EKQ_GT
         end
         return true
     end

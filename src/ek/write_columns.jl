@@ -38,15 +38,6 @@ end
     return nothing
 end
 
-@inline function _ekw_enc!(buf::Vector{UInt8}, at::Int, val::Integer)
-    n = Int(val)
-    for k in 4:-1:0                      # invariant: digits after k are stored
-        buf[at + k] = (n % 128) % UInt8
-        n ÷= 128
-    end
-    return nothing
-end
-
 # ---------------------------------------------------------------------------------------
 # Data pages of a segment
 # ---------------------------------------------------------------------------------------
@@ -151,7 +142,7 @@ function _ekw_rel(s, coldsc::AbstractVector{Int32}, row::Integer, key, null::Boo
         key isa Real || _ekw_bug("Column type is $(col.dtype); value type is $(typeof(key)).")
         _ek_vrel(s, col, row, _EK_DP, UInt8[], Float64(key), 0, null, true)
     end
-    return rel == _EK_LT ? -1 : rel == _EK_GT ? 1 : 0
+    return rel == _EKQ_LT ? -1 : rel == _EKQ_GT ? 1 : 0
 end
 
 # ---------------------------------------------------------------------------------------
@@ -891,35 +882,14 @@ entries that are not null that `a` stays before `b`. The sequence of the swaps i
 of CSPICE, so the result is the same also where the sort is not stable.
 """
 function _ekw_order(n::Int, nullok::Bool, nlflgs::AbstractVector{Bool}, inorder::F) where {F}
-    iorder = collect(Int32(1):Int32(n))
-    gap = n ÷ 2
-    while gap > 0
-        for i in (gap + 1):n
-            j = i - gap
-            while j > 0
-                # invariant: the entries at i, i - gap, ... down to j + gap are in order
-                jg = j + gap
-                a = iorder[j]
-                b = iorder[jg]
-                ok = if !nullok
-                    inorder(a, b)
-                else
-                    na = nlflgs[a]
-                    nb = nlflgs[b]
-                    (na && !nb) || (na && nb && a < b) || (!(na || nb) && inorder(a, b))
-                end
-                if ok
-                    j = 0
-                else
-                    iorder[j] = b
-                    iorder[jg] = a
-                end
-                j -= gap
-            end
-        end
-        gap ÷= 2
+    ok(a, b) = if !nullok
+        inorder(a, b)
+    else
+        na = nlflgs[a]
+        nb = nlflgs[b]
+        (na && !nb) || (na && nb && a < b) || (!(na || nb) && inorder(a, b))
     end
-    return iorder
+    return _ek_shellsort!(collect(Int32(1):Int32(n)), ok)
 end
 
 "Order vector of numbers (`zzekordd`, `zzekordi`): by value, then by entry number."
@@ -1016,7 +986,6 @@ function _ekw_ac12(
             copyto!(dst, pbase + 1, page, 1, length(page))
             if nwrite < ndata
                 p, pbase = _ekw_aps(h, segdsc, t)
-                dst = t == 2 ? h.dps : h.ints
                 fill!(page, 0)
                 n = 0
                 to = 1

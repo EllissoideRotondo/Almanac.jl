@@ -155,7 +155,7 @@ function ekq_catalogue()
                 )
             )
         end
-        push!(tables, Almanac.EKTable(table, cnames, attrs, NTuple{2, Int32}[]))
+        push!(tables, Almanac.EKTable(table, cnames, attrs, NTuple{2, Int32}[], Vector{Almanac._EKColumn}[]))
     end
     return tables
 end

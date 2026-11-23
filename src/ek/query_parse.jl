@@ -1903,28 +1903,6 @@ end
 # ---------------------------------------------------------------------------------
 
 """
-    _ek_scn2id(ks, clknam) -> Union{Int,Nothing}
-
-Contract: `clknam` is the name of a spacecraft clock, `"<body name> SCLK"`. Returns
-the ID code of the clock, which is the code of the body, or `nothing` if the body name
-is unknown or missing (`scn2id_`): the last `SCLK` of the name is removed and the rest
-is a body name. Reads the body names of `ks` only.
-"""
-function _ek_scn2id(ks::KernelSet, clknam::AbstractString)
-    name = uppercase(String(first(clknam, 32)))
-    r = findlast("SCLK", name)
-    r === nothing || (
-        name = string(
-            SubString(name, 1, prevind(name, first(r))), "    ",
-            SubString(name, last(r) + 1)
-        )
-    )
-    name = strip(name, ' ')
-    isempty(name) && return nothing
-    return bodn2c(ks, name)
-end
-
-"""
     _ek_qtcnv(ks, td, timstr) -> (et, error)
 
 Contract: `timstr` holds the 32 bytes of a time value of a query. Returns its
@@ -1952,7 +1930,7 @@ function _ek_qtcnv(ks::KernelSet, td::TimeDefaults, timstr::AbstractVector{UInt8
     r = findlast("SCLK", locstr)
     if r !== nothing
         pos = first(r)
-        clkid = _ek_scn2id(ks, locstr[1:(pos + 3)])
+        clkid = scn2id(ks, locstr[1:(pos + 3)])
         if clkid === nothing
             pos > 1 && return 0.0, _repmc(
                     "Time conversion failed; SCLK type <#> " *
@@ -2155,12 +2133,6 @@ function _ek_qencode(
     return q, tabcat, false, ""
 end
 
-"Contract: returns the integer nearest to `x` as `i_dnnt` of f2c gives it on x86: the smallest 32-bit integer if the result does not fit."
-function _ek_qnint(x::Float64)
-    r = x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x)
-    return (-2.0^31 <= r < 2.0^31) ? Int(r) : Int(typemin(Int32))
-end
-
 "Contract: `base` is the C base of a pair of descriptors (qualifier, column) of a resolved query; returns the column reference, with the lexeme bounds by the rule of `zzekqsel_`."
 function _ek_qcol(q::_EKQEnc, base::Int)
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
@@ -2206,7 +2178,7 @@ function _ek_qdecode(q::_EKQEnc, tabcat::Vector{Int})
             p = _ek_qget(q, base + 23)
             cval = dtype == _EK_CHR ? _ek_qstr(q, p, _ek_qget(q, base + 24)) : ""
             dval = dtype == _EK_CHR ? 0.0 : q.d[p]
-            ival = dtype == _EK_INT ? _ek_qnint(dval) : 0
+            ival = dtype == _EK_INT ? _nint(dval) : 0
             push!(
                 constraints,
                 _EKQConstraint(

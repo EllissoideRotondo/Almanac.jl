@@ -49,11 +49,21 @@ end
     return p, _ekw_base(t, p)
 end
 
+"Write `val` as five base-128 characters at `buf[at:at+4]` (`prtenc`)."
+@inline function _ekw_enc!(buf::Vector{UInt8}, at::Int, val::Integer)
+    n = Int(val)
+    for k in 4:-1:0                      # invariant: digits after k are stored
+        buf[at + k] = (n % 128) % UInt8
+        n ÷= 128
+    end
+    return nothing
+end
+
 """
     _ekw_sei(h, addr, val) -> Nothing
 
-Write `val` as five base-128 characters at the character address `addr` (`zzeksei`,
-`prtenc`). Precondition: `0 <= val < 128^5`, else `SpiceError(:outofrange)`.
+Write `val` as five base-128 characters at the character address `addr` (`zzeksei`).
+Throws `SpiceError(:outofrange)` unless `0 <= val < 128^5`.
 """
 function _ekw_sei(h::DASHandle, addr::Integer, val::Integer)
     (0 <= val < 34359738368) || throw(
@@ -62,12 +72,7 @@ function _ekw_sei(h::DASHandle, addr::Integer, val::Integer)
             "the integer $val cannot be encoded in five base-128 characters"
         )
     )
-    n = Int(val)
-    chars = h.chars
-    for k in 4:-1:0                      # invariant: digits after k are stored
-        chars[addr + k] = (n % 128) % UInt8
-        n ÷= 128
-    end
+    _ekw_enc!(h.chars, Int(addr), val)
     return nothing
 end
 
@@ -119,12 +124,10 @@ function _ekw_pgan(h::DASHandle, t::Int)
         n = length(h.dps)
         resize!(h.dps, n + 128)
         fill!(view(h.dps, (n + 1):(n + 128)), 0.0)
-    elseif t == 3
+    else
         n = length(ints)
         resize!(ints, n + 256)
         fill!(view(ints, (n + 1):(n + 256)), Int32(0))
-    else
-        throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     end
     np = Int(ints[_ekw_NPAGE[t]])
     ints[_ekw_NPAGE[t]] = np + 1
@@ -139,7 +142,6 @@ list has a page, else a new page. A page from the free list keeps its old words,
 CSPICE; its first word held the link of the free list.
 """
 function _ekw_pgal(h::DASHandle, t::Int)
-    (1 <= t <= 3) || throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     ints = h.ints
     p = Int(ints[_ekw_FREEP[t]])
     p > 0 || return _ekw_pgan(h, t)
@@ -159,7 +161,6 @@ Precondition: the page exists, else `SpiceError(:invalidindex)`. Only the first 
 of the page changes: it takes the old head of the list.
 """
 function _ekw_pgfr(h::DASHandle, t::Int, p::Integer)
-    (1 <= t <= 3) || throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     ints = h.ints
     np = Int(ints[_ekw_NPAGE[t]])
     (1 <= p <= np) || throw(

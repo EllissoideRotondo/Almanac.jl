@@ -102,7 +102,7 @@ function ekopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0
     )
     h = dasonw(path, "EK", ifname, (Int(ncomch) + 1023) ÷ 1024)
     _ekw_pgin(h)
-    p, base = _ekw_pgan(h, 3)
+    _, base = _ekw_pgan(h, 3)
     tree = _ekw_trit(h)
     h.ints[base + 1] = tree
     return h
@@ -124,7 +124,7 @@ See also [`ekopn`](@ref), [`ekifld`](@ref).
 function ekops()
     h = dasops()
     _ekw_pgin(h)
-    p, base = _ekw_pgan(h, 3)
+    _, base = _ekw_pgan(h, 3)
     tree = _ekw_trit(h)
     h.ints[base + 1] = tree
     return h
@@ -203,14 +203,8 @@ function _ekw_isident(name::AbstractString)
     b = codeunits(name)
     l = something(findlast(!=(UInt8(' ')), b), 0)
     l == 0 && return false
-    letter(c) = UInt8('A') <= c <= UInt8('Z') || UInt8('a') <= c <= UInt8('z')
-    letter(b[1]) || return false
-    for k in 2:l                         # invariant: the characters before k are valid
-        c = b[k]
-        (letter(c) || UInt8('0') <= c <= UInt8('9') || c == UInt8('$') || c == UInt8('_')) ||
-            return false
-    end
-    return true
+    _ek_qisalpha(b[1]) || return false
+    return all(_ek_qisidtail, view(b, 2:l))
 end
 
 @noinline _ekw_baddecl(msg::AbstractString, decl::AbstractString) =
@@ -1379,7 +1373,6 @@ function _ekw_ff01(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     end
     tree = _ekw_trit(h)
     _ekw_tr1s(h, tree, rcptrs.ptrs)
-    ints = h.ints
     ints[mbase + _EK_RTIDX] = tree
     ints[mbase + _EK_NRIDX] = nrows
     ints[mbase + _EK_LCWIDX] = _EK_CPSIZE

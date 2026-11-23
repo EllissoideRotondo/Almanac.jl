@@ -175,14 +175,12 @@ at `recptr`, as `zzekrsi`. `found` is false if the entry has no element `elt`; a
 entry gives `(0, true, true)`. Throws `SpiceError` (`:uninitializedvalue`, `:bug`,
 `:noclass`).
 """
-function _ek_elt_i(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_elt_i(s, col::_EKColumn, recptr::Integer, elt::Integer)
     c = col.cclass
     if c == 7
         recno = Int(recptr)
         _ek_fixed_null(s, col, recno) && return 0, true, true
-        q = (recno - 1) ÷ _EK_IPSIZE
-        r = recno - q * _EK_IPSIZE
-        return Int(s.ints[Int(s.ints[col.metptr + 1]) + r + q * 256]), false, true
+        return _ek_ordvec_value(s.ints, s.ints[col.metptr + 1], recno), false, true
     end
     (c == 1 || c == 4) || _ek_noclass(col, "integer")
     datptr = _ek_datptr(s, col, recptr)
@@ -210,7 +208,7 @@ Base.getindex(v::_EKRefVec, ::Int) = v.r[]
 Element `elt` of the entry of the double or time column `col` (class 2, 5 or 8), as
 `zzekrsd`. Results and errors as [`_ek_elt_i`](@ref).
 """
-function _ek_elt_d(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_elt_d(s, col::_EKColumn, recptr::Integer, elt::Integer)
     c = col.cclass
     if c == 8
         recno = Int(recptr)
@@ -261,7 +259,7 @@ The place of element `elt` of the entry of the character column `col` (class 3, 
 for it (the stored length for class 3, the string length of the column for classes 6
 and 9). Results and errors as [`_ek_elt_c`](@ref); a null or missing element has `n = 0`.
 """
-function _ek_cref(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_cref(s, col::_EKColumn, recptr::Integer, elt::Integer)
     c = col.cclass
     if c == 9
         recno = Int(recptr)
@@ -344,7 +342,7 @@ for it (the stored length for class 3, the string length of the column for class
 and 9, so trailing blanks can be present). Results and errors as
 [`_ek_elt_i`](@ref), with `:uninitialized` for an entry that was never written.
 """
-function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer)
     r, isnull, found = _ek_cref(s, col, recptr, elt)
     return (r.n == 0 ? "" : _ek_cstring(s.chars, r)), isnull, found
 end
