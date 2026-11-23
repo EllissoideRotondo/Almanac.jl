@@ -546,14 +546,7 @@ function _dsk_latsrf(
         a, b, c = _dsk_radii(ks, trgcde)
         for i in 1:npts                  # invariant: out[1:i-1] holds the points 1 .. i-1
             lon, lat = _dsk_get2(lonlat, i)
-            p = _dsk_latrec(1.0, lon, lat)
-            d1 = p[1] / a
-            d2 = p[2] / b
-            d3 = p[3] / c
-            level = d1 * d1 + d2 * d2 + d3 * d3
-            level <= 0.0 && throw(SpiceError(:pointtoosmall, "the direction vector is too small"))
-            sq = sqrt(level)
-            out[i] = Vec3{Float64}(p[1] / sq, p[2] / sq, p[3] / sq)
+            out[i] = _m_edpnt(_m_latrec(1.0, lon, lat), a, b, c)
         end
         return out
     end
@@ -565,7 +558,7 @@ function _dsk_latsrf(
     t = Float64(et)
     for i in 1:npts                      # invariant: out[1:i-1] holds the points 1 .. i-1
         lon, lat = _dsk_get2(lonlat, i)
-        x = _dsk_latrec(r, lon, lat)
+        x = _m_latrec(r, lon, lat)
         xpt, _, _, found = _dsk_bux_ray(ks, tols, segs, maxrad, trgcde, srflst, t, fixfid, x, -x)
         found || throw(
             SpiceError(
@@ -642,7 +635,7 @@ function _dsk_srfnrm(
                     "the input point at index $i is not on the target body's reference ellipsoid"
                 )
             )
-            out[i] = _dsk_surfnm(a, b, c, p)
+            out[i] = _m_surfnm(a, b, c, p)
         end
         return out
     end

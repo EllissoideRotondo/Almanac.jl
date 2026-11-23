@@ -10,29 +10,6 @@
 # --- rectangular, latitudinal, right ascension ----------------------------------------
 
 """
-`(radius, lon, lat)` of `v`. With `scaled` the longitude comes from the components
-divided by the largest one, as in `reclat_c`; without it from the components themselves,
-as in `reclat_`, which also decide whether the point is on the z axis (`[0, 5e-324, 1e10]`
-has the longitude pi/2 in `reclat_` and 0 in `reclat_c`).
-"""
-@inline function _m_reclat(v::SVector{3}, scaled::Bool)
-    vmax = _m_maxabs(v)
-    z0 = zero(atan(v[1] / 1.0))
-    vmax > 0.0 || return z0, z0, z0
-    x1 = v[1] / vmax
-    y1 = v[2] / vmax
-    z1 = v[3] / vmax
-    radius = vmax * sqrt(x1 * x1 + y1 * y1 + z1 * z1)
-    lat = atan(z1, sqrt(x1 * x1 + y1 * y1))
-    if scaled
-        (primal(x1) == 0.0 && primal(y1) == 0.0) && return radius + z0, z0, lat
-        return radius + z0, atan(y1, x1), lat
-    end
-    (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && return radius + z0, z0, lat
-    return radius + z0, atan(v[2], v[1]), lat
-end
-
-"""
     reclat(rectan) -> (radius, lon, lat)
 
 Return the latitudinal coordinates of the rectangular point `rectan`, as
@@ -58,12 +35,6 @@ See also [`latrec`](@ref), [`recrad`](@ref), [`recsph`](@ref), [`recgeo`](@ref),
 [`dlatdr`](@ref).
 """
 reclat(rectan::AbstractVector) = _m_reclat(_m_v3(rectan), true)
-
-@inline function _m_latrec(radius, lon, lat)
-    slon, clon = sincos(lon)
-    slat, clat = sincos(lat)
-    return SVector(radius * clon * clat, radius * slon * clat, radius * slat)
-end
 
 """
     latrec(radius, lon, lat) -> SVector{3}
@@ -202,11 +173,6 @@ See also [`cylrec`](@ref), [`dcyldr`](@ref).
 """
 reccyl(rectan::AbstractVector) = _m_reccyl(_m_v3(rectan))
 
-@inline function _m_cylrec(r, clon, z)
-    s, c = sincos(clon)
-    return SVector(r * c, r * s, z - zero(r * c))
-end
-
 """
     cylrec(r, clon, z) -> SVector{3}
 
@@ -331,19 +297,6 @@ end
 
 # --- geodetic -------------------------------------------------------------------------
 
-@noinline _m_badre(re, kind::Symbol = :valueoutofrange) = throw(
-    SpiceError(
-        kind,
-        "the equatorial radius must be positive; it is $(primal(re))"
-    )
-)
-@noinline _m_badflat(f) = throw(
-    SpiceError(
-        :valueoutofrange,
-        "the flattening coefficient must be less than 1; it is $(primal(f))"
-    )
-)
-
 @inline function _m_recgeo(v::SVector{3}, re, f)
     primal(re) > 0.0 || _m_badre(re)
     primal(f) < 1.0 || _m_badflat(f)
@@ -387,24 +340,6 @@ true
 See also [`georec`](@ref), [`recpgr`](@ref), [`dgeodr`](@ref).
 """
 recgeo(rectan::AbstractVector, re::Real, f::Real) = _m_recgeo(_m_v3(rectan), _m_f(re), _m_f(f))
-
-@inline function _m_georec(lon, lat, alt, re, f)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    rp = re - f * re
-    sphi, cphi = sincos(lat)
-    slmbda, clmbda = sincos(lon)
-    big = max(abs(primal(re * cphi)), abs(primal(rp * sphi)))
-    x = re * cphi / big
-    y = rp * sphi / big
-    scale = 1.0 / (big * sqrt(x * x + y * y))
-    base = SVector(
-        scale * re * re * clmbda * cphi, scale * re * re * slmbda * cphi,
-        scale * rp * rp * sphi
-    )
-    normal = _m_surfnm(re, re, rp, base)
-    return 1.0 * base + alt * normal
-end
 
 """
     georec(lon, lat, alt, re, f) -> SVector{3}

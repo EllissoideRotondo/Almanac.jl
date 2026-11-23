@@ -456,6 +456,230 @@ end
     return a / b
 end
 
+# --- coordinates, ellipsoids, lines and planes -----------------------------------------
+#
+# The kernels of `math/coordinates.jl` and `math/ellipsoid.jl` that the DSK files, which
+# come before them, use too.
+
+"""
+`(radius, lon, lat)` of `v`. With `scaled` the longitude comes from the components
+divided by the largest one, as in `reclat_c`; without it from the components themselves,
+as in `reclat_`, which also decide whether the point is on the z axis (`[0, 5e-324, 1e10]`
+has the longitude pi/2 in `reclat_` and 0 in `reclat_c`).
+"""
+@inline function _m_reclat(v::SVector{3}, scaled::Bool)
+    vmax = _m_maxabs(v)
+    z0 = zero(atan(v[1] / 1.0))
+    vmax > 0.0 || return z0, z0, z0
+    x1 = v[1] / vmax
+    y1 = v[2] / vmax
+    z1 = v[3] / vmax
+    radius = vmax * sqrt(x1 * x1 + y1 * y1 + z1 * z1)
+    lat = atan(z1, sqrt(x1 * x1 + y1 * y1))
+    if scaled
+        (primal(x1) == 0.0 && primal(y1) == 0.0) && return radius + z0, z0, lat
+        return radius + z0, atan(y1, x1), lat
+    end
+    (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && return radius + z0, z0, lat
+    return radius + z0, atan(v[2], v[1]), lat
+end
+
+@inline function _m_latrec(radius, lon, lat)
+    slon, clon = sincos(lon)
+    slat, clat = sincos(lat)
+    return SVector(radius * clon * clat, radius * slon * clat, radius * slat)
+end
+
+@inline function _m_cylrec(r, clon, z)
+    s, c = sincos(clon)
+    return SVector(r * c, r * s, z - zero(r * c))
+end
+
+@noinline _m_badre(re, kind::Symbol = :valueoutofrange) = throw(
+    SpiceError(
+        kind,
+        "the equatorial radius must be positive; it is $(primal(re))"
+    )
+)
+@noinline _m_badflat(f) = throw(
+    SpiceError(
+        :valueoutofrange,
+        "the flattening coefficient must be less than 1; it is $(primal(f))"
+    )
+)
+
+@inline function _m_georec(lon, lat, alt, re, f)
+    primal(re) > 0.0 || _m_badre(re)
+    primal(f) < 1.0 || _m_badflat(f)
+    rp = re - f * re
+    sphi, cphi = sincos(lat)
+    slmbda, clmbda = sincos(lon)
+    big = max(abs(primal(re * cphi)), abs(primal(rp * sphi)))
+    x = re * cphi / big
+    y = rp * sphi / big
+    scale = 1.0 / (big * sqrt(x * x + y * y))
+    base = SVector(
+        scale * re * re * clmbda * cphi, scale * re * re * slmbda * cphi,
+        scale * rp * rp * sphi
+    )
+    normal = _m_surfnm(re, re, rp, base)
+    return 1.0 * base + alt * normal
+end
+
+@inline _m_abs(x::Real) = primal(x) < 0.0 ? -x : x
+
+@inline _m_max(x, y) = primal(y) > primal(x) ? y : x
+
+@noinline _m_badaxis(a, b, c) = throw(
+    SpiceError(
+        :badaxislength,
+        "the ellipsoid semi-axis lengths must be positive; they are $(primal(a)), $(primal(b)), $(primal(c))"
+    )
+)
+
+@inline _m_axes_ok(a, b, c) = primal(a) > 0.0 && primal(b) > 0.0 && primal(c) > 0.0
+
+@inline function _m_surfnm(a, b, c, point::SVector{3})
+    _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
+    m = primal(a) <= primal(b) ? a : b
+    m = primal(m) <= primal(c) ? m : c
+    a1 = m / a
+    b1 = m / b
+    c1 = m / c
+    return _m_hat(SVector(point[1] * (a1 * a1), point[2] * (b1 * b1), point[3] * (c1 * c1)))
+end
+
+"`(found, point)` of `surfpt_`, with the semi-axes `a`, `b`, `c`; the point is zero when nothing is found."
+@inline function _m_surfpt(positn::SVector{3}, u::SVector{3}, a, b, c)
+    _m_iszero(u) && throw(SpiceError(:zerovector, "the ray direction is the zero vector"))
+    _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
+    x = SVector(u[1] / a, u[2] / b, u[3] / c)
+    y = SVector(positn[1] / a, positn[2] / b, positn[3] / c)
+    # In the scaled space the ellipsoid is the unit sphere; p is the point of the
+    # line that is nearest to the center.
+    p = _m_perp(y, x, false)
+    yproj = y - p
+    ymag = _m_norm(y)
+    pmag = _m_norm(p)
+    ux = _m_hat(x)
+    none = zero(p)
+    sign = 1.0
+    if primal(ymag) > 1.0
+        primal(pmag) > 1.0 && return false, none
+        primal(_m_dot(yproj, x)) > 0.0 && return false, none
+        primal(pmag) == 1.0 && return true, SVector(p[1] * a, p[2] * b, p[3] * c)
+        sign = -1.0
+    elseif primal(ymag) == 1.0
+        return true, convert(typeof(none), positn)  # `vequ_`: keeps the sign of a zero
+    end
+    t = 1.0 - pmag * pmag
+    scale = primal(t) <= 0.0 ? zero(t) : sqrt(t)  # `sqrt(max(0, t))` of f2c, which keeps a NaN
+    q = 1.0 * p + (sign * scale) * ux
+    return true, SVector(q[1] * a, q[2] * b, q[3] * c)
+end
+
+"`edpnt_` after its checks of the axes and of a zero `v`: `v` scaled to the ellipsoid."
+@inline function _m_edpnt(v::SVector{3}, a, b, c)
+    x = v[1] / a
+    y = v[2] / b
+    z = v[3] / c
+    level = x * x + y * y + z * z
+    primal(level) <= 0.0 && throw(
+        SpiceError(
+            :pointtoosmall,
+            "the input point is too close to the origin to be scaled to the ellipsoid"
+        )
+    )
+    sq = sqrt(level)
+    return SVector(v[1] / sq, v[2] / sq, v[3] / sq)
+end
+
+"""
+Nearest point of the line through `lp` along a nonzero `ld` to `p`, and its distance;
+`recip` true projects as `nplnpt_c`, false as the f2c `nplnpt_`.
+"""
+@inline function _m_nplnpt(lp::SVector{3}, ld::SVector{3}, p::SVector{3}, recip::Bool)
+    pnear = _m_proj(p - lp, ld, recip) + lp
+    return pnear, _m_norm(pnear - p)
+end
+
+"`npsgpt`: the point of the segment from `e1` to `e2` that is nearest to `p`, and its distance."
+@inline function _m_npsgpt(e1::SVector{3}, e2::SVector{3}, p::SVector{3})
+    seg = e2 - e1
+    _m_iszero(seg) && return e1, _m_norm(e1 - p)
+    # `npsgpt_` calls the Fortran `nplnpt_`, whose projection is `vproj_`.
+    lnear, dist = _m_nplnpt(e1, seg, p, false)
+    offdot = _m_dot(lnear - e1, seg)
+    primal(offdot) < 0.0 && return e1, _m_norm(e1 - p)
+    primal(offdot) > primal(_m_dot(seg, seg)) && return e2, _m_norm(e2 - p)
+    return lnear, dist
+end
+
+
+# --- planes as (unit normal, constant) ------------------------------------------------
+
+"The plane `(normal, constant)` with the signs of both changed if `constant < 0`."
+@inline _m_nvc(normal::SVector{3}, constant) =
+    primal(constant) < 0.0 ? (-normal, -constant) : (normal, constant)
+
+"`nvc2pl_` as a tuple `(normal, constant)`; throws `:zerovector` for a zero `normal`."
+@inline function _m_nvc2pl(normal::SVector{3}, konst)
+    u, mag = _m_unorm(normal)
+    primal(mag) == 0.0 && throw(SpiceError(:zerovector, "the normal of a plane must not be zero"))
+    return _m_nvc(u, konst / mag)
+end
+
+"`nvp2pl_` as a tuple `(normal, constant)`, without its check: a zero `normal` gives `(0, 0)`."
+@inline function _m_nvp2pl(normal::SVector{3}, point::SVector{3})
+    u = _m_hat(normal)
+    # The zero (which gives the number type of `point` to the normal) is subtracted, not
+    # added, because `-0.0 + 0.0` is `0.0`: a zero component keeps its sign, as in CSPICE.
+    return _m_nvc(u - zero(point), _m_dot(point, u))
+end
+
+"""
+`(nxpts, xpt)` of `inrypl_` for the ray from `vtx` along `d` and the plane of the unit
+normal `normal` and the constant `constant >= 0`.
+"""
+@inline function _m_inrypl(vtx::SVector{3}, d::SVector{3}, normal::SVector{3}, constant)
+    toobig = floatmax(Float64) / 3.0
+    vnrm = _m_norm(vtx)
+    primal(vnrm) >= toobig && throw(
+        SpiceError(
+            :vectortoobig,
+            "the vertex of the ray is too far from the origin"
+        )
+    )
+    primal(constant) >= toobig && throw(
+        SpiceError(
+            :vectortoobig,
+            "the plane is too far from the origin"
+        )
+    )
+    udir = _m_hat(d)
+    _m_iszero(udir) && throw(SpiceError(:zerovector, "the direction of the ray is the zero vector"))
+    mscale = _m_max(_m_abs(constant) - zero(vnrm), _m_abs(vnrm) - zero(constant))
+    if primal(mscale) != 0.0
+        sclvtx = (1.0 / mscale) * vtx
+        sclcon = constant / mscale
+    else
+        sclvtx = vtx - zero(SVector{3, typeof(mscale)})
+        sclcon = constant - zero(mscale)
+    end
+    primal(mscale) > 1.0 && (toobig = toobig / primal(mscale))
+    prjdif = sclcon - _m_dot(sclvtx, normal)
+    prjdir = _m_dot(udir, normal)
+    none = zero(1.0 * sclvtx + prjdif * udir)
+    if primal(prjdif) == 0.0
+        return (primal(_m_dot(normal, udir)) == 0.0 ? -1 : 1), convert(typeof(none), vtx)
+    end
+    pd, pf = primal(prjdir), primal(prjdif)
+    samesign = (pd > 0.0 && pf > 0.0) || (pd < 0.0 && pf < 0.0)
+    (!samesign || abs(pf) >= abs(pd) * toobig) && return 0, none
+    scale = _m_abs(prjdif) / _m_abs(prjdir)
+    return 1, mscale * (1.0 * sclvtx + scale * udir)
+end
+
 # ---------------------------------------------------------------------------------
 # Integer conversions of C
 # ---------------------------------------------------------------------------------
