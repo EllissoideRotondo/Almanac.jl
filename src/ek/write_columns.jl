@@ -429,7 +429,7 @@ function _ekw_ad12(
         lastw = Int(segdsc[_ekw_lcw(t)])
         if lastw < _ekw_DSIZE[t]
             p = Int(segdsc[_ekw_lcp(t)])
-            datptr = _ekw_base(t, p) + lastw + 1
+            datptr = _ek_base(t, p) + lastw + 1
             ints[ptrloc] = datptr
             _ekw_putn(h, t, datptr, val)
             _ekw_slnk(h, t, p, _ekw_glnk(h, t, p) + 1)
@@ -552,7 +552,7 @@ function _ekw_ad45(
             # last data page are free
             if room >= 2
                 p = Int(segdsc[_ekw_lcp(t)])
-                datptr = _ekw_base(t, p) + lastw + 1
+                datptr = _ek_base(t, p) + lastw + 1
                 if fstpag
                     h.ints[ptrloc] = datptr
                     _ekw_putn(h, t, datptr, nvals)
@@ -685,7 +685,7 @@ function _ekw_de12(h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, r
     datptr = Int(h.ints[ptrloc])
     if datptr > 0
         coldsc[_EK_IXTIDX] != -1 && _ekw_ixdl(h, segdsc, coldsc, recptr)
-        p, _ = _ekw_pgpg(t, datptr)
+        p, _ = _ek_pgpg(t, datptr)
         _ekw_unlink(h, segdsc, t, p)
         h.ints[ptrloc] = _EK_UNINIT
     elseif datptr == _EK_NULL
@@ -717,7 +717,7 @@ function _ekw_unlink_chain(
         h::DASHandle, segdsc::Vector{Int32}, t::Int, datptr::Int,
         nwords::Int, fastrec::Bool = false
     )
-    p, base = _ekw_pgpg(t, datptr)
+    p, base = _ek_pgpg(t, datptr)
     if fastrec
         nlinks = _ekw_glnk(h, t, p)
         nlinks > 1 && _ekw_slnk(h, t, p, nlinks - 1)
@@ -744,7 +744,7 @@ a link for every record that it holds, so it never has the count 0 while a recor
 in it.
 """
 @inline _ekw_fast_record(h::DASHandle, recptr::Integer) =
-    _ekw_glnk(h, 3, _ekw_pgpg(3, Int(recptr) + 1)[1]) == 0
+    _ekw_glnk(h, 3, _ek_pgpg(3, Int(recptr) + 1)[1]) == 0
 
 """
     _ekw_de03(h, segdsc, coldsc, recptr) -> Nothing
@@ -847,7 +847,7 @@ function _ekw_ue12(
             _ekw_ixin(h, segdsc, coldsc, val, recptr, isnull)
         end
         if isnull
-            p, _ = _ekw_pgpg(t, datptr)
+            p, _ = _ek_pgpg(t, datptr)
             _ekw_slnk(h, t, p, _ekw_glnk(h, t, p) - 1)
             h.ints[ptrloc] = _EK_NULL
         else
@@ -1384,7 +1384,7 @@ function _ekw_ac78(
         to += 1
         if to > dsize || from == nrows
             page[dsize + 2] = to - 1
-            copyto!(dst, _ekw_base(t, p) + 1, page, 1, length(page))
+            copyto!(dst, _ek_base(t, p) + 1, page, 1, length(page))
             p += 1
             to = 1
         end

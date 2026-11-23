@@ -91,6 +91,17 @@ const _EK_TRMXDP = 10             # largest depth of a tree
 @inline _ek_dbase(p::Integer) = (Int(p) - 1) * 128
 @inline _ek_ibase(p::Integer) = (Int(p) - 1) * 256 + 256
 
+"The base address of page `p` of type `t` (1 character, 2 double, 3 integer), as `zzekpgbs`: word `k` of the page is at `base + k`."
+@inline _ek_base(t::Int, p::Integer) =
+    t == 1 ? _ek_cbase(p) : t == 2 ? _ek_dbase(p) : _ek_ibase(p)
+
+"The page of type `t` that holds the address `addr`, and its base, as `zzekpgpg`."
+@inline function _ek_pgpg(t::Int, addr::Integer)
+    a = Int(addr)
+    p = t == 1 ? (a + 1023) ÷ 1024 : t == 2 ? (a + 127) ÷ 128 : (a - 1) ÷ 256
+    return p, _ek_base(t, p)
+end
+
 "The integer that five base-128 characters at the character address `addr` encode (`prtdec`)."
 @inline function _ek_gei(chars::AbstractVector{UInt8}, addr::Integer)
     n = 0
@@ -116,9 +127,9 @@ function _ek_check(s, path::AbstractString, who::AbstractString)
                 "for paged access; the EK software version is $_EK_ARCH"
         )
     )
-    topc = Int(ints[4]) * 1024
-    topd = Int(ints[9]) * 128
-    topi = Int(ints[14]) * 256 + 256
+    topc = _ek_cbase(Int(ints[4]) + 1)
+    topd = _ek_dbase(Int(ints[9]) + 1)
+    topi = _ek_ibase(Int(ints[14]) + 1)
     length(s.chars) > topc && throw(
         SpiceError(
             :invalidformat,

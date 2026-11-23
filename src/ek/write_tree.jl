@@ -14,7 +14,7 @@
 # one to one.
 #
 # A function `_ekw_<name>` ports the routine `zzek<name>` of CSPICE (`_ekw_pgal` is
-# `zzekpgal`, `_ekw_trin` is `zzektrin`); `_ekw_base` is `zzekpgbs`. A tree is known
+# `zzekpgal`, `_ekw_trin` is `zzektrin`); `_ek_base` is `zzekpgbs`. A tree is known
 # by the number of its root page.
 #
 # Nothing here keeps state outside the handle.
@@ -38,15 +38,6 @@ The check of `zzekpgch` for write access: `h` is open (`:dasnosuchhandle`), writ
     _das_check_write(h, who)
     _ek_check(h, h.path, who)
     return nothing
-end
-
-@inline _ekw_base(t::Int, p::Integer) =
-    t == 1 ? _ek_cbase(p) : t == 2 ? _ek_dbase(p) : _ek_ibase(p)
-
-@inline function _ekw_pgpg(t::Int, addr::Integer)
-    a = Int(addr)
-    p = t == 1 ? (a + 1023) ÷ 1024 : t == 2 ? (a + 127) ÷ 128 : (a - 1) ÷ 256
-    return p, _ekw_base(t, p)
 end
 
 "Write `val` as five base-128 characters at `buf[at:at+4]` (`prtenc`)."
@@ -131,7 +122,7 @@ function _ekw_pgan(h::DASHandle, t::Int)
     end
     np = Int(ints[_ekw_NPAGE[t]])
     ints[_ekw_NPAGE[t]] = np + 1
-    return np + 1, _ekw_base(t, np + 1)
+    return np + 1, _ek_base(t, np + 1)
 end
 
 """
@@ -145,9 +136,8 @@ function _ekw_pgal(h::DASHandle, t::Int)
     ints = h.ints
     p = Int(ints[_ekw_FREEP[t]])
     p > 0 || return _ekw_pgan(h, t)
-    base = _ekw_base(t, p)
-    next = t == 1 ? _ek_gei(h.chars, base + 1) : t == 2 ? round(Int, h.dps[base + 1]) :
-        Int(ints[base + 1])
+    base = _ek_base(t, p)
+    next = _ekw_getw(h, t, base, _ekw_FIRSTW)
     ints[_ekw_NFREE[t]] -= 1
     ints[_ekw_FREEP[t]] = next
     return p, base
@@ -170,56 +160,50 @@ function _ekw_pgfr(h::DASHandle, t::Int, p::Integer)
         )
     )
     head = Int(ints[_ekw_FREEP[t]])
-    base = _ekw_base(t, p)
-    if t == 1
-        _ekw_sei(h, base + 1, head)
-    elseif t == 2
-        h.dps[base + 1] = Float64(head)
-    else
-        ints[base + 1] = head
-    end
+    base = _ek_base(t, p)
+    _ekw_setw(h, t, base, _ekw_FIRSTW, head)
     ints[_ekw_FREEP[t]] = p
     ints[_ekw_NFREE[t]] += 1
     return nothing
 end
 
-# The link count of a data page is in its last word and the forward pointer, a page
-# number, in the word before it; in a character page each takes five characters.
-@inline function _ekw_glnk(h::DASHandle, t::Int, p::Integer)
-    base = _ekw_base(t, p)
-    return t == 1 ? _ek_gei(h.chars, base + 1020) : t == 2 ? round(Int, h.dps[base + 128]) :
-        Int(h.ints[base + 256])
+"""
+    _ekw_getw(h, t, base, offs) -> Int
+
+The integer in word `offs[t]` of the page of type `t` at `base`: an integer, a double,
+or five base-128 characters from that offset in a character page.
+"""
+@inline function _ekw_getw(h::DASHandle, t::Int, base::Int, offs::NTuple{3, Int})
+    a = base + offs[t]
+    return t == 1 ? _ek_gei(h.chars, a) : t == 2 ? round(Int, h.dps[a]) : Int(h.ints[a])
 end
 
-@inline function _ekw_slnk(h::DASHandle, t::Int, p::Integer, n::Integer)
-    base = _ekw_base(t, p)
+"Store `n` in the word that `_ekw_getw(h, t, base, offs)` reads."
+@inline function _ekw_setw(h::DASHandle, t::Int, base::Int, offs::NTuple{3, Int}, n::Integer)
+    a = base + offs[t]
     if t == 1
-        _ekw_sei(h, base + 1020, n)
+        _ekw_sei(h, a, n)
     elseif t == 2
-        h.dps[base + 128] = Float64(n)
+        h.dps[a] = Float64(n)
     else
-        h.ints[base + 256] = n
+        h.ints[a] = n
     end
     return nothing
 end
 
-@inline function _ekw_gfwd(h::DASHandle, t::Int, p::Integer)
-    base = _ekw_base(t, p)
-    return t == 1 ? _ek_gei(h.chars, base + 1015) : t == 2 ? round(Int, h.dps[base + 127]) :
-        Int(h.ints[base + 255])
-end
+# The first word of a free page holds the link of the free list. The link count of a
+# data page is in its last word and the forward pointer, a page number, in the word
+# before it; in a character page each takes five characters.
+const _ekw_FIRSTW = (1, 1, 1)
+const _ekw_LNKW = (1020, 128, 256)
+const _ekw_FWDW = (1015, 127, 255)
 
-@inline function _ekw_sfwd(h::DASHandle, t::Int, p::Integer, fwd::Integer)
-    base = _ekw_base(t, p)
-    if t == 1
-        _ekw_sei(h, base + 1015, fwd)
-    elseif t == 2
-        h.dps[base + 127] = Float64(fwd)
-    else
-        h.ints[base + 255] = fwd
-    end
-    return nothing
-end
+@inline _ekw_glnk(h::DASHandle, t::Int, p::Integer) = _ekw_getw(h, t, _ek_base(t, p), _ekw_LNKW)
+@inline _ekw_slnk(h::DASHandle, t::Int, p::Integer, n::Integer) =
+    _ekw_setw(h, t, _ek_base(t, p), _ekw_LNKW, n)
+@inline _ekw_gfwd(h::DASHandle, t::Int, p::Integer) = _ekw_getw(h, t, _ek_base(t, p), _ekw_FWDW)
+@inline _ekw_sfwd(h::DASHandle, t::Int, p::Integer, fwd::Integer) =
+    _ekw_setw(h, t, _ek_base(t, p), _ekw_FWDW, fwd)
 
 # ---------------------------------------------------------------------------------------
 # Integer page buffers with the 0-based offsets of the C source
@@ -598,7 +582,7 @@ function _ekw_tr13(h::DASHandle, tree::Integer)
 end
 
 "Key, data and child bases (0-based offsets) of a node: the root or another node."
-@inline _ekw_bases(isroot::Bool) =
+@inline _ek_bases(isroot::Bool) =
     isroot ? (_EK_TRKEYR, _EK_TRDATR, _EK_TRKIDR) : (_EK_TRKEYC, _EK_TRDATC, _EK_TRKIDC)
 
 @inline function _ekw_sibling_check(
@@ -641,7 +625,7 @@ function _ekw_tr23(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     c2page = _ekw_pgri(h, right)
     ppage = _ekw_pgri(h, parent)
     root = Int(tree)
-    keybas, datbas, kidbas = _ekw_bases(parent == root)
+    keybas, datbas, kidbas = _ek_bases(parent == root)
     _ekw_sibling_check(ppage, kidbas, pkidx, left, right, parent)
     nlkeys = c1page[0]
     nrkeys = c2page[0]
@@ -738,7 +722,7 @@ function _ekw_trrk(
     lpage = _ekw_pgri(h, left)
     rpage = _ekw_pgri(h, right)
     ppage = _ekw_pgri(h, parent)
-    keybas, datbas, kidbas = _ekw_bases(parent == root)
+    keybas, datbas, kidbas = _ek_bases(parent == root)
     _ekw_sibling_check(ppage, kidbas, pkidx, left, right, parent)
     lnkeys = lpage[0]
     rnkeys = rpage[0]
@@ -1107,7 +1091,7 @@ function _ekw_tr32(
     c3page = _ekw_pgri(h, right)
     ppage = _ekw_pgri(h, parent)
     root = Int(tree)
-    keybas, datbas, kidbas = _ekw_bases(parent == root)
+    keybas, datbas, kidbas = _ek_bases(parent == root)
     psize = parent == root ? ppage[4] : ppage[0]
     (1 <= lpkidx <= psize - 1) || _ekw_bug(
         "Left parent key of MIDDLE is out of range.  " *
