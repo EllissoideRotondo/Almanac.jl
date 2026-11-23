@@ -68,7 +68,7 @@ const ERROR_KINDS = (
     :noloadeddskfiles, :noloadedfiles, :nonconicmotion, :nonemptyentry, :nonemptytree,
     :nonpositiveaxis, :nonpositivemass, :nonpositiveradius, :nonpositivescale,
     :nonpositivevalue, :nonpospacketsize, :nonprintablechars, :nonprintingchar, :nonprintingchars, :nopartition,
-    :nosegmentsfound, :noseparation, :nosuchfile, :nosuchhandle, :notanumber, :notarotation,
+    :nosegmentsfound, :noseparation, :nosuchfile, :nosuchhandle, :notarotation,
     :notcomputable, :notdisjoint, :notindexed, :notinpart, :notranslation, :notrecognized,
     :notsupported, :numberexpected, :numcoeffsnotpos, :numericoverflow, :numpacketsnotpos, :numpartsunequal,
     :numstatesnotpos, :objectstooclose, :orbitdecay, :outofrange, :outofroom,

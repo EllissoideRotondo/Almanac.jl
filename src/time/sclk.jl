@@ -631,7 +631,8 @@ function _sclk_encode(clock::SclkType1, sc::Integer, sclkch::AbstractString, sce
         return 0.0, :invalidsclkstring, "Input spacecraft clock string is blank."
     pos = something(findfirst('/', sclkch), 0)
     badpart = "Unable to parse the partition number from SCLK string #."
-    pos == 1 && return 0.0, :badpartnumber, _repmc(badpart, sclkch)
+    kind = :badpartnumber    # the kinds are named by `kind = ...` for the registry test
+    pos == 1 && return 0.0, kind, _repmc(badpart, sclkch)
     fields = SubString(sclkch, pos == 0 ? 1 : nextind(sclkch, pos))
     ticks, msg = _sclk_ticks(clock, fields)
     isempty(msg) || return 0.0, :invalidsclkstring, msg
@@ -642,9 +643,9 @@ function _sclk_encode(clock::SclkType1, sc::Integer, sclkch::AbstractString, sce
             _nparsi(SubString(sclkch, 1, prevind(sclkch, pos)))
         catch err
             err isa SpiceError || rethrow()
-            return 0.0, :badpartnumber, _repmc(badpart, sclkch)
+            return 0.0, kind, _repmc(badpart, sclkch)
         end
-        (part <= 0 || part > nparts) && return 0.0, :badpartnumber, _repmc(
+        (part <= 0 || part > nparts) && return 0.0, kind, _repmc(
                 _repmc(
                     _repmc(
                         "Partition number # taken from SCLK string # is not in acceptable " *
@@ -652,7 +653,8 @@ function _sclk_encode(clock::SclkType1, sc::Integer, sclkch::AbstractString, sce
                     ), sclkch
                 ), nparts
             )
-        (ticks < pstart[part] || ticks > pstop[part]) && return 0.0, :notinpart, _repmc(
+        kind = :notinpart
+        (ticks < pstart[part] || ticks > pstop[part]) && return 0.0, kind, _repmc(
                 _repmc(
                     "SCLK count from # does not fall in the boundaries of partition number #.",
                     fields
@@ -662,7 +664,8 @@ function _sclk_encode(clock::SclkType1, sc::Integer, sclkch::AbstractString, sce
         while part <= nparts && (ticks < pstart[part] || ticks > pstop[part])
             part += 1                # invariant: partitions 1:part-1 do not hold `ticks`
         end
-        part > nparts && return 0.0, :nopartition, _repmc(
+        kind = :nopartition
+        part > nparts && return 0.0, kind, _repmc(
                 _repmc(
                     "SCLK count # does not fall in the boundaries of any of the partitions " *
                     "for spacecraft #.", fields
