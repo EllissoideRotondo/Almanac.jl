@@ -92,7 +92,7 @@ end
 function _gf_shape_radius(ks::KernelSet, body::Int32, shape::AbstractString)
     s = _ljucase(shape)
     s == "POINT" && return 0.0
-    s == "SPHERE" && return maximum(_geo_radii(ks, body))
+    s == "SPHERE" && return maximum(_positive_radii(ks, body))
     throw(
         SpiceError(
             :notrecognized,
@@ -480,7 +480,7 @@ function GFCoordinate(
                     "the kernel pool."
             )
         )
-        re, f, sense = _gf_geodetic(ks, center, ref, sys, _geo_radii(ks, center))
+        re, f, sense = _gf_geodetic(ks, center, ref, sys, _positive_radii(ks, center))
     end
     return GFCoordinate(vec, sys, idx, re, f, sense, center)
 end

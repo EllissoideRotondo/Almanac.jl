@@ -219,6 +219,19 @@ values).
 end
 
 """
+    _positive_radii(ks, body) -> NTuple{3,Float64}
+
+`zzgftreb`: the three radii of `body` from the kernel pool. Throws `SpiceError`
+(`:kernelvarnotfound`, `:typemismatch`, `:invalidcount`, `:badaxislength`) unless
+they are three positive values. No allocation for an ID in 1:999.
+"""
+@inline function _positive_radii(ks::KernelSet, body::Integer)
+    a, b, c = _radii3(ks, body, :invalidcount)
+    (a > 0.0 && b > 0.0 && c > 0.0) || _bad_radii(body, (a, b, c))
+    return a, b, c
+end
+
+"""
     bods2c([ctx,] name) -> Union{Int,Nothing}
 
 Return the NAIF ID code of the body `name`, or `nothing` if the name is not known, as

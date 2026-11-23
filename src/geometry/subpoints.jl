@@ -97,7 +97,7 @@ relative to the target in the frame `fixfid`, corrected as `corr` says, the epoc
     tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, corr, obscde)
     obspos = -tpos
     trgepc = et + s * lt
-    radii = _geo_radii(ks, trgcde)
+    radii = _positive_radii(ks, trgcde)
     return fixfid, near, sh, et, s, obspos, trgepc, radii
 end
 

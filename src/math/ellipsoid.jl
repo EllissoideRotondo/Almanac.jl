@@ -1440,31 +1440,6 @@ function _m_edterm(
     return out
 end
 
-"Radii of `body` with the checks of `zzgftreb_`."
-function _m_radii(ks::KernelSet, body::Integer)
-    v = get(ks.pool, _body_key(body, "RADII"), nothing)
-    v === nothing && throw(
-        SpiceError(
-            :kernelvarnotfound,
-            "the variable BODY$(body)_RADII is not in the kernel pool"
-        )
-    )
-    v isa Vector{Float64} || throw(
-        SpiceError(
-            :typemismatch,
-            "the variable BODY$(body)_RADII is not numeric"
-        )
-    )
-    length(v) == 3 || throw(
-        SpiceError(
-            length(v) > 3 ? :arraytoosmall : :invalidcount,
-            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
-        )
-    )
-    all(>(0.0), v) || throw(SpiceError(:badaxislength, "a radius of body $body is not positive"))
-    return v[1], v[2], v[3]
-end
-
 function _m_bodyid(ks::KernelSet, name::NameOrID, kind::Symbol)
     name isa Integer && return Int32(name)
     try
@@ -1543,8 +1518,8 @@ function edterm(
             "the frame $fixref is not centered on the target body $target"
         )
     )
-    trgrad = _m_radii(ks, trgid)
-    srcrad = _m_radii(ks, srcid)
+    trgrad = _positive_radii(ks, trgid)
+    srcrad = _positive_radii(ks, srcid)
     r = max(srcrad[1], srcrad[2], srcrad[3])
     t0 = Float64(et)
     corr = try

@@ -823,7 +823,7 @@ function xfmsta(
     f = 0.0
     if isys >= 5 || osys >= 5
         id = _m_bodyid(ks, body, :idcodenotfound)
-        r1, r2, r3 = _m_radii(ks, id)
+        r1, r2, r3 = _positive_radii(ks, id)
         sqrt(abs(r1 - r3)) / sqrt(abs(r1)) >= sqrt(floatmax(Float64)) &&
             throw(SpiceError(:invalidradius, "the radii of body $body give no flattening"))
         r1 == r2 || throw(

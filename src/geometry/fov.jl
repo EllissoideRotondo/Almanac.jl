@@ -642,7 +642,7 @@ function _geo_fov_setup(
     else
         corr = Aberration(abcorr)
     end
-    trad = etrg ? _geo_radii(ks, targ) : (0.0, 0.0, 0.0)
+    trad = etrg ? _positive_radii(ks, targ) : (0.0, 0.0, 0.0)
     rdir = zero(Vec3{Float64})
     if uray
         _m_iszero(raydir) && _throw_spice(:zerovector, "the direction of the ray is the zero vector")

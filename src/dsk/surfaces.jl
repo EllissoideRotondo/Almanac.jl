@@ -431,7 +431,7 @@ The radii of the body `code` as `latsrf` and `srfnrm` read them, with `zzbodvcd`
 room for 3 values: more values are `SpiceError(:arraytoosmall)`, as in `bodvcd`. With
 fewer, CSPICE uses the radius that its saved array still holds (0 on the first call),
 which is `:badaxislength` here, as is a radius that is not positive. The test of the
-signs is the `min` of `latsrf`, which lets a NaN pass, where `_geo_radii` throws.
+signs is the `min` of `latsrf`, which lets a NaN pass, where `_positive_radii` throws.
 """
 function _dsk_radii(ks::KernelSet, code::Integer)
     r = _radii3(ks, code, :badaxislength)

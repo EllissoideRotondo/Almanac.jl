@@ -257,7 +257,7 @@ if there are not 3 of them, and `SpiceError(:badaxislength)` if one is not posit
 See also [`latsrf`](@ref), [`latrec`](@ref), [`bodvrd`](@ref).
 """
 function srfrec(ks::KernelSet, body::NameOrID, lon::Real, lat::Real)
-    a, b, c = _geo_radii(ks, _body_id(ks, body, "body"))
+    a, b, c = _positive_radii(ks, _body_id(ks, body, "body"))
     return edpnt(_m_latrec(1.0, float(lon), float(lat)), a, b, c)
 end
 srfrec(ctx::SpiceContext, body::NameOrID, lon::Real, lat::Real) =

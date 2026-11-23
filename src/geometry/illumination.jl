@@ -56,7 +56,7 @@ end
     (vsep(obspos, tipos), vsep(normal, tipos), vsep(normal, obspos))
 
 @inline function _geo_ellipsoid_normal(ks::KernelSet, trgcde::Int32, sp::Vec3{Float64})
-    a, b, c = _geo_radii(ks, trgcde)
+    a, b, c = _positive_radii(ks, trgcde)
     return _m_surfnm(a, b, c, sp)
 end
 
@@ -345,7 +345,7 @@ end
 function _geo_sepradius(ks::KernelSet, body::Int32, shape::AbstractString)
     sh = _geo_sepshape(shape)
     sh == 0x01 && return 0.0
-    sh == 0x02 && return maximum(_geo_radii(ks, body))
+    sh == 0x02 && return maximum(_positive_radii(ks, body))
     throw(
         SpiceError(
             :notrecognized,

@@ -134,19 +134,6 @@ end
 @inline _geo_fixfid(ks::KernelSet, fixref::NameOrID, trgcde::Int32, target) =
     _dsk_fixfid(ks, fixref, trgcde, target, :noframe, :noframe)
 
-"""
-    _geo_radii(ks, body) -> NTuple{3,Float64}
-
-`zzgftreb`: the three radii of `body` from the kernel pool. Throws `SpiceError`
-(`:kernelvarnotfound`, `:typemismatch`, `:invalidcount`, `:badaxislength`) unless
-they are three positive values. No allocation for an ID in 1:999.
-"""
-@inline function _geo_radii(ks::KernelSet, body::Integer)
-    a, b, c = _radii3(ks, body, :invalidcount)
-    (a > 0.0 && b > 0.0 && c > 0.0) || _bad_radii(body, (a, b, c))
-    return a, b, c
-end
-
 # --- positions --------------------------------------------------------------------------
 
 "`spkezp_`: position of `targ` relative to `obs` in frame `ref` and the light time."
@@ -197,7 +184,7 @@ _GeoShape(dsk, trgcde, fixfid, a, b, c, maxrad, srflst, tols) =
 
 "`zzsuelin`: the ellipsoid of the body `trgcde`."
 @inline function _geo_ellshape(ks::KernelSet, trgcde::Int32, fixfid::Int32)
-    a, b, c = _geo_radii(ks, trgcde)
+    a, b, c = _positive_radii(ks, trgcde)
     return _GeoShape(
         false, trgcde, fixfid, a, b, c, max(max(a, b), c),
         _GEO_NOSURF, _DSK_DEFAULT_TOLS

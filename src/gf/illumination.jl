@@ -65,7 +65,7 @@ function GFIllumination(
                 "$(string(corr)); transmission corrections are not allowed by this routine."
         )
     )
-    a, b, c = _geo_radii(ks, targ)
+    a, b, c = _positive_radii(ks, targ)
     sp = _dsk_vec3(spoint)
     normal = _m_surfnm(a, b, c, sp)
     _ljucase(method) == "ELLIPSOID" || throw(

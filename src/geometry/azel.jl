@@ -185,7 +185,7 @@ function azlcpo(
         # On the polar axis the local +X axis is the +X axis of the body-fixed frame.
         pos[3] < 0.0 ? _m_rotmat(one(Mat3{Float64}), Float64(pi), 1) : one(Mat3{Float64})
     else
-        a, b, c = _geo_radii(ks, obscde)
+        a, b, c = _positive_radii(ks, obscde)
         obsspt, _ = _m_nearpt(pos, a, b, c)
         twovec(_m_surfnm(a, b, c, obsspt), 3, SVector(0.0, 0.0, 1.0), 1)
     end

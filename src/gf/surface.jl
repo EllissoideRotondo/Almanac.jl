@@ -364,7 +364,7 @@ function _gf_surface_coordinate(
                 "Bodies {0,..,9} represent barycenters and so lack physical properties."
         )
     )
-    rad = _geo_radii(ks, center)
+    rad = _positive_radii(ks, center)
     re, f, sense = (sys == _GF_GEODETIC || sys == _GF_PLANETOGRAPHIC) ?
         _gf_geodetic(ks, center, frame, sys, rad) : (0.0, 0.0, 0)
     meth = uppercase(lstrip(method, ' '))

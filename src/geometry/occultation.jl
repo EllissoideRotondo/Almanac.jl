@@ -391,7 +391,7 @@ end
 @inline function _geo_occ_extent(ks::KernelSet, b::_GeoOccBody, frame, srflst)
     b.kind == _GEO_OCC_POINT && return (0.0, 0.0, 0.0), 0.0, 0.0, Int32(0)
     if b.kind == _GEO_OCC_ELLIPSOID
-        rad = _geo_radii(ks, b.id)
+        rad = _positive_radii(ks, b.id)
         ffrm = _geo_occ_frame(ks, frame, b.id)
         return rad, min(min(rad[1], rad[2]), rad[3]), max(max(rad[1], rad[2]), rad[3]), ffrm
     end
