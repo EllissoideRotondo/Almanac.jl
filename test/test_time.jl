@@ -1205,6 +1205,22 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
             # rules, so that a long s (U+017F) was an S; `ucase_` changes ASCII letters only.
             @test throws_kind(() -> timdef(ctx, "GET", "ſYSTEM"), cspice_timdef("GET", "ſYSTEM", ""))
             @test throws_kind(() -> timdef(ctx, "ſET", "SYSTEM", "TDB"), cspice_timdef("ſET", "SYSTEM", "TDB"))
+            # Regression: TIMDEF reads the item and the value into variables of 16 characters
+            # after `ljust_`, and the zone into 14 after the prefix `::`, so a character after
+            # that is ignored and a GET returns the value without blanks.
+            pad(s, n, tail) = rpad(s, n) * tail
+            for (item, value) in (
+                    (pad(" SYSTEM", 17, "X"), pad("tdb", 16, "XY")), ("ZONE", pad(" UTC+5", 15, "X")),
+                    ("SYSTEM", pad("TDB", 15, "X")),
+                )
+                kind = cspice_timdef("SET", item, value)
+                kind === :none ? timdef(ctx, "SET", item, value) :
+                    @test throws_kind(() -> timdef(ctx, "SET", item, value), kind)
+                for it in ("CALENDAR", "SYSTEM", "ZONE")
+                    @test timdef(ctx, pad("GET", 16, ""), pad(it, 16, "X")) == SPICE.timdef("GET", it)
+                end
+            end
+            reset_timdef(ctx)
             # The defaults belong to one context: another context keeps its own.
             other = neo_context([Kernels.LSK])
             timdef(ctx, "SET", "SYSTEM", "TDB")

@@ -1090,6 +1090,24 @@ end
 # ---------------------------------------------------------------------------------
 
 """
+    _timdef_field(s, n = 16) -> String
+
+`s` as `ljust_` and `ucase_` write it into a variable of `n` bytes in TIMDEF, without
+the trailing blanks: the bytes after the first `n` of `s` without leading blanks are
+lost, and only ASCII letters change case.
+"""
+function _timdef_field(s::AbstractString, n::Int = 16)::String
+    b = codeunits(lstrip(s, ' '))
+    m = min(n, length(b))
+    while m > 0 && b[m] == UInt8(' ')     # invariant: b[m+1:min(n, end)] is blank
+        m -= 1
+    end
+    out = String(map(_upper, b[1:m]))
+    @assert ncodeunits(out) <= n
+    return out
+end
+
+"""
     _timdef_set(defs, item, value) -> TimeDefaults
 
 Contract: `item` is `"CALENDAR"`, `"SYSTEM"` or `"ZONE"` and `value` a value that
@@ -1099,8 +1117,8 @@ defaults: a system clears the zone and a zone clears the system, as in CSPICE. T
 another value. Pure.
 """
 function _timdef_set(defs::TimeDefaults, item::AbstractString, value::AbstractString)
-    it = _ljucase(item)
-    val = first(_ljucase(value), 16)
+    it = _timdef_field(item)
+    val = _timdef_field(value)
     if it == "SYSTEM"
         val in ("TDB", "TDT", "TT", "UTC") || throw(
             SpiceError(
@@ -1112,7 +1130,7 @@ function _timdef_set(defs::TimeDefaults, item::AbstractString, value::AbstractSt
     elseif it == "ZONE"
         zone = findfirst(==(val), _TK_ZONES)
         zone === nothing || (val = _TK_OFFSETS[zone])
-        val = first(val, 14)
+        val = _timdef_field(val, 14)
         _, _, ok = _zone_offsets(val)
         ok || throw(
             SpiceError(
@@ -1141,7 +1159,7 @@ end
 
 "Contract: returns the value of the default `item` (`CALENDAR`, `SYSTEM` or `ZONE`, any case) in `defs`; throws `SpiceError(:badtimeitem)` for another item."
 function _timdef_get(defs::TimeDefaults, item::AbstractString)::String
-    it = _ljucase(item)
+    it = _timdef_field(item)
     it == "CALENDAR" && return defs.calendar
     it == "SYSTEM" && return defs.system
     it == "ZONE" && return defs.zone
