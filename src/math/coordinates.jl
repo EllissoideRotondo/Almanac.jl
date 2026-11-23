@@ -457,6 +457,14 @@ function _m_pgrsense(ks::KernelSet, body::NameOrID)
     return pm[2] < 0.0 ? 1 : -1
 end
 
+"The checks of `recpgr_`, `pgrrec_`, `drdpgr_` and `dpgrdr_` after the body string (ID, `re`, `f`), then the sense of the longitude."
+function _m_pgrsense(ks::KernelSet, body::NameOrID, re::Real, f::Real)
+    id = _m_bodyid(ks, body, :idcodenotfound)
+    primal(re) > 0.0 || _m_badre(re)
+    primal(f) < 1.0 || _m_badflat(f)
+    return _m_pgrsense(ks, id)
+end
+
 """
     recpgr([ctx,] body, rectan, re, f) -> (lon, lat, alt)
 
@@ -504,10 +512,7 @@ See also [`pgrrec`](@ref), [`recgeo`](@ref), [`dpgrdr`](@ref).
 function recpgr(ks::KernelSet, body::NameOrID, rectan::AbstractVector, re::Real, f::Real)
     body isa AbstractString && _chkfstr("recpgr", "string `body`", body)
     v = _m_v3(rectan)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     lon, lat, alt = _m_recgeo(v, _m_f(re), _m_f(f))
     lon = sense * lon
     primal(lon) < 0.0 && (lon += _TWOPI)
@@ -533,10 +538,7 @@ See also [`recpgr`](@ref), which has an example, and [`drdpgr`](@ref).
 """
 function pgrrec(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("pgrrec", "string `body`", body)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     return _m_georec(sense * _m_f(lon), _m_f(lat), _m_f(alt), _m_f(re), _m_f(f))
 end
 
@@ -749,10 +751,7 @@ See also [`dpgrdr`](@ref), [`pgrrec`](@ref), [`drdgeo`](@ref).
 """
 function drdpgr(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("drdpgr", "string `body`", body)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     j = _m_drdgeo(promote(sense * _m_f(lon), _m_f(lat), _m_f(alt), _m_f(re), _m_f(f))...)
     return _m_cols(sense * _m_col(j, 1), _m_col(j, 2), _m_col(j, 3))
 end
@@ -773,10 +772,7 @@ See also [`drdpgr`](@ref), [`recpgr`](@ref), [`dgeodr`](@ref).
 """
 function dpgrdr(ks::KernelSet, body::NameOrID, x::Real, y::Real, z::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("dpgrdr", "string `body`", body)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     j = _m_dgeodr(SVector(promote(_m_f(x), _m_f(y), _m_f(z))...), _m_f(re), _m_f(f))
     return _m_rows(sense * _m_row(j, 1), _m_row(j, 2), _m_row(j, 3))
 end

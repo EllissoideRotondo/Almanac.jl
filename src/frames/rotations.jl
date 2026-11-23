@@ -21,25 +21,6 @@ const _FRAME_CHAIN_LIMIT = 1000
 # --- small rotation helpers -----------------------------------------------------------
 
 """
-    _eul2m(a3, a2, a1, axis3, axis2, axis1) -> Mat3{Float64}
-
-`[a3]_axis3 * [a2]_axis2 * [a1]_axis1`, as `eul2m_` of CSPICE. Throws
-`SpiceError(:badaxisnumbers)` unless every axis is in 1:3.
-"""
-function _eul2m(
-        a3::Float64, a2::Float64, a1::Float64, axis3::Integer, axis2::Integer,
-        axis1::Integer
-    )
-    all(a -> 1 <= a <= 3, (axis3, axis2, axis1)) || throw(
-        SpiceError(
-            :badaxisnumbers,
-            "Euler axis numbers are $axis3, $axis2, $axis1; each must be 1, 2 or 3"
-        )
-    )
-    return _m_eul2m_unchecked(a3, a2, a1, axis3, axis2, axis1)
-end
-
-"""
     _eul313(w, delta, phi) -> Mat3
 
 `[w]_3 * [delta]_1 * [phi]_3`, the same matrix as `eul2m_(w, delta, phi, 3, 1, 3)` with
@@ -392,7 +373,7 @@ function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     dw *= _RPD
     x = eul2xf(SVector(w, _HALFPI - dec, ra + _HALFPI, dw, -ddec, dra), 3, 1, 3)
     r = _eul313(w, _HALFPI - dec, ra + _HALFPI)
-    dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+    dr = _m_blocks(x)[2]
     if br.ref != _J2000_FRAME
         c = inertial_rotation(br.ref)
         r, dr = _m_mxm(r, c), _m_mxm(dr, c)
@@ -438,8 +419,7 @@ function _binary_pck_state(data::Vector{Float64}, seg::Segment, et::Float64)
         x = eul2xf(
             SVector(f2c_dmod(ang[3], _TWOPI), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
         )
-        r = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
-        dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+        r, dr = _m_blocks(x)
     end
     if seg.frame != _J2000_FRAME
         c = inertial_rotation(seg.frame)
@@ -500,21 +480,6 @@ function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T <: Real}
 end
 
 # --- fixed-offset (TK) frames ---------------------------------------------------------
-
-"""
-    _sharpr(m) -> Mat3{Float64}
-
-`m` with its columns made orthonormal as `sharpr_` of CSPICE does: column 1 scaled to
-unit length, column 3 the unit cross product of columns 1 and 2, column 2 the unit
-cross product of columns 3 and 1.
-"""
-function _sharpr(m::Mat3{Float64})
-    # `vhat_` and `ucrss_`, with the scaled norms of `sharpr_`
-    c1 = _m_hat(_m_col(m, 1))
-    c3 = _m_ucrss(c1, _m_col(m, 2))
-    c2 = _m_ucrss(c3, c1)
-    return _m_cols(c1, c2, c3)
-end
 
 """
     _q2m(q) -> Mat3{Float64}
@@ -588,7 +553,7 @@ function _tk_matrix(
         key = _tk_key(pool, idkey, namekey, "_MATRIX")
         _badkpv(pool, "TKFRAM", key, "=", 9, 1, 'N')
         m = Mat3{Float64}(pool[key])            # stored column by column
-        r = _sharpr(m)
+        r = _m_sharpr(m)
         c2 = dot(r[:, 2], m[:, 2]) < 0 ? -r[:, 2] : r[:, 2]
         c3 = dot(r[:, 3], m[:, 3]) < 0 ? -r[:, 3] : r[:, 3]
         return hcat(r[:, 1], c2, c3)
@@ -608,7 +573,7 @@ function _tk_matrix(
         # radian), from RADIANS without a unit, as `tkfram_` does.
         u = units isa Vector{String} && !isempty(units) ? units[1] : "RADIANS"
         rad = map(x -> convrt(x, u, "RADIANS"), (ang[1], ang[2], ang[3]))
-        return _eul2m(Float64(rad[1]), Float64(rad[2]), Float64(rad[3]), ax[1], ax[2], ax[3])
+        return _m_eul2m(Float64(rad[1]), Float64(rad[2]), Float64(rad[3]), ax[1], ax[2], ax[3])
     elseif kind == "QUATERNION"
         key = _tk_key(pool, idkey, namekey, "_Q")
         _badkpv(pool, "TKFRAM", key, "=", 4, 1, 'N')

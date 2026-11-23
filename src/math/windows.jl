@@ -40,21 +40,19 @@ struct Window <: AbstractVector{Float64}
     data::Vector{Float64}
     Window() = new(Float64[])
     Window(endpoints::AbstractVector{<:Real}) = wnvald!(new(_vec_of(Float64, endpoints)))
+    # The internal constructor of `_window_of`: it takes `data` as it is.
+    Window(data::Vector{Float64}, ::Val{:valid}) = new(data)
 end
 
 Base.size(w::Window) = size(w.data)
 Base.getindex(w::Window, i::Int) = w.data[i]
 Base.IndexStyle(::Type{Window}) = IndexLinear()
-Base.copy(w::Window) = (c = Window(); append!(c.data, w.data); c)
+Base.copy(w::Window) = _window_of(copy(w.data))
 Base.empty!(w::Window) = (empty!(w.data); w)
 Base.:(==)(a::Window, b::Window) = a.data == b.data
 
-"Window with a copy of the endpoint vector `d`, which must already be valid (no check)."
-function _window_of(d::Vector{Float64})
-    w = Window()
-    append!(w.data, d)
-    return w
-end
+"Window that takes the endpoint vector `d`, which must already be valid (no check), without a copy; the caller must not use `d` after."
+_window_of(d::Vector{Float64}) = Window(d, Val(:valid))
 
 """
     card(x) -> Int

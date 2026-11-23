@@ -12,17 +12,10 @@
 "`asin` that returns NaN outside [-1, 1], as the C library does."
 @inline _m_asin(x::Real) = abs(primal(x)) > 1.0 ? x * NaN : asin(x)
 
-@noinline _m_badaxes(a, b, c) =
-    throw(SpiceError(:badaxisnumbers, "axis numbers are $a, $b, $c; each must be 1, 2 or 3"))
-
-@inline _m_axisok(a::Integer) = 1 <= a <= 3
-
 @inline _m_next(a::Integer) = Int(a) % 3 + 1
 
-@inline function _m_eul2m(angle3, angle2, angle1, axis3::Integer, axis2::Integer, axis1::Integer)
-    (_m_axisok(axis3) && _m_axisok(axis2) && _m_axisok(axis1)) || _m_badaxes(axis3, axis2, axis1)
-    return _m_eul2m_unchecked(angle3, angle2, angle1, axis3, axis2, axis1)
-end
+"The factor `delta(a, b)` of `m2eul_` and `xf2eul_`: 1 if `b` follows `a` in the cycle, else -1."
+@inline _m_delta(a::Integer, b::Integer) = b == _m_next(a) ? 1.0 : -1.0
 
 """
     eul2m(angle3, angle2, angle1, axis3, axis2, axis1) -> SMatrix{3,3}
@@ -71,16 +64,16 @@ end
 @inline _m_p0(x) = primal(x) == 0.0
 
 @inline function _m_m2eul(r::SMatrix{3, 3}, axis3::Integer, axis2::Integer, axis1::Integer)
-    (_m_axisok(axis3) && _m_axisok(axis2) && _m_axisok(axis1)) || _m_badaxes(axis3, axis2, axis1)
+    _m_checkaxes(axis3, axis2, axis1)
     (axis3 == axis2 || axis1 == axis2) && throw(
         SpiceError(
             :badaxisnumbers,
             "the middle axis matches a neighbor: $axis3 $axis2 $axis1"
         )
     )
-    _m_isrot(r, 0.1, 0.1) || throw(SpiceError(:notarotation, "the input matrix is not a rotation"))
+    _m_checkrot(r)
     t0 = _m_cols(_m_hat(_m_col(r, 1)), _m_hat(_m_col(r, 2)), _m_hat(_m_col(r, 3)))
-    sign = axis2 == _m_next(axis3) ? 1.0 : -1.0
+    sign = _m_delta(axis3, axis2)
     if axis3 == axis1
         # a-b-a sequence: the factorization of a 3-1-3 rotation after the axis change
         c = 6 - Int(axis3) - Int(axis2)
@@ -138,9 +131,6 @@ See also [`eul2m`](@ref), which has an example, and [`xf2eul`](@ref).
 m2eul(r::AbstractMatrix, axis3::Integer, axis2::Integer, axis1::Integer) =
     _m_m2eul(_m_m3(r), axis3, axis2, axis1)
 
-"The factor `delta(a, b)` of `xf2eul_`: 1 if `b` follows `a` in the cycle, else -1."
-@inline _m_delta(a::Integer, b::Integer) = b == _m_next(a) ? 1.0 : -1.0
-
 """
     eul2xf(eulang, axisa, axisb, axisc) -> SMatrix{6,6}
 
@@ -176,7 +166,7 @@ See also [`xf2eul`](@ref), [`eul2m`](@ref), [`rav2xf`](@ref).
 """
 function eul2xf(eulang::AbstractVector, axisa::Integer, axisb::Integer, axisc::Integer)
     e = _m_v6(eulang)
-    (_m_axisok(axisa) && _m_axisok(axisb) && _m_axisok(axisc)) || _m_badaxes(axisa, axisb, axisc)
+    _m_checkaxes(axisa, axisb, axisc)
     a1, a2, a3, d1, d2, d3 = e
     locaxb = Int(axisb)
     if axisb == axisa || axisb == axisc
@@ -475,10 +465,4 @@ Throws `SpiceError(:badarg)` if `rot` is not 3 by 3.
 
 See also [`isrot`](@ref).
 """
-function sharpr(rot::AbstractMatrix)
-    m = _m_m3(rot)
-    c1 = _m_hat(_m_col(m, 1))
-    c3 = _m_ucrss(c1, _m_col(m, 2))
-    c2 = _m_ucrss(c3, c1)
-    return _m_cols(c1, c2, c3)
-end
+sharpr(rot::AbstractMatrix) = _m_sharpr(_m_m3(rot))

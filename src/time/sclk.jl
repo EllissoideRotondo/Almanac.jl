@@ -196,23 +196,22 @@ before all, found with the bisection of `scte01`. Requires `length(coef) >= 3`.
     return lower
 end
 
-"TDB seconds past J2000 of the parallel time `partim` of `clock` (`unitim_`), generic over the number type."
-@inline function _sclk_to_tdb(ks::KernelSet, clock::SclkType1, partim::T) where {T <: Real}
-    clock.timsys == 1 && return partim
+"`x` converted by `unitim_` from `insys` to `outsys` if the parallel time of `clock` is TDT (2); `x` as it is for TDB (1)."
+@inline function _sclk_unitim(ks::KernelSet, clock::SclkType1, x::Real, insys, outsys)
+    clock.timsys == 1 && return x
     clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
     l = ks.lsk
     l === nothing && _sclk_nolsk()
-    return _unitim(l, partim, _US_TDT, _US_TDB)
+    return _unitim(l, x, insys, outsys)
 end
 
+"TDB seconds past J2000 of the parallel time `partim` of `clock` (`unitim_`), generic over the number type."
+@inline _sclk_to_tdb(ks::KernelSet, clock::SclkType1, partim::Real) =
+    _sclk_unitim(ks, clock, partim, _US_TDT, _US_TDB)
+
 "Parallel time of `clock` for the TDB epoch `et` (`unitim_`, three fixed-point steps), generic over the number type."
-@inline function _sclk_from_tdb(ks::KernelSet, clock::SclkType1, et::T) where {T <: Real}
-    clock.timsys == 1 && return et
-    clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
-    l = ks.lsk
-    l === nothing && _sclk_nolsk()
-    return _unitim(l, et, _US_TDB, _US_TDT)
-end
+@inline _sclk_from_tdb(ks::KernelSet, clock::SclkType1, et::Real) =
+    _sclk_unitim(ks, clock, et, _US_TDB, _US_TDT)
 
 """
     _sct2e(ks, clock, sclkdp::T) -> T

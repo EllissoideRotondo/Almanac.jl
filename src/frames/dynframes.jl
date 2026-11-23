@@ -85,42 +85,28 @@ end
     )
 )
 
-"Return the character values (at most `maxn`) of a required definition item, as `zzdynvac_`."
-function _dyn_chars(pool, id, name, item, maxn::Int)
-    key, v = _dyn_lookup(pool, id, name, item, true)
-    v isa Vector{String} || _dyn_badtype(key, name, "character")
+"""
+    _dyn_values(pool, id, name, item, T, maxn, required = true) -> Union{Vector{T}, Nothing}
+
+Return the values of the definition item `item`, of element type `String` or `Float64`
+and at most `maxn` of them, as `zzdynvac_`/`zzdynvad_` (required) and
+`zzdynoac_`/`zzdynoad_` (optional) do. An optional item that is absent gives `nothing`.
+"""
+function _dyn_values(pool, id, name, item, ::Type{T}, maxn::Int, required::Bool = true) where {T}
+    r = _dyn_lookup(pool, id, name, item, required)
+    r === nothing && return nothing
+    key, v = r
+    v isa Vector{T} || _dyn_badtype(key, name, T === String ? "character" : "numeric")
     length(v) > maxn && _dyn_badsize(key, name, maxn, length(v))
     return v
 end
 
-_dyn_char(pool, id, name, item) = _dyn_chars(pool, id, name, item, 1)[1]
+_dyn_char(pool, id, name, item) = _dyn_values(pool, id, name, item, String, 1)[1]
 
-"Return the single character value of an optional definition item, or `nothing`, as `zzdynoac_`."
-function _dyn_optchar(pool, id, name, item)
-    r = _dyn_lookup(pool, id, name, item, false)
-    r === nothing && return nothing
-    key, v = r
-    v isa Vector{String} || _dyn_badtype(key, name, "character")
-    length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
-    return v[1]
-end
-
-"Return the numeric values (at most `maxn`) of a required definition item, as `zzdynvad_`."
-function _dyn_nums(pool, id, name, item, maxn::Int)
-    key, v = _dyn_lookup(pool, id, name, item, true)
-    v isa Vector{Float64} || _dyn_badtype(key, name, "numeric")
-    length(v) > maxn && _dyn_badsize(key, name, maxn, length(v))
-    return v
-end
-
-"Return the single numeric value of an optional definition item, or `nothing`, as `zzdynoad_`."
-function _dyn_optnum(pool, id, name, item)
-    r = _dyn_lookup(pool, id, name, item, false)
-    r === nothing && return nothing
-    key, v = r
-    v isa Vector{Float64} || _dyn_badtype(key, name, "numeric")
-    length(v) > 1 && _dyn_badsize(key, name, 1, length(v))
-    return v[1]
+"The single value of type `T` of an optional definition item, or `nothing`, as `zzdynoac_` and `zzdynoad_`."
+function _dyn_optvalue(pool, id, name, item, ::Type{T}) where {T}
+    v = _dyn_values(pool, id, name, item, T, 1, false)
+    return v === nothing ? nothing : v[1]
 end
 
 """
@@ -296,7 +282,7 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
         )
     elseif vdef == "CONSTANT"
         frid = _dyn_frameid(ks, id, name, prefix * "FRAME")
-        cs = _dyn_optchar(pool, id, name, prefix * "ABCORR")
+        cs = _dyn_optvalue(pool, id, name, prefix * "ABCORR", String)
         corr = _dyn_abcorr(cs === nothing ? "NONE" : cs, true)
         class, center, obs = Int32(1), Int32(0), Int32(0)
         if !corr.geometric
@@ -307,14 +293,14 @@ function _dyn_parse_vector(ks::KernelSet, fd::FrameDef, prefix::AbstractString)
         end
         spec = _squeeze(_dyn_char(pool, id, name, prefix * "SPEC"))
         if spec == "RECTANGULAR"
-            v = _dyn_nums(pool, id, name, prefix * "VECTOR", 3)
+            v = _dyn_values(pool, id, name, prefix * "VECTOR", Float64, 3)
             length(v) == 3 || _dyn_badsize("FRAME_$(id)_$(prefix)VECTOR", name, 3, length(v))
             dir = SVector{3, Float64}(v)
         elseif spec == "LATITUDINAL" || spec == "RA/DEC"
             f = _dyn_degrees(_dyn_char(pool, id, name, prefix * "UNITS"))
             lonitem, latitem = spec == "LATITUDINAL" ? ("LONGITUDE", "LATITUDE") : ("RA", "DEC")
-            lon = _dyn_nums(pool, id, name, prefix * lonitem, 1)[1] * f / (180.0 / pi)
-            lat = _dyn_nums(pool, id, name, prefix * latitem, 1)[1] * f / (180.0 / pi)
+            lon = _dyn_values(pool, id, name, prefix * lonitem, Float64, 1)[1] * f / (180.0 / pi)
+            lat = _dyn_values(pool, id, name, prefix * latitem, Float64, 1)[1] * f / (180.0 / pi)
             slon, clon = sincos(lon)
             slat, clat = sincos(lat)
             dir = SVector{3, Float64}(clon * clat, slon * clat, slat)
@@ -375,9 +361,9 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
         family == "TWO-VECTOR" ? _DYN_TWOVEC : family == "EULER" ? _DYN_EULER :
         family == "PRODUCT" ? _DYN_PRODUCT : Int8(0)
     ofdate = 1 <= fam <= 3
-    freeze = _dyn_optnum(pool, id, name, "FREEZE_EPOCH")
+    freeze = _dyn_optvalue(pool, id, name, "FREEZE_EPOCH", Float64)
     frozen = freeze !== nothing
-    rotsta = _dyn_optchar(pool, id, name, "ROTATION_STATE")
+    rotsta = _dyn_optvalue(pool, id, name, "ROTATION_STATE", String)
     frozen && rotsta !== nothing && throw(
         SpiceError(
             :framedeferror, "the definition " *
@@ -433,7 +419,7 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
     elseif fam == _DYN_TWOVEC
         v1 = _dyn_parse_vector(ks, fd, "PRI_")
         v2 = _dyn_parse_vector(ks, fd, "SEC_")
-        sep = _dyn_optnum(pool, id, name, "ANGLE_SEP_TOL")
+        sep = _dyn_optvalue(pool, id, name, "ANGLE_SEP_TOL", Float64)
         minsep = sep === nothing ? 1.0e-3 : sep
         v1.axis == v2.axis && throw(
             SpiceError(
@@ -442,13 +428,13 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
             )
         )
     elseif fam == _DYN_EULER
-        epoch = _dyn_nums(pool, id, name, "EPOCH", 1)[1]
+        epoch = _dyn_values(pool, id, name, "EPOCH", Float64, 1)[1]
         key, a = _dyn_lookup(pool, id, name, "AXES", true)
         a isa Vector{Float64} || _dyn_badtype(key, name, "integer")
         length(a) == 3 || _dyn_badsize(key, name, 3, length(a))
         _gipool_first(a, key; room = 3)      # `zzdynvai_`: `gipool_` after the size check
         axes = map(x -> _gipool_value(x)::Int32, (a[1], a[2], a[3]))
-        coef = ntuple(i -> copy(_dyn_nums(pool, id, name, "ANGLE_$(i)_COEFFS", 20)), 3)
+        coef = ntuple(i -> copy(_dyn_values(pool, id, name, "ANGLE_$(i)_COEFFS", Float64, 20)), 3)
         scale = _dyn_degrees(_dyn_char(pool, id, name, "UNITS"))
         all(x -> 1 <= x <= 3, axes) || throw(
             SpiceError(
@@ -457,8 +443,8 @@ function _dyn_parse_checked(ks::KernelSet, fd::FrameDef)
             )
         )
     elseif fam == _DYN_PRODUCT
-        fnames = _dyn_chars(pool, id, name, "FROM_FRAMES", 10)
-        tnames = _dyn_chars(pool, id, name, "TO_FRAMES", 10)
+        fnames = _dyn_values(pool, id, name, "FROM_FRAMES", String, 10)
+        tnames = _dyn_values(pool, id, name, "TO_FRAMES", String, 10)
         length(fnames) == length(tnames) || throw(
             SpiceError(
                 :badframecount,
@@ -749,6 +735,27 @@ const _DYN_RADIAN = 180.0 / pi
 const _DYN_WAHR_FACTOR = _DYN_RADIAN * 3600.0 * 1.0e4
 
 """
+    _dyn_wahr_args(et) -> (dd, t, ang)
+
+Return the time arguments of `zzwahr_` at `et` (TDB seconds): `dd`, the days past
+J2000 over 1e4, `t`, the Julian millennia, and `ang`, the five fundamental arguments
+l, l', F, D, Omega in radians.
+"""
+@inline function _dyn_wahr_args(et::Real)
+    dj = et / 86400.0
+    dd = dj / 1.0e4
+    dd2 = dd * dd
+    t = dj / 365250.0
+    ang = map(_DYN_WAHR_ARGS) do c
+        f2c_dmod(c[1] + dj * c[2] + (c[3] + dd * c[4]) * dd2, 360.0) / _DYN_RADIAN
+    end
+    return dd, t, ang
+end
+
+"Coefficient `c0 + c1 * t` of a nutation term, in the type of `t`, as `zzwahr_` forms it (no product when `c1` is 0)."
+@inline _dyn_wahr_coef(c0::Integer, c1::Integer, t::Real) = c1 != 0 ? c0 + c1 * t : zero(t) + c0
+
+"""
     _dyn_wahr(et) -> (dpsi, deps)
 
 Return the nutation in longitude and in obliquity (radians) of the 1980 IAU theory at
@@ -757,13 +764,7 @@ a `Taylor` epoch the derivatives are those of the series, including the slow cha
 of the coefficients that the rates of `zzwahr_` leave out.
 """
 function _dyn_wahr(et::S) where {S <: Real}
-    dj = et / 86400.0
-    dd = dj / 1.0e4
-    dd2 = dd * dd
-    t = dj / 365250.0
-    ang = map(_DYN_WAHR_ARGS) do c
-        f2c_dmod(c[1] + dj * c[2] + (c[3] + dd * c[4]) * dd2, 360.0) / _DYN_RADIAN
-    end
+    dd, t, ang = _dyn_wahr_args(et)
     dpsi = zero(S)
     deps = zero(S)
     for i in 1:106      # invariant: dpsi, deps hold the sums of the terms 1:i-1
@@ -775,10 +776,8 @@ function _dyn_wahr(et::S) where {S <: Real}
                 arg = f2c_dmod(arg, _TWOPI)
             end
         end
-        cl = zero(S) + m[6]
-        m[7] != 0 && (cl += m[7] * t)
-        ce = zero(S) + m[8]
-        m[9] != 0 && (ce += m[9] * t)
+        cl = _dyn_wahr_coef(m[6], m[7], t)
+        ce = _dyn_wahr_coef(m[8], m[9], t)
         s, c = sincos(arg)
         dpsi += cl * s / _DYN_WAHR_FACTOR
         deps += ce * c / _DYN_WAHR_FACTOR
@@ -795,14 +794,8 @@ coefficients. Generic over the number type of `et`; with a `Float64` epoch the
 arithmetic is that of `zzwahr_`.
 """
 function _dyn_wahr_rates(et::S) where {S <: Real}
-    dj = et / 86400.0
-    dd = dj / 1.0e4
+    dd, t, ang = _dyn_wahr_args(et)
     dddj = dd / 1.0e4
-    dd2 = dd * dd
-    t = dj / 365250.0
-    ang = map(_DYN_WAHR_ARGS) do c
-        f2c_dmod(c[1] + dj * c[2] + (c[3] + dd * c[4]) * dd2, 360.0) / _DYN_RADIAN
-    end
     rate = map(_DYN_WAHR_ARGS) do c
         f2c_dmod(c[2] + dddj * (c[3] * 2.0 + dd * 3.0 * c[4]), 360.0) / _DYN_RADIAN
     end
@@ -817,8 +810,8 @@ function _dyn_wahr_rates(et::S) where {S <: Real}
                 arg = f2c_dmod(arg, _TWOPI)
             end
         end
-        cl = m[7] != 0 ? m[6] + m[7] * t : zero(S) + m[6]
-        ce = m[9] != 0 ? m[8] + m[9] * t : zero(S) + m[8]
+        cl = _dyn_wahr_coef(m[6], m[7], t)
+        ce = _dyn_wahr_coef(m[8], m[9], t)
         s, c = sincos(arg)
         dpsi += cl * s / _DYN_WAHR_FACTOR
         deps += ce * c / _DYN_WAHR_FACTOR
@@ -890,13 +883,8 @@ the axes `x3`, `x2`, `x1` and their rates `d3`, `d2`, `d1`, as a matrix of
 `Taylor{1,Float64}` (value: the rotation block; derivative: the derivative block).
 """
 @inline function _dyn_eul2xf(a3, a2, a1, d3, d2, d1, x3::Integer, x2::Integer, x1::Integer)
-    x = eul2xf(SVector{6, Float64}(a3, a2, a1, d3, d2, d1), x3, x2, x1)
-    return Mat3{Taylor{1, Float64}}(
-        ntuple(Val(9)) do k
-            i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
-            Taylor((x[i, j], x[i + 3, j]))
-        end
-    )
+    r, d = _m_blocks(eul2xf(SVector{6, Float64}(a3, a2, a1, d3, d2, d1), x3, x2, x1))
+    return map((a, b) -> Taylor((a, b)), r, d)::Mat3{Taylor{1, Float64}}
 end
 
 """
@@ -1046,6 +1034,13 @@ end
 "Epoch `et` moved by the light time `lt` in the direction of the correction `corr`, as `zzcorepc_`."
 @inline _dyn_corepc(corr, et, lt) = corr.uselt ? et + _ltsign(corr) * lt : et
 
+"The epoch `et` corrected by `corr` for the light time from the observer to the center of the frame of `vd` if `uselt` and the frame is not inertial; `et` otherwise."
+@inline function _dyn_frame_epoch(ks::KernelSet, vd::DynVector, corr, et::Real, uselt::Bool)
+    (uselt && vd.frclass != 1) || return et
+    lt = _dyn_apo(ks, vd.frcenter, et, _J2000_FRAME, corr, vd.observer)[2]
+    return _dyn_corepc(corr, et, lt)
+end
+
 """
     _dyn_vector(mode, ks, vd, et) -> Vec3
 
@@ -1073,15 +1068,7 @@ function _dyn_vector(mode::_CKExact, ks::KernelSet, vd::DynVector, et::T) where 
         _, v, _ = _dyn_spkez(ks, vd.target, et, vd.frame, corr, vd.observer)
         u = _m_hat(v)
         vd.frame == _J2000_FRAME && return u::Vec3{T}
-        vet = et
-        if corr.uselt && vd.frclass != 1
-            vet = _dyn_corepc(
-                corr, et, _dyn_apo(
-                    ks, vd.frcenter, et, _J2000_FRAME, corr,
-                    vd.observer
-                )[2]
-            )
-        end
+        vet = _dyn_frame_epoch(ks, vd, corr, et, corr.uselt)
         return _m_mxv(_dyn_xf(_CKExact(), ks, vd.frame, _J2000_FRAME, vet), u)::Vec3{T}
     elseif vd.kind == 3
         p, lt = _dyn_apo(ks, vd.target, et, vd.frame, corr, vd.observer)
@@ -1091,15 +1078,7 @@ function _dyn_vector(mode::_CKExact, ks::KernelSet, vd::DynVector, et::T) where 
         return _m_mxv(_dyn_xf(_CKExact(), ks, vd.frame, _J2000_FRAME, fet), d)::Vec3{T}
     end
     # A constant vector.
-    fet = et
-    if corr.uselt && !corr.stellar && vd.frclass != 1
-        fet = _dyn_corepc(
-            corr, et, _dyn_apo(
-                ks, vd.frcenter, et, _J2000_FRAME, corr,
-                vd.observer
-            )[2]
-        )
-    end
+    fet = _dyn_frame_epoch(ks, vd, corr, et, corr.uselt && !corr.stellar)
     c = Vec3{T}(vd.vec)
     vd.frame == _J2000_FRAME || (c = _m_mxv(_dyn_xf(_CKExact(), ks, vd.frame, _J2000_FRAME, fet), c))
     if corr.stellar
@@ -1124,15 +1103,7 @@ function _dyn_vector(mode::_CKState, ks::KernelSet, vd::DynVector, et::Float64)
         up = _m_hat(_dyn_spkez(ks, vd.target, et + delta, vd.frame, corr, vd.observer)[2])
         s = _dyn_pack(u0, (0.5 / delta) * up + (-0.5 / delta) * um)
         vd.frame == _J2000_FRAME && return s
-        vet = et
-        if corr.uselt && vd.frclass != 1
-            vet = _dyn_corepc(
-                corr, et, _dyn_apo(
-                    ks, vd.frcenter, et, _J2000_FRAME, corr,
-                    vd.observer
-                )[2]
-            )
-        end
+        vet = _dyn_frame_epoch(ks, vd, corr, et, corr.uselt)
         return _sx_mxv(_dyn_xf(_CKState(), ks, vd.frame, _J2000_FRAME, vet), s)
     elseif vd.kind == 3
         r, v, lt = _dyn_spkez(ks, vd.target, et, vd.frame, corr, vd.observer)
@@ -1141,15 +1112,7 @@ function _dyn_vector(mode::_CKState, ks::KernelSet, vd::DynVector, et::Float64)
         fet = _dyn_corepc(corr, et, lt)
         return _sx_mxv(_dyn_xf(_CKState(), ks, vd.frame, _J2000_FRAME, fet), d)
     end
-    fet = et
-    if corr.uselt && !corr.stellar && vd.frclass != 1
-        fet = _dyn_corepc(
-            corr, et, _dyn_apo(
-                ks, vd.frcenter, et, _J2000_FRAME, corr,
-                vd.observer
-            )[2]
-        )
-    end
+    fet = _dyn_frame_epoch(ks, vd, corr, et, corr.uselt && !corr.stellar)
     c = _dyn_pack(vd.vec, zero(Vec3{Float64}))
     vd.frame == _J2000_FRAME || (c = _sx_mxv(_dyn_xf(_CKState(), ks, vd.frame, _J2000_FRAME, fet), c))
     if corr.stellar
