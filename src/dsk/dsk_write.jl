@@ -161,9 +161,6 @@ end
     )
 end
 
-"`d_nint`: the nearest integer, with a tie away from zero."
-@inline _dsk_nint(x::Float64) = round(x, RoundNearestTiesAway)
-
 """
     _dsk_mkspin!(spaixd, spaixi, vf, pf, np, voxscl, cgscal, maxptr, maxvxl, cval, cnext) -> nvxtot
 
@@ -214,21 +211,21 @@ function _dsk_mkspin!(
     mdltol = voxsiz * 0.001
     xe = (xmin - mdltol, xmax + mdltol, ymin - mdltol, ymax + mdltol, zmin - mdltol, zmax + mdltol)
     cvxsiz = voxsiz * cgscal
-    xvmin = _dsk_nint(xmin / cvxsiz - 1.0)
-    yvmin = _dsk_nint(ymin / cvxsiz - 1.0)
-    zvmin = _dsk_nint(zmin / cvxsiz - 1.0)
-    xvmax = _dsk_nint(xmax / cvxsiz + 1.0)
-    yvmax = _dsk_nint(ymax / cvxsiz + 1.0)
-    zvmax = _dsk_nint(zmax / cvxsiz + 1.0)
+    xvmin = _dnint(xmin / cvxsiz - 1.0)
+    yvmin = _dnint(ymin / cvxsiz - 1.0)
+    zvmin = _dnint(zmin / cvxsiz - 1.0)
+    xvmax = _dnint(xmax / cvxsiz + 1.0)
+    yvmax = _dnint(ymax / cvxsiz + 1.0)
+    zvmax = _dnint(zmax / cvxsiz + 1.0)
     voxori = (xvmin * cvxsiz, yvmin * cvxsiz, zvmin * cvxsiz)
     spans = (xvmax - xvmin, yvmax - yvmin, zvmax - zvmin)
     all(s -> isfinite(s) && s * cgscal <= _DSK_MAXVOX, spans) || _dsk_throw(
         :valueoutofrange,
         "the fine voxel grid is too large or not defined; check the fine voxel scale"
     )
-    nx = Int(_dsk_nint(spans[1])) * cgscal
-    ny = Int(_dsk_nint(spans[2])) * cgscal
-    nz = Int(_dsk_nint(spans[3])) * cgscal
+    nx = Int(_dnint(spans[1])) * cgscal
+    ny = Int(_dnint(spans[2])) * cgscal
+    nz = Int(_dnint(spans[3])) * cgscal
     nvox = (nx, ny, nz)
     nvxtot = nx * ny * nz
     nvxtot > _DSK_MAXVOX && _dsk_throw(

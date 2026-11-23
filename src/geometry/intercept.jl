@@ -39,13 +39,9 @@ end
     _geo_sfxcor(ks, sh, et, corr, obscde, dfrcde, dvec) -> (found, spoint, trgepc, srfvec)
 
 `zzsfxcor`: the intercept on the shape `sh` of the ray from the body `obscde` along
-`dvec` (frame `dfrcde`), with the aberration corrections `corr`.
-
-Contract: `dvec` is not zero. The frame of the ray is evaluated at `et`, or, for a
-frame that is not inertial and not centered on the observer, at the epoch corrected for
-the light time to its center. `LT` forms make one light-time iteration and `CN` forms
-at most ten, with the convergence test of CSPICE. Postcondition: if `found`, `spoint`
-is on the surface and `srfvec` is the vector from the observer to it.
+`dvec` (frame `dfrcde`, `dvec != 0`), with the aberration corrections `corr`. The
+frame of the ray is evaluated at `et`, or, for a frame that is not inertial and not
+centered on the observer, at the epoch corrected for the light time to its center.
 """
 function _geo_sfxcor(
         ks::KernelSet, sh::_GeoShape, et, corr::Aberration, obscde::Int32,

@@ -27,11 +27,7 @@ function _geo_fov_vec3(ks::KernelSet, instid::Integer, suffix::String, missing::
         missing,
         "the variable INS$(instid)$suffix is not in the kernel pool"
     )
-    v isa Vector{Float64} || _geo_fov_error(
-        bad,
-        "the variable INS$(instid)$suffix must hold 3 numbers"
-    )
-    length(v) == 3 || _geo_fov_error(
+    (v isa Vector{Float64} && length(v) == 3) || _geo_fov_error(
         bad,
         "the variable INS$(instid)$suffix must hold 3 numbers"
     )
@@ -44,11 +40,7 @@ function _geo_fov_angle(
         units::Union{Nothing, String}
     )
     v = _geo_fov_var(ks, instid, suffix)
-    v isa Vector{Float64} || _geo_fov_error(
-        missing,
-        "the variable INS$(instid)$suffix is not in the kernel pool"
-    )
-    isempty(v) && _geo_fov_error(
+    (v isa Vector{Float64} && !isempty(v)) || _geo_fov_error(
         missing,
         "the variable INS$(instid)$suffix is not in the kernel pool"
     )
@@ -352,27 +344,6 @@ function _geo_fovaxi(bounds::Vector{Vec3{Float64}})
     return _m_hat(axis)
 end
 
-"`frame_`: the unit vector along `x0` and two unit vectors that complete a right-handed frame."
-@inline function _geo_frame(x0::Vec3{Float64})
-    x = _m_hat(x0)
-    a = x[1] * x[1]
-    b = x[2] * x[2]
-    c = x[3] * x[3]
-    a + b + c == 0.0 && return Vec3(1.0, 0.0, 0.0), Vec3(0.0, 1.0, 0.0), Vec3(0.0, 0.0, 1.0)
-    if a <= b && a <= c
-        f = sqrt(b + c)
-        y = Vec3(0.0, -x[3] / f, x[2] / f)
-        return x, y, Vec3(f, -x[1] * y[3], x[1] * y[2])
-    elseif b <= a && b <= c
-        f = sqrt(a + c)
-        y = Vec3(x[3] / f, 0.0, -x[1] / f)
-        return x, y, Vec3(x[2] * y[3], f, -x[2] * y[1])
-    end
-    f = sqrt(a + b)
-    y = Vec3(-x[2] / f, x[1] / f, 0.0)
-    return x, y, Vec3(-x[3] * y[2], x[3] * y[1], f)
-end
-
 # --- winding numbers and the ellipse against the pyramid ----------------------------------
 
 "`zzwind2d`: the winding number of the planar polygon `poly` about `point`."
@@ -631,18 +602,8 @@ end
 that do not depend on the epoch. `project` true projects the vertices of a polygonal
 field of view here, as `zzgffvin` does; false leaves it to the test, as `fovtrg` and
 `fovray` do, so that a boundary vector that does not meet the plane of the field of
-view is an error only for a direction that reaches the polygon test.
-
-Contract: the observer is known (`:idcodenotfound`); a target is known and differs from
-the observer (`:idcodenotfound`, `:bodiesnotdistinct`); the frame of an ellipsoid or of
-a ray is not blank, is known (`:invalidframe`, `:frameinfonotfound`) and, for an
-ellipsoid, is centered on the target (`:invalidframe`); the correction is one of
-`spkezr` for a target and `NONE`, `S` or `XS` for a ray (`:invalidoption`); an
-ellipsoid has three positive radii; a ray is not zero (`:zerovector`); the instrument
-is known (`:idcodenotfound`) and its field of view is in the kernel pool (the errors of
-`getfov`), with an angular radius below 90 degrees minus 1e-6 radians (`:fovtoowide`)
-and the errors of the axis of a polygon (`:degeneratecase`, `:facenotfound`,
-`:notsupported`). The frame of the instrument is checked at the test.
+view is an error only for a direction that reaches the polygon test. The frame of the
+instrument is checked at the test.
 """
 function _geo_fov_setup(
         ks::KernelSet, inst::NameOrID, shp::Int, raydir::Vec3{Float64},
@@ -742,15 +703,14 @@ function _geo_fov_setup(
     fx = zero(Vec3{Float64})
     fy = zero(Vec3{Float64})
     fpol = _GEO_NOFPOL
-    pl = SpicePlane{Float64}(plane.normal, plane.constant)
     if poly && !etrg
-        _, fx, fy = _geo_frame(faxi)
-        project && (fpol = _geo_fov_polygon(bounds, pl, fvct, fx, fy))
+        _, fx, fy = _dsk_frame(faxi)
+        project && (fpol = _geo_fov_polygon(bounds, plane, fvct, fx, fy))
     end
     return _GeoFov(
         ks, obs, targ, shp, tfid, corr, ustl, xmit, trad, rdir, ifid,
         ifrname, poly, circle, faxi, arad, Float64(cang), bounds,
-        pl, fvct, semi1, semi2, xmag1, xmag2, edct, fsmx, fx, fy, fpol
+        plane, fvct, semi1, semi2, xmag1, xmag2, edct, fsmx, fx, fy, fpol
     )
 end
 
@@ -759,13 +719,8 @@ end
 
 `zzgffvst`: true if at `et` the target of `v` (an ellipsoid, a point or a ray) is in
 the field of view. The frame of the instrument is evaluated at `et`, and the frame of
-an ellipsoid at the epoch corrected for the light time.
-
-Contract: the frame of the instrument is known (`SpiceError(:unknownframe)`); the
-vertices of a polygon that `v` does not hold meet the plane of the field of view
-(`SpiceError(:degeneratecase)`). The test of an ellipsoid against a polygonal field of
-view allocates (`_geo_elvupy`), and so does the projection of the vertices of a
-polygon; the other tests do not.
+an ellipsoid at the epoch corrected for the light time. Throws
+`SpiceError(:unknownframe)` if the frame of the instrument is not known.
 """
 function _geo_fov_visible(v::_GeoFov, et::Float64)
     ks = v.ks

@@ -295,8 +295,7 @@ end
 
 The phase angle as `zzgfpaq` computes it, for three distinct bodies: pi minus the angle
 between the position of `targ` seen from `obs` and the position of `illum` seen from
-`targ` at the epoch `et - lt` (at `et` without correction), in J2000. `phaseq` and the
-phase angle of the geometry finder.
+`targ` at the epoch `et - lt` (at `et` without correction), in J2000.
 """
 @inline function _geo_phase(
         ks::KernelSet, targ::Int32, illum::Int32, obs::Int32, corr::Aberration, et

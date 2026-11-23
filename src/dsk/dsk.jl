@@ -836,7 +836,7 @@ function _dsk_inpdt(
         _dsk_inpdt0(p, lon, altbds, re, f, 1) || return false
     end
     if exclud != 1
-        minlon, maxlon = _dsk_nrmlon(b[1], b[2], 1.0e-12)
+        _dsk_nrmlon(b[1], b[2], 1.0e-12)           # validates the longitude bounds
         relmax = _dsk_pdcmpl(re, f, p, _HALFPI - 1.0e-8)
         relmin = _dsk_pdcmpl(re, f, p, -_HALFPI + 1.0e-8)
         if relmax != 1 && relmin != -1
@@ -1671,13 +1671,10 @@ end
     open_dsk(path) -> DSKFile
 
 Open the DSK file at `path` and return its integer and double arrays and its segment
-descriptors in file order.
-
-Contract: `path` names a readable DAS file with the ID word `DAS/DSK`, of either byte
-order, segregated or not. In the result the arrays are memory-mapped where the file
-allows it, and every segment lies inside them. Throws `SpiceError` with the kinds of
-`dasopr`, `:invalidfiletype` for a DAS file that is not a DSK, and `:invalidformat` or
-`:dasnosuchaddress` for a segment that does not fit the file.
+descriptors in file order. The arrays are memory-mapped where the file allows it.
+Throws `SpiceError` with the kinds of `dasopr`, `:invalidfiletype` for a DAS file that
+is not a DSK, and `:invalidformat` or `:dasnosuchaddress` for a segment that does not
+fit the file.
 """
 function open_dsk(path::AbstractString)
     h = _das_load(path, "furnsh", false)
@@ -1740,11 +1737,9 @@ end
     _dsk_x02(ints, dps, seg, tols, vertex, raydir) -> (plid, xpt, found)
 
 `dskx02`: the plate and the point where the ray from `vertex` along `raydir` (both in
-the frame of the segment) first meets the plates of the type 2 segment `seg`.
-
-Contract: `ints`, `dps` are the arrays of the file of `seg`; `raydir != 0`
-(`SpiceError(:rayiszerovector)`). `found` is false if the ray meets no plate inside
-the volume element of the segment. The function allocates nothing and writes nothing.
+the frame of the segment) first meets the plates of the type 2 segment `seg`, whose
+file has the arrays `ints`, `dps`. `found` is false if the ray meets no plate inside
+the volume element of the segment.
 
 The voxel grid is walked along the ray as `xdda` does it, and the plates of each
 voxel are tested in file order; a hit counts if it lies in the voxel that is being
@@ -1769,8 +1764,7 @@ function _dsk_x02(
     dsc = seg.dskdsc
     voxsiz = hdr.voxsiz
     voxsiz == 0.0 && _dsk_throw(:invalidvalue, "the voxel size of a DSK segment is zero")
-    cgscal = hdr.cgscal
-    cgscal < 1 && _dsk_throw(:valueoutofrange, "the coarse voxel scale of a DSK segment is less than 1")
+    cgscal = hdr.cgscal                  # >= 1, checked by `_dsk_segment`
     vg1, vg2, vg3 = hdr.vgrext
     grdext = Vec3{Float64}(vg1 * voxsiz, vg2 * voxsiz, vg3 * voxsiz)
     grdtol = max(max(grdext[1], grdext[2]), grdext[3]) * 1.0e-12
@@ -2556,7 +2550,6 @@ function _dsk_ptpl02(
     hdr = seg.hdr
     dsc = seg.dskdsc
     hdr.voxsiz == 0.0 && _dsk_throw(:valueoutofrange, "the voxel size of a DSK segment is zero")
-    hdr.cgscal == 0 && _dsk_throw(:valueoutofrange, "the coarse voxel scale of a DSK segment is zero")
     isnan(seg.boxrad) && _dsk_segbox(dsc)
     ptsrfm = tols.ptmemm
     limit = ptsrfm * seg.boxrad

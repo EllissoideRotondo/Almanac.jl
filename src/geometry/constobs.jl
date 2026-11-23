@@ -45,11 +45,8 @@ end
 
 `zzspkflt`: the state of the fixed target `f` relative to an observer with the
 barycentric state `(robs, vobs)` at `et`, in the inertial frame `iref`, corrected for
-light time as `corr` says, the light time and its rate.
-
-Contract: as `spkltc`, with the barycentric state of the target taken from
-`_geo_cvx_ssb`: `LT` forms make one iteration, `CN` forms at most five and stop when
-the light time changes by less than `1e-17 * max(1, |epoch|)`.
+light time as `corr` says, the light time and its rate. The iteration is that of
+`spkltc`, with the barycentric state of the target from `_geo_cvx_ssb`.
 """
 function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration, robs, vobs)
     rt, vt = _geo_cvx_ssb(ks, f, et, iref)

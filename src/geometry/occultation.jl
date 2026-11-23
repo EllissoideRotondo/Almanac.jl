@@ -26,12 +26,9 @@ end
 `zzasryel`: the smallest (`domin`) or the largest angular separation between the ray
 from `vertex` along `dir` and the ellipse `ellips`, and the point of the ellipse where
 it occurs. The angle is negative if the ray goes through the plane region that the
-ellipse bounds.
-
-Contract: the vertex is not in the plane of the ellipse (`SpiceError(:degeneratecase)`).
-The search is the one of CSPICE: a scan of 400 points of the ellipse (320 for a minimum
-with the ray outside of the ellipse), then a golden section search of at most 101 steps
-to an interval of `1e-9` radians.
+ellipse bounds. Throws `SpiceError(:degeneratecase)` if the vertex is in the plane of
+the ellipse. The search is that of CSPICE: a scan of 400 points of the ellipse (320 for
+a minimum with the ray outside of the ellipse), then a golden section search.
 """
 function _geo_asryel(
         domin::Bool, ellips::SpiceEllipse{Float64}, vertex::Vec3{Float64},
@@ -135,11 +132,9 @@ end
 `zzocced`: the occultation code of two ellipsoids seen from `viewpt`. The columns of
 `semax1` and `semax2` are the semi-axis vectors. The code is 0 (no occultation), ±1
 (partial), ±2 (annular) or ±3 (total); it is negative if the second ellipsoid is in
-front of the first one.
-
-Contract: positive axis lengths (`SpiceError(:badaxislength)`), orthogonal axes
-(`:notarotation`), and a view point outside of both ellipsoids, which do not overlap
-(`:notdisjoint`).
+front of the first one. Throws `SpiceError` for an axis length that is not positive
+(`:badaxislength`), axes that are not orthogonal (`:notarotation`), and a view point
+inside an ellipsoid or ellipsoids that overlap (`:notdisjoint`).
 """
 function _geo_occed(
         viewpt::Vec3{Float64}, centr1::Vec3{Float64}, semax1::Mat3{Float64},

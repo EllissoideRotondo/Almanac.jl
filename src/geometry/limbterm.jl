@@ -10,43 +10,6 @@ const _GEO_LOC_ELLIPSOID = 2
 "Size of the result window and of the point buffer of `limbpt` and `termpt` in CSPICE."
 const _GEO_MAXWIN = 2000
 
-"""
-    _geo_radii3(ks, body, kind) -> NTuple{3,Float64}
-
-`zzbodvcd` for `RADII` with the count test of `limbpt`, `termpt` and `tangpt`: three
-values, with no test of their signs. Throws `SpiceError` (`:kernelvarnotfound`,
-`:typemismatch`, `:arraytoosmall`, and `kind` for a count that is not 3).
-"""
-@inline function _geo_radii3(ks::KernelSet, body::Integer, kind::Symbol)
-    v = get(
-        ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
-            string("BODY", body, "_RADII"), nothing
-    )
-    v isa Vector{Float64} || _geo_bad_radii3(body, v, kind)
-    length(v) == 3 || _geo_bad_radii3(body, v, kind)
-    return @inbounds (v[1], v[2], v[3])
-end
-@noinline function _geo_bad_radii3(body, v, kind::Symbol)
-    v === nothing && throw(
-        SpiceError(
-            :kernelvarnotfound,
-            "the variable BODY$(body)_RADII could not be found in the kernel pool"
-        )
-    )
-    v isa Vector{Float64} || throw(
-        SpiceError(
-            :typemismatch,
-            "the variable BODY$(body)_RADII is not numeric"
-        )
-    )
-    throw(
-        SpiceError(
-            length(v) > 3 ? :arraytoosmall : kind,
-            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
-        )
-    )
-end
-
 # --- terminator point of an ellipsoid ---------------------------------------------------
 
 """
@@ -55,13 +18,11 @@ end
 `zzedtmpt`: the terminator point of the ellipsoid with the semi-axes `a`, `b`, `c` in
 the half plane that the vector `axis` (from the center to a spherical source of the
 radius `r`) bounds and that contains `plnvec`. `umbral` selects the umbral terminator,
-otherwise the penumbral one.
-
-Contract: positive axes (`SpiceError(:invalidaxislength)`) and radius
-(`:invalidradius`), `axis` and `plnvec` not zero (`:zerovector`) and not parallel
-(`:degeneratecase`), and a source that does not touch the bounding sphere of the
-ellipsoid (`:objectstooclose`). The iteration of CSPICE: at most 20 steps, to an angular
-error of `1e-15` (`:noconvergence`).
+otherwise the penumbral one. Throws `SpiceError` for an axis or a radius that is not
+positive (`:invalidaxislength`, `:invalidradius`), a zero `axis` or `plnvec`
+(`:zerovector`), parallel `axis` and `plnvec` (`:degeneratecase`), a source that
+touches the bounding sphere of the ellipsoid (`:objectstooclose`), and an iteration
+that does not converge in 20 steps (`:noconvergence`).
 """
 function _geo_edtmpt(
         umbral::Bool, a::Float64, b::Float64, c::Float64, r::Float64,
@@ -171,12 +132,10 @@ end
 
 `zztangnt` with `zztanslv`: the tangent points of rays on the surface `sh` in the half
 plane that `axis` bounds and that contains `plnvec`. The points are left in `pts[1:n]`
-and `n` is returned; `ends` is scratch space for the transition angles.
-
-Contract: the ray angle goes from `start` to `finish` in steps of `schstp`; every
-change of the state (the ray meets the surface or not) is located by bisection to the
-tolerance `soltol`, and the intercept that was found last is the tangent point. Throws
-`SpiceError`: `:zerovector`, `:degeneratecase`, `:invalidradius`, `:objectstooclose`,
+and `n` is returned; `ends` is scratch space for the transition angles. The ray angle
+goes in steps of `schstp`, each change of the state (the ray meets the surface or not)
+is located by bisection to the tolerance `soltol`, and the intercept that was found
+last is the tangent point. Throws `SpiceError`: `:zerovector`, `:degeneratecase`, `:invalidradius`, `:objectstooclose`,
 `:invalidtolerance`, `:invalidconststep`, `:noconvergence`, `:arraytoosmall` for more
 than $(_GEO_MAXWIN) points, and `:bug` where CSPICE signals `SPICE(BUG)` (a transition
 without an intercept in the refinement).

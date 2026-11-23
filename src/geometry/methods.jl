@@ -43,13 +43,10 @@ end
 """
     _geo_method(ks, bodyid, method) -> _GeoMethod
 
-`zzprsmet`: parse the method string `method` for the body `bodyid`.
-
-Contract: the common spellings (upper case, one blank at most between words, no
-surface list) are compared as they are and do not allocate; every other string goes
-through the lexer and the parser of `surfaces.jl`, which accept and reject what
-`zzprsmet` accepts and rejects. Throws `SpiceError` (`:badmethodsyntax`,
-`:badpriorityspec`, `:idcodenotfound`, `:toomanysurfaces`, `:syntaxerror`).
+`zzprsmet`: parse the method string `method` for the body `bodyid`. The common
+spellings are compared as they are and do not allocate; every other string goes through
+`_dsk_parse_method`. Throws `SpiceError` (`:badmethodsyntax`, `:badpriorityspec`,
+`:idcodenotfound`, `:toomanysurfaces`, `:syntaxerror`).
 """
 @inline function _geo_method(ks::KernelSet, bodyid::Integer, method::AbstractString)
     method == "ELLIPSOID" && return _geo_ell(0x00)
@@ -171,11 +168,7 @@ end
 @inline _geo_namfrm(::KernelSet, ref::Integer) = Int32(ref)
 _geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
 
-"""
-    _geo_frinfo(ks, id) -> (center, class, found)
-
-`frinfo` without the class ID. Does not allocate.
-"""
+"`frinfo` without the class ID: `(center, class, found)`."
 @inline function _geo_frinfo(ks::KernelSet, id::Int32)
     f = _frame_def_or_nothing(ks, id)
     f === nothing && return Int32(0), Int32(0), false
@@ -206,14 +199,14 @@ end
 
 const _GEO_RADII_KEYS = String[string("BODY", i, "_RADII") for i in 1:999]
 
-@noinline function _geo_bad_radii(body, v)
+@noinline function _geo_bad_radii(body, v, kind::Symbol = :invalidcount)
     v === nothing && throw(
         SpiceError(
             :kernelvarnotfound,
             "the variable BODY$(body)_RADII could not be found in the kernel pool"
         )
     )
-    v isa Vector{Float64} || throw(
+    (v isa Vector{Float64} || v isa NTuple{3, Float64}) || throw(
         SpiceError(
             :typemismatch,
             "the variable BODY$(body)_RADII is not numeric"
@@ -221,29 +214,40 @@ const _GEO_RADII_KEYS = String[string("BODY", i, "_RADII") for i in 1:999]
     )
     length(v) == 3 || throw(
         SpiceError(
-            length(v) > 3 ? :arraytoosmall : :invalidcount,
+            length(v) > 3 ? :arraytoosmall : kind,
             "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
         )
     )
-    throw(SpiceError(:badaxislength, "a radius of the body $body is not positive: $v"))
+    throw(SpiceError(:badaxislength, "a radius of the body $body is not positive: $(collect(v))"))
+end
+
+"""
+    _geo_radii3(ks, body, kind) -> NTuple{3,Float64}
+
+`zzbodvcd` for `RADII`: three values, with no test of their signs. Throws `SpiceError`
+(`:kernelvarnotfound`, `:typemismatch`, `:arraytoosmall`, and `kind` for fewer than 3
+values).
+"""
+@inline function _geo_radii3(ks::KernelSet, body::Integer, kind::Symbol)
+    v = get(
+        ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
+            string("BODY", body, "_RADII"), nothing
+    )
+    v isa Vector{Float64} || _geo_bad_radii(body, v, kind)
+    length(v) == 3 || _geo_bad_radii(body, v, kind)
+    return @inbounds (v[1], v[2], v[3])
 end
 
 """
     _geo_radii(ks, body) -> NTuple{3,Float64}
 
 `zzgftreb`: the three radii of `body` from the kernel pool. Throws `SpiceError`
-(`:kernelvarnotfound`, `:typemismatch`, `:invalidcount`, `:badaxislength`).
-Postcondition: the three values are positive. No allocation for an ID in 1:999.
+(`:kernelvarnotfound`, `:typemismatch`, `:invalidcount`, `:badaxislength`) unless
+they are three positive values. No allocation for an ID in 1:999.
 """
 @inline function _geo_radii(ks::KernelSet, body::Integer)
-    v = get(
-        ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
-            string("BODY", body, "_RADII"), nothing
-    )
-    v isa Vector{Float64} || _geo_bad_radii(body, v)
-    length(v) == 3 || _geo_bad_radii(body, v)
-    a, b, c = @inbounds v[1], v[2], v[3]
-    (a > 0.0 && b > 0.0 && c > 0.0) || _geo_bad_radii(body, v)
+    a, b, c = _geo_radii3(ks, body, :invalidcount)
+    (a > 0.0 && b > 0.0 && c > 0.0) || _geo_bad_radii(body, (a, b, c))
     return a, b, c
 end
 

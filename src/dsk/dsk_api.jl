@@ -10,12 +10,7 @@
 # Tolerances
 # ---------------------------------------------------------------------------------------
 
-"""
-    dsktolerances(ctx::SpiceContext) -> DSKTolerances
-
-Contract: returns the current DSK tolerances of `ctx` with one atomic read; the result
-never changes.
-"""
+"The DSK tolerances of `ctx`, read once."
 dsktolerances(ctx::SpiceContext) = @atomic ctx.dsktols
 
 """
@@ -641,9 +636,7 @@ Insert the ID codes of the surfaces of the body `bodyid` that have a segment in 
 file `path` into the vector `ids`, as
 [`dsksrf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dsksrf_c.html) does with a SPICE cell.
 
-`ids` is used as a set: on return it is sorted and without duplicates. The vector
-comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
-unchanged. Throws the errors of [`dskobj`](@ref).
+`ids` is used as a set, as in [`dskobj!`](@ref). Throws the errors of [`dskobj`](@ref).
 """
 dsksrf!(ids::AbstractVector{<:Integer}, path::AbstractString, bodyid::Integer) =
     _add_ids!(ids, dsksrf(path, bodyid))
