@@ -367,11 +367,7 @@ Return the name of the frame `id`, a built-in frame first, then a frame of `ks.f
 (or of the dictionary `frames`), as `frmnam_`; `nothing` if the ID has no name.
 """
 function frame_name(frames::AbstractDict, id::Integer)::Union{String, Nothing}
-    typemin(Int32) <= id <= typemax(Int32) || return nothing
-    i = Int32(id)
-    f = get(BUILTIN_FRAMES, i, nothing)
-    f === nothing || return f.name
-    f = get(frames, i, nothing)
+    f = _frame_lookup(frames, id)
     return f === nothing ? nothing : f.name
 end
 frame_name(ks::KernelSet, id::Integer) = frame_name(ks.frames, id)
@@ -383,12 +379,17 @@ frame_name(ks::KernelSet, id::Integer) = frame_name(ks.frames, id)
 order. Does not allocate.
 """
 @inline function _frame_def_or_nothing(ks::KernelSet, id::Integer)
+    f = _frame_lookup(ks.frames, id)
+    f === nothing || return f
+    13000 <= id < 14000 && return FrameDef(Int32(id), "", 2, Int32(id) - Int32(10000), 399)
+    return nothing
+end
+
+"The frame `id` of the built-in frames, then of `frames`; `nothing` for neither or an ID outside the 32-bit range."
+@inline function _frame_lookup(frames::AbstractDict, id::Integer)
     typemin(Int32) <= id <= typemax(Int32) || return nothing
     i = Int32(id)
     f = get(BUILTIN_FRAMES, i, nothing)
     f === nothing || return f
-    f = get(ks.frames, i, nothing)
-    f === nothing || return f
-    13000 <= i < 14000 && return FrameDef(i, "", 2, i - Int32(10000), 399)
-    return nothing
+    return get(frames, i, nothing)
 end
