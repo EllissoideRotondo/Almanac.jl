@@ -391,5 +391,8 @@ end
     i = Int32(id)
     f = get(BUILTIN_FRAMES, i, nothing)
     f === nothing || return f
-    return get(frames, i, nothing)
+    # The two returns, not `return get(...)`: Julia 1.10 allocates in `spkezr` otherwise.
+    f = get(frames, i, nothing)
+    f === nothing || return f
+    return nothing
 end
