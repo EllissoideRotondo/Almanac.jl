@@ -8,8 +8,7 @@
 
 Order 1 rotation jet at a plain epoch, the one behind `sxform`, `spkezr` and `spkgeo`.
 If CK kernels are loaded and one of the two frame chains holds a CK frame, `dR` comes
-from the angular velocity of the CK segment, as
-[`sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html) of CSPICE gives it
+from the angular velocity of the CK segment, as `sxform_c` of CSPICE gives it
 (`_ck_state_rotation`). A chain with a dynamic or a switch frame goes the same way, and
 `dR` is the derivative block of `zzdynfrm_`; so does a chain with a PCK frame, whose
 `dR` is that of `tisbod_`, and the links are joined with the arithmetic of `frmchg_`.
@@ -21,13 +20,14 @@ Otherwise the result is `rotation_jet`, unchanged.
     return _ck_frame_jet(ks, from, to, et)
 end
 
+# Not inlined, so that the callers of `frame_jet` stay small for a snapshot without such
+# frames.
 """
     _ck_frame_jet(ks, from::Int32, to::Int32, et::Float64) -> (R, dR)
 
-Contract: `frame_jet` of order 1 for a snapshot that has CK, PCK, dynamic or switch frames:
-the state transformation of CSPICE if one of the two chains holds such a frame, and
-`rotation_jet` otherwise. Not inlined, so that the callers of `frame_jet` stay small
-for a snapshot without such frames. An invalid aberration correction in a dynamic frame
+`frame_jet` of order 1 for a snapshot that has CK, PCK, dynamic or switch frames: the
+state transformation of CSPICE if one of the two chains holds such a frame, and
+`rotation_jet` otherwise. An invalid aberration correction in a dynamic frame
 definition throws `SpiceError(:invalidoption)`, the kind of `zzprscor_` in `zzdynfrm_`
 (a rotation alone throws `:spkinvalidoption`, as `zzvalcor_` in `zzdynrot_`).
 """
@@ -94,8 +94,7 @@ clock value `sclkdp`, as
 The result is `(cmat, clkout)`: `cmat` is an `SMatrix{3,3}` that rotates a vector from
 `ref` to the instrument frame, and `clkout` is the clock value, in ticks, of the
 pointing that was used. The result is `nothing` if no loaded CK segment gives a
-pointing; `nothing` takes the place of the `found` flag of CSPICE. Segments with and
-without angular velocity are searched in priority order.
+pointing. Segments with and without angular velocity are searched in priority order.
 
 If `ref` is not the frame of the segment, the matrix is changed with the rotation
 between the two frames at the epoch of `clkout`. This needs the SCLK kernel of the
@@ -190,10 +189,10 @@ without angular velocity. This is the link of the frame chain that [`pxform`](@r
 follows for a CK frame. As in `pxform`, `et` can be a dual number when ForwardDiff is
 loaded; the elements of `rot` then are dual numbers.
 
-`nothing` takes the place of the `found` flag of CSPICE. The checks come in this
-order: `SpiceError(:badarg)` if `et` is not finite; `nothing` if no CK is loaded or the
-SCLK kernel of the clock is not loaded, as in CSPICE; `SpiceError(:valueoutofrange)`
-if `et` is outside the range of the clock; `nothing` if no segment covers `et`.
+The checks come in this order: `SpiceError(:badarg)` if `et` is not finite; `nothing`
+if no CK is loaded or the SCLK kernel of the clock is not loaded, as in CSPICE;
+`SpiceError(:valueoutofrange)` if `et` is outside the range of the clock; `nothing` if
+no segment covers `et`.
 
 # Examples
 ```julia
@@ -333,7 +332,8 @@ ckobj(ck) =
     ckobj!(ids, ck) -> ids
 
 Insert the CK IDs that have a segment in the CK file `ck` into the vector `ids`, as
-[`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html) does with a SPICE cell.
+[`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html)
+does with a SPICE cell.
 
 `ids` is used as a set: on return it is sorted and without duplicates. The vector
 comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
@@ -420,10 +420,9 @@ function _ck_intervals!(out::Vector{NTuple{2, Float64}}, data::Vector{Float64}, 
             first <= finish && push!(out, (first, finish))
         end
     elseif dtype == 4
-        _, _, pdrbas, pdrtyp, pktbas, npkt, pktsz, pktoff = _ck_meta04(data, seg)
-        for k in 1:npkt
-            a = pdrtyp == 0 ? pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff :
-                pktbas + trunc(Int, data[pdrbas + k])
+        meta = _ck_meta04(data, seg)
+        for k in 1:meta[6]
+            a = _ck04_packet(data, meta, k)
             push!(out, (data[a] - data[a + 1], data[a] + data[a + 1]))
         end
     elseif dtype == 6

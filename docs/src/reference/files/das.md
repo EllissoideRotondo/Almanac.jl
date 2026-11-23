@@ -3,11 +3,9 @@
 DSK and EK files are DAS (direct access segregated) files. A file handle is a
 [`DASHandle`](@ref) object, not an integer.
 
-A call that needs a context takes it as the optional first argument `[ctx,]`, a
-[`SpiceContext`](@ref), and uses [`default_context`](@ref) without it. `[ctx | ks,]`
-means that the call also accepts a `KernelSet`, the immutable snapshot of the kernels of
-a context that `Almanac.kernelset(ctx)` returns. [`dskxv!`](@ref) takes the context
-after its two output arguments.
+`[ctx,]` and `[ctx | ks,]` in the signatures are the optional context of
+[Contexts in place of global state](@ref); [`dskxv!`](@ref) takes it after its two
+output arguments.
 
 ## DAS and DLA files
 

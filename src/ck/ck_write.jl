@@ -56,8 +56,7 @@ Open a new CK file that lives in memory, for writing: [`ckopn`](@ref) without th
 path. No file is made. The writers (such as [`ckw03`](@ref)) take the handle as they take
 one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
 and [`save_kernel`](@ref) writes them to a file; [`ckcls`](@ref) discards them, so load or
-save before the close. This call
-has no CSPICE counterpart; see [`dafops`](@ref).
+save before the close. CSPICE has no such call; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
 """
@@ -67,9 +66,9 @@ ckops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("CK", 6, ifna
     ckcls(handle) -> Nothing
 
 Close the CK file of `handle`, as
-[`ckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcls_c.html). The call does nothing if the handle is closed
-already. The close writes no data: every write call puts its bytes on disk before it
-returns. Load the file with [`furnsh`](@ref) after the close. For a handle in memory
+[`ckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcls_c.html).
+The call does nothing if the handle is closed already. The close writes no data: every
+write call puts its bytes on disk before it returns. For a handle in memory
 (from [`ckops`](@ref)), the close discards the bytes: load it with [`furnsh`](@ref) or
 save it with [`save_kernel`](@ref) before the close.
 
@@ -107,19 +106,55 @@ function _ck_avvs(who::AbstractString, avvs, nrec::Int)
     return av, true
 end
 
+"""
+    _ck_nonzero_quat(who, flat, a, i, mini = 0) -> Nothing
+
+Throw `SpiceError(:zeroquaternion)` if the quaternion `flat[a:a+3]`, number `i` (of
+mini-segment `mini` if `mini > 0`), is zero.
+"""
+@inline function _ck_nonzero_quat(
+        who::AbstractString, flat::Vector{Float64}, a::Int, i::Int, mini::Int = 0
+    )
+    (flat[a] == 0.0 && flat[a + 1] == 0.0 && flat[a + 2] == 0.0 && flat[a + 3] == 0.0) &&
+        _ck_zero_quat(who, i, mini)
+    return nothing
+end
+
+@noinline _ck_zero_quat(who, i, mini) = throw(
+    SpiceError(
+        :zeroquaternion, "$who: the quaternion at index $i" *
+            (mini > 0 ? " within mini-segment $mini" : "") * " has magnitude zero"
+    )
+)
+
+"The quaternions and the angular velocities (see `_ck_avvs`) of `nrec` records of `ckw01` and `ckw03`; another count of quaternions throws `SpiceError(:badarg)`."
+function _ck_quats_avvs(who::AbstractString, quats, avvs, nrec::Int)
+    q, nq, _ = _seg_flat(who, "quats", quats, 4)
+    nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
+    av, avflag = _ck_avvs(who, avvs, nrec)
+    return q, av, avflag
+end
+
+"""
+    _ck_ids_times(who, ctx, ref, segid, t) -> Int
+
+The checks of `ckw01` and `ckw03` after the descriptor times, in their order: the frame
+(whose ID it returns), the segment ID, and times `t` that are not negative
+(`SpiceError(:invalidsclktime)`) and strictly increasing.
+"""
+function _ck_ids_times(who::AbstractString, ctx, ref, segid::AbstractString, t::Vector{Float64})
+    refcod = _seg_refcode(who, ctx, ref)
+    _seg_idchars(who, segid)
+    _seg_idlen(who, segid)
+    t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
+    _seg_increasing(who, t, "SCLKDP")
+    return refcod
+end
+
 "Throws `SpiceError(:zeroquaternion)` if one of the `n` quaternions that start every `step` doubles in `flat` is zero."
 function _ck_nonzero_quats(who::AbstractString, flat::Vector{Float64}, n::Int, step::Int)
     for i in 1:n
-        base = (i - 1) * step
-        (
-            flat[base + 1] == 0.0 && flat[base + 2] == 0.0 && flat[base + 3] == 0.0 &&
-                flat[base + 4] == 0.0
-        ) && throw(
-            SpiceError(
-                :zeroquaternion,
-                "$who: the quaternion at index $i has magnitude zero"
-            )
-        )
+        _ck_nonzero_quat(who, flat, (i - 1) * step + 1, i)
     end
     return nothing
 end
@@ -196,9 +231,7 @@ function ckw01(
     _chkfstr(who, "string `segid`", segid)
     t = _seg_vec(who, "sclkdp", sclkdp, -1)
     nrec = length(t)
-    q, nq, _ = _seg_flat(who, "quats", quats, 4)
-    nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
-    av, avflag = _ck_avvs(who, avvs, nrec)
+    q, av, avflag = _ck_quats_avvs(who, quats, avvs, nrec)
     nrec <= 0 && throw(
         SpiceError(
             :invalidnumrec,
@@ -217,11 +250,7 @@ function ckw01(
                 "of the descriptor is invalid: DCD(2) = $endtim and SCLKDP(NREC) = $(t[nrec])"
         )
     )
-    refcod = _seg_refcode(who, ctx, ref)
-    _seg_idchars(who, segid)
-    _seg_idlen(who, segid)
-    t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
-    _seg_increasing(who, t, "SCLKDP")
+    refcod = _ck_ids_times(who, ctx, ref, segid, t)
     _ck_nonzero_quats(who, q, nrec, 4)
     data = _ck_pointing(q, av, nrec, avflag)
     append!(data, t)
@@ -382,9 +411,7 @@ function ckw03(
     nrec = length(t)
     st = _seg_vec(who, "starts", starts, -1)
     nints = length(st)
-    q, nq, _ = _seg_flat(who, "quats", quats, 4)
-    nq == nrec || throw(SpiceError(:badarg, "$who: `quats` must have $nrec elements but has $nq"))
-    av, avflag = _ck_avvs(who, avvs, nrec)
+    q, av, avflag = _ck_quats_avvs(who, quats, avvs, nrec)
     nrec <= 0 && throw(
         SpiceError(
             :invalidnumrec,
@@ -411,11 +438,7 @@ function ckw03(
                 "SCLKDP($nrec) = $(t[nrec])"
         )
     )
-    refcod = _seg_refcode(who, ctx, ref)
-    _seg_idchars(who, segid)
-    _seg_idlen(who, segid)
-    t[1] < 0.0 && throw(SpiceError(:invalidsclktime, "$who: the first SCLKDP time $(t[1]) is negative"))
-    _seg_increasing(who, t, "SCLKDP")
+    refcod = _ck_ids_times(who, ctx, ref, segid, t)
     t[1] != st[1] && throw(
         SpiceError(
             :timesdontmatch, "$who: the start time of the first " *
@@ -857,13 +880,7 @@ function _ck06_quats(
     )
     for j in 1:n
         a = pktbeg + pktsiz * (j - 1)
-        (pk[a] == 0.0 && pk[a + 1] == 0.0 && pk[a + 2] == 0.0 && pk[a + 3] == 0.0) &&
-            throw(
-            SpiceError(
-                :zeroquaternion, "$who: the quaternion at index $j within " *
-                    "mini-segment $i has magnitude zero"
-            )
-        )
+        _ck_nonzero_quat(who, pk, a, j, i)
         if j > 1 && iseven(subtyp)
             p = a - pktsiz
             prevq = SVector(pk[p], pk[p + 1], pk[p + 2], pk[p + 3])
@@ -885,7 +902,8 @@ end
           packts, rates, sclkdp, ivlbds, sellst) -> Nothing
 
 Write a CK segment of type 6 (mini-segments of Hermite or Lagrange interpolation), as
-[`ckw06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw06.html) of SPICELIB. CSPICE has no C wrapper for it.
+[`ckw06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw06.html)
+of SPICELIB. CSPICE has no C wrapper for it.
 
 A mini-segment is a set of packets with its own subtype, degree and clock rate, valid on
 its own interval. The number of mini-segments is `length(npkts)`. The subtypes, their

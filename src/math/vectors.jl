@@ -770,8 +770,9 @@ The position parts of the states `axdef` and `plndef` define the frame as in
 right 3 by 3 blocks of the result are the `twovec` matrix. The lower left block is its
 time derivative. The upper right block is zero.
 
-Throws as [`twovec`](@ref), and `SpiceError(:badarg)` if a state does not have 6
-elements.
+Throws `SpiceError(:badindex)`, `SpiceError(:undefinedframe)` and
+`SpiceError(:dependentvectors)` in the cases of [`twovec`](@ref), and
+`SpiceError(:badarg)` if a state does not have 6 elements.
 """
 function twovxf(axdef::AbstractVector, indexa::Integer, plndef::AbstractVector, indexp::Integer)
     _m_check_twovec(indexa, indexp)
@@ -810,12 +811,6 @@ end
     )
 end
 
-@inline function _m_blocks(x::SMatrix{6, 6})
-    r = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
-    d = SMatrix{3, 3}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
-    return r, d
-end
-
 """
     frame(x) -> (x̂, y, z)
 
@@ -838,32 +833,38 @@ true
 
 See also [`twovec`](@ref).
 """
-function frame(x::AbstractVector)
-    u = _m_hat(_m_v3(x))
-    a = u[1] * u[1]
-    b = u[2] * u[2]
-    c = u[3] * u[3]
-    o = zero(a)
-    if primal(a + b + c) == 0.0
-        return SVector(o + 1, o, o), SVector(o, o + 1, o), SVector(o, o, o + 1)
-    end
+frame(x::AbstractVector) = _m_frame(_m_v3(x))
+
+"Right-handed orthonormal frame `(x̂, y, z)` of `frame_c`, for a static vector."
+@inline function _m_frame(x0::SVector{3})
+    x = _m_hat(x0)
+    a = x[1] * x[1]
+    b = x[2] * x[2]
+    c = x[3] * x[3]
+    z0 = zero(a)
+    o = one(a)
+    primal(a + b + c) == 0.0 &&
+        return SVector(o, z0, z0), SVector(z0, o, z0), SVector(z0, z0, o)
     # The smallest component (s0) is zero in y; the other two (s1, s2) are swapped, with
     # the sign of the first changed: y[s1] = -x[s2]/f, y[s2] = x[s1]/f, z[s0] = f,
     # z[s1] = -x[s0] y[s2], z[s2] = x[s0] y[s1]. The cyclic order of (s0, s1, s2) makes
     # the frame right-handed.
-    pa, pb, pc = primal(a), primal(b), primal(c)
-    if pa <= pb && pa <= pc                     # (s0, s1, s2) = (1, 2, 3)
+    a0, b0, c0 = primal(a), primal(b), primal(c)
+    if a0 <= b0 && a0 <= c0                     # (s0, s1, s2) = (1, 2, 3)
         f = sqrt(b + c)
-        y = SVector(o, -u[3] / f, u[2] / f)
-        return u, y, SVector(f, -u[1] * y[3], u[1] * y[2])
-    elseif pb <= pa && pb <= pc                 # (2, 3, 1)
+        y2 = -x[3] / f
+        y3 = x[2] / f
+        return x, SVector(z0, y2, y3), SVector(f, -x[1] * y3, x[1] * y2)
+    elseif b0 <= a0 && b0 <= c0                 # (2, 3, 1)
         f = sqrt(a + c)
-        y = SVector(u[3] / f, o, -u[1] / f)
-        return u, y, SVector(u[2] * y[3], f, -u[2] * y[1])
+        y3 = -x[1] / f
+        y1 = x[3] / f
+        return x, SVector(y1, z0, y3), SVector(x[2] * y3, f, -x[2] * y1)
     end
     f = sqrt(a + b)                             # (3, 1, 2)
-    y = SVector(-u[2] / f, u[1] / f, o)
-    return u, y, SVector(-u[3] * y[2], u[3] * y[1], f)
+    y1 = -x[2] / f
+    y2 = x[1] / f
+    return x, SVector(y1, y2, z0), SVector(-x[3] * y2, x[3] * y1, f)
 end
 
 # --- derivatives of vector functions of a state -------------------------------------

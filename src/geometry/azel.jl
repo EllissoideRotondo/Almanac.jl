@@ -170,30 +170,30 @@ function azlcpo(
         abcorr::AbcorrArg, azccw::Bool, elplsz::Bool, obspos::AbstractVector, obsctr::NameOrID,
         obsref::NameOrID
     )
-    obscde = _geo_body(ks, obsctr, "observer center")
-    fxfcde = _geo_namfrm(ks, obsref)
+    obscde = _body_id(ks, obsctr, "observer center")
+    fxfcde = _frame_code(ks, obsref)
     center, _, found = _geo_frinfo(ks, fxfcde)
     found || _geo_unknown_frame(obsref)
-    center == obscde || _geo_bad_center(obsref, obsctr, center)
+    center == obscde || _dsk_bad_frame(:invalidframe, obsref, obsctr, center)
     (method == "ELLIPSOID" || _eqstr(method, "ELLIPSOID")) || throw(
         SpiceError(
             :invalidmethod, "the method <$method> is not supported; use ELLIPSOID"
         )
     )
-    pos = _geo_pos(obspos)
+    pos = _dsk_vec3(obspos)
     xftopo = if pos[1] == 0.0 && pos[2] == 0.0
         # On the polar axis the local +X axis is the +X axis of the body-fixed frame.
         pos[3] < 0.0 ? _m_rotmat(one(Mat3{Float64}), Float64(pi), 1) : one(Mat3{Float64})
     else
-        a, b, c = _geo_radii(ks, obscde)
+        a, b, c = _positive_radii(ks, obscde)
         obsspt, _ = _m_nearpt(pos, a, b, c)
         twovec(_m_surfnm(a, b, c, obsspt), 3, SVector(0.0, 0.0, 1.0), 1)
     end
-    corr = _geo_abcorr(abcorr)
-    trgcde = _geo_body(ks, target, "target")
+    corr = Aberration(abcorr)
+    trgcde = _body_id(ks, target, "target")
     f = _GeoFixed(pos, zero(Vec3{Float64}), 0.0, obscde, fxfcde)
-    state, lt = _geo_cvo(ks, trgcde, check_epoch(et), fxfcde, _GEO_AT_OBSERVER, corr, f)
-    r, v = _geo_pv(state)
+    state, lt = _geo_cv(ks, trgcde, check_epoch(et), fxfcde, _GEO_AT_OBSERVER, corr, f)
+    r, v = _m_pv(state)
     lr = _m_mxv(xftopo, r)
     lv = _m_mxv(xftopo, v)
     range, az, el = recazl(lr, azccw, elplsz)

@@ -22,7 +22,7 @@ One of the two defining vectors of a two-vector dynamic frame, parsed from the
   its center.
 - `vec`: the constant vector (kind 4) or the radii of the target (kind 3).
 
-Contract: `kind in 0:4`; if `kind != 0` then `axis in 1:3`.
+`kind` is in `0:4`, and `axis` is in `1:3` for a used vector.
 """
 struct DynVector
     kind::Int8
@@ -56,8 +56,7 @@ reference and copies nothing.
 - `errkind`, `errmsg`: `:none`, or the `SpiceError` that an evaluation of the frame
   throws because the definition is not valid (CSPICE reports it at that time).
 
-Contract: if `errkind === :none` then `family in 1:6` and the fields of the family are
-complete.
+With `errkind === :none`, `family` is in `1:6` and the fields of the family are set.
 """
 mutable struct DynFrame
     const id::Int32
@@ -90,8 +89,6 @@ end
 Reference to the snapshot (`K` is `KernelSet`) with which the definitions of dynamic
 frames are evaluated, one recursion level below the snapshot that holds it. Mutable, so
 that it is passed as one pointer through the typed function pointer of `_dyn_call`.
-
-Contract: `ks` has the data of the snapshot that holds this reference.
 """
 mutable struct DynLevel{K}
     const ks::K
@@ -105,8 +102,8 @@ built: the base frames in the order of `FRAME_<id>_ALIGNED_WITH` (lowest priorit
 first), the class of each, and the optional time intervals `starts[i] <= et <=
 stops[i]` (ET seconds). `errkind`, `errmsg` are as in `DynFrame`.
 
-Contract: `length(classes) == length(bases)`; if `usetime` then `starts` and `stops`
-have that length too and `starts[i] < stops[i]`.
+`classes` has the length of `bases`; with `usetime`, `starts` and `stops` have that
+length too, and `starts[i] < stops[i]`.
 """
 mutable struct SwitchFrame
     const id::Int32
@@ -127,8 +124,8 @@ Watcher state of one `SpiceContext`, the per-context form of the agent tables of
 holds the agents that have an update pending (what `cvpool` reports and clears), and
 `version` counts the changes of the kernel pool of the context.
 
-Contract: `agents` and `notify` are read and written only under the lock of the
-context; `version` is atomic, never decreases, and can be read without the lock.
+`agents` and `notify` are read and written under the lock of the context only;
+`version` is atomic, never decreases, and is read without the lock.
 """
 mutable struct PoolWatch
     const agents::Dict{String, Vector{String}}

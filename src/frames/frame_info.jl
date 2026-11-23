@@ -34,7 +34,7 @@ end
 """
     _frame_of_object(ks, value) -> Union{Nothing,Tuple{Int,String}}
 
-Contract: frame ID and frame name for the value of an `OBJECT_<body>_FRAME` variable,
+Return the frame ID and frame name for the value of an `OBJECT_<body>_FRAME` variable,
 as `cidfrm_` and `cnmfrm_` read it: a frame name (built-in, or with a `FRAME_<name>`
 variable) or a frame ID (built-in, or with a `FRAME_<id>_NAME` variable). `nothing` if
 the value does not identify a frame. A name is taken as `gcpool_` returns it into 32
@@ -426,7 +426,7 @@ end
 """
     _tis_jet(ks, ref, body, et) -> (R, dR)
 
-Contract: the matrix from the inertial frame `ref` to the body-fixed frame of `body`
+Return the matrix from the inertial frame `ref` to the body-fixed frame of `body`
 (a body ID, or the frame class ID of a binary PCK frame) at `et` and its time
 derivative: `_body_rotation` (binary PCK first, text constants otherwise) times the
 constant rotation from `ref` to J2000.

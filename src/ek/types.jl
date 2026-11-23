@@ -139,9 +139,6 @@ struct EKTable
     cols::Vector{Vector{_EKColumn}}
 end
 
-# A catalog entry without column descriptors.
-EKTable(name, cnames, attrs, segs) = EKTable(name, cnames, attrs, segs, Vector{_EKColumn}[])
-
 _ek_attr(c::_EKColumn) = EKColumnAttr(
     Int(c.cclass), _EK_TYPE_SYMBOLS[c.dtype],
     c.dtype == _EK_CHR ? Int(c.strlen) : 0, Int(c.size), c.ixtype != -1, c.nullok

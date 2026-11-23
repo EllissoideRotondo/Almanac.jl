@@ -14,7 +14,7 @@
 # one to one.
 #
 # A function `_ekw_<name>` ports the routine `zzek<name>` of CSPICE (`_ekw_pgal` is
-# `zzekpgal`, `_ekw_trin` is `zzektrin`); `_ekw_base` is `zzekpgbs`. A tree is known
+# `zzekpgal`, `_ekw_trin` is `zzektrin`); `_ek_base` is `zzekpgbs`. A tree is known
 # by the number of its root page.
 #
 # Nothing here keeps state outside the handle.
@@ -40,20 +40,21 @@ The check of `zzekpgch` for write access: `h` is open (`:dasnosuchhandle`), writ
     return nothing
 end
 
-@inline _ekw_base(t::Int, p::Integer) =
-    t == 1 ? _ek_cbase(p) : t == 2 ? _ek_dbase(p) : _ek_ibase(p)
-
-@inline function _ekw_pgpg(t::Int, addr::Integer)
-    a = Int(addr)
-    p = t == 1 ? (a + 1023) ÷ 1024 : t == 2 ? (a + 127) ÷ 128 : (a - 1) ÷ 256
-    return p, _ekw_base(t, p)
+"Write `val` as five base-128 characters at `buf[at:at+4]` (`prtenc`)."
+@inline function _ekw_enc!(buf::Vector{UInt8}, at::Int, val::Integer)
+    n = Int(val)
+    for k in 4:-1:0                      # invariant: digits after k are stored
+        buf[at + k] = (n % 128) % UInt8
+        n ÷= 128
+    end
+    return nothing
 end
 
 """
     _ekw_sei(h, addr, val) -> Nothing
 
-Write `val` as five base-128 characters at the character address `addr` (`zzeksei`,
-`prtenc`). Precondition: `0 <= val < 128^5`, else `SpiceError(:outofrange)`.
+Write `val` as five base-128 characters at the character address `addr` (`zzeksei`).
+Throws `SpiceError(:outofrange)` unless `0 <= val < 128^5`.
 """
 function _ekw_sei(h::DASHandle, addr::Integer, val::Integer)
     (0 <= val < 34359738368) || throw(
@@ -62,12 +63,7 @@ function _ekw_sei(h::DASHandle, addr::Integer, val::Integer)
             "the integer $val cannot be encoded in five base-128 characters"
         )
     )
-    n = Int(val)
-    chars = h.chars
-    for k in 4:-1:0                      # invariant: digits after k are stored
-        chars[addr + k] = (n % 128) % UInt8
-        n ÷= 128
-    end
+    _ekw_enc!(h.chars, Int(addr), val)
     return nothing
 end
 
@@ -78,9 +74,9 @@ end
 """
     _ekw_pgin(h) -> Nothing
 
-Set up the paging metadata of a new, empty DAS file (`zzekpgin`). Precondition: the
-file holds no data, else `SpiceError(:dasnotempty)`. Postcondition: the first 256
+Write the paging metadata of a new, empty DAS file (`zzekpgin`): the first 256
 integers hold the architecture code, the page sizes and the page counts (all zero).
+Throws `SpiceError(:dasnotempty)` if the file holds data.
 """
 function _ekw_pgin(h::DASHandle)
     _das_check_write(h, "zzekpgin")
@@ -107,7 +103,7 @@ end
     _ekw_pgan(h, t) -> (p, base)
 
 Append a new page of type `t` to the file (`zzekpgan`): 1024 blanks, 128 zeros or 256
-zeros. Postcondition: the page count of the type is one more, and `p` is that count.
+zeros. `p` is the new page count of the type.
 """
 function _ekw_pgan(h::DASHandle, t::Int)
     ints = h.ints
@@ -119,16 +115,14 @@ function _ekw_pgan(h::DASHandle, t::Int)
         n = length(h.dps)
         resize!(h.dps, n + 128)
         fill!(view(h.dps, (n + 1):(n + 128)), 0.0)
-    elseif t == 3
+    else
         n = length(ints)
         resize!(ints, n + 256)
         fill!(view(ints, (n + 1):(n + 256)), Int32(0))
-    else
-        throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     end
     np = Int(ints[_ekw_NPAGE[t]])
     ints[_ekw_NPAGE[t]] = np + 1
-    return np + 1, _ekw_base(t, np + 1)
+    return np + 1, _ek_base(t, np + 1)
 end
 
 """
@@ -139,13 +133,11 @@ list has a page, else a new page. A page from the free list keeps its old words,
 CSPICE; its first word held the link of the free list.
 """
 function _ekw_pgal(h::DASHandle, t::Int)
-    (1 <= t <= 3) || throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     ints = h.ints
     p = Int(ints[_ekw_FREEP[t]])
     p > 0 || return _ekw_pgan(h, t)
-    base = _ekw_base(t, p)
-    next = t == 1 ? _ek_gei(h.chars, base + 1) : t == 2 ? round(Int, h.dps[base + 1]) :
-        Int(ints[base + 1])
+    base = _ek_base(t, p)
+    next = _ekw_getw(h, t, base, _ekw_FIRSTW)
     ints[_ekw_NFREE[t]] -= 1
     ints[_ekw_FREEP[t]] = next
     return p, base
@@ -155,11 +147,10 @@ end
     _ekw_pgfr(h, t, p) -> Nothing
 
 Put page `p` of type `t` at the head of the free list of its type (`zzekpgfr`).
-Precondition: the page exists, else `SpiceError(:invalidindex)`. Only the first word
-of the page changes: it takes the old head of the list.
+Only the first word of the page changes: it takes the old head of the list. Throws
+`SpiceError(:invalidindex)` for a page that does not exist.
 """
 function _ekw_pgfr(h::DASHandle, t::Int, p::Integer)
-    (1 <= t <= 3) || throw(SpiceError(:invalidtype, "The data type code $t was not recognized."))
     ints = h.ints
     np = Int(ints[_ekw_NPAGE[t]])
     (1 <= p <= np) || throw(
@@ -169,56 +160,50 @@ function _ekw_pgfr(h::DASHandle, t::Int, p::Integer)
         )
     )
     head = Int(ints[_ekw_FREEP[t]])
-    base = _ekw_base(t, p)
-    if t == 1
-        _ekw_sei(h, base + 1, head)
-    elseif t == 2
-        h.dps[base + 1] = Float64(head)
-    else
-        ints[base + 1] = head
-    end
+    base = _ek_base(t, p)
+    _ekw_setw(h, t, base, _ekw_FIRSTW, head)
     ints[_ekw_FREEP[t]] = p
     ints[_ekw_NFREE[t]] += 1
     return nothing
 end
 
-# The link count of a data page is in its last word and the forward pointer, a page
-# number, in the word before it; in a character page each takes five characters.
-@inline function _ekw_glnk(h::DASHandle, t::Int, p::Integer)
-    base = _ekw_base(t, p)
-    return t == 1 ? _ek_gei(h.chars, base + 1020) : t == 2 ? round(Int, h.dps[base + 128]) :
-        Int(h.ints[base + 256])
+"""
+    _ekw_getw(h, t, base, offs) -> Int
+
+The integer in word `offs[t]` of the page of type `t` at `base`: an integer, a double,
+or five base-128 characters from that offset in a character page.
+"""
+@inline function _ekw_getw(h::DASHandle, t::Int, base::Int, offs::NTuple{3, Int})
+    a = base + offs[t]
+    return t == 1 ? _ek_gei(h.chars, a) : t == 2 ? round(Int, h.dps[a]) : Int(h.ints[a])
 end
 
-@inline function _ekw_slnk(h::DASHandle, t::Int, p::Integer, n::Integer)
-    base = _ekw_base(t, p)
+"Store `n` in the word that `_ekw_getw(h, t, base, offs)` reads."
+@inline function _ekw_setw(h::DASHandle, t::Int, base::Int, offs::NTuple{3, Int}, n::Integer)
+    a = base + offs[t]
     if t == 1
-        _ekw_sei(h, base + 1020, n)
+        _ekw_sei(h, a, n)
     elseif t == 2
-        h.dps[base + 128] = Float64(n)
+        h.dps[a] = Float64(n)
     else
-        h.ints[base + 256] = n
+        h.ints[a] = n
     end
     return nothing
 end
 
-@inline function _ekw_gfwd(h::DASHandle, t::Int, p::Integer)
-    base = _ekw_base(t, p)
-    return t == 1 ? _ek_gei(h.chars, base + 1015) : t == 2 ? round(Int, h.dps[base + 127]) :
-        Int(h.ints[base + 255])
-end
+# The first word of a free page holds the link of the free list. The link count of a
+# data page is in its last word and the forward pointer, a page number, in the word
+# before it; in a character page each takes five characters.
+const _ekw_FIRSTW = (1, 1, 1)
+const _ekw_LNKW = (1020, 128, 256)
+const _ekw_FWDW = (1015, 127, 255)
 
-@inline function _ekw_sfwd(h::DASHandle, t::Int, p::Integer, fwd::Integer)
-    base = _ekw_base(t, p)
-    if t == 1
-        _ekw_sei(h, base + 1015, fwd)
-    elseif t == 2
-        h.dps[base + 127] = Float64(fwd)
-    else
-        h.ints[base + 255] = fwd
-    end
-    return nothing
-end
+@inline _ekw_glnk(h::DASHandle, t::Int, p::Integer) = _ekw_getw(h, t, _ek_base(t, p), _ekw_LNKW)
+@inline _ekw_slnk(h::DASHandle, t::Int, p::Integer, n::Integer) =
+    _ekw_setw(h, t, _ek_base(t, p), _ekw_LNKW, n)
+@inline _ekw_gfwd(h::DASHandle, t::Int, p::Integer) = _ekw_getw(h, t, _ek_base(t, p), _ekw_FWDW)
+@inline _ekw_sfwd(h::DASHandle, t::Int, p::Integer, fwd::Integer) =
+    _ekw_setw(h, t, _ek_base(t, p), _ekw_FWDW, fwd)
 
 # ---------------------------------------------------------------------------------------
 # Integer page buffers with the 0-based offsets of the C source
@@ -285,8 +270,9 @@ Parent information of the node that holds `key` (`zzektrpi`): the parent page, t
 key of the parent (absolute), the key offset of the parent, and for the keys of the
 parent that are left and right of the node their position, their value in the parent and
 the sibling of the node on that side. All are 0 if the key is in the root; the values of
-a side are 0 if the node is the first or the last child. Precondition: `1 <= key <=`
-number of keys, else `SpiceError(:indexoutofrange)`; `:itemnotfound` for a damaged tree.
+a side are 0 if the node is the first or the last child. Throws
+`SpiceError(:indexoutofrange)` for a key outside the tree and `:itemnotfound` for a
+damaged tree.
 """
 function _ekw_trpi(h::DASHandle, tree::Integer, key::Integer)
     ints = h.ints
@@ -368,7 +354,8 @@ end
     _ekw_trki(h, tree, nodkey, n) -> key
 
 The absolute value of key number `n` of the node that holds the key `nodkey`
-(`zzektrki`). Precondition: `0 <= n <=` number of keys of the node (`:invalidindex`).
+(`zzektrki`). Throws `SpiceError(:invalidindex)` unless `0 <= n <=` number of keys of
+the node.
 """
 function _ekw_trki(h::DASHandle, tree::Integer, nodkey::Integer, n::Integer)
     _, node, noffst, _, level = _ek_trlk(h.ints, tree, nodkey)
@@ -436,7 +423,7 @@ end
 
 Insert `value` at the key `key` without balancing (`zzektrui`): the keys from `key` on
 move up by one. The result tells that the node that took the key now holds one key more
-than its capacity. Precondition: `1 <= key <= nkeys + 1`, else `:invalidindex`.
+than its capacity. Throws `SpiceError(:invalidindex)` unless `1 <= key <= nkeys + 1`.
 """
 function _ekw_trui(h::DASHandle, tree::Integer, key::Int, value::Integer)
     root = Int(tree)
@@ -595,7 +582,7 @@ function _ekw_tr13(h::DASHandle, tree::Integer)
 end
 
 "Key, data and child bases (0-based offsets) of a node: the root or another node."
-@inline _ekw_bases(isroot::Bool) =
+@inline _ek_bases(isroot::Bool) =
     isroot ? (_EK_TRKEYR, _EK_TRDATR, _EK_TRKIDR) : (_EK_TRKEYC, _EK_TRDATC, _EK_TRKIDC)
 
 @inline function _ekw_sibling_check(
@@ -638,7 +625,7 @@ function _ekw_tr23(h::DASHandle, tree::Integer, left::Int, right::Int, parent::I
     c2page = _ekw_pgri(h, right)
     ppage = _ekw_pgri(h, parent)
     root = Int(tree)
-    keybas, datbas, kidbas = _ekw_bases(parent == root)
+    keybas, datbas, kidbas = _ek_bases(parent == root)
     _ekw_sibling_check(ppage, kidbas, pkidx, left, right, parent)
     nlkeys = c1page[0]
     nrkeys = c2page[0]
@@ -720,8 +707,8 @@ end
     _ekw_trrk(h, tree, left, right, parent, pkidx, nrot) -> Nothing
 
 Rotate `nrot` keys from the node `left` through the parent key number `pkidx` into its
-right sibling `right` (`zzektrrk`); a negative `nrot` rotates to the left. Precondition:
-both nodes keep 40 to 63 keys, else `SpiceError(:bug)`. The words of a node after its
+right sibling `right` (`zzektrrk`); a negative `nrot` rotates to the left. Throws
+`SpiceError(:bug)` unless both nodes keep 40 to 63 keys. The words of a node after its
 last key are not cleared, as in CSPICE.
 """
 function _ekw_trrk(
@@ -735,7 +722,7 @@ function _ekw_trrk(
     lpage = _ekw_pgri(h, left)
     rpage = _ekw_pgri(h, right)
     ppage = _ekw_pgri(h, parent)
-    keybas, datbas, kidbas = _ekw_bases(parent == root)
+    keybas, datbas, kidbas = _ek_bases(parent == root)
     _ekw_sibling_check(ppage, kidbas, pkidx, left, right, parent)
     lnkeys = lpage[0]
     rnkeys = rpage[0]
@@ -823,7 +810,7 @@ end
     _ekw_trbn(h, tree, left, right, parent, pkidx) -> Nothing
 
 Balance the two siblings `left` and `right` so that their key counts differ by at most
-one (`zzektrbn`). Precondition: they hold 82 to 124 keys together, else `:bug`.
+one (`zzektrbn`). Throws `SpiceError(:bug)` unless they hold 82 to 124 keys together.
 """
 function _ekw_trbn(h::DASHandle, tree::Integer, left::Int, right::Int, parent::Int, pkidx::Int)
     (left == tree || right == tree) &&
@@ -846,9 +833,9 @@ end
 
 Insert `value` at the key `key` of the tree with the root page `tree` and restore the
 balance (`zzektrin`): an overflow is passed to a sibling that has room, else two
-siblings are split into three, else the root is split. Precondition: `1 <= key <=
-nkeys + 1` (`:invalidindex`). Postcondition: the tree has one key more; the values of
-the old keys `key`, `key + 1`, ... are now at `key + 1`, `key + 2`, ...
+siblings are split into three, else the root is split. The values of the old keys
+`key`, `key + 1`, ... move to `key + 1`, `key + 2`, ... Throws
+`SpiceError(:invalidindex)` unless `1 <= key <= nkeys + 1`.
 """
 function _ekw_trin(h::DASHandle, tree::Integer, key::Integer, value::Integer)
     root = Int(tree)
@@ -928,8 +915,8 @@ end
 Delete the key `key` without balancing (`zzektrud`): the keys after it move down by
 one. `trgkey` is a key of the node that lost a key (0 if the tree is empty now), and
 `underflow` tells that this node holds one key less than its lower bound. A key that
-is not in a leaf is replaced by its predecessor, which is taken from a leaf.
-Precondition: `1 <= key <= nkeys`, else `:invalidindex`.
+is not in a leaf is replaced by its predecessor, which is taken from a leaf. Throws
+`SpiceError(:invalidindex)` unless `1 <= key <= nkeys`.
 """
 function _ekw_trud(h::DASHandle, tree::Integer, key::Int)
     root = Int(tree)
@@ -1104,7 +1091,7 @@ function _ekw_tr32(
     c3page = _ekw_pgri(h, right)
     ppage = _ekw_pgri(h, parent)
     root = Int(tree)
-    keybas, datbas, kidbas = _ekw_bases(parent == root)
+    keybas, datbas, kidbas = _ek_bases(parent == root)
     psize = parent == root ? ppage[4] : ppage[0]
     (1 <= lpkidx <= psize - 1) || _ekw_bug(
         "Left parent key of MIDDLE is out of range.  " *
@@ -1196,9 +1183,9 @@ end
 Delete the key `key` of the tree with the root page `tree` and restore the balance
 (`zzektrdl`): an underflow takes keys from a sibling that has spare keys (also through
 the sibling beyond, for a node at an end), else three siblings are joined into two,
-else the two children of the root are joined into the root. Precondition: `1 <= key <=
-nkeys` (`:invalidindex`). Postcondition: the tree has one key less; the values of the
-old keys `key + 1`, `key + 2`, ... are now at `key`, `key + 1`, ...
+else the two children of the root are joined into the root. The values of the old
+keys `key + 1`, `key + 2`, ... move to `key`, `key + 1`, ... Throws
+`SpiceError(:invalidindex)` unless `1 <= key <= nkeys`.
 """
 function _ekw_trdl(h::DASHandle, tree::Integer, key::Integer)
     trgkey, undrfl = _ekw_trud(h, tree, Int(key))
@@ -1317,8 +1304,8 @@ end
 
 Load the empty tree `tree` with `values` in one step (`zzektr1s`): the keys 1 to
 `length(values)` in a tree of the smallest depth, whose subtrees of one node differ in
-size by at most one. Precondition: the tree is empty (`:nonemptytree`) and the depth
-is at most 10 (`:counttoolarge`).
+size by at most one. Throws `SpiceError(:nonemptytree)` for a tree that is not empty
+and `SpiceError(:counttoolarge)` if the depth would exceed 10.
 
 CSPICE fills every node in one page buffer, and it does not clear the buffer before it
 fills a leaf, so a leaf keeps words of the node that the buffer held before (its

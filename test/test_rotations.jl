@@ -253,7 +253,6 @@ group("2. rotations against CSPICE", Kernels.TEXT_SET_FILES..., Kernels.MOON_BPC
                 # `tkfram_` converts each angle with `convrt_`, then calls
                 # `eul2m_(angles[1], angles[2], angles[3], axes[1], axes[2], axes[3])`.
                 rad = map(x -> convrt(x, "RADIANS", "RADIANS"), ang)
-                @test Almanac._eul2m(rad..., ax...) == eul2m(rad..., ax...)
                 trig = all(SPICE.rotate(rad[i], ax[i]) == Matrix(rotate(rad[i], ax[i])) for i in 1:3)
                 trig || continue
                 ncompared += 1

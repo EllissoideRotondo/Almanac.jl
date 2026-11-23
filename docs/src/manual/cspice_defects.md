@@ -1,9 +1,8 @@
 # Defects of CSPICE N0067
 
-Almanac.jl takes CSPICE N0067 as the reference for its results. Where CSPICE has a
-defect, Almanac.jl either copies it, so that its results equal those of CSPICE, or
-fixes it, so that its results differ for the inputs that the defect concerns. This page
-lists the defects known to the maintainers in the routines that Almanac.jl ports, and
+Where CSPICE N0067 has a defect, Almanac.jl either copies it, so that its results equal
+those of CSPICE, or fixes it, so that its results differ for the inputs that the defect
+concerns. This page lists the known defects of the routines that Almanac.jl ports, and
 what Almanac.jl does about each.
 
 The defects come from the tests of Almanac.jl, from [NAIF's test suite](@ref "Run
@@ -12,12 +11,11 @@ NAIF's test suite") replayed against Almanac.jl, and from the
 of [PEPPER](https://github.com/jacobwilliams/pepper), a Fortran port of SPICELIB. Not
 listed: defects of routines that Almanac.jl does not port, and defects of the Fortran
 source that cannot occur in Julia, such as a string passed as both input and output.
-
-How to read the tables:
+In the tables:
 
 - **Where** names the routine of SPICELIB in lower case, `_c` for a routine written in
   C. Parentheses name the public calls through which the defect shows.
-- **Test** names the test group (`test/test_<group>.jl`) that covers the behaviour, or
+- **Test** names the test group (`test/test_<group>.jl`) that covers the behavior, or
   the family of NAIF's test suite (`tspice F_NAME`) whose difference from CSPICE is in
   the baseline of that suite.
 
@@ -25,12 +23,12 @@ How to read the tables:
 
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
-| `nparsd` (text kernels, SCLK kernels, TLE fields) | Converts a decimal string to a double that is not always the nearest one: the GM of the Sun in `gm_de431.tpc` comes out 5 units in the last place low | The same doubles as CSPICE. The EK query scanner fixes it (table below) | `pool` |
+| `nparsd` (text kernels, SCLK kernels, TLE fields) | Converts a decimal string to a double that is not always the nearest one: the GM of the Sun in `gm_de431.tpc` comes out 5 units in the last place low | The same doubles. The EK query scanner fixes it (below) | `pool` |
 | `zzeksemc` (`ekfind`) | The check of a query stops at the first `IS NULL` or `IS NOT NULL`: the constraints after it and the ORDER BY columns are not checked. A non-scalar column in a later constraint then makes the search signal `SPICE(BUG)` | The same check. The search compares a non-scalar column by its first element, with no error | `ek_parse` |
 | `ttrans` (`str2et`) | Day numbers are 32-bit integers and wrap: the epoch `"238409829538 JD"` gives an ET of the opposite sign | The same | `time` |
-| C casts of f2c (`(integer) x`, `i_dnnt`) | A double outside the 32-bit range, or NaN, is undefined behaviour in C: x86 gives the smallest 32-bit integer, ARM saturates | The x86 result on every machine, so it differs from CSPICE built for ARM | `time` |
+| C casts of f2c (`(integer) x`, `i_dnnt`) | A double outside the 32-bit range, or NaN, is undefined behavior in C: x86 gives the smallest 32-bit integer, ARM saturates | The x86 result on every machine, so it differs from CSPICE built for ARM | `time` |
 | `hx2dp` | The exponent -2³¹ overflows when negated, and the routine divides by 16 once instead of returning zero | The same | `math_vectors` |
-| `ckw06` | The second check of the bounds of a mini-segment compares its last epoch with the start of its interval, not with the end, so a mini-segment whose epochs end before its interval is written | The same check, so the same files | `dafwrite` |
+| `ckw06` | The second bounds check of a mini-segment compares its last epoch with the start of its interval, not the end, so a mini-segment whose epochs end before its interval is written | The same check | `dafwrite` |
 
 ## Defects that Almanac.jl fixes
 
@@ -41,8 +39,8 @@ error or the correct result.
 
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
-| `tisbod` (`sxform`, states in a body-fixed frame) | For a body whose angles are cubic (`BODY<sys>_MAX_PHASE_DEGREE = 3`, `<sys>` the ID of the system barycenter), the rate of the cubic term is divided by the square of the seconds per century instead of by the seconds per century, so the derivative block of the rotation misses that term | The exact derivative; see [Derivatives of rotations](@ref) | `frameinfo` |
-| `str2et`, `tparch` | Converting a second 60 in a time zone, or a date on the Julian calendar, turns on the range check of `tparch` for the rest of the process, so later conversions depend on history | Conversions do not change the setting of `tparch`, which belongs to the context | `time` |
+| `tisbod` (`sxform`, states in a body-fixed frame) | For cubic angles (`BODY<sys>_MAX_PHASE_DEGREE = 3`, `<sys>` the ID of the system barycenter), divides the rate of the cubic term by the square of the seconds per century in place of the seconds per century, so the derivative block misses that term | The exact derivative; see [Derivatives of rotations](@ref) | `frameinfo` |
+| `str2et`, `tparch` | Converting a second 60 in a time zone, or a Julian-calendar date, turns on the range check of `tparch` for the rest of the process, so later conversions depend on earlier ones | Conversions do not change the setting of `tparch`, which belongs to the context | `time` |
 | `ttrans` (`str2et`) | A month outside 1 to 12 in a year-month-weekday input aborts with a subscript error | `:badsubscript` | `time` |
 | `zzrefch0`, `zzfrmch0` (`pxform`, `sxform`, every query in a frame) | Frame definitions that form a cycle (frame A relative to B, B relative to A) make the search of the chain loop forever | `:framechain` after 1000 links | `rotations` |
 | `et2lst` | The short message is cut to `SPICE(CANTGETROTATIONTYPE`, without its closing parenthesis | `:cantgetrotationtype` | `frameinfo` |
@@ -72,11 +70,11 @@ error or the correct result.
 | `termpt` | The room left in the output arrays (`maxn`) goes down by n² for each half plane with n points, not by n, so with a DSK method `OUTOFROOM` can come before `maxn` points are found | The room goes down by n | `geom_limbterm` |
 | `zzgfocin` (`gfoclt`, `gfocce`, `occult`) | The surface names given for the back target are translated to IDs as surfaces of the front target. Surfaces given by number are not affected | The surfaces of the back target | `geom_occult`, `gf_occult` |
 | `dskxsi` | Returns the plate of the last segment searched that had an intercept, which need not be the segment of the returned point | The plate of the returned point | `dsk` |
-| `dskxsi`, `dskxv` | A call whose frame is not centred at the target (`INVALIDFRAME`) keeps the ID of that frame. The next call with the same target and the frame of the last call that passed then uses the ID of the failed frame, until the kernel pool changes: the ray is taken in the wrong frame, or the call fails if that frame has no orientation data | Each call uses the frame it names | `dsk`, `tspice F_DSKXSI` |
+| `dskxsi`, `dskxv` | A call whose frame is not centered at the target (`INVALIDFRAME`) keeps the ID of that frame; until the pool changes, the next call with the same target and the frame of the last call that passed uses the failed frame, so the ray is in the wrong frame, or the call fails if that frame has no orientation data | Each call uses the frame it names | `dsk`, `tspice F_DSKXSI` |
 | `dski02` | For item 1 (the number of vertices) with `start > 1`, gives `INDEXOUTOFRANGE`, `DASNOSUCHADDRESS` or no error, depending on earlier calls | `:indexoutofrange` | `dsk` |
 | `dskmi2` | Does not check that the vertex indices are in 1 to `nv` | `:badvertexindex` | `dsk` |
 | `zzmkspin`, `dskw02` (`dskmi2`, `dskw02`) | The fine voxel count is the 32-bit product of the three grid extents, so a grid of more than 2³¹ voxels can wrap to a count that passes the check against 100000000: 1000 × 1000 × 4295 voxels pass as 32704 | The product in 64 bits: `:valueoutofrange` | `dsk` |
-| `zzdsksba` (`dskxsi`, `dskxv`, `srfnrm`, `latsrf` and the geometry calls with a DSK shape) | The segment table of a body looks up the SPK offset of every segment whose frame is not centred on the body, also of segments that no search uses (other surfaces, other times): missing ephemeris data for one of them makes every call for the body fail | The offset of a segment is looked up when a search uses it | `dsk` |
+| `zzdsksba` (`dskxsi`, `dskxv`, `srfnrm`, `latsrf` and the geometry calls with a DSK shape) | The segment table of a body looks up the SPK offset of every segment whose frame is not centered on the body, also of segments that no search uses (other surfaces, other times): missing ephemeris data for one of them makes every call for the body fail | The offset of a segment is looked up when a search uses it | `dsk` |
 | `zzdsksph`, `zzdskbux`, `zzdskbun` (the same calls) | A segment whose frame is that of the segment examined before it reuses the offset of that segment, which is taken at the middle of the coverage of that segment, not of its own. In `zzdskbux` this affects the test of which segments the ray meets, so a ray can miss a segment that it crosses; in `zzdskbun` a point on a segment can be found in no segment (`POINTNOTINSEGMENT`) | The offset of each segment | `dsk` |
 | `zzgflong` (`gfposc`, `gfsubc`, `gfsntc`) | For ABSMIN or ABSMAX with `adjust` on a longitude or right ascension, reads the first interval of an empty result window | Returns the empty window | `gf_posc` |
 | `gfevnt` | A blank quantity name matches one of the two blank entries of the table of quantities, whose search does nothing: the call returns with no error and the result is left as it was | `:notrecognized` | `gf_quantities` |
@@ -89,9 +87,9 @@ error or the correct result.
 
 ### EK queries
 
-The first five rows change the rows that `ekfind` returns; its docstring states the
-cases. The tests reproduce each of the five with a switch of the search that is not
-part of the API, to show that every difference from CSPICE comes from them.
+The first five rows change the rows that `ekfind` returns. The tests reproduce each of
+the five with an internal switch of the search, so that every difference from CSPICE is
+traced to one of them.
 
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|

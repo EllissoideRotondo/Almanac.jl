@@ -26,12 +26,9 @@ end
 `zzasryel`: the smallest (`domin`) or the largest angular separation between the ray
 from `vertex` along `dir` and the ellipse `ellips`, and the point of the ellipse where
 it occurs. The angle is negative if the ray goes through the plane region that the
-ellipse bounds.
-
-Contract: the vertex is not in the plane of the ellipse (`SpiceError(:degeneratecase)`).
-The search is the one of CSPICE: a scan of 400 points of the ellipse (320 for a minimum
-with the ray outside of the ellipse), then a golden section search of at most 101 steps
-to an interval of `1e-9` radians.
+ellipse bounds. Throws `SpiceError(:degeneratecase)` if the vertex is in the plane of
+the ellipse. The search is that of CSPICE: a scan of 400 points of the ellipse (320 for
+a minimum with the ray outside of the ellipse), then a golden section search.
 """
 function _geo_asryel(
         domin::Bool, ellips::SpiceEllipse{Float64}, vertex::Vec3{Float64},
@@ -135,11 +132,9 @@ end
 `zzocced`: the occultation code of two ellipsoids seen from `viewpt`. The columns of
 `semax1` and `semax2` are the semi-axis vectors. The code is 0 (no occultation), ±1
 (partial), ±2 (annular) or ±3 (total); it is negative if the second ellipsoid is in
-front of the first one.
-
-Contract: positive axis lengths (`SpiceError(:badaxislength)`), orthogonal axes
-(`:notarotation`), and a view point outside of both ellipsoids, which do not overlap
-(`:notdisjoint`).
+front of the first one. Throws `SpiceError` for an axis length that is not positive
+(`:badaxislength`), axes that are not orthogonal (`:notarotation`), and a view point
+inside an ellipsoid or ellipsoids that overlap (`:notdisjoint`).
 """
 function _geo_occed(
         viewpt::Vec3{Float64}, centr1::Vec3{Float64}, semax1::Mat3{Float64},
@@ -298,7 +293,7 @@ end
 @inline function _geo_occ_frame(ks::KernelSet, frame::NameOrID, id::Int32)
     frame isa AbstractString && all(==(' '), frame) &&
         _geo_occ_bad_frame(frame, id, "is blank; an extended target needs a frame")
-    ffrmid = _geo_namfrm(ks, frame)
+    ffrmid = _frame_code(ks, frame)
     center, _, found = _geo_frinfo(ks, ffrmid)
     found || _geo_occ_bad_frame(frame, id, "is not recognized")
     center == id || _geo_occ_bad_frame(frame, id, "is not centered on the target")
@@ -396,12 +391,12 @@ end
 @inline function _geo_occ_extent(ks::KernelSet, b::_GeoOccBody, frame, srflst)
     b.kind == _GEO_OCC_POINT && return (0.0, 0.0, 0.0), 0.0, 0.0, Int32(0)
     if b.kind == _GEO_OCC_ELLIPSOID
-        rad = _geo_radii(ks, b.id)
+        rad = _positive_radii(ks, b.id)
         ffrm = _geo_occ_frame(ks, frame, b.id)
         return rad, min(min(rad[1], rad[2]), rad[3]), max(max(rad[1], rad[2]), rad[3]), ffrm
     end
     ffrm = _geo_occ_frame(ks, frame, b.id)
-    mn, mx = _geo_dsksph(ks, b.id, srflst)
+    mn, mx = _dsk_body_sph(ks, b.id, srflst)
     return (0.0, 0.0, 0.0), mn, mx, ffrm
 end
 
@@ -409,7 +404,7 @@ end
 @inline function _geo_occ_parse(ks::KernelSet, targ::NameOrID, shape::AbstractString, what)
     shap = _geo_occ_upper(shape)
     shap == "POINT" && return _GeoOccBody(Int32(0), _GEO_OCC_POINT, _geo_ell(0x00))
-    id = _geo_body(ks, targ, what)
+    id = _body_id(ks, targ, what)
     m = _geo_method(ks, id, shap)
     kind = m.dsk ? _GEO_OCC_DSK : (shap == "ELLIPSOID" || _eqstr(shap, "ELLIPSOID")) ?
         _GEO_OCC_ELLIPSOID : 0x00
@@ -424,9 +419,9 @@ function _geo_occult(
     _plain_epoch(et, "occult")
     b1 = _geo_occ_parse(ks, targ1, shape1, "first target")
     b2 = _geo_occ_parse(ks, targ2, shape2, "second target")
-    b1 = _GeoOccBody(_geo_body(ks, targ1, "first target"), b1.kind, b1.m)
-    b2 = _GeoOccBody(_geo_body(ks, targ2, "second target"), b2.kind, b2.m)
-    obs = _geo_body(ks, obsrvr, "observer")
+    b1 = _GeoOccBody(_body_id(ks, targ1, "first target"), b1.kind, b1.m)
+    b2 = _GeoOccBody(_body_id(ks, targ2, "second target"), b2.kind, b2.m)
+    obs = _body_id(ks, obsrvr, "observer")
     e = Float64(check_epoch(et))
     # `zzgfocin` makes its body and shape checks before it reads the correction.
     c1 = _geo_occ_checked(ks, tols, b1, shape1, frame1, b2, shape2, frame2, obs, abcorr, e)
@@ -456,13 +451,6 @@ end
     (front.kind == _GEO_OCC_DSK && back.kind != _GEO_OCC_POINT) ||
     (back.kind == _GEO_OCC_DSK && front.kind != _GEO_OCC_POINT)
 
-"The correction of `zzgfocin`: `abcorr` without stellar aberration."
-@inline function _geo_occ_corr(abcorr)
-    full = _geo_abcorr(abcorr)
-    return full.uselt ?
-        Aberration(; uselt = true, converged = full.converged, transmit = full.transmit) : full
-end
-
 function _geo_occ_roles(
         ks::KernelSet, tols::DSKTolerances, front::_GeoOccBody, fframe,
         back::_GeoOccBody, bframe, obs::Int32, abcorr, et::Float64
@@ -480,7 +468,7 @@ function _geo_occ_roles(
             :invalidshapecombo, "a target with DSK data needs a point as the other target"
         )
     )
-    corr = _geo_occ_corr(abcorr)
+    corr = _geo_lt_only(Aberration(abcorr))
     return _geo_occ_eval(ks, tols, front, fframe, back, bframe, bsrf, obs, corr, et)
 end
 

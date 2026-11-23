@@ -45,11 +45,8 @@ end
 
 `zzspkflt`: the state of the fixed target `f` relative to an observer with the
 barycentric state `(robs, vobs)` at `et`, in the inertial frame `iref`, corrected for
-light time as `corr` says, the light time and its rate.
-
-Contract: as `spkltc`, with the barycentric state of the target taken from
-`_geo_cvx_ssb`: `LT` forms make one iteration, `CN` forms at most five and stop when
-the light time changes by less than `1e-17 * max(1, |epoch|)`.
+light time as `corr` says, the light time and its rate. The iteration is that of
+`spkltc`, with the barycentric state of the target from `_geo_cvx_ssb`.
 """
 function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration, robs, vobs)
     rt, vt = _geo_cvx_ssb(ks, f, et, iref)
@@ -84,13 +81,13 @@ function _geo_flt(ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration
 end
 
 """
-    _geo_fat(ks, f, et, iref, corr, obs) -> (; r, v, lt, dlt)
+    _geo_fa(ks, f::_GeoFixed, et, iref, corr, obs) -> (; r, v, lt, dlt)
 
 `zzspkfat` with `zzspkfap`: the state of the fixed target `f` relative to the body
 `obs` in the inertial frame `iref`, corrected for light time and stellar aberration.
 The acceleration of the observer is the central difference of its velocity over ±1 s.
 """
-@inline function _geo_fat(
+@inline function _geo_fa(
         ks::KernelSet, f::_GeoFixed, et, iref::Int32, corr::Aberration,
         obs::Int32
     )
@@ -102,13 +99,13 @@ The acceleration of the observer is the central difference of its velocity over 
 end
 
 """
-    _geo_fao(ks, targ, et, iref, corr, f) -> (; r, v, lt, dlt)
+    _geo_fa(ks, targ, et, iref, corr, f::_GeoFixed) -> (; r, v, lt, dlt)
 
 `zzspkfao`: the state of the body `targ` relative to the fixed observer `f` in the
 inertial frame `iref`, corrected as `corr` says (`spkaps` with the barycentric state
 of the observer; its acceleration is the central difference of the velocity over ±1 s).
 """
-@inline function _geo_fao(
+@inline function _geo_fa(
         ks::KernelSet, targ::Int32, et, iref::Int32, corr::Aberration,
         f::_GeoFixed
     )
@@ -138,67 +135,58 @@ end
     return center, class
 end
 
-"""
-    _geo_fzo(ks, targ, et, ref, corr, f) -> (state, lt)
+# The geometric state, and the light time and its rate between the observer and the
+# center `center` of a frame, for `_geo_fz`: one method for a fixed observer
+# (`zzspkfzo`) and one for a fixed target (`zzspkfzt`).
+@inline function _geo_fz_geometric(ks::KernelSet, targ::Int32, et, ref::Int32, f::_GeoFixed)
+    ro, vo = _geo_cvx(ks, f, et, ref)
+    rt, vt = spk_jet(ks, targ, et, ref, f.ctr, Val(1))
+    r = rt - ro
+    return vcat(r, vt - vo), _m_norm(r) / CLIGHT
+end
+@inline function _geo_fz_geometric(ks::KernelSet, f::_GeoFixed, et, ref::Int32, obs::Int32)
+    rt, vt = _geo_cvx(ks, f, et, ref)
+    rc, vc = spk_jet(ks, f.ctr, et, ref, obs, Val(1))
+    r = rt + rc
+    return vcat(r, vt + vc), _m_norm(r) / CLIGHT
+end
 
-`zzspkfzo`: the state of the body `targ` relative to the fixed observer `f` in the
-frame `ref`. A frame that is not inertial is evaluated at the epoch corrected for the
-light time between the observer and the center of the frame.
-"""
-function _geo_fzo(ks::KernelSet, targ::Int32, et, ref::Int32, corr::Aberration, f::_GeoFixed)
-    if corr.geometric
-        ro, vo = _geo_cvx(ks, f, et, ref)
-        rt, vt = spk_jet(ks, targ, et, ref, f.ctr, Val(1))
-        r = rt - ro
-        return vcat(r, vt - vo), _m_norm(r) / CLIGHT
-    end
-    center, class = _geo_frame_class(ks, ref)
-    if class == Int32(1)
-        q = _geo_fao(ks, targ, et, ref, corr, f)
-        return vcat(q.r, q.v), q.lt
-    end
-    q = _geo_fao(ks, targ, et, Int32(1), corr, f)
-    ltcent = q.lt
-    dltctr = q.dlt
-    if center != targ
-        robs, vobs = _geo_cvx_ssb(ks, f, et, Int32(1))
-        qc = _ltc(ks, center, et, Int32(1), corr, robs, vobs)
-        ltcent = qc.lt
-        dltctr = qc.dlt
-    end
-    s = _ltsign(corr)
-    R, dR = frame_jet(ks, Int32(1), ref, et + s * ltcent, Val(1))
-    return _geo_corsxf(R, dR, 1 + s * dltctr, q.r, q.v), q.lt
+@inline function _geo_fz_ltcent(
+        ks::KernelSet, targ::Int32, et, corr::Aberration, f::_GeoFixed,
+        center::Int32, q
+    )
+    center == targ && return q.lt, q.dlt
+    robs, vobs = _geo_cvx_ssb(ks, f, et, Int32(1))
+    qc = _ltc(ks, center, et, Int32(1), corr, robs, vobs)
+    return qc.lt, qc.dlt
+end
+@inline function _geo_fz_ltcent(
+        ks::KernelSet, ::_GeoFixed, et, corr::Aberration, obs::Int32,
+        center::Int32, q
+    )
+    center == obs && return zero(q.lt), zero(q.dlt)
+    robs, vobs = _ssb(ks, obs, et, Int32(1))
+    qc = _ltc(ks, center, et, Int32(1), corr, robs, vobs)
+    return qc.lt, qc.dlt
 end
 
 """
-    _geo_fzt(ks, f, et, ref, corr, obs) -> (state, lt)
+    _geo_fz(ks, targ, et, ref, corr, obs) -> (state, lt)
 
-`zzspkfzt`: the state of the fixed target `f` relative to the body `obs` in the frame
-`ref`. A frame that is not inertial is evaluated at the epoch corrected for the light
-time between the observer and the center of the frame.
+`zzspkfzo` (the observer `obs` is a `_GeoFixed`) or `zzspkfzt` (the target `targ` is
+one): the state of `targ` relative to `obs` in the frame `ref`. A frame that is not
+inertial is evaluated at the epoch corrected for the light time between the observer
+and the center of the frame.
 """
-function _geo_fzt(ks::KernelSet, f::_GeoFixed, et, ref::Int32, corr::Aberration, obs::Int32)
-    if corr.geometric
-        rt, vt = _geo_cvx(ks, f, et, ref)
-        rc, vc = spk_jet(ks, f.ctr, et, ref, obs, Val(1))
-        r = rt + rc
-        return vcat(r, vt + vc), _m_norm(r) / CLIGHT
-    end
+function _geo_fz(ks::KernelSet, targ, et, ref::Int32, corr::Aberration, obs)
+    corr.geometric && return _geo_fz_geometric(ks, targ, et, ref, obs)
     center, class = _geo_frame_class(ks, ref)
     if class == Int32(1)
-        q = _geo_fat(ks, f, et, ref, corr, obs)
+        q = _geo_fa(ks, targ, et, ref, corr, obs)
         return vcat(q.r, q.v), q.lt
     end
-    q = _geo_fat(ks, f, et, Int32(1), corr, obs)
-    ltcent = zero(q.lt)
-    dltctr = zero(q.dlt)
-    if center != obs
-        robs, vobs = _ssb(ks, obs, et, Int32(1))
-        qc = _ltc(ks, center, et, Int32(1), corr, robs, vobs)
-        ltcent = qc.lt
-        dltctr = qc.dlt
-    end
+    q = _geo_fa(ks, targ, et, Int32(1), corr, obs)
+    ltcent, dltctr = _geo_fz_ltcent(ks, targ, et, corr, obs, center, q)
     s = _ltsign(corr)
     R, dR = frame_jet(ks, Int32(1), ref, et + s * ltcent, Val(1))
     return _geo_corsxf(R, dR, 1 + s * dltctr, q.r, q.v), q.lt
@@ -240,53 +228,29 @@ end
 )
 
 @inline function _geo_known_frame(ks::KernelSet, ref::NameOrID)
-    id = _geo_namfrm(ks, ref)
+    id = _frame_code(ks, ref)
     _geo_frinfo(ks, id)[3] || _geo_unknown_frame(ref)
     return id
 end
 
 """
-    _geo_cvo(ks, trgcde, et, orfcde, evltyp, corr, f) -> (state, lt)
+    _geo_cv(ks, targ, et, orfcde, evltyp, corr, obs) -> (state, lt)
 
-The computation of `spkcvo` after the checks: the state of the body `trgcde` relative
-to the fixed observer `f` in the frame `orfcde`, evaluated at the locus `evltyp`.
+The computation of `spkcvo` (the observer `obs` is a `_GeoFixed`) or `spkcvt` (the
+target `targ` is one) after the checks: the state of `targ` relative to `obs` in the
+frame `orfcde`, evaluated at the locus `evltyp`.
 """
-function _geo_cvo(
-        ks::KernelSet, trgcde::Int32, et, orfcde::Int32, evltyp::Int,
-        corr::Aberration, f::_GeoFixed
+function _geo_cv(
+        ks::KernelSet, targ, et, orfcde::Int32, evltyp::Int, corr::Aberration, obs
     )
-    (!corr.uselt || evltyp == _GEO_AT_CENTER) && return _geo_fzo(ks, trgcde, et, orfcde, corr, f)
+    (!corr.uselt || evltyp == _GEO_AT_CENTER) && return _geo_fz(ks, targ, et, orfcde, corr, obs)
     if evltyp == _GEO_AT_OBSERVER
-        st, lt = _geo_fzo(ks, trgcde, et, Int32(1), corr, f)
+        st, lt = _geo_fz(ks, targ, et, Int32(1), corr, obs)
         orfcde == Int32(1) && return st, lt
-        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _geo_pv(st))
+        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _m_pv(st))
         return vcat(pr, pv), lt
     end
-    q = _geo_fao(ks, trgcde, et, Int32(1), corr, f)
-    orfcde == Int32(1) && return vcat(q.r, q.v), q.lt
-    s = _ltsign(corr)
-    R, dR = frame_jet(ks, Int32(1), orfcde, et + s * q.lt, Val(1))
-    return _geo_corsxf(R, dR, 1 + s * q.dlt, q.r, q.v), q.lt
-end
-
-"""
-    _geo_cvt(ks, f, et, orfcde, evltyp, corr, obscde) -> (state, lt)
-
-The computation of `spkcvt` after the checks: the state of the fixed target `f`
-relative to the body `obscde` in the frame `orfcde`, evaluated at the locus `evltyp`.
-"""
-function _geo_cvt(
-        ks::KernelSet, f::_GeoFixed, et, orfcde::Int32, evltyp::Int,
-        corr::Aberration, obscde::Int32
-    )
-    (!corr.uselt || evltyp == _GEO_AT_CENTER) && return _geo_fzt(ks, f, et, orfcde, corr, obscde)
-    if evltyp == _GEO_AT_OBSERVER
-        st, lt = _geo_fzt(ks, f, et, Int32(1), corr, obscde)
-        orfcde == Int32(1) && return st, lt
-        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _geo_pv(st))
-        return vcat(pr, pv), lt
-    end
-    q = _geo_fat(ks, f, et, Int32(1), corr, obscde)
+    q = _geo_fa(ks, targ, et, Int32(1), corr, obs)
     orfcde == Int32(1) && return vcat(q.r, q.v), q.lt
     s = _ltsign(corr)
     R, dR = frame_jet(ks, Int32(1), orfcde, et + s * q.lt, Val(1))
@@ -306,26 +270,19 @@ in the caller.
         ks::KernelSet, abcorr::AbcorrArg, ctr::NameOrID, ctrwhat::String,
         body::NameOrID, bodywhat::String, outref::NameOrID, refloc::AbstractString
     )
-    corr = _geo_abcorr(abcorr)
-    ctrcde = _geo_body(ks, ctr, ctrwhat)
-    bodcde = _geo_body(ks, body, bodywhat)
-    orfcde = _geo_namfrm(ks, outref)
+    corr = Aberration(abcorr)
+    ctrcde = _body_id(ks, ctr, ctrwhat)
+    bodcde = _body_id(ks, body, bodywhat)
+    orfcde = _frame_code(ks, outref)
     orfcde == Int32(0) && _geo_unknown_frame(outref)
     evltyp = _geo_refloc(refloc)
     return corr, ctrcde, bodcde, orfcde, evltyp
 end
 
-@inline _geo_pv(s::SVector{6}) = SVector(s[1], s[2], s[3]), SVector(s[4], s[5], s[6])
-
 @inline function _geo_state(s::AbstractVector)
     length(s) == 6 || throw(SpiceError(:badarg, "a state vector must have 6 elements"))
     @inbounds return Vec3{Float64}(s[begin], s[begin + 1], s[begin + 2]),
         Vec3{Float64}(s[begin + 3], s[begin + 4], s[begin + 5])
-end
-
-@inline function _geo_pos(p::AbstractVector)
-    length(p) == 3 || throw(SpiceError(:badarg, "a position vector must have 3 elements"))
-    @inbounds return Vec3{Float64}(p[begin], p[begin + 1], p[begin + 2])
 end
 
 # --- public interface -------------------------------------------------------------------
@@ -376,7 +333,7 @@ function spkcvo(
         _geo_cv_args(ks, abcorr, obsctr, "observer center", target, "target", outref, refloc)
     pos, vel = _geo_state(obssta)
     f = _GeoFixed(pos, vel, Float64(obsepc), ctrcde, _geo_known_frame(ks, obsref))
-    return _geo_cvo(ks, trgcde, check_epoch(et), orfcde, evltyp, corr, f)
+    return _geo_cv(ks, trgcde, check_epoch(et), orfcde, evltyp, corr, f)
 end
 
 """
@@ -401,8 +358,8 @@ function spkcpo(
     )
     corr, ctrcde, trgcde, orfcde, evltyp =
         _geo_cv_args(ks, abcorr, obsctr, "observer center", target, "target", outref, refloc)
-    f = _GeoFixed(_geo_pos(obspos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, obsref))
-    return _geo_cvo(ks, trgcde, check_epoch(et), orfcde, evltyp, corr, f)
+    f = _GeoFixed(_dsk_vec3(obspos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, obsref))
+    return _geo_cv(ks, trgcde, check_epoch(et), orfcde, evltyp, corr, f)
 end
 
 """
@@ -433,7 +390,7 @@ function spkcvt(
         _geo_cv_args(ks, abcorr, trgctr, "target center", obsrvr, "observer", outref, refloc)
     pos, vel = _geo_state(trgsta)
     f = _GeoFixed(pos, vel, Float64(trgepc), ctrcde, _geo_known_frame(ks, trgref))
-    return _geo_cvt(ks, f, check_epoch(et), orfcde, evltyp, corr, obscde)
+    return _geo_cv(ks, f, check_epoch(et), orfcde, evltyp, corr, obscde)
 end
 
 """
@@ -458,8 +415,8 @@ function spkcpt(
     )
     corr, ctrcde, obscde, orfcde, evltyp =
         _geo_cv_args(ks, abcorr, trgctr, "target center", obsrvr, "observer", outref, refloc)
-    f = _GeoFixed(_geo_pos(trgpos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, trgref))
-    return _geo_cvt(ks, f, check_epoch(et), orfcde, evltyp, corr, obscde)
+    f = _GeoFixed(_dsk_vec3(trgpos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, trgref))
+    return _geo_cv(ks, f, check_epoch(et), orfcde, evltyp, corr, obscde)
 end
 
 # Context and default-context forms.

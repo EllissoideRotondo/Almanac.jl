@@ -17,9 +17,8 @@
     _daf_write_at!(h, bytes, offset) -> Nothing
 
 Write `bytes` (bytes or doubles, as they are in memory) at the 0-based byte `offset` of
-the file of `h` and flush. A gap between
-the end of the file and `offset` is filled with zero bytes. Throws
-`SpiceError(:dafwritefail)` if the system reports an error.
+the file of `h` and flush. A gap between the end of the file and `offset` is filled with
+zero bytes. Throws `SpiceError(:dafwritefail)` if the system reports an error.
 """
 function _daf_write_at!(
         h::DAFHandle, bytes::Union{Vector{UInt8}, Vector{Float64}},
@@ -35,7 +34,6 @@ function _daf_write_at!(
         write(h.io, bytes)
         flush(h.io)
     catch e
-        e isa SpiceError && rethrow()
         throw(
             SpiceError(
                 :dafwritefail,
@@ -53,7 +51,7 @@ function _daf_write_drec!(h::DAFHandle, recno::Integer, rec::Vector{Float64})
     return nothing
 end
 
-"Write the 1000 characters `rec` at the start of record `recno`, as `dafwcr` (bytes 1001 to 1024 are not touched)."
+"Write the 1000 characters `rec` at the start of record `recno`, as `dafwcr`."
 function _daf_write_crec!(h::DAFHandle, recno::Integer, rec::Vector{UInt8})
     @assert length(rec) == _DAF_CRECLEN
     _daf_write_at!(h, rec, (Int(recno) - 1) * _DAF_RECLEN)
@@ -65,7 +63,6 @@ end
 
 Write `data` at the DAF addresses `addr : addr + length(data) - 1`, as `dafwda`, and
 fill the rest of the last record with zeros if the file ends inside it.
-Postcondition: the file length is a whole number of records.
 """
 function _daf_write_data!(h::DAFHandle, addr::Integer, data::Vector{Float64})
     isempty(data) && return nothing
@@ -101,7 +98,7 @@ function _daf_write_filerecord!(
     return nothing
 end
 
-"The code units of `s`, cut or padded with blanks to exactly `n` bytes (Fortran character assignment)."
+"Return the code units of `s`, cut or padded with blanks to `n` bytes, as a Fortran assignment."
 function _daf_padded(s::AbstractString, n::Int)
     out = fill(UInt8(' '), n)
     cu = codeunits(String(s))
@@ -109,7 +106,7 @@ function _daf_padded(s::AbstractString, n::Int)
     return out
 end
 
-"Number of code units of `s` without trailing blanks, as `lastnb`."
+# `lastnb`: the number of code units of `s` without trailing blanks.
 function _daf_lastnb(s::AbstractString)
     cu = codeunits(String(s))
     n = length(cu)
@@ -182,14 +179,12 @@ function dafonw(
 end
 
 """
-    _daf_new_checks(who, ftype, nd, ni, resv) -> String
+    _daf_check_ftype(who, ftype) -> String
 
-Contract: the checks of `dafonw` on its inputs other than the path, in the order of
-SPICELIB; returns the file type without its blanks.
+The checks of `dafonw` and `dasonw` on the file type of a new file: return it without
+its blanks, or throw `SpiceError(:blankfiletype)` or `:illegalcharacter`.
 """
-function _daf_new_checks(
-        who::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer, resv::Integer
-    )
+function _daf_check_ftype(who::AbstractString, ftype::AbstractString)
     isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "$who: the file type is blank"))
     ttype = String(strip(ftype, ' '))
     all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
@@ -198,6 +193,19 @@ function _daf_new_checks(
             "$who: the file type contains nonprinting characters"
         )
     )
+    return ttype
+end
+
+"""
+    _daf_new_checks(who, ftype, nd, ni, resv) -> String
+
+Make the checks of `dafonw` on its inputs other than the path, in the order of SPICELIB,
+and return the file type without its blanks.
+"""
+function _daf_new_checks(
+        who::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer, resv::Integer
+    )
+    ttype = _daf_check_ftype(who, ftype)
     (0 <= nd <= 124) || throw(SpiceError(:dafinvalidparams, "$who: ND was $nd, should be in range [0,124]"))
     (2 <= ni <= 250) || throw(SpiceError(:dafinvalidparams, "$who: NI was $ni, should be in range [2,250]"))
     _daf_sumsize(nd, ni) <= 125 || throw(
@@ -218,9 +226,8 @@ end
 """
     _daf_init!(h, ttype, nd, ni, ifname, resv) -> Nothing
 
-Contract: write the records of a new DAF into the empty handle `h` as `dafonw` of
-SPICELIB does: the file record, `resv` reserved (comment) records, the first summary
-record and the first name record.
+Write the records of a new DAF into the empty handle `h`, as `dafonw` of SPICELIB: the
+file record, `resv` reserved records, the first summary record and the first name record.
 """
 function _daf_init!(
         h::DAFHandle, ttype::AbstractString, nd::Integer, ni::Integer,
@@ -253,13 +260,14 @@ end
 """
     dafops(ftype, nd, ni, ifname, resv) -> DAFHandle
 
-Open a new DAF that lives in memory, for writing: [`dafonw`](@ref) without the path.
-No file is made at any time. The handle takes every write call and every read call of a
-DAF handle, and [`furnsh`](@ref) loads its contents as a kernel. Its bytes are those that
-`dafonw` and the same write calls put in a file, so [`save_kernel`](@ref) can write them
-to one. [`dafcls`](@ref) discards them. `furnsh` loads a handle of the type `"SPK"`,
-`"CK"` or `"PCK"` (with `nd = 2` and `ni = 6`, `6`, `5`); [`spkops`](@ref), [`ckops`](@ref)
-and [`pckops`](@ref) make those. This call has no CSPICE counterpart.
+Open a new DAF in memory for writing: [`dafonw`](@ref) without a file. This call has no
+CSPICE counterpart.
+
+The handle takes every read and write call of a DAF handle. Its bytes are those that
+`dafonw` and the same write calls put in a file; [`save_kernel`](@ref) writes them to a
+file and [`dafcls`](@ref) discards them. [`furnsh`](@ref) loads a handle of the type
+`"SPK"`, `"CK"` or `"PCK"` (with `nd = 2` and `ni = 6`, `6`, `5`), as [`spkops`](@ref),
+[`ckops`](@ref) and [`pckops`](@ref) make them.
 
 Throws the errors of [`dafonw`](@ref) other than those on the path.
 
@@ -280,12 +288,10 @@ end
 Open the existing DAF file `path` for writing, as
 [`dafopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafopw_c.html), to add arrays or comments.
 
-The file must have the native byte order, and no open handle of this process may have
-it open, for read or for write, under any path. After the call, [`dafopr`](@ref) can
-still open the file for read, where CSPICE refuses; a search on that handle finds the
-changes made before the search began. A kernel that `furnsh` loaded does not count as open,
-where CSPICE refuses. A context that loaded the file sees the arrays added later only
-after it loads the file again, once the handle is closed.
+The file must have the native byte order, and no other handle may have it open.
+[`dafopr`](@ref) can still open the file for read, and a kernel that [`furnsh`](@ref)
+loaded does not count as open; CSPICE refuses both. A context that loaded the file sees
+the arrays added later only after it loads the file again.
 
 Throws the `SpiceError` kinds of [`dafopr`](@ref), `:unsupportedbff` if the file has the
 other byte order, `:fileopenconflict` if another handle has the file open, and
@@ -507,13 +513,10 @@ Replace the packed summary of the current array of the search on `handle` with `
 change is on disk when the call returns.
 
 Throws `SpiceError(:nocurrentarray)` if the search has no current array,
-`:dafillegwrite` if the file is open for read (the kind of `dafws` of SPICELIB and
-CSPICE, which find the current array first; [`dafrs`](@ref) throws
-`:dafinvalidaccess`), and `:dafinvalidparams` if `sum` has fewer doubles than a summary
-of the file. A call that throws does not change the file.
+`:dafillegwrite` if the file is open for read, and `:dafinvalidparams` if `sum` has fewer
+doubles than a summary of the file. A call that throws does not change the file.
 """
 function dafws(h::DAFHandle, sum::AbstractVector{<:Real})
-    _daf_check_open(h, "dafws")
     _daf_check_current(h, "dafws")
     h.writable || throw(
         SpiceError(:dafillegwrite, "dafws: the DAF $(h.path) is open for read; its summaries cannot be written")
@@ -594,11 +597,10 @@ end
 """
     _daf_add_reserved!(h, resv) -> Nothing
 
-Add `resv` reserved records after the existing ones, as `dafarr`: every record from
-the first summary record on moves down by `resv` records, the links of the summary
-records, the pointers of the file record and the addresses in all summaries are
-adjusted, and the new reserved records are filled with nulls. (Where SPICELIB writes
-an uninitialized buffer to extend the file, this routine writes zeros.)
+Add `resv` reserved records after the existing ones, as `dafarr`: the records from the
+first summary record on move down by `resv` records, with their links, the pointers of
+the file record and the addresses of the summaries. The new reserved records hold nulls;
+where SPICELIB extends the file with an uninitialized buffer, this routine writes zeros.
 """
 function _daf_add_reserved!(h::DAFHandle, resv::Int)
     resv < 1 && return nothing

@@ -48,30 +48,7 @@ function SpiceEllipse(center::SVector{3}, semimajor::SVector{3}, semiminor::SVec
     return SpiceEllipse{T}(center, semimajor, semiminor)
 end
 
-@inline _m_abs(x::Real) = primal(x) < 0.0 ? -x : x
-
-@inline _m_max(x, y) = primal(y) > primal(x) ? y : x
-
-@noinline _m_badaxis(a, b, c) = throw(
-    SpiceError(
-        :badaxislength,
-        "the ellipsoid semi-axis lengths must be positive; they are $(primal(a)), $(primal(b)), $(primal(c))"
-    )
-)
-
-@inline _m_axes_ok(a, b, c) = primal(a) > 0.0 && primal(b) > 0.0 && primal(c) > 0.0
-
 # --- surface normal, ray intercept, scaling to the surface ------------------------------
-
-@inline function _m_surfnm(a, b, c, point::SVector{3})
-    _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
-    m = primal(a) <= primal(b) ? a : b
-    m = primal(m) <= primal(c) ? m : c
-    a1 = m / a
-    b1 = m / b
-    c1 = m / c
-    return _m_hat(SVector(point[1] * (a1 * a1), point[2] * (b1 * b1), point[3] * (c1 * c1)))
-end
 
 """
     surfnm(a, b, c, point) -> SVector{3}
@@ -94,35 +71,6 @@ See also [`ednmpt`](@ref), [`nearpt`](@ref).
 """
 surfnm(a::Real, b::Real, c::Real, point::AbstractVector) =
     _m_surfnm(_m_f(a), _m_f(b), _m_f(c), _m_v3(point))
-
-"`(found, point)` of `surfpt_`; the point is zero when nothing is found."
-@inline function _m_surfpt(positn::SVector{3}, u::SVector{3}, a, b, c)
-    _m_iszero(u) && throw(SpiceError(:zerovector, "the ray direction is the zero vector"))
-    _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
-    x = SVector(u[1] / a, u[2] / b, u[3] / c)
-    y = SVector(positn[1] / a, positn[2] / b, positn[3] / c)
-    # In the scaled space the ellipsoid is the unit sphere; p is the point of the
-    # line that is nearest to the center.
-    p = _m_perp(y, x, false)
-    yproj = y - p
-    ymag = _m_norm(y)
-    pmag = _m_norm(p)
-    ux = _m_hat(x)
-    none = zero(p)
-    sign = 1.0
-    if primal(ymag) > 1.0
-        primal(pmag) > 1.0 && return false, none
-        primal(_m_dot(yproj, x)) > 0.0 && return false, none
-        primal(pmag) == 1.0 && return true, SVector(p[1] * a, p[2] * b, p[3] * c)
-        sign = -1.0
-    elseif primal(ymag) == 1.0
-        return true, positn + none
-    end
-    t = 1.0 - pmag * pmag
-    scale = primal(t) > 0.0 ? sqrt(t) : zero(t)
-    q = 1.0 * p + (sign * scale) * ux
-    return true, SVector(q[1] * a, q[2] * b, q[3] * c)
-end
 
 """
     surfpt(positn, u, a, b, c) -> Union{SVector{3},Nothing}
@@ -178,18 +126,7 @@ function edpnt(p::AbstractVector, a::Real, b::Real, c::Real)
         )
     )
     _m_iszero(v) && throw(SpiceError(:zerovector, "the input point is the zero vector"))
-    x = v[1] / a
-    y = v[2] / b
-    z = v[3] / c
-    level = x * x + y * y + z * z
-    primal(level) > 0.0 || throw(
-        SpiceError(
-            :pointtoosmall,
-            "the input point is too close to the origin to be scaled to the ellipsoid"
-        )
-    )
-    sq = sqrt(level)
-    return SVector(v[1] / sq, v[2] / sq, v[3] / sq)
+    return _m_edpnt(v, a, b, c)
 end
 
 """
@@ -214,34 +151,8 @@ true
 
 See also [`surfnm`](@ref).
 """
-function ednmpt(a::Real, b::Real, c::Real, normal::AbstractVector)
-    n = _m_v3(normal)
-    a, b, c = _m_f(a), _m_f(b), _m_f(c)
-    _m_axes_ok(a, b, c) || _m_badaxis(a, b, c)
-    scale = _m_max(_m_max(a, b), c)
-    sa = a / scale
-    sb = b / scale
-    sc = c / scale
-    _m_axes_ok(sa, sb, sc) || throw(
-        SpiceError(
-            :axisunderflow,
-            "a scaled semi-axis length is not positive"
-        )
-    )
-    _m_iszero(n) && throw(SpiceError(:zerovector, "the input normal vector is the zero vector"))
-    na2 = n[1] * sa * sa
-    nb2 = n[2] * sb * sb
-    nc2 = n[3] * sc * sc
-    arg = na2 * n[1] + nb2 * n[2] + nc2 * n[3]
-    primal(arg) > 0.0 || throw(
-        SpiceError(
-            :degeneratecase,
-            "the reciprocal of the square of the scale factor is not positive"
-        )
-    )
-    lambda = (1.0 / sqrt(arg)) * scale
-    return SVector(lambda * na2, lambda * nb2, lambda * nc2)
-end
+ednmpt(a::Real, b::Real, c::Real, normal::AbstractVector) =
+    _m_ednmpt(_m_f(a), _m_f(b), _m_f(c), _m_v3(normal))
 
 # --- nearest point on an ellipsoid ------------------------------------------------------
 
@@ -284,10 +195,9 @@ end
 """
     _m_nearpt_plain(positn, a, b, c) -> (npoint, alt)
 
-`nearpt_` of CSPICE for `Float64` arguments: the same axis ordering, scaling, bracketing
-and bisection of the multiplier `lambda`, and the same (at most five) correction steps
-that move the solution along the error of the first one. The AD extensions treat it as
-a constant (`_AD_CONSTANT`); `_m_nearpt` gives the derivatives.
+`nearpt_` for `Float64` arguments, with its scaling, its bisection of `lambda` and its
+at most five correction steps. The AD extensions treat it as a constant
+(`_AD_CONSTANT`); `_m_nearpt` gives the derivatives.
 """
 function _m_nearpt_plain(positn::SVector{3, Float64}, a::Float64, b::Float64, c::Float64)
     (a > 0.0 && b > 0.0 && c > 0.0) || _m_badaxis(a, b, c)
@@ -536,13 +446,11 @@ end
 """
     _m_nearpt(positn, a, b, c) -> (npoint, alt)
 
-The plain result of `_m_nearpt_plain` (`nearpt_`) with derivative parts from the
-stationarity condition: the near point is `p_i a_i^2 / (a_i^2 + lambda)` where `lambda`
-is the root of `sum((p_i a_i / (a_i^2 + lambda))^2) = 1`, refined by Newton steps in
-the number type (one for `Float64`, whose derivative the reverse-mode AD packages take
-through `_ad_pin`). Where that form does not hold (the center, and the interior points
-whose near point is not unique or not smooth) the derivative parts are zero. For
-`Float64` arguments the result is that of `_m_nearpt_plain`, bit for bit.
+The result of `_m_nearpt_plain`, bit for bit, with derivative parts from the
+stationarity condition: the near point is `p_i a_i^2 / (a_i^2 + lambda)`, where
+`lambda`, the root of `sum((p_i a_i / (a_i^2 + lambda))^2) = 1`, is refined by Newton
+steps in the number type (one for `Float64`, through `_ad_pin`). The derivative parts
+are zero at the center and where the near point is not unique.
 """
 function _m_nearpt(positn::SVector{3}, a::Real, b::Real, c::Real)
     p0 = SVector(primal(positn[1]), primal(positn[2]), primal(positn[3]))
@@ -625,8 +533,8 @@ The first result is the position and the velocity of the near point. The second 
 `(alt, dalt/dt)`. The result is `nothing` where the velocity of the near point is not
 defined, for example at the center of a sphere; CSPICE returns a `found` flag.
 
-Throws as [`nearpt`](@ref), and `SpiceError(:badarg)` if `state` does not have 6
-elements.
+Throws `SpiceError(:badaxislength)` and `SpiceError(:inputstoolarge)` in the cases of
+[`nearpt`](@ref), and `SpiceError(:badarg)` if `state` does not have 6 elements.
 
 # Examples
 ```jldoctest
@@ -668,9 +576,10 @@ and its time derivative. The result is the position and the velocity of the inte
 point of [`surfpt`](@ref). The result is `nothing` if the ray misses, if it is tangent
 to the surface, or if the velocity would overflow; CSPICE returns a `found` flag.
 
-Throws `SpiceError(:invalidvertex)` if the start point is on the surface and
-`SpiceError(:badarg)` if a state does not have 6 elements; other errors as
-[`surfpt`](@ref).
+Throws `SpiceError(:invalidvertex)` if the start point is on the surface,
+`SpiceError(:zerovector)` if the direction is zero, `SpiceError(:badaxislength)` if a
+semi-axis is not positive, and `SpiceError(:badarg)` if a state does not have 6
+elements.
 
 # Examples
 ```jldoctest
@@ -714,8 +623,7 @@ end
 
 # --- planes -------------------------------------------------------------------------------
 
-@inline _m_plane(normal::SVector{3}, constant) =
-    primal(constant) < 0.0 ? SpicePlane(-normal, -constant) : SpicePlane(normal, constant)
+@inline _m_plane(normal::SVector{3}, constant) = SpicePlane(_m_nvc(normal, constant)...)
 
 """
     nvc2pl(normal, konst) -> SpicePlane
@@ -736,11 +644,8 @@ SpicePlane{Float64}([0.0, 0.0, 1.0], 2.0)
 
 See also [`nvp2pl`](@ref), [`psv2pl`](@ref), [`pl2nvc`](@ref), [`SpicePlane`](@ref).
 """
-function nvc2pl(normal::AbstractVector, konst::Real)
-    u, mag = _m_unorm(_m_v3(normal))
-    primal(mag) == 0.0 && throw(SpiceError(:zerovector, "the normal of a plane must not be zero"))
-    return _m_plane(u, _m_f(konst) / mag)
-end
+nvc2pl(normal::AbstractVector, konst::Real) =
+    SpicePlane(_m_nvc2pl(_m_v3(normal), _m_f(konst))...)
 
 """
     nvp2pl(normal, point) -> SpicePlane
@@ -756,10 +661,7 @@ See also [`nvc2pl`](@ref), [`psv2pl`](@ref), [`pl2nvp`](@ref).
 function nvp2pl(normal::AbstractVector, point::AbstractVector)
     n = _m_v3(normal)
     _m_iszero(n) && throw(SpiceError(:zerovector, "the normal of a plane must not be zero"))
-    u = _m_hat(n)
-    # The zero (which gives the number type of `point` to the normal) is subtracted, not
-    # added, because `-0.0 + 0.0` is `0.0`: a zero component keeps its sign, as in CSPICE.
-    return _m_plane(u - zero(_m_v3(point)), _m_dot(_m_v3(point), u))
+    return SpicePlane(_m_nvp2pl(n, _m_v3(point))...)
 end
 
 """
@@ -800,38 +702,6 @@ as
 See also [`nvp2pl`](@ref), [`pl2nvc`](@ref), [`pl2psv`](@ref).
 """
 pl2nvp(plane::SpicePlane) = plane.normal, plane.constant * plane.normal
-
-"""
-Right-handed orthonormal frame `(x, y, z)` whose first axis is along `x`, as
-[`frame_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frame_c.html):
-`y` has a zero in the smallest component of `x`. A zero `x` gives the standard basis.
-"""
-@inline function _m_frame(x0::SVector{3})
-    x = _m_hat(x0)
-    a = x[1] * x[1]
-    b = x[2] * x[2]
-    c = x[3] * x[3]
-    z0 = zero(a)
-    o = one(a)
-    primal(a + b + c) == 0.0 &&
-        return SVector(o, z0, z0), SVector(z0, o, z0), SVector(z0, z0, o)
-    a0, b0, c0 = primal(a), primal(b), primal(c)
-    if a0 <= b0 && a0 <= c0
-        f = sqrt(b + c)
-        y2 = -x[3] / f
-        y3 = x[2] / f
-        return x, SVector(z0, y2, y3), SVector(f, -x[1] * y3, x[1] * y2)
-    elseif b0 <= a0 && b0 <= c0
-        f = sqrt(a + c)
-        y3 = -x[1] / f
-        y1 = x[3] / f
-        return x, SVector(y1, z0, y3), SVector(x[2] * y3, f, -x[2] * y1)
-    end
-    f = sqrt(a + b)
-    y1 = -x[2] / f
-    y2 = x[1] / f
-    return x, SVector(y1, y2, z0), SVector(-x[3] * y2, x[3] * y1, f)
-end
 
 """
     pl2psv(plane) -> (point::SVector{3}, span1::SVector{3}, span2::SVector{3})
@@ -925,54 +795,12 @@ julia> inrypl([1, 0, 4], [1, 0, -1], nvc2pl([0, 0, 1], 0))
 See also [`inelpl`](@ref), [`inedpl`](@ref), [`surfpt`](@ref).
 """
 function inrypl(vertex::AbstractVector, dir::AbstractVector, plane::SpicePlane)
-    vtx = _m_v3(vertex)
-    d = _m_v3(dir)
-    toobig = floatmax(Float64) / 3.0
-    vnrm = _m_norm(vtx)
-    primal(vnrm) >= toobig && throw(
-        SpiceError(
-            :vectortoobig,
-            "the vertex of the ray is too far from the origin"
-        )
-    )
-    normal, constant = plane.normal, plane.constant
-    primal(constant) >= toobig && throw(
-        SpiceError(
-            :vectortoobig,
-            "the plane is too far from the origin"
-        )
-    )
-    udir = _m_hat(d)
-    _m_iszero(udir) && throw(SpiceError(:zerovector, "the direction of the ray is the zero vector"))
-    mscale = _m_max(_m_abs(constant) - zero(vnrm), _m_abs(vnrm) - zero(constant))
-    if primal(mscale) != 0.0
-        sclvtx = (1.0 / mscale) * vtx
-        sclcon = constant / mscale
-    else
-        sclvtx = vtx - zero(SVector{3, typeof(mscale)})
-        sclcon = constant - zero(mscale)
-    end
-    primal(mscale) > 1.0 && (toobig = toobig / primal(mscale))
-    prjdif = sclcon - _m_dot(sclvtx, normal)
-    prjdir = _m_dot(udir, normal)
-    none = zero(1.0 * sclvtx + prjdif * udir)
-    if primal(prjdif) == 0.0
-        return (primal(_m_dot(normal, udir)) == 0.0 ? -1 : 1), vtx + none
-    end
-    pd, pf = primal(prjdir), primal(prjdif)
-    samesign = (pd > 0.0 && pf > 0.0) || (pd < 0.0 && pf < 0.0)
-    (!samesign || abs(pf) >= abs(pd) * toobig) && return 0, none
-    scale = _m_abs(prjdif) / _m_abs(prjdir)
-    return 1, mscale * (1.0 * sclvtx + scale * udir)
+    return _m_inrypl(_m_v3(vertex), _m_v3(dir), plane.normal, plane.constant)
 end
 
 # --- ellipses -----------------------------------------------------------------------------
 
-"""
-Roots of `a x^2 + b x + c` as
-[`rquad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rquad_c.html): `((re1, im1), (re2, im2))`. Requires that `a`
-and `b` are not both zero (`SpiceError(:degeneratecase)`).
-"""
+"Roots `((re1, im1), (re2, im2))` of `a x^2 + b x + c`, as [`rquad`](@ref)."
 @inline function _m_rquad(a::T, b::T, c::T) where {T <: Real}
     (primal(a) == 0.0 && primal(b) == 0.0) && throw(
         SpiceError(
@@ -1017,12 +845,7 @@ end
     return x / vmag, y / vmag
 end
 
-"""
-Diagonalization of the symmetric matrix `[s11 s12; s12 s22]` as
-[`diags2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/diags2_c.html): the two
-diagonal values and the rotation `(c11, c12, c21, c22)` whose columns are the
-eigenvectors.
-"""
+"Diagonal values and rotation `(c11, c12, c21, c22)` of `[s11 s12; s12 s22]`, as `diags2_c`."
 @inline function _m_diags2(s11::T, s12::T, s22::T) where {T <: Real}
     o = one(T)
     z = zero(T)
@@ -1270,9 +1093,8 @@ pjelpl(elin::SpiceEllipse, plane::SpicePlane) = _m_pjelpl(elin, plane)
 """
     _m_scaled_axes(a, b, c) -> (scale, scla, sclb, sclc, scla2, sclb2, sclc2)
 
-The scaling of `edlimb_` and `npedln_`: the longest semi-axis `scale`, the semi-axes
-divided by it and their squares. Throws `SpiceError(:degeneratecase)` if a square
-underflows to zero. The semi-axes are checked by the caller.
+The scaling of `edlimb_` and `npedln_`: the longest semi-axis, the semi-axes divided by
+it, and their squares. Throws `SpiceError(:degeneratecase)` if a square underflows.
 """
 @inline function _m_scaled_axes(a, b, c)
     scale = _m_max(_m_max(a, b), c)
@@ -1375,18 +1197,6 @@ function nplnpt(linpt::AbstractVector, lindir::AbstractVector, point::AbstractVe
 end
 
 """
-    _m_nplnpt(lp, ld, p, recip) -> (pnear, dist)
-
-Nearest point of the line through `lp` along `ld` to `p`, and its distance. `recip`
-chooses the projection of `nplnpt_c` (`vproj_c`, true) or of the Fortran `nplnpt_`
-(`vproj_`, false), which the SPICELIB routines call; see `_m_proj`. `ld` is not zero.
-"""
-@inline function _m_nplnpt(lp::SVector{3}, ld::SVector{3}, p::SVector{3}, recip::Bool)
-    pnear = _m_proj(p - lp, ld, recip) + lp
-    return pnear, _m_norm(pnear - p)
-end
-
-"""
     npsgpt(ep1, ep2, point) -> (pnear::SVector{3}, dist)
 
 Return the point of the line segment from `ep1` to `ep2` that is nearest to `point`, and
@@ -1407,17 +1217,7 @@ julia> npsgpt([0, 0, 0], [2, 0, 0], [5, 4, 0])
 See also [`nplnpt`](@ref).
 """
 function npsgpt(ep1::AbstractVector, ep2::AbstractVector, point::AbstractVector)
-    e1 = _m_v3(ep1)
-    e2 = _m_v3(ep2)
-    p = _m_v3(point)
-    seg = e2 - e1
-    _m_iszero(seg) && return e1, _m_norm(e1 - p)
-    # `npsgpt_` calls the Fortran `nplnpt_`, whose projection is `vproj_`.
-    lnear, dist = _m_nplnpt(e1, seg, p, false)
-    offdot = _m_dot(lnear - e1, seg)
-    primal(offdot) < 0.0 && return e1, _m_norm(e1 - p)
-    primal(offdot) > primal(_m_dot(seg, seg)) && return e2, _m_norm(e2 - p)
-    return lnear, dist
+    return _m_npsgpt(_m_v3(ep1), _m_v3(ep2), _m_v3(point))
 end
 
 """
@@ -1529,11 +1329,8 @@ npedln(a::Real, b::Real, c::Real, linept::AbstractVector, linedr::AbstractVector
     _m_npedln(a, b, c, _m_v3(linept), _m_v3(linedr), true)
 
 """
-    _m_npedln(a, b, c, lp, ld, recip) -> (pnear, dist)
-
-`npedln`. `recip` true follows `npedln_c`, false the Fortran `npedln_` that the SPICELIB
-routines (`tangpt_`, `zzraynp_`) call: its `pjelpl_` projects with `vperp_`, which
-divides by the largest component where `vperp_c` multiplies by its reciprocal.
+`npedln` with `recip` true as `npedln_c`, false as the f2c `npedln_` that `tangpt_` and
+`zzraynp_` call (its `pjelpl_` projects with `vperp_`).
 """
 function _m_npedln(a::Real, b::Real, c::Real, lp::SVector{3}, ld::SVector{3}, recip::Bool)
     a, b, c = _m_f(a), _m_f(b), _m_f(c)
@@ -1571,12 +1368,8 @@ end
 # --- terminator ---------------------------------------------------------------------------
 
 """
-    _m_edterm(umbral, a, b, c, srcrad, srcpos, npts) -> Vector{SVector{3,Float64}}
-
-Terminator points of `zzedterm_`: for each of `npts` directions about the axis from
-the target to the source, the point of the ellipsoid where a plane that is tangent to
-the spherical source is tangent to the ellipsoid, found by at most eleven corrections
-of the tangent angle.
+Terminator points of `zzedterm_`: for each of `npts` directions about the axis to the
+source, the point where a plane tangent to the spherical source touches the ellipsoid.
 """
 function _m_edterm(
         umbral::Bool, a::Float64, b::Float64, c::Float64, srcrad::Float64,
@@ -1645,31 +1438,6 @@ function _m_edterm(
         out[i] = pt
     end
     return out
-end
-
-"Radii of `body` with the checks of `zzgftreb_`."
-function _m_radii(ks::KernelSet, body::Integer)
-    v = get(ks.pool, _body_key(body, "RADII"), nothing)
-    v === nothing && throw(
-        SpiceError(
-            :kernelvarnotfound,
-            "the variable BODY$(body)_RADII is not in the kernel pool"
-        )
-    )
-    v isa Vector{Float64} || throw(
-        SpiceError(
-            :typemismatch,
-            "the variable BODY$(body)_RADII is not numeric"
-        )
-    )
-    length(v) == 3 || throw(
-        SpiceError(
-            length(v) > 3 ? :arraytoosmall : :invalidcount,
-            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
-        )
-    )
-    all(>(0.0), v) || throw(SpiceError(:badaxislength, "a radius of body $body is not positive"))
-    return v[1], v[2], v[3]
 end
 
 function _m_bodyid(ks::KernelSet, name::NameOrID, kind::Symbol)
@@ -1750,16 +1518,11 @@ function edterm(
             "the frame $fixref is not centered on the target body $target"
         )
     )
-    trgrad = _m_radii(ks, trgid)
-    srcrad = _m_radii(ks, srcid)
+    trgrad = _positive_radii(ks, trgid)
+    srcrad = _positive_radii(ks, srcid)
     r = max(srcrad[1], srcrad[2], srcrad[3])
     t0 = Float64(et)
-    corr = try
-        Aberration(abcorr)
-    catch e
-        e isa SpiceError || rethrow()
-        throw(SpiceError(:spkinvalidoption, "the aberration correction $abcorr is not recognized"))
-    end
+    corr = _spk_abcorr(abcorr)
     trgpos, lttarg = spkpos(ks, Int(trgid), t0, frcode, abcorr, Int(obsid))
     trgepc = corr.uselt ? (corr.transmit ? t0 + lttarg : t0 - lttarg) : t0
     srcpos, _ = spkpos(ks, Int(srcid), trgepc, frcode, abcorr, Int(trgid))

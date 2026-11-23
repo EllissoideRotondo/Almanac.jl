@@ -21,8 +21,6 @@ vinf_turn_angle
 
 ## Element names
 
-The table lists the names in the order of `elements()`, with the unit and the name in ANISE.
-
 - **Angles.** `:inc` is in [0, π]; `:ta`, `:aop`, `:raan`, `:aol`, `:tlong`, `:ha` and `:right_ascension` in [0, 2π], where `:raan` and `:aop` can be exactly 2π; `:ea` in (-π, π]; the elliptic `:ma` in [0, 2π], the hyperbolic one unbounded; `:declination` in [-π/2, π/2]. Near a circular orbit (`ecc` down to 1e-9) the arc cosine amplifies rounding, and `:ta`, `:aop`, `:ma` and `:ea` agree with ANISE to 3e-8 rad.
 - **Undefined** (`SpiceError(:degeneratecase)`): `:ta`, `:ea`, `:ma`, `:fpa`, `:tlong` and `:ha` for `ecc < 1e-11`; `:aol` within 1e-6° of the equator; `:ma` for `|ecc - 1| < 1e-11`; `:ea` for `ecc > 1`; `:ha` for `ecc <= 1`; whatever needs the angular momentum (zero position or velocity), the eccentricity vector or `:energy` (zero position; a zero velocity gives `ecc = 1`).
 - **B-plane** (`:bplane_bt` to `:bplane_ltof`): for a hyperbola in an inertial frame, with the triad built on the `+z` axis of the frame; `:bplane_angle` is in [-π, π). They throw for `ecc <= 1` and for an incoming asymptote within 1e-12 of the `z` axis; `:bplane_ltof` also for `c3 <= 0`.
@@ -41,6 +39,8 @@ These are returned instead of an error:
 - [`keplerian_orbit`](@ref) changes the sign of a negative `ecc`, and of an `sma` of the wrong sign for `ecc`.
 
 ### Units and ANISE names
+
+The names in the order of `elements()`, with the unit and the name in ANISE:
 
 ```@eval
 using Almanac, Markdown

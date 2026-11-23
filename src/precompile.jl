@@ -24,8 +24,8 @@ let
             end
         end
     end
-    # Integer epochs, `Int32` codes and a parsed `Aberration`, which a first call of
-    # these forms compiled for 8 to 20 ms.
+    # Integer epochs, `Int32` codes and a parsed `Aberration`, which the forms above do not
+    # cover.
     for head in ((), (C,), (K,))
         precompile(spkezr, (head..., S, I, S, S, S))
         precompile(spkezr, (head..., Int32, F, Int32, S, Int32))
@@ -144,9 +144,9 @@ let
 end
 
 # A small workload for the time calls. Their formatting code calls methods of Base with
-# argument types that only a run finds, so directives alone left 140 ms of compilation
-# in the first `timout`. The leap seconds below are text in this file (two entries are
-# enough for the code paths); no kernel file is read.
+# argument types that only a run finds, which directives do not cover. The leap seconds
+# below are text in this file (two entries are enough for the code paths); no kernel
+# file is read.
 let
     ctx = SpiceContext()
     lmpool(
@@ -179,9 +179,9 @@ let
 end
 
 # The Orbit layer. `getproperty` of an `Orbit` takes the name at run time, so its first
-# call compiled all of `element`, 0.7 s. The workload reads no kernel file: the GM and the
-# radii are given, or put in the pool of a context of its own by `lmpool`. The directives
-# cover `orbit`, which needs an SPK.
+# call compiles all of `element`. The workload reads no kernel file: the GM and the radii
+# are given, or put in the pool of a context of its own by `lmpool`. The directives cover
+# `orbit`, which needs an SPK.
 let
     S, F, I = String, Float64, Int
     for head in ((), (SpiceContext,), (KernelSet,)), (B, R) in ((S, S), (I, I))

@@ -117,7 +117,7 @@ end
 
 The parts of the SPK type 14 or binary PCK type 3 segment `seg` that the evaluator
 needs: `refbas`, `nref`, `pktbas`, `npkt`, `pktoff`, `stride` and `ncoef`, with the
-meaning of [`_spk14_check`](@ref). They come from `seg.layout`, or from the checks of
+meaning of `_spk14_check`. They come from `seg.layout`, or from the checks of
 `_spk14_check` (and their errors) when the segment has no layout.
 """
 @inline function _spk14_layout(data::Vector{Float64}, seg::Segment)
@@ -127,13 +127,6 @@ meaning of [`_spk14_check`](@ref). They come from `seg.layout`, or from the chec
 end
 
 # --- SPK type 10 ------------------------------------------------------------------------------
-
-@noinline _t10_error(seg::Segment, msg::String) = throw(
-    SpiceError(
-        :baddaf,
-        "SPK type 10 segment at $(seg.baddr):$(seg.eaddr): $msg"
-    )
-)
 
 """
     _t10_check(data, seg) -> NamedTuple
@@ -145,8 +138,8 @@ packets, `pksz` the packet size (10 or 14) and `stride` the size of a packet rec
 (the packet and the `pktoff` doubles that precede it).
 
 The last double of the segment is the count of meta items. A segment with 15 or 16
-items has no packet offset (item 16), as `sgmeta` reads the old files; with 17 or more
-items the first 17 are used. Throws `SpiceError(:baddaf)` unless the segment has
+items has no packet offset (item 16), as `sgmeta` reads them; with 17 or more items
+the first 17 are used. Throws `SpiceError(:baddaf)` unless the segment has
 fixed-size packets of 10 or 14 doubles, one reference epoch for each packet with the
 reference index type 4 (closest epoch), at least 8 constants, and all its parts
 inside the segment.
@@ -154,11 +147,11 @@ inside the segment.
 function _t10_check(data::Vector{Float64}, seg::Segment)
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
-    (b >= 1 && e <= length(data) && len >= 16) || _t10_error(seg, "the segment is too short")
+    (b >= 1 && e <= length(data) && len >= 16) || _badsegment(seg, "the segment is too short")
     nmeta = _seg_count(seg, @inbounds(data[e]), 15, _MAXCOUNT, "meta item count")
     m, hasoff = _sg_meta_base(nmeta, e)      # meta item k is data[m + k]
     span = e - m                             # doubles from the first meta item to the end
-    span <= len || _t10_error(seg, "the meta data is longer than the segment")
+    span <= len || _badsegment(seg, "the meta data is longer than the segment")
     item(k, lo, what) = _seg_count(seg, @inbounds(data[m + k]), lo, _MAXCOUNT, what)
     conbas = item(1, 0, "constants base")
     ncon = item(2, 0, "constants count")
@@ -170,18 +163,18 @@ function _t10_check(data::Vector{Float64}, seg::Segment)
     npkt = item(12, 1, "packet count")
     pksz = item(15, 1, "packet size")
     pktoff = hasoff ? item(16, 0, "packet offset") : 0
-    ncon >= 8 || _t10_error(seg, "the segment has $ncon constants, 8 are needed")
-    pdrtyp == 0 || _t10_error(seg, "the packets do not have a fixed size")
-    (pksz == 10 || pksz == 14) || _t10_error(seg, "the packet size $pksz is not 10 or 14")
-    rdrtyp == 4 || _t10_error(seg, "the reference index type $rdrtyp is not 4")
-    nref == npkt || _t10_error(seg, "the counts of packets and reference epochs differ")
+    ncon >= 8 || _badsegment(seg, "the segment has $ncon constants, 8 are needed")
+    pdrtyp == 0 || _badsegment(seg, "the packets do not have a fixed size")
+    (pksz == 10 || pksz == 14) || _badsegment(seg, "the packet size $pksz is not 10 or 14")
+    rdrtyp == 4 || _badsegment(seg, "the reference index type $rdrtyp is not 4")
+    nref == npkt || _badsegment(seg, "the counts of packets and reference epochs differ")
     stride = pksz + pktoff
     data_len = len - span
     (
         conbas + 8 <= data_len && pktoff <= data_len && npkt <= (data_len - pktbas) ÷ stride &&
             pktbas <= data_len && refbas <= data_len && nref <= data_len - refbas
     ) ||
-        _t10_error(seg, "a part of the segment is outside the segment")
+        _badsegment(seg, "a part of the segment is outside the segment")
     return (;
         con = b - 1 + conbas, pkt = b - 1 + pktbas + pktoff, ref = b - 1 + refbas, n = npkt,
         pksz, stride,
@@ -201,7 +194,7 @@ end
     _t10_layout(data, seg) -> NamedTuple
 
 The parts `con`, `pkt`, `ref`, `n`, `pksz` and `stride` of the type 10 segment `seg`,
-with the meaning of [`_t10_check`](@ref). They come from `seg.layout`, or from the
+with the meaning of `_t10_check`. They come from `seg.layout`, or from the
 checks of `_t10_check` (and their errors) when the segment has no layout.
 """
 @inline function _t10_layout(data::Vector{Float64}, seg::Segment)

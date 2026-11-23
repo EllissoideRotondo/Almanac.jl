@@ -17,9 +17,6 @@
 # other method throws `SpiceError(:notsupported)` at the first evaluation of the state,
 # as in CSPICE.
 
-"Apply the state transformation with the blocks `R` and `dR` to the state `(r, v)`, as `mxvg_` does (`rotate_jet`)."
-@inline _gf_xf(R, dR, r, v) = rotate_jet((R, dR), (r, v))
-
 """
 Apply the inverse of the state transformation with the blocks `R` and `dR` to the state
 `(r, v)`, as `mxvg_` applies the matrix of `invstm`: each velocity component sums its
@@ -68,16 +65,12 @@ in the body-fixed frame `ref`, for the observer `obs` at `et`, from the point `s
 at the target epoch `trgepc` (the outputs of `subpnt` or `sincpt`).
 
 `point(obspos, obsvel, R, dR)` gives the state `(position, velocity)` of the surface
-point for the body-fixed state of the observer, or `nothing`; `R` and `dR` are the
-blocks of the corrected state transformation from J2000 to `ref`. The iteration of
-CSPICE is kept: the target epoch is held at `trgepc`; in each of the `nitr` passes the
-velocity of the target and `dR` are multiplied by `1 - dlt` (`1 + dlt` for
-transmission), where `dlt` is the rate of the light time of the pass before (zero in
-the first pass), and for the `+S` forms the stellar aberration offset of the surface
-point and its rate (`zzstelab`) are added to the observer-target state.
-
-Contract: `corr.uselt`. `found` is false if `point` returns `nothing`. No allocation
-for a `point` that does not allocate.
+point for the body-fixed state of the observer, or `nothing`, which makes `found` false;
+`R` and `dR` are the blocks of the corrected state transformation from J2000 to `ref`.
+The target epoch is held at `trgepc`. In each of the `nitr` passes the velocity of the
+target and `dR` are multiplied by `1 - dlt` (`1 + dlt` for transmission), where `dlt`
+is the rate of the light time of the pass before, and the `+S` forms add the stellar
+aberration offset of `zzstelab`. `corr.uselt` must be true.
 """
 function _gf_ltstate(
         ks::KernelSet, targ::Int32, obs::Int32, ref::Int32, corr::Aberration,
@@ -112,7 +105,7 @@ function _gf_ltstate(
             sr = otr + sa
             sv = otv + savel
         end
-        tr, tv = _gf_xf(R, dRs, sr, sv)
+        tr, tv = rotate_jet((R, dRs), (sr, sv))
         st = point(-tr, -tv, R, dRs)
         st === nothing && return _GF_ZERO6, false
         pr, pv = st
@@ -179,7 +172,7 @@ for the nearest point, `surfpv` with the ray toward the center otherwise. Throws
                     "DNEARP returned \"not found.\""
             )
         )
-        return _gf_pv(res[1])
+        return _m_pv(res[1])
     end
     st = surfpv(fxo, -fxo, a, b, c)
     st === nothing && throw(
@@ -189,7 +182,7 @@ for the nearest point, `surfpv` with the ray toward the center otherwise. Throws
                 "returned \"not found.\""
         )
     )
-    return _gf_pv(st)
+    return _m_pv(st)
 end
 
 """
@@ -205,7 +198,7 @@ function _gf_vecstate(v::GFSubObserverVector, et::Float64)
     radii = v.radii
     if v.corr.geometric
         _gf_fixed_frame(v.ks, v.ref, v.targ)
-        tr, tv = _gf_pv(_gf_spkez(v.ks, v.targ, et, v.ref, v.corr, v.obs)[1])
+        tr, tv = _m_pv(spkezr(v.ks, v.targ, et, v.ref, v.corr, v.obs)[1])
         pr, pv = _gf_subpoint_state(near, -tr, -tv, radii)
         return vcat(pr, pv), true
     end
@@ -272,11 +265,11 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
     corr = v.corr
     if corr.geometric
         Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et, Val(1))
-        j2r, j2v = _gf_xf(Rd, dRd, v.dvec, _GF_ZERO3)
+        j2r, j2v = rotate_jet((Rd, dRd), (v.dvec, _GF_ZERO3))
         _gf_fixed_frame(ks, v.ref, v.targ)
-        tr, tv = _gf_pv(_gf_spkez(ks, v.targ, et, v.ref, corr, v.obs)[1])
+        tr, tv = _m_pv(spkezr(ks, v.targ, et, v.ref, corr, v.obs)[1])
         R, dR = frame_jet(ks, _J2000_FRAME, v.ref, et, Val(1))
-        dr, dv = _gf_xf(R, dR, j2r, j2v)
+        dr, dv = rotate_jet((R, dR), (j2r, j2v))
         st = surfpv(vcat(-tr, -tv), vcat(dr, dv), a, b, c)
         st === nothing && return _GF_ZERO6, false
         return SVector{6, Float64}(st), true
@@ -289,7 +282,7 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
         Rd, dRd = frame_jet(ks, v.dref, _J2000_FRAME, et + s * ltctr, Val(1))
         dRd = (s * dltctr + 1.0) * dRd
     end
-    j2r, j2v = _gf_xf(Rd, dRd, v.dvec, _GF_ZERO3)
+    j2r, j2v = rotate_jet((Rd, dRd), (v.dvec, _GF_ZERO3))
     res = _geo_sincpt(
         ks, _DSK_DEFAULT_TOLS, v.method, v.targ, et, v.ref, corr, v.obs,
         v.dref, v.dvec
@@ -301,10 +294,10 @@ function _gf_vecstate(v::GFInterceptVector, et::Float64)
         let j2r = j2r, j2v = j2v      # assigned in two branches: bind them for the closure
             function (or, ov, R, dR)
                 local dr, dv, st            # not the variables of the same names above
-                dr, dv = _gf_xf(R, dR, j2r, j2v)
+                dr, dv = rotate_jet((R, dR), (j2r, j2v))
                 st = surfpv(vcat(or, ov), vcat(dr, dv), a, b, c)
                 st === nothing && return nothing
-                return _gf_pv(SVector{6, Float64}(st))
+                return _m_pv(SVector{6, Float64}(st))
             end
         end
     )
@@ -348,12 +341,12 @@ function _gf_surface_coordinate(
         obsrvr::NameOrID, dref::NameOrID, dvec::AbstractVector, crdsys::AbstractString,
         coord::AbstractString
     )
-    targ = _gf_body(ks, target, "target object")
-    obs = _gf_body(ks, obsrvr, "observer")
+    targ = _body_id(ks, target, "target object")
+    obs = _body_id(ks, obsrvr, "observer")
     _gf_distinct(targ, obs, target, obsrvr)
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     sys, idx = _gf_sysidx(crdsys, coord)
-    ref = _geo_namfrm(ks, frame isa AbstractString ? strip(frame, ' ') : frame)
+    ref = _frame_code(ks, frame isa AbstractString ? strip(frame, ' ') : frame)
     center, _, found = _geo_frinfo(ks, ref)
     found || throw(SpiceError(:noframe, "Frame system did not recognize frame $frame."))
     (chkctr && center != targ) && throw(
@@ -371,7 +364,7 @@ function _gf_surface_coordinate(
                 "Bodies {0,..,9} represent barycenters and so lack physical properties."
         )
     )
-    rad = _geo_radii(ks, center)
+    rad = _positive_radii(ks, center)
     re, f, sense = (sys == _GF_GEODETIC || sys == _GF_PLANETOGRAPHIC) ?
         _gf_geodetic(ks, center, frame, sys, rad) : (0.0, 0.0, 0)
     meth = uppercase(lstrip(method, ' '))
@@ -381,14 +374,14 @@ function _gf_surface_coordinate(
         vec = GFSubObserverVector(ks, targ, obs, corr, ref, meth, near, rad)
         return GFCoordinate(vec, sys, idx, re, f, sense, center)
     end
-    dv = _geo_pos(dvec)
+    dv = _dsk_vec3(dvec)
     (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(
         SpiceError(
             :zerovector,
             "Ray's direction vector is the zero vector. This variable might be uninitialized."
         )
     )
-    dfr = _geo_namfrm(ks, dref isa AbstractString ? strip(dref, ' ') : dref)
+    dfr = _frame_code(ks, dref isa AbstractString ? strip(dref, ' ') : dref)
     dctr, _, dfound = _geo_frinfo(ks, dfr)
     dfound || throw(SpiceError(:noframe, "Frame system did not recognize frame $dref."))
     vec = GFInterceptVector(

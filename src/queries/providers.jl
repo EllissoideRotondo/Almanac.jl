@@ -6,16 +6,15 @@
 """
     provider_jet(p::EphemerisProvider, et, ::Val{N}) -> NTuple{N+1,Vec3}
 
-Contract: the jet of the position of `p.body` relative to `p.center` in `p.frame`. Order
-0 and 1 come from the state that `p.f(et)` returns; order `k >= 2` is derivative `k-1`
-of its velocity, from `p.f` called on a Taylor number (as for SPK types that store the
-velocity, `spk_eval`). Throws `SpiceError(:badarraysize)` if `p.f` does not return six
-numbers.
+Return the jet of the position of `p.body` relative to `p.center` in `p.frame`. Orders 0
+and 1 come from the state `p.f(et)`; order `k >= 2` is derivative `k-1` of its velocity,
+from `p.f` called on a Taylor number. Throws `SpiceError(:badarraysize)` if `p.f` does
+not return six numbers.
 """
 @noinline function provider_jet(p::EphemerisProvider, et::T, ::Val{N}) where {T <: Real, N}
     # `p.f` is not inferred: every value is converted to `T` with an assertion, so that
-    # the jet has a concrete type and the callers of `segment_jet` stay type-stable.
-    # `@noinline` keeps this branch out of the inlined `segment_jet` of the file types.
+    # the jet has a concrete type and the callers of `segment_jet_native` stay
+    # type-stable. `@noinline` keeps this branch out of the inlined `segment_jet_native`.
     if N <= 1
         s = p.f(et)
         _provider_check(p, s, et)
@@ -53,9 +52,9 @@ end
 """
     _kernel_bodies(who, bodies) -> Vector{Tuple{String,Int32}}
 
-Contract: the pairs `name => code` of the iterable `bodies` as a vector of name and code,
-with the blanks around each name removed. Throws `SpiceError(:badarg)` for a blank name,
-as [`boddef`](@ref) does, and for a code that is not a 32-bit integer.
+Return the pairs `name => code` of the iterable `bodies` as a vector of name and code,
+with the blanks around each name removed. Throws `SpiceError(:badarg)` for a blank name
+and for a code that is not a 32-bit integer.
 """
 function _kernel_bodies(who::AbstractString, bodies)
     out = Tuple{String, Int32}[]
@@ -74,8 +73,8 @@ end
 """
     _resolve_body(ks, x, bodies) -> Int32
 
-Contract: the code of the body `x`: a name of the pairs `bodies` (the later pair first),
-else the code that [`body_code`](@ref) gives in `ks`.
+Return the code of the body `x`: a name of the pairs `bodies` (the later pair first),
+else the code that `body_code` gives in `ks`.
 """
 function _resolve_body(ks::KernelSet, x::NameOrID, bodies::Vector{Tuple{String, Int32}})
     if x isa AbstractString
@@ -94,13 +93,10 @@ Make `body` a body whose state relative to `center` in `frame` is `f(et)` for
 `t0 <= et <= t1` (ET, seconds past J2000 TDB). `f` returns six numbers: the position
 (km) and the velocity (km/s).
 
-The body is then available to every call that reads SPK data: [`spkezr`](@ref) with
-any aberration correction, [`spkpos`](@ref), the geometry calls, the event searches,
-[`ephemeris_table`](@ref). It enters the load list as a file named `name` with one SPK
-segment, so the rules of a file hold: it has priority over the files loaded before it
-and not over those loaded after it, outside `[t0, t1]` the files that cover the body
-apply, [`unload`](@ref) with `name` removes it and [`kclear`](@ref) removes it with
-the rest. [`kdata`](@ref) lists it with the type `"SPK"`. An empty `name` stands for
+The body is then available to every call that reads SPK data. It enters the load list
+as a file named `name` with one SPK segment, so the rules of a file hold: it has
+priority over the files loaded before it, outside `[t0, t1]` the files that cover the
+body apply, and [`unload`](@ref) with `name` removes it. An empty `name` stands for
 `"ephemeris of body <code>"`, with the NAIF code of `body`.
 
 `bodies`, pairs such as `["MYSAT" => -1001]`, are body names that hold while the
@@ -182,8 +178,8 @@ add_ephemeris!(
 """
     frame_provider(ks, fd::FrameDef) -> Union{Nothing,FrameProvider}
 
-Contract: the provider of the class 7 frame `fd`, or `nothing` if `fd` comes from the
-kernel pool (a frame kernel may give any class; CSPICE has no class 7).
+Return the provider of the class 7 frame `fd`, or `nothing` if `fd` comes from the
+kernel pool (a frame kernel may give any class).
 """
 @inline function frame_provider(ks::KernelSet, fd::FrameDef)
     i = fd.classid
@@ -195,8 +191,8 @@ end
 """
     provider_rotation(p::FrameProvider, et::T) -> Mat3{T}
 
-Contract: the matrix from frame `p.id` to frame `p.relative` that `p.f(et)` returns.
-Throws `SpiceError(:badarraysize)` if it does not have 3 x 3 elements.
+Return the matrix from frame `p.id` to frame `p.relative` that `p.f(et)` gives. Throws
+`SpiceError(:badarraysize)` if it does not have 3 x 3 elements.
 """
 @inline function provider_rotation(p::FrameProvider, et::T) where {T <: Real}
     m = p.f(et)
@@ -219,12 +215,10 @@ that takes the coordinates of a vector in frame `name` to its coordinates in fra
 `relative` at `et` (ET, seconds past J2000 TDB), the direction of the matrix of
 [`pxform`](@ref)`(name, relative, et)`.
 
-The frame is then available to every call that takes a frame: [`pxform`](@ref),
-[`sxform`](@ref), states in the frame, [`add_ephemeris!`](@ref) and other frames
-relative to it, [`frinfo`](@ref) (class 7, a class that CSPICE does not have). It
-enters the load list as a frame kernel named `path` (`"frame <name>"` if `path` is
-empty): [`unload`](@ref) with `path` removes it and [`kclear`](@ref) removes it with the rest. A frame of a text kernel with
-the same name or ID loses to it, whatever the load order.
+The frame is then available to every call that takes a frame; [`frinfo`](@ref) gives it
+class 7, a class that CSPICE does not have. It enters the load list as a frame kernel
+named `path` (`"frame <name>"` if `path` is empty), which [`unload`](@ref) takes. A
+frame of a text kernel with the same name or ID loses to it, whatever the load order.
 
 `f` is called from any thread that makes a query, so it must not change shared data. It
 receives the epoch type of the query: `Float64`, a `ForwardDiff.Dual`, and for the

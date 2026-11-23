@@ -5,15 +5,16 @@
 # Elements are in the CSPICE order: perifocal distance `rp`, eccentricity `ecc`,
 # inclination `inc`, longitude of the ascending node `lnode`, argument of periapsis
 # `argp`, mean anomaly at epoch `m0`, epoch `t0` and gravitational parameter `mu`.
-# The propagator is the private `_prop2b` of `spk/types/conic.jl`, which SPK types 5
-# and 15 use, and the state from equinoctial elements of `eqncpv` is the private
-# `_eqn_state` of SPK type 17; nothing of them is repeated here.
+# The propagator is `_prop2b` of `spk/types/conic.jl` (SPK types 5 and 15), and the
+# state from equinoctial elements is `_eqn_state` of SPK type 17.
 
 """
     stmp03(x) -> (c0, c1, c2, c3)
 
 Return the Stumpff functions `ck(x) = sum((-x)^j / (2j + k)!, j = 0:∞)` for
-`k = 0:3`, as `stmp03` of SPICELIB.
+`k = 0:3`, as
+[`stmp03`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/stmp03.html)
+of SPICELIB. CSPICE has no C wrapper for it.
 
 `c0 = 1 - x * c2` and `c1 = 1 - x * c3` hold to rounding. For `x > 0`, `c0` is
 `cos(sqrt(x))` and `c1` is `sin(sqrt(x)) / sqrt(x)`.
@@ -87,14 +88,12 @@ function prop2b(gm::Real, pvinit::AbstractVector, dt::Real)
             "the initial position and velocity are parallel: the motion is not conic"
         )
     )
+    # The input is checked, so `_prop2b` fails only for a long `dt`. The kind is an
+    # argument, not a catch block: AllocCheck counts the `ijl_setjmp` of a catch block on
+    # Windows as an allocation.
     p, v = _prop2b(mu, pos, vel, _m_f(dt), :dtoutofrange)
     return _m_state(p, v)
 end
-
-# `prop2b` and `conics` check their input first, so the remaining failure of `_prop2b`
-# is a time interval that is too long, `SpiceError(:dtoutofrange)` as in CSPICE. The kind
-# goes in as an argument, so that the calls have no catch block: on Windows AllocCheck
-# counts the `ijl_setjmp` of a catch block as a possible allocation.
 
 """
     conics(elts, et) -> SVector{6}
@@ -286,7 +285,9 @@ semi-major axis and the period, as
 | 11    | period; 0 for an orbit that is not an ellipse, or if it would overflow     |
 | 12:20 | zero                                                                       |
 
-Throws as [`oscelt`](@ref).
+Throws `SpiceError(:nonpositivemass)` if `mu <= 0`, `SpiceError(:degeneratecase)` if
+the position or the velocity is zero or if they are parallel, and `SpiceError(:badarg)`
+if `state` does not have 6 elements.
 
 # Examples
 ```jldoctest

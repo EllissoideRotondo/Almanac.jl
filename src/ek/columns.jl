@@ -63,11 +63,11 @@ end
     _ek_stream_i!(out, ints, addr, first, n) -> out
 
 Copy the elements `first:first+n-1` of the integer array entry whose element count is
-at the address `addr` into `out[1:n]` (`zzekrd04`). Precondition: the entry has at
-least `first + n - 1` elements.
+at the address `addr` into `out[1:n]` (`zzekrd04`). The entry must have at least
+`first + n - 1` elements.
 """
 function _ek_stream_i!(out::AbstractVector, ints::AbstractVector{Int32}, addr::Int, first::Int, n::Int)
-    base = _ek_ibase((addr - 1) ÷ 256)
+    _, base = _ek_pgpg(3, addr)
     off = addr - base + first            # position of the element in the page, if it is there
     done = 0
     while done < n
@@ -88,7 +88,7 @@ end
 
 "As `_ek_stream_i!` for a double array entry (`zzekrd05`); pointers are stored as doubles."
 function _ek_stream_d!(out::AbstractVector, dps::AbstractVector{Float64}, addr::Int, first::Int, n::Int)
-    base = _ek_dbase((addr + 127) ÷ 128)
+    _, base = _ek_pgpg(2, addr)
     off = addr - base + first
     done = 0
     while done < n
@@ -115,7 +115,7 @@ the five-character count at the address `addr` (`zzekrd03`, `zzekrd06`).
 """
 function _ek_stream_c(chars::AbstractVector{UInt8}, addr::Int, skip::Int, n::Int)
     out = Vector{UInt8}(undef, n)
-    base = _ek_cbase((addr + 1023) ÷ 1024)
+    _, base = _ek_pgpg(1, addr)
     off = addr - base + 5 + skip         # stream offset of the first wanted character
     done = 0
     while done < n
@@ -175,14 +175,12 @@ at `recptr`, as `zzekrsi`. `found` is false if the entry has no element `elt`; a
 entry gives `(0, true, true)`. Throws `SpiceError` (`:uninitializedvalue`, `:bug`,
 `:noclass`).
 """
-function _ek_elt_i(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_elt_i(s, col::_EKColumn, recptr::Integer, elt::Integer)
     c = col.cclass
     if c == 7
         recno = Int(recptr)
         _ek_fixed_null(s, col, recno) && return 0, true, true
-        q = (recno - 1) ÷ _EK_IPSIZE
-        r = recno - q * _EK_IPSIZE
-        return Int(s.ints[Int(s.ints[col.metptr + 1]) + r + q * 256]), false, true
+        return _ek_ordvec_value(s.ints, s.ints[col.metptr + 1], recno), false, true
     end
     (c == 1 || c == 4) || _ek_noclass(col, "integer")
     datptr = _ek_datptr(s, col, recptr)
@@ -208,9 +206,9 @@ Base.getindex(v::_EKRefVec, ::Int) = v.r[]
     _ek_elt_d(s, col, recptr, elt) -> (value, isnull, found)
 
 Element `elt` of the entry of the double or time column `col` (class 2, 5 or 8), as
-`zzekrsd`. Results and errors as [`_ek_elt_i`](@ref).
+`zzekrsd`. Results and errors as `_ek_elt_i`.
 """
-function _ek_elt_d(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_elt_d(s, col::_EKColumn, recptr::Integer, elt::Integer)
     c = col.cclass
     if c == 8
         recno = Int(recptr)
@@ -250,7 +248,6 @@ end
 "The `_EKCRef` of all `n` bytes of a byte vector."
 _EKCRef(n::Integer) = _EKCRef(0, 1, Int(n), false)
 
-"`r` cut to its first `n` characters."
 @inline _ek_cfirst(r::_EKCRef, n::Int) = _EKCRef(r.base, r.off, min(r.n, n), r.linked)
 
 """
@@ -259,9 +256,9 @@ _EKCRef(n::Integer) = _EKCRef(0, 1, Int(n), false)
 The place of element `elt` of the entry of the character column `col` (class 3, 6 or
 9) in the record at `recptr`, as `zzekrsc` finds it: all characters that the file holds
 for it (the stored length for class 3, the string length of the column for classes 6
-and 9). Results and errors as [`_ek_elt_c`](@ref); a null or missing element has `n = 0`.
+and 9). Results and errors as `_ek_elt_c`; a null or missing element has `n = 0`.
 """
-function _ek_cref(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_cref(s, col::_EKColumn, recptr::Integer, elt::Integer)
     c = col.cclass
     if c == 9
         recno = Int(recptr)
@@ -278,7 +275,7 @@ function _ek_cref(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
     datptr == _EK_NULL && return _EKCRef(0), true, true
     datptr > 0 || _ek_badptr(col, datptr, recptr)
     n = _ek_gei(s.chars, datptr)
-    base = _ek_cbase((datptr + 1023) ÷ 1024)
+    _, base = _ek_pgpg(1, datptr)
     c == 3 && return _EKCRef(base, datptr - base + 5, n, true), false, true
     (1 <= elt <= n) || return _EKCRef(0), false, false
     l = Int(col.strlen)
@@ -313,14 +310,13 @@ function _ek_cbytes(chars::AbstractVector{UInt8}, r::_EKCRef)
     return out
 end
 
-"The characters of the element `r` of the store `chars` as a `String`."
 _ek_cstring(chars::AbstractVector{UInt8}, r::_EKCRef) = String(_ek_cbytes(chars, r))
 
 """
     _ek_ccmp(ca, ra, cb, rb) -> Int
 
 Order of the element `ra` of the store `ca` and the element `rb` of `cb` as Fortran
-compares strings, as [`_ek_bcmp`](@ref) on their characters: -1, 0 or 1.
+compares strings, as `_ek_bcmp` on their characters: -1, 0 or 1.
 """
 function _ek_ccmp(ca::AbstractVector{UInt8}, ra::_EKCRef, cb::AbstractVector{UInt8}, rb::_EKCRef)
     abase, aoff = ra.base, ra.off
@@ -342,9 +338,9 @@ Element `elt` of the entry of the character column `col` (class 3, 6 or 9) in th
 record at `recptr`, as `zzekrsc`: the string with all characters that the file holds
 for it (the stored length for class 3, the string length of the column for classes 6
 and 9, so trailing blanks can be present). Results and errors as
-[`_ek_elt_i`](@ref), with `:uninitialized` for an entry that was never written.
+`_ek_elt_i`, with `:uninitialized` for an entry that was never written.
 """
-function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer = 1)
+function _ek_elt_c(s, col::_EKColumn, recptr::Integer, elt::Integer)
     r, isnull, found = _ek_cref(s, col, recptr, elt)
     return (r.n == 0 ? "" : _ek_cstring(s.chars, r)), isnull, found
 end
@@ -371,7 +367,7 @@ function _ek_entry_i(s, col::_EKColumn, recptr::Integer)
     return isnull ? Int[] : Int[v], isnull
 end
 
-"As [`_ek_entry_i`](@ref) for a double or time column (`ekrced`)."
+"As `_ek_entry_i` for a double or time column (`ekrced`)."
 function _ek_entry_d(s, col::_EKColumn, recptr::Integer)
     if col.cclass == 5
         datptr = _ek_datptr(s, col, recptr)
@@ -384,7 +380,7 @@ function _ek_entry_d(s, col::_EKColumn, recptr::Integer)
     return isnull ? Float64[] : Float64[v], isnull
 end
 
-"As [`_ek_entry_i`](@ref) for a character column (`ekrcec`); the strings are as stored."
+"As `_ek_entry_i` for a character column (`ekrcec`); the strings are as stored."
 function _ek_entry_c(s, col::_EKColumn, recptr::Integer)
     if col.cclass == 6
         datptr = _ek_datptr(s, col, recptr)

@@ -4,7 +4,6 @@
 # an epoch of type `Taylor{N,Float64}` gives the time derivatives to order N.
 
 const _SEC_PER_CENTURY = _SPD * 36525.0          # seconds per Julian century
-const _RPD = pi / 180                # radians per degree, `rpd_`
 
 """
 Number of frames of the chain of the first frame that `frame_rotation` keeps, as the
@@ -20,25 +19,6 @@ and throws `SpiceError(:framechain)`; `zzrefch0_` has no bound and never returns
 const _FRAME_CHAIN_LIMIT = 1000
 
 # --- small rotation helpers -----------------------------------------------------------
-
-"""
-    _eul2m(a3, a2, a1, axis3, axis2, axis1) -> Mat3{Float64}
-
-`[a3]_axis3 * [a2]_axis2 * [a1]_axis1`, as `eul2m_` of CSPICE. Throws
-`SpiceError(:badaxisnumbers)` unless every axis is in 1:3.
-"""
-function _eul2m(
-        a3::Float64, a2::Float64, a1::Float64, axis3::Integer, axis2::Integer,
-        axis1::Integer
-    )
-    all(a -> 1 <= a <= 3, (axis3, axis2, axis1)) || throw(
-        SpiceError(
-            :badaxisnumbers,
-            "Euler axis numbers are $axis3, $axis2, $axis1; each must be 1, 2 or 3"
-        )
-    )
-    return _m_eul2m_unchecked(a3, a2, a1, axis3, axis2, axis1)
-end
 
 """
     _eul313(w, delta, phi) -> Mat3
@@ -62,17 +42,6 @@ elements are left out, which does not change a result). Generic over the angle t
         sw * sd, cw * sd, cd
     )
 end
-
-"""
-    _reduce_twopi(w)
-
-`w` reduced by a whole number of turns with the arithmetic of `d_mod(w, twopi_())` in
-`tisbod_` (the f2c library computes `w - twopi * trunc(w / twopi)` in floating point,
-which is not the exact remainder; the same operations are used here so that the
-order-0 value equals the one of CSPICE). The subtracted quantity is a constant, so
-derivatives are not changed. Generic over the type of `w`.
-"""
-@inline _reduce_twopi(w::Real) = w - _TWOPI * trunc(primal(w) / _TWOPI)
 
 # --- text PCK constants ---------------------------------------------------------------
 
@@ -110,36 +79,36 @@ function build_bodyrot(pool::AbstractDict)
     out = Dict{Int32, BodyRot}()
     for (name, value) in pool
         value isa Vector{Float64} || continue
+        # The test of the ends spares the regular expression for most names.
+        (startswith(name, "BODY") && endswith(name, "_PM")) || continue
         m = match(r"^BODY(-?\d+)_PM$", name)
         m === nothing && continue
         id = tryparse(Int32, m.captures[1])
         id === nothing && continue
-        ra = _pool_numbers(pool, "BODY$(id)_POLE_RA")
-        dec = _pool_numbers(pool, "BODY$(id)_POLE_DEC")
+        # The names are joined from strings: `*` of strings is faster than interpolation.
+        bid = "BODY" * string(id)
+        ra = _pool_numbers(pool, bid * "_POLE_RA")
+        dec = _pool_numbers(pool, bid * "_POLE_DEC")
         (ra === nothing || dec === nothing) && continue
         sys = _bodbry(id)
-        epoch = _pool_first(
-            pool,
-            ("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH"), _JD2000
-        )
-        ref = _pool_first(
-            pool,
-            ("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME"), 1.0
-        )
+        bs = "BODY" * string(sys)
+        epoch1, epoch2 = bs * "_CONSTANTS_JED_EPOCH", bs * "_CONSTS_JED_EPOCH"
+        ref1, ref2 = bs * "_CONSTANTS_REF_FRAME", bs * "_CONSTS_REF_FRAME"
+        epoch = _pool_first(pool, (epoch1, epoch2), _JD2000)
+        ref = _pool_first(pool, (ref1, ref2), 1.0)
         both(a, b) = _pool_numbers(pool, a) !== nothing && _pool_numbers(pool, b) !== nothing
         # `tisbod_` reads the frame with `gipool_` after the epoch check and before the
         # check of the two frame forms.
         refid = _gipool_value(ref)
-        specerr = both("BODY$(sys)_CONSTANTS_JED_EPOCH", "BODY$(sys)_CONSTS_JED_EPOCH") ?
-            :competingepochspec : refid === nothing ? :intoutofrange :
-            both("BODY$(sys)_CONSTANTS_REF_FRAME", "BODY$(sys)_CONSTS_REF_FRAME") ?
-            :competingframespec : :none
+        specerr = both(epoch1, epoch2) ? :competingepochspec :
+            refid === nothing ? :intoutofrange :
+            both(ref1, ref2) ? :competingframespec : :none
         out[id] = BodyRot(
             ra, dec, value,
-            _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_RA"),
-            _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_DEC"),
-            _pool_numbers_or_empty(pool, "BODY$(id)_NUT_PREC_PM"),
-            _pool_numbers_or_empty(pool, "BODY$(sys)_NUT_PREC_ANGLES"),
+            _pool_numbers_or_empty(pool, bid * "_NUT_PREC_RA"),
+            _pool_numbers_or_empty(pool, bid * "_NUT_PREC_DEC"),
+            _pool_numbers_or_empty(pool, bid * "_NUT_PREC_PM"),
+            _pool_numbers_or_empty(pool, bs * "_NUT_PREC_ANGLES"),
             something(refid, _J2000_FRAME), epoch, _phase_degree(pool, sys), specerr
         )
     end
@@ -153,7 +122,7 @@ Value of `BODY<sys>_MAX_PHASE_DEGREE` rounded as CSPICE rounds it, or 1 if the v
 is absent. The value is not checked here; `_phase_ncoef` checks it at evaluation.
 """
 function _phase_degree(pool::AbstractDict, sys::Integer)
-    v = _pool_numbers(pool, "BODY$(sys)_MAX_PHASE_DEGREE")
+    v = _pool_numbers(pool, "BODY" * string(sys) * "_MAX_PHASE_DEGREE")
     (v === nothing || isempty(v)) && return Int32(1)
     return Int32(_nint(v[1]))                  # `i_dnnt` of `bodvcd_`'s value
 end
@@ -288,7 +257,7 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
 
     ra *= _RPD
     dec *= _RPD
-    w = _reduce_twopi(w * _RPD)
+    w = f2c_dmod(w * _RPD, _TWOPI)
     tipm = _eul313(w, _HALFPI - dec, ra + _HALFPI)
     br.ref == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(br.ref))
@@ -297,7 +266,7 @@ end
 """
     _body_state(ks, classid, et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the matrix of `_body_rotation` with its time derivative as `tisbod_` gives
+Return the matrix of `_body_rotation` with its time derivative as `tisbod_` gives
 them: from a binary PCK segment if one covers `et` (`_binary_pck_state`), else from the
 text PCK constants (`_text_pck_state`). Throws as `_body_rotation`.
 """
@@ -330,7 +299,7 @@ end
 """
     _text_pck_state(br, body, et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the matrix of `_text_pck_rotation` with its time derivative, with the
+Return the matrix of `_text_pck_rotation` with its time derivative, with the
 arithmetic of `tisbod_` of CSPICE: the rates of RA, DEC and W from the derivatives of
 their polynomials and trigonometric terms, written out as `tisbod_` writes them, and the
 derivative of the matrix from these angles and rates by `eul2xf_`. The derivative of
@@ -398,13 +367,13 @@ function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     end
     ra *= _RPD
     dec *= _RPD
-    w = _reduce_twopi(w * _RPD)
+    w = f2c_dmod(w * _RPD, _TWOPI)
     dra *= _RPD
     ddec *= _RPD
     dw *= _RPD
     x = eul2xf(SVector(w, _HALFPI - dec, ra + _HALFPI, dw, -ddec, dra), 3, 1, 3)
     r = _eul313(w, _HALFPI - dec, ra + _HALFPI)
-    dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+    dr = _m_blocks(x)[2]
     if br.ref != _J2000_FRAME
         c = inertial_rotation(br.ref)
         r, dr = _m_mxm(r, c), _m_mxm(dr, c)
@@ -424,7 +393,7 @@ from J2000 to the reference frame of the segment. Requires `seg.t0 <= primal(et)
     ang = pck_eval(data, seg, et, Val(0))[1]
     # `pcke02_` and `pcke20_` reduce W with `d_mod`, and `pcke03_` does not; the same
     # arithmetic keeps the value of CSPICE.
-    w = seg.dtype == 3 ? ang[3] : _reduce_twopi(ang[3])
+    w = seg.dtype == 3 ? ang[3] : f2c_dmod(ang[3], _TWOPI)
     tipm = _eul313(w, ang[2], ang[1])
     seg.frame == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(seg.frame))
@@ -433,7 +402,7 @@ end
 """
     _binary_pck_state(data, seg, et::Float64) -> Mat3{Taylor{1,Float64}}
 
-Contract: the matrix of `_binary_pck_rotation` with its time derivative, with the
+Return the matrix of `_binary_pck_rotation` with its time derivative, with the
 arithmetic of `pckmat_` and `tisbod_`: the angles and their rates of the segment
 (`chbint_` for type 2, `spke20_` for type 20; W reduced by whole turns as `pcke02_`
 and `pcke20_` do) go to `eul2xf_`, and both blocks are multiplied on the right by the
@@ -448,10 +417,9 @@ function _binary_pck_state(data::Vector{Float64}, seg::Segment, et::Float64)
     else
         ang, rate = pck_eval(data, seg, et, Val(1))
         x = eul2xf(
-            SVector(_reduce_twopi(ang[3]), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
+            SVector(f2c_dmod(ang[3], _TWOPI), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
         )
-        r = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
-        dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
+        r, dr = _m_blocks(x)
     end
     if seg.frame != _J2000_FRAME
         c = inertial_rotation(seg.frame)
@@ -512,21 +480,6 @@ function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T <: Real}
 end
 
 # --- fixed-offset (TK) frames ---------------------------------------------------------
-
-"""
-    _sharpr(m) -> Mat3{Float64}
-
-`m` with its columns made orthonormal as `sharpr_` of CSPICE does: column 1 scaled to
-unit length, column 3 the unit cross product of columns 1 and 2, column 2 the unit
-cross product of columns 3 and 1.
-"""
-function _sharpr(m::Mat3{Float64})
-    # `vhat_` and `ucrss_`, with the scaled norms of `sharpr_`
-    c1 = _m_hat(_m_col(m, 1))
-    c3 = _m_ucrss(c1, _m_col(m, 2))
-    c2 = _m_ucrss(c3, c1)
-    return _m_cols(c1, c2, c3)
-end
 
 """
     _q2m(q) -> Mat3{Float64}
@@ -600,7 +553,7 @@ function _tk_matrix(
         key = _tk_key(pool, idkey, namekey, "_MATRIX")
         _badkpv(pool, "TKFRAM", key, "=", 9, 1, 'N')
         m = Mat3{Float64}(pool[key])            # stored column by column
-        r = _sharpr(m)
+        r = _m_sharpr(m)
         c2 = dot(r[:, 2], m[:, 2]) < 0 ? -r[:, 2] : r[:, 2]
         c3 = dot(r[:, 3], m[:, 3]) < 0 ? -r[:, 3] : r[:, 3]
         return hcat(r[:, 1], c2, c3)
@@ -620,7 +573,7 @@ function _tk_matrix(
         # radian), from RADIANS without a unit, as `tkfram_` does.
         u = units isa Vector{String} && !isempty(units) ? units[1] : "RADIANS"
         rad = map(x -> convrt(x, u, "RADIANS"), (ang[1], ang[2], ang[3]))
-        return _eul2m(Float64(rad[1]), Float64(rad[2]), Float64(rad[3]), ax[1], ax[2], ax[3])
+        return _m_eul2m(Float64(rad[1]), Float64(rad[2]), Float64(rad[3]), ax[1], ax[2], ax[3])
     elseif kind == "QUATERNION"
         key = _tk_key(pool, idkey, namekey, "_Q")
         _badkpv(pool, "TKFRAM", key, "=", 4, 1, 'N')
@@ -632,14 +585,6 @@ function _tk_matrix(
                 "is not MATRIX, ANGLES or QUATERNION"
         )
     )
-end
-
-"Name of the frame with ID `id`, the built-in table first, as `frmnam_`; `nothing` if none."
-function _tk_frame_name(frames::AbstractDict, id::Integer)
-    typemin(Int32) <= id <= typemax(Int32) || return nothing
-    f = get(BUILTIN_FRAMES, Int32(id), nothing)
-    f === nothing && (f = get(frames, Int32(id), nothing))
-    return f === nothing ? nothing : f.name
 end
 
 """
@@ -660,7 +605,7 @@ function _tk_parse(pool::AbstractDict, frames::AbstractDict, frcode::Integer)
             "frame identification codes are required to be non-zero"
         )
     )
-    name = _tk_frame_name(frames, frcode)
+    name = frame_name(frames, frcode)
     name === nothing && throw(
         SpiceError(
             :incompleteframe,
@@ -802,16 +747,11 @@ end
 """
     frame_rotation(ks, from, to, et::T) -> Mat3{T}
 
-Matrix that rotates vectors from frame `from` to frame `to` at `et` (ET seconds),
-generic over the epoch type. The chain of `from` is evaluated link by link (class 4 to
-its relative frame, class 3 to the reference frame of its CK segment for `et`, classes 1
-and 2 to J2000) until it reaches `to` or J2000, then the chain of `to` until it meets it,
-as `zzrefch0_` of CSPICE does (`_chain_rotation`).
-`from == to` gives the identity.
-A class 3 (CK) frame is evaluated as `ckfrot_` does, see `_ck_frame_step`; with a
-`Taylor` epoch the result holds the derivatives of the interpolated rotation. Class 5
-(dynamic) and class 6 (switch) frames are evaluated as `zzdynrot_` and `zzswfxfm_` do,
-see `dynframes.jl` and `switchframes.jl`.
+Return the matrix that rotates vectors from frame `from` to frame `to` at `et` (ET
+seconds), generic over the epoch type. The frame chains are followed as `zzrefch0_` of
+CSPICE follows them; `from == to` gives the identity. A CK frame is evaluated as
+`ckfrot_` does; with a `Taylor` epoch the result holds the derivatives of the
+interpolated rotation.
 """
 function frame_rotation(ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
     from == to && return one(Mat3{T})
@@ -829,7 +769,7 @@ frame_rotation(ks::KernelSet, from::Integer, to::Integer, et::Real) =
 """
     _inertial_pair(T, from, to) -> Mat3{T}
 
-Contract: `frame_rotation` from the built-in inertial frame `from` to the built-in
+Return `frame_rotation` from the built-in inertial frame `from` to the built-in
 inertial frame `to != from`, without the lookups of the chains: both chains are one link
 to J2000, so the operations are those of the general path (`_frame_step` gives the
 transposed `inertial_rotation`, and the two links meet at J2000).

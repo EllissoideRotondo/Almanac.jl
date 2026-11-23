@@ -5,10 +5,9 @@ its argument order with the few exceptions below. It departs from CSPICE where t
 interface relies on hidden state, on output arguments or on arguments that only manage
 C memory.
 
-Every docstring links to the NAIF page of the routine it ports: the `_c` page of
-CSPICE, or the SPICELIB page for a Fortran routine that CSPICE does not wrap. The NAIF
-page is the full specification. The docstring gives the Julia signature, the units and
-what differs.
+The docstring of each ported routine links to its NAIF page, the `_c` page of CSPICE or,
+for a Fortran routine that CSPICE does not wrap, the SPICELIB page. That page is the full
+specification; the docstring gives the Julia signature, the units and what differs.
 
 ## Names, arguments and results
 
@@ -27,11 +26,12 @@ what differs.
   `SpiceError(:badvarname)`. CSPICE keeps leading blanks as part of the name and stores
   a blank name.
 - **Indices** count from 1, where CSPICE counts from 0: window intervals, EK rows.
-- **Cells.** A CSPICE cell becomes a `Vector`, kept sorted and without duplicates when
-  it is a set, or a [`Window`](@ref). Both grow as needed and have no declared size. The calls that fill one ([`spkobj!`](@ref), [`spkcov!`](@ref), [`ckobj!`](@ref),
-  [`ckcov!`](@ref), [`pckfrm!`](@ref), [`pckcov!`](@ref), [`dskobj!`](@ref),
-  [`dsksrf!`](@ref)) take it as the first argument; CSPICE takes it last. SPICE.jl
-  also puts it first, except in `ckobj!` and `ckcov!`.
+- **Cells.** A CSPICE cell becomes a `Vector`, sorted and without duplicates when it is
+  a set, or a [`Window`](@ref); neither has a declared size. The calls that fill one
+  ([`spkobj!`](@ref), [`spkcov!`](@ref), [`ckobj!`](@ref), [`ckcov!`](@ref),
+  [`pckfrm!`](@ref), [`pckcov!`](@ref), [`dskobj!`](@ref), [`dsksrf!`](@ref)) take it
+  first, where CSPICE takes it last; SPICE.jl also puts it first, except in `ckobj!` and
+  `ckcov!`.
 
 ## Contexts in place of global state
 
@@ -48,6 +48,8 @@ an optional first argument, written `[ctx,]` in the reference, and uses
   of CSPICE. Its `kind` is the CSPICE short message as a lower-case symbol
   (`SPICE(INVALIDDEGREE)` is `:invaliddegree`), and its `msg` is the text. Conditions
   that CSPICE does not check have kinds of Almanac.jl, such as `:badarg`.
+- Because each kind is that of the routine a call ports, two calls can report one
+  failure with different kinds, as in CSPICE; [`SpiceError`](@ref) gives examples.
 - Missing SPK data throw the subtype [`SpkInsufficientDataError`](@ref), whose fields
   name the bodies and the epoch, and say whether the missing body has data at other
   epochs.
@@ -60,19 +62,19 @@ an optional first argument, written `[ctx,]` in the reference, and uses
 - A file handle is an object, a [`DAFHandle`](@ref) or a [`DASHandle`](@ref), passed
   to every call. No call acts on a hidden "current" file.
 - A file open for write can also be read, by [`dafopr`](@ref), [`dasopr`](@ref),
-  [`ekopr`](@ref) or [`furnsh`](@ref). CSPICE refuses this (`RWCONFLICT`). It is safe
-  because a DAF array is complete before its summary is written, and a DAS file changes
-  on disk only at [`dascls`](@ref).
+  [`ekopr`](@ref) or [`furnsh`](@ref), which CSPICE refuses (`RWCONFLICT`). A reader
+  sees a valid file, because a DAF array is complete before its summary is written and
+  a DAS file changes on disk only at [`dascls`](@ref).
 - A loaded kernel can be opened for write, for instance by [`spkopa`](@ref). A context
   sees only the segments written before it loaded the file, so it sees new segments
-  only after it loads the file again. A second write open of one
-  file still throws `SpiceError(:fileopenconflict)`.
+  only after it loads the file again. A second write open of one file throws
+  `SpiceError(:fileopenconflict)`.
 
 ## No state between calls
 
 CSPICE keeps buffers and the results of earlier searches between calls, for speed.
-Almanac.jl keeps none: a query is a function of the loaded kernels and of its
-arguments. This has three consequences.
+Almanac.jl keeps none, so a query is a function of the loaded kernels and of its
+arguments only, with three consequences.
 
 - **Threads.** Queries take no lock, and kernels can be loaded while other threads
   query; see [Contexts and threads](@ref).
@@ -87,9 +89,9 @@ arguments. This has three consequences.
 
 ## Porting from SPICE.jl
 
-SPICE.jl already returns results, ends mutating calls in `!`, returns `nothing` for a
-failed lookup and counts from 1. A program written for SPICE.jl changes in these
-places:
+SPICE.jl returns results, ends mutating calls in `!`, returns `nothing` for a failed
+lookup and counts from 1, as Almanac.jl does. A program written for SPICE.jl changes in
+these places:
 
 - Results are static arrays, which cannot be changed in place.
 - The error type is `Almanac.SpiceError`, with its `kind` field, not

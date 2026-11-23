@@ -6,26 +6,6 @@
 # the angles need the arcsine, which the `Taylor` type does not have).
 
 """
-    _geo_illum_setup(ks, method, target, fixref, abcorr, obsrvr)
-        -> (corr, trgcde, obscde, fixfid, m)
-
-The checks that `illumg` and `illumf` share, in the order of CSPICE.
-"""
-@inline function _geo_illum_setup(
-        ks::KernelSet, method::AbstractString, target::NameOrID,
-        fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
-    )
-    corr = _geo_abcorr(abcorr)
-    trgcde = _geo_body(ks, target, "target")
-    m = _geo_method(ks, trgcde, method)
-    m.subtyp == 0x00 || _geo_sub_in_method(method)
-    obscde = _geo_body(ks, obsrvr, "observer")
-    obscde == trgcde && _geo_same_bodies("illumination angles", obsrvr)
-    fixfid = _geo_fixfid(ks, fixref, trgcde, target)
-    return corr, trgcde, obscde, fixfid, m
-end
-
-"""
     _geo_illum_states(ks, corr, trgcde, obscde, srccde, fixfid, spoint, et)
         -> (trgepc, srfvec, tipos)
 
@@ -39,10 +19,45 @@ locus `OBSERVER`), which gives `tipos`.
         obscde::Int32, srccde::Int32, fixfid::Int32, spoint::Vec3{Float64}, et
     )
     f = _GeoFixed(spoint, zero(Vec3{Float64}), 0.0, trgcde, fixfid)
-    opstat, lt = _geo_cvt(ks, f, et, fixfid, _GEO_AT_TARGET, corr, obscde)
+    opstat, lt = _geo_cv(ks, f, et, fixfid, _GEO_AT_TARGET, corr, obscde)
     trgepc = et + _geo_sign(corr) * lt
-    tistat, _ = _geo_cvo(ks, srccde, trgepc, fixfid, _GEO_AT_OBSERVER, corr, f)
+    tistat, _ = _geo_cv(ks, srccde, trgepc, fixfid, _GEO_AT_OBSERVER, corr, f)
     return trgepc, SVector(opstat[1], opstat[2], opstat[3]), SVector(tistat[1], tistat[2], tistat[3])
+end
+
+"""
+    _geo_illum_prep(ks, method, target, ilusrc, et, fixref, abcorr, obsrvr, spoint)
+        -> (m, trgcde, fixfid, sp, e, trgepc, srfvec, tipos)
+
+The checks that `illumg` and `illumf` share, in the order of CSPICE, the checked epoch
+`e`, and the states of `_geo_illum_states`.
+"""
+@inline function _geo_illum_prep(
+        ks::KernelSet, method::AbstractString, target::NameOrID, ilusrc::NameOrID,
+        et::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
+        spoint::AbstractVector
+    )
+    corr = Aberration(abcorr)
+    trgcde = _body_id(ks, target, "target")
+    m = _geo_method(ks, trgcde, method)
+    m.subtyp == 0x00 || _geo_sub_in_method(method)
+    obscde = _body_id(ks, obsrvr, "observer")
+    obscde == trgcde && _geo_same_bodies("illumination angles", obsrvr)
+    fixfid = _geo_fixfid(ks, fixref, trgcde, target)
+    sp = _dsk_vec3(spoint)
+    e = check_epoch(et)
+    srccde = _body_id(ks, ilusrc, "illumination source")
+    trgepc, srfvec, tipos = _geo_illum_states(ks, corr, trgcde, obscde, srccde, fixfid, sp, e)
+    return m, trgcde, fixfid, sp, e, trgepc, srfvec, tipos
+end
+
+"The phase, incidence and emission angles for the surface normal `normal`."
+@inline _geo_illum_angles(normal, obspos, tipos) =
+    (vsep(obspos, tipos), vsep(normal, tipos), vsep(normal, obspos))
+
+@inline function _geo_ellipsoid_normal(ks::KernelSet, trgcde::Int32, sp::Vec3{Float64})
+    a, b, c = _positive_radii(ks, trgcde)
+    return _m_surfnm(a, b, c, sp)
 end
 
 function _geo_illumg(
@@ -50,19 +65,14 @@ function _geo_illumg(
         target::NameOrID, ilusrc::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, spoint::AbstractVector
     )
-    corr, trgcde, obscde, fixfid, m = _geo_illum_setup(ks, method, target, fixref, abcorr, obsrvr)
-    sp = _geo_pos(spoint)
-    e = check_epoch(et)
-    srccde = _geo_body(ks, ilusrc, "illumination source")
-    trgepc, srfvec, tipos = _geo_illum_states(ks, corr, trgcde, obscde, srccde, fixfid, sp, e)
+    m, trgcde, fixfid, sp, e, trgepc, srfvec, tipos =
+        _geo_illum_prep(ks, method, target, ilusrc, et, fixref, abcorr, obsrvr, spoint)
     normal = if m.dsk
         _dsk_bun(ks, tols, trgcde, m.srflst, _geo_plain(e), fixfid, sp)
     else
-        a, b, c = _geo_radii(ks, trgcde)
-        _m_surfnm(a, b, c, sp)
+        _geo_ellipsoid_normal(ks, trgcde, sp)
     end
-    obspos = -srfvec
-    return trgepc, srfvec, vsep(obspos, tipos), vsep(normal, tipos), vsep(normal, obspos)
+    return trgepc, srfvec, _geo_illum_angles(normal, -srfvec, tipos)...
 end
 
 function _geo_illumf(
@@ -70,18 +80,11 @@ function _geo_illumf(
         target::NameOrID, ilusrc::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, spoint::AbstractVector
     )
-    corr, trgcde, obscde, fixfid, m = _geo_illum_setup(ks, method, target, fixref, abcorr, obsrvr)
-    sp = _geo_pos(spoint)
-    e = check_epoch(et)
-    srccde = _geo_body(ks, ilusrc, "illumination source")
-    trgepc, srfvec, tipos = _geo_illum_states(ks, corr, trgcde, obscde, srccde, fixfid, sp, e)
+    m, trgcde, fixfid, sp, e, trgepc, srfvec, tipos =
+        _geo_illum_prep(ks, method, target, ilusrc, et, fixref, abcorr, obsrvr, spoint)
     obspos = -srfvec
     if !m.dsk
-        a, b, c = _geo_radii(ks, trgcde)
-        normal = _m_surfnm(a, b, c, sp)
-        phase = vsep(obspos, tipos)
-        incdnc = vsep(normal, tipos)
-        emissn = vsep(normal, obspos)
+        phase, incdnc, emissn = _geo_illum_angles(_geo_ellipsoid_normal(ks, trgcde, sp), obspos, tipos)
         return trgepc, srfvec, phase, incdnc, emissn, primal(emissn) <= _HALFPI,
             primal(incdnc) <= _HALFPI
     end
@@ -90,9 +93,7 @@ function _geo_illumf(
     sh = _geo_dskshape(ks, tols, trgcde, fixfid, _GEO_NOSURF)
     tp = _geo_plain(trgepc)
     normal = _m_hat(_dsk_bun(ks, tols, trgcde, _GEO_NOSURF, tp, fixfid, sp))
-    phase = vsep(obspos, tipos)
-    incdnc = vsep(normal, tipos)
-    emissn = vsep(normal, obspos)
+    phase, incdnc, emissn = _geo_illum_angles(normal, obspos, tipos)
     visibl = emissn <= _HALFPI
     lit = incdnc <= _HALFPI
     if lit || visibl
@@ -269,10 +270,10 @@ function phaseq(
         ks::KernelSet, et::Real, target::NameOrID, illmn::NameOrID, obsrvr::NameOrID,
         abcorr::AbcorrArg
     )
-    targ = _geo_body(ks, target, "target")
-    illum = _geo_body(ks, illmn, "illumination source")
-    obs = _geo_body(ks, obsrvr, "observer")
-    corr = _geo_abcorr(abcorr)
+    targ = _body_id(ks, target, "target")
+    illum = _body_id(ks, illmn, "illumination source")
+    obs = _body_id(ks, obsrvr, "observer")
+    corr = Aberration(abcorr)
     corr.transmit && throw(
         SpiceError(
             :invalidoption,
@@ -295,8 +296,7 @@ end
 
 The phase angle as `zzgfpaq` computes it, for three distinct bodies: pi minus the angle
 between the position of `targ` seen from `obs` and the position of `illum` seen from
-`targ` at the epoch `et - lt` (at `et` without correction), in J2000. `phaseq` and the
-phase angle of the geometry finder.
+`targ` at the epoch `et - lt` (at `et` without correction), in J2000.
 """
 @inline function _geo_phase(
         ks::KernelSet, targ::Int32, illum::Int32, obs::Int32, corr::Aberration, et
@@ -345,7 +345,7 @@ end
 function _geo_sepradius(ks::KernelSet, body::Int32, shape::AbstractString)
     sh = _geo_sepshape(shape)
     sh == 0x01 && return 0.0
-    sh == 0x02 && return maximum(_geo_radii(ks, body))
+    sh == 0x02 && return maximum(_positive_radii(ks, body))
     throw(
         SpiceError(
             :notrecognized,
@@ -415,16 +415,16 @@ function trgsep(
     _geo_nonempty(frame2, "frame 2")
     _geo_nonempty(obsrvr, "observer")
     _geo_nonempty(abcorr, "aberration correction")
-    b1 = _geo_body(ks, targ1, "target 1")
-    b2 = _geo_body(ks, targ2, "target 2")
-    obs = _geo_body(ks, obsrvr, "observer")
+    b1 = _body_id(ks, targ1, "target 1")
+    b2 = _body_id(ks, targ2, "target 2")
+    obs = _body_id(ks, obsrvr, "observer")
     (obs == b1 || obs == b2 || b1 == b2) && throw(
         SpiceError(
             :bodiesnotdistinct,
             "the targets $targ1 and $targ2 and the observer $obsrvr must be three different bodies"
         )
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     r1 = _geo_sepradius(ks, b1, shape1)
     r2 = _geo_sepradius(ks, b2, shape2)
     e = check_epoch(et)

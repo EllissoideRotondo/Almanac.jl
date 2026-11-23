@@ -97,7 +97,7 @@ relative to the target in the frame `fixfid`, corrected as `corr` says, the epoc
     tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, corr, obscde)
     obspos = -tpos
     trgepc = et + s * lt
-    radii = _geo_radii(ks, trgcde)
+    radii = _positive_radii(ks, trgcde)
     return fixfid, near, sh, et, s, obspos, trgepc, radii
 end
 
@@ -105,9 +105,9 @@ function _geo_subpnt(
         ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
-    trgcde = _geo_body(ks, target, "target")
-    obscde = _geo_body(ks, obsrvr, "observer")
+    corr = Aberration(abcorr)
+    trgcde = _body_id(ks, target, "target")
+    obscde = _body_id(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("sub-observer point", obsrvr)
     fixfid, near, sh, et, s, obspos, trgepc, radii =
         _geo_sub_setup(ks, tols, method, target, et0, fixref, corr, trgcde, obscde)
@@ -157,7 +157,7 @@ function _geo_subslr(
         ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     corr.transmit && throw(
         SpiceError(
             :notsupported,
@@ -165,8 +165,8 @@ function _geo_subslr(
                 "accepts reception corrections only"
         )
     )
-    trgcde = _geo_body(ks, target, "target")
-    obscde = _geo_body(ks, obsrvr, "observer")
+    trgcde = _body_id(ks, target, "target")
+    obscde = _body_id(ks, obsrvr, "observer")
     trgcde == Int32(10) && throw(
         SpiceError(
             :invalidtarget,
@@ -222,18 +222,18 @@ end
 
 `spkcpo` for the observer at the surface point `point` of the body `f.ctr`, in the
 body-fixed frame `fixfid` with the locus `OBSERVER`. For a plain `point` this is
-`_geo_cvo`; for another number type the derivative parts of the point enter the
+`_geo_cv`; for another number type the derivative parts of the point enter the
 position at first order (the observer moves with the point).
 """
 @inline _geo_cvo_point(
     ks::KernelSet, targ::Int32, et, fixfid::Int32, corr::Aberration,
     f::_GeoFixed, ::Vec3{Float64}
-) = _geo_cvo(ks, targ, et, fixfid, _GEO_AT_OBSERVER, corr, f)
+) = _geo_cv(ks, targ, et, fixfid, _GEO_AT_OBSERVER, corr, f)
 @inline function _geo_cvo_point(
         ks::KernelSet, targ::Int32, et, fixfid::Int32,
         corr::Aberration, f::_GeoFixed, point::SVector{3}
     )
-    st, lt = _geo_cvo(ks, targ, et, fixfid, _GEO_AT_OBSERVER, corr, f)
+    st, lt = _geo_cv(ks, targ, et, fixfid, _GEO_AT_OBSERVER, corr, f)
     d = point - f.pos
     return vcat(SVector(st[1], st[2], st[3]) - d, SVector(st[4], st[5], st[6]) - zero(d)), lt
 end
@@ -242,12 +242,12 @@ end
 @inline _geo_cvt_point(
     ks::KernelSet, f::_GeoFixed, et, fixfid::Int32, corr::Aberration,
     obs::Int32, ::Vec3{Float64}
-) = _geo_cvt(ks, f, et, fixfid, _GEO_AT_TARGET, corr, obs)
+) = _geo_cv(ks, f, et, fixfid, _GEO_AT_TARGET, corr, obs)
 @inline function _geo_cvt_point(
         ks::KernelSet, f::_GeoFixed, et, fixfid::Int32,
         corr::Aberration, obs::Int32, point::SVector{3}
     )
-    st, lt = _geo_cvt(ks, f, et, fixfid, _GEO_AT_TARGET, corr, obs)
+    st, lt = _geo_cv(ks, f, et, fixfid, _GEO_AT_TARGET, corr, obs)
     d = point - f.pos
     return vcat(SVector(st[1], st[2], st[3]) + d, SVector(st[4], st[5], st[6]) - zero(d)), lt
 end

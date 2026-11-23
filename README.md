@@ -30,12 +30,11 @@ the [issues](https://github.com/Orbitology/Almanac.jl/issues).
 
 ## Installation
 
-Almanac.jl requires Julia 1.10 or later. It is not yet registered, so add it from its
-repository:
+Almanac.jl requires Julia 1.10 or later. Install it with the package manager:
 
 ```julia
 using Pkg
-Pkg.add(url = "https://github.com/Orbitology/Almanac.jl")
+Pkg.add("Almanac")
 ```
 
 ## Quickstart
@@ -73,8 +72,8 @@ Beyond CSPICE:
 
 - **Thread safety.** Each query reads an immutable snapshot of the loaded kernels, so any
   number of threads can query at once, even while another thread loads kernels.
-- **Independent kernel sets.** A `SpiceContext` holds its own kernels and settings, so you
-  can compare two ephemerides or keep two missions apart.
+- **Independent kernel sets.** A `SpiceContext` holds its own kernels and settings, so a
+  program can compare two ephemerides or keep two missions apart.
 - **Derivatives.** `spkder` and `pxder` return time derivatives of any order, and states,
   rotations and surface points differentiate with respect to the epoch with ForwardDiff.jl,
   Enzyme.jl, Mooncake.jl, Zygote.jl, ReverseDiff.jl and Tracker.jl.
@@ -92,10 +91,11 @@ The package is under active development, and its interface may still change.
 ## Tutorials and Documentation
 
 For information on using the package, see the
-[documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a getting-started
-page that goes from loading kernels to an event search, followed by tutorials, a manual
-on the relation to CSPICE, and the API reference. The docstring of each ported routine links to its NAIF page. If you are porting a
-program from CSPICE or SPICE.jl, start with the
+[documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a
+getting-started page that goes from loading kernels to an event search, followed by
+tutorials, a manual on the relation to CSPICE, and the API reference, in which the
+docstring of each ported routine links to its NAIF page. To port a program from CSPICE or
+SPICE.jl, start with the
 [conventions](https://orbitology.github.io/Almanac.jl/dev/manual/conventions/).
 
 ## Citing

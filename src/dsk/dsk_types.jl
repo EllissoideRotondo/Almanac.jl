@@ -1,6 +1,6 @@
 # Data types of the DLA and DSK layers. This file comes before `types.jl` because
-# `Loaded` and `KernelSet` hold these types. Every type here is immutable. The segment table of a `KernelSet` is built here too,
-# because the empty set of the default context needs it when the package loads.
+# `Loaded` and `KernelSet` hold these types. The segment table of a `KernelSet` is built
+# here too, because the empty set of the default context needs it when the package loads.
 
 """
     DLADescr
@@ -146,8 +146,7 @@ Immutable snapshot of the six DSK tolerances of `dskgtl`/`dskstl`, in keyword or
 `xfract` (1, plate expansion fraction), `sgreed` (2, segment boundary margin),
 `sgpadm` (3, segment pad margin), `ptmemm` (4, surface point membership margin),
 `angmrg` (5, angular rounding margin, fixed), `lonali` (6, longitude alias margin,
-fixed). Declared `mutable` with `const` fields only so that it lives behind one
-pointer, as `TimeDefaults` does.
+fixed).
 """
 mutable struct DSKTolerances
     const xfract::Float64

@@ -8,6 +8,23 @@ function pool_value(ks::KernelSet, name::AbstractString)
 end
 
 """
+    _pool_get(ks, name, who, V, what) -> V
+
+The stored values of the pool variable `name`, not a copy, after the checks of the C
+wrapper `who`: `SpiceError(:emptystring)`, `:kernelvarnotfound`, and `:typemismatch`
+unless the values are a `V` (`what` names that type in the message).
+"""
+function _pool_get(
+        ks::KernelSet, name::AbstractString, who::AbstractString, ::Type{V},
+        what::AbstractString
+    ) where {V}
+    _chkfstr(who, "variable name", name)          # CHKFSTR of the C wrapper
+    v = pool_value(ks, name)
+    v isa V || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not $what"))
+    return v::V
+end
+
+"""
     gdpool([ctx,] name) -> Vector{Float64}
 
 Return the numeric values of the kernel-pool variable `name`, as
@@ -38,10 +55,7 @@ julia> gdpool(ctx, "BODY399_RADII")
 See also [`gipool`](@ref), [`gcpool`](@ref), [`bodvrd`](@ref), [`pdpool`](@ref).
 """
 function gdpool(ks::KernelSet, name::AbstractString)
-    _chkfstr("gdpool", "variable name", name)     # CHKFSTR of gdpool_c
-    v = pool_value(ks, name)
-    v isa Vector{Float64} || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not numeric"))
-    return copy(v)
+    return copy(_pool_get(ks, name, "gdpool", Vector{Float64}, "numeric"))
 end
 
 """
@@ -60,8 +74,7 @@ Throws `SpiceError`:
 - `:intoutofrange` if a value is outside the 32-bit integers or NaN.
 """
 function gipool(ks::KernelSet, name::AbstractString)
-    _chkfstr("gipool", "variable name", name)     # CHKFSTR of gipool_c
-    v = gdpool(ks, name)
+    v = _pool_get(ks, name, "gipool", Vector{Float64}, "numeric")
     for (i, x) in enumerate(v)
         # `gipool` of CSPICE: DBLE(INTMIN()) <= x <= DBLE(INTMAX()), then NINT
         _gipool_value(x) === nothing && _gipool_range_error(name, i, x)
@@ -83,17 +96,14 @@ Throws `SpiceError(:emptystring)` if `name` is the empty string,
 `SpiceError(:typemismatch)` if it holds numeric values.
 """
 function gcpool(ks::KernelSet, name::AbstractString)
-    _chkfstr("gcpool", "variable name", name)     # CHKFSTR of gcpool_c
-    v = pool_value(ks, name)
-    v isa Vector{String} || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not character"))
-    return copy(v)
+    return copy(_pool_get(ks, name, "gcpool", Vector{String}, "character"))
 end
 
 """
     _pool_key(prefix, mid, s1, s2="", upper=false) -> String
 
-The pool name `prefix * mid * s1 * s2`, built in one buffer: `mid` is an integer (its
-decimal digits) or a string (in upper case if `upper`).
+Return the pool name `prefix * mid * s1 * s2`, built in one buffer: `mid` is an integer
+(its decimal digits) or a string (in upper case if `upper`).
 """
 function _pool_key(
         prefix::String, mid::Union{Integer, AbstractString}, s1::AbstractString,
@@ -126,7 +136,6 @@ function _pool_key(
     return String(buf)
 end
 
-"The pool name `BODY<code>_<item>`, with the blanks around `item` removed."
 _body_key(code::Integer, item::AbstractString) = _pool_key("BODY", code, "_", strip(item))
 
 # `bodvrd_c` signals SPICE(NOTRANSLATION) for a name without a code, where the state
@@ -145,8 +154,7 @@ Return the values of the kernel-pool variable `BODY<id>_<item>` for `body`, as
 [`bodvrd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodvrd_c.html).
 
 `body` is a body name, a string that holds an integer (`"399"`) or an integer NAIF ID
-code. `item` is case sensitive, as in CSPICE;
-blanks around it are ignored. The values have the units of the kernel: km for
+code. `item` is case sensitive, as in CSPICE; blanks around it are ignored. The values have the units of the kernel: km for
 `"RADII"`, km^3/s^2 for `"GM"` in the NAIF kernels. There is no `maxn` argument.
 
 Throws `SpiceError`:
@@ -167,6 +175,60 @@ function bodvrd(ks::KernelSet, body::NameOrID, item::AbstractString)
     body isa AbstractString && _chkfstr("bodvrd", "body name", body)   # CHKFSTR of bodvrd_c,
     _chkfstr("bodvrd", "item", item)                                     # body then item
     return gdpool(ks, _body_key(_bodvrd_code(ks, body), item))
+end
+
+const _RADII_KEYS = String[string("BODY", i, "_RADII") for i in 1:999]
+
+@noinline function _bad_radii(body, v, kind::Symbol = :invalidcount)
+    v === nothing && throw(
+        SpiceError(
+            :kernelvarnotfound,
+            "the variable BODY$(body)_RADII could not be found in the kernel pool"
+        )
+    )
+    (v isa Vector{Float64} || v isa NTuple{3, Float64}) || throw(
+        SpiceError(
+            :typemismatch,
+            "the variable BODY$(body)_RADII is not numeric"
+        )
+    )
+    length(v) == 3 || throw(
+        SpiceError(
+            length(v) > 3 ? :arraytoosmall : kind,
+            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
+        )
+    )
+    throw(SpiceError(:badaxislength, "a radius of the body $body is not positive: $(collect(v))"))
+end
+
+"""
+    _radii3(ks, body, kind) -> NTuple{3,Float64}
+
+`zzbodvcd` for `RADII`: three values, with no test of their signs. Throws `SpiceError`
+(`:kernelvarnotfound`, `:typemismatch`, `:arraytoosmall`, and `kind` for fewer than 3
+values).
+"""
+@inline function _radii3(ks::KernelSet, body::Integer, kind::Symbol)
+    v = get(
+        ks.pool, 1 <= body <= 999 ? (@inbounds _RADII_KEYS[body]) :
+            string("BODY", body, "_RADII"), nothing
+    )
+    v isa Vector{Float64} || _bad_radii(body, v, kind)
+    length(v) == 3 || _bad_radii(body, v, kind)
+    return @inbounds (v[1], v[2], v[3])
+end
+
+"""
+    _positive_radii(ks, body) -> NTuple{3,Float64}
+
+`zzgftreb`: the three radii of `body` from the kernel pool. Throws `SpiceError`
+(`:kernelvarnotfound`, `:typemismatch`, `:invalidcount`, `:badaxislength`) unless
+they are three positive values. No allocation for an ID in 1:999.
+"""
+@inline function _positive_radii(ks::KernelSet, body::Integer)
+    a, b, c = _radii3(ks, body, :invalidcount)
+    (a > 0.0 && b > 0.0 && c > 0.0) || _bad_radii(body, (a, b, c))
+    return a, b, c
 end
 
 """
@@ -194,6 +256,21 @@ function bods2c(ks::KernelSet, name::AbstractString)
     _chkfstr("bods2c", "body name", name)         # CHKFSTR of bods2c_c
     c = _body_code_lookup(ks.name2code, name)
     return c === nothing ? nothing : Int(c)
+end
+
+@noinline _no_body_id(what, name) = throw(
+    SpiceError(
+        :idcodenotfound,
+        "the $what, '$name', is not a recognized name for an ephemeris object"
+    )
+)
+
+"The body code of `body` (a code, or a name or an integer string for `bods2c`); `what` names it in the error."
+@inline _body_id(::KernelSet, id::Integer, ::AbstractString) = Int32(id)
+function _body_id(ks::KernelSet, name::AbstractString, what::AbstractString)
+    code = bods2c(ks, name)
+    code === nothing && _no_body_id(what, name)
+    return Int32(code)
 end
 
 """
@@ -344,13 +421,17 @@ function namfrm(ks::KernelSet, name::AbstractString)
     return _namfrm(ks, name)
 end
 
-"Contract: `namfrm_` of SPICELIB, without the empty-string check of `namfrm_c`: the frame ID of `name`, or 0."
+"Return the frame ID of `name`, or 0, as `namfrm_` of SPICELIB (without the empty-string check of `namfrm_c`)."
 function _namfrm(ks::KernelSet, name::AbstractString)
     # The lookups of `frame_id`, without its error for an unknown name.
     id = name_lookup(BUILTIN_FRAMENAME2ID, name)
     id === nothing && (id = name_lookup(ks.framename2id, name))
     return id === nothing ? 0 : Int(id)
 end
+
+"The frame ID of `ref`: an ID as it is, a name through `_namfrm` (0 if it is not known)."
+@inline _frame_code(::KernelSet, ref::Integer) = Int32(ref)
+_frame_code(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
 
 """
     frmnam([ctx,] id) -> String

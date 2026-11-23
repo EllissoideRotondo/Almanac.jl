@@ -10,12 +10,7 @@
 # Tolerances
 # ---------------------------------------------------------------------------------------
 
-"""
-    dsktolerances(ctx::SpiceContext) -> DSKTolerances
-
-Contract: returns the current DSK tolerances of `ctx` with one atomic read; the result
-never changes.
-"""
+"The DSK tolerances of `ctx`, read once."
 dsktolerances(ctx::SpiceContext) = @atomic ctx.dsktols
 
 """
@@ -641,9 +636,7 @@ Insert the ID codes of the surfaces of the body `bodyid` that have a segment in 
 file `path` into the vector `ids`, as
 [`dsksrf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dsksrf_c.html) does with a SPICE cell.
 
-`ids` is used as a set: on return it is sorted and without duplicates. The vector
-comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
-unchanged. Throws the errors of [`dskobj`](@ref).
+`ids` is used as a set, as in [`dskobj!`](@ref). Throws the errors of [`dskobj`](@ref).
 """
 dsksrf!(ids::AbstractVector{<:Integer}, path::AbstractString, bodyid::Integer) =
     _add_ids!(ids, dsksrf(path, bodyid))
@@ -652,45 +645,36 @@ dsksrf!(ids::AbstractVector{<:Integer}, path::AbstractString, bodyid::Integer) =
 # Ray-surface intercept on the loaded segments
 # ---------------------------------------------------------------------------------------
 
-"The body code of the target (a name, or a string that holds an integer, or a code)."
-@inline _dsk_target(::KernelSet, target::Integer) = Int32(target)
-function _dsk_target(ks::KernelSet, target::AbstractString)
-    code = bods2c(ks, target)
-    code === nothing && throw(
-        SpiceError(
-            :idcodenotfound, "the target, '$target', is not " *
-                "a recognized name for an ephemeris object"
-        )
-    )
-    return Int32(code)
-end
-
-@noinline _dsk_bad_frame(kind::Symbol, fixref, target) = throw(
+@noinline _dsk_bad_frame(kind::Symbol, fixref, target, center) = throw(
     SpiceError(
         kind,
-        kind === :idcodenotfound ? "the reference frame $fixref is not recognized" :
+        kind === :invalidframe ?
+            "the reference frame $fixref is not centered at the target body $target; the ID " *
+            "code of the frame center is $center" :
             kind === :noframeinfo ? "attributes of the reference frame $fixref could not be determined" :
-            "the reference frame $fixref is not centered at the target body $target"
+            "the reference frame $fixref is not recognized"
     )
 )
 
 """
-    _dsk_fixfid(ks, fixref, trgcde, target) -> Int32
+    _dsk_fixfid(ks, fixref, trgcde, target, nocode = :idcodenotfound, noinfo = :noframeinfo) -> Int32
 
-The ID of the body-fixed frame `fixref` (a name or an ID) after the checks of
-`dskxsi`: the frame is known (`SpiceError(:idcodenotfound)`, `:noframeinfo`) and its
-center is the target (`:invalidframe`).
+The ID of the body-fixed frame `fixref` (a name or an ID) after the checks of `dskxsi`:
+the frame is known (`SpiceError(nocode)` for a name without an ID, `SpiceError(noinfo)`
+for an ID without a frame) and its center is the target (`:invalidframe`). The
+geometry calls (`_geo_fixfid`) throw `:noframe` for both.
 """
-@inline function _dsk_fixfid(ks::KernelSet, fixref, trgcde::Int32, target)
-    fixfid = _dsk_frame_code(ks, fixref)
-    fixfid == 0 && _dsk_bad_frame(:idcodenotfound, fixref, target)
+@inline function _dsk_fixfid(
+        ks::KernelSet, fixref, trgcde::Int32, target,
+        nocode::Symbol = :idcodenotfound, noinfo::Symbol = :noframeinfo
+    )
+    fixfid = _frame_code(ks, fixref)
+    fixfid == 0 && _dsk_bad_frame(nocode, fixref, target, 0)
     fd = _frame_def_or_nothing(ks, fixfid)
-    fd === nothing && _dsk_bad_frame(:noframeinfo, fixref, target)
-    fd.center == trgcde || _dsk_bad_frame(:invalidframe, fixref, target)
+    fd === nothing && _dsk_bad_frame(noinfo, fixref, target, 0)
+    fd.center == trgcde || _dsk_bad_frame(:invalidframe, fixref, target, fd.center)
     return fixfid
 end
-@inline _dsk_frame_code(::KernelSet, fixref::Integer) = Int32(fixref)
-_dsk_frame_code(ks::KernelSet, fixref::AbstractString) = Int32(_namfrm(ks, fixref))
 
 @noinline _dsk_bad_pri() = throw(
     SpiceError(
@@ -770,7 +754,7 @@ dskxsi(pri::Bool, target::NameOrID, srflst, et::Real, fixref::NameOrID, vertex, 
         et::Real, fixref, vertex, raydir
     )
     pri && _dsk_bad_pri()
-    trgcde = _dsk_target(ks, target)
+    trgcde = _body_id(ks, target, "target")
     fixfid = _dsk_fixfid(ks, fixref, trgcde, target)
     xpt, idx, plid, found = _dsk_bux(
         ks, tols, trgcde, srflst, Float64(et), fixfid,
@@ -829,7 +813,7 @@ function _dsk_xv!(
     nrays < 1 && throw(SpiceError(:invalidcount, "dskxv: the number of rays must be positive"))
     (_dsk_count3(dirarr) == nrays && length(xptarr) == nrays && length(fndarr) == nrays) ||
         throw(SpiceError(:badarg, "dskxv: the ray arrays and the result arrays must have one element for each ray"))
-    trgcde = _dsk_target(ks, target)
+    trgcde = _body_id(ks, target, "target")
     fixfid = _dsk_fixfid(ks, fixref, trgcde, target)
     t = Float64(et)
     segs = _dsk_body_segments(ks, trgcde)

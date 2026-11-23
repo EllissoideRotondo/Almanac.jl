@@ -100,9 +100,13 @@ function ekopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0
                 "characters must be non-negative but was $ncomch."
         )
     )
-    h = dasonw(path, "EK", ifname, (Int(ncomch) + 1023) ÷ 1024)
+    return _ekw_init!(dasonw(path, "EK", ifname, (Int(ncomch) + 1023) ÷ 1024))
+end
+
+"Make the new DAS file of `h` an EK without segments: the page counts and the empty segment tree in the first integer page."
+function _ekw_init!(h::DASHandle)
     _ekw_pgin(h)
-    p, base = _ekw_pgan(h, 3)
+    _, base = _ekw_pgan(h, 3)
     tree = _ekw_trit(h)
     h.ints[base + 1] = tree
     return h
@@ -122,12 +126,7 @@ no name, so [`furnsh`](@ref) cannot load it for queries, as in CSPICE.
 See also [`ekopn`](@ref), [`ekifld`](@ref).
 """
 function ekops()
-    h = dasops()
-    _ekw_pgin(h)
-    p, base = _ekw_pgan(h, 3)
-    tree = _ekw_trit(h)
-    h.ints[base + 1] = tree
-    return h
+    return _ekw_init!(dasops())
 end
 
 """
@@ -203,44 +202,22 @@ function _ekw_isident(name::AbstractString)
     b = codeunits(name)
     l = something(findlast(!=(UInt8(' ')), b), 0)
     l == 0 && return false
-    letter(c) = UInt8('A') <= c <= UInt8('Z') || UInt8('a') <= c <= UInt8('z')
-    letter(b[1]) || return false
-    for k in 2:l                         # invariant: the characters before k are valid
-        c = b[k]
-        (letter(c) || UInt8('0') <= c <= UInt8('9') || c == UInt8('$') || c == UInt8('_')) ||
-            return false
-    end
-    return true
+    _ek_qisalpha(b[1]) || return false
+    return all(_ek_qisidtail, view(b, 2:l))
 end
 
 @noinline _ekw_baddecl(msg::AbstractString, decl::AbstractString) =
     throw(SpiceError(:badcolumndecl, msg * " Declaration was: " * decl))
 
-"The integer that `nparsi` reads from `token`, or `nothing` if `nparsi` signals an error."
-function _ekw_nparsi(token::AbstractString)
-    return try
-        _nparsi(token)
-    catch e
-        e isa SpiceError || rethrow()
-        nothing
-    end
-end
-
 """
     _ekw_pdec(decl) -> Vector{Int32}
 
 The column descriptor (11 integers) that the declaration `decl` gives, as `zzekpdec`.
-A declaration is a list of `KEYWORD = value` items that commas separate, in any case:
-
-- `DATATYPE` (required): `INTEGER`, `DOUBLE PRECISION`, `TIME`, `CHARACTER*(n)` or
-  `CHARACTER*(*)`;
-- `SIZE`: a number or `VARIABLE` (1 if absent);
-- `INDEXED`, `NULLS_OK`, `FIXED_COUNT`: `TRUE` or `FALSE` (false if absent).
-
-Postcondition: class, type, string length, size, index type (1 or -1) and null flag
-(1 or -1) are set; name base, index pointer, position and metadata pointer are 0.
-Throws `SpiceError(:badcolumndecl)` for a declaration that does not follow these
-rules, and `:badcolumdecl` (the spelling of CSPICE) if `DATATYPE` is absent.
+The grammar of `decl` is in [`ekbseg`](@ref). The result sets class, type, string
+length, size, index type (1 or -1) and null flag (1 or -1); name base, index pointer,
+position and metadata pointer are 0. Throws `SpiceError(:badcolumndecl)` for a
+declaration that does not follow the grammar, and `:badcolumdecl` (the spelling of
+CSPICE) if `DATATYPE` is absent.
 """
 function _ekw_pdec(decl::AbstractString)
     pardsc = zeros(Int32, _EK_CDSCSZ)
@@ -286,7 +263,7 @@ function _ekw_pdec(decl::AbstractString)
         if length(b) >= 11 && b[11] == UInt8('*')
             pardsc[_EK_LENIDX] = -1
         else
-            len = _ekw_nparsi(String(b[11:end]))
+            len = _try_nparsi(String(b[11:end]))
             len === nothing && _ekw_baddecl(
                 "String length specification $tok didn't parse " *
                     "as an integer.", decl
@@ -309,7 +286,7 @@ function _ekw_pdec(decl::AbstractString)
             )
             pardsc[_EK_SIZIDX] = -1
         else
-            size = _ekw_nparsi(tok)
+            size = _try_nparsi(tok)
             size === nothing && _ekw_baddecl(
                 "Column element size specification $tok " *
                     "didn't parse as an integer.", decl
@@ -380,8 +357,8 @@ adjacent integer pages with the segment descriptor and the column descriptors,
 adjacent character pages with the table name and the column names (upper case), the
 record tree (type 1 only), the three data page trees and, in a type 1 segment, an
 empty index tree for every indexed column. The segment is appended to the segment tree
-of the file. Mutates `cdscrs` (position, name base, index). Postcondition: `segno` is
-the number of segments of the file.
+of the file, and `segno` is its number. Mutates `cdscrs` (position, name base,
+index).
 """
 function _ekw_bs(
         h::DASHandle, stype::Int, tabnam::AbstractString,
@@ -522,9 +499,9 @@ end
     _ekw_segment(h, who, segno) -> (segdsc, mbase)
 
 A copy of the descriptor of segment `segno` for a routine that changes records, and
-the integer base of the segment metadata. Preconditions: write handle; valid segment
-number (`:invalidindex`); segment of type 1, else `SpiceError(:invalidtype)` (CSPICE
-has no such check and damages a type 2 segment).
+the integer base of the segment metadata. Throws the errors of `_ekw_check`,
+`SpiceError(:invalidindex)` for a bad segment number and `SpiceError(:invalidtype)` for
+a segment of type 2 (CSPICE has no such check and damages the segment).
 """
 function _ekw_segment(h::DASHandle, who::AbstractString, segno::Integer)
     _ekw_check(h, who)
@@ -655,7 +632,7 @@ function ekdelr(h::DASHandle, segno::Integer, recno::Integer)
     # record that is deleted, and so loses the other records of the page. Here such a
     # page stays in the segment.
     fastrec = _ekw_fast_record(h, recptr)
-    p, _ = _ekw_pgpg(3, recptr + 1)
+    p, _ = _ek_pgpg(3, recptr + 1)
     fastrec || _ekw_unlink(h, segdsc, 3, p)
     _ekw_trdl(h, segdsc[_EK_RTIDX], recno)
     segdsc[_EK_NRIDX] -= 1
@@ -673,9 +650,6 @@ function _ekw_cdsc(h::DASHandle, segdsc::AbstractVector{Int32}, column::Abstract
     b = Int(segdsc[_EK_IMDIDX]) + _EK_SDSCSZ + (Int(col.ord) - 1) * _EK_CDSCSZ
     return h.ints[(b + 1):(b + _EK_CDSCSZ)]
 end
-
-_ekw_typename(types::Tuple) = types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ?
-    "integer" : "d.p. or time"
 
 """
     _ekw_locate(h, who, segno, recno, column, types) -> (segdsc, coldsc, recptr)
@@ -697,13 +671,7 @@ function _ekw_locate(
     _ek_check_read(h, who)
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
     coldsc = _ekw_cdsc(h, segdsc, column)
-    coldsc[_EK_TYPIDX] in types || throw(
-        SpiceError(
-            :wrongdatatype, "Column $column is of " *
-                "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
-                "$(_ekw_typename(types)) columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
-        )
-    )
+    _ek_check_type(h, who, column, coldsc[_EK_TYPIDX], types, segno, recno)
     recptr = _ek_trdp(h.ints, segdsc[_EK_RTIDX], recno)
     write && _das_check_write(h, who)
     return segdsc, coldsc, recptr
@@ -998,8 +966,8 @@ of CSPICE. Return the segment number (from 1) and the state of the load.
 exactly once with [`ekaclc`](@ref), [`ekacld`](@ref) or [`ekacli`](@ref), then call
 [`ekffld`](@ref); pass `rcptrs` to each of these calls. Until `ekffld` the segment
 cannot be read or extended. [`ekcls`](@ref) before `ekffld` closes the file without an
-error, as in CSPICE, but the file then holds a segment that [`eklef`](@ref) refuses. Other segments of the file can be changed meanwhile, which
-CSPICE does not allow.
+error, as in CSPICE, but the file then holds a segment that [`eklef`](@ref) refuses.
+Other segments of the file can be changed meanwhile, which CSPICE does not allow.
 
 If the columns are declared with `FIXED_COUNT = TRUE`, the number of rows is fixed:
 [`ekappr`](@ref), [`ekinsr`](@ref) and [`ekdelr`](@ref) refuse the segment.
@@ -1093,13 +1061,7 @@ function _ekw_fast_locate(
         )
     )
     coldsc = _ekw_cdsc(h, segdsc, column)
-    coldsc[_EK_TYPIDX] in types || throw(
-        SpiceError(
-            :wrongdatatype, "Column $column is of " *
-                "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
-                "$(_ekw_typename(types)) columns."
-        )
-    )
+    _ek_check_type(h, who, column, coldsc[_EK_TYPIDX], types, segno)
     return segdsc, coldsc
 end
 
@@ -1334,7 +1296,7 @@ ekacli(
 End the fast load of a type 1 segment (`zzekff01`): the records get their status and
 the data pointers of all columns (from the stack of the load), the record tree is
 made, and the segment descriptor gets the tree and marks the last data pages as full.
-Precondition: every column was stored once, else `SpiceError(:invalidaddress)`.
+Throws `SpiceError(:invalidaddress)` unless every column was stored once.
 """
 function _ekw_ff01(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     _, mbase = _ek_mloc(h, segno)
@@ -1379,7 +1341,6 @@ function _ekw_ff01(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     end
     tree = _ekw_trit(h)
     _ekw_tr1s(h, tree, rcptrs.ptrs)
-    ints = h.ints
     ints[mbase + _EK_RTIDX] = tree
     ints[mbase + _EK_NRIDX] = nrows
     ints[mbase + _EK_LCWIDX] = _EK_CPSIZE

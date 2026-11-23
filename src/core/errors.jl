@@ -84,7 +84,7 @@ const ERROR_KINDS = (
     :toomanyhits, :toomanysurfaces, :typemismatch, :typenotsupported, :unallocatednode,
     :undefinedframe, :uninitialized, :uninitializedvalue, :unitsmissing, :unitsnotrec,
     :unknownbff, :unknownckmeta, :unknowncompare, :unknownfilarc, :unknownframe,
-    :unknownframespec, :unknownframetype, :unknownmode, :unknownspktype, :unknownsystem,
+    :unknownframespec, :unknownmode, :unknownspktype, :unknownsystem,
     :unmatchendpts, :unnaturalrelation, :unorderedrefs, :unorderedtimes, :unparsedtime,
     :unrecognizedtype, :unresolvednames, :unresolvedtimes, :unsupportedbff,
     :unsupportedspec, :valueoutofrange, :variablenotfound, :varnametoolong, :vectortoobig,
@@ -116,19 +116,12 @@ subtype whose `kind` is `:x`.
 A kind is the short error message of the CSPICE routine that the call ports, in lower
 case (`:kernelvarnotfound` for `SPICE(KERNELVARNOTFOUND)`). Sibling calls can therefore
 report one failure with different kinds, as in CSPICE: a file that does not exist is
-`:nosuchfile` in `furnsh` and `:filenotfound` in `spkobj`, a bad correction is
-`:invalidoption` in `spkezr` and `:spkinvalidoption` in `spkpos`, and an unknown body
-name is `:idcodenotfound` in `spkezr` and `:notranslation` in `bodvrd`. Test the kinds
-that the docstring of the call lists. Where CSPICE has no message, because the failure
-cannot occur in C or the call has no counterpart, the kind is a name of this package;
-the main one is `:badarg`, for an argument of the wrong size or type.
-
-A call of CSPICE that has a `found` flag returns `nothing` here when nothing is found,
-unless its docstring names another result (an error, `0`, an empty string or vector, or
-the flag itself).
-
-[`Almanac.ERROR_KINDS`](@ref) lists every kind. A kind that is not in the list cannot
-be constructed.
+`:nosuchfile` in `furnsh` and `:filenotfound` in `spkobj`. Test the kinds that the
+docstring of the call lists. A failure that CSPICE does not check has a kind of this
+package, mainly `:badarg` for an argument of the wrong size or type.
+[`Almanac.ERROR_KINDS`](@ref) lists every kind; a kind that is not in the list cannot be
+constructed. The manual page [Conventions](@ref) describes the `nothing` result of a
+call that has a `found` flag in CSPICE.
 
 # Examples
 ```jldoctest
@@ -158,6 +151,9 @@ struct SpiceKindError <: SpiceError
     SpiceKindError(kind::Symbol, msg::AbstractString) = new(_check_kind(kind), msg)
 end
 SpiceError(kind::Symbol, msg::AbstractString) = SpiceKindError(kind, msg)
+
+"Throw `SpiceError(kind, msg)` from a call that is not inlined, so that a throw site in a numeric kernel stays one call."
+@noinline _throw_spice(kind::Symbol, msg::AbstractString) = throw(SpiceError(kind, msg))
 
 """
     SpkInsufficientDataError <: SpiceError
@@ -248,7 +244,8 @@ function _isfile(path::AbstractString)
     end
 end
 
-"True for the errors of the file system and of I/O, which the file calls report as a `SpiceError`; any other error (an interrupt, a fault of the code) passes through."
+# True for the errors of the file system and of I/O, which the file calls report as a
+# `SpiceError`; any other error (an interrupt, a fault of the code) passes through.
 _io_failure(e) = e isa SystemError || e isa Base.IOError
 
 # `open(path, "r")` of a DAF or DAS file, with a failure of the system open (a file that

@@ -22,7 +22,6 @@ const _DAS_RECLEN = 1024
 const _DAS_NW = (1024, 128, 256)          # words in a record of type 1 (char), 2 (dp), 3 (int)
 const _DAS_NEXT = (2, 3, 1)
 const _DAS_PREV = (3, 1, 2)
-const _DAS_NATIVE_BFF = _DAF_NATIVE_LITTLE ? "LTL-IEEE" : "BIG-IEEE"
 
 """
     DASHandle
@@ -36,21 +35,14 @@ return a handle. Close it with [`dascls`](@ref), [`dasllc`](@ref), [`dskcls`](@r
 open.
 
 The handle holds the three address spaces of the file in memory: characters, doubles and
-32-bit integers, each numbered from 1. A handle that is open for writing changes this
-memory only, and the file on disk changes when `dascls` runs. The data of a handle that is
-open for reading are never modified.
+32-bit integers, each numbered from 1. A handle open for writing changes this memory only,
+and the file on disk changes when `dascls` writes it in segregated form (all records of
+one data type together). One handle is not safe for concurrent use: tasks that share a
+handle must hold a lock around every call. A file that a handle has open cannot be opened
+for write by another handle (`SpiceError(:fileopenconflict)`).
 
-A DAS file is segregated if all records of one data type are together.
-
-Two handles are independent. One handle is not safe for concurrent use: tasks that share a
-handle must hold a lock around every call. A file that an open handle has open, for read or
-for write, cannot be opened for write by another handle (`SpiceError(:fileopenconflict)`),
-as in CSPICE.
-Unlike CSPICE, a file that is open for write can be opened for read, and a kernel that
-[`furnsh`](@ref) loaded can be opened for write.
-
-A call on a closed handle throws `SpiceError(:dasnosuchhandle)`; the close calls do
-nothing instead. A write call on a handle that is open for reading throws
+A call on a closed handle throws `SpiceError(:dasnosuchhandle)`, except the close calls,
+which do nothing. A write call on a handle open for reading throws
 `SpiceError(:dasinvalidaccess)`. A call that throws changes neither the data of the handle
 nor the file.
 """
@@ -103,22 +95,12 @@ end
 # Reading a file image
 # ---------------------------------------------------------------------------------------
 
-"32-bit integer at 0-based byte offset `off` of `raw`; `swap` tells that the file has the other byte order."
-@inline function _das_i32(raw::AbstractVector{UInt8}, off::Int, swap::Bool)
-    v = UInt32(raw[off + 1]) | (UInt32(raw[off + 2]) << 8) | (UInt32(raw[off + 3]) << 16) |
-        (UInt32(raw[off + 4]) << 24)
-    v = _DAF_NATIVE_LITTLE ? v : bswap(v)       # `v` is now the stored word, native layout
-    return Int(reinterpret(Int32, swap ? bswap(v) : v))
-end
-
 """
     _das_probe(path, who) -> (raw_file_record, swap)
 
 Check that `path` is an existing DAS file that this machine can read, and return its
-file record and whether its byte order is the other one. Throws `SpiceError` with kind
-`:emptystring`, `:blankfilename`, `:filenotfound`, `:filereadfailed`, `:unknownfilarc`,
-`:filarchmismatch`, `:ftpxfererror`, `:unknownbff` or `:unsupportedbff`. A file from
-before the binary-file-format string (bytes 85 to 92 zero) is taken as native.
+file record and whether its byte order is the other one. A file without the binary file
+format string (bytes 85 to 92 zero) is taken as native.
 """
 function _das_probe(path::AbstractString, who::AbstractString)
     _chk_filename(who, path)
@@ -130,27 +112,7 @@ function _das_probe(path::AbstractString, who::AbstractString)
             "$who: $path is too short ($(length(raw)) bytes) to hold a DAS file record"
         )
     )
-    arch, _ = idw2at(String(raw[1:8]))
-    arch == "DAF" && throw(
-        SpiceError(
-            :filarchmismatch,
-            "$who: the file $path is a DAF, not a DAS file"
-        )
-    )
-    arch == "DAS" || throw(
-        SpiceError(
-            :unknownfilarc,
-            "$who: the file $path is neither a DAF nor a DAS file"
-        )
-    )
-    if raw[700:705] == _DAF_FTPSTR[1:6] && raw[700:727] != _DAF_FTPSTR
-        throw(
-            SpiceError(
-                :ftpxfererror, "$who: the FTP validation string of $path is " *
-                    "damaged; the file was most likely moved in text mode"
-            )
-        )
-    end
+    _daf_check_arch(raw, path, who, "DAS")
     bff = String(raw[85:92])
     little = if bff == "LTL-IEEE"
         true
@@ -179,11 +141,10 @@ end
 """
     _das_extent(io, raw, T, clusters, n, swap, copy) -> Vector{T}
 
-The first `n` words of one DAS address space whose data records are the `clusters`
-(first record, record count), in address order. Contract: the clusters lie inside
-`raw` and hold at least `n` words. The result is memory-mapped from `io` if the
-clusters are adjacent, the byte order is native and `copy` is false; else it is an
-owned array in native byte order.
+Return the first `n` words of the DAS address space whose data records are the
+`clusters` (first record, record count), in address order. The result is memory-mapped
+from `io` if the clusters are adjacent, the byte order is native and `copy` is false;
+else it is an owned array in native byte order.
 """
 function _das_extent(
         io::IOStream, raw::Vector{UInt8}, ::Type{T},
@@ -218,22 +179,20 @@ end
 """
     _das_load(path, who, writable) -> DASHandle
 
-Read the DAS file `path` and return an open handle on it. Contract: `path` is a DAS
-file of either byte order whose directory records are consistent; the handle holds the
-complete address spaces (owned copies if `writable`, else memory-mapped where the file
-allows it). Throws the errors of `_das_probe`, `SpiceError(:dasfilereadfailed)` for a
-directory record past the end of the file, and `SpiceError(:baddasdirectory)` for a
-directory that points to data records outside the file, has a cycle, or does not
-cover the last addresses that it states.
+Read the DAS file `path` and return an open handle that holds its address spaces: owned
+copies if `writable`, else memory-mapped where the file allows it. Throws the errors of
+`_das_probe`, `SpiceError(:dasfilereadfailed)` for a directory record past the end of the
+file, and `SpiceError(:baddasdirectory)` for a directory that does not agree with the
+file.
 """
 function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
     frec, swap = _das_probe(path, who)
     idword = String(frec[1:8])
     ifname = String(rstrip(String(frec[9:68]), [' ', '\0']))
-    nresvr = _das_i32(frec, 68, swap)
-    nresvc = _das_i32(frec, 72, swap)
-    ncomr = _das_i32(frec, 76, swap)
-    ncomc = _das_i32(frec, 80, swap)
+    nresvr = _daf_frint(frec, 68, swap)
+    nresvc = _daf_frint(frec, 72, swap)
+    ncomr = _daf_frint(frec, 76, swap)
+    ncomc = _daf_frint(frec, 80, swap)
     bad(msg) = throw(SpiceError(:baddasdirectory, "$who: $msg in $path"))
     return open(path, "r") do io
         nrecords = Int(filesize(io) ÷ _DAS_RECLEN)
@@ -270,7 +229,7 @@ function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
                     )
                 )
                 base = (rec - 1) * _DAS_RECLEN
-                word(k) = _das_i32(raw, base + 4 * (k - 1), swap)
+                word(k) = _daf_frint(raw, base + 4 * (k - 1), swap)
                 lastrec = max(lastrec, rec)
                 for t in 1:3
                     hi = word(2t + 2)
@@ -329,7 +288,6 @@ function _das_load(path::AbstractString, who::AbstractString, writable::Bool)
     end
 end
 
-"Record counts (chars, doubles, integers) of the segregated file of `h`."
 _das_nrecs(h::DASHandle) = (
     cld(length(h.chars), _DAS_NW[1]), cld(length(h.dps), _DAS_NW[2]),
     cld(length(h.ints), _DAS_NW[3]),
@@ -376,7 +334,7 @@ function _das_file_record(h::DASHandle)
     ints[2] = h.nresvc
     ints[3] = h.ncomr
     ints[4] = h.ncomc
-    copyto!(rec, 85, codeunits(_DAS_NATIVE_BFF), 1, 8)
+    copyto!(rec, 85, codeunits(_DAF_NATIVE_BFF), 1, 8)
     copyto!(rec, 700, _DAF_FTPSTR, 1, length(_DAF_FTPSTR))
     return rec
 end
@@ -415,10 +373,9 @@ end
 """
     _das_write_image(h) -> Nothing
 
-Write the complete segregated file of the write handle `h` to a temporary file beside
-`h.path` and move it into place. Postcondition: the file holds the file record, the
-reserved records, the comment records, one directory record, and the character, double
-and integer records; the unused words of a last record are blank (characters) or zero.
+Write the segregated file of the write handle `h` to a temporary file beside `h.path`
+and move it into place: the file record, the reserved and comment records, one directory
+record, and the character, double and integer records.
 """
 function _das_write_image(h::DASHandle)
     tmp = string(h.path, ".", getpid(), ".", objectid(h), ".tmp")
@@ -456,8 +413,8 @@ end
 Open the DAS file `path` for reading and return its handle, as
 [`dasopr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasopr_c.html).
 
-The file can have either byte order, and it need not be segregated (see
-[`DASHandle`](@ref)). Close the handle with [`dascls`](@ref).
+The file can have either byte order, and it need not be segregated. Close the handle
+with [`dascls`](@ref).
 
 Throws `SpiceError`:
 - `:emptystring` if `path` is empty, `:blankfilename` if it holds only blanks;
@@ -482,12 +439,9 @@ dasopr(path::AbstractString) = _open_register!(_das_load(path, "dasopr", false),
 Open the existing DAS file `path` for writing, as
 [`dasopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasopw_c.html).
 
-The file is read into memory. The file on disk does not change until [`dascls`](@ref),
-which writes the complete file.
-
-No open handle of this process may have the file open, for read or for write, under any
-path. After the call, [`dasopr`](@ref) can still open the file for read, where CSPICE
-refuses; that handle keeps the data of the file as they were when it opened.
+The file is read into memory, and the file on disk does not change until
+[`dascls`](@ref). No other handle may have the file open. [`dasopr`](@ref) can still open
+it for read, where CSPICE refuses; that handle keeps the data as they were when it opened.
 
 Throws the `SpiceError` kinds of [`dasopr`](@ref), `:fileopenconflict` if another handle
 has the file open, and `:fileopenfail` if the file is not writable.
@@ -506,7 +460,9 @@ end
 """
     dasonw(path, ftype, ifname, ncomr) -> DASHandle
 
-Create the DAS file `path` and open it for writing, as `dasonw` of SPICELIB.
+Create the DAS file `path` and open it for writing, as
+[`dasonw`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasonw.html)
+of SPICELIB.
 
 `ftype` is the file type (for example `"DSK"`; four characters are stored), `ifname` is
 the internal file name and `ncomr` is the number of comment records, 1024 characters in
@@ -530,14 +486,7 @@ function dasonw(
         ncomr::Integer
     )
     isempty(strip(path)) && throw(SpiceError(:blankfilename, "dasonw: the file name is blank"))
-    isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "dasonw: the file type is blank"))
-    ttype = String(strip(ftype, ' '))
-    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
-        SpiceError(
-            :illegalcharacter,
-            "dasonw: the file type contains nonprinting characters"
-        )
-    )
+    ttype = _daf_check_ftype("dasonw", ftype)
     ncomr < 0 && throw(
         SpiceError(
             :invalidcount,
@@ -578,12 +527,12 @@ end
 """
     dasops() -> DASHandle
 
-Open a scratch DAS file for writing, as `dasops` of SPICELIB: a DAS file that exists only
-while its handle is open.
+Open a scratch DAS file for writing, as
+[`dasops`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasops.html)
+of SPICELIB.
 
-CSPICE makes a temporary file and deletes it at the close. Here the data are in memory, so
-no file exists at any time and [`dascls`](@ref) writes nothing. The handle has no data, the
-file name `""` and the file type `SCR`.
+The data are in memory: no file exists at any time and [`dascls`](@ref) writes nothing.
+The handle has the file name `""` and the file type `SCR`.
 
 # Examples
 ```jldoctest
@@ -622,12 +571,9 @@ end
 Close the DAS file of `handle`, as
 [`dascls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dascls_c.html).
 
-A handle that is open for writing writes the complete file, in segregated form (see
-[`DASHandle`](@ref)). The file goes to a temporary file beside it and is moved into place
-in one step. All data are on disk when the call returns. A scratch file
-([`dasops`](@ref)) is not written. The call does nothing if the handle is closed already.
-After the call the handle keeps no memory map of the file, so that Windows can delete or
-replace it.
+A handle open for writing writes the complete file in segregated form, to a temporary
+file that is then moved into place. A scratch file ([`dasops`](@ref)) is not written. The
+call does nothing on a closed handle.
 
 Throws `SpiceError(:daswritefail)` if the file cannot be written; the handle then stays
 open. On Windows the file cannot be replaced, and the call throws, while another handle
@@ -648,9 +594,8 @@ end
 """
     _das_release!(h) -> h
 
-Remove the memory maps of the address spaces of `h` and put empty arrays in their place,
-so that a closed handle does not keep its file mapped (see `_unmap!`). No result of a
-call on `h` refers to these arrays, because the read calls copy.
+Remove the memory maps of the address spaces of `h` and put empty arrays in their place.
+No result of a call on `h` refers to these arrays, because the read calls copy.
 """
 function _das_release!(h::DASHandle)
     _unmap!(h.chars)
@@ -665,11 +610,12 @@ end
 """
     dasllc(handle) -> Nothing
 
-Close the DAS file of `handle`, as `dasllc` of SPICELIB.
+Close the DAS file of `handle`, as
+[`dasllc`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasllc.html)
+of SPICELIB.
 
-The call does what [`dascls`](@ref) does. CSPICE does not segregate the file in `dasllc`;
-here the data of a write handle are only in memory before the close, so the file is
-written and it is segregated.
+The call is [`dascls`](@ref): the file of a write handle is written in segregated form,
+which `dasllc` of CSPICE does not do.
 """
 dasllc(h::DASHandle) = dascls(h)
 
@@ -720,7 +666,9 @@ end
 """
     dashfs(handle) -> (nresvr, nresvc, ncomr, ncomc, free, lastla, lastrc, lastwd)
 
-Return the file summary, as `dashfs` of SPICELIB.
+Return the file summary, as
+[`dashfs`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dashfs.html)
+of SPICELIB.
 
 - `nresvr`, `nresvc`: the numbers of reserved records and of reserved characters.
 - `ncomr`, `ncomc`: the numbers of comment records and of comment characters.
@@ -745,7 +693,7 @@ end
 # Data: read, add, update
 # ---------------------------------------------------------------------------------------
 
-"Throws `SpiceError(:dasnosuchaddress)` unless `first:last` lies in `1:n`; requires `first <= last`."
+# Throw `SpiceError(:dasnosuchaddress)` unless `first:last` (not empty) lies in `1:n`.
 @inline function _das_check_range(
         h::DASHandle, who::AbstractString, first::Integer,
         last::Integer, n::Int
@@ -840,7 +788,6 @@ function dasadd(h::DASHandle, data::AbstractVector{<:Real})
     return nothing
 end
 
-"Throws `SpiceError(:valueoutofrange)` unless every element of `data` fits in an `Int32`, the integer of a DAS file."
 function _das_check_int32(who::AbstractString, data)
     for v in data
         typemin(Int32) <= v <= typemax(Int32) || throw(

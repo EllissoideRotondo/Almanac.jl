@@ -107,7 +107,8 @@ Return the value and the first derivative with respect to `x` of the Chebyshev
 expansion of [`chbval`](@ref), as
 [`chbint_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbint_c.html) of CSPICE.
 
-Throws as [`chbval`](@ref).
+Throws `SpiceError(:invaliddegree)` if `cp` is empty, and `SpiceError(:badarg)` if `x2s`
+does not have 2 elements.
 
 # Examples
 ```jldoctest
@@ -279,7 +280,9 @@ Return the value and the derivative at `x` of the interpolating polynomial of
 [`lgrint`](@ref), as
 [`lgrind_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lgrind_c.html) of CSPICE.
 
-Throws as [`lgrint`](@ref).
+Throws `SpiceError(:invalidsize)` if `xvals` is empty, `SpiceError(:dividebyzero)` if
+two abscissas are equal, and `SpiceError(:badarg)` if `yvals` does not have the length
+of `xvals`.
 
 # Examples
 ```jldoctest

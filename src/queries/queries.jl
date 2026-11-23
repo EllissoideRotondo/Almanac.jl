@@ -1,6 +1,6 @@
 # Prepared queries: a state or a rotation whose names, frame and aberration correction
 # are resolved once, on one snapshot of the kernels, and then evaluated at any number
-# of epochs (PEPPER's prepare_state/query_state and prepare_rotation/query_rotation).
+# of epochs.
 
 """
     StateQuery
@@ -29,9 +29,8 @@ aberration correction `abcorr` once, for a state that a program needs at many ep
 The arguments are those of [`spkezr`](@ref) without the epoch, in the same order.
 
 The query holds the kernels of `ctx` as they are at the call: a later
-[`furnsh`](@ref), [`unload`](@ref) or pool edit of `ctx` does not change it, so that all
-its results come from one set of kernels; build a new query to see the change. The
-query does not change, so one query can be used from any number of threads.
+[`furnsh`](@ref), [`unload`](@ref) or pool edit of `ctx` does not change it. The query
+is immutable, so one query can be used from any number of threads.
 
 [`spkezr`](@ref)`(q, et)` and [`spkpos`](@ref)`(q, et)` return what `spkezr` and
 `spkpos` return for the same arguments and kernels, to the last bit, without the

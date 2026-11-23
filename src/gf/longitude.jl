@@ -35,13 +35,7 @@ _gf_relx_sin(q::GFCoordinate, relate, refval, cnfine::Window, run::_GFRun, prefi
     0.0, cnfine, run, prefix, "done."
 )
 
-"""
-    _gf_cslv_checks(adjust, tol)
-
-The first checks of `zzgfcslv`, which come before the coordinate quantity is set up:
-`SpiceError(:valueoutofrange)` if `adjust < 0` or `tol <= 0`. `gfposc`, `gfsubc`,
-`gfsntc` and `gfevnt` make them before they build the quantity.
-"""
+"The first checks of `zzgfcslv`: `SpiceError(:valueoutofrange)` if `adjust < 0` or `tol <= 0`."
 function _gf_cslv_checks(adjust::Real, tol::Real)
     adjust < 0 && throw(
         SpiceError(
@@ -57,16 +51,13 @@ end
     _gf_search(q::GFCoordinate, relate, refval, adjust, cnfine, run) -> Window
 
 The coordinate solver `zzgfcslv`: the search is confined to the window on which the
-vector exists, and a longitude or a right ascension goes to `_gf_long`.
-
-Contract: `adjust >= 0` and `run.tol > 0` (`SpiceError(:valueoutofrange)`), a known
-relation (`:notrecognized`); the result is a new window that is a subset of `cnfine`.
+vector exists, and a longitude or a right ascension goes to `_gf_long`. The caller makes
+the checks of `_gf_cslv_checks` first, before it builds `q`.
 """
 function _gf_search(
         q::GFCoordinate, relate::AbstractString, refval::Real, adjust::Real,
         cnfine::Window, run::_GFRun
     )
-    _gf_cslv_checks(adjust, run.tol)
     rel = _gf_relcode(relate)
     exist = _gf_vecexist(q.vec, cnfine, run)
     name = _GF_CRDNMS[q.sys][q.idx]
@@ -104,11 +95,11 @@ reference value `2 pi - refval`). The proxy searches use the tolerance
   searched with a function without a jump there, and the regions that lie wholly below
   the reference value are added.
 
-Contract: the checks of `_gf_checkadjust` and `_gf_checkref`. An inequality whose reference value is on
-the branch cut is decided without a search: for a coordinate in [0, 2 pi) with
-`cos(refval) == 1`, `<` gives the empty window and `>` gives `cnfine`; for a coordinate
-in (-pi, pi] with `cos(refval) == -1`, `<` gives `cnfine` and `>` the empty window. The
-result is a new window that is a subset of `cnfine`.
+The checks are those of `_gf_checkadjust` and `_gf_checkref`. An inequality whose
+reference value is on the branch cut is decided without a search: for a coordinate in
+[0, 2 pi) with `cos(refval) == 1`, `<` gives the empty window and `>` gives `cnfine`;
+for a coordinate in (-pi, pi] with `cos(refval) == -1`, `<` gives `cnfine` and `>` the
+empty window.
 """
 function _gf_long(
         q::GFCoordinate, rel::Int, refval::Float64, adjust::Float64,

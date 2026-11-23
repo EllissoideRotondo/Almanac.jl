@@ -38,15 +38,6 @@ end
     return nothing
 end
 
-@inline function _ekw_enc!(buf::Vector{UInt8}, at::Int, val::Integer)
-    n = Int(val)
-    for k in 4:-1:0                      # invariant: digits after k are stored
-        buf[at + k] = (n % 128) % UInt8
-        n ÷= 128
-    end
-    return nothing
-end
-
 # ---------------------------------------------------------------------------------------
 # Data pages of a segment
 # ---------------------------------------------------------------------------------------
@@ -151,7 +142,7 @@ function _ekw_rel(s, coldsc::AbstractVector{Int32}, row::Integer, key, null::Boo
         key isa Real || _ekw_bug("Column type is $(col.dtype); value type is $(typeof(key)).")
         _ek_vrel(s, col, row, _EK_DP, UInt8[], Float64(key), 0, null, true)
     end
-    return rel == _EK_LT ? -1 : rel == _EK_GT ? 1 : 0
+    return rel == _EKQ_LT ? -1 : rel == _EKQ_GT ? 1 : 0
 end
 
 # ---------------------------------------------------------------------------------------
@@ -177,9 +168,9 @@ Position in the index tree of the column `coldsc` of the last entry that is not 
 the pair (`key`, `recptr`), and the record pointer at that position; `(0, 0)` if no
 entry qualifies (`zzeklerc`, `zzeklerd`, `zzekleri` with `zzekerc1`, `zzekerd1`,
 `zzekeri1`). The index is in the order of the entry values, null entries first, and
-entries with equal values in the order of their record pointers. Precondition: index
-of type 1 (`:notindexed`, `:invalidtype`) that holds no more entries than the segment
-has rows (`:sizemismatch`).
+entries with equal values in the order of their record pointers. Throws `SpiceError`:
+`:notindexed` or `:invalidtype` unless the index has type 1, `:sizemismatch` if it
+holds more entries than the segment has rows.
 """
 function _ekw_ler(
         s, segdsc::AbstractVector{Int32}, coldsc::AbstractVector{Int32}, key,
@@ -224,7 +215,6 @@ end
 
 Insert the record `recptr`, whose entry in the indexed column `coldsc` is `key` (or
 null), into the index of the column (`zzekiii1`, `zzekiid1`, `zzekiic1`).
-Postcondition: the index is in order and has one entry more.
 """
 function _ekw_ixin(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, key,
@@ -306,9 +296,9 @@ end
 """
     _ekw_ixdl(h, segdsc, coldsc, recptr) -> Nothing
 
-Delete the record `recptr` from the index of the column `coldsc` (`zzekixdl`).
-Precondition: the column has an index (`:bug`) of type 1 (`:invalidtype`), and the
-entry of the record is not changed yet.
+Delete the record `recptr` from the index of the column `coldsc` (`zzekixdl`). The
+entry of the record must still hold its indexed value. Throws `SpiceError(:bug)` for a
+column without index and `SpiceError(:invalidtype)` for an index of another type than 1.
 """
 function _ekw_ixdl(h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Integer)
     idxtyp = coldsc[_EK_IXTIDX]
@@ -418,9 +408,10 @@ end
 Add the entry `val` (or null) of a scalar integer, double or time column (class 1 or
 2) to the record at `recptr` (`zzekad01`, `zzekad02`). The value takes the next free
 word of the last data page of its type, or the first word of a new page; an indexed
-column gets the record in its index. Preconditions (each throws `SpiceError`): valid
-column position (`:invalidindex`), null allowed (`:badattribute`), entry not written
-yet (`:nonemptyentry`). Postcondition: the segment descriptor in the file is `segdsc`.
+column gets the record in its index, and the segment descriptor in the file becomes
+`segdsc`. Throws `SpiceError`: `:invalidindex` for a bad column position,
+`:badattribute` for a null in a column without nulls, `:nonemptyentry` for an entry
+that is written already.
 """
 function _ekw_ad12(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -438,7 +429,7 @@ function _ekw_ad12(
         lastw = Int(segdsc[_ekw_lcw(t)])
         if lastw < _ekw_DSIZE[t]
             p = Int(segdsc[_ekw_lcp(t)])
-            datptr = _ekw_base(t, p) + lastw + 1
+            datptr = _ek_base(t, p) + lastw + 1
             ints[ptrloc] = datptr
             _ekw_putn(h, t, datptr, val)
             _ekw_slnk(h, t, p, _ekw_glnk(h, t, p) + 1)
@@ -465,8 +456,8 @@ Add the string `cval` (or null) of a scalar character column (class 3) to the re
 without trailing blanks (at least one; at most the string length of the column); the
 string starts on the last character data page if that has room for the count and one
 character, and continues on new pages. The index compares the whole of `cval`, as in
-CSPICE, also if the column stores less of it. Preconditions: as `_ekw_ad12`; CSPICE
-does not check that the entry is empty (see `_ekw_empty_check`).
+CSPICE, also if the column stores less of it. Throws as `_ekw_ad12`; CSPICE does not
+check that the entry is empty (see `_ekw_empty_check`).
 """
 function _ekw_ad03(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -533,9 +524,8 @@ Add the array `vals` (or null) of an integer, double or time array column (class
 5) to the record at `recptr` (`zzekad04`, `zzekad05`). The file takes the element
 count and then the elements; the entry starts on the last data page of its type if
 that has two free words, and continues on new pages that the forward pointers link.
-Preconditions: valid column position (`:invalidindex`), null allowed
-(`:badattribute`), `length(vals) >= 1` and equal to a fixed entry size
-(`:invalidcount`), entry not written yet (`:nonemptyentry`).
+Throws as `_ekw_ad12`, and `SpiceError(:invalidcount)` unless `length(vals) >= 1`
+and, for a fixed entry size, equal to it.
 """
 function _ekw_ad45(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -562,7 +552,7 @@ function _ekw_ad45(
             # last data page are free
             if room >= 2
                 p = Int(segdsc[_ekw_lcp(t)])
-                datptr = _ekw_base(t, p) + lastw + 1
+                datptr = _ek_base(t, p) + lastw + 1
                 if fstpag
                     h.ints[ptrloc] = datptr
                     _ekw_putn(h, t, datptr, nvals)
@@ -607,7 +597,7 @@ end
 Add the array of strings `cvals` (or null) of a character array column (class 6) to the
 record at `recptr` (`zzekad06`). The file takes a five-character element count and
 then every string with exactly the string length of the column (cut or continued with
-blanks). Preconditions as `_ekw_ad45`.
+blanks). Throws as `_ekw_ad45`.
 """
 function _ekw_ad06(
         h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, recptr::Int,
@@ -695,7 +685,7 @@ function _ekw_de12(h::DASHandle, segdsc::Vector{Int32}, coldsc::Vector{Int32}, r
     datptr = Int(h.ints[ptrloc])
     if datptr > 0
         coldsc[_EK_IXTIDX] != -1 && _ekw_ixdl(h, segdsc, coldsc, recptr)
-        p, _ = _ekw_pgpg(t, datptr)
+        p, _ = _ek_pgpg(t, datptr)
         _ekw_unlink(h, segdsc, t, p)
         h.ints[ptrloc] = _EK_UNINIT
     elseif datptr == _EK_NULL
@@ -727,7 +717,7 @@ function _ekw_unlink_chain(
         h::DASHandle, segdsc::Vector{Int32}, t::Int, datptr::Int,
         nwords::Int, fastrec::Bool = false
     )
-    p, base = _ekw_pgpg(t, datptr)
+    p, base = _ek_pgpg(t, datptr)
     if fastrec
         nlinks = _ekw_glnk(h, t, p)
         nlinks > 1 && _ekw_slnk(h, t, p, nlinks - 1)
@@ -754,7 +744,7 @@ a link for every record that it holds, so it never has the count 0 while a recor
 in it.
 """
 @inline _ekw_fast_record(h::DASHandle, recptr::Integer) =
-    _ekw_glnk(h, 3, _ekw_pgpg(3, Int(recptr) + 1)[1]) == 0
+    _ekw_glnk(h, 3, _ek_pgpg(3, Int(recptr) + 1)[1]) == 0
 
 """
     _ekw_de03(h, segdsc, coldsc, recptr) -> Nothing
@@ -788,7 +778,7 @@ CSPICE sets the status word of the record to 2 ("updated") in these three routin
 so does this function.
 
 For a record that the fast writers made (its record page has the link count 0, see
-[`_ekw_fast_record`](@ref)) the first page of the entry loses a link and no page is
+`_ekw_fast_record`) the first page of the entry loses a link and no page is
 freed. CSPICE takes a link from every page of the entry and frees a page without
 links; after a fast load that frees pages that other entries still use.
 """
@@ -857,7 +847,7 @@ function _ekw_ue12(
             _ekw_ixin(h, segdsc, coldsc, val, recptr, isnull)
         end
         if isnull
-            p, _ = _ekw_pgpg(t, datptr)
+            p, _ = _ek_pgpg(t, datptr)
             _ekw_slnk(h, t, p, _ekw_glnk(h, t, p) - 1)
             h.ints[ptrloc] = _EK_NULL
         else
@@ -891,35 +881,14 @@ entries that are not null that `a` stays before `b`. The sequence of the swaps i
 of CSPICE, so the result is the same also where the sort is not stable.
 """
 function _ekw_order(n::Int, nullok::Bool, nlflgs::AbstractVector{Bool}, inorder::F) where {F}
-    iorder = collect(Int32(1):Int32(n))
-    gap = n ÷ 2
-    while gap > 0
-        for i in (gap + 1):n
-            j = i - gap
-            while j > 0
-                # invariant: the entries at i, i - gap, ... down to j + gap are in order
-                jg = j + gap
-                a = iorder[j]
-                b = iorder[jg]
-                ok = if !nullok
-                    inorder(a, b)
-                else
-                    na = nlflgs[a]
-                    nb = nlflgs[b]
-                    (na && !nb) || (na && nb && a < b) || (!(na || nb) && inorder(a, b))
-                end
-                if ok
-                    j = 0
-                else
-                    iorder[j] = b
-                    iorder[jg] = a
-                end
-                j -= gap
-            end
-        end
-        gap ÷= 2
+    ok(a, b) = if !nullok
+        inorder(a, b)
+    else
+        na = nlflgs[a]
+        nb = nlflgs[b]
+        (na && !nb) || (na && nb && a < b) || (!(na || nb) && inorder(a, b))
     end
-    return iorder
+    return _ek_shellsort!(collect(Int32(1):Int32(n)), ok)
 end
 
 "Order vector of numbers (`zzekordd`, `zzekordi`): by value, then by entry number."
@@ -1016,7 +985,6 @@ function _ekw_ac12(
             copyto!(dst, pbase + 1, page, 1, length(page))
             if nwrite < ndata
                 p, pbase = _ekw_aps(h, segdsc, t)
-                dst = t == 2 ? h.dps : h.ints
                 fill!(page, 0)
                 n = 0
                 to = 1
@@ -1416,7 +1384,7 @@ function _ekw_ac78(
         to += 1
         if to > dsize || from == nrows
             page[dsize + 2] = to - 1
-            copyto!(dst, _ekw_base(t, p) + 1, page, 1, length(page))
+            copyto!(dst, _ek_base(t, p) + 1, page, 1, length(page))
             p += 1
             to = 1
         end
@@ -1431,7 +1399,7 @@ end
 
 Store a whole fixed-count character column (class 9) of a type 2 segment
 (`zzekac09`): every row takes exactly the string length `l` of the column, and a page
-holds `1014 ÷ l` rows. Precondition: `1 <= l <= 1014`, else `:invalidsize` (CSPICE
+holds `1014 ÷ l` rows. Throws `SpiceError(:invalidsize)` unless `1 <= l <= 1014` (CSPICE
 divides by zero for `l = 0`, and it also refuses a column whose string length is
 greater than the declared length of the input strings, which a string here does not
 have). CSPICE writes whole page buffers, so the forward pointers of these pages hold

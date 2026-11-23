@@ -12,7 +12,7 @@ const _HALFD = 43200.0        # `_SPD` and `_JD2000` are in math/kernels.jl
 """
     build_lsk(pool) -> Union{Nothing,LeapSeconds}
 
-Contract: returns the leap-second data when `pool` has all of `DELTET/DELTA_T_A`,
+Return the leap-second data when `pool` has all of `DELTET/DELTA_T_A`,
 `DELTET/K`, `DELTET/EB`, `DELTET/M` (two values) and `DELTET/DELTA_AT` (a non-empty
 list of pairs) as numeric variables, and `nothing` otherwise.
 """
@@ -121,10 +121,10 @@ end
 const _DPJAN0 = (0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334)
 const _DPBEGL = (0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335)
 
-"Contract: `year >= 1`; returns 1 for a Gregorian leap year and 0 otherwise."
+"Return 1 for a Gregorian leap year and 0 otherwise. Requires `year >= 1`."
 _leap(year::Int) = (year % 4 == 0) - (year % 100 == 0) + (year % 400 == 0)
 
-"Contract: `1 <= month <= 12`, any `year`; returns the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles."
+"Return the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles. Requires `1 <= month <= 12`."
 function _tt_daynum(year::Int, month::Int, day::Int)::Int
     doffst = 0
     if year <= 0
@@ -144,7 +144,7 @@ end
 const _DN2000 = _tt_daynum(2000, 1, 1)
 const _JD1101 = _JD2000 - Float64(_DN2000) - 0.5
 
-"Contract: `1 <= dofyr <= 366`; returns (month, day of month) of day `dofyr` of a year that has (`leap`) or does not have a leap day."
+"Return (month, day of month) of day `dofyr` of a year that has (`leap`) or does not have a leap day. Requires `1 <= dofyr <= 366`."
 @inline function _month_day(dofyr::Int, leap::Bool)
     tab = leap ? _DPBEGL : _DPJAN0
     month = 1
@@ -155,7 +155,7 @@ const _JD1101 = _JD2000 - Float64(_DN2000) - 0.5
     return month, dofyr - tab[month]
 end
 
-"Contract: returns (year, day of year) of day number `daynum` (0001-01-01 is day 0) in the extended Gregorian calendar, by the 400-, 100-, 4- and 1-year cycles of `ttrans` and `jul2gr`."
+"Return (year, day of year) of day number `daynum` (0001-01-01 is day 0) in the extended Gregorian calendar, by the 400-, 100-, 4- and 1-year cycles of `ttrans` and `jul2gr`."
 @inline function _gregorian_year(daynum::Int)
     yr400, rem = fldmod(daynum, 146097)
     yr100 = min(3, div(rem, 36524))
@@ -167,14 +167,14 @@ end
     return yr400 * 400 + yr100 * 100 + yr4 * 4 + yr1 + 1, rem + 1
 end
 
-"Contract: returns (year, month, day, day of year) of day number `daynum` in the Gregorian calendar, as `ttrans` computes them."
+"Return (year, month, day, day of year) of day number `daynum` in the Gregorian calendar, as `ttrans` computes them."
 function _calendar(daynum::Int)
     year, dofyr = _gregorian_year(daynum)
     month, day = _month_day(dofyr, _leap(year) != 0)
     return year, month, day, dofyr
 end
 
-"Contract: `1 <= i <= length(l.delta_at)`; entry `i` of the `TAITAB` of `ttrans`: TAI seconds past J2000 at the start of the day before (odd `i`) and of the day after (even `i`) each leap-second epoch."
+"Return entry `i` (in `1:length(l.delta_at)`) of the `TAITAB` of `ttrans`: TAI seconds past J2000 at the start of the day before (odd `i`) and of the day after (even `i`) each leap-second epoch."
 @inline function _taitab(l::LeapSeconds, i::Int)::Float64
     d = l.delta_at
     j = (i + 1) >> 1
@@ -189,14 +189,14 @@ end
     end
 end
 
-"Contract: `1 <= i <= length(l.delta_at)`; entry `i` of the `DAYTAB` of `ttrans`: the day number that starts at `_taitab(l, i)`."
+"Return entry `i` (in `1:length(l.delta_at)`) of the `DAYTAB` of `ttrans`: the day number that starts at `_taitab(l, i)`."
 @inline function _daytab(l::LeapSeconds, i::Int)::Int
     j = (i + 1) >> 1
     daynum = trunc(Int, (@inbounds(l.delta_at[2j]) + _HALFD) / _SPD) + _DN2000
     return isodd(i) ? daynum - 1 : daynum
 end
 
-"Contract: returns the largest `i` with `_taitab(l, i) <= tai`, or 0 (`lstled`)."
+"Return the largest `i` with `_taitab(l, i) <= tai`, or 0 (`lstled`)."
 function _last_tai(l::LeapSeconds, tai::Float64)::Int
     n = length(l.delta_at)
     i = 0
@@ -206,7 +206,7 @@ function _last_tai(l::LeapSeconds, tai::Float64)::Int
     return i
 end
 
-"Contract: returns the largest `i` with `_daytab(l, i) <= daynum`, or 0 (`lstlei`)."
+"Return the largest `i` with `_daytab(l, i) <= daynum`, or 0 (`lstlei`)."
 function _last_day(l::LeapSeconds, daynum::Int)::Int
     n = length(l.delta_at)
     i = 0
@@ -216,7 +216,7 @@ function _last_day(l::LeapSeconds, daynum::Int)::Int
     return i
 end
 
-"Contract: `den > 0`; returns (q, r) with `num == q*den + r` and `0 <= r < den` up to rounding, as CSPICE `rmaind`."
+"Return (q, r) with `num == q*den + r` and `0 <= r < den` up to rounding, as CSPICE `rmaind`. Requires `den > 0`."
 @inline function _rmaind(num::Float64, den::Float64)
     q = trunc(num / den)
     r = num - q * den
@@ -227,7 +227,7 @@ end
     return q, r
 end
 
-"Contract: returns (day number, seconds into that UTC day) of the TAI epoch `tai`; the seconds reach 86400 and above only inside a leap second."
+"Return (day number, seconds into that UTC day) of the TAI epoch `tai`; the seconds reach 86400 and above only inside a leap second."
 function _tai_to_day(l::LeapSeconds, tai::Float64)
     p = _last_tai(l, tai)
     if isodd(p)
@@ -238,7 +238,7 @@ function _tai_to_day(l::LeapSeconds, tai::Float64)
     return _wrap32(_cint(q) + _daytab(l, p)), secs
 end
 
-"Contract: returns the TAI seconds past J2000 of `secs` seconds into UTC day `daynum`."
+"Return the TAI seconds past J2000 of `secs` seconds into UTC day `daynum`."
 function _day_to_tai(l::LeapSeconds, daynum::Int, secs::Float64)::Float64
     p = max(1, _last_day(l, daynum))
     return _taitab(l, p) + (secs + Float64(_wrap32(daynum - _daytab(l, p))) * _SPD)
@@ -445,7 +445,7 @@ const _US_JDTDB = 7
 const _US_JED = 8
 const _US_TDB = 9
 
-"Contract: returns the code of the uniform time scale `s` (any case, trailing blanks allowed), or 0 if `s` is not one of them. Does not allocate."
+"Return the code of the uniform time scale `s` (any case, trailing blanks allowed), or 0 if `s` is not one of them. Does not allocate."
 function _unitim_code(s::AbstractString)::Int
     _eqci(s, "TDB", true) && return _US_TDB
     _eqci(s, "ET", true) && return _US_ET
@@ -459,7 +459,7 @@ function _unitim_code(s::AbstractString)::Int
     return 0
 end
 
-"Contract: `i`, `o` are codes of uniform scales; returns `epoch` of scale `i` in scale `o` with the arithmetic of CSPICE `unitim`. Generic over the number type; does not allocate."
+"Return `epoch` of the uniform scale `i` in the uniform scale `o` with the arithmetic of CSPICE `unitim`. Generic over the number type; does not allocate."
 @inline function _unitim(l::LeapSeconds, epoch::Real, i::Int, o::Int)
     t = epoch * 1.0
     i == o && return t
@@ -580,11 +580,11 @@ const _TT_YMWDF = 19
 const _TT_YWD = 20
 const _TT_YWDF = 21
 
-"Contract: `1 <= p <= 21`; returns whether representation `p` is formal, that is, counts every day as 86400 seconds."
+"Return whether representation `p` is formal, that is, counts every day as 86400 seconds. Requires `1 <= p <= 21`."
 @inline _tt_formal(p::Int) = p == _TT_FORMAL || p == _TT_JDUTC || p == _TT_YDDF ||
     p == _TT_YDF || p == _TT_YMDF || p == _TT_YMWDF || p == _TT_YWDF
 
-"Contract: returns the `unitim` code of the uniform representation `p` of `ttrans`, or 0 if `p` is not uniform."
+"Return the `unitim` code of the uniform representation `p` of `ttrans`, or 0 if `p` is not uniform."
 @inline function _tt_uniform(p::Int)::Int
     p == _TT_ET && return _US_ET
     p == _TT_JDTDB && return _US_JDTDB
@@ -596,7 +596,7 @@ const _TT_YWDF = 21
     return 0
 end
 
-"Contract: returns the code of the representation `name` of `ttrans` (first word, any case), or 0."
+"Return the code of the representation `name` of `ttrans` (first word, any case), or 0."
 function _tt_code(name::AbstractString)::Int
     w = uppercase(first(split(name * " ")))
     i = findfirst(==(w), _TT_NAMES)
@@ -610,10 +610,9 @@ const TVec = NTuple{7, Float64}
 """
     _ttrans(l, pfrom, pto, tv) -> NTuple{7,Float64}
 
-Contract: `pfrom` and `pto` are codes `_TT_*`; `tv` holds the components of an epoch
-in representation `pfrom`. Returns the components of the same epoch in representation
-`pto`, with the steps and the arithmetic of CSPICE `ttrans`; components that `pto`
-does not have are copied from `tv` (as the in-place routine leaves them). Does not
+Return the components of the epoch `tv` of representation `pfrom` (a code `_TT_*`) in
+representation `pto`, with the steps and the arithmetic of CSPICE `ttrans`; components
+that `pto` does not have are copied from `tv` (as the in-place routine leaves them). Does not
 allocate.
 """
 function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
@@ -741,11 +740,11 @@ end
 """
     ttrans(ks, from, to, tvec) -> NTuple{7,Float64}
 
-Contract: `from` and `to` are names of time-vector representations of CSPICE `ttrans`
+Return the seven components of the epoch `tvec` (up to seven components) of
+representation `from` in representation `to`. The names are those of CSPICE `ttrans`
 (`"YMD"`, `"YMDF"`, `"YD"`, `"YDF"`, `"YD.D"`, `"YD.DF"`, `"YWD"`, `"YWDF"`, `"YMWD"`,
 `"YMWDF"`, `"DAYSEC"`, `"DP2000"`, `"FORMAL"`, `"JDUTC"`, `"TAI"`, `"TDT"`, `"TDB"`,
-`"ET"`, `"JED"`, `"JDTDB"`, `"JDTDT"`), in any case; `tvec` holds up to seven
-components. Returns the seven components of the same epoch in representation `to`.
+`"ET"`, `"JED"`, `"JDTDB"`, `"JDTDT"`), in any case.
 Throws `SpiceError(:badtimetype)` for another name and `SpiceError(:noleapseconds)` without
 a leap-second kernel. Internal: not exported.
 """

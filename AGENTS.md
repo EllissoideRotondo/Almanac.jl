@@ -107,9 +107,8 @@ an atomic reference to one of them is a single word.
   between Julia versions.
 - **Chebyshev sums.** `_cheb3` must match `chbval_`/`chbint_` to the last bit for a
   plain epoch, which matters for angles of many turns.
-- **Remainders.** Where CSPICE calls `d_mod`, use `f2c_dmod` (or `_dyn_dmod`), never
-  `rem`: the exact remainder moved the state of SPK type 15 by 3e-12 relative after 3e5
-  revolutions.
+- **Remainders.** Where CSPICE calls `d_mod`, use `f2c_dmod`, never `rem`: the exact
+  remainder moved the state of SPK type 15 by 3e-12 relative after 3e5 revolutions.
 - **Providers.** An `EphemerisProvider` segment has `dtype == PROVIDER_DTYPE` (-1). Any
   code that reads `ks.daf[seg.file]` must test for this first. A `FrameProvider` frame
   has class 7, so dispatch on dynamic frames with `class == 5 || class == 6`, never

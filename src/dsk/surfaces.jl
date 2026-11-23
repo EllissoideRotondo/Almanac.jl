@@ -109,16 +109,6 @@ function _dsk_surface_c2n(ks::KernelSet, code::Integer, bodyid::Integer)
     return nothing
 end
 
-"`nparsi` as `srfscc_` calls it: the integer that the string holds (`_nparsi`), or `nothing` if `nparsi` gives an error."
-function _dsk_parse_int(s::AbstractString)
-    return try
-        _nparsi(s)
-    catch err
-        err isa SpiceError || rethrow()
-        nothing
-    end
-end
-
 """
     srfc2s([ctx | ks,] code, bodyid) -> (srfstr, isname)
 
@@ -179,7 +169,7 @@ Throws `SpiceError(:emptystring)` if `srfstr` is empty, and the error kinds of
 function srfscc(ks::KernelSet, srfstr::AbstractString, bodyid::Integer)
     _chkfstr("srfscc", "string `srfstr`", srfstr)
     code = _dsk_surface_n2c(ks, srfstr, bodyid)
-    return code === nothing ? _dsk_parse_int(srfstr) : code
+    return code === nothing ? _try_nparsi(srfstr) : code
 end
 
 """
@@ -422,16 +412,8 @@ function _dsk_surface_setup(
     _chkfstr("latsrf/srfnrm", "string `method`", method)
     target isa AbstractString && _chkfstr("latsrf/srfnrm", "string `target`", target)
     fixref isa AbstractString && _chkfstr("latsrf/srfnrm", "string `fixref`", fixref)
-    trgcde = _dsk_target(ks, target)
-    fixfid = _dsk_frame_code(ks, fixref)
-    fd = fixfid == 0 ? nothing : _frame_def_or_nothing(ks, fixfid)
-    fd === nothing && throw(SpiceError(:noframe, "the reference frame $fixref is not recognized"))
-    fd.center == trgcde || throw(
-        SpiceError(
-            :invalidframe, "the reference frame $fixref is " *
-                "not centered at the target body $target"
-        )
-    )
+    trgcde = _body_id(ks, target, "target")
+    fixfid = _dsk_fixfid(ks, fixref, trgcde, target, :noframe, :noframe)
     shape, subtyp, _, srflst = _dsk_parse_method(ks, trgcde, method)
     isempty(subtyp) || throw(
         SpiceError(
@@ -448,29 +430,18 @@ end
 The radii of the body `code` as `latsrf` and `srfnrm` read them, with `zzbodvcd` and
 room for 3 values: more values are `SpiceError(:arraytoosmall)`, as in `bodvcd`. With
 fewer, CSPICE uses the radius that its saved array still holds (0 on the first call),
-which is `:badaxislength` here, as is a radius that is not positive.
+which is `:badaxislength` here, as is a radius that is not positive. The test of the
+signs is the `min` of `latsrf`, which lets a NaN pass, where `_positive_radii` throws.
 """
 function _dsk_radii(ks::KernelSet, code::Integer)
-    radii = bodvrd(ks, code, "RADII")
-    length(radii) > 3 && throw(
-        SpiceError(
-            :arraytoosmall,
-            "BODY$(code)_RADII has $(length(radii)) values; there is room for 3"
-        )
-    )
-    length(radii) == 3 || throw(
+    r = _radii3(ks, code, :badaxislength)
+    min(min(r[1], r[2]), r[3]) <= 0.0 && throw(
         SpiceError(
             :badaxislength,
-            "BODY$(code)_RADII has $(length(radii)) values; 3 are required"
+            "the radii of the body $code must be positive but were $r"
         )
     )
-    min(min(radii[1], radii[2]), radii[3]) <= 0.0 && throw(
-        SpiceError(
-            :badaxislength,
-            "the radii of the body $code must be positive but were $radii"
-        )
-    )
-    return radii[1], radii[2], radii[3]
+    return r
 end
 
 @inline _dsk_get2(a::AbstractMatrix, i::Int) = (Float64(a[1, i]), Float64(a[2, i]))
@@ -546,14 +517,7 @@ function _dsk_latsrf(
         a, b, c = _dsk_radii(ks, trgcde)
         for i in 1:npts                  # invariant: out[1:i-1] holds the points 1 .. i-1
             lon, lat = _dsk_get2(lonlat, i)
-            p = _dsk_latrec(1.0, lon, lat)
-            d1 = p[1] / a
-            d2 = p[2] / b
-            d3 = p[3] / c
-            level = d1 * d1 + d2 * d2 + d3 * d3
-            level <= 0.0 && throw(SpiceError(:pointtoosmall, "the direction vector is too small"))
-            sq = sqrt(level)
-            out[i] = Vec3{Float64}(p[1] / sq, p[2] / sq, p[3] / sq)
+            out[i] = _m_edpnt(_m_latrec(1.0, lon, lat), a, b, c)
         end
         return out
     end
@@ -565,7 +529,7 @@ function _dsk_latsrf(
     t = Float64(et)
     for i in 1:npts                      # invariant: out[1:i-1] holds the points 1 .. i-1
         lon, lat = _dsk_get2(lonlat, i)
-        x = _dsk_latrec(r, lon, lat)
+        x = _m_latrec(r, lon, lat)
         xpt, _, _, found = _dsk_bux_ray(ks, tols, segs, maxrad, trgcde, srflst, t, fixfid, x, -x)
         found || throw(
             SpiceError(
@@ -642,7 +606,7 @@ function _dsk_srfnrm(
                     "the input point at index $i is not on the target body's reference ellipsoid"
                 )
             )
-            out[i] = _dsk_surfnm(a, b, c, p)
+            out[i] = _m_surfnm(a, b, c, p)
         end
         return out
     end

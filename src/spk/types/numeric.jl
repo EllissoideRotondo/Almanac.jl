@@ -1,5 +1,5 @@
-# Numeric helpers of the SPK evaluators: elementary functions that `Taylor` does not
-# have yet, and the two functions that carry derivatives through an iterative solution.
+# Numeric helpers of the SPK evaluators: the Taylor series of sinh, cosh and the two-argument
+# atan, and the two functions that carry derivatives through an iterative solution.
 # The vector routines are the `_m_` kernels of `math/kernels.jl`.
 
 # --- Taylor series of sinh, cosh and atan ---------------------------------------------
@@ -90,7 +90,7 @@ type gives 8, which is sufficient for a type that carries not more than 8 orders
     _with_primal(x::T, p::Float64) -> T
 
 `x` with its plain value (`primal(x)`) replaced by `p`; the derivative parts do not
-change. Postcondition: `primal(result) == p`.
+change.
 """
 @inline _with_primal(x::AbstractFloat, p::Float64) = oftype(x, p)
 @inline _with_primal(x::Taylor, p::Float64) = _taylor(_with_primal(x.v, p), x.d)

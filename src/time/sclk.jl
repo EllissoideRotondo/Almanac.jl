@@ -196,29 +196,22 @@ before all, found with the bisection of `scte01`. Requires `length(coef) >= 3`.
     return lower
 end
 
-"TDB seconds past J2000 of the parallel time `partim` of `clock` (`unitim_`), generic over the number type."
-@inline function _sclk_to_tdb(ks::KernelSet, clock::SclkType1, partim::T) where {T <: Real}
-    clock.timsys == 1 && return partim
+"`x` converted by `unitim_` from `insys` to `outsys` if the parallel time of `clock` is TDT (2); `x` as it is for TDB (1)."
+@inline function _sclk_unitim(ks::KernelSet, clock::SclkType1, x::Real, insys, outsys)
+    clock.timsys == 1 && return x
     clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
     l = ks.lsk
     l === nothing && _sclk_nolsk()
-    m0, m1 = l.m
-    return partim + l.k * sin(m0 + m1 * partim + l.eb * sin(m0 + m1 * partim))
+    return _unitim(l, x, insys, outsys)
 end
 
+"TDB seconds past J2000 of the parallel time `partim` of `clock` (`unitim_`), generic over the number type."
+@inline _sclk_to_tdb(ks::KernelSet, clock::SclkType1, partim::Real) =
+    _sclk_unitim(ks, clock, partim, _US_TDT, _US_TDB)
+
 "Parallel time of `clock` for the TDB epoch `et` (`unitim_`, three fixed-point steps), generic over the number type."
-@inline function _sclk_from_tdb(ks::KernelSet, clock::SclkType1, et::T) where {T <: Real}
-    clock.timsys == 1 && return et
-    clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
-    l = ks.lsk
-    l === nothing && _sclk_nolsk()
-    m0, m1 = l.m
-    tdt = et
-    for _ in 1:3
-        tdt = et - l.k * sin(m0 + m1 * tdt + l.eb * sin(m0 + m1 * tdt))
-    end
-    return tdt
-end
+@inline _sclk_from_tdb(ks::KernelSet, clock::SclkType1, et::Real) =
+    _sclk_unitim(ks, clock, et, _US_TDB, _US_TDT)
 
 """
     _sct2e(ks, clock, sclkdp::T) -> T
@@ -476,16 +469,12 @@ function _sclk_ticks(clock::SclkType1, clkstr::AbstractString)
         item = _cut_bytes(field, 30)         # `scps01_` reads items of 30 characters
         value = clock.offsets[i]
         if !isempty(strip(item, ' '))
-            try
-                isascii(item) || throw(SpiceError(:badnumber, "not a number"))
-                value = _nparsd(strip(item, ' '))
-            catch err
-                err isa SpiceError || rethrow()
-                return 0.0, _repmc(
-                        _repmc("Could not parse SCLK component # from # as a number.", item),
-                        clkstr
-                    )
-            end
+            x = isascii(item) ? _try_nparsd(strip(item, ' ')) : nothing
+            x === nothing && return 0.0, _repmc(
+                    _repmc("Could not parse SCLK component # from # as a number.", item),
+                    clkstr
+                )
+            value = x
         end
         value -= clock.offsets[i]
         _dnint(value) < 0 && return 0.0, _repmc(
@@ -639,12 +628,8 @@ function _sclk_encode(clock::SclkType1, sc::Integer, sclkch::AbstractString, sce
     scencd && (ticks = _dnint(ticks))
     part = 1
     if pos > 1
-        part = try
-            _nparsi(SubString(sclkch, 1, prevind(sclkch, pos)))
-        catch err
-            err isa SpiceError || rethrow()
-            return 0.0, kind, _repmc(badpart, sclkch)
-        end
+        part = _try_nparsi(SubString(sclkch, 1, prevind(sclkch, pos)))
+        part === nothing && return 0.0, kind, _repmc(badpart, sclkch)
         (part <= 0 || part > nparts) && return 0.0, kind, _repmc(
                 _repmc(
                     _repmc(

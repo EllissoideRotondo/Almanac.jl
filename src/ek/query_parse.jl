@@ -219,8 +219,6 @@ function _ek_qlexmsg(template::String, qb, lxb::Int, lxe::Int, locfirst::Bool)
     return _repmc(_repmc(template, _ek_qlex(qb, lxb, lxe)), lxb)
 end
 
-@noinline _ek_qsignal(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
-
 # ---------------------------------------------------------------------------------
 # The encoded query: ZZEKQINI, ZZEKINQC, ZZEKINQN
 # ---------------------------------------------------------------------------------
@@ -247,7 +245,7 @@ struct _EKQEnc
     dx::Vector{Float64}     # the correctly rounded value of each element of `d`
 end
 
-"Contract: returns a new encoded query in the state that `zzekqini_` gives."
+"A new encoded query in the state that `zzekqini_` gives."
 function _ek_qini()
     i = zeros(Int32, 19)
     i[2] = 1
@@ -275,7 +273,7 @@ end
 @inline _ek_qput!(q::_EKQEnc, k::Int, v::Integer) = (@inbounds q.i[k - 5] = Int32(v); nothing)
 
 @inline function _ek_qappnd!(q::_EKQEnc, x::Integer)
-    length(q.i) < _EKQ_ISIZE || _ek_qsignal(
+    length(q.i) < _EKQ_ISIZE || _throw_spice(
         :celltoosmall,
         "The cell cannot accommodate the addition of the element $x"
     )
@@ -296,16 +294,17 @@ const _EKQ_NODESCR = (1, 0, 0, 0, 0, 0)
 """
     _ek_qinqc!(q, value, lxb, lxe) -> NTuple{6,Int}
 
-Contract: `value` is not empty. Stores the bytes `value` in the character buffer of `q`
-and returns the descriptor of the string with the lexeme bounds `lxb`, `lxe`
-(`zzekinqc_`). Throws `SpiceError(:buffertoosmall)` if the buffer is full.
+Store the bytes `value` in the character buffer of `q` and return the descriptor of
+the string with the lexeme bounds `lxb`, `lxe` (`zzekinqc_`). Throws
+`SpiceError(:invalidcount)` for an empty `value` and `SpiceError(:buffertoosmall)` if
+the buffer is full.
 """
 function _ek_qinqc!(q::_EKQEnc, value::AbstractVector{UInt8}, lxb::Int, lxe::Int)
     n = length(value)
-    n < 1 && _ek_qsignal(:invalidcount, "Length of string value was $n; must be > 0.")
+    n < 1 && _throw_spice(:invalidcount, "Length of string value was $n; must be > 0.")
     free = Int(q.i[16])
     room = Int(q.i[15]) - free + 1
-    n > room && _ek_qsignal(
+    n > room && _throw_spice(
         :buffertoosmall, "Out of room in character portion of " *
             "encoded query; only $room elements were available; $n are needed."
     )
@@ -317,10 +316,9 @@ end
 """
     _ek_qinqn!(q, value, type, lxb, lxe) -> NTuple{6,Int}
 
-Contract: stores the number `value` of type code `type` in the double buffer of `q` and
-returns its descriptor (`zzekinqn_`); `exact` is the correctly rounded value of the same
-text. Throws `SpiceError(:buffertoosmall)` if the
-buffer is full.
+Store the number `value` of type code `type` in the double buffer of `q` and return
+its descriptor (`zzekinqn_`); `exact` is the correctly rounded value of the same text.
+Throws `SpiceError(:buffertoosmall)` if the buffer is full.
 """
 function _ek_qinqn!(
         q::_EKQEnc, value::Float64, type::Int, lxb::Int, lxe::Int,
@@ -328,7 +326,7 @@ function _ek_qinqn!(
     )
     free = Int(q.i[14])
     size = Int(q.i[13])
-    size - free + 1 <= 0 && _ek_qsignal(
+    size - free + 1 <= 0 && _throw_spice(
         :buffertoosmall, "Out of room in numeric " *
             "portion of encoded query; only $size elements were available."
     )
@@ -366,26 +364,25 @@ struct _EKQTokens
     chends::Vector{Int}
 end
 
-@inline _ek_qisdigit(c::UInt8) = UInt8('0') <= c <= UInt8('9')
 @inline _ek_qisalpha(c::UInt8) =
     (UInt8('A') <= c <= UInt8('Z')) || (UInt8('a') <= c <= UInt8('z'))
 @inline _ek_qisidtail(c::UInt8) =
-    _ek_qisalpha(c) || _ek_qisdigit(c) || c == UInt8('$') || c == UInt8('_')
+    _ek_qisalpha(c) || _isdigit(c) || c == UInt8('$') || c == UInt8('_')
 
-"Contract: returns `(last, nchar)` of the unsigned integer that starts at `s[first]`, as `lx4uns_`; `nchar == 0` and `last == first - 1` if there is none."
+"`(last, nchar)` of the unsigned integer that starts at `s[first]`, as `lx4uns_`; `nchar == 0` and `last == first - 1` if there is none."
 function _ek_qlx4uns(s::Vector{UInt8}, first::Int)
     l = length(s)
     last = first - 1
     (first < 1 || first > l) && return last, 0
     i = first
-    while i <= l && _ek_qisdigit(@inbounds s[i])    # invariant: s[first:last] are digits
+    while i <= l && _isdigit(@inbounds s[i])    # invariant: s[first:last] are digits
         last += 1
         i += 1
     end
     return last, last + 1 - first
 end
 
-"Contract: as `_ek_qlx4uns` for a signed integer (`lx4sgn_`)."
+"As `_ek_qlx4uns` for a signed integer (`lx4sgn_`)."
 function _ek_qlx4sgn(s::Vector{UInt8}, first::Int)
     (first < 1 || first > length(s)) && return first - 1, 0
     c = s[first]
@@ -396,7 +393,7 @@ function _ek_qlx4sgn(s::Vector{UInt8}, first::Int)
     return _ek_qlx4uns(s, first)
 end
 
-"Contract: as `_ek_qlx4uns` for a decimal number (`lx4dec_`); `nchar` is only exact for the forms that start with a digit or a sign and a digit, as in CSPICE."
+"As `_ek_qlx4uns` for a decimal number (`lx4dec_`); `nchar` is only exact for the forms that start with a digit or a sign and a digit, as in CSPICE."
 function _ek_qlx4dec(s::Vector{UInt8}, first::Int)
     l = length(s)
     (first < 1 || first > l) && return first - 1, 0
@@ -418,7 +415,7 @@ function _ek_qlx4dec(s::Vector{UInt8}, first::Int)
     return last, n
 end
 
-"Contract: as `_ek_qlx4uns` for a number with an optional exponent `E`, `D`, `e` or `d` (`lx4num_`)."
+"As `_ek_qlx4uns` for a number with an optional exponent `E`, `D`, `e` or `d` (`lx4num_`)."
 function _ek_qlx4num(s::Vector{UInt8}, first::Int)
     l = length(s)
     (first < 1 || first > l) && return first - 1, 0
@@ -439,8 +436,8 @@ end
 """
     _ek_qlxqstr(s, qchar, first) -> (last, nchar)
 
-Contract: finds the quoted string that starts at `s[first]` with the quote character
-`qchar`, as `lxqstr_`: the string ends at the first quote that is not doubled, and a
+Find the quoted string that starts at `s[first]` with the quote character `qchar`, as
+`lxqstr_`: the string ends at the first quote that is not doubled, and a
 quote without a partner ends it at the last complete pair. `nchar == 0` if `s[first]`
 is not `qchar` or no second quote follows.
 """
@@ -474,9 +471,9 @@ end
 """
     _ek_qparsqs(s, qchar, outlen) -> (value, error)
 
-Contract: `s` is a quoted string token with the quote character `qchar`. Returns the
-bytes between the quotes with each doubled quote as one, or the error message of
-`parsqs_` (`""` if none); `outlen` is the room for the value.
+Return the bytes between the quotes of the quoted string token `s` with each doubled
+quote `qchar` as one, and the error message of `parsqs_` (`""` if none); `outlen` is
+the room for the value.
 """
 function _ek_qparsqs(s::AbstractVector{UInt8}, qchar::UInt8, outlen::Int)
     value = UInt8[]
@@ -512,10 +509,9 @@ end
 """
     _ek_qexact(lexeme, x) -> Float64
 
-Contract: `lexeme` is a numeric token that `nparsd` reads as `x`. Returns the correctly
-rounded double of the token, or `x` if the token has a form that Julia does not read
-(the result then is the value of CSPICE). The two values differ by a few units in the
-last place at most, so a result farther from `x` is not accepted.
+Return the correctly rounded double of the numeric token `lexeme`, which `nparsd` reads
+as `x`, or `x` if Julia does not read the token or the two differ by more than 8 units
+in the last place.
 """
 function _ek_qexact(lexeme::AbstractVector{UInt8}, x::Float64)::Float64
     text = replace(String(copy(lexeme)), r"[dD]" => "e", ' ' => "", ',' => "")
@@ -527,16 +523,13 @@ end
 """
     _ek_qnparsd(s) -> (value, error, ptr)
 
-Contract: `s` is a numeric token of `_ek_qlx4num`. Returns its value with an empty
-`error`, or the message and the pointer of `nparsd_` for a number that is too large
-for a double (the only error that such a token can have).
+Return the value of the numeric token `s` of `_ek_qlx4num` with an empty `error`, or
+the message and the pointer of `nparsd_` for a number that is too large for a double
+(the only error that such a token can have).
 """
 function _ek_qnparsd(s::AbstractVector{UInt8})
-    try
-        return _nparsd(s), "", 0
-    catch err
-        err isa SpiceError || rethrow()
-    end
+    x = _try_nparsd(s)
+    x === nothing || return x, "", 0
     # The pointer of NPARSD: the exponent digit at which the exponent, with the count
     # of the mantissa digits that did not fit, passes 308; or one past the end.
     intval = decval = ecount = expval = 0.0
@@ -545,7 +538,7 @@ function _ek_qnparsd(s::AbstractVector{UInt8})
     zeroi = false
     ptr = length(s) + 1
     for (i, c) in enumerate(s)
-        if _ek_qisdigit(c)
+        if _isdigit(c)
             v = Float64(c - UInt8('0'))
             if mode == 1
                 intval < 1.0e15 ? (intval = intval * 10.0 + v) : (ecount += 1.0)
@@ -576,10 +569,10 @@ end
 """
     _ek_qscan(qb, maxntk, maxnum, buflen) -> (tokens, error)
 
-Contract: `qb` holds the bytes of a query of at most `_EKQ_MAXQRY` characters without
-trailing blanks. Returns the tokens of the query (`zzekscan_`) and `""`, or `nothing`
-and the error message of the scanner; `maxntk` and `maxnum` are the largest numbers of
-tokens and of numeric tokens and `buflen` the room for identifiers and strings.
+Return the tokens of the query `qb` (at most `_EKQ_MAXQRY` characters) and `""`, as
+`zzekscan_`, or `nothing` and the error message of the scanner. `maxntk` and `maxnum`
+are the largest numbers of tokens and of numeric tokens, `buflen` the room for
+identifiers and strings.
 """
 function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::Int)
     l = max(1, something(findlast(!=(UInt8(' ')), qb), 0))
@@ -628,7 +621,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         elseif chr == UInt8('.')
             _, nchars = _ek_qlx4num(tq, cptr)
             kind = nchars > 0 ? 6 : 8
-        elseif _ek_qisdigit(chr) || chr == UInt8('+') || chr == UInt8('-')
+        elseif _isdigit(chr) || chr == UInt8('+') || chr == UInt8('-')
             kind = 6
         elseif _ek_qisalpha(chr)
             kind = 7
@@ -672,7 +665,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
             push!(numexact, _ek_qexact(lexeme, x))
             # BEINT: an optional sign and then digits only.
             b = (lexeme[1] == UInt8('+') || lexeme[1] == UInt8('-')) ? 2 : 1
-            isint = b <= length(lexeme) && all(_ek_qisdigit, view(lexeme, b:length(lexeme)))
+            isint = b <= length(lexeme) && all(_isdigit, view(lexeme, b:length(lexeme)))
             token!(isint ? _EKQ_TKINT : _EKQ_TKDP, length(numvls), cptr, last)
         elseif kind == 7                                # identifier or keyword
             last = cptr
@@ -729,7 +722,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         ), ""
 end
 
-"Contract: returns `(loc, found)` of the first token with the code `tokid` (and the keyword code `kwcode` for a keyword), as `zzektloc_`; `loc == n + 1` if there is none."
+"`(loc, found)` of the first token with the code `tokid` (and the keyword code `kwcode` for a keyword), as `zzektloc_`; `loc == n + 1` if there is none."
 function _ek_qtloc(tk::_EKQTokens, tokid::Int, kwcode::Int)
     for loc in 1:tk.n
         if tk.tokens[loc] == tokid && (tokid != _EKQ_TKKEY || tk.values[loc] == kwcode)
@@ -770,11 +763,11 @@ function _ek_qlnkini(size::Int)
     return _EKQPool(fwd, zeros(Int32, size), size, 1)
 end
 
-@noinline _ek_qlnkbad(node, p::_EKQPool) = _ek_qsignal(
+@noinline _ek_qlnkbad(node, p::_EKQPool) = _throw_spice(
     :invalidnode,
     "NODE was $node; valid range is 1 to $(length(p.fwd))."
 )
-@noinline _ek_qlnkunalloc(node) = _ek_qsignal(
+@noinline _ek_qlnkunalloc(node) = _throw_spice(
     :unallocatednode,
     "Node $node of the linked list pool is not allocated."
 )
@@ -786,7 +779,7 @@ end
 end
 
 function _ek_qlnkan!(p::_EKQPool)
-    p.nfree == 0 && _ek_qsignal(
+    p.nfree == 0 && _throw_spice(
         :nofreenodes,
         "There are no free nodes left for allocating in the supplied linked list pool."
     )
@@ -819,7 +812,7 @@ function _ek_qlnktl(node::Int, p::_EKQPool)
     return node
 end
 
-"Contract: inserts the whole list of the node `list` after the node `prev`; nothing if `prev <= 0` (`lnkila_`)."
+"Insert the whole list of the node `list` after the node `prev`; nothing if `prev <= 0` (`lnkila_`)."
 function _ek_qlnkila!(prev::Int, list::Int, p::_EKQPool)
     prev <= 0 && return nothing
     _ek_qlnkchk(prev, p)
@@ -838,7 +831,7 @@ function _ek_qlnkila!(prev::Int, list::Int, p::_EKQPool)
     return nothing
 end
 
-"Contract: inserts the whole list of the node `list` before the node `next`; nothing if `next <= 0` (`lnkilb_`)."
+"Insert the whole list of the node `list` before the node `next`; nothing if `next <= 0` (`lnkilb_`)."
 function _ek_qlnkilb!(list::Int, next::Int, p::_EKQPool)
     next <= 0 && return nothing
     _ek_qlnkchk(next, p)
@@ -857,7 +850,7 @@ function _ek_qlnkilb!(list::Int, next::Int, p::_EKQPool)
     return nothing
 end
 
-"Contract: `tail` follows `head` in one list; frees the nodes from `head` to `tail` and joins their neighbors (`lnkfsl_`)."
+"Free the nodes from `head` to `tail` of one list and join their neighbors (`lnkfsl_`)."
 function _ek_qlnkfsl!(head::Int, tail::Int, p::_EKQPool)
     _ek_qlnkchk(head, p)
     _ek_qlnkchk(tail, p)
@@ -867,7 +860,7 @@ function _ek_qlnkfsl!(head::Int, tail::Int, p::_EKQPool)
         count += 1
         node = Int(p.fwd[node])
     end
-    node != tail && _ek_qsignal(
+    node != tail && _throw_spice(
         :invalidsublist,
         "Node $tail cannot be found by forward traversal, starting at node $head."
     )
@@ -899,10 +892,9 @@ end
 """
     _ek_qnrml!(q, qb, tk) -> Union{Nothing,String}
 
-Contract: `tk` holds the tokens of the query `qb` and has a WHERE keyword, and `q`
-holds the FROM clause. Appends the constraints of the WHERE clause in normal form (a
-disjunction of conjunctions) and the sizes of the conjunctions to `q`, as
-`zzeknrml_`, and returns `nothing`; or returns the error message of the normalizer.
+Append the constraints of the WHERE clause of the tokens `tk` of the query `qb` in
+normal form (a disjunction of conjunctions) and the sizes of the conjunctions to `q`,
+as `zzeknrml_`. Return `nothing`, or the error message of the normalizer.
 
 The WHERE clause runs from the token after the first WHERE to the token before the
 first FROM, ORDER or SELECT that follows it. Its tokens become "meta-tokens" in a
@@ -1418,7 +1410,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
         nconj += 1
         djnode = _ek_qlnknxt(djnode, djpool)
     end
-    nconj > _EKQ_MAXCNJ && _ek_qsignal(
+    nconj > _EKQ_MAXCNJ && _throw_spice(
         :toomanyconjunctions,
         "The normalized WHERE clause has $nconj conjunctions; the maximum is $_EKQ_MAXCNJ."
     )
@@ -1481,10 +1473,10 @@ end
 """
     _ek_qpars!(q, qb, tk) -> Union{Nothing,String}
 
-Contract: `tk` holds the tokens of the query `qb` and `q` is a new encoded query.
-Fills `q` with the FROM clause, the normalized WHERE clause, the ORDER BY clause and
-the SELECT clause, in this order, and marks it as parsed (`zzekpars_`); returns
-`nothing`, or the error message of the parser.
+Fill the new encoded query `q` from the tokens `tk` of the query `qb` with the FROM
+clause, the normalized WHERE clause, the ORDER BY clause and the SELECT clause, in this
+order, and mark it as parsed (`zzekpars_`). Return `nothing`, or the error message of
+the parser.
 
 State machine: the states are those of the C source (0 table, 1 after a table, 3 after
 an alias, 4 WHERE, 5 ORDER, 6 to 10 order-by columns, 11 SELECT, 12 to 15 SELECT
@@ -1755,7 +1747,7 @@ end
 # Name resolution: ZZEKNRES, ZZEKCCHK
 # ---------------------------------------------------------------------------------
 
-"Contract: `1 <= n <= number of tables of q`; returns the name and the alias (`\"\"` if none) of table `n` of the FROM clause, cut to 64 characters (`zzekqtab_`)."
+"The name and the alias (`\"\"` if none) of table `n` of the FROM clause, cut to 64 characters (`zzekqtab_`)."
 function _ek_qtab(q::_EKQEnc, n::Int)
     base = (n - 1) * 12 + 19
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
@@ -1768,10 +1760,10 @@ end
 """
     _ek_qcchk!(q, tables, tabcat, table, alias, base) -> Union{Nothing,String}
 
-Contract: `base` is the C base of a pair of descriptors (qualifier, column) in `q`;
-`table`, `alias` are the names of the FROM clause and `tabcat` their catalog
-indices. Writes the table index and the column index into the pair and returns
-`nothing`, or returns the error message of `zzekcchk_`. A qualifier is looked up in
+Write the table index and the column index into the pair of descriptors (qualifier,
+column) at the C base `base` of `q` and return `nothing`, or return the error message
+of `zzekcchk_`. `table`, `alias` are the names of the FROM clause and `tabcat` their
+catalog indices. A qualifier is looked up in
 the table names first and then in the aliases; a column without a qualifier must be
 in exactly one table of the FROM clause.
 """
@@ -1781,7 +1773,7 @@ function _ek_qcchk!(
     )
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
     cb, ce = _ek_qget(q, base + 15), _ek_qget(q, base + 16)
-    (cb <= 0 || ce <= 0) && _ek_qsignal(
+    (cb <= 0 || ce <= 0) && _throw_spice(
         :bug, "Invalid string bounds $cb:$ce for " *
             "column.  Column name descriptor base is $base."
     )
@@ -1825,15 +1817,14 @@ end
 """
     _ek_qnres!(q, qb, tables) -> (tabcat, error)
 
-Contract: `q` is a parsed query of the string `qb` and `tables` the catalog of
-loaded tables. Resolves the table and column names of `q` (`zzeknres_`): returns the
-catalog index of each table of the FROM clause and `nothing`, or an empty vector and
-the error message. Rules, in the order of CSPICE: aliases are distinct; an alias is not
+Resolve the table and column names of the parsed query `q` of the string `qb` against
+the catalog `tables` (`zzeknres_`). Return the catalog index of each table of the FROM
+clause and `nothing`, or an empty vector and the error message. Rules, in the order of CSPICE: aliases are distinct; an alias is not
 the name of another table of the FROM clause; each table is loaded; then the columns
 of the constraints, of the SELECT clause and of the ORDER BY clause are resolved.
 """
 function _ek_qnres!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTable})
-    q.i[4] == -1 && _ek_qsignal(:querynotparsed, "Encoded query has not been parsed.")
+    q.i[4] == -1 && _throw_spice(:querynotparsed, "Encoded query has not been parsed.")
     ntab, ncns, ncnj, nord, nsel = (Int(q.i[k]) for k in (8, 9, 10, 11, 12))
     table = String[]
     alias = String[]
@@ -1903,32 +1894,10 @@ end
 # ---------------------------------------------------------------------------------
 
 """
-    _ek_scn2id(ks, clknam) -> Union{Int,Nothing}
-
-Contract: `clknam` is the name of a spacecraft clock, `"<body name> SCLK"`. Returns
-the ID code of the clock, which is the code of the body, or `nothing` if the body name
-is unknown or missing (`scn2id_`): the last `SCLK` of the name is removed and the rest
-is a body name. Reads the body names of `ks` only.
-"""
-function _ek_scn2id(ks::KernelSet, clknam::AbstractString)
-    name = uppercase(String(first(clknam, 32)))
-    r = findlast("SCLK", name)
-    r === nothing || (
-        name = string(
-            SubString(name, 1, prevind(name, first(r))), "    ",
-            SubString(name, last(r) + 1)
-        )
-    )
-    name = strip(name, ' ')
-    isempty(name) && return nothing
-    return bodn2c(ks, name)
-end
-
-"""
     _ek_qtcnv(ks, td, timstr) -> (et, error)
 
-Contract: `timstr` holds the 32 bytes of a time value of a query. Returns its
-ephemeris time and `""`, or 0 and the error message of `zzektcnv_`. The string is a
+Return the ephemeris time of the 32 bytes `timstr` of a time value of a query and
+`""`, or 0 and the error message of `zzektcnv_`. The string is a
 spacecraft clock string if it contains `SCLK` (`<clock name> SCLK <clock string>`),
 and a time string of `str2et` with the defaults `td` in the other case. An error of
 the time or clock system (no leap-second kernel, no SCLK kernel, a time that
@@ -1952,7 +1921,7 @@ function _ek_qtcnv(ks::KernelSet, td::TimeDefaults, timstr::AbstractVector{UInt8
     r = findlast("SCLK", locstr)
     if r !== nothing
         pos = first(r)
-        clkid = _ek_scn2id(ks, locstr[1:(pos + 3)])
+        clkid = scn2id(ks, locstr[1:(pos + 3)])
         if clkid === nothing
             pos > 1 && return 0.0, _repmc(
                     "Time conversion failed; SCLK type <#> " *
@@ -1987,10 +1956,10 @@ end
 """
     _ek_qtres!(q, tables, tabcat, ks, td) -> Union{Nothing,String}
 
-Contract: the names of `q` are resolved. For each constraint that compares a column
-of type TIME with a value, converts the value to ephemeris time, stores it in the
-double buffer and replaces the value descriptor by one of type 4 (`zzektres_`).
-Returns `nothing`, or the error message of the conversion. As in CSPICE the time
+For each constraint of the resolved query `q` that compares a column of type TIME with
+a value, convert the value to ephemeris time, store it in the double buffer and replace
+the value descriptor by one of type 4 (`zzektres_`). Return `nothing`, or the error
+message of the conversion. As in CSPICE the time
 string is cut to 32 characters, and a numeric value is converted as a blank string,
 which is an error.
 """
@@ -1999,7 +1968,7 @@ function _ek_qtres!(
         ks::KernelSet, td::TimeDefaults
     )
     q.i[5] == -1 &&
-        _ek_qsignal(:namesnotresolved, "Names are not resolved in encoded query.")
+        _throw_spice(:namesnotresolved, "Names are not resolved in encoded query.")
     ntab, ncns = Int(q.i[8]), Int(q.i[9])
     for i in 1:ncns
         base = ntab * 12 + 19 + (i - 1) * 26
@@ -2032,8 +2001,8 @@ end
 """
     _ek_qsemc!(q, qb, tables, tabcat) -> Union{Nothing,String}
 
-Contract: the names and the times of `q` are resolved. Checks the constraints and the
-order-by columns (`zzeksemc_`) and returns `nothing`, or the error message. Rules: a
+Check the constraints and the order-by columns of the resolved query `q` (`zzeksemc_`)
+and return `nothing`, or the error message. Rules: a
 column of a constraint or of the ORDER BY clause is scalar (size 1); LIKE and NOT LIKE
 need a character column on the left; the two sides of a constraint have the same
 type, or both are numeric (DP and INT mix). As in CSPICE, the check stops without an
@@ -2050,9 +2019,9 @@ function _ek_qsemc!(
         tabcat::Vector{Int}
     )
     q.i[5] == -1 &&
-        _ek_qsignal(:unresolvednames, "Encoded query has not had names resolved.")
+        _throw_spice(:unresolvednames, "Encoded query has not had names resolved.")
     q.i[6] == -1 &&
-        _ek_qsignal(:unresolvedtimes, "Encoded query has not had time values resolved.")
+        _throw_spice(:unresolvedtimes, "Encoded query has not had time values resolved.")
     ntab, ncns, ncnj, nord = (Int(q.i[k]) for k in (8, 9, 10, 11))
     attr(tabidx, colidx) = tables[tabcat[tabidx]].attrs[colidx]
     lxe1 = 0            # LXE(2) of ZZEKSEMC: 0 while CSPICE has not set it
@@ -2125,7 +2094,7 @@ end
 """
     _ek_qencode(tables, ks, td, query) -> (q, tabcat, error, errmsg)
 
-Contract: as `_ek_encode_query`, but returns the encoded query in the layout of CSPICE
+As `_ek_encode_query`, but return the encoded query in the layout of CSPICE
 (`zzekencd_`) with the catalog indices of its tables; `q` is `nothing` on error.
 """
 function _ek_qencode(
@@ -2155,13 +2124,7 @@ function _ek_qencode(
     return q, tabcat, false, ""
 end
 
-"Contract: returns the integer nearest to `x` as `i_dnnt` of f2c gives it on x86: the smallest 32-bit integer if the result does not fit."
-function _ek_qnint(x::Float64)
-    r = x >= 0.0 ? floor(x + 0.5) : -floor(0.5 - x)
-    return (-2.0^31 <= r < 2.0^31) ? Int(r) : Int(typemin(Int32))
-end
-
-"Contract: `base` is the C base of a pair of descriptors (qualifier, column) of a resolved query; returns the column reference, with the lexeme bounds by the rule of `zzekqsel_`."
+"The column reference of the pair of descriptors (qualifier, column) at the C base `base` of a resolved query, with the lexeme bounds by the rule of `zzekqsel_`."
 function _ek_qcol(q::_EKQEnc, base::Int)
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
     cb, ce = _ek_qget(q, base + 15), _ek_qget(q, base + 16)
@@ -2178,9 +2141,9 @@ const _EKQ_NOCOL = _EKQCol("", 0, "", 0, 0, 0)
 """
     _ek_qdecode(q, tabcat) -> _EKQuery
 
-Contract: `q` is an encoded query that passed all steps and `tabcat` holds the
-catalog indices of its tables. Returns the query as plain data, with the values that
-`zzekqtab_`, `zzekqcnj_`, `zzekqcon_`, `zzekqord_` and `zzekqsel_` return.
+Return the checked encoded query `q`, whose tables have the catalog indices `tabcat`,
+as plain data, with the values that `zzekqtab_`, `zzekqcnj_`, `zzekqcon_`, `zzekqord_`
+and `zzekqsel_` return.
 """
 function _ek_qdecode(q::_EKQEnc, tabcat::Vector{Int})
     ntab, ncns, ncnj, nord, nsel = (Int(q.i[k]) for k in (8, 9, 10, 11, 12))
@@ -2206,7 +2169,7 @@ function _ek_qdecode(q::_EKQEnc, tabcat::Vector{Int})
             p = _ek_qget(q, base + 23)
             cval = dtype == _EK_CHR ? _ek_qstr(q, p, _ek_qget(q, base + 24)) : ""
             dval = dtype == _EK_CHR ? 0.0 : q.d[p]
-            ival = dtype == _EK_INT ? _ek_qnint(dval) : 0
+            ival = dtype == _EK_INT ? _nint(dval) : 0
             push!(
                 constraints,
                 _EKQConstraint(
@@ -2233,15 +2196,11 @@ end
 """
     _ek_encode_query(tables, ks, td, query) -> (query, failed, errmsg)
 
-Contract: `tables` is the catalog of loaded tables in load order, with names in
-upper case. Runs the steps of `ekfind_` that come before the search (`zzekqini_`,
-`zzekscan_`, `zzekpars_`, `zzeknres_`, `zzektres_`, `zzeksemc_`) on the string `query`
-and returns `(q::_EKQuery, false, "")`, or `(nothing, true, errmsg)` with the error
-message that
-[`ekfind_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekfind_c.html) returns in `errmsg` for a query that is not valid. Positions
-in a message are 1-based byte positions in `query`. Time values are converted with
-the leap-second and clock data of `ks` and the time defaults `td`. Pure function of
-its arguments; does not modify them.
+Run the steps of `ekfind_` that come before the search (`zzekqini_`, `zzekscan_`,
+`zzekpars_`, `zzeknres_`, `zzektres_`, `zzeksemc_`) on the string `query` against the
+catalog `tables` and return `(q::_EKQuery, false, "")`, or `(nothing, true, errmsg)`
+with the message of `ekfind_c` for a query that is not valid. Time values are
+converted with the kernels of `ks` and the time defaults `td`.
 
 Throws `SpiceError` where CSPICE signals a SPICE error: `:celltoosmall` if the
 normalized WHERE clause has more constraints than the encoded query can hold (1000
@@ -2275,16 +2234,7 @@ end
 """
     _ek_psel(tables, ks, td, query) -> NamedTuple
 
-Contract: as `_ek_encode_query` for the arguments. Analyses the SELECT clause of
-`query` as
-[`ekpsel_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekpsel_c.html) and returns `(n, xbegs, xends, xtypes, xclass, tabs, cols, failed,
-errmsg)`: the number `n` of SELECT items and for each item the first and last
-character of its expression in `query` (`xbegs`, `xends`; 1-based byte positions, one
-more than the 0-based positions of `ekpsel_c`), its data type (`xtypes`: `:CHR`,
-`:DP`, `:INT` or `:TIME`), its class (`xclass`: always `:COL`, a column), the name of
-its table (`tabs`: the table name, never the alias) and of its column (`cols`). For a
-query that is not valid, `failed` is true, `errmsg` holds the message, `n` is 0 and the
-vectors are empty.
+The SELECT clause of `query`, as [`ekpsel`](@ref) returns it.
 """
 function _ek_psel(
         tables::Vector{EKTable}, ks::KernelSet, td::TimeDefaults,

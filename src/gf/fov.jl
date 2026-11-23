@@ -14,14 +14,14 @@
 (the observer, then `tshape`, which is `POINT`, `ELLIPSOID` or `RAY`
 (`:invalidshape`), then those of `_geo_fov_setup`, which projects the vertices of a
 polygon here), then the search of each interval of `cnfine` for the intervals on which
-the state `_geo_fov_visible` is true. Postcondition: a new window, a subset of `cnfine`.
+the state `_geo_fov_visible` is true.
 """
 function _gf_fove(
         ks::KernelSet, inst::NameOrID, tshape::AbstractString,
         raydir::Vec3{Float64}, target::NameOrID, tframe::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, cnfine::Window, run::_GFRun
     )
-    _geo_body(ks, obsrvr, "observer")
+    _body_id(ks, obsrvr, "observer")
     shp = _geo_fov_tshape(tshape)
     v = _geo_fov_setup(ks, inst, shp, raydir, target, tframe, abcorr, obsrvr, true)
     _gf_repi(run, cnfine, "Target visibility search ", "done.")
@@ -143,7 +143,7 @@ function gfrfov(
         tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
     )
     run = _gf_run(step, tol; bail, report, threads)
-    return _gf_fove(ks, inst, "RAY", _geo_pos(raydir), 0, rframe, abcorr, obsrvr, cnfine, run)
+    return _gf_fove(ks, inst, "RAY", _dsk_vec3(raydir), 0, rframe, abcorr, obsrvr, cnfine, run)
 end
 gfrfov(
     ctx::SpiceContext, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
@@ -184,7 +184,7 @@ function gffove(
     )
     run = _gf_run(udstep, tol; refine = udrefn, bail, report, threads)
     return _gf_fove(
-        ks, inst, tshape, _geo_pos(raydir), target, tframe, abcorr, obsrvr,
+        ks, inst, tshape, _dsk_vec3(raydir), target, tframe, abcorr, obsrvr,
         cnfine, run
     )
 end

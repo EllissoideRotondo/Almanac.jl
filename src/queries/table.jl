@@ -142,10 +142,9 @@ derivative of the position polynomial. `et` is in seconds past J2000 TDB and is 
 plain number or a dual number. A plain epoch is used as `Float64` also when the
 coefficients are `Float32`. The call reads no kernel and does not allocate.
 
-Throws `SpiceError(:spkinsuffdata)` if `et` is outside [`table_span`](@ref)`(tab)`;
-this is the kind of [`spkezr`](@ref) for an epoch outside the loaded data. The check is
-a bounds check. Under `@inbounds`, as in a GPU kernel, it is removed, and an
-epoch outside the table then gives the extrapolation of the nearest interval.
+Throws `SpiceError(:spkinsuffdata)` if `et` is outside [`table_span`](@ref)`(tab)`. The
+check is a bounds check: under `@inbounds`, as in a GPU kernel, it is removed, and an
+epoch outside the table gives the extrapolation of the nearest interval.
 
 See also [`table_position`](@ref), [`table_state`](@ref).
 """
@@ -197,7 +196,7 @@ end
 # Construction
 # ---------------------------------------------------------------------------------
 
-"Segments from `body` to the root of its chain at `t`, or `nothing` if the chain is too long."
+"Return the segments from `body` to the root of its chain at `t`, or `nothing` if the chain is too long."
 function _tab_up(ks::KernelSet, body::Int32, t::Float64)
     list = Segment[]
     while true     # invariant: `list` is the chain from the first body to `body`
@@ -215,7 +214,7 @@ end
 """
     _tab_chain(ks, targ, obs, t) -> Union{Nothing,Vector{Segment}}
 
-The segments that `spk_jet` adds and subtracts for `targ` relative to `obs` at `t`,
+Return the segments that `spk_jet` adds and subtracts for `targ` relative to `obs` at `t`,
 or `nothing` if the two bodies are not connected at `t`.
 """
 function _tab_chain(ks::KernelSet, targ::Int32, obs::Int32, t::Float64)
@@ -233,7 +232,7 @@ end
 """
     _tab_native_grid(ks, targ, ref, obs, t0, t1) -> Union{Nothing,Tuple{Float64,Float64,Int,Int}}
 
-`(start, dt, nint, ncoef)` of the grid on which the position of `targ` relative to
+Return `(start, dt, nint, ncoef)` of the grid on which the position of `targ` relative to
 `obs` in frame `ref` is one polynomial of degree `ncoef - 1` for each interval, or
 `nothing` if there is no such grid. A grid exists when `ref` is inertial, every
 segment of the chain is SPK type 2 in an inertial frame, the record boundaries of
@@ -264,7 +263,7 @@ end
 """
     _tab_fit(f, start, dt, nint, ncoef) -> (coef::Vector{Float64}, maxerr, scale, velerr)
 
-Chebyshev coefficients of `f(et)::SVector{3}` on `nint` intervals of length `dt` from
+Return the Chebyshev coefficients of `f(et)::SVector{3}` on `nint` intervals of length `dt` from
 `start`: interpolation at the `ncoef` zeros of the Chebyshev polynomial of degree
 `ncoef`. An epoch near 1e9 s has a resolution of 1e-7 s, so a zero is not an exact
 epoch; the function solves the interpolation conditions at the normalized times of
@@ -272,12 +271,11 @@ the epochs that `f` received, which keeps a polynomial `f` exact to rounding.
 `maxerr` is the largest norm of the difference between `f` and the interpolant at the
 `ncoef - 1` points between the zeros (the points where the error of the interpolation
 is largest); `scale` is the largest norm of `f` at the zeros.
-Requires `dt > 0`, `nint >= 1`, `ncoef >= 2`.
 """
 _tab_fit(f::F, start::Float64, dt::Float64, nint::Int, ncoef::Int) where {F} =
     _tab_fit(f, start, dt, nint, ncoef, Val(1))
 
-"The value at `s` of the `C` vector series of one record of `ncoef` coefficients from index `a`, as one vector."
+"Return the value at `s` of the `C` vector series of one record of `n` coefficients from index `a`, as one vector."
 @inline function _tab_value(coef, a::Int, n::Int, s, radius, ::Val{C}) where {C}
     cols = ntuple(c -> _cheb3(coef, a + 3 * n * (c - 1), n, s, radius, Val(0))[1], Val(C))
     return vcat(cols...)
@@ -339,6 +337,34 @@ function _tab_fit(
     end
     @assert length(coef) == w * nint
     return coef, maxerr, scale, velerr
+end
+
+"Default of the `maxintervals` keyword of the fits: the largest number of intervals."
+const _TAB_MAXINTERVALS = 65536
+
+"""
+    _tab_checks(who, t0, t1, ncoef, tol, maxintervals, maxcoef = typemax(Int)) -> (a, b)
+
+The argument checks of a fit, in this order: finite epochs `t0 < t1`, `2 <= ncoef <=
+maxcoef`, a positive `tol` or `nothing`, `maxintervals >= 1`. Return the epochs as
+`Float64`; throw `SpiceError(:badarg)` for the first check that fails.
+"""
+function _tab_checks(
+        who::AbstractString, t0::Real, t1::Real, ncoef::Integer, tol, maxintervals::Integer,
+        maxcoef::Int = typemax(Int)
+    )
+    a, b = Float64(t0), Float64(t1)
+    (isfinite(a) && isfinite(b) && a < b) ||
+        throw(SpiceError(:badarg, "$who: the epochs must be finite, with t0 < t1"))
+    2 <= ncoef <= maxcoef || throw(
+        SpiceError(
+            :badarg, "$who: ncoef is $ncoef; it must be " *
+                (maxcoef == typemax(Int) ? "at least 2" : "in 2:$maxcoef")
+        )
+    )
+    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "$who: tol must be positive"))
+    maxintervals >= 1 || throw(SpiceError(:badarg, "$who: maxintervals must be at least 1"))
+    return a, b
 end
 
 """
@@ -428,14 +454,10 @@ See also [`EphemerisTable`](@ref), [`rotation_table`](@ref), [`table_to_spk`](@r
 function ephemeris_table(
         ks::KernelSet, targ::NameOrID, t0::Real, t1::Real, ref::NameOrID,
         abcorr::Union{AbstractString, Aberration}, obs::NameOrID;
-        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16, maxintervals::Integer = 65536
+        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16,
+        maxintervals::Integer = _TAB_MAXINTERVALS
     )
-    a, b = Float64(t0), Float64(t1)
-    (isfinite(a) && isfinite(b) && a < b) ||
-        throw(SpiceError(:badarg, "ephemeris_table: the epochs must be finite, with t0 < t1"))
-    ncoef >= 2 || throw(SpiceError(:badarg, "ephemeris_table: ncoef must be at least 2"))
-    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "ephemeris_table: tol must be positive"))
-    maxintervals >= 1 || throw(SpiceError(:badarg, "ephemeris_table: maxintervals must be at least 1"))
+    a, b = _tab_checks("ephemeris_table", t0, t1, ncoef, tol, maxintervals)
     t, f, o = body_code(ks, targ), frame_id(ks, ref), body_code(ks, obs)
     corr = Aberration(abcorr)
     source = corr.geometric ? (et -> spk_jet(ks, t, et, f, o, Val(0))[1]) :
@@ -672,14 +694,10 @@ See also [`RotationTable`](@ref), [`ephemeris_table`](@ref).
 """
 function rotation_table(
         ks::KernelSet, from::NameOrID, to::NameOrID, t0::Real, t1::Real;
-        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16, maxintervals::Integer = 65536
+        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16,
+        maxintervals::Integer = _TAB_MAXINTERVALS
     )
-    a, b = Float64(t0), Float64(t1)
-    (isfinite(a) && isfinite(b) && a < b) ||
-        throw(SpiceError(:badarg, "rotation_table: the epochs must be finite, with t0 < t1"))
-    ncoef >= 2 || throw(SpiceError(:badarg, "rotation_table: ncoef must be at least 2"))
-    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "rotation_table: tol must be positive"))
-    maxintervals >= 1 || throw(SpiceError(:badarg, "rotation_table: maxintervals must be at least 1"))
+    a, b = _tab_checks("rotation_table", t0, t1, ncoef, tol, maxintervals)
     f, t = frame_id(ks, from), frame_id(ks, to)
     source = et -> SVector{9, Float64}(frame_rotation(ks, f, t, et))
     source(a), source(b)       # data at both ends, or the error of the frame layer

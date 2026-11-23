@@ -7,19 +7,12 @@ const METAKERNEL_VARIABLES = ("KERNELS_TO_LOAD", "PATH_SYMBOLS", "PATH_VALUES")
 empty_kernelset() = build_kernelset(Loaded[])
 
 """
-    build_kernelset(loaded::Vector{Loaded}) -> KernelSet
+    build_kernelset(loaded, edited=nothing, bodydefs=[]) -> KernelSet
 
-Build the snapshot for the load list `loaded` (load order). The function does not read
-any file: it uses the `DAF` and `TextKernel` objects of the entries. Segment `file`
-numbers index `daf`; `spk`, `pck` and `ck` are in CSPICE priority order (later file
-first, and inside one file later segment first); the pool holds all assignments in load
-order. The spacecraft clocks and the CK meta data are built from the pool.
-
-    build_kernelset(loaded, edited, bodydefs) -> KernelSet
-
-The same with the kernel pool `edited` in the place of the pool of the text kernels
-(a pool with direct edits, see `pool_write.jl`; `nothing` for no edits) and with the
-name and code pairs `bodydefs` of `boddef`.
+Build the snapshot of the load list `loaded` (load order) from the contents of its
+entries, without reading a file. `edited` is a pool with direct edits that takes the
+place of the pool of the text kernels (`nothing` for none), and `bodydefs` are the name
+and code pairs of `boddef`.
 """
 function build_kernelset(
         loaded::Vector{Loaded},
@@ -110,7 +103,6 @@ function build_kernelset(
     )
 end
 
-"The segment table `t` with each list in the indexed form of `find_segment`."
 _segment_lists(t::Dict{Int32, Vector{S}}) where {S} =
     Dict{Int32, SegmentList{S}}(k => SegmentList(v) for (k, v) in t)
 
@@ -143,11 +135,11 @@ Return the current snapshot of `ctx` with one atomic read; the result never chan
 kernelset(ctx::SpiceContext) = @atomic ctx.ks
 
 """
-    read_kernel(path, yearbound=1969, check=false) -> Union{DAF,TextKernel}
+    read_kernel(path, yearbound=1969, check=false) -> Union{DAF,DSKFile,EKFile,TextKernel}
 
-Open the binary kernel (DAF, or DSK) or parse the text kernel at `path` (with the year
-bound `yearbound` of `tsetyr` and the range check `check` of `tparch` for its `@`
-dates); throws `SpiceError` if the file does not exist.
+Open the binary kernel or parse the text kernel at `path`. `yearbound` and `check` are
+the settings of `tsetyr` and `tparch` for the `@` dates of a text kernel. Throws
+`SpiceError(:nosuchfile)` if the file does not exist.
 """
 function read_kernel(path::AbstractString, yearbound::Int = 1969, check::Bool = false)
     _isfile(path) || throw(SpiceError(:nosuchfile, "kernel file not found: $path"))
@@ -193,9 +185,8 @@ end
 """
     _release_entries!(entries) -> Nothing
 
-Contract: remove now the memory maps of the binary kernels of `entries`, which a load
-read and that no snapshot holds, because the load failed (see `_unmap!`). The arrays
-must not be read afterwards.
+Remove the memory maps of the binary kernels of `entries`, which a failed load read and
+no snapshot holds. The arrays must not be read afterwards.
 """
 function _release_entries!(entries::Vector{Loaded})
     foreach(e -> _release_content!(e.content), entries)
@@ -214,9 +205,9 @@ Load the kernel file at `path` into `ctx`, as
 
 The type is read from the file: SPK, binary PCK, CK, DSK, EK, text kernel or
 meta-kernel. A file whose name ends in `.json` is a
-[text kernel in JSON](@ref "Text kernels in JSON"). A meta-kernel loads the files of its `KERNELS_TO_LOAD` list in order,
-with `PATH_SYMBOLS` and `PATH_VALUES` applied as in CSPICE.
-Without `ctx` the kernel goes into [`default_context`](@ref).
+[text kernel in JSON](@ref "Text kernels in JSON"). A meta-kernel loads the files of its
+`KERNELS_TO_LOAD` list in order, with `PATH_SYMBOLS` and `PATH_VALUES` applied as in
+CSPICE.
 
 - A load that fails leaves `ctx` unchanged.
 - A later kernel has priority over an earlier one, as in CSPICE.
@@ -226,12 +217,11 @@ Without `ctx` the kernel goes into [`default_context`](@ref).
 - An SPK, PCK or CK file in the non-native byte order is read; it is converted in memory.
 
 Throws `SpiceError(:emptystring)` if `path` is empty, `SpiceError(:blankfilename)` if it
-holds only blanks, `SpiceError(:nosuchfile)` if the
-file (or a file that a meta-kernel lists) does not exist, and
-`SpiceError(:recursiveloading)` if a meta-kernel lists a meta-kernel. A binary file that is damaged throws
-`SpiceError(:baddaf)`, a malformed assignment in a text kernel throws the kinds that
-[`ldpool`](@ref) lists, and a meta-kernel that is not consistent throws
-`SpiceError(:badkernel)`.
+holds only blanks, `SpiceError(:nosuchfile)` if the file (or a file that a meta-kernel
+lists) does not exist, and `SpiceError(:recursiveloading)` if a meta-kernel lists a
+meta-kernel. A damaged binary file throws `SpiceError(:baddaf)`, a malformed assignment
+in a text kernel throws the kinds that [`ldpool`](@ref) lists, and a meta-kernel that is
+not consistent throws `SpiceError(:badkernel)`.
 
 # Examples
 ```julia
@@ -282,9 +272,8 @@ If a text kernel is removed, the kernel pool is built again from the text kernel
 that stay, so direct edits of the pool ([`pdpool`](@ref), ...) are lost, as in CSPICE.
 The kernels that stay are not read from disk again.
 
-A binary kernel stays memory-mapped after the call until the garbage collector frees
-every snapshot that holds it (the value of `Almanac.kernelset(ctx)`, which a query
-reads once). On Windows the file cannot be deleted or replaced while it is mapped;
+A binary kernel stays memory-mapped until the garbage collector frees every snapshot
+that holds it. On Windows the file cannot be deleted or replaced while it is mapped;
 `GC.gc()` removes the map when no task refers to such a snapshot.
 
 Throws `SpiceError(:emptystring)` if `path` is empty.
@@ -344,7 +333,3 @@ end
 furnsh(path::AbstractString) = furnsh(default_context(), path)
 unload(path::AbstractString) = unload(default_context(), path)
 kclear() = kclear(default_context())
-
-const furnsh! = furnsh
-const unload! = unload
-const kclear! = kclear

@@ -22,7 +22,7 @@ These features have no counterpart in CSPICE:
   [`furnsh`](@ref) of the handle. See [Load states as a kernel, with no file](@ref).
 - **Scratch files kept in memory**: [`dasops`](@ref), [`ekops`](@ref). CSPICE writes a
   temporary file instead.
-- **Text kernels in JSON**, described below.
+- **Text kernels in JSON**.
 
 ## Text kernels in JSON
 
@@ -51,5 +51,5 @@ is read as a classic text kernel, and loads nothing, because it has no `\beginda
   error.
 
 JSON numbers are read correctly rounded, while the numbers of a text kernel are read
-as CSPICE reads them, which can be a few ulps off. The same value written in the two
-formats can therefore give pools that differ in the last bits.
+as CSPICE reads them, which can be a few units in the last place off, so one value
+written in the two formats can give pools that differ in the last bits.

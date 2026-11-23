@@ -170,9 +170,6 @@ end
 A binary PCK segment of type 3 that is open for the addition of records.
 [`pck03b`](@ref) returns it, and it is the first argument of [`pck03a`](@ref) and
 [`pck03e`](@ref).
-
-SPICELIB keeps this state in the table of the generic segment writer `sgseqw`; here the
-caller owns it.
 """
 mutable struct PCK03Writer
     const handle::DAFHandle
@@ -206,9 +203,8 @@ Throws `SpiceError`:
 - `:invalidrefframe` if `frame` is not a built-in inertial frame;
 - `:baddescrtimes` unless `first < last`;
 - `:dafnosuchhandle` or `:dafinvalidaccess` if the file is not open for writing;
-- `:segidtoolong` or `:nonprintingchars` (the kind of the generic segment writer;
-  [`ckw04b`](@ref) checks `segid` itself and throws `:nonprintablechars`) if `segid` is
-  not valid.
+- `:segidtoolong` or `:nonprintingchars` (not `:nonprintablechars` as in
+  [`ckw04b`](@ref)) if `segid` is not valid.
 
 # Examples
 The frame ITRF93 (class ID 3000) turning at 1 degree per second about the z axis of

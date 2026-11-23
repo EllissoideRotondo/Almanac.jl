@@ -33,7 +33,7 @@ acceleration                                # km/s²
 
 Epochs can be `ForwardDiff.Dual` numbers, also on the GPU.
 
-An epoch outside the table throws `SpiceError(:spkinsuffdata)`, not the [`SpkInsufficientDataError`](@ref) of `spkezr`. This check is a bounds check: `@inbounds` removes it, as GPU code requires, and an epoch outside the table then extrapolates the nearest interval.
+An epoch outside the table throws `SpiceError(:spkinsuffdata)`, not the [`SpkInsufficientDataError`](@ref) of `spkezr`. The check is a bounds check, which `@inbounds` removes, as GPU code requires; an epoch outside the table then extrapolates the nearest interval.
 
 ## How the table is built
 
@@ -63,7 +63,7 @@ The tables that reach the Earth stop at 1.5e-11 because of the rounding of the r
 
 ## Measured accuracy and speed
 
-The figures below cover 400 days of `de440s.bsp`, measured by `benchmark/table_gpu.jl` on one thread of an Intel CPU and on an NVIDIA RTX 3090 with 4,000,000 epochs. The error is the largest difference from the kernels, and the tolerance is the default unless stated. `MOON_PA` is the principal-axis frame of the Moon.
+The figures below cover 400 days of `de440s.bsp` and 4,000,000 epochs, measured by `benchmark/table_gpu.jl` on one thread of an Intel CPU and on an NVIDIA RTX 3090. The error is the largest difference from the kernels, and the tolerance is the default unless stated. `MOON_PA` is the principal-axis frame of the Moon.
 
 | Case | Intervals | Error (km) | Table (ns per epoch) | `spkezr` (ns per epoch) |
 |---|---:|---:|---:|---:|
@@ -102,7 +102,7 @@ states = map(et -> @inbounds(table_state(gpu, et)), CuArray(epochs))
 
 ## Use a table in a CasADi model
 
-[CasADiCodegen.jl](https://github.com/EllissoideRotondo/CasADiCodegen.jl) generates Julia code from a CasADi model; its `callback` embeds a Julia function with the derivatives CasADi needs. Since [`table_jet`](@ref) returns static vectors, a table gives the position of a body to generated code without allocation, and its derivatives to the Jacobian. A sketch (not a complete program) for an Earth satellite perturbed by the Moon, where `t0`, `t1`, `GM_EARTH` and `GM_MOON` come from the application:
+[CasADiCodegen.jl](https://github.com/EllissoideRotondo/CasADiCodegen.jl) generates Julia code from a CasADi model, and its `callback` embeds a Julia function with the derivatives that CasADi needs. Because [`table_jet`](@ref) returns static vectors, a table gives the position of a body to the generated code without allocation, and its derivatives to the Jacobian. A sketch (not a complete program) for an Earth satellite perturbed by the Moon, where `t0`, `t1`, `GM_EARTH` and `GM_MOON` come from the application:
 
 ```julia
 using Almanac, CasADiCodegen, LinearAlgebra

@@ -265,7 +265,7 @@ end
 Index of the first packet and number of packets of the window of nominal size `wnd`
 for the epoch `t` among the `n` epochs `data[ebase+1:ebase+n]`, as `spkr18` and
 `spkr19` select it: `wnd/2` packets on each side of the epoch, fewer at an end of
-the packet set. Postcondition: `1 <= first` and `first + count - 1 <= n`.
+the packet set.
 """
 @inline function _packet_window(data::Vector{Float64}, ebase::Int, n::Int, wnd::Int, t::Float64)
     low = max(_lstltd(data, ebase, n, t), 1)

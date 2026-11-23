@@ -15,7 +15,7 @@ const _IPOW10 = (
     1.0e-12, 1.0e-13, 1.0e-14, 1.0e-15, 1.0e-16, 1.0e-17,
 )
 
-"Contract: `x >= 0`, `1 <= maxsig <= 14`; returns the first `maxsig` significant decimal digits of `x` (in a tuple of 14, the rest 0) and its decimal exponent, generated with the arithmetic of CSPICE `dpstr`. Zero gives digits 0 and exponent 0."
+"Return the first `maxsig` significant decimal digits of `x` (in a tuple of 14, the rest 0) and its decimal exponent, generated with the arithmetic of CSPICE `dpstr`. Zero gives digits 0 and exponent 0. Requires `x >= 0`, `1 <= maxsig <= 14`."
 function _dpstr_digits(x::Float64, maxsig::Int = 14)
     x == 0.0 && return ntuple(_ -> 0, Val(14)), 0
     buf = ntuple(_ -> 0, Val(14))
@@ -56,7 +56,7 @@ end
 """
     _dpstr(x, sigdig) -> String
 
-Contract: returns `x` in the exponent form of CSPICE `dpstr` with `clamp(sigdig, 1,
+Return `x` in the exponent form of CSPICE `dpstr` with `clamp(sigdig, 1,
 14)` significant digits: a blank or `-`, one digit, the decimal point, the other
 digits, `E+` or `E-` and the exponent with two digits at least.
 """
@@ -76,12 +76,11 @@ end
 """
     _vsbstr(buf, digits, expont, from, to, fill=' ', rnd=true) -> (buf, carry)
 
-Contract: `from <= to`; `digits`, `expont` come from `_dpstr_digits(x, 14)`. Appends to
-`buf` the characters of slots `from..to` of the virtual digit string of CSPICE
+Append to `buf` the characters of slots `from..to` of the virtual digit string of CSPICE
 `zzvsbstr` (negative slots are integer digits, slot 0 is the decimal point, positive
 slots are decimals), rounded at slot `to` if `rnd`, with `fill` in the integer slots to
-the left of the number, and returns the buffer and whether the rounding carried out of
-slot `from`.
+the left of the number, and return the buffer and whether the rounding carried out of
+slot `from`. `digits` and `expont` come from `_dpstr_digits(x, 14)`, and `from <= to`.
 """
 function _vsbstr(
         buf, digits::NTuple{14, Int}, expont::Int, from::Int, to::Int,
@@ -125,7 +124,7 @@ end
 """
     _dpstrf(buf, x, sigdig) -> buf
 
-Contract: appends to `buf` the number `x` in fixed-point form with `clamp(sigdig, 1,
+Append to `buf` the number `x` in fixed-point form with `clamp(sigdig, 1,
 14)` significant digits, as CSPICE `dpstrf(x, sigdig, 'F')` writes it: a blank or `-`
 for the sign, then the digits; the rounding is the two-step rounding of CSPICE (to 14
 digits, then to the requested digit), so a tie rounds away from zero.
@@ -160,11 +159,11 @@ end
 """
     _dpfmt!(buf, x, pictur) -> buf
 
-Contract: `pictur` holds the bytes of a number picture of CSPICE `dpfmt` without
-blanks: an optional `+` or `-`, then one character for each integer digit (a leading
-`0` asks for zero fill), and optionally a decimal point and one character for each
-decimal. Appends to `buf` the number `x` written to the picture, rounded at the last
-decimal, in exactly `length(pictur)` characters: right justified, the minus sign next
+Append to `buf` the number `x` written to the picture `pictur`, a number picture of
+CSPICE `dpfmt` without blanks: an optional `+` or `-`, then one character for each
+integer digit (a leading `0` asks for zero fill), and optionally a decimal point and one character for each
+decimal. The number is rounded at the last decimal and written in exactly
+`length(pictur)` characters: right justified, the minus sign next
 to the first digit, the exponent form of `dpstr` when the integer part does not fit and
 `*` characters when that does not fit either.
 """
@@ -293,7 +292,7 @@ const _TC_ERA = 50
 const _TC_AMPM = 51
 const _TC_SIGNED_YEAR = 52
 
-"Contract: `1 <= id <= 46` is the number of a mark; returns its class."
+"Return the class of the mark number `id` (`1:46`)."
 function _to_class(id::Int)::Int
     id == 1 && return _TC_TEXT
     4 <= id <= 9 && return _TC_MONTH
@@ -306,7 +305,7 @@ function _to_class(id::Int)::Int
     return id + 1
 end
 
-"Contract: returns half of the unit of the component class `type` in seconds, the amount that `::RND` adds before truncation (`PAD` of `timout.c`); 0 for a class that is not a number."
+"Return half of the unit of the component class `type` in seconds, the amount that `::RND` adds before truncation (`PAD` of `timout.c`); 0 for a class that is not a number."
 function _to_pad(type::Int)::Float64
     type == _TC_SC && return 0.5
     type == _TC_MN && return 0.5 * 60.0
@@ -318,7 +317,7 @@ function _to_pad(type::Int)::Float64
     return 0.0
 end
 
-"Contract: `type` is a numeric component class; returns its number picture and the width of that picture (`ORIGNL` and `LENGTH` of `timout.c`)."
+"Return the number picture of the numeric component class `type` and the width of that picture (`ORIGNL` and `LENGTH` of `timout.c`)."
 function _to_format(type::Int)
     type == _TC_YEAR && return "YYYY", 4
     type == _TC_YR && return "0Y", 2
@@ -340,7 +339,7 @@ const _WEEKDAY_NAMES = (
 """
     _to_scan(mystr) -> (ident, beg, fin)
 
-Contract: returns the tokens of the picture `mystr` in order: for each token the
+Return the tokens of the picture `mystr` in order: for each token the
 number of its mark (`_ID_TEXT` for a run of characters that start no mark) and its
 first and last position (`scan` with the marks of `timout`). At each position the
 marks are tried in descending ASCII order.
@@ -357,8 +356,10 @@ function _to_scan(mystr::Vector{UInt8})
     while start <= n
         hit = 0
         stop = start
+        c = mystr[start]
         for (mark, id) in _TO_SCAN
             m = codeunits(mark)
+            m[1] == c || continue
             stop = start + length(m) - 1
             if stop <= n && @views(mystr[start:stop] == m)
                 hit = id
@@ -1008,12 +1009,7 @@ julia> etcal(-1.0e11)
 """
 function etcal(et::Real)::String63
     mynum = primal(et) + _HALFD
-    q = trunc(mynum / _SPD)
-    secs = mynum - q * _SPD
-    if secs < 0.0
-        q -= 1.0
-        secs += _SPD
-    end
+    q, secs = _rmaind(mynum, _SPD)
     dmxint = 2147483647.0
     dmnint = -2147483648.0
     messge = ""

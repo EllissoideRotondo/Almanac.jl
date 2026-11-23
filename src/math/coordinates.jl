@@ -10,30 +10,6 @@
 # --- rectangular, latitudinal, right ascension ----------------------------------------
 
 """
-`reclat` kernel. With `scaled` the longitude comes from the components divided by the
-largest one (
-[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)); without it from the components themselves (`reclat_`), which
-also decide whether the point is on the z axis: `[0, 5e-324, 1e10]` has the longitude
-pi/2 there and 0 in `reclat_c`.
-"""
-@inline function _m_reclat(v::SVector{3}, scaled::Bool)
-    vmax = _m_maxabs(v)
-    z0 = zero(atan(v[1] / 1.0))
-    vmax > 0.0 || return z0, z0, z0
-    x1 = v[1] / vmax
-    y1 = v[2] / vmax
-    z1 = v[3] / vmax
-    radius = vmax * sqrt(x1 * x1 + y1 * y1 + z1 * z1)
-    lat = atan(z1, sqrt(x1 * x1 + y1 * y1))
-    if scaled
-        (primal(x1) == 0.0 && primal(y1) == 0.0) && return radius + z0, z0, lat
-        return radius + z0, atan(y1, x1), lat
-    end
-    (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && return radius + z0, z0, lat
-    return radius + z0, atan(v[2], v[1]), lat
-end
-
-"""
     reclat(rectan) -> (radius, lon, lat)
 
 Return the latitudinal coordinates of the rectangular point `rectan`, as
@@ -59,12 +35,6 @@ See also [`latrec`](@ref), [`recrad`](@ref), [`recsph`](@ref), [`recgeo`](@ref),
 [`dlatdr`](@ref).
 """
 reclat(rectan::AbstractVector) = _m_reclat(_m_v3(rectan), true)
-
-@inline function _m_latrec(radius, lon, lat)
-    slon, clon = sincos(lon)
-    slat, clat = sincos(lat)
-    return SVector(radius * clon * clat, radius * slon * clat, radius * slat)
-end
 
 """
     latrec(radius, lon, lat) -> SVector{3}
@@ -203,11 +173,6 @@ See also [`cylrec`](@ref), [`dcyldr`](@ref).
 """
 reccyl(rectan::AbstractVector) = _m_reccyl(_m_v3(rectan))
 
-@inline function _m_cylrec(r, clon, z)
-    s, c = sincos(clon)
-    return SVector(r * c, r * s, z - zero(r * c))
-end
-
 """
     cylrec(r, clon, z) -> SVector{3}
 
@@ -332,19 +297,6 @@ end
 
 # --- geodetic -------------------------------------------------------------------------
 
-@noinline _m_badre(re) = throw(
-    SpiceError(
-        :valueoutofrange,
-        "the equatorial radius must be positive; it is $(primal(re))"
-    )
-)
-@noinline _m_badflat(f) = throw(
-    SpiceError(
-        :valueoutofrange,
-        "the flattening coefficient must be less than 1; it is $(primal(f))"
-    )
-)
-
 @inline function _m_recgeo(v::SVector{3}, re, f)
     primal(re) > 0.0 || _m_badre(re)
     primal(f) < 1.0 || _m_badflat(f)
@@ -389,24 +341,6 @@ See also [`georec`](@ref), [`recpgr`](@ref), [`dgeodr`](@ref).
 """
 recgeo(rectan::AbstractVector, re::Real, f::Real) = _m_recgeo(_m_v3(rectan), _m_f(re), _m_f(f))
 
-@inline function _m_georec(lon, lat, alt, re, f)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    rp = re - f * re
-    sphi, cphi = sincos(lat)
-    slmbda, clmbda = sincos(lon)
-    big = max(abs(primal(re * cphi)), abs(primal(rp * sphi)))
-    x = re * cphi / big
-    y = rp * sphi / big
-    scale = 1.0 / (big * sqrt(x * x + y * y))
-    base = SVector(
-        scale * re * re * clmbda * cphi, scale * re * re * slmbda * cphi,
-        scale * rp * rp * sphi
-    )
-    normal = _m_surfnm(re, re, rp, base)
-    return 1.0 * base + alt * normal
-end
-
 """
     georec(lon, lat, alt, re, f) -> SVector{3}
 
@@ -429,11 +363,8 @@ georec(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
 """
     _m_pgrsense(ks, body) -> Int
 
-+1 if the planetographic longitude of `body` is positive east, -1 if positive west, as
-`recpgr_` and `pgrrec_`: the pool variable `BODY<id>_PGR_POSITIVE_LON` decides if it is a
-string variable (its first four characters without blanks, in upper case, must be `EAST`
-or `WEST`); otherwise the sign of the prime meridian rate `BODY<id>_PM[2]` does
-(retrograde rotation is positive east), with east for the Earth, the Moon and the Sun.
+`1` if the planetographic longitude of `body` is positive east, `-1` if positive west,
+by the rules of [`recpgr`](@ref), as `recpgr_` and `pgrrec_` decide it.
 """
 function _m_pgrsense(ks::KernelSet, body::NameOrID)
     id = _m_bodyid(ks, body, :idcodenotfound)
@@ -459,6 +390,14 @@ function _m_pgrsense(ks::KernelSet, body::NameOrID)
     )
     (id == 301 || id == 10) && return 1
     return pm[2] < 0.0 ? 1 : -1
+end
+
+"The checks of `recpgr_`, `pgrrec_`, `drdpgr_` and `dpgrdr_` after the body string (ID, `re`, `f`), then the sense of the longitude."
+function _m_pgrsense(ks::KernelSet, body::NameOrID, re::Real, f::Real)
+    id = _m_bodyid(ks, body, :idcodenotfound)
+    primal(re) > 0.0 || _m_badre(re)
+    primal(f) < 1.0 || _m_badflat(f)
+    return _m_pgrsense(ks, id)
 end
 
 """
@@ -508,10 +447,7 @@ See also [`pgrrec`](@ref), [`recgeo`](@ref), [`dpgrdr`](@ref).
 function recpgr(ks::KernelSet, body::NameOrID, rectan::AbstractVector, re::Real, f::Real)
     body isa AbstractString && _chkfstr("recpgr", "string `body`", body)
     v = _m_v3(rectan)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     lon, lat, alt = _m_recgeo(v, _m_f(re), _m_f(f))
     lon = sense * lon
     primal(lon) < 0.0 && (lon += _TWOPI)
@@ -537,10 +473,7 @@ See also [`recpgr`](@ref), which has an example, and [`drdpgr`](@ref).
 """
 function pgrrec(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("pgrrec", "string `body`", body)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     return _m_georec(sense * _m_f(lon), _m_f(lat), _m_f(alt), _m_f(re), _m_f(f))
 end
 
@@ -675,12 +608,7 @@ end
 
 @inline function _m_drdgeo(lon, lat, alt, re, f)
     primal(f) < 1.0 || _m_badflat(f)
-    primal(re) > 0.0 || throw(
-        SpiceError(
-            :badradius,
-            "the equatorial radius must be positive; it is $(primal(re))"
-        )
-    )
+    primal(re) > 0.0 || _m_badre(re, :badradius)
     slat, clat = sincos(lat)
     slon, clon = sincos(lon)
     flat = 1.0 - f
@@ -720,12 +648,7 @@ drdgeo(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
 
 @inline function _m_dgeodr(v::SVector{3}, re, f)
     primal(f) < 1.0 || _m_badflat(f)
-    primal(re) > 0.0 || throw(
-        SpiceError(
-            :badradius,
-            "the equatorial radius must be positive; it is $(primal(re))"
-        )
-    )
+    primal(re) > 0.0 || _m_badre(re, :badradius)
     (primal(v[1]) == 0.0 && primal(v[2]) == 0.0) && _m_onzaxis()
     lon, lat, alt = _m_recgeo(v, re, f)
     return _m_invort(_m_drdgeo(promote(lon, lat, alt, re, f)...))
@@ -763,10 +686,7 @@ See also [`dpgrdr`](@ref), [`pgrrec`](@ref), [`drdgeo`](@ref).
 """
 function drdpgr(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("drdpgr", "string `body`", body)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     j = _m_drdgeo(promote(sense * _m_f(lon), _m_f(lat), _m_f(alt), _m_f(re), _m_f(f))...)
     return _m_cols(sense * _m_col(j, 1), _m_col(j, 2), _m_col(j, 3))
 end
@@ -787,10 +707,7 @@ See also [`drdpgr`](@ref), [`recpgr`](@ref), [`dgeodr`](@ref).
 """
 function dpgrdr(ks::KernelSet, body::NameOrID, x::Real, y::Real, z::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("dpgrdr", "string `body`", body)
-    id = _m_bodyid(ks, body, :idcodenotfound)
-    primal(re) > 0.0 || _m_badre(re)
-    primal(f) < 1.0 || _m_badflat(f)
-    sense = _m_pgrsense(ks, id)
+    sense = _m_pgrsense(ks, body, re, f)
     j = _m_dgeodr(SVector(promote(_m_f(x), _m_f(y), _m_f(z))...), _m_f(re), _m_f(f))
     return _m_rows(sense * _m_row(j, 1), _m_row(j, 2), _m_row(j, 3))
 end
@@ -906,7 +823,7 @@ function xfmsta(
     f = 0.0
     if isys >= 5 || osys >= 5
         id = _m_bodyid(ks, body, :idcodenotfound)
-        r1, r2, r3 = _m_radii(ks, id)
+        r1, r2, r3 = _positive_radii(ks, id)
         sqrt(abs(r1 - r3)) / sqrt(abs(r1)) >= sqrt(floatmax(Float64)) &&
             throw(SpiceError(:invalidradius, "the radii of body $body give no flattening"))
         r1 == r2 || throw(

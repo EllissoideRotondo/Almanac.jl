@@ -85,7 +85,7 @@ rel = relative_state(deputy, chief, :ric)
 
 - The frame is not checked. Keplerian, B-plane and local-frame results assume an inertial frame and are wrong, without an error, in a rotating one such as `IAU_EARTH`.
 - The velocity of `relative_state` (`rel[4:6]`) is the rate of the offset seen in the rotating local frame, not the difference of the inertial velocities; it is not zero when those are equal. Orbits of different epoch, center or frame throw `SpiceError(:badarg)`.
-- A circular orbit (`ecc < 1e-11`) has no true anomaly: `:ta`, `:ma`, `:ea`, `:fpa`, `:tlong`, `:equinoctial_lambda`, the Brouwer elements, `keplerian`, [`with_element`](@ref) (except for `:ta`), [`with_apsides`](@ref) and `two_body` throw. The state, `:sma`, `:ecc`, `:inc`, `:raan` and `:aop` (0 for an exactly circular state), `:aol` (if not equatorial), `:period`, the altitudes, the local frames and `relative_state` still work. A `ForwardDiff.Dual` state on an exactly circular orbit throws for `:ecc` too.
+- A circular orbit (`ecc < 1e-11`) has no true anomaly, so the elements that need one, `keplerian`, [`with_element`](@ref) (except for `:ta`), [`with_apsides`](@ref) and `two_body` throw; the state, the other elements, the local frames and `relative_state` work. [Element names](@ref) lists the undefined cases.
 - Brouwer mean elements need an elliptic orbit about the Earth (399) with a periapsis radius above 3000 km; the B-plane elements need a hyperbola.
 
 ## Apsides, flybys and other elements

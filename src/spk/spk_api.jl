@@ -43,11 +43,12 @@ end
     frame_jet(ks, from::Int32, to::Int32, et, ::Val{N}) -> NTuple{N+1,Mat3}
 
 Return the rotation matrix from frame `from` to frame `to` at `et` and its time
-derivatives to order N, for any epoch number type (`rotation_jet` of `rotations.jl`
-takes a plain epoch only, so a dual-number epoch goes through `frame_rotation`).
+derivatives to order N, for any epoch number type: `rotation_jet` for a plain epoch,
+`frame_rotation` of a `Taylor` epoch otherwise.
 """
 @inline frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Float64, v::Val) =
     rotation_jet(ks, from, to, et, v)
+# The method for `Float64` and `Val{0}` resolves the ambiguity of the two above and below.
 @inline frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Float64, v::Val{0}) =
     rotation_jet(ks, from, to, et, v)
 @inline frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Real, ::Val{0}) =
@@ -55,22 +56,6 @@ takes a plain epoch only, so a dual-number epoch goes through `frame_rotation`).
 @inline function frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Real, v::Val{N}) where {N}
     d = map(derivatives, frame_rotation(ks, from, to, taylor_var(et, v)))
     return ntuple(k -> map(x -> x[k], d), Val(N + 1))
-end
-
-"""
-    segment_jet(ks, seg::Segment, et, ::Val{N}) -> NTuple{N+1,Vec3}
-
-Return the jet of `seg.target` relative to `seg.center` at `et` in J2000; a segment in
-another frame is rotated with the rotation jet of that frame.
-"""
-@inline function segment_jet(ks::KernelSet, seg::Segment, et::T, ::Val{N}) where {T <: Real, N}
-    # Type 10 (two-line elements) needs the leap seconds: spk/types/type10.jl.
-    jet = seg.dtype == PROVIDER_DTYPE ?
-        provider_jet(ks.loaded[seg.baddr].content::EphemerisProvider, et, Val(N)) :
-        seg.dtype == Int32(10) ? _t10_jet(_lsk(ks), ks.daf[seg.file], seg, et, Val(N)) :
-        spk_eval(ks.daf[seg.file], seg, et, Val(N))
-    seg.frame == Int32(1) && return jet
-    return rotate_jet(frame_jet(ks, seg.frame, Int32(1), et, Val(N)), jet)
 end
 
 "Jet of order N of `seg` at `et` in the segment frame `seg.frame`."
@@ -90,8 +75,8 @@ end
 
 Add the jet of `seg` to the sum `acc` in frame `accframe` as `SPKGEO` of CSPICE does:
 in the segment frame, after `acc` is rotated to it when the frames differ. With this
-order a chain of segments in a frame other than J2000 (the FK4 segments of some test
-kernels) gives the CSPICE state to the last bit.
+order a chain of segments in a frame other than J2000 gives the CSPICE state to the
+last bit.
 """
 @inline function _chain_add(ks::KernelSet, et, acc, accframe::Int32, seg::Segment, v::Val)
     jet = segment_jet_native(ks, seg, et, v)
@@ -251,8 +236,8 @@ end
 """
     spk_jet_long(ks, targ::Int32, et, ref::Int32, obs::Int32, ::Val{N}) -> NTuple{N+1,Vec3}
 
-`spk_jet` for a target chain of more than MAXCHAIN bodies; it allocates. CSPICE
-(`SPKGEO`) has no limit on the length of a chain either.
+`spk_jet` for a target chain of more than MAXCHAIN bodies; it allocates. As in
+`SPKGEO`, the length of a chain has no limit.
 """
 @noinline function spk_jet_long(
         ks::KernelSet, targ::Int32, et::T, ref::Int32, obs::Int32,
@@ -470,7 +455,7 @@ one-way light time, as
 are those of [`spkezr`](@ref), except that an `abcorr` that is not valid throws
 `SpiceError(:spkinvalidoption)`, as in CSPICE.
 
-As in CSPICE, the `CN` corrections make exactly three light-time iterations here;
+As in CSPICE, the `CN` corrections make three light-time iterations here;
 [`spkezr`](@ref) makes up to five, with the convergence test of [`spkltc`](@ref). The
 position can therefore differ from the position part of `spkezr` by up to 2e-11
 relative (see [Known limits of accuracy](@ref)).

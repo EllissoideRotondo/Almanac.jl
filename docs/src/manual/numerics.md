@@ -1,7 +1,7 @@
 # Numerical results and derivatives
 
 This page says how closely the results of Almanac.jl follow those of CSPICE, where they
-differ on purpose, and how the derivatives of states and rotations are defined.
+differ, and how the derivatives of states and rotations are defined.
 
 ## Agreement with CSPICE
 
@@ -60,8 +60,8 @@ J2000 to the output frame.
 The velocity of `spkezr` differs from order 1 for two reasons:
 
 - Even for the `LT` corrections, which do not iterate to convergence, CSPICE takes the
-  rate of the light time from the converged equation. This gives about 1e-8 relative for the Moon seen from the Earth
-  (8.4e-9 measured with `de440s.bsp`).
+  rate of the light time from the converged equation, which gives about 1e-8 relative
+  for the Moon seen from the Earth (8.4e-9 measured with `de440s.bsp`).
 - For `+S`, CSPICE takes the acceleration of the observer from a difference of
   velocities ±1 s apart, which gives about 1e-13 relative.
 
@@ -79,13 +79,12 @@ The velocity of `spkezr` differs from order 1 for two reasons:
 | Dynamic, with `ROTATION_STATE = 'INERTIAL'` | the rotation of the frame, as if it were rotating | zero |
 | Switch, which selects a base frame by epoch | the base that `pxform` selects at the epoch | the block of that base |
 
-A body whose text PCK has cubic nutation and precession angles
-(`BODY<sys>_MAX_PHASE_DEGREE = 3`) shows a defect of CSPICE N0067: `tisbod_` divides
-the cubic term of an angle rate by the square of the seconds per century instead of by
-the seconds per century, so its rate block misses that term. [`tisbod`](@ref),
-[`sxform`](@ref) and states in such frames give the exact derivative. With the Moon
-constants of the NAIF test suite, CSPICE differs from a central difference of `tipbod`
-by 1.1e-9, and Almanac.jl by 1.6e-13. Degrees 1 and 2 agree to rounding.
+For a body whose text PCK has cubic nutation and precession angles
+(`BODY<sys>_MAX_PHASE_DEGREE = 3`), the rate block of `tisbod_` misses the cubic term
+(see [Defects of CSPICE N0067](@ref)), while [`tisbod`](@ref), [`sxform`](@ref) and
+states in such frames give the exact derivative. With the Moon constants of the NAIF
+test suite, CSPICE differs from a central difference of `tipbod` by 1.1e-9 and
+Almanac.jl by 1.6e-13; degrees 1 and 2 agree to rounding.
 
 ### Smoothness at record boundaries
 
@@ -104,7 +103,7 @@ positions also have small steps there; see [Known limits of accuracy](@ref).
 For the states of the Moon and the planets from `de440s.bsp`, in
 inertial and body-fixed frames and with all nine aberration corrections (`NONE` to
 `XCN+S`), the largest relative difference of position, velocity and light time measured
-by the default run is 7.3e-16.
+by the default test run was 7.3e-16.
 
 Three limits hold in CSPICE as well, because they come from the size of a number or
 from the method of CSPICE:

@@ -91,6 +91,17 @@ const _EK_TRMXDP = 10             # largest depth of a tree
 @inline _ek_dbase(p::Integer) = (Int(p) - 1) * 128
 @inline _ek_ibase(p::Integer) = (Int(p) - 1) * 256 + 256
 
+"The base address of page `p` of type `t` (1 character, 2 double, 3 integer), as `zzekpgbs`: word `k` of the page is at `base + k`."
+@inline _ek_base(t::Int, p::Integer) =
+    t == 1 ? _ek_cbase(p) : t == 2 ? _ek_dbase(p) : _ek_ibase(p)
+
+"The page of type `t` that holds the address `addr`, and its base, as `zzekpgpg`."
+@inline function _ek_pgpg(t::Int, addr::Integer)
+    a = Int(addr)
+    p = t == 1 ? (a + 1023) ÷ 1024 : t == 2 ? (a + 127) ÷ 128 : (a - 1) ÷ 256
+    return p, _ek_base(t, p)
+end
+
 "The integer that five base-128 characters at the character address `addr` encode (`prtdec`)."
 @inline function _ek_gei(chars::AbstractVector{UInt8}, addr::Integer)
     n = 0
@@ -116,9 +127,9 @@ function _ek_check(s, path::AbstractString, who::AbstractString)
                 "for paged access; the EK software version is $_EK_ARCH"
         )
     )
-    topc = Int(ints[4]) * 1024
-    topd = Int(ints[9]) * 128
-    topi = Int(ints[14]) * 256 + 256
+    topc = _ek_cbase(Int(ints[4]) + 1)
+    topd = _ek_dbase(Int(ints[9]) + 1)
+    topi = _ek_ibase(Int(ints[14]) + 1)
     length(s.chars) > topc && throw(
         SpiceError(
             :invalidformat,
@@ -163,8 +174,8 @@ end
 
 Look up `key` in the tree with the root page `tree`, as `zzektrlk`: the data value, the
 page of the node that holds the key, the key offset of that node, the position of the
-key in the node, and the level of the node (1 for the root). Precondition:
-`1 <= key <= _ek_trsz(ints, tree)`, else `SpiceError(:indexoutofrange)`. Throws
+key in the node, and the level of the node (1 for the root). Throws
+`SpiceError(:indexoutofrange)` unless `1 <= key <= _ek_trsz(ints, tree)`, and
 `SpiceError(:bug)` for a damaged tree.
 """
 function _ek_trlk(ints::AbstractVector{Int32}, tree::Integer, key::Integer)
@@ -216,9 +227,9 @@ end
 """
     _ek_tree_values(ints, tree) -> Vector{Int32}
 
-All data values of the tree with the root page `tree`, in key order. Postcondition: the
-length is the number of keys of the tree. Throws `SpiceError(:bug)` for a tree whose
-nodes do not hold the number of keys that the root states.
+All data values of the tree with the root page `tree`, in key order. Throws
+`SpiceError(:bug)` for a tree whose nodes do not hold the number of keys that the root
+states.
 """
 function _ek_tree_values(ints::AbstractVector{Int32}, tree::Integer)
     n = _ek_trsz(ints, tree)
@@ -420,8 +431,8 @@ end
     open_ek(path) -> EKFile
 
 Open the EK file at `path` for `furnsh` and decode its segments, as the first part of
-`eklef`. Contract: `path` names a DAS file that holds a paged EK of architecture 8 with
-at least one segment, of either byte order. In the result the address spaces are
+`eklef`. The file is a DAS file of either byte order that holds a paged EK of
+architecture 8 with at least one segment. In the result the address spaces are
 memory-mapped where the file allows it. Throws `SpiceError` with the kinds of `dasopr`,
 `:wrongarchitecture`, `:invalidformat` and `:eknosegments`. The columns of the segments
 are checked by `_ek_build_tables`.

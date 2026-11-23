@@ -6,7 +6,7 @@
 """
     _sw_times(ks, key) -> Vector{Float64}
 
-Contract: the values of the pool variable `key` as ET seconds: numbers as they are,
+Return the values of the pool variable `key` as ET seconds: numbers as they are,
 strings through `str2et` (which needs a leap-second kernel), as `zzswffet_`.
 """
 function _sw_times(ks::KernelSet, key::AbstractString)
@@ -18,7 +18,7 @@ end
 """
     _sw_parse(ks, fd) -> SwitchFrame
 
-Contract: the definition of the class 6 frame `fd` from the pool of `ks`, with the
+Return the definition of the class 6 frame `fd` from the pool of `ks`, with the
 checks of `zzswffet_`: the base frame list `FRAME_<id>_ALIGNED_WITH` (names or IDs,
 every base with a frame specification) and the optional `FRAME_<id>_START` and
 `FRAME_<id>_STOP` (both or none, one value for each base, start before stop). The
@@ -37,7 +37,7 @@ function _sw_parse(ks::KernelSet, fd::FrameDef)
     end
 end
 
-"Contract: as `_sw_parse`, but throws the `SpiceError` of the first check that fails."
+"Like `_sw_parse`, but throw the `SpiceError` of the first check that fails."
 function _sw_parse_checked(ks::KernelSet, fd::FrameDef)
     pool, id = ks.pool, fd.id
     kalign, kstart, kstop = "FRAME_$(id)_ALIGNED_WITH", "FRAME_$(id)_START", "FRAME_$(id)_STOP"
@@ -144,7 +144,7 @@ definition. No allocation.
 function _sw_frame_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
     sw = get(ks.switch, fd.id, nothing)
     sw === nothing && _sw_throw_missing(fd.id)
-    sw.errkind === :none || _dyn_throw_def(sw.errkind, sw.errmsg)
+    sw.errkind === :none || _throw_spice(sw.errkind, sw.errmsg)
     S = _ck_numtype(mode, T)
     t = primal(et)
     for i in length(sw.bases):-1:1      # invariant: no base above i was selected

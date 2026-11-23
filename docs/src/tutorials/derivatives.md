@@ -59,7 +59,7 @@ ForwardDiff.derivative(apparent, et)        # km/s in the rotating frame
 
 ## Differentiate with other AD packages
 
-The same calls can be differentiated with Enzyme.jl, Mooncake.jl, Zygote.jl (and other users of ChainRulesCore.jl), ReverseDiff.jl and Tracker.jl. Loading the package is enough: an extension gives it the analytical derivatives, so no package has to differentiate the evaluators, and every package returns the derivative that ForwardDiff returns. The bisections of `nearpt` (and so of `subpnt` and `subslr` with `NEAR POINT`) and of `prop2b` and `conics` run on plain numbers, and every package takes the derivative of their root from the equation that the root solves. [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) selects a package by its backend type:
+The same calls can be differentiated with Enzyme.jl, Mooncake.jl, Zygote.jl (and other users of ChainRulesCore.jl), ReverseDiff.jl and Tracker.jl. Loading the package is enough: an extension gives it the analytical derivatives, and every package returns the derivative that ForwardDiff returns. The bisections of `nearpt` (and so of `subpnt` and `subslr` with `NEAR POINT`) and of `prop2b` and `conics` run on plain numbers, and every package takes the derivative of their root from the equation that the root solves. [DifferentiationInterface.jl](https://github.com/JuliaDiff/DifferentiationInterface.jl) selects a package by its backend type:
 
 ```julia
 import DifferentiationInterface as DI

@@ -10,8 +10,6 @@
 # state. The operations have the order of the CSPICE source, so a plain time gives the
 # CSPICE state to rounding level. Every discrete decision uses `primal`.
 
-@noinline _sgp4_error(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
-
 "The constant 2/3 as the source writes it."
 const _SGP4_X2O3 = 0.66666666666666663
 "Earth rotation rate in radians per minute (`RPTIM`)."
@@ -39,8 +37,8 @@ Requires `primal(x) > 0` (not checked).
     return Expr(:block, Expr(:meta, :inline), ex..., _pack(:r, N))
 end
 
-# The remainders are `_dyn_dmod` (`d_mod` of f2c), not the exact remainder `rem`, which
-# moved the state by up to 1.4e-12 relative from that of CSPICE.
+# The remainders are `f2c_dmod` (`d_mod` of f2c); the exact remainder
+# `rem` moves the state by up to 1.4e-12 relative from that of CSPICE.
 
 """
     _sgp4_lsterms(zcosg, zsing, zcosi, zsini, zcosh, zsinh, cc, c) -> NamedTuple
@@ -113,9 +111,8 @@ the element epoch (`TC = 0`): the solar terms `sun`, the lunar terms `moon` (eac
 mean anomalies `zmos` and `zmol` of the Sun and the Moon, and `sinim`, `cosim`,
 `emsq` of the orbit.
 
-Contract: `epoch` is in days from 1949 December 31 00:00 UTC, the angles are in
-radians, `no` is the mean motion in radians per minute after the removal of the
-Kozai correction, with `no != 0` and `0 <= ecco < 1`.
+`epoch` is in days from 1949 December 31 00:00 UTC, the angles are in radians, and
+`no` is the mean motion in radians per minute without the Kozai correction.
 """
 function _sgp4_dscom(
         epoch::Float64, ecco::Float64, argpo::Float64, inclo::Float64,
@@ -200,8 +197,8 @@ element epoch (`T = TC = 0`). `irez` is 0 for no resonance, 1 for a one-day orbi
 (with `del1`, `del2`, `del3`) and 2 for a half-day orbit of eccentricity 0.5 or more
 (with `d2201` ... `d5433`); `xlamo` and `xfact` start the resonance integration.
 
-Contract: `c` is the result of `_sgp4_dscom` for the same elements; `xke` is the
-fourth geophysical constant.
+`c` is the result of `_sgp4_dscom` for the same elements; `xke` is the fourth
+geophysical constant.
 """
 function _sgp4_dsinit(
         xke::Float64, c, argpo::Float64, gsto::Float64, mo::Float64,
@@ -385,7 +382,7 @@ function _sgp4_gsto(epoch::Float64, opmode::Int)
         c1p2p = c1 + _TWOPI
         thgr70 + c1 * ids70 + c1p2p * tfrac + ts70 * ts70 * fk5r
     else
-        _sgp4_error(:unknownmode, "the SGP4 operation mode $opmode is not 1 or 2")
+        _throw_spice(:unknownmode, "the SGP4 operation mode $opmode is not 1 or 2")
     end
     gsto = f2c_dmod(gsto, _TWOPI)
     return gsto < 0.0 ? gsto + _TWOPI : gsto
@@ -400,14 +397,12 @@ OMEGA, M0, N0 and the epoch, in the units of `getelm`. `epoch` is the element ep
 in days from 1949 December 31 00:00 UTC (Julian date UTC minus 2433281.5), which
 CSPICE computes with `ttrans` from `elems[10]`.
 
-Contract: the result is plain bits (`isbits`), with all the values that `_sgp4_eval`
-needs: `dodeep` tells whether the period is 225 minutes or more (SDP4), and `dosimp`
-whether the drag terms of higher order are left out. Throws
+The result is `isbits`. `dodeep` tells whether the period is 225 minutes or more
+(SDP4), and `dosimp` whether the drag terms of higher order are left out. Throws
 `SpiceError(:suborbital)` if the perigee radius is below one Earth radius, and
-`SpiceError(:invalidelements)` for an eccentricity above 1 (the mean motion is then
-NaN), where CSPICE signals no error at the initialization and keeps the constants of
-the element set before. As in CSPICE, QO, SO and AE
-are not read: the atmosphere bounds 120 km and 78 km are fixed in the code.
+`SpiceError(:invalidelements)` for an eccentricity above 1, where CSPICE signals no
+error and keeps the constants of the previous element set. As in CSPICE, QO, SO and
+AE are not read: the atmosphere bounds 120 km and 78 km are fixed.
 """
 function _sgp4_init(
         geophs::NTuple{8, Float64}, elems::NTuple{10, Float64}, epoch::Float64,
@@ -444,8 +439,8 @@ function _sgp4_init(
     posq = po * po
     rp = ao * (1.0 - ecco)
     gsto = _sgp4_gsto(epoch, opmode)
-    rp < 1.0 && _sgp4_error(:suborbital, "TLE elements suborbital.")
-    (omeosq >= 0.0 || no >= 0.0) || _sgp4_error(
+    rp < 1.0 && _throw_spice(:suborbital, "TLE elements suborbital.")
+    (omeosq >= 0.0 || no >= 0.0) || _throw_spice(
         :invalidelements,
         "the eccentricity is above 1 and the mean motion is negative"
     )
@@ -581,8 +576,7 @@ For a resonant orbit the mean longitude and the mean motion are integrated from 
 epoch in steps of 720 minutes with plain numbers (the count of steps follows
 `primal(t)`) and the last part of a step is a polynomial in the type of `t`. CSPICE
 can continue the integration from the time of the previous call; the steps are the
-same from the epoch, so the result is the same. Loop invariant: `atime` is a whole
-number of steps from the epoch, and `xli`, `xni` are the integrated values at `atime`.
+same from the epoch, so the result is the same.
 """
 @inline function _sgp4_dspace(r, t::T, eccm, argpm, inclm, mm, nodem) where {T <: Real}
     ds = r.ds
@@ -596,7 +590,7 @@ number of steps from the epoch, and `xli`, `xni` are the integrated values at `a
     g54 = 4.4108898
     stepp = 720.0
     step2 = 259200.0
-    theta = _dyn_dmod(r.gsto + t * _SGP4_RPTIM, _TWOPI)
+    theta = f2c_dmod(r.gsto + t * _SGP4_RPTIM, _TWOPI)
     eccm = eccm + ds.dedt * t
     inclm = inclm + ds.didt * t
     argpm = argpm + ds.domdt * t
@@ -610,6 +604,8 @@ number of steps from the epoch, and `xli`, `xni` are the integrated values at `a
     xli = ds.xlamo
     delt = t0 > 0.0 ? stepp : -stepp
     xndt = xldot = xnddt = 0.0
+    # invariant: `atime` is a whole number of steps from the epoch, and `xli`, `xni`
+    # are the integrated values at `atime`
     while true
         if ds.irez != 2
             # Terms of the near-synchronous resonance.
@@ -722,7 +718,7 @@ Lyddane form; the choice follows the plain value of the inclination.
         dbet = -ph * sinop + pinc * cosip * cosop
         alfdp = alfdp + dalf
         betdp = betdp + dbet
-        nodep = _dyn_dmod(nodep, _TWOPI)
+        nodep = f2c_dmod(nodep, _TWOPI)
         (primal(nodep) < 0.0 && r.opmode == _SGP4_AFSPC) && (nodep = nodep + _TWOPI)
         xls = mp + argpp + cosip * nodep
         dls = pl + pgh - pinc * nodep * sinip
@@ -751,14 +747,13 @@ in the Kepler iteration of `xxsgp4e`: Newton steps on
 `u - aynl cos(e) + axnl sin(e) - e` from `e = u`, each limited to 1 in size, until a
 step is below 1e-12 or 10 steps are made. CSPICE uses the sine and the cosine that it
 computed before the last step, so the result is the iterate before that step.
-Loop invariant: `e` is the iterate that precedes the step `tem5`.
 """
 @inline function _sgp4_kepler(u::Float64, axnl::Float64, aynl::Float64)
     eo1 = u
     e = u
     temp = 9999.9
     iter = 0
-    while temp >= 1.0e-12 && iter < 10
+    while temp >= 1.0e-12 && iter < 10     # invariant: `e` is the iterate before `eo1`
         iter += 1
         e = eo1
         sineo1, coseo1 = sincos(eo1)
@@ -777,16 +772,14 @@ end
 Position (km) and velocity (km/s) in the TEME frame at `t` minutes from the element
 epoch, for the record `r` of `_sgp4_init`, as `xxsgp4e`.
 
-Contract: with a plain `t` the result is the CSPICE state to rounding level. With a
-series-valued `t` both results are the series of the CSPICE position and velocity
-functions: the Kepler equation is solved with plain numbers as CSPICE does, and the
-eccentric longitude then gets its derivative parts from Newton steps on the residual
-with its plain value removed (`_with_primal`). Errors, with the kinds of CSPICE:
+With a `Taylor` time both results are series of the CSPICE functions: the Kepler
+equation is solved with plain numbers, and the eccentric longitude gets its
+derivative parts from Newton steps (`_with_primal`). Errors, with the kinds of CSPICE:
 `:badmeanmotion` (mean motion not positive), `:badmeccentricity` (mean eccentricity
 outside `[-0.001, 1)`), `:badmsemimajor` (mean semi-major axis below 0.95 Earth
 radii), `:badpeccentricity` (perturbed eccentricity outside `[0, 1]`),
 `:badsemilatus` (negative semi-latus rectum) and `:orbitdecay` (radius below one
-Earth radius). No allocation.
+Earth radius).
 """
 @inline function _sgp4_eval(r, t::T) where {T <: Real}
     x2o3 = _SGP4_X2O3
@@ -822,19 +815,19 @@ Earth radius). No allocation.
     if r.dodeep
         eccm, argpm, inclm, mm, nodem, xn = _sgp4_dspace(r, t, eccm, argpm, inclm, mm, nodem)
     end
-    primal(xn) <= 0.0 && _sgp4_error(
+    primal(xn) <= 0.0 && _throw_spice(
         :badmeanmotion,
         "Mean motion less-than zero. This error may indicate a bad TLE set."
     )
     am = _sgp4_pow(r.xke / xn, x2o3) * (tempa * tempa)
     xn = r.xke / _sgp4_pow(am, 1.5)
     eccm = eccm - tempe
-    (primal(eccm) >= 1.0 || primal(eccm) < -0.001) && _sgp4_error(
+    (primal(eccm) >= 1.0 || primal(eccm) < -0.001) && _throw_spice(
         :badmeccentricity,
         "Mean eccentricity value beyond allowed bounds [-0.001,1.0). This error may " *
             "indicate a bad TLE set."
     )
-    primal(am) < 0.95 && _sgp4_error(
+    primal(am) < 0.95 && _throw_spice(
         :badmsemimajor,
         "Mean semi-major axis value below allowed minimum of 0.95. This error may " *
             "indicate a bad TLE set or a decayed orbit."
@@ -842,10 +835,10 @@ Earth radius). No allocation.
     primal(eccm) < 1.0e-6 && (eccm = convert(T, 1.0e-6))
     mm = mm + r.no * templ
     xlm = mm + argpm + nodem
-    nodem = _dyn_dmod(nodem, _TWOPI)
-    argpm = _dyn_dmod(argpm, _TWOPI)
-    xlm = _dyn_dmod(xlm, _TWOPI)
-    mm = _dyn_dmod(xlm - argpm - nodem, _TWOPI)
+    nodem = f2c_dmod(nodem, _TWOPI)
+    argpm = f2c_dmod(argpm, _TWOPI)
+    xlm = f2c_dmod(xlm, _TWOPI)
+    mm = f2c_dmod(xlm - argpm - nodem, _TWOPI)
     # Lunar and solar periodics.
     eccp = eccm
     xincp = inclm
@@ -865,7 +858,7 @@ Earth radius). No allocation.
             nodep = nodep + Float64(pi)
             argpp = argpp - Float64(pi)
         end
-        (primal(eccp) < 0.0 || primal(eccp) > 1.0) && _sgp4_error(
+        (primal(eccp) < 0.0 || primal(eccp) > 1.0) && _throw_spice(
             :badpeccentricity,
             "Perturbed eccentricity value beyond allowed bounds [0,1]. This error may " *
                 "indicate a bad TLE set."
@@ -885,7 +878,7 @@ Earth radius). No allocation.
     aynl = eccp * sargpp + temp * aycof
     xl = mp + argpp + nodep + temp * xlcof * axnl
     # Kepler equation: plain solution as CSPICE, then the derivative parts.
-    u = _dyn_dmod(xl - nodep, _TWOPI)
+    u = f2c_dmod(xl - nodep, _TWOPI)
     eo1 = convert(T, _sgp4_kepler(primal(u), primal(axnl), primal(aynl)))
     for _ in 1:_ad_order(T)       # invariant: one more derivative order of eo1 is exact
         s, c = sincos(eo1)
@@ -898,7 +891,7 @@ Earth radius). No allocation.
     esine = axnl * sineo1 - aynl * coseo1
     el2 = axnl * axnl + aynl * aynl
     pl = am * (1.0 - el2)
-    primal(pl) < 0.0 && _sgp4_error(:badsemilatus, "Semi-latus rectum less-than zero.")
+    primal(pl) < 0.0 && _throw_spice(:badsemilatus, "Semi-latus rectum less-than zero.")
     rl = am * (1.0 - ecose)
     rdotl = sqrt(am) * esine / rl
     rvdotl = sqrt(pl) / rl
@@ -942,6 +935,6 @@ Earth radius). No allocation.
         (mv * ux + rvdot * vx) * kps, (mv * uy + rvdot * vy) * kps,
         (mv * uz + rvdot * vz) * kps
     )
-    primal(mr) < 1.0 && _sgp4_error(:orbitdecay, "Satellite has decayed.")
+    primal(mr) < 1.0 && _throw_spice(:orbitdecay, "Satellite has decayed.")
     return pos, vel
 end

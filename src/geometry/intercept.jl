@@ -39,13 +39,9 @@ end
     _geo_sfxcor(ks, sh, et, corr, obscde, dfrcde, dvec) -> (found, spoint, trgepc, srfvec)
 
 `zzsfxcor`: the intercept on the shape `sh` of the ray from the body `obscde` along
-`dvec` (frame `dfrcde`), with the aberration corrections `corr`.
-
-Contract: `dvec` is not zero. The frame of the ray is evaluated at `et`, or, for a
-frame that is not inertial and not centered on the observer, at the epoch corrected for
-the light time to its center. `LT` forms make one light-time iteration and `CN` forms
-at most ten, with the convergence test of CSPICE. Postcondition: if `found`, `spoint`
-is on the surface and `srfvec` is the vector from the observer to it.
+`dvec` (frame `dfrcde`, `dvec != 0`), with the aberration corrections `corr`. The
+frame of the ray is evaluated at `et`, or, for a frame that is not inertial and not
+centered on the observer, at the epoch corrected for the light time to its center.
 """
 function _geo_sfxcor(
         ks::KernelSet, sh::_GeoShape, et, corr::Aberration, obscde::Int32,
@@ -54,9 +50,7 @@ function _geo_sfxcor(
     trgcde = sh.trgcde
     fixfid = sh.fixfid
     s = _geo_sign(corr)
-    loccor = corr.uselt ? Aberration(; uselt = true, converged = corr.converged, transmit = corr.transmit) :
-        Aberration()
-    tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, loccor, obscde)
+    tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, _geo_lt_only(corr), obscde)
     obspos = -tpos
     trgepc = et + s * lt
     dcentr, dclass, _ = _geo_frinfo(ks, dfrcde)
@@ -146,20 +140,20 @@ function _geo_sincpt(
         target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
         dref::NameOrID, dvec::AbstractVector
     )
-    corr = _geo_abcorr(abcorr)
-    trgcde = _geo_body(ks, target, "target")
-    obscde = _geo_body(ks, obsrvr, "observer")
+    corr = Aberration(abcorr)
+    trgcde = _body_id(ks, target, "target")
+    obscde = _body_id(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("surface intercept", obsrvr)
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
-    dv = _geo_pos(dvec)
+    dv = _dsk_vec3(dvec)
     (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(
         SpiceError(
             :zerovector,
             "the direction vector of the ray is the zero vector"
         )
     )
-    dfrcde = _geo_namfrm(ks, dref)
-    _geo_frinfo(ks, dfrcde)[3] || _geo_no_frame(dref)
+    dfrcde = _frame_code(ks, dref)
+    _geo_frinfo(ks, dfrcde)[3] || _dsk_bad_frame(:noframe, dref, nothing, 0)
     m = _geo_method(ks, trgcde, method)
     m.subtyp == 0x00 || _geo_sub_in_method(method)
     sh = _geo_shape(ks, tols, m, trgcde, fixfid)
@@ -263,7 +257,7 @@ if there are not 3 of them, and `SpiceError(:badaxislength)` if one is not posit
 See also [`latsrf`](@ref), [`latrec`](@ref), [`bodvrd`](@ref).
 """
 function srfrec(ks::KernelSet, body::NameOrID, lon::Real, lat::Real)
-    a, b, c = _geo_radii(ks, _geo_body(ks, body, "body"))
+    a, b, c = _positive_radii(ks, _body_id(ks, body, "body"))
     return edpnt(_m_latrec(1.0, float(lon), float(lat)), a, b, c)
 end
 srfrec(ctx::SpiceContext, body::NameOrID, lon::Real, lat::Real) =

@@ -476,11 +476,23 @@ end
 
 # Equinoctial elements: src/astro/orbit_equinoctial.rs of ANISE (rad here). The mean
 # longitude is raan + aop + ma and is not wrapped.
+_aeq_hk(ecc, aop, raan) = (w = aop + raan; (ecc * sin(w), ecc * cos(w)))
+_aeq_pq(inc, raan) = (s = sin(inc / 2); (s * sin(raan), s * cos(raan)))
+
+# The equinoctial elements `(a, h, k, p, q, lambda)` of Keplerian ones, with the mean anomaly.
+function _kep_to_aeq(sma, ecc, inc, raan, aop, ma)
+    h, k = _aeq_hk(ecc, aop, raan)
+    p, q = _aeq_pq(inc, raan)
+    return (sma, h, k, p, q, raan + aop + ma)
+end
+
+_el_equinoctial(o::Orbit) =
+    _kep_to_aeq(_el_sma(o), _el_ecc(o), _el_inc(o), _el_raan(o), _el_aop(o), _el_ma(o))
 _el_equinoctial_a(o::Orbit) = _el_sma(o)
-_el_equinoctial_h(o::Orbit) = _el_ecc(o) * sin(_el_aop(o) + _el_raan(o))
-_el_equinoctial_k(o::Orbit) = _el_ecc(o) * cos(_el_aop(o) + _el_raan(o))
-_el_equinoctial_p(o::Orbit) = sin(_el_inc(o) / 2) * sin(_el_raan(o))
-_el_equinoctial_q(o::Orbit) = sin(_el_inc(o) / 2) * cos(_el_raan(o))
+_el_equinoctial_h(o::Orbit) = _aeq_hk(_el_ecc(o), _el_aop(o), _el_raan(o))[1]
+_el_equinoctial_k(o::Orbit) = _aeq_hk(_el_ecc(o), _el_aop(o), _el_raan(o))[2]
+_el_equinoctial_p(o::Orbit) = _aeq_pq(_el_inc(o), _el_raan(o))[1]
+_el_equinoctial_q(o::Orbit) = _aeq_pq(_el_inc(o), _el_raan(o))[2]
 _el_equinoctial_lambda(o::Orbit) = _el_raan(o) + _el_aop(o) + _el_ma(o)
 
 # ANISE `equinoctial_to_keplerian`: (sma, ecc, inc, raan, aop, ma), the angles not wrapped.

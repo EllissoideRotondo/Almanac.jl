@@ -9,10 +9,9 @@
 """
     _daf_of_handle(h, name, who) -> DAF
 
-Contract: the `DAF`, named `name`, of the bytes that the open handle `h` holds now (in
-memory or in its file), with the checks of `open_daf`. An array that is being added has
-no summary yet and is not in the result. Throws `SpiceError(:dafnosuchhandle)` if `h` is
-closed.
+Return the `DAF`, named `name`, of the bytes that the open handle `h` holds now, with the
+checks of `open_daf`. An array that is being added is not in the result. Throws
+`SpiceError(:dafnosuchhandle)` if `h` is closed.
 """
 function _daf_of_handle(h::DAFHandle, name::AbstractString, who::AbstractString)
     _daf_check_open(h, who)
@@ -29,9 +28,9 @@ end
 """
     _daf_from_handle(h, name, who) -> DAF
 
-Contract: `_daf_of_handle` for the load of an in-memory handle. Throws `SpiceError` with
-kind `:dafnosuchhandle` if `h` is closed, `:dafinvalidaccess` if it has a file, and
-`:dafnewconflict` if an array is being added (`dafbna` without `dafena`).
+Return `_daf_of_handle` for the load of an in-memory handle. Throws `SpiceError` with kind
+`:dafnosuchhandle` if `h` is closed, `:dafinvalidaccess` if it has a file, and
+`:dafnewconflict` if an array is being added.
 """
 function _daf_from_handle(h::DAFHandle, name::AbstractString, who::AbstractString)
     _daf_check_open(h, who)
@@ -57,19 +56,14 @@ Load the segments that are in the in-memory DAF `handle` (from [`spkops`](@ref),
 [`ckops`](@ref), [`pckops`](@ref) or [`dafops`](@ref)) into `ctx` as an SPK, CK or
 binary PCK kernel, with no file. This method has no CSPICE counterpart.
 
-The kernel enters the load list under `name`, with the rules of a file: it has priority
-over the kernels loaded before it, [`kdata`](@ref) lists `name` with its type,
-[`unload`](@ref) with `name` and [`kclear`](@ref) remove it, and loading the same name
-twice makes two entries, of which `unload` removes the later. The type is the file type
-of the handle (`"SPK"` for [`spkops`](@ref)). The call copies the segments: writing to `handle` afterwards
-does not change the loaded kernel, and `handle` stays open, so it can take more segments
-and be loaded again.
+The kernel enters the load list under `name` with the rules of a file, so
+[`kdata`](@ref), [`unload`](@ref) and [`kclear`](@ref) take `name`. The call copies the
+segments: writing to `handle` afterwards does not change the loaded kernel, and `handle`
+stays open.
 
 `bodies`, pairs such as `["MYSAT" => -1001]`, are body names that hold while the kernel
-is loaded and go with it. A name that the kernel pool defines (`NAIF_BODY_NAME`) keeps the
-definition of the pool; among kernels, the later one wins; a kernel name has priority over
-one of [`boddef`](@ref) and over the built-in names. After [`unload`](@ref) the next
-definition in this order holds again.
+is loaded. They rank below the names of the kernel pool (`NAIF_BODY_NAME`) and above
+those of [`boddef`](@ref) and the built-in names; among kernels, the later one wins.
 
 Throws `SpiceError`:
 
@@ -126,7 +120,7 @@ furnsh(h::DAFHandle; kw...) = furnsh(default_context(), h; kw...)
 # Coverage of a handle, and saving
 # ---------------------------------------------------------------------------------------
 
-"The DAF of the handle `h` for the coverage call `who`, which needs the kind `kind`."
+"Return the DAF of the handle `h` for the coverage call `who`, which needs the kind `kind`."
 function _cov_daf(h::DAFHandle, who::AbstractString, kind::Symbol)
     name = _daf_inmemory(h) ? "(DAF in memory)" : h.path
     daf = _daf_of_handle(h, name, who)
@@ -143,7 +137,7 @@ end
 _cov_ids!(ids::AbstractVector{<:Integer}, h::DAFHandle, who::AbstractString, kind::Symbol) =
     _add_ids!(ids, Int[s.target for s in _cov_daf(h, who, kind).segments])
 
-"`spkcov!` and `pckcov!` of a handle: the spans of the segments of `idcode`, in file order (the order of the summaries)."
+"`spkcov!` and `pckcov!` of a handle: the spans of the segments of `idcode`, in file order."
 function _cov_window!(cover::Window, h::DAFHandle, idcode::Integer, who::AbstractString, kind::Symbol)
     for s in _cov_daf(h, who, kind).segments
         s.target == idcode && wninsd!(cover, s.t0, s.t1)
@@ -168,10 +162,9 @@ _ck_open(f, h::DAFHandle, who::AbstractString) = f(_cov_daf(h, who, :CK))
 
 Write the in-memory DAF `handle` (from [`spkops`](@ref), [`ckops`](@ref),
 [`pckops`](@ref) or [`dafops`](@ref)) to the new file `path`: the bytes that the same
-write calls would have put in a file made by [`spkopn`](@ref) (or `ckopn`, `pckopn`,
-`dafonw`). The file is a valid kernel; an array that is being added (`dafbna` without
-`dafena`) is not in it. An existing file is never replaced. The handle stays open. This
-call has no CSPICE counterpart.
+write calls put in a file made by [`spkopn`](@ref). An array that is being added is not
+in the file. An existing file is never replaced, and the handle stays open. This call has
+no CSPICE counterpart.
 
 Throws `SpiceError`:
 
@@ -227,13 +220,12 @@ end
 # ---------------------------------------------------------------------------------------
 
 """
-    _load_segment!(write!, ctx, name, segid, bodies, who) -> Nothing
+    _load_segment!(write!, ctx, name, segid, bodies) -> Nothing
 
-Contract: write one segment with `write!(h, segid)` into a new in-memory SPK and load it
-into `ctx` under `name` with the names `bodies`. The handle is closed on return. A call
-that throws leaves `ctx` unchanged.
+Write one segment with `write!(h, segid)` into a new in-memory SPK and load it into `ctx`
+under `name` with the names `bodies`. A call that throws leaves `ctx` unchanged.
 """
-function _load_segment!(write!, ctx::SpiceContext, name::AbstractString, segid::AbstractString, bodies, who::AbstractString)
+function _load_segment!(write!, ctx::SpiceContext, name::AbstractString, segid::AbstractString, bodies)
     h = spkops(name)
     try
         write!(h, first(segid, 40))
@@ -256,14 +248,12 @@ The kernel holds one SPK segment from `ets[1]` to `ets[end]`: type 13 (Hermite
 interpolation, which uses the velocities) for `method = :hermite`, type 9 (Lagrange
 interpolation) for `:lagrange`, with polynomials of degree `degree`. Type 13 needs an odd
 `degree` in `1:27` and at least `(degree + 1) ÷ 2` states; type 9 a `degree` in `1:27` and
-more than `degree` states. `states` is a 6 by n
-matrix, a vector of 6-vectors, or a flat vector, as for [`spkw13`](@ref). The kernel is the
-one that [`spkw13`](@ref) or [`spkw09`](@ref) would write to a file, so queries give the
-same results as on that file. `segid` is cut to its first 40 characters. `bodies` are body
-names of the kernel, as for [`furnsh`](@ref) of a handle; `body` and `center` are NAIF
-codes or names, and may be names of `bodies`. The rules of the load list are those of a
-file. A trajectory with jumps (burns) needs one call per arc, or
-several segments through [`spkops`](@ref).
+more than `degree` states. `states` is a 6 by n matrix, a vector of 6-vectors, or a flat
+vector, as for [`spkw13`](@ref). The kernel is the one that [`spkw13`](@ref) or
+[`spkw09`](@ref) writes to a file, so queries give the same results as on that file.
+`segid` is cut to its first 40 characters. `bodies` are body names of the kernel, as for
+[`furnsh`](@ref) of a handle; `body` and `center` are NAIF codes or names, and may be
+names of `bodies`. A trajectory with jumps (burns) needs one call per arc.
 
 Throws `SpiceError`:
 
@@ -310,7 +300,7 @@ function load_samples!(
     ks = kernelset(ctx)
     b, c = _resolve_body(ks, body, kb), _resolve_body(ks, center, kb)
     writer = method === :hermite ? spkw13 : spkw09
-    _load_segment!(ctx, name, segid, kb, who) do h, id
+    _load_segment!(ctx, name, segid, kb) do h, id
         writer(ctx, h, b, c, frame, ets[1], ets[end], id, degree, states, ets)
     end
     return nothing
@@ -325,17 +315,18 @@ load_samples!(name::AbstractString, body::NameOrID, center::NameOrID, frame::Nam
 
 Fit the trajectory `f(et)` of `body` relative to `center` in `frame` on `t0 <= et <= t1`
 (seconds past J2000 TDB) with Chebyshev polynomials, and load the fit into `ctx` as a kernel
-named `name`, with no file. `f` is called only during the call: a query then costs what a
-query of an SPK file costs, whatever `f` costs. This call has no CSPICE counterpart.
+named `name`, with no file. `f` is called with `Float64` epochs, on the calling task, during
+the call only, so a query costs what a query of an SPK file costs. This call has no CSPICE
+counterpart.
 
 `f` returns six numbers, the position (km) and the velocity (km/s), or three, the position
 only. With six the kernel has an SPK segment of type 3 (a series for the position and one
 for the velocity); with three, of type 2 (the velocity is the derivative of the position).
 The fit takes `ncoef` coefficients on each of `n` intervals of equal length and doubles `n`
 until the position error is at most `tol` (km). Without `tol` the goal is `1e-12` times the
-largest distance, with the early stop of [`ephemeris_table`](@ref). `f` is called with
-`Float64` epochs, on the calling task, during the call only. The result is the measured largest
-position error (km) and velocity error (km/s, `NaN` for three numbers). `body`, `center`,
+largest distance, with the early stop of [`ephemeris_table`](@ref). The result is the
+measured largest position error (km) and velocity error (km/s, `NaN` for three numbers).
+`body`, `center`,
 `segid` and `bodies` are as for [`load_samples!`](@ref).
 
 An `ODESolution` goes in through a closure; see
@@ -373,17 +364,12 @@ See also [`load_samples!`](@ref), [`ephemeris_table`](@ref), [`add_ephemeris!`](
 function load_function!(
         ctx::SpiceContext, name::AbstractString, f, body::NameOrID, center::NameOrID,
         frame::NameOrID, t0::Real, t1::Real; tol::Union{Nothing, Real} = nothing,
-        ncoef::Integer = 16, maxintervals::Integer = 65536, segid::AbstractString = name,
+        ncoef::Integer = 16, maxintervals::Integer = _TAB_MAXINTERVALS, segid::AbstractString = name,
         bodies = ()
     )
     who = "load_function!"
     _chk_filename(who, name)
-    a, b = Float64(t0), Float64(t1)
-    (isfinite(a) && isfinite(b) && a < b) ||
-        throw(SpiceError(:badarg, "$who: the epochs must be finite, with t0 < t1"))
-    2 <= ncoef <= 28 || throw(SpiceError(:badarg, "$who: ncoef is $ncoef; it must be in 2:28"))
-    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "$who: tol must be positive"))
-    maxintervals >= 1 || throw(SpiceError(:badarg, "$who: maxintervals must be at least 1"))
+    a, b = _tab_checks(who, t0, t1, ncoef, tol, maxintervals, 28)
     kb = _kernel_bodies(who, bodies)
     ks = kernelset(ctx)
     bc, cc = _resolve_body(ks, body, kb), _resolve_body(ks, center, kb)
@@ -417,7 +403,7 @@ function load_function!(
     end
     cdata = reshape(coef, n * Int(ncoef), nint)
     writer = n == 6 ? spkw03 : spkw02
-    _load_segment!(ctx, name, segid, kb, who) do h, id
+    _load_segment!(ctx, name, segid, kb) do h, id
         writer(ctx, h, bc, cc, frame, a, b, id, dt, cdata, a)
     end
     return poserr, velerr

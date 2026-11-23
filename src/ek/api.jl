@@ -111,6 +111,31 @@ function ekssum(h::DASHandle, segno::Integer)
 end
 
 """
+    _ek_check_type(h, who, name, dtype, types, segno, recno = nothing) -> Nothing
+
+Throw `SpiceError(:wrongdatatype)` unless the data type code `dtype` of the column
+`name` is in `types`. The message names the row and the segment when `recno` is given.
+"""
+@inline function _ek_check_type(
+        h::DASHandle, who::AbstractString, name::AbstractString, dtype::Integer,
+        types::Tuple, segno::Integer, recno::Union{Nothing, Integer} = nothing
+    )
+    dtype in types || _ek_wrongtype(h, who, name, dtype, types, segno, recno)
+    return nothing
+end
+
+@noinline function _ek_wrongtype(h, who, name, dtype, types, segno, recno)
+    kind = types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ? "integer" : "d.p. or TIME"
+    at = recno === nothing ? "" : "  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
+    throw(
+        SpiceError(
+            :wrongdatatype,
+            "Column $name is of type $dtype; $(uppercase(who)) only works with $kind columns.$at"
+        )
+    )
+end
+
+"""
     _ek_locate(h, who, segno, recno, column, types) -> (col, recptr)
 
 The common start of `ekrcec`, `ekrced` and `ekrcei`: the descriptor of `column` in
@@ -126,14 +151,7 @@ function _ek_locate(
     _ek_check_read(h, who)
     segdsc = _ek_sdsc(h, segno)
     col = _ek_find_column(h, segdsc, column)
-    col.dtype in types || throw(
-        SpiceError(
-            :wrongdatatype, "Column $(col.name) is of type " *
-                "$(col.dtype); $(uppercase(who)) only works with " *
-                "$(types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ? "integer" : "d.p. or TIME") " *
-                "columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
-        )
-    )
+    _ek_check_type(h, who, col.name, col.dtype, types, segno, recno)
     nrows = Int(segdsc[_EK_NRIDX])
     (1 <= recno <= nrows) || throw(
         SpiceError(
@@ -399,28 +417,17 @@ the EK Required Reading of NAIF
 (<https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/ek.html>) describes the
 constraints.
 
-CSPICE keeps the rows of the last query in global state. Here the rows are in
-`result`, an [`EKResult`](@ref), which the fetch calls take as first argument. Rows,
-SELECT columns and elements count from 1; CSPICE counts from 0.
+Rows, SELECT columns and elements count from 1; CSPICE counts from 0. The fetch calls
+take `result` as first argument.
 
 A query that is not valid gives `failed == true`, the message of CSPICE in `errmsg`
 and a result without rows; the call does not throw for it. Positions in a message are
 byte positions in `query`, from 1. A time value in a query is converted with the
-leap-second and clock kernels of the context. A failure of that conversion is also
-reported in `errmsg`.
+leap-second and clock kernels of the context.
 
-The call changes nothing, so many tasks can run queries at the same time, also while
-another task loads or unloads kernels.
-
-The rows differ from those of CSPICE N0067 only where CSPICE has a defect:
-- a row that several OR branches of the WHERE clause match: CSPICE can return it
-  twice, or drop other rows;
-- a double precision value compared with an indexed integer column: `ID < 17.4` loses
-  the rows with `ID = 17` in CSPICE;
-- an integer value outside the 32-bit range: CSPICE compares with the smallest 32-bit
-  integer, so `DCOL > 10000000000` holds for every row that is not null;
-- a number such as `2.756`: the number parser of CSPICE gives a value that is wrong by
-  one unit in the last place.
+The call changes nothing, so many tasks can run queries at the same time. The rows
+differ from those of CSPICE N0067 only where CSPICE has a defect (see
+[Defects of CSPICE N0067](@ref)).
 
 Throws `SpiceError` for a query that is over a size limit:
 - `:celltoosmall` if the WHERE clause expands to more than 1000 constraints (fewer if
