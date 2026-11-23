@@ -294,13 +294,15 @@ end
 # ---------------------------------------------------------------------------------------
 
 """
-    _ek_ixlk(f, col, key) -> Int
+    _ek_ixlk(f, col, key, ix = _EK_NOIX) -> Int
 
 Record pointer at position `key` of the index of column `col`, as `zzekixlk`. An index
 of type 1 is a tree; an index of type 2 (fast writers) is an order vector in adjacent
-integer pages. Throws `SpiceError(:invalidtype)` for another index type.
+integer pages. `ix` is the index decoded at load ([`_ek_ixvals`](@ref)); if it is
+empty the file is read. Throws `SpiceError(:invalidtype)` for another index type.
 """
-function _ek_ixlk(f, col::_EKColumn, key::Int)
+function _ek_ixlk(f, col::_EKColumn, key::Int, ix::Vector{Int32} = _EK_NOIX)
+    isempty(ix) || return Int(ix[key])
     col.ixtype == 1 && return _ek_trdp(f.ints, col.ixptr, key)
     col.ixtype == 2 || throw(
         SpiceError(
@@ -308,25 +310,38 @@ function _ek_ixlk(f, col::_EKColumn, key::Int)
             "The index type $(col.ixtype) is not supported."
         )
     )
-    q = (key - 1) ÷ _EK_IPSIZE
-    return Int(f.ints[Int(col.ixptr) + q * 256 + (key - q * _EK_IPSIZE)])
+    return _ek_ordvec_value(f.ints, col.ixptr, key)
 end
 
 """
-    _ek_ixlast(f, col, nrows, strict, dtype, cval, dval, ival) -> Int
+    _ek_ixvals(qs, col) -> Vector{Int32}
+
+The record pointers of the index of the column `col` of the segment of `qs` in index
+order, as `_ek_segment` decoded them at load; empty if they were not decoded.
+"""
+function _ek_ixvals(qs::_EKQSeg, col::_EKColumn)
+    cols = qs.seg.columns
+    j = Int(col.ord)
+    (1 <= j <= length(cols) && cols[j] == col) || (j = something(findfirst(==(col), cols), 0))
+    return j == 0 ? _EK_NOIX : qs.seg.ixvals[j]
+end
+
+"""
+    _ek_ixlast(f, col, nrows, strict, dtype, cval, dval, ival, ix = _EK_NOIX) -> Int
 
 Position of the last entry in the index of `col` that is less than (`strict`) or not
 greater than the value, 0 if there is none: the binary search of `zzeklltc`/`zzekllec`
-and their integer and double forms. Precondition: `col` has an index over `nrows` rows.
+and their integer and double forms. `ix` as in [`_ek_ixlk`](@ref). Precondition: `col`
+has an index over `nrows` rows.
 """
 function _ek_ixlast(
         f, col::_EKColumn, nrows::Int, strict::Bool, dtype::Int, cval::String,
-        dval::Float64, ival::Int
+        dval::Float64, ival::Int, ix::Vector{Int32} = _EK_NOIX
     )
     nrows == 0 && return 0
     notbelow = strict ? _EK_GE : _EK_GT       # the first entry is too large
     below = strict ? _EK_LT : _EK_LE
-    cmp(op, pos) = _ek_scmp(op, f, col, _ek_ixlk(f, col, pos), dtype, cval, dval, ival)
+    cmp(op, pos) = _ek_scmp(op, f, col, _ek_ixlk(f, col, pos, ix), dtype, cval, dval, ival)
     cmp(notbelow, 1) && return 0
     cmp(below, nrows) && return nrows
     b = 1
@@ -343,28 +358,30 @@ function _ek_ixlast(
 end
 
 """
-    _ek_ixbound(f, col, nrows, strict, con, compat) -> Int
+    _ek_ixbound(f, col, nrows, strict, con, compat, ix) -> Int
 
 `zzekillt` (`strict`) or `zzekille` for the value of the constraint `con` and the key
-column `col`. With `compat` the value is converted as CSPICE converts it (see defect
+column `col`, whose decoded index is `ix`. With `compat` the value is converted as CSPICE converts it (see defect
 (b) in the file header); else it is compared as it is.
 """
-function _ek_ixbound(f, col::_EKColumn, nrows::Int, strict::Bool, con, compat::Bool)
+function _ek_ixbound(
+        f, col::_EKColumn, nrows::Int, strict::Bool, con, compat::Bool, ix::Vector{Int32}
+    )
     coltyp = Int(col.dtype)
     dtype = Int(con.dtype)
-    coltyp == _EK_CHR && return _ek_ixlast(f, col, nrows, strict, _EK_CHR, con.cval, 0.0, 0)
+    coltyp == _EK_CHR && return _ek_ixlast(f, col, nrows, strict, _EK_CHR, con.cval, 0.0, 0, ix)
     if !compat
         vt = dtype == _EK_INT ? _EK_INT : coltyp == _EK_TIME ? _EK_TIME : _EK_DP
-        return _ek_ixlast(f, col, nrows, strict, vt, "", con.dval, con.ival)
+        return _ek_ixlast(f, col, nrows, strict, vt, "", con.dval, con.ival, ix)
     end
     if coltyp == _EK_DP
         dnum = dtype == _EK_DP ? con.dval : Float64(con.ival)
-        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", dnum, 0)
+        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", dnum, 0, ix)
     elseif coltyp == _EK_TIME
-        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", con.dval, 0)
+        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", con.dval, 0, ix)
     end
     inum = dtype == _EK_DP ? round(Int, con.dval, RoundNearestTiesAway) : con.ival
-    return _ek_ixlast(f, col, nrows, strict, _EK_INT, "", 0.0, inum)
+    return _ek_ixlast(f, col, nrows, strict, _EK_INT, "", 0.0, inum, ix)
 end
 
 """
@@ -393,20 +410,21 @@ function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
     col = best
     for outer col in idxset
         kc = qs.cols[col]
+        ix = _ek_ixvals(qs, kc)
         minptr = 1
         maxptr = nrows
         for (i, c) in enumerate(cons)    # invariant: minptr:maxptr satisfies constraints before i
             (c.lhs.colidx == col && active[i]) || continue
             op = c.opcode
             if op == _EK_LT
-                maxptr = min(_ek_ixbound(f, kc, nrows, true, c, compat), maxptr)
+                maxptr = min(_ek_ixbound(f, kc, nrows, true, c, compat, ix), maxptr)
                 elim = maxptr == 0
             elseif op == _EK_LE
-                maxptr = min(_ek_ixbound(f, kc, nrows, false, c, compat), maxptr)
+                maxptr = min(_ek_ixbound(f, kc, nrows, false, c, compat, ix), maxptr)
                 elim = maxptr == 0
             elseif op == _EK_EQ
-                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat)
-                lastle = _ek_ixbound(f, kc, nrows, false, c, compat)
+                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat, ix)
+                lastle = _ek_ixbound(f, kc, nrows, false, c, compat, ix)
                 if lastlt < lastle
                     minptr = max(lastlt + 1, minptr)
                     maxptr = min(lastle, maxptr)
@@ -414,11 +432,11 @@ function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
                     elim = true
                 end
             elseif op == _EK_GT
-                lastle = _ek_ixbound(f, kc, nrows, false, c, compat)
+                lastle = _ek_ixbound(f, kc, nrows, false, c, compat, ix)
                 minptr = max(lastle + 1, minptr)
                 elim = lastle == nrows
             elseif op == _EK_GE
-                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat)
+                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat, ix)
                 minptr = max(lastlt + 1, minptr)
                 elim = lastlt == nrows
             end
@@ -592,9 +610,10 @@ function _ek_table_rows(
             activv[i] = c.cnstyp == 2 && c.lhs.tabidx == t
         end
         keyfnd, keycol, begidx, endidx = _ek_key(qs, cons, activv, compat)
+        ix = keyfnd ? _ek_ixvals(qs, keycol) : _EK_NOIX
         rows = Int32[]
         for r in begidx:endidx           # invariant: `rows` holds the matches before position r
-            recptr = keyfnd ? _ek_ixlk(f, keycol, r) : Int(qs.seg.recptrs[r])
+            recptr = keyfnd ? _ek_ixlk(f, keycol, r, ix) : Int(qs.seg.recptrs[r])
             ok = true
             for (i, c) in enumerate(cons)
                 activv[i] || continue

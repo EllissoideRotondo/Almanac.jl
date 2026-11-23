@@ -365,7 +365,43 @@ function _ek_segment(s, segno::Integer)
     else
         throw(SpiceError(:invalidtype, "The segment type $stype is not supported."))
     end
-    return _EKSegment(Int32(segno), Int32(stype), table, Int32(nrows), columns, recptrs, segdsc)
+    ixvals = Vector{Int32}[_ek_index_values(s, c, nrows) for c in columns]
+    return _EKSegment(
+        Int32(segno), Int32(stype), table, Int32(nrows), columns, recptrs, ixvals, segdsc
+    )
+end
+
+"An empty vector of record pointers: no decoded index. Never modified."
+const _EK_NOIX = Int32[]
+
+"Record pointer at position `key` of the order vector at `ixptr` in adjacent integer pages (index type 2)."
+@inline function _ek_ordvec_value(ints::AbstractVector{Int32}, ixptr::Integer, key::Int)
+    q = (key - 1) ÷ _EK_IPSIZE
+    return Int(ints[Int(ixptr) + q * 256 + (key - q * _EK_IPSIZE)])
+end
+
+"""
+    _ek_index_values(s, col, nrows) -> Vector{Int32}
+
+The record pointers of the index of `col` in index order, read once at load so that a
+search reads them in constant time: the values of the tree (index type 1) or of the
+order vector (type 2). Empty for a column without index, for another index type, and
+for a tree that does not hold `nrows` keys or cannot be read; the search then reads the
+file and signals the error of CSPICE there.
+"""
+function _ek_index_values(s, col::_EKColumn, nrows::Int)
+    (col.ixtype == 1 || col.ixtype == 2) || return _EK_NOIX
+    return try
+        if col.ixtype == 1
+            v = _ek_tree_values(s.ints, col.ixptr)
+            length(v) == nrows ? v : _EK_NOIX
+        else
+            Int32[_ek_ordvec_value(s.ints, col.ixptr, k) for k in 1:nrows]
+        end
+    catch err
+        (err isa SpiceError || err isa BoundsError) || rethrow()
+        _EK_NOIX
+    end
 end
 
 "Record pointer of row `recno` of the segment with the descriptor `segdsc` (`zzekrplk`)."

@@ -91,8 +91,11 @@ end
 
 One segment of a loaded EK file. `stype` is the segment type (1: rows are records
 found through the record tree; 2: fixed layout of the fast writers). `recptrs[r]` is
-the record pointer of row `r` (for type 2 the row number itself). `segdsc` holds the 24
-integers of the segment descriptor. Never modified after it was built.
+the record pointer of row `r` (for type 2 the row number itself). `ixvals[j]` holds the
+record pointers of the index of column `columns[j]` in index order, or nothing (an
+empty vector) if the column has no index or its index could not be decoded at load.
+`segdsc` holds the 24 integers of the segment descriptor. Never modified after it was
+built.
 """
 struct _EKSegment
     segno::Int32
@@ -101,6 +104,7 @@ struct _EKSegment
     nrows::Int32
     columns::Vector{_EKColumn}
     recptrs::Vector{Int32}
+    ixvals::Vector{Vector{Int32}}
     segdsc::Vector{Int32}
 end
 
