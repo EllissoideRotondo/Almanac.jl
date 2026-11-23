@@ -67,7 +67,7 @@ at the address `addr` into `out[1:n]` (`zzekrd04`). The entry must have at least
 `first + n - 1` elements.
 """
 function _ek_stream_i!(out::AbstractVector, ints::AbstractVector{Int32}, addr::Int, first::Int, n::Int)
-    base = _ek_ibase((addr - 1) ÷ 256)
+    _, base = _ek_pgpg(3, addr)
     off = addr - base + first            # position of the element in the page, if it is there
     done = 0
     while done < n
@@ -88,7 +88,7 @@ end
 
 "As `_ek_stream_i!` for a double array entry (`zzekrd05`); pointers are stored as doubles."
 function _ek_stream_d!(out::AbstractVector, dps::AbstractVector{Float64}, addr::Int, first::Int, n::Int)
-    base = _ek_dbase((addr + 127) ÷ 128)
+    _, base = _ek_pgpg(2, addr)
     off = addr - base + first
     done = 0
     while done < n
@@ -115,7 +115,7 @@ the five-character count at the address `addr` (`zzekrd03`, `zzekrd06`).
 """
 function _ek_stream_c(chars::AbstractVector{UInt8}, addr::Int, skip::Int, n::Int)
     out = Vector{UInt8}(undef, n)
-    base = _ek_cbase((addr + 1023) ÷ 1024)
+    _, base = _ek_pgpg(1, addr)
     off = addr - base + 5 + skip         # stream offset of the first wanted character
     done = 0
     while done < n
@@ -275,7 +275,7 @@ function _ek_cref(s, col::_EKColumn, recptr::Integer, elt::Integer)
     datptr == _EK_NULL && return _EKCRef(0), true, true
     datptr > 0 || _ek_badptr(col, datptr, recptr)
     n = _ek_gei(s.chars, datptr)
-    base = _ek_cbase((datptr + 1023) ÷ 1024)
+    _, base = _ek_pgpg(1, datptr)
     c == 3 && return _EKCRef(base, datptr - base + 5, n, true), false, true
     (1 <= elt <= n) || return _EKCRef(0), false, false
     l = Int(col.strlen)

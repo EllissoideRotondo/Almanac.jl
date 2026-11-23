@@ -216,13 +216,7 @@ segment, then the one record. `seg` describes `rec` as a segment of one record a
 """
 function _spkpvn_record(h::DAFHandle, dc, ic, t::Float64)
     b, e, dtype = ic[5], ic[6], Int32(ic[4])
-    b <= 0 && throw(SpiceError(:dafnegaddr, "spkpvn: negative value for the first address: $b"))
-    b > e && throw(
-        SpiceError(
-            :dafbeggtend,
-            "spkpvn: beginning address ($b) greater than ending address ($e)"
-        )
-    )
+    _daf_check_range("spkpvn", b, e)
     _daf_directory_length(h.path, dtype, b, e)
     dir = dafgda(h, e - 3, e)
     init, intlen, rsize, nrec = _daf_directory_values(
@@ -324,13 +318,7 @@ function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Rea
     _, ic = dafus(descr, 2, 6)
     t = _spkpvn_epoch(ic[4], et)
     b, e = ic[5], ic[6]
-    b <= 0 && throw(SpiceError(:dafnegaddr, "spkpvn: negative value for the first address: $b"))
-    b > e && throw(
-        SpiceError(
-            :dafbeggtend,
-            "spkpvn: beginning address ($b) greater than ending address ($e)"
-        )
-    )
+    _daf_check_range("spkpvn", b, e)
     e <= length(daf.data) || throw(
         SpiceError(
             :filereadfailed,
@@ -589,6 +577,85 @@ function _spks19_last(r::_SegReader, minbep::Int, npkt::Int, bufbas::Int, nread:
     return l, bufbas, nread, buf
 end
 
+"""
+    _spks19_first(r, base, n, t0) -> (bufbas, nread, buf)
+
+The search of `spks19` for `t0` in the `n` increasing values after `base`, by blocks of
+100: `buf` holds the values `bufbas + 1 : bufbas + nread`, the first block whose last
+value is `>= t0`, or the last block.
+"""
+function _spks19_first(r::_SegReader, base::Int, n::Int, t0::Float64)
+    nread = min(100, n)
+    bufbas = base
+    buf = _rd(r, bufbas + 1, bufbas + nread)
+    remain = n - nread
+    while remain > 0 && buf[nread] < t0  # invariant: the values up to `bufbas + nread` are < t0
+        bufbas += nread
+        nread = min(100, remain)
+        buf = _rd(r, bufbas + 1, bufbas + nread)
+        remain -= nread
+    end
+    return bufbas, nread, buf
+end
+
+"The first and the last address of mini-segment `idx` of a type 19 segment, from its pointers after `ptrbas`."
+function _spks19_bounds(r::_SegReader, baddr::Int, ptrbas::Int, idx::Int)
+    p1, p2 = _rd(r, ptrbas + idx, ptrbas + idx + 1)
+    return baddr - 1 + _nint(p1), baddr - 1 + _nint(p2) - 1
+end
+
+"""
+    _spks19_mini(r, baddr, ptrbas, idx) -> (minib, subtyp, wndsiz, npkt, pktsiz, minbep)
+
+The layout of mini-segment `idx` of a type 19 segment: first address, subtype, window
+size, packet count, packet size, and the base of its epochs. Throws
+`SpiceError(:notsupported)` for a subtype outside 0:2.
+"""
+function _spks19_mini(r::_SegReader, baddr::Int, ptrbas::Int, idx::Int)
+    minib, minie = _spks19_bounds(r, baddr, ptrbas, idx)
+    subtyp, wndsiz, npkt = _nint.(_rd(r, minie - 2, minie))
+    0 <= subtyp < 3 || throw(
+        SpiceError(
+            :notsupported, "spksub: unexpected SPK type 19 " *
+                "subtype $subtyp found in type 19 segment within mini-segment $idx"
+        )
+    )
+    pktsiz = _SPK19_PKTSZS[subtyp + 1]
+    return minib, subtyp, wndsiz, npkt, pktsiz, minib - 1 + npkt * pktsiz
+end
+
+"""
+    _spks19_copy!(out, r, minib, npkt, pktsiz, i1, i2, subtyp, wndsiz) -> (ep1, ep2, size)
+
+Append to `out` the mini-segment made of the packets `i1:i2` of the mini-segment at
+`minib`: packets, epochs, epoch directory and control words. Return the first and the
+last epoch and the size of the new mini-segment.
+"""
+function _spks19_copy!(
+        out::Vector{Float64}, r::_SegReader, minib::Int, npkt::Int, pktsiz::Int,
+        i1::Int, i2::Int, subtyp::Int, wndsiz::Int
+    )
+    for i in i1:i2
+        b = minib - 1 + (i - 1) * pktsiz
+        append!(out, _rd(r, b + 1, b + pktsiz))
+    end
+    ebase = minib - 1 + npkt * pktsiz
+    ep1 = ep2 = 0.0
+    for i in i1:i2
+        ep = _rd(r, ebase + i)
+        push!(out, ep)
+        i == i1 && (ep1 = ep)
+        i == i2 && (ep2 = ep)
+    end
+    n = i2 - i1 + 1
+    ndir = (n - 1) ÷ 100
+    for i in 1:ndir
+        push!(out, _rd(r, ebase + (i1 - 1) + 100i))
+    end
+    push!(out, Float64(subtyp), Float64(wndsiz), Float64(n))
+    return ep1, ep2, n * (pktsiz + 1) + ndir + 3
+end
+
 "Type 19 (`spks19`): the mini-segments of the intervals that cover `t0:t1`, the first and the last one cut."
 function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64)
     out = Float64[]
@@ -600,40 +667,11 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     ptrbas = eaddr - (nintvl + 3)
     ivlbas = ptrbas - (ndir + nintvl + 1)
     # The interval that holds t0.
-    nread = min(100, nintvl)
-    bufbas = ivlbas
-    buf = _rd(r, bufbas + 1, bufbas + nread)
-    remain = nintvl - nread
-    while remain > 0 && buf[nread] < t0  # invariant: the bounds up to `bufbas + nread` are < t0
-        bufbas += nread
-        nread = min(100, remain)
-        buf = _rd(r, bufbas + 1, bufbas + nread)
-        remain -= nread
-    end
+    bufbas, nread, buf = _spks19_first(r, ivlbas, nintvl, t0)
     begidx = max(1, bufbas - ivlbas + _lstltd(buf, 0, nread, t0))
-    p1, p2 = _rd(r, ptrbas + begidx, ptrbas + begidx + 1)
-    minib = baddr - 1 + _nint(p1)
-    minie = baddr - 1 + _nint(p2) - 1
-    subtyp, wndsiz, npkt = _nint.(_rd(r, minie - 2, minie))
-    0 <= subtyp < 3 || throw(
-        SpiceError(
-            :notsupported, "spksub: unexpected SPK type 19 " *
-                "subtype $subtyp found in type 19 segment within mini-segment $begidx"
-        )
-    )
-    pktsiz = _SPK19_PKTSZS[subtyp + 1]
-    minbep = minib - 1 + npkt * pktsiz
+    minib, subtyp, wndsiz, npkt, pktsiz, minbep = _spks19_mini(r, baddr, ptrbas, begidx)
     # The first packet of the first mini-segment.
-    nread = min(100, npkt)
-    bufbas = minbep
-    buf = _rd(r, bufbas + 1, bufbas + nread)
-    remain = npkt - nread
-    while remain > 0 && buf[nread] < t0  # invariant: the epochs up to `bufbas + nread` are < t0
-        bufbas += nread
-        nread = min(100, remain)
-        buf = _rd(r, bufbas + 1, bufbas + nread)
-        remain -= nread
-    end
+    bufbas, nread, buf = _spks19_first(r, minbep, npkt, t0)
     bepidx = bufbas - minbep + _lstled(buf, 0, nread, t0)
     bepidx = min(max(1, bepidx - (wndsiz ÷ 2 - 1)), npkt - 1)
     # The last packet of the first mini-segment.
@@ -656,24 +694,9 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
         eepidx = min(npkt, eepidx + (buf[l] == t1 ? wndsiz ÷ 2 - 2 : wndsiz ÷ 2 - 1))
     end
     ivlbeg = _rd(r, ivlbas + begidx)
-    for i in bepidx:eepidx
-        b = minib - 1 + (i - 1) * pktsiz
-        append!(out, _rd(r, b + 1, b + pktsiz))
-    end
-    iv1beg = iv1end = 0.0
-    for i in bepidx:eepidx
-        ep = _rd(r, minib - 1 + npkt * pktsiz + i)
-        push!(out, ep)
-        i == bepidx && (iv1beg = _f2c_max(ivlbeg, ep))
-        i == eepidx && (iv1end = _f2c_min(ivlend, ep))
-    end
-    minnpk = eepidx - bepidx + 1
-    minndr = (minnpk - 1) ÷ 100
-    for i in 1:minndr
-        push!(out, _rd(r, minib - 1 + npkt * pktsiz + (bepidx - 1) + 100i))
-    end
-    push!(out, Float64(subtyp), Float64(wndsiz), Float64(minnpk))
-    min1sz = minnpk * (pktsiz + 1) + minndr + 3
+    ep1, ep2, min1sz = _spks19_copy!(out, r, minib, npkt, pktsiz, bepidx, eepidx, subtyp, wndsiz)
+    iv1beg = _f2c_max(ivlbeg, ep1)
+    iv1end = _f2c_min(ivlend, ep2)
     # The mini-segments that follow, whole, and the last one, cut.
     ivfbeg = ivfend = 0.0
     minfsz = 0
@@ -685,9 +708,7 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
         ivlend = _rd(r, ivlbas + curivl + 1)
         while ivlend <= t1 && curivl <= nintvl
             # invariant: the mini-segments begidx+1 .. curivl-1 are copied whole
-            q1, q2 = _rd(r, ptrbas + curivl, ptrbas + curivl + 1)
-            minib = baddr - 1 + _nint(q1)
-            minie = baddr - 1 + _nint(q2) - 1
+            minib, minie = _spks19_bounds(r, baddr, ptrbas, curivl)
             minie >= minib && append!(out, _rd(r, minib, minie))
             ivfbeg = ivlend
             curivl += 1
@@ -698,18 +719,7 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
         else
             final = true
             endidx = curivl
-            q1, q2 = _rd(r, ptrbas + endidx, ptrbas + endidx + 1)
-            minib = baddr - 1 + _nint(q1)
-            minie = baddr - 1 + _nint(q2) - 1
-            subtyp, wndsiz, npkt = _nint.(_rd(r, minie - 2, minie))
-            0 <= subtyp < 3 || throw(
-                SpiceError(
-                    :notsupported, "spksub: unexpected SPK " *
-                        "type 19 subtype $subtyp found in type 19 segment within mini-segment $curivl"
-                )
-            )
-            pktsiz = _SPK19_PKTSZS[subtyp + 1]
-            minbep = minib - 1 + npkt * pktsiz
+            minib, subtyp, wndsiz, npkt, pktsiz, minbep = _spks19_mini(r, baddr, ptrbas, endidx)
             l, bufbas, nread, buf = _spks19_last(r, minbep, npkt, minbep, min(100, npkt), t1)
             eepidx = bufbas - minbep + l + 1
             eepidx < 2 && _spks19_error(
@@ -721,21 +731,7 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
                     "after the end $t1 (CSPICE stops with a subscript error)"
             )
             eepidx = max(min(npkt, eepidx + (buf[l] == t1 ? wndsiz ÷ 2 - 2 : wndsiz ÷ 2 - 1)), 2)
-            for i in 1:eepidx
-                b = minib - 1 + (i - 1) * pktsiz
-                append!(out, _rd(r, b + 1, b + pktsiz))
-            end
-            for i in 1:eepidx
-                ep = _rd(r, minib - 1 + npkt * pktsiz + i)
-                push!(out, ep)
-                i == eepidx && (ivfend = ep)
-            end
-            minndr = (eepidx - 1) ÷ 100
-            for i in 1:minndr
-                push!(out, _rd(r, minib - 1 + npkt * pktsiz + 100i))
-            end
-            push!(out, Float64(subtyp), Float64(wndsiz), Float64(eepidx))
-            minfsz = eepidx * (pktsiz + 1) + minndr + 3
+            _, ivfend, minfsz = _spks19_copy!(out, r, minib, npkt, pktsiz, 1, eepidx, subtyp, wndsiz)
         end
     end
     # Interval bounds, their directory, the mini-segment pointers and the control words.

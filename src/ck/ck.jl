@@ -52,8 +52,6 @@ end
 @inline _ck_av(::Type{T}, data::Vector{Float64}, a::Int, has::Bool) where {T} =
     has ? @inbounds(Vec3{T}(data[a], data[a + 1], data[a + 2])) : zero(Vec3{T})
 
-@noinline _ck_bad(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
-
 # --- type 1: discrete pointing ----------------------------------------------------------
 
 """
@@ -72,7 +70,7 @@ function _ck_eval01(
     psiz = seg.avflag ? 7 : 4
     nrec = _cint(data[seg.eaddr])          # `(integer)` of `ckr01_`
     (nrec >= 1 && beg + (psiz + 1) * nrec - 1 <= seg.eaddr) ||
-        _ck_bad(:baddaf, "CK type 1 segment with a wrong record count")
+        _throw_spice(:baddaf, "CK type 1 segment with a wrong record count")
     ndir = (nrec - 1) ÷ 100
     tbase = beg + nrec * psiz - 1               # times are data[tbase+1:tbase+nrec]
     group = ndir == 0 ? 1 : _lstled(data, tbase + nrec, ndir, p) + 1
@@ -102,7 +100,7 @@ function _ck_eval02(
     p = primal(sclk)
     beg = seg.baddr
     nrec = round(Int, ((seg.eaddr - beg + 1) * 100.0 + 1.0) / 1001.0, RoundNearestTiesAway)
-    nrec >= 1 || _ck_bad(:baddaf, "CK type 2 segment with a wrong record count")
+    nrec >= 1 || _throw_spice(:baddaf, "CK type 2 segment with a wrong record count")
     ndir = (nrec - 1) ÷ 100
     group = ndir == 0 ? 1 : _lstled(data, beg + nrec * 10 - 1, ndir, p) + 1
     skip = (group - 1) * 100
@@ -185,7 +183,7 @@ function _ck_eval03(
     numint = round(Int, data[en - 1])
     numrec = round(Int, data[en])
     (numrec >= 1 && numint >= 1 && beg + (psiz + 1) * numrec + numint + 1 <= en) ||
-        _ck_bad(:baddaf, "CK type 3 segment with wrong record or interval counts")
+        _throw_spice(:baddaf, "CK type 3 segment with wrong record or interval counts")
     nrdir = (numrec - 1) ÷ 100
     tbase = beg + psiz * numrec - 1             # times are data[tbase+1:tbase+numrec]
     group = nrdir == 0 ? 1 : _lstltd(data, tbase + numrec, nrdir, p) + 1
@@ -262,17 +260,51 @@ request), which is the type that the CK type 4 writer uses.
 @inline function _ck_meta04(data::Vector{Float64}, seg::CKSegment)
     en = seg.eaddr
     metasz = round(Int, data[en])
-    metasz >= 15 || _ck_bad(:baddaf, "generic segment with fewer than 15 meta data items")
+    metasz >= 15 || _throw_spice(:baddaf, "generic segment with fewer than 15 meta data items")
     b, hasoff = _sg_meta_base(metasz, en)       # item k is data[b+k]
-    b >= seg.baddr || _ck_bad(:baddaf, "generic segment shorter than its meta data")
+    b >= seg.baddr || _throw_spice(:baddaf, "generic segment shorter than its meta data")
     item(k) = round(Int, @inbounds data[b + k])
     begm1 = seg.baddr - 1
-    item(5) == 3 || _ck_bad(
+    item(5) == 3 || _throw_spice(
         :notsupported,
         "CK type 4 segment with a reference directory type other than 3"
     )
     return item(6) + begm1, item(7), item(8) + begm1, item(10), item(11) + begm1,
         item(12), item(15), (hasoff ? item(16) : 0)
+end
+
+"Address of the first value (the interval midpoint) of the fixed-size packet `k` of a generic segment, as `sgfpkt_`."
+@inline _ck04_fixed_packet(pktbas::Int, pktsz::Int, pktoff::Int, k::Int) =
+    pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff
+
+"""
+    _ck04_packet(data, meta, k) -> Int
+
+Address of the first value of packet `k` of a type 4 segment with the meta data `meta`
+of `_ck_meta04`, as `sgfpkt_`.
+"""
+@inline function _ck04_packet(data::Vector{Float64}, meta::NTuple{8, Int}, k::Int)
+    _, _, pdrbas, pdrtyp, pktbas, _, pktsz, pktoff = meta
+    return pdrtyp == 0 ? _ck04_fixed_packet(pktbas, pktsz, pktoff, k) :
+        pktbas + trunc(Int, data[pdrbas + k])
+end
+
+"""
+    _ck04_counts(packed, toint) -> NTuple{7,Int}
+
+The seven coefficient counts of a type 4 packet, packed in one double base 128, as
+`zzck4d2i_`; `toint` turns the quotient into an integer.
+"""
+@inline function _ck04_counts(packed::Float64, toint)
+    x = 128.0^6
+    ncf = ntuple(_ -> 0, Val(7))
+    for k in 7:-1:1         # invariant: counts k+1:7 are decoded, `packed` holds the rest
+        v = toint(packed / x)
+        ncf = Base.setindex(ncf, v, k)
+        packed -= v * x
+        x /= 128.0
+    end
+    return ncf
 end
 
 """
@@ -288,11 +320,10 @@ function _ck_eval04(
         needav::Bool
     ) where {T <: Real}
     p = primal(sclk)
-    refbas, nref, pdrbas, pdrtyp, pktbas, npkt, pktsz, pktoff = _ck_meta04(data, seg)
-    (npkt >= 1 && nref >= 1) || _ck_bad(:baddaf, "CK type 4 segment without records")
-    # Address of the first value (the interval midpoint) of packet k, as `sgfpkt_`.
-    packet(k) = pdrtyp == 0 ? pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff :
-        pktbas + trunc(Int, @inbounds data[pdrbas + k])
+    meta = _ck_meta04(data, seg)
+    refbas, nref, npkt = meta[1], meta[2], meta[6]
+    (npkt >= 1 && nref >= 1) || _throw_spice(:baddaf, "CK type 4 segment without records")
+    packet(k) = _ck04_packet(data, meta, k)
     idx = _lstled(data, refbas, nref, p)
     clkout = sclk
     a = 0
@@ -323,15 +354,7 @@ function _ck_eval04(
         end
     end
     @inbounds mid, rad, packed = data[a], data[a + 1], data[a + 2]
-    # The seven coefficient counts are packed in one double, base 128 (`zzck4d2i_`).
-    x = 128.0^6
-    ncf = ntuple(_ -> 0, Val(7))
-    for k in 7:-1:1         # invariant: counts k+1:7 are decoded, `packed` holds the rest
-        v = trunc(Int, packed / x)
-        ncf = Base.setindex(ncf, v, k)
-        packed -= v * x
-        x /= 128.0
-    end
+    ncf = _ck04_counts(packed, x -> trunc(Int, x))
     cb = a + 2                                  # coefficient j of a set is data[cb+j]
     q0 = _ck_chbval(data, cb, ncf[1], mid, rad, clkout); cb += ncf[1]
     q1 = _ck_chbval(data, cb, ncf[2], mid, rad, clkout); cb += ncf[2]
@@ -513,8 +536,8 @@ Throw `SpiceError` unless `subtyp` is in 0:3 and `wndsiz` is a valid window size
 A bad subtype is `kind`: `:notsupported` in `ckr05_`, `:invalidsubtype` in `ckr06_`.
 """
 @inline function _ck_check05(subtyp::Int, wndsiz::Int, kind::Symbol = :notsupported)
-    0 <= subtyp <= 3 || _ck_bad(kind, "unexpected subtype of a CK type 5 or 6 segment")
-    (2 <= wndsiz <= _CK5_MAXWND[subtyp + 1] && iseven(wndsiz)) || _ck_bad(
+    0 <= subtyp <= 3 || _throw_spice(kind, "unexpected subtype of a CK type 5 or 6 segment")
+    (2 <= wndsiz <= _CK5_MAXWND[subtyp + 1] && iseven(wndsiz)) || _throw_spice(
         :invalidvalue,
         "window size of a CK type 5 or 6 segment is odd or outside the allowed range"
     )
@@ -546,7 +569,7 @@ function _ck_eval05seg(
     nidir = (nints - 1) ÷ 100
     sbase = en - 5 - nidir - nints              # interval starts are data[sbase+1:sbase+nints]
     (n >= 1 && nints >= 1 && sbase >= eb + n) ||
-        _ck_bad(:baddaf, "CK type 5 segment with wrong packet or interval counts")
+        _throw_spice(:baddaf, "CK type 5 segment with wrong packet or interval counts")
     @inbounds begin
         if t < data[eb + 1]
             p + tol < data[eb + 1] && return _ck_none(T)
@@ -620,7 +643,7 @@ function _ck_eval06seg(
     ptrbas = en - 2 - (n + 1)                   # pointers are data[ptrbas+1:ptrbas+n+1]
     ivbas = ptrbas - ndir - (n + 1)             # bounds are data[ivbas+1:ivbas+n+1]
     (n >= 1 && ivbas >= beg) ||
-        _ck_bad(:baddaf, "CK type 6 segment with a wrong mini-segment count")
+        _throw_spice(:baddaf, "CK type 6 segment with a wrong mini-segment count")
     miniix = ivlsel ? min(_lstled(data, ivbas, n + 1, t) + 1, n + 1) - 1 :
         max(_lstltd(data, ivbas, n + 1, t), 1)
     1 <= miniix <= n || return _ck_none(T)
@@ -629,7 +652,7 @@ function _ck_eval06seg(
         @inbounds minib = round(Int, data[ptrbas + miniix]) + beg - 1
         @inbounds minie = round(Int, data[ptrbas + miniix + 1]) + beg - 2
         (beg <= minib && minib + 4 <= minie <= ivbas) ||
-            _ck_bad(:baddaf, "CK type 6 segment with a wrong mini-segment pointer")
+            _throw_spice(:baddaf, "CK type 6 segment with a wrong mini-segment pointer")
         @inbounds rate = data[minie - 3]
         @inbounds subtyp, wndsiz = round(Int, data[minie - 2]), round(Int, data[minie - 1])
         @inbounds npkt = round(Int, data[minie])
@@ -654,7 +677,7 @@ function _ck_eval06seg(
         packsz = _CK5_PACKSZ[subtyp + 1]
         eb = minib - 1 + npkt * packsz          # epochs are data[eb+1:eb+npkt]
         (npkt >= 1 && eb + npkt <= minie) ||
-            _ck_bad(:baddaf, "CK type 6 mini-segment with a wrong packet count")
+            _throw_spice(:baddaf, "CK type 6 mini-segment with a wrong packet count")
         i = _lstltd(data, eb, npkt, t)
         low = i == 0 ? 1 : i
         high = low + 1
@@ -668,6 +691,7 @@ function _ck_eval06seg(
         )
         return true, cmat, av, t
     end
+    return
 end
 
 # --- one segment, and the segment search -------------------------------------------------
@@ -695,7 +719,7 @@ interpolates, and constants where it takes a stored instance. Throws `SpiceError
     dtype == 2 && return _ck_eval02(data, seg, sclk, tol, needav)
     dtype == 1 && return _ck_eval01(data, seg, sclk, tol, needav)
     dtype == 4 && return _ck_eval04(data, seg, sclk, tol, needav)
-    return _ck_bad(:ckunknowndatatype, "CK data type $dtype is not supported")
+    return _throw_spice(:ckunknowndatatype, "CK data type $dtype is not supported")
 end
 
 """
@@ -848,7 +872,7 @@ the last bit.
 @inline function _sx_mxm(a::Mat3{Taylor{1, Float64}}, b::Mat3{Taylor{1, Float64}})
     return Mat3{Taylor{1, Float64}}(
         ntuple(Val(9)) do k
-            i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
+            i, j = _m_rowcol(k)
             v = a[i, 1].v * b[1, j].v + a[i, 2].v * b[2, j].v + a[i, 3].v * b[3, j].v
             d = a[i, 1].d[1] * b[1, j].v + a[i, 2].d[1] * b[2, j].v + a[i, 3].d[1] * b[3, j].v +
                 a[i, 1].v * b[1, j].d[1] + a[i, 2].v * b[2, j].d[1] + a[i, 3].v * b[3, j].d[1]

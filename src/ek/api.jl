@@ -111,6 +111,31 @@ function ekssum(h::DASHandle, segno::Integer)
 end
 
 """
+    _ek_check_type(h, who, name, dtype, types, segno, recno = nothing) -> Nothing
+
+Throw `SpiceError(:wrongdatatype)` unless the data type code `dtype` of the column
+`name` is in `types`. The message names the row and the segment when `recno` is given.
+"""
+@inline function _ek_check_type(
+        h::DASHandle, who::AbstractString, name::AbstractString, dtype::Integer,
+        types::Tuple, segno::Integer, recno::Union{Nothing, Integer} = nothing
+    )
+    dtype in types || _ek_wrongtype(h, who, name, dtype, types, segno, recno)
+    return nothing
+end
+
+@noinline function _ek_wrongtype(h, who, name, dtype, types, segno, recno)
+    kind = types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ? "integer" : "d.p. or TIME"
+    at = recno === nothing ? "" : "  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
+    throw(
+        SpiceError(
+            :wrongdatatype,
+            "Column $name is of type $dtype; $(uppercase(who)) only works with $kind columns.$at"
+        )
+    )
+end
+
+"""
     _ek_locate(h, who, segno, recno, column, types) -> (col, recptr)
 
 The common start of `ekrcec`, `ekrced` and `ekrcei`: the descriptor of `column` in
@@ -126,14 +151,7 @@ function _ek_locate(
     _ek_check_read(h, who)
     segdsc = _ek_sdsc(h, segno)
     col = _ek_find_column(h, segdsc, column)
-    col.dtype in types || throw(
-        SpiceError(
-            :wrongdatatype, "Column $(col.name) is of type " *
-                "$(col.dtype); $(uppercase(who)) only works with " *
-                "$(types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ? "integer" : "d.p. or TIME") " *
-                "columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
-        )
-    )
+    _ek_check_type(h, who, col.name, col.dtype, types, segno, recno)
     nrows = Int(segdsc[_EK_NRIDX])
     (1 <= recno <= nrows) || throw(
         SpiceError(

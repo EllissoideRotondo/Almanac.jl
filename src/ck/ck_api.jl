@@ -420,10 +420,9 @@ function _ck_intervals!(out::Vector{NTuple{2, Float64}}, data::Vector{Float64}, 
             first <= finish && push!(out, (first, finish))
         end
     elseif dtype == 4
-        _, _, pdrbas, pdrtyp, pktbas, npkt, pktsz, pktoff = _ck_meta04(data, seg)
-        for k in 1:npkt
-            a = pdrtyp == 0 ? pktbas + (k - 1) * (pktsz + pktoff) + 1 + pktoff :
-                pktbas + trunc(Int, data[pdrbas + k])
+        meta = _ck_meta04(data, seg)
+        for k in 1:meta[6]
+            a = _ck04_packet(data, meta, k)
             push!(out, (data[a] - data[a + 1], data[a] + data[a + 1]))
         end
     elseif dtype == 6

@@ -112,27 +112,7 @@ function _das_probe(path::AbstractString, who::AbstractString)
             "$who: $path is too short ($(length(raw)) bytes) to hold a DAS file record"
         )
     )
-    arch, _ = idw2at(String(raw[1:8]))
-    arch == "DAF" && throw(
-        SpiceError(
-            :filarchmismatch,
-            "$who: the file $path is a DAF, not a DAS file"
-        )
-    )
-    arch == "DAS" || throw(
-        SpiceError(
-            :unknownfilarc,
-            "$who: the file $path is neither a DAF nor a DAS file"
-        )
-    )
-    if raw[700:705] == _DAF_FTPSTR[1:6] && raw[700:727] != _DAF_FTPSTR
-        throw(
-            SpiceError(
-                :ftpxfererror, "$who: the FTP validation string of $path is " *
-                    "damaged; the file was most likely moved in text mode"
-            )
-        )
-    end
+    _daf_check_arch(raw, path, who, "DAS")
     bff = String(raw[85:92])
     little = if bff == "LTL-IEEE"
         true
@@ -506,14 +486,7 @@ function dasonw(
         ncomr::Integer
     )
     isempty(strip(path)) && throw(SpiceError(:blankfilename, "dasonw: the file name is blank"))
-    isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "dasonw: the file type is blank"))
-    ttype = String(strip(ftype, ' '))
-    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
-        SpiceError(
-            :illegalcharacter,
-            "dasonw: the file type contains nonprinting characters"
-        )
-    )
+    ttype = _daf_check_ftype("dasonw", ftype)
     ncomr < 0 && throw(
         SpiceError(
             :invalidcount,

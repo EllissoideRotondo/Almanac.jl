@@ -8,6 +8,23 @@ function pool_value(ks::KernelSet, name::AbstractString)
 end
 
 """
+    _pool_get(ks, name, who, V, what) -> V
+
+The stored values of the pool variable `name`, not a copy, after the checks of the C
+wrapper `who`: `SpiceError(:emptystring)`, `:kernelvarnotfound`, and `:typemismatch`
+unless the values are a `V` (`what` names that type in the message).
+"""
+function _pool_get(
+        ks::KernelSet, name::AbstractString, who::AbstractString, ::Type{V},
+        what::AbstractString
+    ) where {V}
+    _chkfstr(who, "variable name", name)          # CHKFSTR of the C wrapper
+    v = pool_value(ks, name)
+    v isa V || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not $what"))
+    return v::V
+end
+
+"""
     gdpool([ctx,] name) -> Vector{Float64}
 
 Return the numeric values of the kernel-pool variable `name`, as
@@ -38,10 +55,7 @@ julia> gdpool(ctx, "BODY399_RADII")
 See also [`gipool`](@ref), [`gcpool`](@ref), [`bodvrd`](@ref), [`pdpool`](@ref).
 """
 function gdpool(ks::KernelSet, name::AbstractString)
-    _chkfstr("gdpool", "variable name", name)     # CHKFSTR of gdpool_c
-    v = pool_value(ks, name)
-    v isa Vector{Float64} || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not numeric"))
-    return copy(v)
+    return copy(_pool_get(ks, name, "gdpool", Vector{Float64}, "numeric"))
 end
 
 """
@@ -60,8 +74,7 @@ Throws `SpiceError`:
 - `:intoutofrange` if a value is outside the 32-bit integers or NaN.
 """
 function gipool(ks::KernelSet, name::AbstractString)
-    _chkfstr("gipool", "variable name", name)     # CHKFSTR of gipool_c
-    v = gdpool(ks, name)
+    v = _pool_get(ks, name, "gipool", Vector{Float64}, "numeric")
     for (i, x) in enumerate(v)
         # `gipool` of CSPICE: DBLE(INTMIN()) <= x <= DBLE(INTMAX()), then NINT
         _gipool_value(x) === nothing && _gipool_range_error(name, i, x)
@@ -83,10 +96,7 @@ Throws `SpiceError(:emptystring)` if `name` is the empty string,
 `SpiceError(:typemismatch)` if it holds numeric values.
 """
 function gcpool(ks::KernelSet, name::AbstractString)
-    _chkfstr("gcpool", "variable name", name)     # CHKFSTR of gcpool_c
-    v = pool_value(ks, name)
-    v isa Vector{String} || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not character"))
-    return copy(v)
+    return copy(_pool_get(ks, name, "gcpool", Vector{String}, "character"))
 end
 
 """

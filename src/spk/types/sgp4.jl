@@ -10,8 +10,6 @@
 # state. The operations have the order of the CSPICE source, so a plain time gives the
 # CSPICE state to rounding level. Every discrete decision uses `primal`.
 
-@noinline _sgp4_error(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
-
 "The constant 2/3 as the source writes it."
 const _SGP4_X2O3 = 0.66666666666666663
 "Earth rotation rate in radians per minute (`RPTIM`)."
@@ -384,7 +382,7 @@ function _sgp4_gsto(epoch::Float64, opmode::Int)
         c1p2p = c1 + _TWOPI
         thgr70 + c1 * ids70 + c1p2p * tfrac + ts70 * ts70 * fk5r
     else
-        _sgp4_error(:unknownmode, "the SGP4 operation mode $opmode is not 1 or 2")
+        _throw_spice(:unknownmode, "the SGP4 operation mode $opmode is not 1 or 2")
     end
     gsto = f2c_dmod(gsto, _TWOPI)
     return gsto < 0.0 ? gsto + _TWOPI : gsto
@@ -441,8 +439,8 @@ function _sgp4_init(
     posq = po * po
     rp = ao * (1.0 - ecco)
     gsto = _sgp4_gsto(epoch, opmode)
-    rp < 1.0 && _sgp4_error(:suborbital, "TLE elements suborbital.")
-    (omeosq >= 0.0 || no >= 0.0) || _sgp4_error(
+    rp < 1.0 && _throw_spice(:suborbital, "TLE elements suborbital.")
+    (omeosq >= 0.0 || no >= 0.0) || _throw_spice(
         :invalidelements,
         "the eccentricity is above 1 and the mean motion is negative"
     )
@@ -817,19 +815,19 @@ Earth radius).
     if r.dodeep
         eccm, argpm, inclm, mm, nodem, xn = _sgp4_dspace(r, t, eccm, argpm, inclm, mm, nodem)
     end
-    primal(xn) <= 0.0 && _sgp4_error(
+    primal(xn) <= 0.0 && _throw_spice(
         :badmeanmotion,
         "Mean motion less-than zero. This error may indicate a bad TLE set."
     )
     am = _sgp4_pow(r.xke / xn, x2o3) * (tempa * tempa)
     xn = r.xke / _sgp4_pow(am, 1.5)
     eccm = eccm - tempe
-    (primal(eccm) >= 1.0 || primal(eccm) < -0.001) && _sgp4_error(
+    (primal(eccm) >= 1.0 || primal(eccm) < -0.001) && _throw_spice(
         :badmeccentricity,
         "Mean eccentricity value beyond allowed bounds [-0.001,1.0). This error may " *
             "indicate a bad TLE set."
     )
-    primal(am) < 0.95 && _sgp4_error(
+    primal(am) < 0.95 && _throw_spice(
         :badmsemimajor,
         "Mean semi-major axis value below allowed minimum of 0.95. This error may " *
             "indicate a bad TLE set or a decayed orbit."
@@ -860,7 +858,7 @@ Earth radius).
             nodep = nodep + Float64(pi)
             argpp = argpp - Float64(pi)
         end
-        (primal(eccp) < 0.0 || primal(eccp) > 1.0) && _sgp4_error(
+        (primal(eccp) < 0.0 || primal(eccp) > 1.0) && _throw_spice(
             :badpeccentricity,
             "Perturbed eccentricity value beyond allowed bounds [0,1]. This error may " *
                 "indicate a bad TLE set."
@@ -893,7 +891,7 @@ Earth radius).
     esine = axnl * sineo1 - aynl * coseo1
     el2 = axnl * axnl + aynl * aynl
     pl = am * (1.0 - el2)
-    primal(pl) < 0.0 && _sgp4_error(:badsemilatus, "Semi-latus rectum less-than zero.")
+    primal(pl) < 0.0 && _throw_spice(:badsemilatus, "Semi-latus rectum less-than zero.")
     rl = am * (1.0 - ecose)
     rdotl = sqrt(am) * esine / rl
     rvdotl = sqrt(pl) / rl
@@ -937,6 +935,6 @@ Earth radius).
         (mv * ux + rvdot * vx) * kps, (mv * uy + rvdot * vy) * kps,
         (mv * uz + rvdot * vz) * kps
     )
-    primal(mr) < 1.0 && _sgp4_error(:orbitdecay, "Satellite has decayed.")
+    primal(mr) < 1.0 && _throw_spice(:orbitdecay, "Satellite has decayed.")
     return pos, vel
 end

@@ -100,7 +100,11 @@ function ekopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0
                 "characters must be non-negative but was $ncomch."
         )
     )
-    h = dasonw(path, "EK", ifname, (Int(ncomch) + 1023) ÷ 1024)
+    return _ekw_init!(dasonw(path, "EK", ifname, (Int(ncomch) + 1023) ÷ 1024))
+end
+
+"Make the new DAS file of `h` an EK without segments: the page counts and the empty segment tree in the first integer page."
+function _ekw_init!(h::DASHandle)
     _ekw_pgin(h)
     _, base = _ekw_pgan(h, 3)
     tree = _ekw_trit(h)
@@ -122,12 +126,7 @@ no name, so [`furnsh`](@ref) cannot load it for queries, as in CSPICE.
 See also [`ekopn`](@ref), [`ekifld`](@ref).
 """
 function ekops()
-    h = dasops()
-    _ekw_pgin(h)
-    _, base = _ekw_pgan(h, 3)
-    tree = _ekw_trit(h)
-    h.ints[base + 1] = tree
-    return h
+    return _ekw_init!(dasops())
 end
 
 """
@@ -264,7 +263,7 @@ function _ekw_pdec(decl::AbstractString)
         if length(b) >= 11 && b[11] == UInt8('*')
             pardsc[_EK_LENIDX] = -1
         else
-            len = _dsk_parse_int(String(b[11:end]))
+            len = _try_nparsi(String(b[11:end]))
             len === nothing && _ekw_baddecl(
                 "String length specification $tok didn't parse " *
                     "as an integer.", decl
@@ -287,7 +286,7 @@ function _ekw_pdec(decl::AbstractString)
             )
             pardsc[_EK_SIZIDX] = -1
         else
-            size = _dsk_parse_int(tok)
+            size = _try_nparsi(tok)
             size === nothing && _ekw_baddecl(
                 "Column element size specification $tok " *
                     "didn't parse as an integer.", decl
@@ -633,7 +632,7 @@ function ekdelr(h::DASHandle, segno::Integer, recno::Integer)
     # record that is deleted, and so loses the other records of the page. Here such a
     # page stays in the segment.
     fastrec = _ekw_fast_record(h, recptr)
-    p, _ = _ekw_pgpg(3, recptr + 1)
+    p, _ = _ek_pgpg(3, recptr + 1)
     fastrec || _ekw_unlink(h, segdsc, 3, p)
     _ekw_trdl(h, segdsc[_EK_RTIDX], recno)
     segdsc[_EK_NRIDX] -= 1
@@ -651,9 +650,6 @@ function _ekw_cdsc(h::DASHandle, segdsc::AbstractVector{Int32}, column::Abstract
     b = Int(segdsc[_EK_IMDIDX]) + _EK_SDSCSZ + (Int(col.ord) - 1) * _EK_CDSCSZ
     return h.ints[(b + 1):(b + _EK_CDSCSZ)]
 end
-
-_ekw_typename(types::Tuple) = types[1] == _EK_CHR ? "character" : types[1] == _EK_INT ?
-    "integer" : "d.p. or time"
 
 """
     _ekw_locate(h, who, segno, recno, column, types) -> (segdsc, coldsc, recptr)
@@ -675,13 +671,7 @@ function _ekw_locate(
     _ek_check_read(h, who)
     segdsc = Vector{Int32}(_ek_sdsc(h, segno))
     coldsc = _ekw_cdsc(h, segdsc, column)
-    coldsc[_EK_TYPIDX] in types || throw(
-        SpiceError(
-            :wrongdatatype, "Column $column is of " *
-                "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
-                "$(_ekw_typename(types)) columns.  RECNO = $recno; SEGNO = $segno; EK = $(h.path)."
-        )
-    )
+    _ek_check_type(h, who, column, coldsc[_EK_TYPIDX], types, segno, recno)
     recptr = _ek_trdp(h.ints, segdsc[_EK_RTIDX], recno)
     write && _das_check_write(h, who)
     return segdsc, coldsc, recptr
@@ -1071,13 +1061,7 @@ function _ekw_fast_locate(
         )
     )
     coldsc = _ekw_cdsc(h, segdsc, column)
-    coldsc[_EK_TYPIDX] in types || throw(
-        SpiceError(
-            :wrongdatatype, "Column $column is of " *
-                "type $(coldsc[_EK_TYPIDX]); $(uppercase(who)) only works with " *
-                "$(_ekw_typename(types)) columns."
-        )
-    )
+    _ek_check_type(h, who, column, coldsc[_EK_TYPIDX], types, segno)
     return segdsc, coldsc
 end
 

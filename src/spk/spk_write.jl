@@ -135,21 +135,16 @@ function _seg_flat(who::AbstractString, what::AbstractString, x, rowlen::Int)
     throw(SpiceError(:badarg, "$who: `$what` must be a matrix or a vector of vectors"))
 end
 
-"The vector `x` as `Vector{Float64}`; throws `SpiceError(:badarg)` unless it has `n` elements (`n < 0`: any length)."
-function _seg_vec(who::AbstractString, what::AbstractString, x, n::Int)
-    x isa AbstractVector{<:Real} || throw(SpiceError(:badarg, "$who: `$what` must be a vector of numbers"))
-    (n < 0 || length(x) == n) || throw(
-        SpiceError(
-            :badarg,
-            "$who: `$what` must have $n elements but has $(length(x))"
-        )
-    )
-    return _vec_of(Float64, x)
-end
-
+"The collection `v` as `Vector{Float64}`; throws `SpiceError(:badarg)` unless it has `n` elements."
 function _seg_fixed(who::AbstractString, what::AbstractString, v, n::Int)
     length(v) == n || throw(SpiceError(:badarg, "$who: `$what` must have $n elements but has $(length(v))"))
     return _vec_of(Float64, v)
+end
+
+"`_seg_fixed` for a vector of numbers (`n < 0`: any length); throws `SpiceError(:badarg)` for anything else."
+function _seg_vec(who::AbstractString, what::AbstractString, x, n::Int)
+    x isa AbstractVector{<:Real} || throw(SpiceError(:badarg, "$who: `$what` must be a vector of numbers"))
+    return n < 0 ? _vec_of(Float64, x) : _seg_fixed(who, what, x, n)
 end
 
 """

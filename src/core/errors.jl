@@ -152,6 +152,9 @@ struct SpiceKindError <: SpiceError
 end
 SpiceError(kind::Symbol, msg::AbstractString) = SpiceKindError(kind, msg)
 
+"Throw `SpiceError(kind, msg)` from a call that is not inlined, so that a throw site in a numeric kernel stays one call."
+@noinline _throw_spice(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
+
 """
     SpkInsufficientDataError <: SpiceError
 

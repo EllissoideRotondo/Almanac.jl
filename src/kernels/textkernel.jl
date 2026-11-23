@@ -94,7 +94,7 @@ function _nparsd(s::Union{AbstractString, AbstractVector{UInt8}})::Float64
     l == 0 && throw(SpiceError(:badnumber, "a blank string is not a number"))
     @inbounds for i in 1:l
         c = bytes[i]
-        if UInt8('0') <= c <= UInt8('9')
+        if _isdigit(c)
             v = Float64(c - UInt8('0'))
             bpiok = epiok = signok = false
             sigchr = true
@@ -226,6 +226,16 @@ function _nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Int
     t = trunc(_nparsd(s))
     -2147483648.0 <= t <= 2147483647.0 || throw(SpiceError(:badnumber, _NPARSI_RANGE))
     return Int(t)
+end
+
+"The integer of `s` (`_nparsi`), or `nothing` where `nparsi` signals an error."
+function _try_nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Union{Int, Nothing}
+    return try
+        _nparsi(s)
+    catch err
+        err isa SpiceError || rethrow()
+        nothing
+    end
 end
 
 """

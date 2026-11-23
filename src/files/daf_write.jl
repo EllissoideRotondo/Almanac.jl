@@ -179,14 +179,12 @@ function dafonw(
 end
 
 """
-    _daf_new_checks(who, ftype, nd, ni, resv) -> String
+    _daf_check_ftype(who, ftype) -> String
 
-Make the checks of `dafonw` on its inputs other than the path, in the order of SPICELIB,
-and return the file type without its blanks.
+The checks of `dafonw` and `dasonw` on the file type of a new file: return it without
+its blanks, or throw `SpiceError(:blankfiletype)` or `:illegalcharacter`.
 """
-function _daf_new_checks(
-        who::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer, resv::Integer
-    )
+function _daf_check_ftype(who::AbstractString, ftype::AbstractString)
     isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "$who: the file type is blank"))
     ttype = String(strip(ftype, ' '))
     all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
@@ -195,6 +193,19 @@ function _daf_new_checks(
             "$who: the file type contains nonprinting characters"
         )
     )
+    return ttype
+end
+
+"""
+    _daf_new_checks(who, ftype, nd, ni, resv) -> String
+
+Make the checks of `dafonw` on its inputs other than the path, in the order of SPICELIB,
+and return the file type without its blanks.
+"""
+function _daf_new_checks(
+        who::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer, resv::Integer
+    )
+    ttype = _daf_check_ftype(who, ftype)
     (0 <= nd <= 124) || throw(SpiceError(:dafinvalidparams, "$who: ND was $nd, should be in range [0,124]"))
     (2 <= ni <= 250) || throw(SpiceError(:dafinvalidparams, "$who: NI was $ni, should be in range [2,250]"))
     _daf_sumsize(nd, ni) <= 125 || throw(

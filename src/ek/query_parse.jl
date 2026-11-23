@@ -219,8 +219,6 @@ function _ek_qlexmsg(template::String, qb, lxb::Int, lxe::Int, locfirst::Bool)
     return _repmc(_repmc(template, _ek_qlex(qb, lxb, lxe)), lxb)
 end
 
-@noinline _ek_qsignal(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
-
 # ---------------------------------------------------------------------------------
 # The encoded query: ZZEKQINI, ZZEKINQC, ZZEKINQN
 # ---------------------------------------------------------------------------------
@@ -275,7 +273,7 @@ end
 @inline _ek_qput!(q::_EKQEnc, k::Int, v::Integer) = (@inbounds q.i[k - 5] = Int32(v); nothing)
 
 @inline function _ek_qappnd!(q::_EKQEnc, x::Integer)
-    length(q.i) < _EKQ_ISIZE || _ek_qsignal(
+    length(q.i) < _EKQ_ISIZE || _throw_spice(
         :celltoosmall,
         "The cell cannot accommodate the addition of the element $x"
     )
@@ -303,10 +301,10 @@ the buffer is full.
 """
 function _ek_qinqc!(q::_EKQEnc, value::AbstractVector{UInt8}, lxb::Int, lxe::Int)
     n = length(value)
-    n < 1 && _ek_qsignal(:invalidcount, "Length of string value was $n; must be > 0.")
+    n < 1 && _throw_spice(:invalidcount, "Length of string value was $n; must be > 0.")
     free = Int(q.i[16])
     room = Int(q.i[15]) - free + 1
-    n > room && _ek_qsignal(
+    n > room && _throw_spice(
         :buffertoosmall, "Out of room in character portion of " *
             "encoded query; only $room elements were available; $n are needed."
     )
@@ -328,7 +326,7 @@ function _ek_qinqn!(
     )
     free = Int(q.i[14])
     size = Int(q.i[13])
-    size - free + 1 <= 0 && _ek_qsignal(
+    size - free + 1 <= 0 && _throw_spice(
         :buffertoosmall, "Out of room in numeric " *
             "portion of encoded query; only $size elements were available."
     )
@@ -366,11 +364,10 @@ struct _EKQTokens
     chends::Vector{Int}
 end
 
-@inline _ek_qisdigit(c::UInt8) = UInt8('0') <= c <= UInt8('9')
 @inline _ek_qisalpha(c::UInt8) =
     (UInt8('A') <= c <= UInt8('Z')) || (UInt8('a') <= c <= UInt8('z'))
 @inline _ek_qisidtail(c::UInt8) =
-    _ek_qisalpha(c) || _ek_qisdigit(c) || c == UInt8('$') || c == UInt8('_')
+    _ek_qisalpha(c) || _isdigit(c) || c == UInt8('$') || c == UInt8('_')
 
 "`(last, nchar)` of the unsigned integer that starts at `s[first]`, as `lx4uns_`; `nchar == 0` and `last == first - 1` if there is none."
 function _ek_qlx4uns(s::Vector{UInt8}, first::Int)
@@ -378,7 +375,7 @@ function _ek_qlx4uns(s::Vector{UInt8}, first::Int)
     last = first - 1
     (first < 1 || first > l) && return last, 0
     i = first
-    while i <= l && _ek_qisdigit(@inbounds s[i])    # invariant: s[first:last] are digits
+    while i <= l && _isdigit(@inbounds s[i])    # invariant: s[first:last] are digits
         last += 1
         i += 1
     end
@@ -544,7 +541,7 @@ function _ek_qnparsd(s::AbstractVector{UInt8})
     zeroi = false
     ptr = length(s) + 1
     for (i, c) in enumerate(s)
-        if _ek_qisdigit(c)
+        if _isdigit(c)
             v = Float64(c - UInt8('0'))
             if mode == 1
                 intval < 1.0e15 ? (intval = intval * 10.0 + v) : (ecount += 1.0)
@@ -627,7 +624,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         elseif chr == UInt8('.')
             _, nchars = _ek_qlx4num(tq, cptr)
             kind = nchars > 0 ? 6 : 8
-        elseif _ek_qisdigit(chr) || chr == UInt8('+') || chr == UInt8('-')
+        elseif _isdigit(chr) || chr == UInt8('+') || chr == UInt8('-')
             kind = 6
         elseif _ek_qisalpha(chr)
             kind = 7
@@ -671,7 +668,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
             push!(numexact, _ek_qexact(lexeme, x))
             # BEINT: an optional sign and then digits only.
             b = (lexeme[1] == UInt8('+') || lexeme[1] == UInt8('-')) ? 2 : 1
-            isint = b <= length(lexeme) && all(_ek_qisdigit, view(lexeme, b:length(lexeme)))
+            isint = b <= length(lexeme) && all(_isdigit, view(lexeme, b:length(lexeme)))
             token!(isint ? _EKQ_TKINT : _EKQ_TKDP, length(numvls), cptr, last)
         elseif kind == 7                                # identifier or keyword
             last = cptr
@@ -769,11 +766,11 @@ function _ek_qlnkini(size::Int)
     return _EKQPool(fwd, zeros(Int32, size), size, 1)
 end
 
-@noinline _ek_qlnkbad(node, p::_EKQPool) = _ek_qsignal(
+@noinline _ek_qlnkbad(node, p::_EKQPool) = _throw_spice(
     :invalidnode,
     "NODE was $node; valid range is 1 to $(length(p.fwd))."
 )
-@noinline _ek_qlnkunalloc(node) = _ek_qsignal(
+@noinline _ek_qlnkunalloc(node) = _throw_spice(
     :unallocatednode,
     "Node $node of the linked list pool is not allocated."
 )
@@ -785,7 +782,7 @@ end
 end
 
 function _ek_qlnkan!(p::_EKQPool)
-    p.nfree == 0 && _ek_qsignal(
+    p.nfree == 0 && _throw_spice(
         :nofreenodes,
         "There are no free nodes left for allocating in the supplied linked list pool."
     )
@@ -866,7 +863,7 @@ function _ek_qlnkfsl!(head::Int, tail::Int, p::_EKQPool)
         count += 1
         node = Int(p.fwd[node])
     end
-    node != tail && _ek_qsignal(
+    node != tail && _throw_spice(
         :invalidsublist,
         "Node $tail cannot be found by forward traversal, starting at node $head."
     )
@@ -1416,7 +1413,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
         nconj += 1
         djnode = _ek_qlnknxt(djnode, djpool)
     end
-    nconj > _EKQ_MAXCNJ && _ek_qsignal(
+    nconj > _EKQ_MAXCNJ && _throw_spice(
         :toomanyconjunctions,
         "The normalized WHERE clause has $nconj conjunctions; the maximum is $_EKQ_MAXCNJ."
     )
@@ -1779,7 +1776,7 @@ function _ek_qcchk!(
     )
     tb, te = _ek_qget(q, base + 9), _ek_qget(q, base + 10)
     cb, ce = _ek_qget(q, base + 15), _ek_qget(q, base + 16)
-    (cb <= 0 || ce <= 0) && _ek_qsignal(
+    (cb <= 0 || ce <= 0) && _throw_spice(
         :bug, "Invalid string bounds $cb:$ce for " *
             "column.  Column name descriptor base is $base."
     )
@@ -1830,7 +1827,7 @@ the name of another table of the FROM clause; each table is loaded; then the col
 of the constraints, of the SELECT clause and of the ORDER BY clause are resolved.
 """
 function _ek_qnres!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTable})
-    q.i[4] == -1 && _ek_qsignal(:querynotparsed, "Encoded query has not been parsed.")
+    q.i[4] == -1 && _throw_spice(:querynotparsed, "Encoded query has not been parsed.")
     ntab, ncns, ncnj, nord, nsel = (Int(q.i[k]) for k in (8, 9, 10, 11, 12))
     table = String[]
     alias = String[]
@@ -1974,7 +1971,7 @@ function _ek_qtres!(
         ks::KernelSet, td::TimeDefaults
     )
     q.i[5] == -1 &&
-        _ek_qsignal(:namesnotresolved, "Names are not resolved in encoded query.")
+        _throw_spice(:namesnotresolved, "Names are not resolved in encoded query.")
     ntab, ncns = Int(q.i[8]), Int(q.i[9])
     for i in 1:ncns
         base = ntab * 12 + 19 + (i - 1) * 26
@@ -2025,9 +2022,9 @@ function _ek_qsemc!(
         tabcat::Vector{Int}
     )
     q.i[5] == -1 &&
-        _ek_qsignal(:unresolvednames, "Encoded query has not had names resolved.")
+        _throw_spice(:unresolvednames, "Encoded query has not had names resolved.")
     q.i[6] == -1 &&
-        _ek_qsignal(:unresolvedtimes, "Encoded query has not had time values resolved.")
+        _throw_spice(:unresolvedtimes, "Encoded query has not had time values resolved.")
     ntab, ncns, ncnj, nord = (Int(q.i[k]) for k in (8, 9, 10, 11))
     attr(tabidx, colidx) = tables[tabcat[tabidx]].attrs[colidx]
     lxe1 = 0            # LXE(2) of ZZEKSEMC: 0 while CSPICE has not set it
