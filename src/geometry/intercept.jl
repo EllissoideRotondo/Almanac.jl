@@ -140,7 +140,7 @@ function _geo_sincpt(
         target::NameOrID, et::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
         dref::NameOrID, dvec::AbstractVector
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     trgcde = _body_id(ks, target, "target")
     obscde = _body_id(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("surface intercept", obsrvr)

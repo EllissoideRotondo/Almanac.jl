@@ -96,7 +96,7 @@ function _gf_occultation(
                 "with point targets."
         )
     )
-    corr = _geo_lt_only(_geo_abcorr(abcorr))
+    corr = _geo_lt_only(Aberration(abcorr))
     # Radii, frames and bounding spheres, the front target first. CSPICE translates the
     # surface names of the back target with the ID of the front target; the surfaces
     # here are those of the back target.

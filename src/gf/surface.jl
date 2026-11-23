@@ -344,7 +344,7 @@ function _gf_surface_coordinate(
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer")
     _gf_distinct(targ, obs, target, obsrvr)
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     sys, idx = _gf_sysidx(crdsys, coord)
     ref = _frame_code(ks, frame isa AbstractString ? strip(frame, ' ') : frame)
     center, _, found = _geo_frinfo(ks, ref)

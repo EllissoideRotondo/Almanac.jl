@@ -105,7 +105,7 @@ function _geo_subpnt(
         ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     trgcde = _body_id(ks, target, "target")
     obscde = _body_id(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("sub-observer point", obsrvr)
@@ -157,7 +157,7 @@ function _geo_subslr(
         ks::KernelSet, tols::DSKTolerances, method::AbstractString,
         target::NameOrID, et0::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     corr.transmit && throw(
         SpiceError(
             :notsupported,

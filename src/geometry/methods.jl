@@ -1,5 +1,5 @@
 # Geometry layer, shared part: the computation method strings (`zzprsmet`), the
-# aberration correction with the error kinds of `zzvalcor`, the lookup of bodies, frames
+# aberration correction without stellar aberration, the lookup of bodies, frames
 # and radii with the error kinds of the geometry calls of CSPICE, and the target shape
 # (`zzsinutl`: `zzsuelin`, `zzsudski`, `zzraysfx`, `zzraynp`, `zzmaxrad`).
 #
@@ -116,37 +116,6 @@ end
 end
 
 # --- aberration corrections, bodies, frames, radii --------------------------------------
-
-@noinline _geo_bad_abcorr(s) = throw(
-    SpiceError(
-        :invalidoption,
-        "the aberration correction \"$s\" is not recognized or not supported; the valid " *
-            "values are NONE, LT, LT+S, CN, CN+S, XLT, XLT+S, XCN, XCN+S"
-    )
-)
-
-@noinline function _geo_abcorr_slow(s::AbstractString)
-    try
-        return _parse_abcorr(s)
-    catch e
-        e isa SpiceError || rethrow()
-        _geo_bad_abcorr(s)
-    end
-end
-
-"""
-    _geo_abcorr(abcorr) -> Aberration
-
-`zzvalcor`: the correction as a plain value. A string that is not one of the nine valid
-values (case and blanks ignored) throws `SpiceError(:invalidoption)`, the short message
-of CSPICE. No allocation for the common spellings.
-"""
-@inline function _geo_abcorr(s::AbstractString)
-    f = _abcorr_fast(s)
-    f == 0xff || return _aberration(f)
-    return _geo_abcorr_slow(s)
-end
-@inline _geo_abcorr(c::Aberration) = c
 
 "The correction `c` without stellar aberration (`loccor` of `zzsfxcor`, the correction of `zzgfocin`)."
 @inline _geo_lt_only(c::Aberration) = _aberration(c.flags & ~_AB_S)

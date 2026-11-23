@@ -361,7 +361,7 @@ function _geo_limbpt(
         ncuts::Integer, schstp0::Real, soltol0::Real, maxn::Integer
     )
     _plain_epoch(et0, "limbpt")
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     s = _geo_sign(corr)
     trgcde = _body_id(ks, target, "target")
     obscde = _body_id(ks, obsrvr, "observer")
@@ -545,7 +545,7 @@ function _geo_termpt(
         ncuts::Integer, schstp0::Real, soltol0::Real, maxn::Integer
     )
     _plain_epoch(et0, "termpt")
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     corr.transmit && throw(
         SpiceError(
             :invalidoption,
@@ -986,7 +986,7 @@ function tangpt(
         dref::NameOrID, dvec0::AbstractVector
     )
     _plain_epoch(et0, "tangpt")
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     s = _geo_sign(corr)
     (method == "ELLIPSOID" || _eqstr(method, "ELLIPSOID")) || throw(
         SpiceError(

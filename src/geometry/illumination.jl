@@ -37,7 +37,7 @@ The checks that `illumg` and `illumf` share, in the order of CSPICE, the checked
         et::Real, fixref::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
         spoint::AbstractVector
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     trgcde = _body_id(ks, target, "target")
     m = _geo_method(ks, trgcde, method)
     m.subtyp == 0x00 || _geo_sub_in_method(method)
@@ -273,7 +273,7 @@ function phaseq(
     targ = _body_id(ks, target, "target")
     illum = _body_id(ks, illmn, "illumination source")
     obs = _body_id(ks, obsrvr, "observer")
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     corr.transmit && throw(
         SpiceError(
             :invalidoption,
@@ -424,7 +424,7 @@ function trgsep(
             "the targets $targ1 and $targ2 and the observer $obsrvr must be three different bodies"
         )
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     r1 = _geo_sepradius(ks, b1, shape1)
     r2 = _geo_sepradius(ks, b2, shape2)
     e = check_epoch(et)

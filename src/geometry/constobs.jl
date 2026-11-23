@@ -270,7 +270,7 @@ in the caller.
         ks::KernelSet, abcorr::AbcorrArg, ctr::NameOrID, ctrwhat::String,
         body::NameOrID, bodywhat::String, outref::NameOrID, refloc::AbstractString
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     ctrcde = _body_id(ks, ctr, ctrwhat)
     bodcde = _body_id(ks, body, bodywhat)
     orfcde = _frame_code(ks, outref)

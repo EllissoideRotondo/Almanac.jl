@@ -468,7 +468,7 @@ function _geo_occ_roles(
             :invalidshapecombo, "a target with DSK data needs a point as the other target"
         )
     )
-    corr = _geo_lt_only(_geo_abcorr(abcorr))
+    corr = _geo_lt_only(Aberration(abcorr))
     return _geo_occ_eval(ks, tols, front, fframe, back, bframe, bsrf, obs, corr, et)
 end
 

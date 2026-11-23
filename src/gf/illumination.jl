@@ -58,7 +58,7 @@ function GFIllumination(
                 "TARGET = $target; ILLUM = $illmn."
         )
     )
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     corr.transmit && throw(
         SpiceError(
             :notsupported, "Aberration correction was " *

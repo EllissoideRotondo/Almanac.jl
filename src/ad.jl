@@ -50,7 +50,7 @@ the derivative of the root by a Newton step (see the header of this file).
 const _AD_CONSTANT = (
     body_code, frame_id, kernelset, timedefaults, dsktolerances,
     default_context, Aberration, bodvcd, bodfnd,
-    _spk_abcorr, _geo_method, _geo_abcorr, _body_id, _frame_code, _geo_frinfo,
+    _spk_abcorr, _geo_method, _body_id, _frame_code, _geo_frinfo,
     _geo_fixfid, _geo_radii, _geo_shape, _lsk, _unitim_code,
     _m_nearpt_plain, _prop2b_root,
 )

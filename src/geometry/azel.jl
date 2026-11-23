@@ -189,7 +189,7 @@ function azlcpo(
         obsspt, _ = _m_nearpt(pos, a, b, c)
         twovec(_m_surfnm(a, b, c, obsspt), 3, SVector(0.0, 0.0, 1.0), 1)
     end
-    corr = _geo_abcorr(abcorr)
+    corr = Aberration(abcorr)
     trgcde = _body_id(ks, target, "target")
     f = _GeoFixed(pos, zero(Vec3{Float64}), 0.0, obscde, fxfcde)
     state, lt = _geo_cv(ks, trgcde, check_epoch(et), fxfcde, _GEO_AT_OBSERVER, corr, f)

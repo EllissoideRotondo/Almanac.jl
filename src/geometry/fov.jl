@@ -642,7 +642,7 @@ function _geo_fov_setup(
     if uray
         ustl, xmit = _geo_fov_raycorr(abcorr)
     else
-        corr = _geo_abcorr(abcorr)
+        corr = Aberration(abcorr)
     end
     trad = etrg ? _geo_radii(ks, targ) : (0.0, 0.0, 0.0)
     rdir = zero(Vec3{Float64})

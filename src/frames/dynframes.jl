@@ -172,30 +172,21 @@ function _dyn_degrees(units::AbstractString)
     throw(SpiceError(:unitsnotrec, "the angle unit '$units' of a dynamic frame is not recognized"))
 end
 
-"`Aberration(s)`; a value that is not valid throws `SpiceError(:spkinvalidoption)`, as `zzvalcor_` in `zzdynrot_` (`_ck_frame_jet` gives the kind of `zzdynfrm_`)."
-function _dyn_parse_abcorr(s::AbstractString)
-    try
-        return Aberration(s)
-    catch e
-        e isa SpiceError || rethrow()
-        throw(SpiceError(:spkinvalidoption, e.msg))
-    end
-end
-
 """
     _dyn_abcorr(s, constant::Bool) -> Aberration
 
 Return the correction of a vector definition. For an observer-target vector the
-nine values of `spkezr`. For a constant vector also `S` and `XS`, and a value with
-both light time and stellar aberration throws `SpiceError(:invalidoption)`, as
-`zzdynfrm_` does.
+nine values of `spkezr`; another value throws `SpiceError(:spkinvalidoption)`, as
+`zzvalcor_` in `zzdynrot_` (`_ck_frame_jet` gives the kind of `zzdynfrm_`). For a
+constant vector also `S` and `XS`, and a value with both light time and stellar
+aberration throws `SpiceError(:invalidoption)`, as `zzdynfrm_` does.
 """
 function _dyn_abcorr(s::AbstractString, constant::Bool)
-    constant || return _dyn_parse_abcorr(s)
+    constant || return _spk_abcorr(s)
     u = _squeeze(s)
     u == "S" && return _aberration(_AB_S)
     u == "XS" && return _aberration(_AB_S | _AB_X)
-    c = _dyn_parse_abcorr(s)
+    c = _spk_abcorr(s)
     c.stellar && throw(
         SpiceError(
             :invalidoption, "aberration correction '$s' of a " *
