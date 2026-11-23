@@ -2006,6 +2006,21 @@ function _dsk_body_segments(ks::KernelSet, bodyid::Int32)
 end
 
 """
+    _dsk_segments_ok(ks, segs) -> Bool
+
+Whether the checks that `_dsk_body_segments` makes on the loaded segments `segs` of a
+body pass: `false` if one of them would throw. Does not throw.
+"""
+function _dsk_segments_ok(ks::KernelSet, segs::Vector{DSKSegment})
+    isempty(segs) && return false
+    for seg in segs                      # invariant: the segments before `seg` pass
+        isnan(seg.boxrad) && return false  # `_dsk_segment` set NaN where `zzsegbox` throws
+        _frame_def_or_nothing(ks, seg.dskdsc.frmcde) === nothing && return false
+    end
+    return true
+end
+
+"""
     _dsk_sph(ks, segs, bodyid, srflst) -> (minrad, maxrad)
 
 `zzdsksph`: radii of an inner and an outer bounding sphere, centered on the body, of
