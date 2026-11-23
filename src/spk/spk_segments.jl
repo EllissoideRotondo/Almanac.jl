@@ -375,10 +375,6 @@ function _rd(r::_SegReader, a::Int)
     return 1 <= i <= length(r.data) ? r.data[i] : dafgda(r.h, a, a)[1]
 end
 
-# `max` and `min` of f2c (`a >= b ? a : b`), which differ from Julia for -0.0 and NaN.
-_fmax(a::Float64, b::Float64) = a >= b ? a : b
-_fmin(a::Float64, b::Float64) = a <= b ? a : b
-
 "Types 1 and 21 (`spks01`, `spks21`): the difference lines whose final epochs cover `t0:t1`."
 function _spks01(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64, t21::Bool)
     out = Float64[]
@@ -457,7 +453,7 @@ function _spks08(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     degree = _nint(dg)
     nrec = _nint(nr)
     (t1 < t0 || t1 < start || t0 > start + (nrec - 1) * step) && return Float64[]
-    ratio = _fmax(0.0, (t0 - start) / step)
+    ratio = _f2c_max(0.0, (t0 - start) / step)
     r1 = min(_cint(ratio), nrec - 1) + 1
     r1 = max(1, r1 - degree ÷ 2)
     r1 = min(r1, nrec - degree)
@@ -668,8 +664,8 @@ function _spks19(r::_SegReader, baddr::Int, eaddr::Int, t0::Float64, t1::Float64
     for i in bepidx:eepidx
         ep = _rd(r, minib - 1 + npkt * pktsiz + i)
         push!(out, ep)
-        i == bepidx && (iv1beg = _fmax(ivlbeg, ep))
-        i == eepidx && (iv1end = _fmin(ivlend, ep))
+        i == bepidx && (iv1beg = _f2c_max(ivlbeg, ep))
+        i == eepidx && (iv1end = _f2c_min(ivlend, ep))
     end
     minnpk = eepidx - bepidx + 1
     minndr = (minnpk - 1) ÷ 100

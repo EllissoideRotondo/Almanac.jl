@@ -169,7 +169,7 @@ end
     _abcorr_fast(s) -> UInt8
 
 The flags of the nine common spellings of a correction, compared as they are, or `0xff`
-(no valid set of flags) for any other string. No allocation.
+(no valid set of flags) for any other string.
 """
 @inline function _abcorr_fast(s::AbstractString)
     s == "NONE" && return 0x00

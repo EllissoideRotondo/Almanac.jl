@@ -467,8 +467,7 @@ Open a new SPK file that lives in memory, for writing: [`spkopn`](@ref) without 
 path. No file is made. The writers (such as [`spkw02`](@ref)) take the handle as they take
 one of a file and write the same bytes. [`furnsh`](@ref) loads its segments as a kernel,
 and [`save_kernel`](@ref) writes them to a file; [`spkcls`](@ref) discards them, so load or
-save before the close. This call
-has no CSPICE counterpart; see [`dafops`](@ref).
+save before the close. This call has no CSPICE counterpart; see [`dafops`](@ref).
 
 Throws the errors of [`dafops`](@ref).
 """
@@ -528,13 +527,14 @@ end
     spkcls(handle) -> Nothing
 
 Close the SPK file of `handle`, as
-[`spkcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcls_c.html). The call does nothing if the handle is
-closed already. The close writes no data: every write call puts its bytes on disk before it
-returns, except [`spk14b`](@ref) and [`spk14a`](@ref), so a type 14 segment that
-[`spk14e`](@ref) did not end is not in the file. Load the file with [`furnsh`](@ref) after
-the close. For a handle in memory
-(from [`spkops`](@ref)), the close discards the bytes: load it with [`furnsh`](@ref) or
-save it with [`save_kernel`](@ref) before the close.
+[`spkcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcls_c.html).
+The call does nothing if the handle is closed already.
+
+The close writes no data: every write call puts its bytes on disk before it returns,
+except [`spk14b`](@ref) and [`spk14a`](@ref), so a type 14 segment that
+[`spk14e`](@ref) did not end is not in the file. Load the file with [`furnsh`](@ref)
+after the close. For a handle in memory (from [`spkops`](@ref)), the close discards the
+bytes: load it with [`furnsh`](@ref) or save it with [`save_kernel`](@ref) before.
 
 Throws `SpiceError(:nosegmentsfound)` if the file is open for writing and holds no
 segment. The handle then stays open; close it with [`dafcls`](@ref).
@@ -1402,8 +1402,8 @@ spkw17(
         -> Nothing
 
 Write an SPK segment of type 1 (modified difference arrays), as
-[`spkw01`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw01.html) of SPICELIB.
-CSPICE has no C wrapper for it.
+[`spkw01`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw01.html)
+of SPICELIB. CSPICE has no C wrapper for it.
 
 `dlines` holds `n` difference lines, each the 71 doubles of one modified difference
 array: a vector of vectors, a matrix with one line in each column, or a flat vector of
@@ -1460,7 +1460,8 @@ spkw01(
         -> Nothing
 
 Write an SPK segment of type 21 (extended modified difference arrays), as
-[`spkw21`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw21.html) of SPICELIB. CSPICE has no C wrapper for it.
+[`spkw21`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw21.html)
+of SPICELIB. CSPICE has no C wrapper for it.
 
 `dlines` holds `n` difference lines of equal size `dlsize`: a matrix with one line in each
 column, or a vector of vectors. `n` and `dlsize` follow from its shape. `epochs` holds
@@ -1722,7 +1723,8 @@ end
            packts, epochs, ivlbds, sellst) -> Nothing
 
 Write an SPK segment of type 19 (mini-segments of Hermite or Lagrange interpolation), as
-[`spkw19`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw19.html) of SPICELIB. CSPICE has no C wrapper for it.
+[`spkw19`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/spkw19.html)
+of SPICELIB. CSPICE has no C wrapper for it.
 
 A mini-segment is a set of packets with its own subtype and degree, valid on its own
 interval. The number of mini-segments is `length(npkts)`.
@@ -1792,10 +1794,8 @@ spkw19(
     SPK14Writer
 
 An SPK segment of type 14 that is open for the addition of records. [`spk14b`](@ref)
-returns it, and it is the first argument of [`spk14a`](@ref) and [`spk14e`](@ref).
-
-CSPICE keeps this state in a table of the files that have a segment in work; here the
-caller owns it. [`spk14e`](@ref) writes the segment.
+returns it, and it is the first argument of [`spk14a`](@ref) and [`spk14e`](@ref), which
+writes the segment.
 """
 mutable struct SPK14Writer
     const handle::DAFHandle
@@ -1824,17 +1824,18 @@ _seg_check_open(who::AbstractString, w) =
 
 Begin an SPK segment of type 14 (Chebyshev polynomials for the position and the velocity,
 on intervals of unequal length), as
-[`spk14b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spk14b_c.html), and return its writer.
+[`spk14b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spk14b_c.html),
+and return its writer.
 
 `chbdeg` is the degree of the polynomials. The other arguments are those of
-[`spkw02`](@ref); note that `segid` comes before `body`. Add records with
+[`spkw02`](@ref), but `segid` comes before `body`, as in CSPICE. Add records with
 [`spk14a`](@ref) and end the segment with [`spk14e`](@ref).
 
 Throws `SpiceError`:
 - `:dafnosuchhandle` or `:dafinvalidaccess` if the file is not open for writing;
 - `:emptystring` if `frame` or `segid` is empty;
 - `:invalidargument` if `chbdeg < 0`;
-- `:segidtoolong` or `:nonprintingchars` (the kind of the generic segment writer `sgbwfs`) if `segid` is not valid;
+- `:segidtoolong` or `:nonprintingchars` (the kind of `sgbwfs`) if `segid` is not valid;
 - the error kinds of [`spkpds`](@ref).
 
 # Examples
@@ -1898,8 +1899,8 @@ spk14b(
     spk14a(writer, coeffs, epochs) -> Nothing
 
 Add `ncsets` records to the type 14 segment `writer`, as
-[`spk14a_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spk14a_c.html). Without `ncsets`,
-the number of records is `length(epochs)`.
+[`spk14a_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spk14a_c.html).
+Without `ncsets`, the number of records is `length(epochs)`.
 
 A record has `2 + 6 * (chbdeg + 1)` numbers: the midpoint (seconds past J2000 TDB) and
 the radius (s) of its interval, then the coefficients of x, y, z (km) and of dx, dy, dz

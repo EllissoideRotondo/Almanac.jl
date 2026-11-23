@@ -455,7 +455,7 @@ one-way light time, as
 are those of [`spkezr`](@ref), except that an `abcorr` that is not valid throws
 `SpiceError(:spkinvalidoption)`, as in CSPICE.
 
-As in CSPICE, the `CN` corrections make exactly three light-time iterations here;
+As in CSPICE, the `CN` corrections make three light-time iterations here;
 [`spkezr`](@ref) makes up to five, with the convergence test of [`spkltc`](@ref). The
 position can therefore differ from the position part of `spkezr` by up to 2e-11
 relative (see [Known limits of accuracy](@ref)).

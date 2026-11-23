@@ -54,8 +54,7 @@ end
 
 # The `min` and `max` macros of f2c, `a <= b ? a : b` and `a >= b ? a : b`, as
 # selections without branches. Unlike `Base.min`, they do not propagate a NaN and keep
-# the first of two equal zeros; the bisection of `_prop2b_root` mispredicts the branches of
-# `Base.min`.
+# the first of two equal zeros. The bisection of `_prop2b_root` and `spksub` use them.
 @inline _f2c_min(a::Float64, b::Float64) = ifelse(a <= b, a, b)
 @inline _f2c_max(a::Float64, b::Float64) = ifelse(a >= b, a, b)
 
@@ -67,12 +66,10 @@ gravitational parameter `gm`, by the universal-variable formulation of `prop2b`.
 
 Throws the kinds of `prop2b`, in its order: `:nonpositivemass` if `gm <= 0`,
 `:zeroposition`, `:zerovelocity`, and `:nonconicmotion` if `pos` and `vel` are
-parallel; `SpiceError(kind)` for a time interval that is too long. The
-universal variable `x` is the plain `Float64` root of the Kepler equation
-`kfun(x) = primal(dt)`, found by the bracketing and bisection of CSPICE
-(`_prop2b_root`), so a plain `dt` gives the CSPICE state. `x` gets its derivative parts
-from Newton steps with `d kfun / dx = b r` (see `_ad_pin`; one step for a `Float64`,
-whose value is `x`), and the closing formulas are evaluated in the type of `dt`.
+parallel; `SpiceError(kind)` for a time interval that is too long. The universal
+variable is the root of the Kepler equation that the bisection of CSPICE finds on
+`primal(dt)` (`_prop2b_root`), so a plain `dt` gives the CSPICE state; its derivative
+parts come from Newton steps (see `_ad_pin`).
 """
 function _prop2b(
         gm::Float64, pos::Vec3{Float64}, vel::Vec3{Float64}, dt::T,

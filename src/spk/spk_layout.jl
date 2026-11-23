@@ -117,7 +117,7 @@ end
 
 The parts of the SPK type 14 or binary PCK type 3 segment `seg` that the evaluator
 needs: `refbas`, `nref`, `pktbas`, `npkt`, `pktoff`, `stride` and `ncoef`, with the
-meaning of [`_spk14_check`](@ref). They come from `seg.layout`, or from the checks of
+meaning of `_spk14_check`. They come from `seg.layout`, or from the checks of
 `_spk14_check` (and their errors) when the segment has no layout.
 """
 @inline function _spk14_layout(data::Vector{Float64}, seg::Segment)
@@ -145,8 +145,8 @@ packets, `pksz` the packet size (10 or 14) and `stride` the size of a packet rec
 (the packet and the `pktoff` doubles that precede it).
 
 The last double of the segment is the count of meta items. A segment with 15 or 16
-items has no packet offset (item 16), as `sgmeta` reads the old files; with 17 or more
-items the first 17 are used. Throws `SpiceError(:baddaf)` unless the segment has
+items has no packet offset (item 16), as `sgmeta` reads them; with 17 or more items
+the first 17 are used. Throws `SpiceError(:baddaf)` unless the segment has
 fixed-size packets of 10 or 14 doubles, one reference epoch for each packet with the
 reference index type 4 (closest epoch), at least 8 constants, and all its parts
 inside the segment.
@@ -201,7 +201,7 @@ end
     _t10_layout(data, seg) -> NamedTuple
 
 The parts `con`, `pkt`, `ref`, `n`, `pksz` and `stride` of the type 10 segment `seg`,
-with the meaning of [`_t10_check`](@ref). They come from `seg.layout`, or from the
+with the meaning of `_t10_check`. They come from `seg.layout`, or from the
 checks of `_t10_check` (and their errors) when the segment has no layout.
 """
 @inline function _t10_layout(data::Vector{Float64}, seg::Segment)
