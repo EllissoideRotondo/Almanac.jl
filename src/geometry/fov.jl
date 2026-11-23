@@ -213,7 +213,7 @@ Throws `SpiceError(:idcodenotfound)` if the name is not known.
 See also [`getfov`](@ref), [`bodn2c`](@ref).
 """
 getfvn(ks::KernelSet, inst::AbstractString, room::Integer = _GEO_MAXVRT) =
-    _geo_getfov(ks, _geo_body(ks, inst, "instrument"), room)
+    _geo_getfov(ks, _body_id(ks, inst, "instrument"), room)
 getfvn(ctx::SpiceContext, inst::AbstractString, room::Integer = _GEO_MAXVRT) =
     getfvn(kernelset(ctx), inst, room)
 getfvn(inst::AbstractString, room::Integer = _GEO_MAXVRT) = getfvn(default_context(), inst, room)
@@ -610,12 +610,12 @@ function _geo_fov_setup(
         target::NameOrID, tframe::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
         project::Bool
     )
-    obs = _geo_body(ks, obsrvr, "observer")
+    obs = _body_id(ks, obsrvr, "observer")
     uray = shp == _GEO_FOV_RAY
     etrg = shp == _GEO_FOV_ELLIPSOID
     targ = Int32(0)
     if !uray
-        targ = _geo_body(ks, target, "target")
+        targ = _body_id(ks, target, "target")
         targ == obs && _geo_same_bodies("field of view test", obsrvr)
     end
     tfid = Int32(0)
@@ -624,7 +624,7 @@ function _geo_fov_setup(
             :invalidframe,
             "the name of the reference frame is blank"
         )
-        tfid = _geo_namfrm(ks, tframe)
+        tfid = _frame_code(ks, tframe)
         tfid == Int32(0) && _geo_fov_error(
             :invalidframe,
             "the reference frame $tframe is not recognized"
@@ -634,7 +634,7 @@ function _geo_fov_setup(
             :frameinfonotfound,
             "no data are available for the reference frame $tframe"
         )
-        (etrg && center != targ) && _geo_bad_center(tframe, target, center)
+        (etrg && center != targ) && _dsk_bad_frame(:invalidframe, tframe, target, center)
     end
     ustl = false
     xmit = false
@@ -650,9 +650,9 @@ function _geo_fov_setup(
         _m_iszero(raydir) && _geo_fov_error(:zerovector, "the direction of the ray is the zero vector")
         rdir = _m_hat(raydir)
     end
-    instid = _geo_body(ks, inst, "instrument")
+    instid = _body_id(ks, inst, "instrument")
     shape, ifrname, bsite, bounds = _geo_getfov(ks, instid, _GEO_MAXVRT)
-    ifid = _geo_namfrm(ks, ifrname)
+    ifid = _frame_code(ks, ifrname)
     poly = shape == "POLYGON" || shape == "RECTANGLE"
     circle = shape == "CIRCLE"
     faxi = poly ? _geo_fovaxi(bounds) : _m_hat(bsite)
@@ -851,7 +851,7 @@ function fovtrg(
         "the target shape RAY is not valid in fovtrg; use fovray"
     )
     # The observer is checked before the shape, as in CSPICE.
-    _geo_body(ks, obsrvr, "observer")
+    _body_id(ks, obsrvr, "observer")
     return _geo_fovvis(
         ks, inst, _geo_fov_tshape(tshape), zero(Vec3{Float64}), target, tframe,
         abcorr, obsrvr, et

@@ -202,7 +202,7 @@ function compare_xsi(ctx, ks, target, srf, et, fixref, v, d)
             _, sv, sd = Almanac._dsk_to_segment(ks, seg.dskdsc, Int32(fixfid), et, v, d)
         elseif !multfr
             maxrad = Almanac._dsk_sph(ks, segs, body, srf)[2] * 1.01
-            norm(v) > maxrad && (sv = Almanac._dsk_surfpt(v, d, maxrad, maxrad, maxrad)[1])
+            norm(v) > maxrad && (sv = Almanac._m_surfpt(v, d, maxrad, maxrad, maxrad)[2])
         end
         stale = c_dskx02(chh, cdla, sv, sd)[2] == plid
     end
@@ -1581,7 +1581,7 @@ function dsk_part_17()
     vtx = V3(0.3, -0.4, 1.0)
     plane = SPICE.nvc2pl([0.0, 0.0, 1.0], 1.0)
     for (d, want) in ((V3(1.0, 0.5, 0.0), -1), (V3(0.2, 0.0, 1.0), 1))
-        n, x = Almanac._dsk_inrypl(vtx, d, V3(0.0, 0.0, 1.0), 1.0)
+        n, x = Almanac._m_inrypl(vtx, d, V3(0.0, 0.0, 1.0), 1.0)
         cn, cx = SPICE.inrypl(collect(vtx), collect(d), plane)
         @test n == cn == want
         @test x == V3(cx) == vtx

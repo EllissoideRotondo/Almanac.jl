@@ -346,7 +346,7 @@ function _gf_surface_coordinate(
     _gf_distinct(targ, obs, target, obsrvr)
     corr = _geo_abcorr(abcorr)
     sys, idx = _gf_sysidx(crdsys, coord)
-    ref = _geo_namfrm(ks, frame isa AbstractString ? strip(frame, ' ') : frame)
+    ref = _frame_code(ks, frame isa AbstractString ? strip(frame, ' ') : frame)
     center, _, found = _geo_frinfo(ks, ref)
     found || throw(SpiceError(:noframe, "Frame system did not recognize frame $frame."))
     (chkctr && center != targ) && throw(
@@ -381,7 +381,7 @@ function _gf_surface_coordinate(
             "Ray's direction vector is the zero vector. This variable might be uninitialized."
         )
     )
-    dfr = _geo_namfrm(ks, dref isa AbstractString ? strip(dref, ' ') : dref)
+    dfr = _frame_code(ks, dref isa AbstractString ? strip(dref, ' ') : dref)
     dctr, _, dfound = _geo_frinfo(ks, dfr)
     dfound || throw(SpiceError(:noframe, "Frame system did not recognize frame $dref."))
     vec = GFInterceptVector(

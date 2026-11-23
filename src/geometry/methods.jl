@@ -148,25 +148,11 @@ of CSPICE. No allocation for the common spellings.
 end
 @inline _geo_abcorr(c::Aberration) = c
 
+"The correction `c` without stellar aberration (`loccor` of `zzsfxcor`, the correction of `zzgfocin`)."
+@inline _geo_lt_only(c::Aberration) = _aberration(c.flags & ~_AB_S)
+
 "`s` of the geometry calls: -1 for reception, +1 for transmission, 0 without light time."
 @inline _geo_sign(c::Aberration) = c.uselt ? (c.transmit ? 1.0 : -1.0) : 0.0
-
-@noinline _geo_no_body(what, name) = throw(
-    SpiceError(
-        :idcodenotfound,
-        "the $what, '$name', is not a recognized name for an ephemeris object"
-    )
-)
-
-@inline _geo_body(::KernelSet, id::Integer, ::AbstractString) = Int32(id)
-function _geo_body(ks::KernelSet, name::AbstractString, what::AbstractString)
-    code = bods2c(ks, name)
-    code === nothing && _geo_no_body(what, name)
-    return Int32(code)
-end
-
-@inline _geo_namfrm(::KernelSet, ref::Integer) = Int32(ref)
-_geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
 
 "`frinfo` without the class ID: `(center, class, found)`."
 @inline function _geo_frinfo(ks::KernelSet, id::Int32)
@@ -175,68 +161,9 @@ _geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
     return f.center, f.class, true
 end
 
-@noinline _geo_no_frame(ref) = throw(
-    SpiceError(
-        :noframe, "the reference frame $ref is " *
-            "not recognized by the frame subsystem; possibly a frame kernel has not been loaded"
-    )
-)
-@noinline _geo_bad_center(ref, target, center) = throw(
-    SpiceError(
-        :invalidframe,
-        "the reference frame $ref is not centered at the target body $target; the ID code " *
-            "of the frame center is $center"
-    )
-)
-
-@inline function _geo_fixfid(ks::KernelSet, fixref::NameOrID, trgcde::Int32, target)
-    fixfid = _geo_namfrm(ks, fixref)
-    center, _, found = _geo_frinfo(ks, fixfid)
-    found || _geo_no_frame(fixref)
-    center == trgcde || _geo_bad_center(fixref, target, center)
-    return fixfid
-end
-
-const _GEO_RADII_KEYS = String[string("BODY", i, "_RADII") for i in 1:999]
-
-@noinline function _geo_bad_radii(body, v, kind::Symbol = :invalidcount)
-    v === nothing && throw(
-        SpiceError(
-            :kernelvarnotfound,
-            "the variable BODY$(body)_RADII could not be found in the kernel pool"
-        )
-    )
-    (v isa Vector{Float64} || v isa NTuple{3, Float64}) || throw(
-        SpiceError(
-            :typemismatch,
-            "the variable BODY$(body)_RADII is not numeric"
-        )
-    )
-    length(v) == 3 || throw(
-        SpiceError(
-            length(v) > 3 ? :arraytoosmall : kind,
-            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
-        )
-    )
-    throw(SpiceError(:badaxislength, "a radius of the body $body is not positive: $(collect(v))"))
-end
-
-"""
-    _geo_radii3(ks, body, kind) -> NTuple{3,Float64}
-
-`zzbodvcd` for `RADII`: three values, with no test of their signs. Throws `SpiceError`
-(`:kernelvarnotfound`, `:typemismatch`, `:arraytoosmall`, and `kind` for fewer than 3
-values).
-"""
-@inline function _geo_radii3(ks::KernelSet, body::Integer, kind::Symbol)
-    v = get(
-        ks.pool, 1 <= body <= 999 ? (@inbounds _GEO_RADII_KEYS[body]) :
-            string("BODY", body, "_RADII"), nothing
-    )
-    v isa Vector{Float64} || _geo_bad_radii(body, v, kind)
-    length(v) == 3 || _geo_bad_radii(body, v, kind)
-    return @inbounds (v[1], v[2], v[3])
-end
+"The body-fixed frame of the geometry calls: `_dsk_fixfid` with `:noframe` for an unknown frame."
+@inline _geo_fixfid(ks::KernelSet, fixref::NameOrID, trgcde::Int32, target) =
+    _dsk_fixfid(ks, fixref, trgcde, target, :noframe, :noframe)
 
 """
     _geo_radii(ks, body) -> NTuple{3,Float64}
@@ -246,8 +173,8 @@ end
 they are three positive values. No allocation for an ID in 1:999.
 """
 @inline function _geo_radii(ks::KernelSet, body::Integer)
-    a, b, c = _geo_radii3(ks, body, :invalidcount)
-    (a > 0.0 && b > 0.0 && c > 0.0) || _geo_bad_radii(body, (a, b, c))
+    a, b, c = _radii3(ks, body, :invalidcount)
+    (a > 0.0 && b > 0.0 && c > 0.0) || _bad_radii(body, (a, b, c))
     return a, b, c
 end
 
@@ -308,14 +235,10 @@ _GeoShape(dsk, trgcde, fixfid, a, b, c, maxrad, srflst, tols) =
     )
 end
 
-"`zzdsksph` for the body `trgcde`; `SpiceError(:noloadeddskfiles)` without DSK files,
-`SpiceError(:dskdatanotfound)` without DSK data for the body."
-_geo_dsksph(ks::KernelSet, trgcde::Int32, srflst) = _dsk_body_sph(ks, trgcde, srflst)
-
 "`zzsudski`: the DSK surface of the body `trgcde` with the surfaces `srflst`."
 function _geo_dskshape(ks::KernelSet, tols::DSKTolerances, trgcde::Int32, fixfid::Int32, srflst)
-    _, maxrad = _geo_dsksph(ks, trgcde, srflst)
-    # `_geo_dsksph` has thrown unless a DSK file is loaded and the target has segments.
+    _, maxrad = _dsk_body_sph(ks, trgcde, srflst)
+    # `_dsk_body_sph` has thrown unless a DSK file is loaded and the target has segments.
     segs = ks.dsk[trgcde]
     sh = _GeoShape(
         true, trgcde, fixfid, 0.0, 0.0, 0.0, maxrad, srflst, tols, segs,
