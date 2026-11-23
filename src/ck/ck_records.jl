@@ -136,9 +136,13 @@ Throws `SpiceError`:
 """
 function ckgr03(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     ic = _ck_descr_ic("ckgr03", descr, 3)
+    return _ck_tagged_record("ckgr03", h, ic, _nint(dafgda(h, ic[6], ic[6])[1]), recno)
+end
+
+"Record `recno` of the `nrec` records of the CK type 1 or 3 segment with the integer components `ic`: the time tag, then the quaternion and the angular velocity if the segment has one."
+function _ck_tagged_record(who::AbstractString, h::DAFHandle, ic, nrec::Int, recno::Integer)
     psiz = ic[4] == 1 ? 7 : 4
-    nrec = _nint(dafgda(h, ic[6], ic[6])[1])
-    _ck_check_recno("ckgr03", recno, nrec)
+    _ck_check_recno(who, recno, nrec)
     addr = ic[5] + psiz * (recno - 1)
     tick = ic[5] + psiz * nrec + recno - 1
     record = [dafgda(h, tick, tick); dafgda(h, addr, addr + psiz - 1)]
@@ -180,12 +184,7 @@ The record has the layout of [`ckgr03`](@ref): the time tag (ticks), the quatern
 """
 function ckgr01(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     ic = _ck_descr_ic("ckgr01", descr, 1)
-    nrec = _cint(dafgda(h, ic[6], ic[6])[1])
-    psiz = ic[4] == 1 ? 7 : 4
-    _ck_check_recno("ckgr01", recno, nrec)
-    addr = ic[5] + psiz * (recno - 1)
-    tick = ic[5] + psiz * nrec + recno - 1
-    return [dafgda(h, tick, tick); dafgda(h, addr, addr + psiz - 1)]
+    return _ck_tagged_record("ckgr01", h, ic, _cint(dafgda(h, ic[6], ic[6])[1]), recno)
 end
 
 # The meta data of the generic segment from `baddr` to `eaddr` in the file of `h`, as
@@ -247,7 +246,7 @@ function ckgr04(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     _ck_check_recno("ckgr04", recno, nrec)
     pdrtyp, pktoff, pktsiz, pktbas = meta[10], meta[16], meta[15], meta[11]
     if pdrtyp == 0                              # fixed-size packets, as `sgfpkt`
-        b = pktbas + (recno - 1) * (pktsiz + pktoff) + 1 + pktoff
+        b = _ck04_fixed_packet(pktbas, pktsiz, pktoff, Int(recno))
         e = b + pktsiz - 1
     else
         d = dafgda(h, meta[8] + recno, meta[8] + recno + 1)
@@ -255,17 +254,9 @@ function ckgr04(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
         e = b + _cint(d[2]) - _cint(d[1]) - pktoff - 1
     end
     pkt = dafgda(h, b, e)
-    # The seven counts are packed in one double, base 128 (`zzck4d2i`).
-    packed = pkt[3]
-    x = 128.0^6
-    counts = zeros(Int, 7)
-    for k in 7:-1:1
-        counts[k] = _cint(packed / x)
-        packed -= counts[k] * x
-        x /= 128.0
-    end
+    counts = _ck04_counts(pkt[3], _cint)
     numall = sum(counts)
-    return [pkt[1]; pkt[2]; Float64.(counts); pkt[4:(3 + numall)]]
+    return [pkt[1]; pkt[2]; Float64.(collect(counts)); pkt[4:(3 + numall)]]
 end
 
 """
