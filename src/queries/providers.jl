@@ -13,8 +13,8 @@ not return six numbers.
 """
 @noinline function provider_jet(p::EphemerisProvider, et::T, ::Val{N}) where {T <: Real, N}
     # `p.f` is not inferred: every value is converted to `T` with an assertion, so that
-    # the jet has a concrete type and the callers of `segment_jet` stay type-stable.
-    # `@noinline` keeps this branch out of the inlined `segment_jet` of the file types.
+    # the jet has a concrete type and the callers of `segment_jet_native` stay
+    # type-stable. `@noinline` keeps this branch out of the inlined `segment_jet_native`.
     if N <= 1
         s = p.f(et)
         _provider_check(p, s, et)
