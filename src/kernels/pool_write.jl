@@ -25,7 +25,7 @@
 # of the pool of a context increments an atomic counter, `poolversion(ctx)`, which a
 # caller can read without a lock and compare with a value that it kept.
 
-"Sizes of `szpool`: the parameters of `pool.c`."
+# The sizes of `szpool`: the parameters of `pool.c`.
 const _POOL_X_SIZES = (
     "MAXVAR" => 26003, "MAXVAL" => 400000, "MAXLIN" => 15000,
     "MAXCHR" => 80, "MXNOTE" => 130015, "MAXLEN" => 32, "MAXAGT" => 1000,
@@ -35,18 +35,16 @@ const _POOL_X_SIZES = (
 # Snapshot swaps (called under the lock of the context)
 # ---------------------------------------------------------------------------------------
 
+const _NAMES_POOL_KINDS = (:missingkpv, :baddimensions, :blanknameassigned)   # of `build_names`
+
 """
     _pool_x_namepool(pool, edited::Bool) -> AbstractDict
 
-Contract: the pool from which the body names and the frames are built: `pool` itself,
-or, for a pool with direct edits whose pair `NAIF_BODY_NAME`, `NAIF_BODY_CODE` is not
-complete or not consistent, a copy without the two variables. The two variables are
-set by two calls (`pcpool`, then `pipool`), so the state between the calls must give a
-valid snapshot; the pair is used as soon as it is consistent. A pool without edits is
-returned as it is, and `build_names` reports its errors.
+Return the pool from which the body names and the frames are built: `pool` itself, or,
+for a pool with direct edits whose pair `NAIF_BODY_NAME`, `NAIF_BODY_CODE` is not
+consistent, a copy without the two variables. Two calls (`pcpool`, then `pipool`) set
+the pair, so the state between the calls must give a valid snapshot.
 """
-const _NAMES_POOL_KINDS = (:missingkpv, :baddimensions, :blanknameassigned)   # of `build_names`
-
 function _pool_x_namepool(pool::Dict{String, PoolValue}, edited::Bool)
     edited || return pool
     try
@@ -64,12 +62,10 @@ end
 """
     _pool_x_bodydefs!(name2code, code2name, bodydefs) -> Nothing
 
-Contract: add the name and code pairs of `boddef` to the name tables of the kernel
-pool. A later pair for the same name replaces an earlier one; a name or a code that
-the kernel pool defines keeps the definition of the pool. These tables are searched
-before the built-in table, so a `boddef` pair masks a built-in name, as in CSPICE.
-As in `zzboddef`, the key is the normalized name cut to 36 characters (`_body_norm`)
-and the name that `bodc2n` returns is the first 36 characters of the name as given.
+Add the name and code pairs of `boddef` to the name tables of the kernel pool, as
+`zzboddef`. A later pair for the same name replaces an earlier one; a name or a code that
+the kernel pool defines keeps the definition of the pool. The key is `_body_norm` of the
+name, and the name that `bodc2n` returns is the first 36 characters of the name as given.
 """
 function _pool_x_bodydefs!(
         name2code::Dict{String, Int32}, code2name::Dict{Int32, String},
@@ -99,10 +95,9 @@ end
 """
     _pool_x_notify!(ctx, names) -> Nothing
 
-Contract: called under the lock of `ctx` after a change of the kernel pool. `names` is
-the list of the variables that were assigned or deleted, or `:all`. Every agent that
-watches one of them gets an update pending, and the pool version of the context
-increases by one. Nothing happens for an empty list.
+Mark an update pending for every agent that watches one of the variables `names` (or
+`:all`), and increase the pool version of `ctx` by one; nothing for an empty list. Call
+it under the lock of `ctx`.
 """
 function _pool_x_notify!(ctx::SpiceContext, names)
     names === :all || !isempty(names) || return nothing
@@ -116,7 +111,7 @@ function _pool_x_notify!(ctx::SpiceContext, names)
     return nothing
 end
 
-"Names that the text kernels among `entries` assign, with the meta-kernel variables left out."
+"Return the names that the text kernels among `entries` assign, without the meta-kernel variables."
 function _pool_x_assigned(entries::Vector{Loaded})
     names = String[]
     for e in entries
@@ -132,11 +127,9 @@ end
 """
     _pool_x_swap_loaded!(ctx, list, entries) -> Nothing
 
-Contract: called by `furnsh` under the lock of `ctx`. `list` is the new load list and
-`entries` are its new entries. Swaps in the snapshot for `list`; if the pool of the old
-snapshot has direct edits, the assignments of the new text kernels are applied to that
-pool, otherwise the pool is the one of the text kernels of `list`. Notifies the
-watchers of the assigned variables.
+Swap in the snapshot of the new load list `list`, whose new entries are `entries`, and
+notify the watchers of the assigned variables. If the old pool has direct edits, the
+assignments of the new text kernels are applied to it. Call it under the lock of `ctx`.
 """
 function _pool_x_swap_loaded!(ctx::SpiceContext, list::Vector{Loaded}, entries::Vector{Loaded})
     old = kernelset(ctx)
@@ -170,11 +163,9 @@ end
 """
     _pool_x_swap_unloaded!(ctx, list) -> Nothing
 
-Contract: called by `unload` under the lock of `ctx` with the new load list `list`. If
-a text kernel was removed, the pool is built again from the text kernels of `list`
-(direct edits are lost) and every watcher is notified, as
-[`unload_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unload_c.html) does with
-`clpool_` and a reload. Otherwise the pool of the old snapshot is kept.
+Swap in the snapshot of the new load list `list`. If a text kernel was removed, the pool
+is built again from the text kernels of `list` and every watcher is notified, as
+`unload_c` does; otherwise the old pool is kept. Call it under the lock of `ctx`.
 """
 function _pool_x_swap_unloaded!(ctx::SpiceContext, list::Vector{Loaded})
     old = kernelset(ctx)
@@ -190,8 +181,8 @@ end
 """
     _pool_x_swap_cleared!(ctx) -> Nothing
 
-Contract: called by `kclear` under the lock of `ctx`. Swaps in the snapshot without
-kernels and without pool edits; the pairs of `boddef` stay. Notifies every watcher.
+Swap in the snapshot without kernels and without pool edits, keeping the pairs of
+`boddef`, and notify every watcher. Call it under the lock of `ctx`.
 """
 function _pool_x_swap_cleared!(ctx::SpiceContext)
     ks = build_kernelset(Loaded[], nothing, kernelset(ctx).bodydefs)
@@ -203,11 +194,11 @@ end
 """
     _pool_x_edit!(f!, ctx) -> Nothing
 
-Contract: apply the edit `f!` to the kernel pool of `ctx`. Under the lock of `ctx`,
-`f!(pool)` changes a private copy of the pool (it must replace values, never mutate a
-stored vector) and returns the names that it touched, or `:all`, or an empty list for
-no change. If there is a change, the snapshot with the new pool is swapped in
-atomically and the watchers are notified. If `f!` throws, `ctx` is unchanged.
+Apply the edit `f!` to the kernel pool of `ctx`. Under the lock of `ctx`, `f!(pool)`
+changes a copy of the pool (it replaces values and never mutates a stored vector) and
+returns the names that it touched, `:all`, or an empty list for no change. The new
+snapshot is then swapped in and the watchers are notified. If `f!` throws, `ctx` is
+unchanged.
 """
 function _pool_x_edit!(f!, ctx::SpiceContext)
     lock(ctx.lock) do
@@ -225,11 +216,8 @@ end
 """
     _pool_x_name(name) -> String
 
-Contract: the variable name `name` without outer blanks; throws
-`SpiceError(:badvarname)` if that is empty or longer than 32 characters, as `pdpool_`
-for the length (`pdpool_` accepts a blank name). The callers test an empty `name`
-(`CHKFSTR` of the C wrapper) and the empty value list (`pdpool_` returns before the
-name check) first.
+Return the variable name `name` without outer blanks. Throws `SpiceError(:badvarname)` if
+that is empty or longer than 32 characters.
 """
 function _pool_x_name(name::AbstractString)
     n = String(strip(name))
@@ -255,10 +243,10 @@ Set the kernel-pool variable `name` to the numbers `values`, as
 A variable of that name is replaced, whatever its type. An empty `values` changes
 nothing, as in CSPICE. Blanks around `name` are ignored.
 
-Every table that is built from the pool (body names, frames, clocks) follows the
-edit. The edit stays through a later
-[`furnsh`](@ref) and through the [`unload`](@ref) of a binary kernel. It is lost at
-[`kclear`](@ref) and at the `unload` of a text kernel or a meta-kernel, as in CSPICE.
+Every table that is built from the pool (body names, frames, clocks) follows the edit.
+The edit stays through a later [`furnsh`](@ref) and through the [`unload`](@ref) of a
+binary kernel. It is lost at [`kclear`](@ref) and at the `unload` of a text kernel or a
+meta-kernel, as in CSPICE.
 
 Throws `SpiceError(:emptystring)` if `name` is the empty string and
 `SpiceError(:badvarname)`, if `values` is not empty, when `name` is blank or longer than

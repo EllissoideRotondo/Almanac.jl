@@ -708,9 +708,8 @@ const _BODY_MAXL = 36      # MAXL of `zzbodtrn`: the characters of a body name t
 """
     normalize_name(s) -> String
 
-Contract: returns `s` in upper case, without leading and trailing blanks and with
-each inner run of blanks compressed to one blank (the `ljucrs` rule of CSPICE). The
-result is a fixed point of the function.
+Return `s` in upper case, without leading and trailing blanks and with each inner run of
+blanks compressed to one blank, as `ljucrs` of CSPICE.
 """
 function normalize_name(s::AbstractString)::String
     s isa Union{String, SubString{String}} && isascii(s) && return _normalize_ascii(s)
@@ -729,7 +728,7 @@ function normalize_name(s::AbstractString)::String
     return uppercase(join(split(s, ' '; keepempty = false), ' '))
 end
 
-"Contract: `normalize_name` of the ASCII string `s`: `s` itself (as a `String`) if it is already normalized, else one new `String`."
+"`normalize_name` of the ASCII string `s`: `s` itself (as a `String`) if it is normalized, else one new `String`."
 function _normalize_ascii(s::Union{String, SubString{String}})::String
     cu = codeunits(s)
     n, gap, clean = 0, false, true
@@ -772,10 +771,9 @@ end
 """
     _name_hash(cu) -> (h::UInt64, ascii::Bool)
 
-Contract: hash of the bytes of the normalized form of the bytes `cu` (upper case for
-ASCII letters, blanks trimmed and compressed; other bytes as they are), equal for two
-byte strings with the same normalized form (FNV-1a with a final mix), and whether every
-byte of `cu` is ASCII.
+Return the hash (FNV-1a with a final mix) of the normalized form of the bytes `cu`, and
+whether every byte of `cu` is ASCII. Two byte strings with the same normalized form have
+the same hash.
 """
 @inline function _name_hash(cu)
     h = 0xcbf29ce484222325
@@ -794,7 +792,7 @@ byte of `cu` is ASCII.
     return h ⊻ (h >> 32), high < 0x80
 end
 
-"Contract: true if the normalized key `key` equals the normalized form of the bytes `cu` (as for `_name_hash`)."
+"Return true if the normalized key `key` equals the normalized form of the bytes `cu`."
 @inline function _name_equal(key::String, cu)
     kc = codeunits(key)
     m = length(kc)
@@ -819,8 +817,7 @@ end
 """
     NameTable(d::AbstractDict{String,Int32}) -> NameTable
 
-Contract: the table of the pairs of `d`, whose keys are normalized (fixed points of
-`normalize_name`).
+Make the table of the pairs of `d`, whose keys are normalized with `normalize_name`.
 """
 function NameTable(d::AbstractDict{String, Int32})
     keys_ = collect(String, keys(d))
@@ -839,7 +836,7 @@ function NameTable(d::AbstractDict{String, Int32})
 end
 NameTable() = NameTable(String[], Int32[], UInt64[], zeros(Int32, 4))
 
-"Contract: index in `t.keys` of the key equal to the normalized form of the bytes `cu`, whose hash is `h`, or 0."
+"Return the index in `t.keys` of the key equal to the normalized form of the bytes `cu`, whose hash is `h`, or 0."
 @inline function _name_probe(t::NameTable, cu, h::UInt64)
     mask = length(t.slots) - 1
     i = Int(h & mask)
@@ -855,8 +852,8 @@ end
 """
     name_lookup(t::NameTable, name) -> Union{Int32,Nothing}
 
-Contract: the code of `name` in `t` after normalization (`normalize_name`), or
-`nothing`. No allocation for an ASCII `String` or `SubString{String}`.
+Return the code of `name` in `t` after `normalize_name`, or `nothing`. Allocates nothing
+for an ASCII `String` or `SubString{String}`.
 """
 @inline function name_lookup(t::NameTable, name::AbstractString)
     isempty(t.keys) && return nothing
@@ -869,7 +866,6 @@ Contract: the code of `name` in `t` after normalization (`normalize_name`), or
     return _name_value(t, _name_probe(t, codeunits(nn), first(_name_hash(codeunits(nn)))))
 end
 
-"Contract: the code at index `j` of `t`, or `nothing` for `j == 0`."
 @inline _name_value(t::NameTable, j::Int) = j == 0 ? nothing : @inbounds t.vals[j]
 
 Base.length(t::NameTable) = length(t.keys)
@@ -882,7 +878,7 @@ end
 Base.get(::NameTable, key, default) = default     # no key that is not a string, as for a Dict{String}
 Base.haskey(t::NameTable, key::AbstractString) = name_lookup(t, key) !== nothing
 
-"Contract: builds the (name => code, code => name) dictionaries of a (code, name) table; a later entry overrides an earlier one in both directions."
+"Return the (name => code, code => name) dictionaries of a (code, name) table; a later entry overrides an earlier one."
 function _name_dicts(table)
     name2code = Dict{String, Int32}()
     code2name = Dict{Int32, String}()
@@ -901,17 +897,13 @@ end
 """
     build_names(pool) -> (name2code, code2name)
 
-Contract: reads `NAIF_BODY_NAME` and `NAIF_BODY_CODE` from `pool`; returns
-`name2code::Dict{String,Int32}` keyed by normalized name and
-`code2name::Dict{Int32,String}` with the name as the kernel wrote it (cut to its first
-36 characters, trailing blanks removed; leading blanks kept, as in CSPICE). A later
-element has priority over an earlier one. Both are empty if neither variable exists
-with its type (strings for the names, numbers for the codes), as `zzbodker` finds them
-with `gcpool_` and `gipool_`. Throws, with the kinds of `zzbodker`,
-`SpiceError(:missingkpv)` if only one of the two is found,
-`SpiceError(:baddimensions)` if the sizes differ, and
-`SpiceError(:blanknameassigned)` if a name is blank; first, as `gipool_`,
-`SpiceError(:intoutofrange)` if a code is not a 32-bit integer.
+Return the body names of `NAIF_BODY_NAME` and `NAIF_BODY_CODE` in `pool`, as `zzbodker`
+reads them: `name2code` keyed by normalized name, and `code2name` with the name as the
+kernel wrote it (cut to 36 characters, trailing blanks removed). A later element has
+priority over an earlier one. Throws `SpiceError` with the kinds of `zzbodker`:
+`:intoutofrange` for a code that is not a 32-bit integer, `:missingkpv` if only one of
+the two variables is found, `:baddimensions` if their sizes differ, and
+`:blanknameassigned` for a blank name.
 """
 function build_names(pool::AbstractDict{String, PoolValue})
     name2code = Dict{String, Int32}()
@@ -958,7 +950,7 @@ function build_names(pool::AbstractDict{String, PoolValue})
     return name2code, code2name
 end
 
-"Contract: `s` is an optional sign followed by digits, with blanks allowed at both ends (CSPICE `beint`); returns the integer, or `nothing` if `s` has another form or does not fit in `Int32`."
+"Return the integer of `s`, an optional sign and digits with blanks at both ends (`beint`), or `nothing` for another form or a value outside `Int32`."
 function _parse_int_name(s::AbstractString)
     t = strip(s, ' ')
     isempty(t) && return nothing
@@ -970,9 +962,9 @@ end
 """
     _body_norm(s) -> String
 
-The key of the body name `s`: `normalize_name(s)` cut to 36 characters and without the
-blanks that the cut leaves at the end, as `ljucrs_(1, s, tmpnam)` writes it into the
-`tmpnam` of 36 characters of `zzbodtrn` (the cut comes after the compression).
+Return the key of the body name `s`: `normalize_name(s)` cut to 36 characters, without
+the blanks that the cut leaves at the end, as `ljucrs_` writes it into the `tmpnam` of
+`zzbodtrn`.
 """
 function _body_norm(s::AbstractString)
     k = normalize_name(s)
@@ -983,11 +975,9 @@ end
 """
     _body_name_code(name2code, name) -> Union{Int32,Nothing}
 
-Code of the body name `name` from the pool-defined table `name2code` (kernel pool,
-`boddef`, kernels), then from the built-in table; `nothing` if neither has it (the
-`bodn2c` rule: an integer string is not a name). Only the first 36 characters of the
-normalized name count, as in `zzbodtrn`. No allocation for an ASCII name of at most 36
-bytes.
+Return the code of the body name `name` from the pool-defined table `name2code`, then
+from the built-in table, or `nothing` (the `bodn2c` rule: an integer string is not a
+name). Only the first 36 characters of the normalized name count, as in `zzbodtrn`.
 """
 function _body_name_code(name2code::AbstractDict{String, Int32}, name::AbstractString)
     key = ncodeunits(name) > _BODY_MAXL ? _body_norm(name) : name
@@ -996,14 +986,15 @@ function _body_name_code(name2code::AbstractDict{String, Int32}, name::AbstractS
     return name_lookup(BUILTIN_NAME2CODE, key)
 end
 
-"Contract: code of `name` from the pool-defined dictionary `name2code`, then from the built-in table, then as an integer string; `nothing` if none applies (the `bods2c` rule)."
+"Return the code of `name` as `bods2c` finds it: a name of `name2code`, a built-in name, or an integer string; else `nothing`."
 function _body_code_lookup(name2code::AbstractDict{String, Int32}, name::AbstractString)
     c = _body_name_code(name2code, name)
     c === nothing || return c
     return _parse_int_name(name)
 end
 
-"Contract: code of `name` in a pool-defined name table: a `NameTable` of a snapshot, or the `Dict` (keys normalized) of a snapshot being built; `nothing` if absent."
+# The code of `name` in a `NameTable` of a snapshot, or in the `Dict` (keys normalized)
+# of a snapshot being built; `nothing` if absent.
 _pool_name_lookup(t::NameTable, name::AbstractString) = name_lookup(t, name)
 _pool_name_lookup(d::AbstractDict{String, Int32}, name::AbstractString) =
     isempty(d) ? nothing : get(d, normalize_name(name), nothing)
@@ -1011,10 +1002,8 @@ _pool_name_lookup(d::AbstractDict{String, Int32}, name::AbstractString) =
 """
     body_code(ks, name) -> Int32
 
-Contract: NAIF ID code of the body `name` (case and extra blanks do not matter):
-names defined in the kernel pool first, then the built-in table, then a string that
-is an integer. Throws `SpiceError(:idcodenotfound)` otherwise. An integer argument is
-returned as `Int32`. Reads `ks.name2code` only.
+Return the NAIF ID code of the body `name`, as `_body_code_lookup` finds it, or of an
+integer argument. Throws `SpiceError(:idcodenotfound)` for a name without a code.
 """
 function body_code(ks::KernelSet, name::AbstractString)::Int32
     c = _body_code_lookup(ks.name2code, name)
@@ -1031,9 +1020,8 @@ body_code(::KernelSet, id::Integer) = Int32(id)
 """
     body_name(ks, code) -> Union{String,Nothing}
 
-Contract: name of the body with NAIF ID `code`: the pool-defined name first, then
-the built-in name (the last table entry for the code), or `nothing` if the code has
-no name. Reads `ks.code2name` only.
+Return the name of the body with NAIF ID `code`: the pool-defined name, then the built-in
+name (the last table entry for the code), or `nothing`.
 """
 function body_name(ks::KernelSet, code::Integer)::Union{String, Nothing}
     typemin(Int32) <= code <= typemax(Int32) || return nothing

@@ -92,8 +92,8 @@ end
 """
     _pool_key(prefix, mid, s1, s2="", upper=false) -> String
 
-The pool name `prefix * mid * s1 * s2`, built in one buffer: `mid` is an integer (its
-decimal digits) or a string (in upper case if `upper`).
+Return the pool name `prefix * mid * s1 * s2`, built in one buffer: `mid` is an integer
+(its decimal digits) or a string (in upper case if `upper`).
 """
 function _pool_key(
         prefix::String, mid::Union{Integer, AbstractString}, s1::AbstractString,
@@ -126,7 +126,6 @@ function _pool_key(
     return String(buf)
 end
 
-"The pool name `BODY<code>_<item>`, with the blanks around `item` removed."
 _body_key(code::Integer, item::AbstractString) = _pool_key("BODY", code, "_", strip(item))
 
 # `bodvrd_c` signals SPICE(NOTRANSLATION) for a name without a code, where the state
@@ -145,8 +144,7 @@ Return the values of the kernel-pool variable `BODY<id>_<item>` for `body`, as
 [`bodvrd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodvrd_c.html).
 
 `body` is a body name, a string that holds an integer (`"399"`) or an integer NAIF ID
-code. `item` is case sensitive, as in CSPICE;
-blanks around it are ignored. The values have the units of the kernel: km for
+code. `item` is case sensitive, as in CSPICE; blanks around it are ignored. The values have the units of the kernel: km for
 `"RADII"`, km^3/s^2 for `"GM"` in the NAIF kernels. There is no `maxn` argument.
 
 Throws `SpiceError`:
@@ -344,7 +342,7 @@ function namfrm(ks::KernelSet, name::AbstractString)
     return _namfrm(ks, name)
 end
 
-"Contract: `namfrm_` of SPICELIB, without the empty-string check of `namfrm_c`: the frame ID of `name`, or 0."
+"Return the frame ID of `name`, or 0, as `namfrm_` of SPICELIB (without the empty-string check of `namfrm_c`)."
 function _namfrm(ks::KernelSet, name::AbstractString)
     # The lookups of `frame_id`, without its error for an unknown name.
     id = name_lookup(BUILTIN_FRAMENAME2ID, name)

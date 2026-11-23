@@ -6,9 +6,8 @@ const Vec3{T} = SVector{3, T}
 """
     _vec_of(T, x, f=identity) -> Vector{T}
 
-A new `Vector{T}` of `f(v)` for the elements `v` of `x` in linear order, for any
-iterable: a vector, a static vector, a matrix, a tuple. A typed comprehension is not
-used because over a static vector it gives a `SizedVector` (StaticArrays).
+Return a `Vector{T}` of `f(v)` for the elements `v` of the iterable `x`, in linear
+order. Over a static vector, a typed comprehension would give a `SizedVector`.
 """
 function _vec_of(::Type{T}, x, f = identity) where {T}
     out = Vector{T}(undef, length(x))

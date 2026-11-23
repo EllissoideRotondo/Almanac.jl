@@ -3,20 +3,17 @@
 # `matchi`. They read the code units of a string and do not allocate, except
 # `_squeeze`, which returns a new string.
 
-"Contract: byte `c` in upper case if it is an ASCII lower-case letter, else `c`."
 @inline _upper(c::UInt8) = (UInt8('a') <= c <= UInt8('z')) ? c - 0x20 : c
-"Contract: byte `c` in lower case if it is an ASCII upper-case letter, else `c`."
 @inline _lower(c::UInt8) = (UInt8('A') <= c <= UInt8('Z')) ? c + 0x20 : c
 
-"`s` without blanks and in upper case, as `cmprss_` with zero blanks and `ucase_`."
+# `cmprss_` with zero blanks, then `ucase_`.
 _squeeze(s::AbstractString) = uppercase(replace(s, ' ' => ""))
 
 """
     _cut_bytes(s, n) -> SubString
 
-`s` cut to its first `n` bytes, as a Fortran string of length `n` holds it; a character
-of several bytes that does not fit whole is left out. All of `s` if it is not longer.
-Always a `SubString`, so that the callers are type stable.
+Return `s` cut to its first `n` bytes, as a Fortran string of length `n` holds it; a
+character of several bytes that does not fit whole is left out.
 """
 _cut_bytes(s::AbstractString, n::Int) =
     ncodeunits(s) <= n ? SubString(s) : SubString(s, 1, prevind(s, thisind(s, n + 1)))
@@ -24,9 +21,8 @@ _cut_bytes(s::AbstractString, n::Int) =
 """
     _repmc(msg, value) -> String
 
-Contract: returns `msg` with its first `#` replaced by `value`, as `repmc_` and
-`repmi_`: a string loses its leading and trailing blanks and a blank string becomes
-one blank. `msg` without `#` is returned as it is.
+Return `msg` with its first `#` replaced by `value`, as `repmc_` and `repmi_`: a string
+loses its leading and trailing blanks, and a blank string becomes one blank.
 """
 function _repmc(msg::String, value::Union{AbstractString, Integer})::String
     r = findfirst(==(UInt8('#')), codeunits(msg))
@@ -40,9 +36,8 @@ end
 """
     _ljucase(s) -> String
 
-Contract: `s` without leading and trailing blanks, with ASCII letters in upper case, as
-`ljust_` and `ucase_` give it before a comparison with a constant (which ignores the
-trailing blanks). Other characters are not changed.
+Return `s` without leading and trailing blanks and with ASCII letters in upper case, as
+`ljust_` and `ucase_` give it before a comparison with a constant.
 """
 function _ljucase(s::AbstractString)
     t = strip(s, ' ')
@@ -53,9 +48,8 @@ end
 """
     _ljucrs4(s) -> NTuple{4,UInt8}
 
-Contract: the first four characters of `s` after its blanks are removed, ASCII letters in
-upper case and blanks after the end, as `ljucrs_(0, s, out)` writes them into an `out` of
-four characters. Does not allocate.
+Return the first four non-blank characters of `s` in upper case, padded with blanks, as
+`ljucrs_(0, s, out)` writes them into an `out` of four characters.
 """
 function _ljucrs4(s::AbstractString)
     b = (UInt8(' '), UInt8(' '), UInt8(' '), UInt8(' '))
@@ -69,7 +63,7 @@ function _ljucrs4(s::AbstractString)
     return b
 end
 
-"Contract: true if `a` and `b` are equal without regard to ASCII case and blanks, as `eqstr_`. Does not allocate."
+"Return true if `a` and `b` are equal without regard to ASCII case and blanks, as `eqstr_`."
 function _eqstr(a::AbstractString, b::AbstractString)
     ca = codeunits(a)
     cb = codeunits(b)
@@ -93,8 +87,8 @@ end
 """
     _eqci(a, b, trail=false) -> Bool
 
-Contract: `b` is upper-case ASCII; true if `a` equals `b` when ASCII case is ignored
-and, with `trail`, trailing blanks of `a` are ignored. Does not allocate.
+Return true if `a` equals the upper-case ASCII string `b` without regard to ASCII case
+and, with `trail`, to trailing blanks of `a`.
 """
 function _eqci(a::AbstractString, b::String, trail::Bool = false)::Bool
     ca = codeunits(a)
@@ -113,10 +107,9 @@ end
 """
     _matchi(string, templ) -> Bool
 
-Port of `matchi_` with the wild string `*` and the wild character `%`: true if `string`
-matches the template `templ` without regard to ASCII case; leading and trailing blanks
-of both are ignored; `*` stands for any number of characters and `%` for exactly one.
-Does not allocate.
+Return true if `string` matches the template `templ` of `matchi_` without regard to ASCII
+case and to leading and trailing blanks. `*` stands for any number of characters and `%`
+for exactly one.
 """
 function _matchi(string::AbstractString, templ::AbstractString)
     s = codeunits(string)

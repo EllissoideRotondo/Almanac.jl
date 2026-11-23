@@ -13,13 +13,10 @@ const _TK_MAXSTR = 80       # MAXCHR: longest string value
 """
     kernel_arch(path) -> Symbol
 
-Contract: `path` names a readable file; returns `:SPK`, `:PCK` or `:CK` for a binary
-DAF of that type (ID word `DAF/SPK`, `DAF/PCK`, `DAF/CK`, or the old `NAIF/DAF` with
-summary format ND = 2 and NI = 6 or 5; with NI = 6 the first segment decides between
-SPK and CK, as `open_daf` does), `:DSK` for a DAS file with the ID word `DAS/DSK`, `:EK` for one with `DAS/EK`, and
-`:TEXT` for everything that is not a DAF or DAS file.
-Throws `SpiceError(:filenotfound)` for a missing file and `SpiceError(:notsupported)` for
-another binary kernel type.
+Return `:SPK`, `:PCK` or `:CK` for a binary DAF of that type (the old `NAIF/DAF` too, as
+`open_daf` reads it), `:DSK` or `:EK` for a DAS file of that type, and `:TEXT` for any
+other file. Throws `SpiceError(:filenotfound)` for a missing file and
+`SpiceError(:notsupported)` for another binary kernel type.
 """
 function kernel_arch(path::AbstractString)::Symbol
     _isfile(path) || throw(SpiceError(:filenotfound, "kernel file '$path' does not exist"))
@@ -67,10 +64,9 @@ const _NPARSD_LOOKUP = (1.0, 10.0, 100.0, 1.0e3, 1.0e4, 1.0e5, 1.0e6, 1.0e7, 1.0
 """
     _nparsd(s) -> Float64
 
-Contract: `s` is a number in the syntax of CSPICE `nparsd` (digits, one decimal
-point, `E`/`D` exponent, signs, `PI`, embedded blanks and commas ignored); returns
-the same double that `nparsd` computes, which is not always the correctly rounded
-one. Throws `SpiceError(:badnumber)` otherwise.
+Return the double that `nparsd` computes for the number `s` (digits, one decimal point,
+`E` or `D` exponent, signs, `PI`; blanks and commas ignored), which is not always the
+correctly rounded one. Throws `SpiceError(:badnumber)` for a string that is not a number.
 """
 function _nparsd(s::Union{AbstractString, AbstractVector{UInt8}})::Float64
     bytes = s isa AbstractString ? codeunits(s) : s
@@ -222,10 +218,9 @@ const _NPARSI_RANGE = "NPARSI: Value entered is beyond the bounds of representab
 """
     _nparsi(s) -> Int
 
-Contract: the integer that `s` holds, as `nparsi`: the number of `_nparsd` cut toward
-zero (the C cast). Throws the `SpiceError` of `_nparsd` for a string that is not a
-number, and `SpiceError(:badnumber)` with the message of `nparsi` when the cut value is
-outside `intmin()` to `intmax()`.
+Return the integer of `s`, as `nparsi`: the number of `_nparsd` cut toward zero. Throws
+`SpiceError(:badnumber)` for a string that is not a number and for a value outside the
+32-bit integers.
 """
 function _nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Int
     t = trunc(_nparsd(s))
@@ -234,9 +229,9 @@ function _nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Int
 end
 
 """
-Contract: `x` rounded to the nearest integer, a tie away from zero (`i_dnnt`), when it is
-in the range that `gipool_` accepts (`intmin()` to `intmax()`); `nothing` otherwise,
-NaN included, where `gipool_` signals SPICE(INTOUTOFRANGE).
+Return `x` rounded to the nearest integer, a tie away from zero, when it is in the range
+that `gipool_` accepts; `nothing` otherwise (NaN included), where `gipool_` signals
+SPICE(INTOUTOFRANGE).
 """
 @inline _gipool_value(x::Float64)::Union{Int32, Nothing} =
     -2147483648.0 <= x <= 2147483647.0 ? Int32(_nint(x)) : nothing
@@ -251,12 +246,11 @@ NaN included, where `gipool_` signals SPICE(INTOUTOFRANGE).
 """
     _gipool_first(v, name; room = 1, single = false, strict = true) -> Union{Int32,Nothing}
 
-Contract: the first value of the pool variable `name` whose values are `v`, as
-`gipool_(name, 1, room, n, ivals, found)` gives it: `nothing` if `v` is not numeric or
-is empty (`found` false). Each of the first `room` values must be in the range of
-`gipool_`, else `SpiceError(:intoutofrange)`, or `nothing` with `strict = false` (for a
-builder of the snapshot, which does not throw). With `single`, `nothing` unless `v`
-has one value (the `n == 1` test of the caller).
+Return the first value of the pool variable `name` whose values are `v`, as
+`gipool_(name, 1, room, n, ivals, found)` gives it, or `nothing` if `v` is not numeric or
+is empty. Each of the first `room` values must be in the range of `gipool_`, else
+`SpiceError(:intoutofrange)`, or `nothing` with `strict = false`. With `single`, the
+result is `nothing` unless `v` has one value.
 """
 function _gipool_first(
         v, name::AbstractString; room::Int = 1, single::Bool = false, strict::Bool = true
@@ -272,7 +266,7 @@ function _gipool_first(
     return _gipool_value(@inbounds v[1])
 end
 
-"Contract: the numeric values of the pool variable `name`, or `nothing` if it is missing or holds strings."
+"Return the numeric values of the pool variable `name`, or `nothing` if it is missing or holds strings."
 function _pool_numbers(pool::AbstractDict, name::AbstractString)
     v = get(pool, name, nothing)
     return v isa Vector{Float64} ? v : nothing
@@ -290,14 +284,10 @@ const _MONTH_ABBR = (
 """
     _tparse(s, yearbound=1969, check=false) -> Float64
 
-Contract: `s` is a kernel date without the leading `@`, `yearbound > 0`; returns the
-seconds past J2000 without leap seconds that `tparse` gives, since the reader of CSPICE
-(`zzrvar_`) calls `tparse_` for such a date. A year of two digits is a year of the 100
-years from `yearbound` (the bound of `tsetyr`), and `check` is the range check of
-`tparch`. Both are the settings of the context at the load. Throws
-`SpiceError(:badtimespec)` for a string that `tparse` rejects. The check is off at start,
-as in CSPICE (there `str2et_` can leave the check on, and the reader then rejects dates
-such as `@1-JAN-49` that it accepted before).
+Return the seconds past J2000 that `tparse` gives for the kernel date `s` (without the
+`@`), as `zzrvar_` reads it. `yearbound` and `check` are the settings of `tsetyr` and
+`tparch` of the context at the load. Throws `SpiceError(:badtimespec)` for a string that
+`tparse` rejects.
 """
 function _tparse(s::AbstractString, yearbound::Int = 1969, check::Bool = false)::Float64
     @assert yearbound > 0
@@ -325,8 +315,8 @@ const _TOK_PLUSEQ = 6
 """
     _tokenize(line) -> (begs, ends, types)
 
-Contract: `line` is one data line as bytes; returns the token boundaries (1-based,
-inclusive) and types exactly as the scanner loop of CSPICE `zzrvar` finds them.
+Return the token boundaries (1-based, inclusive) and types of the data line `line`, as
+the scanner loop of `zzrvar` finds them.
 """
 function _tokenize(line::Vector{UInt8})
     begs = Int[]
@@ -401,7 +391,7 @@ function _tokenize(line::Vector{UInt8})
     return begs, ends, types
 end
 
-"Contract: `line[b:e]` is a quoted token; returns its value as `zzrvar` stores it (outer quotes removed, `''` reduced to `'`, at most 80 characters, trailing blanks removed)."
+"Return the value of the quoted token `line[b:e]` as `zzrvar` stores it: quotes removed, `''` reduced to `'`, at most 80 characters, trailing blanks removed."
 function _string_value(line::Vector{UInt8}, b::Int, e::Int)::String
     line[e] == UInt8('\'') || (e += 1)
     out = UInt8[]
@@ -421,10 +411,9 @@ end
 """
     _clean_line(raw, tabs=true) -> Vector{UInt8}
 
-Contract: `raw` is one physical line; returns the line as `rdkdat` hands it on (cut at
-132 characters, tabs replaced by blanks if `tabs`, blanks removed at both ends). The
-lines of `lmpool` keep their tabs (`tabs = false`): `zzrvbf` reads a tab as a separator
-and keeps it inside a quoted string.
+Return the physical line `raw` as `rdkdat` hands it on: cut at 132 characters, tabs
+replaced by blanks if `tabs`, blanks removed at both ends. The lines of `lmpool` keep
+their tabs (`tabs = false`), as `zzrvbf` reads them.
 """
 function _clean_line(raw::AbstractString, tabs::Bool = true)::Vector{UInt8}
     b = Vector{UInt8}(String(raw))     # one copy; `Vector{UInt8}(codeunits(raw))` of a SubString iterates byte by byte
@@ -465,7 +454,7 @@ function _tk_number(path, lineno, bytes)
     end
 end
 
-"Contract: `kind` is 0 (no value), 1 (strings) or 2 (numbers); adds the assignment of `name` with the values of its kind to `out`, and nothing for kind 0."
+"Add the assignment of `name` with the values of `kind` (1 strings, 2 numbers) to `out`; nothing for kind 0."
 function _tk_finish!(out::Vector{Assignment}, kind::Int, name, append::Bool, strs, nums)
     @assert 0 <= kind <= 2
     kind == 1 && push!(out, Assignment(name, append, strs))
@@ -476,15 +465,12 @@ end
 """
     parse_text_lines(path, lines, yearbound=1969, check=false; buffer=false) -> TextKernel
 
-Contract: `lines` iterates the physical lines of a text kernel; returns the
-assignments in file order with the values CSPICE puts in the kernel pool. `path` is
-used for the result and for error messages only; `yearbound` is the bound of `tsetyr`
-for a year of two digits in an `@` date, and `check` the range check of `tparch` for
-it. With `buffer`, the lines are those of `lmpool`, read as `zzrvbf` reads them: every
-line is data (`\\begindata` and `\\begintext` are not markers, so such a line is a
-malformed assignment) and a tab stays a tab. Throws `SpiceError` for a malformed
-assignment, with the kind that `zzrvar` gives (`:badvarassign`, `:nonprintingchar`,
-`:badvarname`, `:typemismatch`, `:numberexpected`, `:badtimespec`).
+Return the assignments of the physical lines `lines` of a text kernel, in file order, with
+the values that CSPICE puts in the kernel pool. `path` names the result and the messages;
+`yearbound` and `check` are the settings of `tsetyr` and `tparch` for `@` dates. With
+`buffer`, the lines are those of `lmpool`, read as `zzrvbf` reads them: every line is
+data and a tab stays a tab. Throws `SpiceError` with the kind of `zzrvar` for a malformed
+assignment.
 """
 function parse_text_lines(
         path::AbstractString, lines, yearbound::Int = 1969,
@@ -600,12 +586,9 @@ end
 """
     parse_text_kernel(path, yearbound=1969, check=false) -> TextKernel
 
-Contract: `path` names a readable text kernel; returns its assignments in file order.
-Only text between `\\begindata` and `\\begintext` is data. Values are numbers (with
-`D` or `E` exponents), `@` dates as TDB seconds past J2000, or quoted strings with
-`''` as an escaped quote; string elements are kept raw, so a continuation marker is
-still in place (see `pool_string_joined`). Variable names are case-sensitive.
-A file whose name ends in `.json` is read by `parse_json_kernel` instead.
+Return the assignments of the text kernel `path` in file order. String elements keep
+their continuation markers (see `pool_string_joined`). A file whose name ends in `.json`
+is read by `parse_json_kernel`.
 """
 function parse_text_kernel(
         path::AbstractString, yearbound::Int = 1969,
@@ -620,9 +603,8 @@ end
 """
     _physical_lines(text::String) -> Vector{SubString{String}}
 
-Contract: returns the lines of `text` split at CR-LF, LF or a lone CR, as
-`eachsplit(text, r"\\r\\n|\\n|\\r")` does (the piece after a final terminator is kept,
-empty), by a scan of the bytes instead of a regex search per line.
+Return the lines of `text` split at CR-LF, LF or a lone CR, as
+`eachsplit(text, r"\\r\\n|\\n|\\r")` does, without a regex search per line.
 """
 function _physical_lines(text::String)
     cu = codeunits(text)
@@ -651,10 +633,9 @@ end
 """
     apply_assignments!(pool, tk) -> pool
 
-Contract: applies the assignments of `tk` to `pool` in order; `=` replaces a variable
-and `+=` appends to it (or creates it). A stored vector is never mutated, so vectors
-shared with an older snapshot stay valid. Throws `SpiceError(:typemismatch)` when
-`+=` mixes numeric and string values.
+Apply the assignments of `tk` to `pool` in order: `=` replaces a variable and `+=`
+appends to it. A stored vector is never mutated, because older snapshots share it.
+Throws `SpiceError(:typemismatch)` when `+=` mixes numeric and string values.
 """
 function apply_assignments!(pool::Dict{String, PoolValue}, tk::TextKernel)
     for a in tk.assignments
@@ -680,9 +661,8 @@ end
 """
     pool_strings_joined(values, contin) -> Vector{String}
 
-Contract: `values` are the raw elements of a string variable and `contin` a non-empty
-continuation marker; returns the logical strings, where an element that ends in
-`contin` is joined (marker removed) with the next element, as CSPICE `stpool` does.
+Return the logical strings of the raw elements `values` of a string variable, as `stpool`
+joins them: an element that ends in the marker `contin` is joined with the next one.
 """
 function pool_strings_joined(values::Vector{String}, contin::AbstractString)::Vector{String}
     out = String[]
@@ -706,9 +686,8 @@ end
 """
     pool_string_joined(values, nth, contin) -> Union{String,Nothing}
 
-Contract: the `nth` (1-based) logical string of a string variable whose elements may
-be continued with the non-empty marker `contin`, or `nothing` if there is none
-(`stpool`).
+Return the `nth` logical string of `pool_strings_joined`, or `nothing` if there
+is none.
 """
 function pool_string_joined(values::Vector{String}, nth::Integer, contin::AbstractString)
     all = pool_strings_joined(values, contin)
@@ -718,11 +697,9 @@ end
 """
     metakernel_files(tk) -> Vector{String}
 
-Contract: returns the files of `KERNELS_TO_LOAD` of `tk` in load order, with every
-`\$SYMBOL` of `PATH_SYMBOLS` replaced by its `PATH_VALUES` entry (longest symbol
-first, `+` as the continuation marker), and an empty vector if `tk` is not a
-meta-kernel. As in CSPICE, a relative path is returned unchanged, so it is relative
-to the current directory of the process and not to the directory of the meta-kernel.
+Return the files of `KERNELS_TO_LOAD` of `tk` in load order, with every `\$SYMBOL` of
+`PATH_SYMBOLS` replaced by its `PATH_VALUES` entry; empty if `tk` is not a meta-kernel.
+A relative path is relative to the current directory, as in CSPICE.
 """
 function metakernel_files(tk::TextKernel)::Vector{String}
     pool = apply_assignments!(Dict{String, PoolValue}(), tk)
@@ -749,7 +726,7 @@ function metakernel_files(tk::TextKernel)::Vector{String}
     return [_substitute_symbols(f, syms, values) for f in files]
 end
 
-"Contract: returns `file` with each `\$SYMBOL` replaced by its value; at each `\$` the longest matching symbol wins and the inserted text is not scanned again."
+"Return `file` with each `\$SYMBOL` replaced by its value; the longest matching symbol wins, and inserted text is not scanned again."
 function _substitute_symbols(file::String, syms::Vector{String}, values::Vector{String})
     out = IOBuffer()
     i = firstindex(file)

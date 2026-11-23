@@ -25,7 +25,7 @@
 # that of `prop2b` (`_prop2b_root`, for the universal variable). The derivative of the
 # root is that of the implicit function, from Newton steps at the converged root in the
 # number type of the arguments (`_m_nearpt`, `_prop2b`). A `Float64` takes one step,
-# through `_ad_pin(a, p)` (`src/spk_types/numeric.jl`), whose value is `p` and whose
+# through `_ad_pin(a, p)` (`src/spk/types/numeric.jl`), whose value is `p` and whose
 # derivative, in the rules of ChainRulesCore, Enzyme and Mooncake, is that of `a`; so
 # the value is the plain one bit for bit, and a reverse-mode package that differentiates
 # the code after the root gets the derivative of the root. `_ad_pin` also gives the

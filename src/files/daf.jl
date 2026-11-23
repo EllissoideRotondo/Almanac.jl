@@ -16,10 +16,9 @@ const _DAF_FTPSTR = UInt8[
 """
     _unmap!(a::Array) -> Nothing
 
-Remove the memory map of `a` now if `Mmap.mmap` made it, and do nothing for another array.
-`a` must not be read afterwards. The finalizer of a mapped array removes the map when the
-garbage collector frees the array; Windows cannot delete or replace a file while a map of
-it exists, so a file that a call maps only for a while is unmapped at once.
+Remove the memory map of `a` now if `Mmap.mmap` made it; do nothing for another array.
+`a` must not be read afterwards. Windows cannot delete or replace a file while a map of it
+exists, so a map that is needed only for a while is removed with this call.
 """
 function _unmap!(a::Array)
     # `Mmap.mmap` puts the finalizer on the `Memory` of the array from Julia 1.11 on.
@@ -31,14 +30,14 @@ function _unmap!(a::Array)
     return nothing
 end
 
-"32-bit integer at 0-based byte offset `off` of `raw`, stored little-endian if `little`, else big-endian; requires `off + 4 <= length(raw)`."
+# The 32-bit integer and the double at 0-based byte offset `off` of `raw`, little-endian
+# if `little`, else big-endian.
 @inline function _daf_i32(raw::AbstractVector{UInt8}, off::Int, little::Bool)
     v = UInt32(raw[off + 1]) | (UInt32(raw[off + 2]) << 8) | (UInt32(raw[off + 3]) << 16) |
         (UInt32(raw[off + 4]) << 24)
     return reinterpret(Int32, little ? v : bswap(v))
 end
 
-"Double at 0-based byte offset `off` of `raw`, stored little-endian if `little`, else big-endian; requires `off + 8 <= length(raw)`."
 @inline function _daf_f64(raw::AbstractVector{UInt8}, off::Int, little::Bool)
     v = UInt64(0)
     for i in 1:8                      # invariant: v holds bytes off+1 .. off+i-1, little-endian
@@ -50,9 +49,8 @@ end
 """
     _daf_name(raw, rec, i, ss) -> String
 
-Name of summary `i` of the summary record `rec`, as `dafgn` reads it: the `8ss` bytes in
-the name record `rec + 1`, without trailing blanks and nulls. The bytes are characters,
-so the byte order does not matter. A name record that is not in `raw` gives `""`.
+Return the name of summary `i` of the summary record `rec`, as `dafgn` reads it, without
+trailing blanks and nulls. A name record that is not in `raw` gives `""`.
 """
 function _daf_name(raw::AbstractVector{UInt8}, rec::Int, i::Int, ss::Int)
     namsiz = 8 * ss
@@ -116,7 +114,7 @@ function _daf_little(
     throw(SpiceError(:unsupportedbff, "$who: $path appears to be a VAX file, which is not supported"))
 end
 
-"Value of `x` as an `Int` if `x` is a finite whole number in `lo:hi`, else throws `SpiceError(:baddaf)` that names `what`."
+"Return `x` as an `Int` if it is a whole number in `lo:hi`; else throw `SpiceError(:baddaf)`."
 function _daf_int(x::Float64, lo::Int, hi::Int, what::AbstractString, path::AbstractString)
     (isfinite(x) && x == trunc(x) && lo <= x <= hi) ||
         throw(SpiceError(:baddaf, "$what = $x is not a whole number in $lo:$hi in $path"))
@@ -126,9 +124,9 @@ end
 """
     _daf_directory(data, path, kind, dtype, baddr, eaddr) -> (init, intlen, rsize, nrec)
 
-Directory values (the last four doubles) of a fixed-interval Chebyshev segment that
-occupies `data[baddr:eaddr]`; throws `SpiceError(:baddaf)` unless RSIZE and N are
-positive whole numbers that agree with the segment length and the data type.
+Return the last four doubles of the fixed-interval Chebyshev segment `data[baddr:eaddr]`.
+Throw `SpiceError(:baddaf)` unless RSIZE and N are positive whole numbers that agree with
+the segment length and the data type.
 """
 function _daf_directory(
         data::Vector{Float64}, path::AbstractString, kind::Symbol,
@@ -197,9 +195,9 @@ end
 """
     _daf_sizeok(size, psize, dsize, offset) -> (ok::Bool, n::Int)
 
-Solve `size = psize*n + (n - offset) ÷ dsize` for `n`, as `zzsizeok_` of CSPICE: the
-number of packets of `psize` doubles with one directory value for each `dsize` packets
-that fill `size` doubles exactly. `ok` is false if there is no such `n`.
+Solve `size = psize*n + (n - offset) ÷ dsize` for `n`, as `zzsizeok_`: the number of
+packets of `psize` doubles, with one directory value per `dsize` packets, that fill `size`
+doubles. `ok` is false if there is no such `n`.
 """
 function _daf_sizeok(size::Int, psize::Int, dsize::Int, offset::Int)
     (size > 0 && dsize > 0 && psize > 0) || return false, 0
@@ -212,12 +210,8 @@ end
 """
     _daf_ckspk(data, ic, nwords) -> Symbol
 
-`:SPK` or `:CK` for an old `NAIF/DAF` file with summary format ND = 2, NI = 6, decided
-from the integer part `ic` of its first summary as `zzckspk_` of CSPICE does: the
-fourth integer is the data type of an SPK segment (never 0) and the angular-velocity
-flag of a CK segment (0 or 1), the second is the center of an SPK segment (0 is a valid
-center, but not a valid frame of a CK segment), and for the case that stays open the
-size of the segment decides between SPK type 1 and CK. Requires `length(ic) == 6`.
+Return `:SPK` or `:CK` for an old `NAIF/DAF` file with ND = 2 and NI = 6, from the
+integer part `ic` of its first summary, as `zzckspk_` decides it.
 """
 function _daf_ckspk(data::Vector{Float64}, ic::NTuple{6, Int32}, nwords::Int)
     # The segment bounds matter only after the first three tests.
@@ -230,7 +224,7 @@ end
     _daf_ckspk(word, ic) -> Symbol
 
 The tests of `zzckspk_` on the integer part `ic` of the first summary, with `word(a)`
-the double at DAF address `a`: the core of the two forms of `_daf_ckspk`.
+the double at DAF address `a`.
 """
 function _daf_ckspk(word::F, ic) where {F}
     angvel, dtype = ic[4], ic[3]
@@ -258,21 +252,14 @@ end
 Open the binary SPK, binary PCK or CK kernel at `path` and return its data array and
 its segment descriptors in file order.
 
-Contract: `path` names a readable DAF file. In the result `data[a]` is the double at
-DAF address `a` (memory-mapped for a file of native byte order, an owned byte-swapped
-copy otherwise), `kind` is `:SPK`, `:PCK` or `:CK`, and every segment has finite epochs
-and `1 <= baddr <= eaddr <= length(data)`. A CK file has its descriptors in
-`cksegments` (instrument, reference frame, data type, angular-velocity flag, and the
-encoded SCLK start and stop as `t0`, `t1`) and an empty `segments`. For SPK types 2, 3, 20 and PCK type 2 the
-fields `init`, `intlen`, `rsize`, `nrec` hold the last four doubles of the segment and
-`rsize`, `nrec` agree with the segment length. `names` holds the array names in file
-order. Throws `SpiceError` with kind
-`:filenotfound` or `:baddaf` if the file does not meet these conditions, and the kinds
-of [`_daf_little`](@ref) if its byte order cannot be read.
+`data` is memory-mapped for a file of native byte order and a byte-swapped copy
+otherwise. Every segment has finite epochs and `1 <= baddr <= eaddr <= length(data)`, and
+a fixed-interval Chebyshev segment has its directory values checked (`_daf_directory`).
+The ID words `DAF/SPK`, `DAF/PCK`, `DAF/CK` and the old `NAIF/DAF` are accepted.
+`names` holds the array names in file order.
 
-The ID words `DAF/SPK`, `DAF/PCK` and `DAF/CK` are accepted, and also the old
-`NAIF/DAF` (as in `de405.bsp`), for which the kind follows from NI (5 is PCK; 6 is SPK
-or CK, and `_daf_ckspk` decides from the first segment).
+Throws `SpiceError(:filenotfound)` for a missing file, `SpiceError(:baddaf)` for a file
+that fails a check, and the kinds of `_daf_little` for an unknown byte order.
 """
 function open_daf(path::AbstractString)
     _isfile(path) || throw(SpiceError(:filenotfound, "no such file: $path"))
@@ -293,11 +280,9 @@ end
 """
     _daf_parse(io, raw, path, native) -> DAF
 
-Contract: the `DAF` of the bytes `raw` of a DAF, with the checks and the result of
-[`open_daf`](@ref); `io` reads the same bytes (for `_daf_little`), and `native()` returns
-the words of `raw` as a `Vector{Float64}` when they have the native byte order. `raw` is
-unmapped on return if it is a memory map; the result never refers to it. `path` is the
-name of the result and of the messages.
+Return the `DAF` of the bytes `raw`, with the checks of [`open_daf`](@ref). `io` reads
+the same bytes, and `native()` returns the words of `raw` as a `Vector{Float64}` when they
+have the native byte order. `raw` is unmapped on return; the result does not refer to it.
 """
 function _daf_parse(io::IO, raw::Vector{UInt8}, path::AbstractString, native)
     nwords = length(raw) ÷ 8

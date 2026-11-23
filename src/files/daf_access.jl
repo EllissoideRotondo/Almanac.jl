@@ -80,23 +80,17 @@ bytes in memory, with no file; [`furnsh`](@ref) loads it. Close it with [`dafcls
 [`spkcls`](@ref), [`ckcls`](@ref), [`pckcls`](@ref) or `close`; `isopen(handle)` tells
 whether it is open.
 
-The handle holds the state that CSPICE keeps in global tables: the array search
-(`dafbfs`, `daffna`, `dafbbs`, `daffpa`) and the array that is being added (`dafbna`,
-`dafada`, `dafena`). Two handles are independent, so two tasks can work on two handles at
-the same time. One handle is not safe for concurrent use: tasks that share a handle must
-hold a lock around every call. A file that an open handle has open, for read or for write,
-cannot be opened for write by another handle (`SpiceError(:fileopenconflict)`), as in
-CSPICE.
-Unlike CSPICE, a file that is open for write can be opened for read, and a kernel that
-[`furnsh`](@ref) loaded can be opened for write.
+The handle holds the state of the array search (`dafbfs`, `daffna`, `dafbbs`, `daffpa`)
+and of the array that is being added (`dafbna`, `dafada`, `dafena`), which CSPICE keeps in
+global tables. One handle is not safe for concurrent use: tasks that share a handle must
+hold a lock around every call. A file that a handle has open cannot be opened for write by
+another handle (`SpiceError(:fileopenconflict)`).
 
-A call on a closed handle throws `SpiceError(:dafnosuchhandle)`; the close calls do
-nothing instead. A write call on a handle that is open for reading throws
-`SpiceError(:dafinvalidaccess)`.
-
-A write call puts its bytes on disk (in memory, for a handle without a file) before it
-returns, except [`spk14b`](@ref) and [`spk14a`](@ref), whose data [`spk14e`](@ref)
-writes. A write call that throws for an invalid input does not change the file.
+A call on a closed handle throws `SpiceError(:dafnosuchhandle)`, except the close calls,
+which do nothing. A write call on a handle open for reading throws
+`SpiceError(:dafinvalidaccess)`. A write call puts its bytes on disk before it returns,
+except [`spk14b`](@ref) and [`spk14a`](@ref), whose data [`spk14e`](@ref) writes; a write
+call that throws for an invalid input does not change the file.
 """
 mutable struct DAFHandle
     const path::String
@@ -131,7 +125,7 @@ end
 Base.isopen(h::DAFHandle) = h.isopen
 Base.close(h::DAFHandle) = dafcls(h)
 
-"Whether `h` keeps its bytes in memory (a handle of [`dafops`](@ref)) and has no file."
+# A handle of `dafops` keeps its bytes in memory and has no file.
 _daf_inmemory(h::DAFHandle) = h.io isa IOBuffer
 
 "The number of bytes of the file of `h`, or of the buffer of an in-memory handle."
@@ -150,7 +144,6 @@ function _daf_bytes(h::DAFHandle)
     return read(h.io)
 end
 
-"Doubles in one summary of a DAF with the format `nd`, `ni`."
 _daf_sumsize(nd::Integer, ni::Integer) = Int(nd) + (Int(ni) + 1) ÷ 2
 
 @inline function _daf_check_open(h::DAFHandle, who::AbstractString)
@@ -177,7 +170,7 @@ end
     _daf_read_at!(h, buf, offset) -> Int
 
 Read up to `length(buf)` bytes of the file of `h` from the 0-based byte `offset` into
-`buf` and return the number of bytes read (less than `length(buf)` at the end of file).
+`buf` and return the number of bytes read.
 """
 function _daf_read_at!(h::DAFHandle, buf::Vector{UInt8}, offset::Integer)
     offset >= _daf_size(h) && return 0
@@ -244,25 +237,26 @@ function _daf_crec(h::DAFHandle, recno::Integer)
     return rec, n == _DAF_CRECLEN
 end
 
-"Record number and word (both 1-based) of the DAF address `addr`, as `dafarw`."
+# The record and word (both 1-based) of a DAF address, as `dafarw`, and the inverse
+# `dafrwa` for word 1.
 _daf_arw(addr::Integer) = ((Int(addr) - 1) ÷ _DAF_RECWORDS + 1, (Int(addr) - 1) % _DAF_RECWORDS + 1)
 
-"First address of record `recno`, as `dafrwa` with word 1."
 _daf_rwa(recno::Integer) = (Int(recno) - 1) * _DAF_RECWORDS + 1
 
 # ---------------------------------------------------------------------------------------
 # File record and file architecture
 # ---------------------------------------------------------------------------------------
 
-"32-bit integer at 0-based byte offset `off` of the file record `raw` of `h`."
+# The 32-bit integer at 0-based byte offset `off` of the bytes `raw` of a DAF or DAS file,
+# whose byte order is the other one if `swap`.
 _daf_frint(raw::Vector{UInt8}, off::Int, swap::Bool) =
     Int(_daf_i32(raw, off, swap ? !_DAF_NATIVE_LITTLE : _DAF_NATIVE_LITTLE))
 
 """
     idw2at(idword) -> (arch, kind)
 
-Architecture and type of a kernel from its ID word (the first eight characters of the
-file), as
+Return the architecture and type of a kernel from its ID word (the first eight
+characters of the file), as
 [`idw2at`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/idw2at.html) of SPICELIB: `("DAF", "SPK")` for `DAF/SPK`, `("DAF", "?")` for the
 old `NAIF/DAF`, `("KPL", "LSK")` for `KPL/LSK`, and `("?", "?")` if the word is not
 recognized.
@@ -424,12 +418,10 @@ end
 Close the DAF file of `handle`, as
 [`dafcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafcls_c.html).
 
-The close writes no data: every write call puts its bytes on disk before it returns,
-except [`spk14b`](@ref) and [`spk14a`](@ref) (see [`DAFHandle`](@ref)). An array that
-`dafbna` began and `dafena` did not end has no summary in the file, so a search does not
-find it. The call does nothing if the handle is closed already. After the call the
-handle keeps the file neither open nor memory-mapped, so that Windows can delete or
-replace it. For a handle in memory (from [`dafops`](@ref)) the close discards the bytes.
+The close writes no data (see [`DAFHandle`](@ref)): an array that `dafbna` began and
+`dafena` did not end has no summary in the file, so a search does not find it. The call
+does nothing on a closed handle. For a handle in memory (from [`dafops`](@ref)) the close
+discards the bytes.
 """
 function dafcls(h::DAFHandle)
     h.isopen || return nothing
@@ -533,9 +525,7 @@ function getfat(path::AbstractString)
     return arch, kind
 end
 
-# `_daf_sizeok` is in `daf.jl`.
-
-"Type `\"SPK\"`, `\"CK\"` or `\"?\"` of an old DAF without a type in its ID word, as `zzckspk`."
+"Return `\"SPK\"`, `\"CK\"` or `\"?\"` for an old DAF without a type in its ID word, as `zzckspk`."
 function _daf_ckspk(h::DAFHandle)
     (h.nd == 2 && h.ni == 6) || return "?"
     dafbfs(h)
@@ -905,11 +895,10 @@ end
 """
     _daf_comment_extent(h, fward, who) -> (ncomc, ncomr, notused)
 
-Number of comment characters before the end-of-comments mark, the number of the
-reserved record that holds the mark (counted from 1 at record 2; 0 if the area is
-empty) and the number of all-null reserved records after it, as `dafac` and `dafec`
-find them. Throws `SpiceError(:badcommentarea)` if the mark is missing from a
-comment area that is not empty.
+Return the number of comment characters before the end-of-comments mark, the reserved
+record that holds the mark (counted from 1 at record 2; 0 for an empty area) and the
+number of all-null reserved records after it. Throws `SpiceError(:badcommentarea)` if the
+mark is missing from a comment area that is not empty.
 """
 function _daf_comment_extent(h::DAFHandle, fward::Int, who::AbstractString)
     ncomr = fward - 2

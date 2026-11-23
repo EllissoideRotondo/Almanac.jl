@@ -7,8 +7,7 @@
 """
     is_json_kernel(path) -> Bool
 
-Contract: true if the name of `path` ends in `.json`, in any case. The content is not
-inspected.
+Return true if the name of `path` ends in `.json`, in any case; the content is not read.
 """
 is_json_kernel(path::AbstractString) = endswith(lowercase(path), ".json")
 
@@ -157,8 +156,10 @@ function _json_number!(r::_JSONReader)::Float64
 end
 
 """
-One scalar: `(kind, value)` with kind 1 for a string, 2 for a number (`true` and `false`
-are 1 and 0), and 3 for a time (a string that starts with `@`, without the `@`).
+    _json_scalar!(r) -> (kind, value)
+
+Read one scalar: kind 1 for a string, 2 for a number (`true` and `false` are 1 and 0),
+and 3 for a time (a string that starts with `@`, without the `@`).
 """
 function _json_scalar!(r::_JSONReader)
     _json_skip!(r)
@@ -207,24 +208,12 @@ end
 """
     parse_json_kernel(path, yearbound=1969, check=false) -> TextKernel
 
-Contract: `path` names a readable JSON kernel; returns its assignments in file order,
-with the values that the equivalent text kernel would put in the kernel pool.
-`yearbound` and `check` are those of `parse_text_kernel`, for the `@` times.
+Return the assignments of the JSON kernel `path` in file order, with the values that the
+equivalent text kernel puts in the kernel pool. The format is in the manual section "Text
+kernels in JSON". `yearbound` and `check` are those of `parse_text_kernel`.
 
-The file is one JSON object (RFC 8259, plus `//` line comments and trailing commas;
-a UTF-8 byte order mark is skipped). Each member is one assignment:
-
-- a key `"NAME"` is `NAME = ...` and `"+NAME"` is `NAME += ...`;
-- a number, `true` (1) or `false` (0) is a numeric value, read correctly rounded;
-- a string is a string value, and a string that starts with `@` is a time, as `@` in a
-  text kernel;
-- an array of such values is a vector; its values are all numbers and times, or all
-  strings.
-
-Throws `SpiceError(:badkernel)` for a syntax error, `null`, a nested object or array,
-an empty or mixed array, a variable name that a text kernel does not accept, or a
-string value that is empty or longer than 80 characters. Nothing of the file is
-returned on an error, so a load that fails changes nothing.
+Throws `SpiceError(:badkernel)` for a syntax error or a value that a text kernel does not
+accept.
 """
 function parse_json_kernel(
         path::AbstractString, yearbound::Int = 1969,

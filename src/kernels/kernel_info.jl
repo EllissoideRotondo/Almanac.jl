@@ -34,9 +34,8 @@ end
 """
     kernel_filetype(entry::Loaded) -> String
 
-Type of a load-list entry as CSPICE reports it: `"SPK"`, `"CK"`, `"PCK"`, `"DSK"`, `"EK"` for a
-binary kernel, `"META"` for a text kernel that assigns `KERNELS_TO_LOAD`, `"TEXT"` for every
-other text kernel.
+Return the type of a load-list entry as CSPICE reports it: `"SPK"`, `"CK"`, `"PCK"`,
+`"DSK"`, `"EK"`, `"META"` for a text kernel that assigns `KERNELS_TO_LOAD`, or `"TEXT"`.
 """
 function kernel_filetype(entry::Loaded)
     content = entry.content
@@ -47,9 +46,8 @@ end
 """
     _kind_filter(kind) -> Union{Nothing,Vector{String}}
 
-The kernel types that the string `kind` selects: `nothing` (every type) if one of its
-blank-separated words is `"ALL"`, as in `keeper`, else the words in upper case. A word
-that is not a kernel type selects nothing, as in CSPICE.
+Return the kernel types that the string `kind` selects: `nothing` (every type) if one of
+its blank-separated words is `"ALL"`, else the words in upper case.
 """
 function _kind_filter(kind::AbstractString)
     words = String[uppercase(w) for w in split(kind, ' '; keepempty = false)]
@@ -103,8 +101,7 @@ as for [`ktotal`](@ref). `file` is the path given to [`furnsh`](@ref), or for a 
 of a meta-kernel its `KERNELS_TO_LOAD` entry after the `PATH_SYMBOLS` substitution.
 `filtyp` is one of the type words of `ktotal`, and `source` is the meta-kernel that
 loaded the file, or `""`. `handle` is always 0, because a loaded kernel has no file
-handle in this package; it is kept for the tuple of CSPICE. `nothing` takes the place
-of the `found` flag of CSPICE.
+handle.
 
 Throws `SpiceError(:emptystring)` if `kind` is the empty string.
 
@@ -189,11 +186,8 @@ end
 """
     _each_summary(f, path) -> Nothing
 
-Call `f(dc, ic, handle)` for the unpacked summary of every array of the DAF `path`,
-in file order, on a private read handle that is closed afterwards. This is the loop
-of `spkobj` and `spkcov`; a coverage routine for another kernel type (`ckcov`,
-`pckcov`) has the same structure: `_require_binary_kernel`, then this loop with a
-body that inserts the intervals of the wanted object into a `Window`.
+Call `f(dc, ic, handle)` for the unpacked summary of every array of the DAF `path`, in
+file order, on a read handle that is closed afterwards.
 """
 function _each_summary(f, path::AbstractString)
     h = dafopr(path)
@@ -224,9 +218,8 @@ Insert the ID codes of the bodies that have data in the SPK file `path` into the
 vector `ids`, as
 [`spkobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkobj_c.html) does with a SPICE cell.
 
-`ids` is used as a set: on return it is sorted and without duplicates. The vector
-comes first, as in SPICE.jl; CSPICE has the cell last. The file is read from disk and
-need not be loaded.
+`ids` is used as a set: on return it is sorted and without duplicates. The vector comes
+first, as in SPICE.jl; CSPICE has the cell last.
 
 Throws the errors of [`spkobj`](@ref).
 """
@@ -293,13 +286,10 @@ end
 Return the coverage [`Window`](@ref) of the body `idcode` in the SPK file `path`, as
 [`spkcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcov_c.html).
 
-The window is the union of the intervals `[start, stop]` of the segments of that
-body, in seconds past J2000 TDB, as sorted disjoint intervals. `collect(w)` gives the
-endpoints as a `Vector{Float64}`. The window is empty if the body has no data. The
-file is read from disk and need not be loaded. An open [`DAFHandle`](@ref)
-(in memory, or of a file) can take the place of the path: the call then reads the
-segments that the handle holds now, without an array that `dafbna` began and `dafena`
-did not end, and throws `SpiceError(:dafnosuchhandle)` if the handle is closed.
+The window is the union of the intervals `[start, stop]` of the segments of that body,
+in seconds past J2000 TDB; it is empty if the body has no data. `collect(w)` gives the
+endpoints as a `Vector{Float64}`. The file need not be loaded, and an open
+[`DAFHandle`](@ref) can take the place of the path, as for [`spkobj`](@ref).
 
 Throws the errors of [`spkobj`](@ref).
 
