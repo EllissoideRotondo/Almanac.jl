@@ -1372,7 +1372,6 @@ end
     (Ref{DynLevel{KernelSet}}, Ref{DynFrame}, Float64), lev, def, et
 )
 
-@noinline _throw_spice(kind::Symbol, msg::AbstractString) = throw(SpiceError(kind, msg))
 @noinline _dyn_throw_missing(id) = throw(
     SpiceError(
         :framedatanotfound,
