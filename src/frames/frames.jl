@@ -56,7 +56,6 @@ function _build_inertial_rotations()
             m = _m_rotmat(m, angle * arcsec / dpr, axis)
         end
         b = findfirst(k -> INERTIAL_FRAME_DEFS[k][1] == base, 1:i)
-        b === nothing && error("base frame of inertial frame $i is not defined before it")
         push!(trans, _m_mxm(m, b == i ? ident : trans[b]))
     end
     return trans
@@ -363,18 +362,20 @@ frame_id(::KernelSet, id::Integer) = Int32(id)
 
 """
     frame_name(ks, id) -> Union{String,Nothing}
+    frame_name(frames, id) -> Union{String,Nothing}
 
-Contract: name of the frame `id`: a built-in frame first, then a pool-defined frame,
-or `nothing` if the ID has no name. Reads `ks.frames` only.
+Return the name of the frame `id`, a built-in frame first, then a frame of `ks.frames`
+(or of the dictionary `frames`), as `frmnam_`; `nothing` if the ID has no name.
 """
-function frame_name(ks::KernelSet, id::Integer)::Union{String, Nothing}
+function frame_name(frames::AbstractDict, id::Integer)::Union{String, Nothing}
     typemin(Int32) <= id <= typemax(Int32) || return nothing
     i = Int32(id)
     f = get(BUILTIN_FRAMES, i, nothing)
     f === nothing || return f.name
-    f = get(ks.frames, i, nothing)
+    f = get(frames, i, nothing)
     return f === nothing ? nothing : f.name
 end
+frame_name(ks::KernelSet, id::Integer) = frame_name(ks.frames, id)
 
 """
     _frame_def_or_nothing(ks, id) -> Union{FrameDef,Nothing}

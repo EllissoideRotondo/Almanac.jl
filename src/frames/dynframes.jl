@@ -552,9 +552,6 @@ end
 @inline _dyn_lift(::Type{S}, x::Float64) where {S <: Real} = convert(S, x)
 @inline _dyn_lift(::Type{S}, x::Taylor{1, Float64}) where {S <: Real} = convert(S, _dyn_still(x))
 
-"`x - m * trunc(x / m)` with the arithmetic of `d_mod` of the f2c library; the subtracted quantity is a constant, so derivatives are not changed."
-@inline _dyn_dmod(x::Real, m::Float64) = x - m * trunc(primal(x) / m)
-
 """
     _dyn_xf(mode, ks, from, to, et) -> Mat3
 
@@ -570,8 +567,6 @@ exact mode (`zzrefch0_`), `_ck_state_rotation` in the state mode (`zzfrmch0_`).
 # Earth precession, nutation and obliquity models
 # ---------------------------------------------------------------------------------------
 
-"Seconds in a Julian century, `jyear_() * 100`."
-const _DYN_CENTURY = 31557600.0 * 100.0
 "Radians per arcsecond, `rpd_() / 3600`."
 const _DYN_ARCSEC = (pi / 180) / 3600.0
 
@@ -594,7 +589,7 @@ Contract: the precession angles of `zzeprc76_` (radians) at `et` (TDB seconds), 
 arithmetic of `zzeprc76_`, in the number type of `et`.
 """
 @inline function _dyn_prec_angles(et::S) where {S <: Real}
-    t = et / _DYN_CENTURY
+    t = et / _SEC_PER_CENTURY
     zeta = t * (t * (t * 0.017998 + 0.30188) + 2306.2181) * _DYN_ARCSEC
     z = t * (t * (t * 0.018203 + 1.09468) + 2306.2181) * _DYN_ARCSEC
     theta = t * (t * (t * -0.041833 - 0.42665) + 2004.3109) * _DYN_ARCSEC
@@ -608,8 +603,8 @@ Contract: the analytic rates (radians per second) of the angles of `_dyn_prec_an
 with the arithmetic of `zzeprc76_`.
 """
 @inline function _dyn_prec_rates(et::S) where {S <: Real}
-    t = et / _DYN_CENTURY
-    ts = 1.0 / _DYN_CENTURY
+    t = et / _SEC_PER_CENTURY
+    ts = 1.0 / _SEC_PER_CENTURY
     dzeta = ts * (t * (t * 3 * 0.017998 + 0.60375999999999996) + 2306.2181) * _DYN_ARCSEC
     dz = ts * (t * (t * 3 * 0.018203 + 2.1893600000000002) + 2306.2181) * _DYN_ARCSEC
     dtheta = ts * (t * (t * 3 * -0.041833 - 0.85329999999999995) + 2004.3109) * _DYN_ARCSEC
@@ -919,7 +914,7 @@ end
 "Contract: the mean obliquity of `_dyn_mobliq` and its rate (radians per second), with the arithmetic of `zzmobliq_`, in the number type of `et`."
 @inline function _dyn_mobliq_state(et::Real)
     t = et / 31557600.0 / 100.0
-    mob = _DYN_ARCSEC * (t * (t * (t * 0.001813 - 5.9e-4) - 46.815) + 84381.448)
+    mob = _dyn_mobliq(et)
     dmob = _DYN_ARCSEC * (t * (t * 3 * 0.001813 - 0.0011800000000000001) - 46.815) *
         (1.0 / (31557600.0 * 100.0))
     return mob, dmob
@@ -1268,13 +1263,7 @@ end
         a1::Taylor{1, Float64}, a2::Taylor{1, Float64}, a3::Taylor{1, Float64},
         axes::NTuple{3, Int32}
     )
-    x = eul2xf(SVector(a1.v, a2.v, a3.v, a1.d[1], a2.d[1], a3.d[1]), axes[1], axes[2], axes[3])
-    return Mat3{Taylor{1, Float64}}(
-        ntuple(Val(9)) do k
-            i, j = (k - 1) % 3 + 1, (k - 1) ÷ 3 + 1
-            Taylor((x[i, j], x[i + 3, j]))
-        end
-    )
+    return _dyn_eul2xf(a1.v, a2.v, a3.v, a1.d[1], a2.d[1], a3.d[1], axes[1], axes[2], axes[3])
 end
 
 """

@@ -202,8 +202,7 @@ end
     clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
     l = ks.lsk
     l === nothing && _sclk_nolsk()
-    m0, m1 = l.m
-    return partim + l.k * sin(m0 + m1 * partim + l.eb * sin(m0 + m1 * partim))
+    return _unitim(l, partim, _US_TDT, _US_TDB)
 end
 
 "Parallel time of `clock` for the TDB epoch `et` (`unitim_`, three fixed-point steps), generic over the number type."
@@ -212,12 +211,7 @@ end
     clock.timsys == 2 || _sclk_badsys(clock.id, clock.timsys)
     l = ks.lsk
     l === nothing && _sclk_nolsk()
-    m0, m1 = l.m
-    tdt = et
-    for _ in 1:3
-        tdt = et - l.k * sin(m0 + m1 * tdt + l.eb * sin(m0 + m1 * tdt))
-    end
-    return tdt
+    return _unitim(l, et, _US_TDB, _US_TDT)
 end
 
 """

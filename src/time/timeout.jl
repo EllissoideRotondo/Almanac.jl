@@ -1008,12 +1008,7 @@ julia> etcal(-1.0e11)
 """
 function etcal(et::Real)::String63
     mynum = primal(et) + _HALFD
-    q = trunc(mynum / _SPD)
-    secs = mynum - q * _SPD
-    if secs < 0.0
-        q -= 1.0
-        secs += _SPD
-    end
+    q, secs = _rmaind(mynum, _SPD)
     dmxint = 2147483647.0
     dmnint = -2147483648.0
     messge = ""

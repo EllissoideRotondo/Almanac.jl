@@ -1021,8 +1021,6 @@ function _tcheck(tvec::Vector{Float64}, type::String, mods::Bool, modify::Vector
     jun30 = 181.0 + leapdy
     ampm = mods && modify[_MOD_AMPM] != ""
     hubnd, hlbnd = ampm ? (13.0, 1.0) : (24.0, 0.0)
-    (type == "YD" || type == "YMD") || return false, "The type of the time vector " *
-        "specified was $type, only 'YD' and 'YMD' are recognized."
     tvec[1] == Float64(year) || return false, "The year value was $(_num(tvec[1])). " *
         "This must be an integral value."
     local day::Int, doy::Float64

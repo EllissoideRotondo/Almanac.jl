@@ -64,15 +64,13 @@ elements are left out, which does not change a result). Generic over the angle t
 end
 
 """
-    _reduce_twopi(w)
+    _dyn_dmod(x, m)
 
-`w` reduced by a whole number of turns with the arithmetic of `d_mod(w, twopi_())` in
-`tisbod_` (the f2c library computes `w - twopi * trunc(w / twopi)` in floating point,
-which is not the exact remainder; the same operations are used here so that the
-order-0 value equals the one of CSPICE). The subtracted quantity is a constant, so
-derivatives are not changed. Generic over the type of `w`.
+`x - m * trunc(x / m)`, the remainder of `d_mod` of the f2c library, which is not the
+exact remainder. The subtracted quantity is a constant, so the derivatives of `x` are
+not changed.
 """
-@inline _reduce_twopi(w::Real) = w - _TWOPI * trunc(primal(w) / _TWOPI)
+@inline _dyn_dmod(x::Real, m::Float64) = x - m * trunc(primal(x) / m)
 
 # --- text PCK constants ---------------------------------------------------------------
 
@@ -288,7 +286,7 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
 
     ra *= _RPD
     dec *= _RPD
-    w = _reduce_twopi(w * _RPD)
+    w = _dyn_dmod(w * _RPD, _TWOPI)
     tipm = _eul313(w, _HALFPI - dec, ra + _HALFPI)
     br.ref == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(br.ref))
@@ -398,7 +396,7 @@ function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     end
     ra *= _RPD
     dec *= _RPD
-    w = _reduce_twopi(w * _RPD)
+    w = _dyn_dmod(w * _RPD, _TWOPI)
     dra *= _RPD
     ddec *= _RPD
     dw *= _RPD
@@ -424,7 +422,7 @@ from J2000 to the reference frame of the segment. Requires `seg.t0 <= primal(et)
     ang = pck_eval(data, seg, et, Val(0))[1]
     # `pcke02_` and `pcke20_` reduce W with `d_mod`, and `pcke03_` does not; the same
     # arithmetic keeps the value of CSPICE.
-    w = seg.dtype == 3 ? ang[3] : _reduce_twopi(ang[3])
+    w = seg.dtype == 3 ? ang[3] : _dyn_dmod(ang[3], _TWOPI)
     tipm = _eul313(w, ang[2], ang[1])
     seg.frame == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(seg.frame))
@@ -448,7 +446,7 @@ function _binary_pck_state(data::Vector{Float64}, seg::Segment, et::Float64)
     else
         ang, rate = pck_eval(data, seg, et, Val(1))
         x = eul2xf(
-            SVector(_reduce_twopi(ang[3]), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
+            SVector(_dyn_dmod(ang[3], _TWOPI), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
         )
         r = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
         dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))
@@ -634,14 +632,6 @@ function _tk_matrix(
     )
 end
 
-"Name of the frame with ID `id`, the built-in table first, as `frmnam_`; `nothing` if none."
-function _tk_frame_name(frames::AbstractDict, id::Integer)
-    typemin(Int32) <= id <= typemax(Int32) || return nothing
-    f = get(BUILTIN_FRAMES, Int32(id), nothing)
-    f === nothing && (f = get(frames, Int32(id), nothing))
-    return f === nothing ? nothing : f.name
-end
-
 """
     _tk_parse(pool, frames, frcode) -> TKFrame
 
@@ -660,7 +650,7 @@ function _tk_parse(pool::AbstractDict, frames::AbstractDict, frcode::Integer)
             "frame identification codes are required to be non-zero"
         )
     )
-    name = _tk_frame_name(frames, frcode)
+    name = frame_name(frames, frcode)
     name === nothing && throw(
         SpiceError(
             :incompleteframe,
