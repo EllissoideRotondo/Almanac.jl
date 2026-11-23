@@ -51,7 +51,7 @@ function _geo_illumg(
         obsrvr::NameOrID, spoint::AbstractVector
     )
     corr, trgcde, obscde, fixfid, m = _geo_illum_setup(ks, method, target, fixref, abcorr, obsrvr)
-    sp = _geo_pos(spoint)
+    sp = _dsk_vec3(spoint)
     e = check_epoch(et)
     srccde = _geo_body(ks, ilusrc, "illumination source")
     trgepc, srfvec, tipos = _geo_illum_states(ks, corr, trgcde, obscde, srccde, fixfid, sp, e)
@@ -71,7 +71,7 @@ function _geo_illumf(
         obsrvr::NameOrID, spoint::AbstractVector
     )
     corr, trgcde, obscde, fixfid, m = _geo_illum_setup(ks, method, target, fixref, abcorr, obsrvr)
-    sp = _geo_pos(spoint)
+    sp = _dsk_vec3(spoint)
     e = check_epoch(et)
     srccde = _geo_body(ks, ilusrc, "illumination source")
     trgepc, srfvec, tipos = _geo_illum_states(ks, corr, trgcde, obscde, srccde, fixfid, sp, e)

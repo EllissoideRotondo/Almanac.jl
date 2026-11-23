@@ -122,15 +122,14 @@ function _daf_int(x::Float64, lo::Int, hi::Int, what::AbstractString, path::Abst
 end
 
 """
-    _daf_directory(data, path, kind, dtype, baddr, eaddr) -> (init, intlen, rsize, nrec)
+    _daf_directory(data, path, dtype, baddr, eaddr) -> (init, intlen, rsize, nrec)
 
 Return the last four doubles of the fixed-interval Chebyshev segment `data[baddr:eaddr]`.
 Throw `SpiceError(:baddaf)` unless RSIZE and N are positive whole numbers that agree with
 the segment length and the data type.
 """
 function _daf_directory(
-        data::Vector{Float64}, path::AbstractString, kind::Symbol,
-        dtype::Int32, baddr::Int, eaddr::Int
+        data::Vector{Float64}, path::AbstractString, dtype::Int32, baddr::Int, eaddr::Int
     )
     _daf_directory_length(path, dtype, baddr, eaddr)
     return _daf_directory_values(
@@ -423,7 +422,7 @@ function _daf_parse(io::IO, raw::Vector{UInt8}, path::AbstractString, native)
                     chebyshev = kind === :SPK ? (dtype == 2 || dtype == 3 || dtype == 20) :
                         (dtype == 2 || dtype == 20)
                     init, intlen, rsize, nrec = (chebyshev && !empty) ?
-                        _daf_directory(data, path, kind, dtype, b, e) :
+                        _daf_directory(data, path, dtype, b, e) :
                         (0.0, 0.0, Int32(0), Int32(0))
                     seg = Segment(
                         target, center, frame, dtype, t0, t1, Int32(0),

@@ -180,7 +180,7 @@ function azlcpo(
             :invalidmethod, "the method <$method> is not supported; use ELLIPSOID"
         )
     )
-    pos = _geo_pos(obspos)
+    pos = _dsk_vec3(obspos)
     xftopo = if pos[1] == 0.0 && pos[2] == 0.0
         # On the polar axis the local +X axis is the +X axis of the body-fixed frame.
         pos[3] < 0.0 ? _m_rotmat(one(Mat3{Float64}), Float64(pi), 1) : one(Mat3{Float64})
@@ -193,7 +193,7 @@ function azlcpo(
     trgcde = _geo_body(ks, target, "target")
     f = _GeoFixed(pos, zero(Vec3{Float64}), 0.0, obscde, fxfcde)
     state, lt = _geo_cvo(ks, trgcde, check_epoch(et), fxfcde, _GEO_AT_OBSERVER, corr, f)
-    r, v = _geo_pv(state)
+    r, v = _m_pv(state)
     lr = _m_mxv(xftopo, r)
     lv = _m_mxv(xftopo, v)
     range, az, el = recazl(lr, azccw, elplsz)

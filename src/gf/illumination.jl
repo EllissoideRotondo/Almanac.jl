@@ -66,7 +66,7 @@ function GFIllumination(
         )
     )
     a, b, c = _geo_radii(ks, targ)
-    sp = _geo_pos(spoint)
+    sp = _dsk_vec3(spoint)
     normal = _m_surfnm(a, b, c, sp)
     _ljucase(method) == "ELLIPSOID" || throw(
         SpiceError(

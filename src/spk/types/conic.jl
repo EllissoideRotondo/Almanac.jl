@@ -368,11 +368,14 @@ function _kepler_equinoctial(h::Float64, k::Float64)
     return x
 end
 
-"`x - y * trunc(x / y)`, the remainder of `d_mod` of the f2c library."
-@inline function f2c_dmod(x::Float64, y::Float64)
-    q = x / y
-    return x - y * (q >= 0.0 ? floor(q) : -floor(-q))
-end
+"""
+    f2c_dmod(x, y)
+
+`x - y * trunc(x / y)`, the remainder of `d_mod` of the f2c library, which is not the
+exact remainder. The quotient is taken on `primal(x)`, so the derivatives of `x` are
+not changed.
+"""
+@inline f2c_dmod(x::Real, y::Float64) = x - y * trunc(primal(x) / y)
 
 """
     _eqn_state(et::T, epoch, a, h0, k0, l, p0, q0, dlpdt, mldt, nodedt, rapol, decpol)

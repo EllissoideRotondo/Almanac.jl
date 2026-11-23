@@ -374,7 +374,7 @@ function _gf_surface_coordinate(
         vec = GFSubObserverVector(ks, targ, obs, corr, ref, meth, near, rad)
         return GFCoordinate(vec, sys, idx, re, f, sense, center)
     end
-    dv = _geo_pos(dvec)
+    dv = _dsk_vec3(dvec)
     (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(
         SpiceError(
             :zerovector,

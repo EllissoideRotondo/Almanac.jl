@@ -9,6 +9,7 @@
 const _PI = Float64(pi)
 const _TWOPI = 2 * Float64(pi)
 const _HALFPI = Float64(pi) / 2
+const _RPD = pi / 180                # radians per degree, `rpd_`
 
 "The ID of the frame J2000."
 const _J2000_FRAME = Int32(1)

@@ -256,7 +256,7 @@ function _geo_cvo(
     if evltyp == _GEO_AT_OBSERVER
         st, lt = _geo_fzo(ks, trgcde, et, Int32(1), corr, f)
         orfcde == Int32(1) && return st, lt
-        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _geo_pv(st))
+        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _m_pv(st))
         return vcat(pr, pv), lt
     end
     q = _geo_fao(ks, trgcde, et, Int32(1), corr, f)
@@ -280,7 +280,7 @@ function _geo_cvt(
     if evltyp == _GEO_AT_OBSERVER
         st, lt = _geo_fzt(ks, f, et, Int32(1), corr, obscde)
         orfcde == Int32(1) && return st, lt
-        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _geo_pv(st))
+        pr, pv = rotate_jet(frame_jet(ks, Int32(1), orfcde, et, Val(1)), _m_pv(st))
         return vcat(pr, pv), lt
     end
     q = _geo_fat(ks, f, et, Int32(1), corr, obscde)
@@ -312,17 +312,10 @@ in the caller.
     return corr, ctrcde, bodcde, orfcde, evltyp
 end
 
-@inline _geo_pv(s::SVector{6}) = SVector(s[1], s[2], s[3]), SVector(s[4], s[5], s[6])
-
 @inline function _geo_state(s::AbstractVector)
     length(s) == 6 || throw(SpiceError(:badarg, "a state vector must have 6 elements"))
     @inbounds return Vec3{Float64}(s[begin], s[begin + 1], s[begin + 2]),
         Vec3{Float64}(s[begin + 3], s[begin + 4], s[begin + 5])
-end
-
-@inline function _geo_pos(p::AbstractVector)
-    length(p) == 3 || throw(SpiceError(:badarg, "a position vector must have 3 elements"))
-    @inbounds return Vec3{Float64}(p[begin], p[begin + 1], p[begin + 2])
 end
 
 # --- public interface -------------------------------------------------------------------
@@ -398,7 +391,7 @@ function spkcpo(
     )
     corr, ctrcde, trgcde, orfcde, evltyp =
         _geo_cv_args(ks, abcorr, obsctr, "observer center", target, "target", outref, refloc)
-    f = _GeoFixed(_geo_pos(obspos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, obsref))
+    f = _GeoFixed(_dsk_vec3(obspos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, obsref))
     return _geo_cvo(ks, trgcde, check_epoch(et), orfcde, evltyp, corr, f)
 end
 
@@ -455,7 +448,7 @@ function spkcpt(
     )
     corr, ctrcde, obscde, orfcde, evltyp =
         _geo_cv_args(ks, abcorr, trgctr, "target center", obsrvr, "observer", outref, refloc)
-    f = _GeoFixed(_geo_pos(trgpos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, trgref))
+    f = _GeoFixed(_dsk_vec3(trgpos), zero(Vec3{Float64}), 0.0, ctrcde, _geo_known_frame(ks, trgref))
     return _geo_cvt(ks, f, check_epoch(et), orfcde, evltyp, corr, obscde)
 end
 

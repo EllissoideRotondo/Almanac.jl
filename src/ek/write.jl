@@ -210,16 +210,6 @@ end
 @noinline _ekw_baddecl(msg::AbstractString, decl::AbstractString) =
     throw(SpiceError(:badcolumndecl, msg * " Declaration was: " * decl))
 
-"The integer that `nparsi` reads from `token`, or `nothing` if `nparsi` signals an error."
-function _ekw_nparsi(token::AbstractString)
-    return try
-        _nparsi(token)
-    catch e
-        e isa SpiceError || rethrow()
-        nothing
-    end
-end
-
 """
     _ekw_pdec(decl) -> Vector{Int32}
 
@@ -274,7 +264,7 @@ function _ekw_pdec(decl::AbstractString)
         if length(b) >= 11 && b[11] == UInt8('*')
             pardsc[_EK_LENIDX] = -1
         else
-            len = _ekw_nparsi(String(b[11:end]))
+            len = _dsk_parse_int(String(b[11:end]))
             len === nothing && _ekw_baddecl(
                 "String length specification $tok didn't parse " *
                     "as an integer.", decl
@@ -297,7 +287,7 @@ function _ekw_pdec(decl::AbstractString)
             )
             pardsc[_EK_SIZIDX] = -1
         else
-            size = _ekw_nparsi(tok)
+            size = _dsk_parse_int(tok)
             size === nothing && _ekw_baddecl(
                 "Column element size specification $tok " *
                     "didn't parse as an integer.", decl

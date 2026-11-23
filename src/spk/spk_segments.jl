@@ -152,7 +152,7 @@ function _spk_descr_segment(data::Vector{Float64}, descr, path::AbstractString, 
     @assert 1 <= b <= e <= length(data)
     dtype = Int32(ic[4])
     init, intlen, rsize, nrec = (dtype == 2 || dtype == 3 || dtype == 20) ?
-        _daf_directory(data, path, :SPK, dtype, b, e) : (0.0, 0.0, Int32(0), Int32(0))
+        _daf_directory(data, path, dtype, b, e) : (0.0, 0.0, Int32(0), Int32(0))
     return Segment(
         Int32(ic[1]), Int32(ic[2]), Int32(ic[3]), dtype, dc[1], dc[2], Int32(0),
         b, e, init, intlen, rsize, nrec

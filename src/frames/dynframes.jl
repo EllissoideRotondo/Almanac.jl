@@ -762,7 +762,7 @@ function _dyn_wahr(et::S) where {S <: Real}
     dd2 = dd * dd
     t = dj / 365250.0
     ang = map(_DYN_WAHR_ARGS) do c
-        _dyn_dmod(c[1] + dj * c[2] + (c[3] + dd * c[4]) * dd2, 360.0) / _DYN_RADIAN
+        f2c_dmod(c[1] + dj * c[2] + (c[3] + dd * c[4]) * dd2, 360.0) / _DYN_RADIAN
     end
     dpsi = zero(S)
     deps = zero(S)
@@ -772,7 +772,7 @@ function _dyn_wahr(et::S) where {S <: Real}
         for j in 1:5
             if m[j] != 0
                 arg += m[j] * ang[j]
-                arg = _dyn_dmod(arg, _TWOPI)
+                arg = f2c_dmod(arg, _TWOPI)
             end
         end
         cl = zero(S) + m[6]
@@ -801,10 +801,10 @@ function _dyn_wahr_rates(et::S) where {S <: Real}
     dd2 = dd * dd
     t = dj / 365250.0
     ang = map(_DYN_WAHR_ARGS) do c
-        _dyn_dmod(c[1] + dj * c[2] + (c[3] + dd * c[4]) * dd2, 360.0) / _DYN_RADIAN
+        f2c_dmod(c[1] + dj * c[2] + (c[3] + dd * c[4]) * dd2, 360.0) / _DYN_RADIAN
     end
     rate = map(_DYN_WAHR_ARGS) do c
-        _dyn_dmod(c[2] + dddj * (c[3] * 2.0 + dd * 3.0 * c[4]), 360.0) / _DYN_RADIAN
+        f2c_dmod(c[2] + dddj * (c[3] * 2.0 + dd * 3.0 * c[4]), 360.0) / _DYN_RADIAN
     end
     dpsi = deps = ddpsi = ddeps = zero(S)
     for i in 1:106      # invariant: the four sums hold the terms 1:i-1
@@ -814,7 +814,7 @@ function _dyn_wahr_rates(et::S) where {S <: Real}
             if m[j] != 0
                 arg += m[j] * ang[j]
                 argrt += m[j] * rate[j]
-                arg = _dyn_dmod(arg, _TWOPI)
+                arg = f2c_dmod(arg, _TWOPI)
             end
         end
         cl = m[7] != 0 ? m[6] + m[7] * t : zero(S) + m[6]
@@ -1467,15 +1467,9 @@ end
     _dyn_chain_step(mode, ks, fd, et) -> (parent::Int32, rot)
 
 One link of a frame chain for a frame of class 5 (`_dyn_frame_step`) or class 6
-(`_sw_frame_step`). Throws `SpiceError(:unknownframetype)` for a higher class.
+(`_sw_frame_step`), the only classes that `_chain_step` passes.
 """
 @noinline function _dyn_chain_step(mode, ks::KernelSet, fd::FrameDef, et::T) where {T <: Real}
     fd.class == 5 && return _dyn_frame_step(mode, ks, fd, et)
-    fd.class == 6 && return _sw_frame_step(mode, ks, fd, et)
-    throw(
-        SpiceError(
-            :unknownframetype,
-            "frame $(fd.id) has class $(fd.class), which is not supported"
-        )
-    )
+    return _sw_frame_step(mode, ks, fd, et)
 end

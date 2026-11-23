@@ -4,7 +4,6 @@
 # an epoch of type `Taylor{N,Float64}` gives the time derivatives to order N.
 
 const _SEC_PER_CENTURY = _SPD * 36525.0          # seconds per Julian century
-const _RPD = pi / 180                # radians per degree, `rpd_`
 
 """
 Number of frames of the chain of the first frame that `frame_rotation` keeps, as the
@@ -62,15 +61,6 @@ elements are left out, which does not change a result). Generic over the angle t
         sw * sd, cw * sd, cd
     )
 end
-
-"""
-    _dyn_dmod(x, m)
-
-`x - m * trunc(x / m)`, the remainder of `d_mod` of the f2c library, which is not the
-exact remainder. The subtracted quantity is a constant, so the derivatives of `x` are
-not changed.
-"""
-@inline _dyn_dmod(x::Real, m::Float64) = x - m * trunc(primal(x) / m)
 
 # --- text PCK constants ---------------------------------------------------------------
 
@@ -286,7 +276,7 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
 
     ra *= _RPD
     dec *= _RPD
-    w = _dyn_dmod(w * _RPD, _TWOPI)
+    w = f2c_dmod(w * _RPD, _TWOPI)
     tipm = _eul313(w, _HALFPI - dec, ra + _HALFPI)
     br.ref == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(br.ref))
@@ -396,7 +386,7 @@ function _text_pck_state(br::BodyRot, body::Integer, et::Float64)
     end
     ra *= _RPD
     dec *= _RPD
-    w = _dyn_dmod(w * _RPD, _TWOPI)
+    w = f2c_dmod(w * _RPD, _TWOPI)
     dra *= _RPD
     ddec *= _RPD
     dw *= _RPD
@@ -422,7 +412,7 @@ from J2000 to the reference frame of the segment. Requires `seg.t0 <= primal(et)
     ang = pck_eval(data, seg, et, Val(0))[1]
     # `pcke02_` and `pcke20_` reduce W with `d_mod`, and `pcke03_` does not; the same
     # arithmetic keeps the value of CSPICE.
-    w = seg.dtype == 3 ? ang[3] : _dyn_dmod(ang[3], _TWOPI)
+    w = seg.dtype == 3 ? ang[3] : f2c_dmod(ang[3], _TWOPI)
     tipm = _eul313(w, ang[2], ang[1])
     seg.frame == _J2000_FRAME && return tipm
     return _m_mxm(tipm, inertial_rotation(seg.frame))
@@ -446,7 +436,7 @@ function _binary_pck_state(data::Vector{Float64}, seg::Segment, et::Float64)
     else
         ang, rate = pck_eval(data, seg, et, Val(1))
         x = eul2xf(
-            SVector(_dyn_dmod(ang[3], _TWOPI), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
+            SVector(f2c_dmod(ang[3], _TWOPI), ang[2], ang[1], rate[3], rate[2], rate[1]), 3, 1, 3
         )
         r = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 1, (k - 1) ÷ 3 + 1], Val(9)))
         dr = Mat3{Float64}(ntuple(k -> x[(k - 1) % 3 + 4, (k - 1) ÷ 3 + 1], Val(9)))

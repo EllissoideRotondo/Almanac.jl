@@ -39,7 +39,7 @@ Requires `primal(x) > 0` (not checked).
     return Expr(:block, Expr(:meta, :inline), ex..., _pack(:r, N))
 end
 
-# The remainders are `f2c_dmod` and `_dyn_dmod` (`d_mod` of f2c); the exact remainder
+# The remainders are `f2c_dmod` (`d_mod` of f2c); the exact remainder
 # `rem` moves the state by up to 1.4e-12 relative from that of CSPICE.
 
 """
@@ -592,7 +592,7 @@ same from the epoch, so the result is the same.
     g54 = 4.4108898
     stepp = 720.0
     step2 = 259200.0
-    theta = _dyn_dmod(r.gsto + t * _SGP4_RPTIM, _TWOPI)
+    theta = f2c_dmod(r.gsto + t * _SGP4_RPTIM, _TWOPI)
     eccm = eccm + ds.dedt * t
     inclm = inclm + ds.didt * t
     argpm = argpm + ds.domdt * t
@@ -720,7 +720,7 @@ Lyddane form; the choice follows the plain value of the inclination.
         dbet = -ph * sinop + pinc * cosip * cosop
         alfdp = alfdp + dalf
         betdp = betdp + dbet
-        nodep = _dyn_dmod(nodep, _TWOPI)
+        nodep = f2c_dmod(nodep, _TWOPI)
         (primal(nodep) < 0.0 && r.opmode == _SGP4_AFSPC) && (nodep = nodep + _TWOPI)
         xls = mp + argpp + cosip * nodep
         dls = pl + pgh - pinc * nodep * sinip
@@ -837,10 +837,10 @@ Earth radius).
     primal(eccm) < 1.0e-6 && (eccm = convert(T, 1.0e-6))
     mm = mm + r.no * templ
     xlm = mm + argpm + nodem
-    nodem = _dyn_dmod(nodem, _TWOPI)
-    argpm = _dyn_dmod(argpm, _TWOPI)
-    xlm = _dyn_dmod(xlm, _TWOPI)
-    mm = _dyn_dmod(xlm - argpm - nodem, _TWOPI)
+    nodem = f2c_dmod(nodem, _TWOPI)
+    argpm = f2c_dmod(argpm, _TWOPI)
+    xlm = f2c_dmod(xlm, _TWOPI)
+    mm = f2c_dmod(xlm - argpm - nodem, _TWOPI)
     # Lunar and solar periodics.
     eccp = eccm
     xincp = inclm
@@ -880,7 +880,7 @@ Earth radius).
     aynl = eccp * sargpp + temp * aycof
     xl = mp + argpp + nodep + temp * xlcof * axnl
     # Kepler equation: plain solution as CSPICE, then the derivative parts.
-    u = _dyn_dmod(xl - nodep, _TWOPI)
+    u = f2c_dmod(xl - nodep, _TWOPI)
     eo1 = convert(T, _sgp4_kepler(primal(u), primal(axnl), primal(aynl)))
     for _ in 1:_ad_order(T)       # invariant: one more derivative order of eo1 is exact
         s, c = sincos(eo1)

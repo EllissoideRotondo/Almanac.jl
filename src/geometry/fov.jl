@@ -904,7 +904,7 @@ fovray(
     ks::KernelSet, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
     abcorr::AbcorrArg, obsrvr::NameOrID, et::Real
 ) =
-    _geo_fovvis(ks, inst, _GEO_FOV_RAY, _geo_pos(raydir), 0, rframe, abcorr, obsrvr, et)
+    _geo_fovvis(ks, inst, _GEO_FOV_RAY, _dsk_vec3(raydir), 0, rframe, abcorr, obsrvr, et)
 fovray(
     ctx::SpiceContext, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
     abcorr::AbcorrArg, obsrvr::NameOrID, et::Real

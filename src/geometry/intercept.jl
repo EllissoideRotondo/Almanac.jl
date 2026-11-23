@@ -147,7 +147,7 @@ function _geo_sincpt(
     obscde = _geo_body(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("surface intercept", obsrvr)
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
-    dv = _geo_pos(dvec)
+    dv = _dsk_vec3(dvec)
     (dv[1] == 0.0 && dv[2] == 0.0 && dv[3] == 0.0) && throw(
         SpiceError(
             :zerovector,

@@ -84,7 +84,7 @@ const ERROR_KINDS = (
     :toomanyhits, :toomanysurfaces, :typemismatch, :typenotsupported, :unallocatednode,
     :undefinedframe, :uninitialized, :uninitializedvalue, :unitsmissing, :unitsnotrec,
     :unknownbff, :unknownckmeta, :unknowncompare, :unknownfilarc, :unknownframe,
-    :unknownframespec, :unknownframetype, :unknownmode, :unknownspktype, :unknownsystem,
+    :unknownframespec, :unknownmode, :unknownspktype, :unknownsystem,
     :unmatchendpts, :unnaturalrelation, :unorderedrefs, :unorderedtimes, :unparsedtime,
     :unrecognizedtype, :unresolvednames, :unresolvedtimes, :unsupportedbff,
     :unsupportedspec, :valueoutofrange, :variablenotfound, :varnametoolong, :vectortoobig,

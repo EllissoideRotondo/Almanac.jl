@@ -143,7 +143,7 @@ function gfrfov(
         tol::Real = _GF_CNVTOL, bail = nothing, report = nothing, threads::Bool = false
     )
     run = _gf_run(step, tol; bail, report, threads)
-    return _gf_fove(ks, inst, "RAY", _geo_pos(raydir), 0, rframe, abcorr, obsrvr, cnfine, run)
+    return _gf_fove(ks, inst, "RAY", _dsk_vec3(raydir), 0, rframe, abcorr, obsrvr, cnfine, run)
 end
 gfrfov(
     ctx::SpiceContext, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
@@ -184,7 +184,7 @@ function gffove(
     )
     run = _gf_run(udstep, tol; refine = udrefn, bail, report, threads)
     return _gf_fove(
-        ks, inst, tshape, _geo_pos(raydir), target, tframe, abcorr, obsrvr,
+        ks, inst, tshape, _dsk_vec3(raydir), target, tframe, abcorr, obsrvr,
         cnfine, run
     )
 end

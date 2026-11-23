@@ -383,7 +383,7 @@ function _geo_limbpt(
     )
     tangent = m.pntdef == _GEO_TANGENT
     loccde = _geo_locus(corloc, "ELLIPSOID LIMB")
-    refvec = _geo_pos(refvec0)
+    refvec = _dsk_vec3(refvec0)
     _m_iszero(refvec) && throw(SpiceError(:zerovector, "the reference vector is the zero vector"))
     maxn < 1 && throw(SpiceError(:invalidsize, "maxn = $maxn; it must be at least 1"))
     (ncuts < 1 || ncuts > maxn) && throw(
@@ -582,7 +582,7 @@ function _geo_termpt(
     umbral = m.trmtyp == _GEO_UMBRAL
     shadow = umbral ? 1 : 2
     loccde = _geo_locus(corloc, "ELLIPSOID TERMINATOR")
-    refvec = _geo_pos(refvec0)
+    refvec = _dsk_vec3(refvec0)
     _m_iszero(refvec) && throw(SpiceError(:zerovector, "the reference vector is the zero vector"))
     maxn < 1 && throw(SpiceError(:invalidsize, "maxn = $maxn; it must be at least 1"))
     (ncuts < 0 || ncuts > maxn) && throw(
@@ -969,11 +969,12 @@ Throws `SpiceError` with the kind
 - `:idcodenotfound` if a body name is not known;
 - `:bodiesnotdistinct` if `target` and `obsrvr` are the same body;
 - `:kernelvarnotfound` if the radii of `target` are not loaded, `:invalidcount` if
-  there are not 3 of them, `:invalidradii` if one is not positive;
+  there are not 3 of them;
 - `:noframe` if `fixref` or `dref` is not known, `:invalidframe` if `fixref` is not
   centered on `target`;
-- `:noseparation` if the observer is at the target center, `:invalidgeometry` if it is
-  inside or on the ellipsoid.
+- `:noseparation` if the observer is at the target center;
+- `:invalidradii` if a radius is not positive;
+- `:invalidgeometry` if the observer is inside or on the ellipsoid.
 
 Also throws the errors of [`spkpos`](@ref).
 
@@ -993,7 +994,7 @@ function tangpt(
         )
     )
     tanloc = _geo_tanloc(corloc)
-    dvec = _geo_pos(dvec0)
+    dvec = _dsk_vec3(dvec0)
     _m_iszero(dvec) && throw(SpiceError(:zerovector, "the ray direction is the zero vector"))
     trgcde = _geo_body(ks, target, "target")
     obscde = _geo_body(ks, obsrvr, "observer")
