@@ -363,8 +363,8 @@ function _geo_limbpt(
     _plain_epoch(et0, "limbpt")
     corr = _geo_abcorr(abcorr)
     s = _geo_sign(corr)
-    trgcde = _geo_body(ks, target, "target")
-    obscde = _geo_body(ks, obsrvr, "observer")
+    trgcde = _body_id(ks, target, "target")
+    obscde = _body_id(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("limb points", obsrvr)
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
     m = _geo_method(ks, trgcde, method)
@@ -415,7 +415,7 @@ function _geo_limbpt(
     )
     sh = _geo_subshape(ks, tols, m, trgcde, fixfid)
     radii = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?
-        _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
+        _radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
     et = Float64(check_epoch(et0))
     npts = zeros(Int, ncuts)
     points = Vec3{Float64}[]
@@ -553,9 +553,9 @@ function _geo_termpt(
                 "accepts reception corrections only"
         )
     )
-    trgcde = _geo_body(ks, target, "target")
-    obscde = _geo_body(ks, obsrvr, "observer")
-    ilucde = _geo_body(ks, ilusrc, "illumination source")
+    trgcde = _body_id(ks, target, "target")
+    obscde = _body_id(ks, obsrvr, "observer")
+    ilucde = _body_id(ks, ilusrc, "illumination source")
     obscde == trgcde && _geo_same_bodies("terminator points", obsrvr)
     ilucde == trgcde && throw(
         SpiceError(
@@ -599,10 +599,10 @@ function _geo_termpt(
         )
     )
     sh = _geo_subshape(ks, tols, m, trgcde, fixfid)
-    srad = _geo_radii3(ks, ilucde, :badradiuscount)
+    srad = _radii3(ks, ilucde, :badradiuscount)
     ilurad = max(max(srad[1], srad[2]), srad[3])
     trad = (!m.dsk || loccde == _GEO_LOC_ELLIPSOID || !tangent) ?
-        _geo_radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
+        _radii3(ks, trgcde, :badradiuscount) : (0.0, 0.0, 0.0)
     et = Float64(check_epoch(et0))
     npts = zeros(Int, ncuts)
     points = Vec3{Float64}[]
@@ -996,14 +996,14 @@ function tangpt(
     tanloc = _geo_tanloc(corloc)
     dvec = _dsk_vec3(dvec0)
     _m_iszero(dvec) && throw(SpiceError(:zerovector, "the ray direction is the zero vector"))
-    trgcde = _geo_body(ks, target, "target")
-    obscde = _geo_body(ks, obsrvr, "observer")
+    trgcde = _body_id(ks, target, "target")
+    obscde = _body_id(ks, obsrvr, "observer")
     obscde == trgcde && _geo_same_bodies("tangent point", obsrvr)
-    a, b, c = _geo_radii3(ks, trgcde, :invalidcount)
+    a, b, c = _radii3(ks, trgcde, :invalidcount)
     fixfid = _geo_fixfid(ks, fixref, trgcde, target)
-    dfrcde = _geo_namfrm(ks, dref)
+    dfrcde = _frame_code(ks, dref)
     dcentr, dclass, found = _geo_frinfo(ks, dfrcde)
-    found || _geo_no_frame(dref)
+    found || _dsk_bad_frame(:noframe, dref, nothing, 0)
     et = Float64(check_epoch(et0))
     tpos, lt = _geo_spkezp(ks, trgcde, et, fixfid, corr, obscde)
     _m_iszero(tpos) && throw(

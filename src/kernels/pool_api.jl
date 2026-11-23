@@ -167,6 +167,47 @@ function bodvrd(ks::KernelSet, body::NameOrID, item::AbstractString)
     return gdpool(ks, _body_key(_bodvrd_code(ks, body), item))
 end
 
+const _RADII_KEYS = String[string("BODY", i, "_RADII") for i in 1:999]
+
+@noinline function _bad_radii(body, v, kind::Symbol = :invalidcount)
+    v === nothing && throw(
+        SpiceError(
+            :kernelvarnotfound,
+            "the variable BODY$(body)_RADII could not be found in the kernel pool"
+        )
+    )
+    (v isa Vector{Float64} || v isa NTuple{3, Float64}) || throw(
+        SpiceError(
+            :typemismatch,
+            "the variable BODY$(body)_RADII is not numeric"
+        )
+    )
+    length(v) == 3 || throw(
+        SpiceError(
+            length(v) > 3 ? :arraytoosmall : kind,
+            "the variable BODY$(body)_RADII has $(length(v)) values; 3 are required"
+        )
+    )
+    throw(SpiceError(:badaxislength, "a radius of the body $body is not positive: $(collect(v))"))
+end
+
+"""
+    _radii3(ks, body, kind) -> NTuple{3,Float64}
+
+`zzbodvcd` for `RADII`: three values, with no test of their signs. Throws `SpiceError`
+(`:kernelvarnotfound`, `:typemismatch`, `:arraytoosmall`, and `kind` for fewer than 3
+values).
+"""
+@inline function _radii3(ks::KernelSet, body::Integer, kind::Symbol)
+    v = get(
+        ks.pool, 1 <= body <= 999 ? (@inbounds _RADII_KEYS[body]) :
+            string("BODY", body, "_RADII"), nothing
+    )
+    v isa Vector{Float64} || _bad_radii(body, v, kind)
+    length(v) == 3 || _bad_radii(body, v, kind)
+    return @inbounds (v[1], v[2], v[3])
+end
+
 """
     bods2c([ctx,] name) -> Union{Int,Nothing}
 
@@ -192,6 +233,21 @@ function bods2c(ks::KernelSet, name::AbstractString)
     _chkfstr("bods2c", "body name", name)         # CHKFSTR of bods2c_c
     c = _body_code_lookup(ks.name2code, name)
     return c === nothing ? nothing : Int(c)
+end
+
+@noinline _no_body_id(what, name) = throw(
+    SpiceError(
+        :idcodenotfound,
+        "the $what, '$name', is not a recognized name for an ephemeris object"
+    )
+)
+
+"The body code of `body` (a code, or a name or an integer string for `bods2c`); `what` names it in the error."
+@inline _body_id(::KernelSet, id::Integer, ::AbstractString) = Int32(id)
+function _body_id(ks::KernelSet, name::AbstractString, what::AbstractString)
+    code = bods2c(ks, name)
+    code === nothing && _no_body_id(what, name)
+    return Int32(code)
 end
 
 """
@@ -349,6 +405,10 @@ function _namfrm(ks::KernelSet, name::AbstractString)
     id === nothing && (id = name_lookup(ks.framename2id, name))
     return id === nothing ? 0 : Int(id)
 end
+
+"The frame ID of `ref`: an ID as it is, a name through `_namfrm` (0 if it is not known)."
+@inline _frame_code(::KernelSet, ref::Integer) = Int32(ref)
+_frame_code(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
 
 """
     frmnam([ctx,] id) -> String

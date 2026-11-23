@@ -74,7 +74,7 @@ function GFIllumination(
                 "method was $method."
         )
     )
-    ref = _geo_namfrm(ks, fixref isa AbstractString ? strip(fixref, ' ') : fixref)
+    ref = _frame_code(ks, fixref isa AbstractString ? strip(fixref, ' ') : fixref)
     center, _, found = _geo_frinfo(ks, ref)
     found || throw(
         SpiceError(
@@ -126,9 +126,9 @@ function _gf_ilurate(q::GFIllumination, et::Float64)
     ks = q.ks
     corr = q.corr
     f = _GeoFixed(q.spoint, _GF_ZERO3, 0.0, q.targ, q.ref)
-    starg, lt = _geo_cvt(ks, f, et, _J2000_FRAME, _GEO_AT_TARGET, corr, q.obs)
+    starg, lt = _geo_cv(ks, f, et, _J2000_FRAME, _GEO_AT_TARGET, corr, q.obs)
     etsurf = et + _geo_sign(corr) * lt
-    srcsta, _ = _geo_cvo(ks, q.illum, etsurf, _J2000_FRAME, _GEO_AT_OBSERVER, corr, f)
+    srcsta, _ = _geo_cv(ks, q.illum, etsurf, _J2000_FRAME, _GEO_AT_OBSERVER, corr, f)
     R, dR = frame_jet(ks, q.ref, _J2000_FRAME, etsurf, Val(1))
     tr, tv = _m_pv(starg)
     sr, sv = _m_pv(srcsta)

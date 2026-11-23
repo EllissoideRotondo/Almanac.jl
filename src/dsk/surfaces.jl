@@ -422,16 +422,8 @@ function _dsk_surface_setup(
     _chkfstr("latsrf/srfnrm", "string `method`", method)
     target isa AbstractString && _chkfstr("latsrf/srfnrm", "string `target`", target)
     fixref isa AbstractString && _chkfstr("latsrf/srfnrm", "string `fixref`", fixref)
-    trgcde = _dsk_target(ks, target)
-    fixfid = _dsk_frame_code(ks, fixref)
-    fd = fixfid == 0 ? nothing : _frame_def_or_nothing(ks, fixfid)
-    fd === nothing && throw(SpiceError(:noframe, "the reference frame $fixref is not recognized"))
-    fd.center == trgcde || throw(
-        SpiceError(
-            :invalidframe, "the reference frame $fixref is " *
-                "not centered at the target body $target"
-        )
-    )
+    trgcde = _body_id(ks, target, "target")
+    fixfid = _dsk_fixfid(ks, fixref, trgcde, target, :noframe, :noframe)
     shape, subtyp, _, srflst = _dsk_parse_method(ks, trgcde, method)
     isempty(subtyp) || throw(
         SpiceError(
@@ -448,29 +440,18 @@ end
 The radii of the body `code` as `latsrf` and `srfnrm` read them, with `zzbodvcd` and
 room for 3 values: more values are `SpiceError(:arraytoosmall)`, as in `bodvcd`. With
 fewer, CSPICE uses the radius that its saved array still holds (0 on the first call),
-which is `:badaxislength` here, as is a radius that is not positive.
+which is `:badaxislength` here, as is a radius that is not positive. The test of the
+signs is the `min` of `latsrf`, which lets a NaN pass, where `_geo_radii` throws.
 """
 function _dsk_radii(ks::KernelSet, code::Integer)
-    radii = bodvrd(ks, code, "RADII")
-    length(radii) > 3 && throw(
-        SpiceError(
-            :arraytoosmall,
-            "BODY$(code)_RADII has $(length(radii)) values; there is room for 3"
-        )
-    )
-    length(radii) == 3 || throw(
+    r = _radii3(ks, code, :badaxislength)
+    min(min(r[1], r[2]), r[3]) <= 0.0 && throw(
         SpiceError(
             :badaxislength,
-            "BODY$(code)_RADII has $(length(radii)) values; 3 are required"
+            "the radii of the body $code must be positive but were $r"
         )
     )
-    min(min(radii[1], radii[2]), radii[3]) <= 0.0 && throw(
-        SpiceError(
-            :badaxislength,
-            "the radii of the body $code must be positive but were $radii"
-        )
-    )
-    return radii[1], radii[2], radii[3]
+    return r
 end
 
 @inline _dsk_get2(a::AbstractMatrix, i::Int) = (Float64(a[1, i]), Float64(a[2, i]))

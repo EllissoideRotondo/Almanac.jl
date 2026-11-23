@@ -21,7 +21,7 @@ function _gf_fove(
         raydir::Vec3{Float64}, target::NameOrID, tframe::NameOrID, abcorr::AbcorrArg,
         obsrvr::NameOrID, cnfine::Window, run::_GFRun
     )
-    _geo_body(ks, obsrvr, "observer")
+    _body_id(ks, obsrvr, "observer")
     shp = _geo_fov_tshape(tshape)
     v = _geo_fov_setup(ks, inst, shp, raydir, target, tframe, abcorr, obsrvr, true)
     _gf_repi(run, cnfine, "Target visibility search ", "done.")

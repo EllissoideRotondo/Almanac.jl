@@ -170,11 +170,11 @@ function azlcpo(
         abcorr::AbcorrArg, azccw::Bool, elplsz::Bool, obspos::AbstractVector, obsctr::NameOrID,
         obsref::NameOrID
     )
-    obscde = _geo_body(ks, obsctr, "observer center")
-    fxfcde = _geo_namfrm(ks, obsref)
+    obscde = _body_id(ks, obsctr, "observer center")
+    fxfcde = _frame_code(ks, obsref)
     center, _, found = _geo_frinfo(ks, fxfcde)
     found || _geo_unknown_frame(obsref)
-    center == obscde || _geo_bad_center(obsref, obsctr, center)
+    center == obscde || _dsk_bad_frame(:invalidframe, obsref, obsctr, center)
     (method == "ELLIPSOID" || _eqstr(method, "ELLIPSOID")) || throw(
         SpiceError(
             :invalidmethod, "the method <$method> is not supported; use ELLIPSOID"
@@ -190,9 +190,9 @@ function azlcpo(
         twovec(_m_surfnm(a, b, c, obsspt), 3, SVector(0.0, 0.0, 1.0), 1)
     end
     corr = _geo_abcorr(abcorr)
-    trgcde = _geo_body(ks, target, "target")
+    trgcde = _body_id(ks, target, "target")
     f = _GeoFixed(pos, zero(Vec3{Float64}), 0.0, obscde, fxfcde)
-    state, lt = _geo_cvo(ks, trgcde, check_epoch(et), fxfcde, _GEO_AT_OBSERVER, corr, f)
+    state, lt = _geo_cv(ks, trgcde, check_epoch(et), fxfcde, _GEO_AT_OBSERVER, corr, f)
     r, v = _m_pv(state)
     lr = _m_mxv(xftopo, r)
     lv = _m_mxv(xftopo, v)

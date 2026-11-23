@@ -294,6 +294,18 @@ function _dsk_mkspin!(
     return nvxtot
 end
 
+"Throws `:badvertexindex` at the first vertex number of `plates` that is not in `1:nv`."
+function _dsk_check_plates(plates, nv::Int)
+    for i in 1:_dsk_count3(plates), k in _dsk_plate3(plates, i)
+        # invariant: the vertex numbers before k are valid
+        (1 <= k <= nv) || _dsk_throw(
+            :badvertexindex,
+            "a vertex index of plate $i was $k; vertex indices must be in the range 1:$nv"
+        )
+    end
+    return nothing
+end
+
 """
     dskmi2(vrtces, plates, finscl, corscl, worksz, voxpsz, voxlsz, makvtl, spxisz)
         -> (spaixd, spaixi)
@@ -373,12 +385,7 @@ function dskmi2(
     )
     vf = _dsk_flat(Float64, vrtces)
     pf = _dsk_flat(Int, plates)
-    for k in eachindex(pf)               # invariant: the vertex numbers before k are valid
-        (1 <= pf[k] <= nv) || _dsk_throw(
-            :badvertexindex, "vertex index $(k - 3 * ((k - 1) ÷ 3)) " *
-                "of plate $((k - 1) ÷ 3 + 1) was $(pf[k]); vertex indices must be in the range 1:$nv"
-        )
-    end
+    _dsk_check_plates(plates, nv)
     spaixd = zeros(Float64, 10)
     spaixi = zeros(Int, spxisz)
     cval = zeros(Int32, worksz)
@@ -447,12 +454,7 @@ unless the radius is positive and the flattening is less than 1.
 function dskrb2(vrtces, plates, corsys::Integer, corpar)
     nv = _dsk_count3(vrtces)
     np = _dsk_count3(plates)
-    for i in 1:np, k in _dsk_plate3(plates, i)
-        (1 <= k <= nv) || _dsk_throw(
-            :badvertexindex,
-            "a vertex index of plate $i was $k; vertex indices must be in the range 1:$nv"
-        )
-    end
+    _dsk_check_plates(plates, nv)
     if corsys == 1
         mx = 0.0
         for i in 1:nv                    # invariant: mx is the largest norm of the vertices 1 .. i-1
@@ -691,12 +693,7 @@ function dskw02(
         "the plate count NP = $np; the count must be in the range 1:$_DSK_MAXPLT"
     )
     pf = _dsk_flat(Int, plates)          # Int, so that an index beyond Int32 is `badvertexindex`
-    for k in eachindex(pf)               # invariant: the vertex numbers before k are valid
-        (1 <= pf[k] <= nv) || _dsk_throw(
-            :badvertexindex, "vertex index $(k - 3 * ((k - 1) ÷ 3)) " *
-                "of plate $((k - 1) ÷ 3 + 1) was $(pf[k]); vertex indices must be in the range 1:$nv"
-        )
-    end
+    _dsk_check_plates(plates, nv)
     (length(spaixd) >= 10 && length(spaixi) >= _DSK_IXIFIX) || throw(
         SpiceError(
             :badarg,
