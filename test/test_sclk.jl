@@ -127,6 +127,9 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
                     "1/100.5", "100.5", "1/0000000100.005", "2/2000.000",
                     "2/ 2000 . 17", "  1/  77 12", "9999.255", "2/9999:255", "1/100", "100,3",
                     "2/2000-1", "1/.7", "1/7.", "2000.001", "1.5/100.5",
+                    # Regression: a tab next to a field was taken as a blank; `nparsd`
+                    # treats it as a character of the number.
+                    "1/100.5\t", "1/\t100",
                 ],
             ),
             (

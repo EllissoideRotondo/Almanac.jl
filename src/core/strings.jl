@@ -22,6 +22,22 @@ _cut_bytes(s::AbstractString, n::Int) =
     ncodeunits(s) <= n ? SubString(s) : SubString(s, 1, prevind(s, thisind(s, n + 1)))
 
 """
+    _repmc(msg, value) -> String
+
+Contract: returns `msg` with its first `#` replaced by `value`, as `repmc_` and
+`repmi_`: a string loses its leading and trailing blanks and a blank string becomes
+one blank. `msg` without `#` is returned as it is.
+"""
+function _repmc(msg::String, value::Union{AbstractString, Integer})::String
+    r = findfirst(==(UInt8('#')), codeunits(msg))
+    r === nothing && return msg
+    v = value isa Integer ? string(value) : String(strip(value, ' '))
+    isempty(v) && (v = " ")
+    c = codeunits(msg)
+    return string(String(c[1:(r - 1)]), v, String(c[(r + 1):end]))
+end
+
+"""
     _ljucase(s) -> String
 
 Contract: `s` without leading and trailing blanks, with ASCII letters in upper case, as
