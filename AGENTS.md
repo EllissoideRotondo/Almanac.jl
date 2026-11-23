@@ -11,12 +11,19 @@ julia --startup-file=no --threads=8 test/parallel.jl [group ...]                
 julia --startup-file=no --threads=8 --project=test test/runtests.jl [group ...]  # tests, one process
 julia --project=docs docs/make.jl                                               # manual and doctests
 julia --project=@runic -m Runic --inplace .                                     # format (CI checks it)
+julia --startup-file=no --project=benchmark benchmark/run.jl                     # benchmarks against CSPICE
 ```
 
 Run the tests with `--threads=8`; the groups `threads`, `gf_threads` and `ek_threads`
 skip with one thread. The code is formatted with [Runic](https://github.com/fredrikekre/Runic.jl)
 (`julia --project=@runic -e 'using Pkg; Pkg.add("Runic")'` once); CI fails on a file that
 Runic would change.
+
+`benchmark/benchmarks.jl` is the AirspeedVelocity suite (`const SUITE`) that
+`.github/workflows/benchmark_pr.yml` runs on a pull request: the script of the pull
+request on `main` and on the pull request, with the ratios commented on the pull request.
+The other scripts in `benchmark/` compare Almanac with CSPICE call by call (`run.jl` runs
+them and lists the calls slower than CSPICE).
 
 ## Skills
 

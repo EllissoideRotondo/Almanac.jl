@@ -1,12 +1,12 @@
 # Ephemeris tables on a GPU: build two tables on the CPU, move them to the GPU and
 # evaluate them at many epochs, by broadcast and in a hand-written kernel.
 #
-# CUDA.jl is not a dependency of the package or of `bench/Project.toml`. Run with a
+# CUDA.jl is not a dependency of the package or of `benchmark/Project.toml`. Run with a
 # temporary environment:
 #
 #     julia --startup-file=no -e 'using Pkg; Pkg.activate(temp=true);
 #         Pkg.develop(path="."); Pkg.add(["CUDA", "Adapt", "StaticArrays", "ForwardDiff"]);
-#         include("bench/table_gpu.jl")'
+#         include("benchmark/table_gpu.jl")'
 
 using Almanac, CUDA, Adapt, StaticArrays, LinearAlgebra, Printf
 import ForwardDiff

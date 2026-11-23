@@ -63,7 +63,7 @@ The tables that reach the Earth stop at 1.5e-11 because of the rounding of the r
 
 ## Measured accuracy and speed
 
-The figures below cover 400 days of `de440s.bsp`, measured by `bench/table_gpu.jl` on one thread of an Intel CPU and on an NVIDIA RTX 3090 with 4,000,000 epochs. The error is the largest difference from the kernels, and the tolerance is the default unless stated. `MOON_PA` is the principal-axis frame of the Moon.
+The figures below cover 400 days of `de440s.bsp`, measured by `benchmark/table_gpu.jl` on one thread of an Intel CPU and on an NVIDIA RTX 3090 with 4,000,000 epochs. The error is the largest difference from the kernels, and the tolerance is the default unless stated. `MOON_PA` is the principal-axis frame of the Moon.
 
 | Case | Intervals | Error (km) | Table (ns per epoch) | `spkezr` (ns per epoch) |
 |---|---:|---:|---:|---:|

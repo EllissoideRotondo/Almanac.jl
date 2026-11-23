@@ -52,6 +52,13 @@ end
 @inline _kfun_grouped(x, br0, b2rv, bq, c1, c2, c3) = x * (br0 * c1 + x * (b2rv * c2 + x * (bq * c3)))
 @inline _kfun_chained(x, br0, b2rv, bq, c1, c2, c3) = x * (br0 * c1 + x * (b2rv * c2 + x * bq * c3))
 
+# The `min` and `max` macros of f2c, `a <= b ? a : b` and `a >= b ? a : b`, as
+# selections without branches. Unlike `Base.min`, they do not propagate a NaN and keep
+# the first of two equal zeros; the bisection of `_prop2b_root` mispredicts the branches of
+# `Base.min`.
+@inline _f2c_min(a::Float64, b::Float64) = ifelse(a <= b, a, b)
+@inline _f2c_max(a::Float64, b::Float64) = ifelse(a >= b, a, b)
+
 """
     _prop2b(gm, pos, vel, dt::T, kind=:dtoutofrange) -> (pos::Vec3{T}, vel::Vec3{T})
 
@@ -177,26 +184,22 @@ function _prop2b_root(
         end
     end
     # Bisection. The count starts again at 64 when both ends are away from zero.
-    x = min(upper, max(lower, (lower + upper) / 2.0))
+    x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
     _, c1, c2, c3 = _stumpff(f * x * x, kind)
     lcount = 0
     mostc = 1000
     # invariant: kfun(lower) <= t <= kfun(upper)
     while x > lower && x < upper && lcount < mostc
         kfun = _kfun_chained(x, br0, b2rv, bq, c1, c2, c3)
-        if kfun > t
-            upper = x
-        elseif kfun < t
-            lower = x
-        else
-            upper = x
-            lower = x
-        end
+        # The `if kfun > t ... elseif kfun < t ... else` of `prop2b`, without
+        # branches: a NaN or an equal `kfun` closes the bracket on `x`.
+        upper = ifelse(!(kfun < t), x, upper)
+        lower = ifelse(!(kfun > t), x, lower)
         if mostc > 64 && upper != 0.0 && lower != 0.0
             mostc = 64
             lcount = 0
         end
-        x = min(upper, max(lower, (lower + upper) / 2.0))
+        x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
         _, c1, c2, c3 = _stumpff(f * x * x, kind)
         lcount += 1
     end

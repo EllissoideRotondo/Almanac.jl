@@ -45,14 +45,19 @@ struct Row
     bytes::Float64
 end
 
+"The engine of a row: the first word of its name (`Almanac`, `CSPICE` or `ANISE`)."
+engine(r::Row) = first(split(r.name))
+
 """
     bench_row(group, name, f, args...; n) -> Row
 
 Benchmark `f(args...)`, which makes `n` queries per call, and return the time per query
-(minimum and median over the samples) and the allocations per query.
+(minimum and median over the samples) and the allocations per query. The name starts with
+the engine: `Almanac`, `CSPICE` or `ANISE`.
 """
 function bench_row(group::AbstractString, name::AbstractString, f, args...; n::Integer)
     @assert n > 0
+    @assert first(split(name)) in ("Almanac", "CSPICE", "ANISE") "name without an engine: $name"
     f(args...)                                   # compile, and fail early if it throws
     b = @benchmark $f($(args)...) seconds = BENCH_SECONDS
     row = Row(
@@ -60,27 +65,38 @@ function bench_row(group::AbstractString, name::AbstractString, f, args...; n::I
         memory(b) / n
     )
     @printf(
-        "  %-34s %-44s min %9.1f ns  median %9.1f ns  allocs %5.2f\n", group, name,
+        "  %-34s %-44s min %10.1f ns  median %10.1f ns  allocs %6.2f\n", group, name,
         row.min_ns, row.median_ns, row.allocs
     )
     return row
 end
 
-"Markdown table of `rows`, with the ratio of each minimum to the minimum of row `base`."
-function markdown_table(rows::Vector{Row}; base::Union{Nothing, Row} = nothing)
+"""
+    speedup(rows, r) -> Float64
+
+Minimum time of the fastest CSPICE row of the group of `r` divided by the minimum time of
+`r`; `NaN` if the group has no CSPICE row. Above 1, `r` is faster than CSPICE.
+"""
+function speedup(rows::Vector{Row}, r::Row)
+    ref = [c.min_ns for c in rows if c.group == r.group && engine(c) == "CSPICE"]
+    return isempty(ref) ? NaN : minimum(ref) / r.min_ns
+end
+
+fmt_speedup(x) = isnan(x) ? "" : @sprintf("%.2f", x)
+
+"""
+Markdown table of `rows`. The last column is the speed-up over CSPICE: the fastest CSPICE
+call of the same group divided by the row, so above 1 is faster than CSPICE.
+"""
+function markdown_table(rows::Vector{Row})
     io = IOBuffer()
-    println(
-        io, "| Case | Engine and call | min ns/query | median ns/query | allocs/query | bytes/query |",
-        base === nothing ? "" : " ratio to $(base.name) |"
-    )
-    println(io, "|---|---|---:|---:|---:|---:|", base === nothing ? "" : "---:|")
+    println(io, "| Case | Engine and call | min ns/query | median ns/query | allocs/query | bytes/query | speed-up vs CSPICE |")
+    println(io, "|---|---|---:|---:|---:|---:|---:|")
     for r in rows
         @printf(
-            io, "| %s | %s | %.1f | %.1f | %.2f | %.0f |", r.group, r.name, r.min_ns,
-            r.median_ns, r.allocs, r.bytes
+            io, "| %s | %s | %.1f | %.1f | %.2f | %.0f | %s |\n", r.group, r.name, r.min_ns,
+            r.median_ns, r.allocs, r.bytes, fmt_speedup(speedup(rows, r))
         )
-        base === nothing || @printf(io, " %.2f |", r.min_ns / base.min_ns)
-        println(io)
     end
     return String(take!(io))
 end
@@ -104,11 +120,23 @@ function run_header(title::AbstractString)
     """
 end
 
-"Write `text` to `bench/results/<name>.md` (the directory is ignored by git) and return the path."
-function write_results(name::AbstractString, text::AbstractString)
+"""
+    write_results(name, text, rows = Row[]) -> String
+
+Write `text` to `benchmark/results/<name>.md` (the directory is ignored by git), and `rows`
+with their speed-ups to `benchmark/results/<name>.tsv` for `benchmark/run.jl`. Returns the path of
+the Markdown file.
+"""
+function write_results(name::AbstractString, text::AbstractString, rows::Vector{Row} = Row[])
     mkpath(RESULTS_DIR)
     path = joinpath(RESULTS_DIR, name * ".md")
     write(path, text)
+    open(joinpath(RESULTS_DIR, name * ".tsv"), "w") do io
+        println(io, "group\tname\tmin_ns\tmedian_ns\tallocs\tbytes\tspeedup")
+        for r in rows
+            println(io, join((r.group, r.name, r.min_ns, r.median_ns, r.allocs, r.bytes, speedup(rows, r)), '\t'))
+        end
+    end
     println("results written to ", path)
     return path
 end

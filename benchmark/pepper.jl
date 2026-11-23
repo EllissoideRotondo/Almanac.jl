@@ -8,7 +8,7 @@
 # one machine and compared row by row. Each time is the fastest of `ALMANAC_BENCH_RUNS`
 # runs (default 7), as in PEPPER's `bench/compare_anise.py`.
 #
-#     julia --project=bench bench/pepper.jl KERNEL_DIR
+#     julia --project=benchmark benchmark/pepper.jl KERNEL_DIR
 #
 # KERNEL_DIR holds naif0012.tls, pck00011.tpc, de421.bsp, earth_latest_high_prec.bpc,
 # moon_pa_de440_200625.bpc and moon_de440_250416.tf, the kernels of PEPPER's comparison.
@@ -153,4 +153,4 @@ function main(kdir)
     return tables(ctx, seq, "_table_seq")
 end
 
-isempty(ARGS) ? println("usage: julia --project=bench bench/pepper.jl KERNEL_DIR") : main(ARGS[1])
+isempty(ARGS) ? println("usage: julia --project=benchmark benchmark/pepper.jl KERNEL_DIR") : main(ARGS[1])

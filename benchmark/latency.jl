@@ -1,6 +1,6 @@
 # Latency benchmark: time to first result in a fresh Julia process.
 #
-#     julia --startup-file=no --project=bench bench/latency.jl
+#     julia --startup-file=no --project=benchmark benchmark/latency.jl
 #
 # The driver starts new Julia processes that run the child script below, one process per
 # repetition, and reports the median of three repetitions. One extra process runs first
@@ -15,10 +15,7 @@
 #   using SPICE                          for comparison: the CSPICE wrapper
 #   first SPICE.furnsh + SPICE.spkezr    for comparison
 
-using Printf, Statistics, Dates
-
-include(joinpath(@__DIR__, "..", "test", "kernels.jl"))
-using .Kernels: Kernels
+include("common.jl")
 
 const REPS = parse(Int, get(ENV, "ALMANAC_BENCH_REPS", "3"))
 
@@ -78,11 +75,7 @@ function run_child(script::AbstractString)
 end
 
 function main()
-    gone = Kernels.missing_kernels(Kernels.DE440S)
-    if !isempty(gone)
-        printstyled("SKIP  missing kernels: ", join(gone, ", "), "\n"; color = :yellow, bold = true)
-        return
-    end
+    require_kernels(Kernels.DE440S)
     script, io = mktemp()
     write(io, CHILD); close(io)
     println("warm-up process (not counted) ...")
@@ -108,10 +101,7 @@ function main()
     text = String(take!(io))
     println()
     println(text)
-    dir = joinpath(@__DIR__, "results")
-    mkpath(dir)
-    write(joinpath(dir, "latency.md"), text)
-    println("results written to ", joinpath(dir, "latency.md"))
+    write_results("latency", text)
     rm(script; force = true)
     return nothing
 end
