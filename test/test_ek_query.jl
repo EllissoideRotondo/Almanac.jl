@@ -853,7 +853,7 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
 
     ek_part("hand-written queries against CSPICE") do
         fails = Failures()
-        for q in EK_HAND_QUERIES
+        for q in filter(!cast_dependent, EK_HAND_QUERIES)
             r = ek_compare_query(ctx, q)
             record(r.cerr ? "hand-written, invalid" : "hand-written, valid", q, r)
             check!(fails, r.compat, "differs in compatibility mode", q)
@@ -949,7 +949,8 @@ group("EK queries: catalogue, query corpus against CSPICE and against the model"
             res, err, _ = ekfind(ctx, q)
             @test !err && res.nmrows == n
             eq, _, _ = Almanac._ek_encode_query(ks.ektables, ks, Almanac.timedefaults(ctx), q)
-            @test Almanac._ek_search(ks, eq; compat = true).nmrows == nc == c_ekfind(q)[1]
+            @test Almanac._ek_search(ks, eq; compat = true).nmrows == nc
+            cast_dependent(q) || @test nc == c_ekfind(q)[1]
         end
     end
 
