@@ -364,17 +364,12 @@ See also [`load_samples!`](@ref), [`ephemeris_table`](@ref), [`add_ephemeris!`](
 function load_function!(
         ctx::SpiceContext, name::AbstractString, f, body::NameOrID, center::NameOrID,
         frame::NameOrID, t0::Real, t1::Real; tol::Union{Nothing, Real} = nothing,
-        ncoef::Integer = 16, maxintervals::Integer = 65536, segid::AbstractString = name,
+        ncoef::Integer = 16, maxintervals::Integer = _TAB_MAXINTERVALS, segid::AbstractString = name,
         bodies = ()
     )
     who = "load_function!"
     _chk_filename(who, name)
-    a, b = Float64(t0), Float64(t1)
-    (isfinite(a) && isfinite(b) && a < b) ||
-        throw(SpiceError(:badarg, "$who: the epochs must be finite, with t0 < t1"))
-    2 <= ncoef <= 28 || throw(SpiceError(:badarg, "$who: ncoef is $ncoef; it must be in 2:28"))
-    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "$who: tol must be positive"))
-    maxintervals >= 1 || throw(SpiceError(:badarg, "$who: maxintervals must be at least 1"))
+    a, b = _tab_checks(who, t0, t1, ncoef, tol, maxintervals, 28)
     kb = _kernel_bodies(who, bodies)
     ks = kernelset(ctx)
     bc, cc = _resolve_body(ks, body, kb), _resolve_body(ks, center, kb)

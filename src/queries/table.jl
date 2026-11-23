@@ -339,6 +339,34 @@ function _tab_fit(
     return coef, maxerr, scale, velerr
 end
 
+"Default of the `maxintervals` keyword of the fits: the largest number of intervals."
+const _TAB_MAXINTERVALS = 65536
+
+"""
+    _tab_checks(who, t0, t1, ncoef, tol, maxintervals, maxcoef = typemax(Int)) -> (a, b)
+
+The argument checks of a fit, in this order: finite epochs `t0 < t1`, `2 <= ncoef <=
+maxcoef`, a positive `tol` or `nothing`, `maxintervals >= 1`. Return the epochs as
+`Float64`; throw `SpiceError(:badarg)` for the first check that fails.
+"""
+function _tab_checks(
+        who::AbstractString, t0::Real, t1::Real, ncoef::Integer, tol, maxintervals::Integer,
+        maxcoef::Int = typemax(Int)
+    )
+    a, b = Float64(t0), Float64(t1)
+    (isfinite(a) && isfinite(b) && a < b) ||
+        throw(SpiceError(:badarg, "$who: the epochs must be finite, with t0 < t1"))
+    2 <= ncoef <= maxcoef || throw(
+        SpiceError(
+            :badarg, "$who: ncoef is $ncoef; it must be " *
+                (maxcoef == typemax(Int) ? "at least 2" : "in 2:$maxcoef")
+        )
+    )
+    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "$who: tol must be positive"))
+    maxintervals >= 1 || throw(SpiceError(:badarg, "$who: maxintervals must be at least 1"))
+    return a, b
+end
+
 """
     _tab_refine(f, a, b, tol, ncoef, maxintervals, Val(C), who, unit; split=false)
         -> (coef, dt, nint, maxerr, velerr)
@@ -426,14 +454,10 @@ See also [`EphemerisTable`](@ref), [`rotation_table`](@ref), [`table_to_spk`](@r
 function ephemeris_table(
         ks::KernelSet, targ::NameOrID, t0::Real, t1::Real, ref::NameOrID,
         abcorr::Union{AbstractString, Aberration}, obs::NameOrID;
-        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16, maxintervals::Integer = 65536
+        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16,
+        maxintervals::Integer = _TAB_MAXINTERVALS
     )
-    a, b = Float64(t0), Float64(t1)
-    (isfinite(a) && isfinite(b) && a < b) ||
-        throw(SpiceError(:badarg, "ephemeris_table: the epochs must be finite, with t0 < t1"))
-    ncoef >= 2 || throw(SpiceError(:badarg, "ephemeris_table: ncoef must be at least 2"))
-    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "ephemeris_table: tol must be positive"))
-    maxintervals >= 1 || throw(SpiceError(:badarg, "ephemeris_table: maxintervals must be at least 1"))
+    a, b = _tab_checks("ephemeris_table", t0, t1, ncoef, tol, maxintervals)
     t, f, o = body_code(ks, targ), frame_id(ks, ref), body_code(ks, obs)
     corr = Aberration(abcorr)
     source = corr.geometric ? (et -> spk_jet(ks, t, et, f, o, Val(0))[1]) :
@@ -670,14 +694,10 @@ See also [`RotationTable`](@ref), [`ephemeris_table`](@ref).
 """
 function rotation_table(
         ks::KernelSet, from::NameOrID, to::NameOrID, t0::Real, t1::Real;
-        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16, maxintervals::Integer = 65536
+        tol::Union{Nothing, Real} = nothing, ncoef::Integer = 16,
+        maxintervals::Integer = _TAB_MAXINTERVALS
     )
-    a, b = Float64(t0), Float64(t1)
-    (isfinite(a) && isfinite(b) && a < b) ||
-        throw(SpiceError(:badarg, "rotation_table: the epochs must be finite, with t0 < t1"))
-    ncoef >= 2 || throw(SpiceError(:badarg, "rotation_table: ncoef must be at least 2"))
-    (tol === nothing || tol > 0) || throw(SpiceError(:badarg, "rotation_table: tol must be positive"))
-    maxintervals >= 1 || throw(SpiceError(:badarg, "rotation_table: maxintervals must be at least 1"))
+    a, b = _tab_checks("rotation_table", t0, t1, ncoef, tol, maxintervals)
     f, t = frame_id(ks, from), frame_id(ks, to)
     source = et -> SVector{9, Float64}(frame_rotation(ks, f, t, et))
     source(a), source(b)       # data at both ends, or the error of the frame layer

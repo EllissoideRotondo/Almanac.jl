@@ -506,14 +506,7 @@ function dasonw(
         ncomr::Integer
     )
     isempty(strip(path)) && throw(SpiceError(:blankfilename, "dasonw: the file name is blank"))
-    isempty(strip(ftype, ' ')) && throw(SpiceError(:blankfiletype, "dasonw: the file type is blank"))
-    ttype = String(strip(ftype, ' '))
-    all(c -> 0x20 <= c <= 0x7e, codeunits(ttype)) || throw(
-        SpiceError(
-            :illegalcharacter,
-            "dasonw: the file type contains nonprinting characters"
-        )
-    )
+    ttype = _daf_check_ftype("dasonw", ftype)
     ncomr < 0 && throw(
         SpiceError(
             :invalidcount,
