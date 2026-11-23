@@ -199,14 +199,6 @@ function _kep_ma_to_cart(sma, ecc, inc, raan, aop, ma, gm::Real)
     return _kep_to_cart(T(sma), T(ecc), T(inc), T(raan), T(aop), ta, gm)
 end
 
-# The equinoctial elements `(a, h, k, p, q, lambda)` of Keplerian ones, with the mean anomaly.
-function _kep_to_aeq(sma, ecc, inc, raan, aop, ma)
-    s = sin(inc / 2)
-    sr, cr = sincos(raan)
-    sh, ch = sincos(aop + raan)
-    return (sma, ecc * sh, ecc * ch, s * sr, s * cr, raan + aop + ma)
-end
-
 # ANISE `brouwer_mean_short_to_osculating_kep`: mean Brouwer-Lyddane elements (short
 # period only) to osculating Keplerian ones, `(sma, ecc, inc, raan, aop, ma)` in km and rad,
 # `re` the equatorial radius used to normalize. It checks only that the orbit is not
@@ -350,10 +342,7 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
     osc = (osc_sma, osc_ecc, osc_inc, _el_raan(o), _el_aop(o), _el_ma(o))
     pseudostate = false
     cart = getfield(o, :state)
-    aeq = (
-        _el_sma(o), _el_equinoctial_h(o), _el_equinoctial_k(o), _el_equinoctial_p(o),
-        _el_equinoctial_q(o), _el_equinoctial_lambda(o),
-    )
+    aeq = _el_equinoctial(o)
     if primal(osc[3]) > deg2rad(175.0)
         pseudostate = true
         osc = (osc[1], osc[2], π - osc[3], -osc[4], -osc[5], osc[6])
@@ -362,10 +351,7 @@ function _brouwer_mean(name::Symbol, o::Orbit{T}) where {T}
             cart, getfield(o, :et), getfield(o, :center), getfield(o, :frame),
             gm, getfield(o, :radii)
         )
-        aeq = (
-            _el_sma(flipped), _el_equinoctial_h(flipped), _el_equinoctial_k(flipped),
-            _el_equinoctial_p(flipped), _el_equinoctial_q(flipped), _el_equinoctial_lambda(flipped),
-        )
+        aeq = _el_equinoctial(flipped)
     end
 
     aeqmean = _kep_to_aeq(osc...)

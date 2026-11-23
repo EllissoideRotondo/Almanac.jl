@@ -200,8 +200,7 @@ julia> t = two_body(o, 3000.0); t.et, round(t.sma, digits=6)
 """
 function two_body(o::Orbit{T}, et2::Real) where {T}
     et2 isa Float64 && o.et isa Float64 && et2 == o.et && return o
-    a, h, k = _el_equinoctial_a(o), _el_equinoctial_h(o), _el_equinoctial_k(o)
-    p, q, lambda = _el_equinoctial_p(o), _el_equinoctial_q(o), _el_equinoctial_lambda(o)
+    a, h, k, p, q, lambda = _el_equinoctial(o)
     n = _el_mean_motion(o)
     lambda2 = lambda + n * (et2 - o.et)
     sma, ecc, inc, raan, aop, ma = _equinoctial_to_kep(a, h, k, p, q, lambda2)
