@@ -1,8 +1,8 @@
 module AlmanacMooncakeExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_rule, _AD_POINTS,
-    _AD_CONSTANT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_pin, _ad_rule,
+    _ad_scale, _AD_POINTS, _AD_CONSTANT, _AD_CONSTANT_ORBIT, _ad_typeof
 using Mooncake: Mooncake
 using Mooncake: DefaultCtx, CoDual, Dual, NoTangent, NoRData, RData, @is_primitive,
     @zero_derivative, zero_fcodual
@@ -17,10 +17,6 @@ _mt(x::StaticArray) = Mooncake.Tangent((data = Tuple(x),))
 _mt(x::Tuple) = map(_mt, x)
 _mt(x::Number) = x
 
-# The derivative `dy` times the epoch tangent `s`.
-_scale(dy::Tuple, s) = map(d -> _scale(d, s), dy)
-_scale(dy, s) = dy * s
-
 # Reverse data of the result times its derivative, summed over the whole structure.
 _mdot(::NoRData, ::Any) = 0.0
 _mdot(a::RData, d::StaticArray) = _mdot(a.data.data, Tuple(d))
@@ -34,7 +30,7 @@ for (f, types, iet) in _AD_POINTS
         @is_primitive DefaultCtx $sig
         function Mooncake.frule!!(::Dual{typeof($f)}, args::Vararg{Dual})
             y, dy = _ad_rule($f, map(Mooncake.primal, args)...)
-            return Dual(y, _mt(_scale(dy, Mooncake.tangent(args[$iet]))))
+            return Dual(y, _mt(_ad_scale(dy, Mooncake.tangent(args[$iet]))))
         end
         function Mooncake.rrule!!(::CoDual{typeof($f)}, args::Vararg{CoDual})
             y, dy = _ad_rule($f, map(Mooncake.primal, args)...)
@@ -60,12 +56,21 @@ function Mooncake.rrule!!(::CoDual{typeof(_ma_to_ta)}, m::CoDual, e::CoDual)
     return zero_fcodual(y), pullback
 end
 
+# The value of one formula with the derivatives of another (see `src/ad.jl`).
+@is_primitive DefaultCtx Tuple{typeof(_ad_pin), Float64, Float64}
+Mooncake.frule!!(::Dual{typeof(_ad_pin)}, a::Dual, p::Dual) =
+    Dual(_ad_pin(Mooncake.primal(a), Mooncake.primal(p)), Mooncake.tangent(a))
+function Mooncake.rrule!!(::CoDual{typeof(_ad_pin)}, a::CoDual, p::CoDual)
+    pullback(ȳ) = (NoRData(), ȳ, zero(ȳ))
+    return zero_fcodual(_ad_pin(Mooncake.primal(a), Mooncake.primal(p))), pullback
+end
+
 # The snapshot, the context and the correction are data without derivatives, and the
 # lookups and the parsing of strings have no derivative.
 Mooncake.tangent_type(::Type{<:KernelSet}) = NoTangent
 Mooncake.tangent_type(::Type{<:SpiceContext}) = NoTangent
 Mooncake.tangent_type(::Type{Aberration}) = NoTangent
-for f in _AD_CONSTANT
+for f in (_AD_CONSTANT..., _AD_CONSTANT_ORBIT...)
     @eval @zero_derivative DefaultCtx Tuple{$(_ad_typeof(f)), Vararg}
 end
 

@@ -146,9 +146,9 @@ group(
         end
         @test isempty(fails)
         @test_throws SPICE.SpiceError SPICE.bodvrd("EARTH", "NO_SUCH_ITEM")
-        # A blank name is an error in CSPICE; Almanac reports "not found".
-        @test bodn2c(ctx, "") === nothing
-        @test namfrm(ctx, "") == 0
+        # An empty name is SPICE(EMPTYSTRING) of `bodn2c_c` and `namfrm_c`.
+        @test throws_kind(() -> bodn2c(ctx, ""), :emptystring)
+        @test throws_kind(() -> namfrm(ctx, ""), :emptystring)
         @test throws_kind(() -> bodvrd(ctx, "EARTH", "NO_SUCH_ITEM"), :kernelvarnotfound)
         @test throws_kind(() -> bodvrd(ctx, "NO_SUCH_BODY", "RADII"), :notranslation)
         # Allocation: the returned vector and the key String; upper bounds, because the
@@ -258,7 +258,20 @@ group("5b. body names that later pool entries take over, against CSPICE") do
         ["NAIF_BODY_CODE = ( 1012 )", "NAIF_BODY_NAME = ( 'EARTH' )"],
         # leading blanks of a name are kept (F_ZZBDTRN)
         ["NAIF_BODY_CODE = ( 1013 )", "NAIF_BODY_NAME = ( '   A' )"],
+        # Regression: a name counts by its first 36 characters (`gcpool_` reads it into
+        # 36), then blanks are compressed; the name of a code is those 36 characters.
+        [
+            "NAIF_BODY_CODE = ( 1011 1012 1013 )",
+            "NAIF_BODY_NAME = ( 'F  LONG  NAME  OF  MORE  THAN  36  CHARACTERS  1'",
+            "                   'F LONG NAME OF MORE THAN 36 CHARACTERS 2'",
+            "                   '      F LONG NAME OF MORE THAN 36 CHARACTERS 3' )",
+        ],
     ]
+    longnames = (
+        "F LONG NAME OF MORE THAN 36 CHARACTERS 1", "F LONG NAME OF MORE THAN 36 C",
+        "F LONG NAME OF MORE THAN 36 CHARACTERS 2", "f long name of more than 36 characte x",
+        "F LONG NAME OF MORE THAN 36 CHARACTERS 3", "F LONG NAME OF MORE THAN 36 CH",
+    )
     fails = Failures()
     try
         for (k, cv) in enumerate(cases)
@@ -267,14 +280,10 @@ group("5b. body names that later pool entries take over, against CSPICE") do
             ctx = SpiceContext()
             Almanac.lmpool(ctx, cv)
             for code in (399, 1011, 1012, 1013)
-                expected = try
-                    SPICE.bodc2n(code)
-                catch
-                    nothing
-                end
+                expected = c_bodc2n(code)
                 check!(fails, Almanac.bodc2n(ctx, code) == expected, "bodc2n", k, code)
             end
-            for name in ("F_X", "F_Y", "A", "B", "EARTH")
+            for name in ("F_X", "F_Y", "A", "B", "EARTH", longnames...)
                 check!(fails, Almanac.bodn2c(ctx, name) == SPICE.bodn2c(name), "bodn2c", k, name)
             end
         end

@@ -457,6 +457,107 @@ group("6. kernel management", Kernels.FULL_SET_FILES..., Kernels.DE430, Kernels.
         for (kind, neo, c) in bare_cases
             @test nkind(neo) === ckind(c) === kind
         end
+        # Regression: `et2utc` with the format J was MISSINGTIMEINFO; its Julian date comes
+        # from `ttrans_`, which signals NOLEAPSECONDS.
+        @test nkind(() -> et2utc(bare, 0.0, "J", 3)) === :noleapseconds === ckind(
+                () -> ccall(
+                    (:et2utc_c, SPICE.libcspice), Cvoid,
+                    (Cdouble, Cstring, Cint, Cint, Ptr{UInt8}), 0.0, "J", 3, 40, buf
+                )
+            )
+        # Regression: these calls took an empty string as a name, a blank one or a
+        # missing kernel; the C wrappers signal EMPTYSTRING first (CHKFSTR), also before
+        # the leap-second check of `deltet` and `unitim`.
+        found, m = Ref{Cint}(0), Ref{Cint}(0)
+        cbuf = zeros(UInt8, 40, 2)
+        ibuf = zeros(Cint, 6)
+        empty_cases = (
+            (() -> deltet(bare, 0.0, ""), () -> ccall((:deltet_c, SPICE.libcspice), Cvoid, (Cdouble, Cstring, Ptr{Cdouble}), 0.0, "", lt)),
+            (() -> unitim(bare, 0.0, "", "TAI"), () -> ccall((:unitim_c, SPICE.libcspice), Cdouble, (Cdouble, Cstring, Cstring), 0.0, "", "TAI")),
+            (() -> unitim(bare, 0.0, "TDB", ""), () -> ccall((:unitim_c, SPICE.libcspice), Cdouble, (Cdouble, Cstring, Cstring), 0.0, "TDB", "")),
+            (() -> dvpool(bare, ""), () -> ccall((:dvpool_c, SPICE.libcspice), Cvoid, (Cstring,), "")),
+            (() -> ktotal(bare, ""), () -> ccall((:ktotal_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), "", n)),
+            (
+                () -> kdata(bare, 1, ""), () -> ccall(
+                    (:kdata_c, SPICE.libcspice), Cvoid,
+                    (Cint, Cstring, Cint, Cint, Cint, Ptr{UInt8}, Ptr{UInt8}, Ptr{UInt8}, Ref{Cint}, Ref{Cint}),
+                    0, "", 40, 40, 40, buf, buf, buf, m, found
+                ),
+            ),
+            (
+                () -> et2lst(bare, 0.0, 399, 0.0, ""), () -> ccall(
+                    (:et2lst_c, SPICE.libcspice), Cvoid,
+                    (Cdouble, Cint, Cdouble, Cstring, Cint, Cint, Ref{Cint}, Ref{Cint}, Ref{Cint}, Ptr{UInt8}, Ptr{UInt8}),
+                    0.0, 399, 0.0, "", 40, 40, n, m, found, buf, buf
+                ),
+            ),
+            (
+                () -> gdpool(bare, ""), () -> ccall(
+                    (:gdpool_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cint, Cint, Ref{Cint}, Ptr{Cdouble}, Ref{Cint}), "", 0, 6, n, st, found
+                ),
+            ),
+            (
+                () -> gipool(bare, ""), () -> ccall(
+                    (:gipool_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cint, Cint, Ref{Cint}, Ptr{Cint}, Ref{Cint}), "", 0, 6, n, ibuf, found
+                ),
+            ),
+            (
+                () -> gcpool(bare, ""), () -> ccall(
+                    (:gcpool_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cint, Cint, Cint, Ref{Cint}, Ptr{UInt8}, Ref{Cint}), "", 0, 2, 40, n, cbuf, found
+                ),
+            ),
+            (
+                () -> gnpool(bare, ""), () -> ccall(
+                    (:gnpool_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cint, Cint, Cint, Ref{Cint}, Ptr{UInt8}, Ref{Cint}), "", 0, 2, 40, n, cbuf, found
+                ),
+            ),
+            (() -> expool(bare, ""), () -> ccall((:expool_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), "", found)),
+            (
+                () -> dtpool(bare, ""), () -> ccall(
+                    (:dtpool_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}, Ref{Cint}, Ptr{UInt8}), "", found, n, buf
+                ),
+            ),
+            (
+                () -> stpool(bare, "", 1, "+"), () -> ccall(
+                    (:stpool_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cint, Cstring, Cint, Ptr{UInt8}, Ref{Cint}, Ref{Cint}), "", 0, "+", 40, buf, n, found
+                ),
+            ),
+            (
+                () -> stpool(bare, "X", 1, ""), () -> ccall(
+                    (:stpool_c, SPICE.libcspice), Cvoid,
+                    (Cstring, Cint, Cstring, Cint, Ptr{UInt8}, Ref{Cint}, Ref{Cint}), "X", 0, "", 40, buf, n, found
+                ),
+            ),
+            (() -> szpool(""), () -> ccall((:szpool_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}, Ref{Cint}), "", n, found)),
+            (() -> bods2c(bare, ""), () -> ccall((:bods2c_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}, Ref{Cint}), "", n, found)),
+            (() -> bodn2c(bare, ""), () -> ccall((:bodn2c_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}, Ref{Cint}), "", n, found)),
+            (() -> bodvrd(bare, "", "RADII"), () -> value("", "RADII")),
+            (() -> bodvrd(bare, "EARTH", ""), () -> value("EARTH", "")),
+            (
+                () -> swpool(bare, "", ["X"]), () -> ccall(
+                    (:swpool_c, SPICE.libcspice), Cvoid, (Cstring, Cint, Cint, Ptr{UInt8}), "", 1, 2, UInt8[UInt8('X'), 0x00]
+                ),
+            ),
+            (() -> cvpool(bare, ""), () -> ccall((:cvpool_c, SPICE.libcspice), Cvoid, (Cstring, Ref{Cint}), "", found)),
+        )
+        for (i, (neo, c)) in enumerate(empty_cases)
+            @test (i, nkind(neo), ckind(c)) == (i, :emptystring, :emptystring)
+        end
+        # Regression: ALL selected every kernel only as the whole kind; `keeper_` takes
+        # it anywhere in the list.
+        oracle_load([Kernels.LSK, Kernels.PCK11])
+        loaded = neo_context([Kernels.LSK, Kernels.PCK11])
+        try
+            @test ktotal(loaded, "SPK ALL") == SPICE.ktotal("SPK ALL") == ktotal(loaded)
+            @test ktotal(loaded, "spk all") == SPICE.ktotal("spk all") == ktotal(loaded)
+        finally
+            SPICE.kclear()
+        end
     end
 
     @apart @testset "the registry of kinds holds the kinds that the source throws" begin

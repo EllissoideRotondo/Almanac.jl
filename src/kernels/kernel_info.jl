@@ -47,13 +47,13 @@ end
 """
     _kind_filter(kind) -> Union{Nothing,Vector{String}}
 
-The kernel types that the string `kind` selects: `nothing` for `"ALL"` (every type),
-else the blank-separated words of `kind` in upper case. A word that is not a kernel
-type selects nothing, as in CSPICE.
+The kernel types that the string `kind` selects: `nothing` (every type) if one of its
+blank-separated words is `"ALL"`, as in `keeper`, else the words in upper case. A word
+that is not a kernel type selects nothing, as in CSPICE.
 """
 function _kind_filter(kind::AbstractString)
-    words = String[uppercase(w) for w in split(kind)]
-    words == ["ALL"] && return nothing
+    words = String[uppercase(w) for w in split(kind, ' '; keepempty = false)]
+    "ALL" in words && return nothing
     return words
 end
 
@@ -70,9 +70,11 @@ Return the number of loaded kernels of the types in `kind`, as
 [`ktotal_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ktotal_c.html).
 
 `kind` is `"ALL"` or a blank-separated list of `SPK`, `CK`, `PCK`, `DSK`, `EK`, `TEXT`
-and `META`, in any letter case. A meta-kernel counts once as `META`, and each file
-that it lists counts once. A path that is loaded twice counts twice. A word
-that is not a kernel type selects nothing.
+and `META`, in any letter case; a list with the word `ALL` selects every kernel. A
+meta-kernel counts once as `META`, and each file that it lists counts once. A path that
+is loaded twice counts twice. A word that is not a kernel type selects nothing.
+
+Throws `SpiceError(:emptystring)` if `kind` is the empty string.
 
 # Examples
 ```jldoctest
@@ -82,7 +84,10 @@ julia> ktotal(SpiceContext())
 
 See also [`kdata`](@ref), [`kinfo`](@ref).
 """
-ktotal(ks::KernelSet, kind::AbstractString = "ALL") = length(_kernels_of_kind(ks, kind))
+function ktotal(ks::KernelSet, kind::AbstractString = "ALL")
+    _chkfstr("ktotal", "kind", kind)                # CHKFSTR of ktotal_c
+    return length(_kernels_of_kind(ks, kind))
+end
 ktotal(ctx::SpiceContext, kind::AbstractString = "ALL") = ktotal(kernelset(ctx), kind)
 ktotal(kind::AbstractString = "ALL") = ktotal(default_context(), kind)
 
@@ -101,6 +106,8 @@ loaded the file, or `""`. `handle` is always 0, because a loaded kernel has no f
 handle in this package; it is kept for the tuple of CSPICE. `nothing` takes the place
 of the `found` flag of CSPICE.
 
+Throws `SpiceError(:emptystring)` if `kind` is the empty string.
+
 # Examples
 ```julia
 for i in 1:ktotal("SPK")
@@ -112,6 +119,7 @@ end
 See also [`kinfo`](@ref).
 """
 function kdata(ks::KernelSet, which::Integer, kind::AbstractString = "ALL")
+    _chkfstr("kdata", "kind", kind)                 # CHKFSTR of kdata_c
     list = _kernels_of_kind(ks, kind)
     (1 <= which <= length(list)) || return nothing
     e = list[which]

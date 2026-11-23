@@ -46,39 +46,46 @@ between. The branch follows `primal(x)`. Throws `SpiceError(kind)` if
     return 1.0 - x * c2, 1.0 - x * c3, c2, c3
 end
 
+# The Kepler function of `prop2b`, in its two parenthesisations: `prop2b.c` groups
+# `x * (bq * c3)` at the first guess and in the loop for dt < 0, and computes
+# `x * bq * c3` from the left in the loop for dt > 0 and in the bisection.
+@inline _kfun_grouped(x, br0, b2rv, bq, c1, c2, c3) = x * (br0 * c1 + x * (b2rv * c2 + x * (bq * c3)))
+@inline _kfun_chained(x, br0, b2rv, bq, c1, c2, c3) = x * (br0 * c1 + x * (b2rv * c2 + x * bq * c3))
+
 # The `min` and `max` macros of f2c, `a <= b ? a : b` and `a >= b ? a : b`, as
 # selections without branches. Unlike `Base.min`, they do not propagate a NaN and keep
-# the first of two equal zeros; the bisection of `_prop2b` mispredicts the branches of
+# the first of two equal zeros; the bisection of `_prop2b_root` mispredicts the branches of
 # `Base.min`.
 @inline _f2c_min(a::Float64, b::Float64) = ifelse(a <= b, a, b)
 @inline _f2c_max(a::Float64, b::Float64) = ifelse(a >= b, a, b)
 
 """
-    _prop2b(gm, pos, vel, dt::T, kind=:badorbit) -> (pos::Vec3{T}, vel::Vec3{T})
+    _prop2b(gm, pos, vel, dt::T, kind=:dtoutofrange) -> (pos::Vec3{T}, vel::Vec3{T})
 
 Two-body state at the time `dt` after the state `(pos, vel)` about a mass with
 gravitational parameter `gm`, by the universal-variable formulation of `prop2b`.
 
-Contract: `gm > 0`, `pos` and `vel` are not zero and not parallel, else
-`SpiceError(kind)`, which is also the error for a time interval that is too long. The
+Throws the kinds of `prop2b`, in its order: `:nonpositivemass` if `gm <= 0`,
+`:zeroposition`, `:zerovelocity`, and `:nonconicmotion` if `pos` and `vel` are
+parallel; `SpiceError(kind)` for a time interval that is too long. The
 universal variable `x` is the plain `Float64` root of the Kepler equation
-`kfun(x) = primal(dt)`, found by the bracketing and bisection of CSPICE, so a plain `dt`
-gives the CSPICE state. For another number type `x`
-gets its derivative parts from Newton steps with `d kfun / dx = b r` (see
-`_with_primal`), and the closing formulas are evaluated in that type.
+`kfun(x) = primal(dt)`, found by the bracketing and bisection of CSPICE
+(`_prop2b_root`), so a plain `dt` gives the CSPICE state. `x` gets its derivative parts
+from Newton steps with `d kfun / dx = b r` (see `_ad_pin`; one step for a `Float64`,
+whose value is `x`), and the closing formulas are evaluated in the type of `dt`.
 """
 function _prop2b(
         gm::Float64, pos::Vec3{Float64}, vel::Vec3{Float64}, dt::T,
-        kind::Symbol = :badorbit
+        kind::Symbol = :dtoutofrange
     ) where {T <: Real}
-    gm > 0.0 || _conic_error("the gravitational parameter is not positive", kind)
-    (_m_maxabs(pos) == 0.0 || _m_maxabs(vel) == 0.0) &&
-        _conic_error("the initial position or velocity is zero", kind)
+    gm <= 0.0 && _conic_error("the gravitational parameter is not positive", :nonpositivemass)
+    _m_maxabs(pos) == 0.0 && _conic_error("the initial position is zero", :zeroposition)
+    _m_maxabs(vel) == 0.0 && _conic_error("the initial velocity is zero", :zerovelocity)
     r0 = _m_norm(pos)
     rv = _m_dot(pos, vel)
     hvec = _m_cross(pos, vel)
     h2 = _m_dot(hvec, hvec)
-    h2 == 0.0 && _conic_error("the initial position and velocity are parallel", kind)
+    h2 == 0.0 && _conic_error("the initial position and velocity are parallel", :nonconicmotion)
     eqvec = (1.0 / gm) * _m_cross(vel, hvec) + (-1.0 / r0) * pos
     e = _m_norm(eqvec)
     q = h2 / (gm * (e + 1.0))
@@ -99,74 +106,17 @@ function _prop2b(
     end
 
     t = primal(dt)
-    x = 0.0
-    if t != 0.0
-        x = clamp(t / bq, -bound, bound)
-        _, c1, c2, c3 = _stumpff(f * x * x, kind)
-        kfun = x * (br0 * c1 + x * (b2rv * c2 + x * (bq * c3)))
-        lower = upper = 0.0
-        if t < 0.0
-            lower = x
-            # invariant: kfun(upper) > t; `lower` doubles until kfun(lower) <= t
-            while kfun > t
-                upper = lower
-                lower *= 2.0
-                oldx = x
-                x = clamp(lower, -bound, bound)
-                x == oldx && _conic_error(
-                    "the time interval is too long for two-body " *
-                        "propagation", kind
-                )
-                _, c1, c2, c3 = _stumpff(f * x * x, kind)
-                kfun = x * (br0 * c1 + x * (b2rv * c2 + x * (bq * c3)))
-            end
-        else
-            upper = x
-            # invariant: kfun(lower) < t; `upper` doubles until kfun(upper) >= t
-            while kfun < t
-                lower = upper
-                upper *= 2.0
-                oldx = x
-                x = clamp(upper, -bound, bound)
-                x == oldx && _conic_error(
-                    "the time interval is too long for two-body " *
-                        "propagation", kind
-                )
-                _, c1, c2, c3 = _stumpff(f * x * x, kind)
-                kfun = x * (br0 * c1 + x * (b2rv * c2 + x * bq * c3))
-            end
-        end
-        # Bisection. The count starts again at 64 when both ends are away from zero.
-        x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
-        _, c1, c2, c3 = _stumpff(f * x * x, kind)
-        lcount = 0
-        mostc = 1000
-        # invariant: kfun(lower) <= t <= kfun(upper)
-        while x > lower && x < upper && lcount < mostc
-            kfun = x * (br0 * c1 + x * (b2rv * c2 + x * bq * c3))
-            # The `if kfun > t ... elseif kfun < t ... else` of `prop2b`, without
-            # branches: a NaN or an equal `kfun` closes the bracket on `x`.
-            upper = ifelse(!(kfun < t), x, upper)
-            lower = ifelse(!(kfun > t), x, lower)
-            if mostc > 64 && upper != 0.0 && lower != 0.0
-                mostc = 64
-                lcount = 0
-            end
-            x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
-            _, c1, c2, c3 = _stumpff(f * x * x, kind)
-            lcount += 1
-        end
-    elseif T === Float64
-        return pos, vel
-    end
+    x = _prop2b_root(t, f, br0, b2rv, bq, bound, kind)
 
-    # Derivative parts of x: Newton steps on kfun(x) - dt with its plain value removed.
+    # Derivative parts of x: Newton steps on kfun(x) - dt with its plain value removed. A
+    # `Float64` takes one step too, whose value is `x` (`_ad_pin`) and whose derivative is
+    # that of the root for the reverse-mode AD packages.
     xt = convert(T, x)
-    for _ in 1:_ad_order(T)       # invariant: one more derivative order of xt is exact
+    for _ in 1:max(1, _ad_order(T))   # invariant: one more derivative order of xt is exact
         d0, d1, d2, d3 = _stumpff(f * xt * xt, kind)
-        kf = xt * (br0 * d1 + xt * (b2rv * d2 + xt * bq * d3))
+        kf = _kfun_chained(xt, br0, b2rv, bq, d1, d2, d3)
         brt = br0 * d0 + xt * (b2rv * d1 + xt * (bq * d2))
-        xt -= _with_primal(kf - dt, 0.0) / brt
+        xt -= _ad_pin(kf - dt, 0.0) / brt
     end
     c0, c1, c2, c3 = _stumpff(f * xt * xt, kind)
     x2 = xt * xt
@@ -176,7 +126,84 @@ function _prop2b(
     vc = dt - bq * x3 * c3
     pcdot = -(qovr0 / br) * xt * c1
     vcdot = 1.0 - bq / br * x2 * c2
-    return pc * pos + vc * vel, pcdot * pos + vcdot * vel
+    pf, vf = pc * pos + vc * vel, pcdot * pos + vcdot * vel
+    # dt = 0: CSPICE returns the initial state (the formulas can change the sign of a zero)
+    T === Float64 && t == 0.0 && return (
+        SVector(_ad_pin(pf[1], pos[1]), _ad_pin(pf[2], pos[2]), _ad_pin(pf[3], pos[3])),
+        SVector(_ad_pin(vf[1], vel[1]), _ad_pin(vf[2], vel[2]), _ad_pin(vf[3], vel[3])),
+    )
+    return pf, vf
+end
+
+"""
+    _prop2b_root(t, f, br0, b2rv, bq, bound, kind) -> x
+
+The universal variable `x` of `prop2b` for the plain time `t`: the root of the Kepler
+function, by the bracketing and bisection of CSPICE (0 for `t == 0`). The AD extensions
+treat it as a constant (`_AD_CONSTANT`); `_prop2b` takes the derivatives of the root by
+a Newton step.
+"""
+function _prop2b_root(
+        t::Float64, f::Float64, br0::Float64, b2rv::Float64, bq::Float64,
+        bound::Float64, kind::Symbol
+    )
+    t == 0.0 && return 0.0
+    x = clamp(t / bq, -bound, bound)
+    _, c1, c2, c3 = _stumpff(f * x * x, kind)
+    kfun = _kfun_grouped(x, br0, b2rv, bq, c1, c2, c3)
+    lower = upper = 0.0
+    if t < 0.0
+        lower = x
+        # invariant: kfun(upper) > t; `lower` doubles until kfun(lower) <= t
+        while kfun > t
+            upper = lower
+            lower *= 2.0
+            oldx = x
+            x = clamp(lower, -bound, bound)
+            x == oldx && _conic_error(
+                "the time interval is too long for two-body " *
+                    "propagation", kind
+            )
+            _, c1, c2, c3 = _stumpff(f * x * x, kind)
+            kfun = _kfun_grouped(x, br0, b2rv, bq, c1, c2, c3)
+        end
+    else
+        upper = x
+        # invariant: kfun(lower) < t; `upper` doubles until kfun(upper) >= t
+        while kfun < t
+            lower = upper
+            upper *= 2.0
+            oldx = x
+            x = clamp(upper, -bound, bound)
+            x == oldx && _conic_error(
+                "the time interval is too long for two-body " *
+                    "propagation", kind
+            )
+            _, c1, c2, c3 = _stumpff(f * x * x, kind)
+            kfun = _kfun_chained(x, br0, b2rv, bq, c1, c2, c3)
+        end
+    end
+    # Bisection. The count starts again at 64 when both ends are away from zero.
+    x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
+    _, c1, c2, c3 = _stumpff(f * x * x, kind)
+    lcount = 0
+    mostc = 1000
+    # invariant: kfun(lower) <= t <= kfun(upper)
+    while x > lower && x < upper && lcount < mostc
+        kfun = _kfun_chained(x, br0, b2rv, bq, c1, c2, c3)
+        # The `if kfun > t ... elseif kfun < t ... else` of `prop2b`, without
+        # branches: a NaN or an equal `kfun` closes the bracket on `x`.
+        upper = ifelse(!(kfun < t), x, upper)
+        lower = ifelse(!(kfun > t), x, lower)
+        if mostc > 64 && upper != 0.0 && lower != 0.0
+            mostc = 64
+            lcount = 0
+        end
+        x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
+        _, c1, c2, c3 = _stumpff(f * x * x, kind)
+        lcount += 1
+    end
+    return x
 end
 
 """
@@ -207,6 +234,17 @@ function _spk5(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     @inbounds t1, t2 = data[ebase + i], data[ebase + i + 1]
     p1, v1 = _prop2b(gm, _vec3(data, a), _vec3(data, a + 3), et - t1)
     p2, v2 = _prop2b(gm, _vec3(data, a + 6), _vec3(data, a + 9), et - t2)
+    return _cos_blend(et, t1, t2, p1, v1, p2, v2)
+end
+
+"""
+    _cos_blend(et, t1, t2, p1, v1, p2, v2) -> (pos, vel)
+
+Weighted mean of the states `(p1, v1)` and `(p2, v2)` at `et`, with the weight
+`(1 + cos(pi (et - t1)/(t2 - t1)))/2` of the first, and the velocity term of the
+weight rate, in the arithmetic of `spke05` and `spke10`.
+"""
+@inline function _cos_blend(et::Real, t1::Float64, t2::Float64, p1, v1, p2, v2)
     denom = t2 - t1
     arg = (et - t1) * _PI / denom
     dargdt = _PI / denom
@@ -236,7 +274,7 @@ its `atan` form in the orbit plane.
 """
 function _spk15(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b = seg.baddr
-    seg.eaddr - b + 1 == 16 || _badsegment(seg, "the segment does not have 16 doubles")
+    seg.eaddr - b + 1 == 16 || _segerror(:malformedsegment, seg, "the segment does not have 16 doubles")
     @inbounds begin
         epoch = data[b]
         tp, pa = _vec3(data, b + 1), _vec3(data, b + 4)
@@ -245,15 +283,17 @@ function _spk15(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
         pv = _vec3(data, b + 10)
         gm, oj2, rpl = data[b + 13], data[b + 14], data[b + 15]
     end
-    (p > 0.0 && ecc >= 0.0 && gm > 0.0 && rpl >= 0.0) || _badsegment(
-        seg,
-        "P = $p, ECC = $ecc, GM = $gm, radius = $rpl are not all in their ranges"
-    )
-    (_m_maxabs(tp) == 0.0 || _m_maxabs(pa) == 0.0 || _m_maxabs(pv) == 0.0) &&
-        _badsegment(seg, "the trajectory pole, the periapsis vector or the body pole is zero")
+    # The checks and kinds of `spke15`, in its order.
+    p <= 0.0 && _segerror(:badlatusrectum, seg, "the semi-latus rectum $p is not positive")
+    ecc < 0.0 && _segerror(:badeccentricity, seg, "the eccentricity $ecc is negative")
+    gm <= 0.0 && _segerror(:nonpositivemass, seg, "the mass $gm of the central body is not positive")
+    _m_maxabs(tp) == 0.0 && _segerror(:badvector, seg, "the trajectory pole is zero")
+    _m_maxabs(pa) == 0.0 && _segerror(:badvector, seg, "the periapsis vector is zero")
+    _m_maxabs(pv) == 0.0 && _segerror(:badvector, seg, "the pole of the central body is zero")
+    rpl < 0.0 && _segerror(:badradius, seg, "the radius $rpl of the central body is negative")
     pa, tp, pv = _m_hat(pa), _m_hat(tp), _m_hat(pv)
     abs(_m_dot(pa, tp)) > 1.0e-5 &&
-        _badsegment(seg, "the periapsis vector and the trajectory pole are not orthogonal")
+        _segerror(:badinitstate, seg, "the periapsis vector and the trajectory pole are not orthogonal")
     near = p / (ecc + 1.0)
     speed = sqrt(gm / p) * (ecc + 1.0)
     q = _m_cross(tp, pa)
@@ -419,12 +459,12 @@ State of a type 17 segment (equinoctial elements), as `spke17` with `eqncpv`
 (`_eqn_state`). The segment is one record: epoch, semi-major axis, H, K, mean
 longitude, P, Q, rate of the longitude of periapsis, mean longitude rate, rate of the
 node, and the right ascension and declination of the pole of the reference plane.
-Throws `SpiceError(:baddaf)` unless the semi-major axis is positive and the
-eccentricity is not above 0.9.
+Throws `SpiceError(:badsemiaxis)` unless the semi-major axis is positive and
+`SpiceError(:badeccentricity)` if the eccentricity is above 0.9, as `spke17`.
 """
 function _spk17(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     bs = seg.baddr
-    seg.eaddr - bs + 1 == 12 || _badsegment(seg, "the segment does not have 12 doubles")
+    seg.eaddr - bs + 1 == 12 || _segerror(:malformedsegment, seg, "the segment does not have 12 doubles")
     @inbounds begin
         epoch = data[bs]
         a, h0, k0, l = data[bs + 1], data[bs + 2], data[bs + 3], data[bs + 4]
@@ -432,9 +472,8 @@ function _spk17(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
         dlpdt, mldt, nodedt = data[bs + 7], data[bs + 8], data[bs + 9]
         rapol, decpol = data[bs + 10], data[bs + 11]
     end
-    (a > 0.0 && sqrt(h0 * h0 + k0 * k0) <= 0.9) || _badsegment(
-        seg,
-        "the semi-major axis is not positive or the eccentricity is above 0.9"
-    )
+    a <= 0.0 && _segerror(:badsemiaxis, seg, "the semi-major axis $a is not positive")
+    ecc = sqrt(h0 * h0 + k0 * k0)
+    ecc > 0.9 && _segerror(:badeccentricity, seg, "the eccentricity $ecc is above 0.9")
     return _eqn_state(et, epoch, a, h0, k0, l, p0, q0, dlpdt, mldt, nodedt, rapol, decpol)
 end

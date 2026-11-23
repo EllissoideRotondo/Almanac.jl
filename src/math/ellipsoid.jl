@@ -282,13 +282,14 @@ end
 end
 
 """
-    _m_nearpt(positn, a, b, c) -> (npoint, alt)
+    _m_nearpt_plain(positn, a, b, c) -> (npoint, alt)
 
 `nearpt_` of CSPICE for `Float64` arguments: the same axis ordering, scaling, bracketing
 and bisection of the multiplier `lambda`, and the same (at most five) correction steps
-that move the solution along the error of the first one.
+that move the solution along the error of the first one. The AD extensions treat it as
+a constant (`_AD_CONSTANT`); `_m_nearpt` gives the derivatives.
 """
-function _m_nearpt(positn::SVector{3, Float64}, a::Float64, b::Float64, c::Float64)
+function _m_nearpt_plain(positn::SVector{3, Float64}, a::Float64, b::Float64, c::Float64)
     (a > 0.0 && b > 0.0 && c > 0.0) || _m_badaxis(a, b, c)
     ax = (a, b, c)
     # `orderd_` for three elements is an insertion sort: ascending and stable.
@@ -529,19 +530,24 @@ function _m_nearpt(positn::SVector{3, Float64}, a::Float64, b::Float64, c::Float
     return npoint, bestht / scale
 end
 
-"""
-    _m_nearpt(positn, a, b, c) for another number type
+# One coordinate `p a^2 / (a^2 + lam)` of the near point, with the plain value `p0`.
+@inline _m_nearpt_coord(p, ax, lam, p0::Float64) = _ad_pin(p * ax * ax / (ax * ax + lam), p0)
 
-The plain result of the `Float64` method with derivative parts from the stationarity
-condition: the near point is `p_i a_i^2 / (a_i^2 + lambda)` where `lambda` is the root
-of `sum((p_i a_i / (a_i^2 + lambda))^2) = 1`, refined by Newton steps in the number
-type. Where that form does not hold (the center, and the interior points whose near
-point is not unique or not smooth) the derivative parts are zero.
+"""
+    _m_nearpt(positn, a, b, c) -> (npoint, alt)
+
+The plain result of `_m_nearpt_plain` (`nearpt_`) with derivative parts from the
+stationarity condition: the near point is `p_i a_i^2 / (a_i^2 + lambda)` where `lambda`
+is the root of `sum((p_i a_i / (a_i^2 + lambda))^2) = 1`, refined by Newton steps in
+the number type (one for `Float64`, whose derivative the reverse-mode AD packages take
+through `_ad_pin`). Where that form does not hold (the center, and the interior points
+whose near point is not unique or not smooth) the derivative parts are zero. For
+`Float64` arguments the result is that of `_m_nearpt_plain`, bit for bit.
 """
 function _m_nearpt(positn::SVector{3}, a::Real, b::Real, c::Real)
     p0 = SVector(primal(positn[1]), primal(positn[2]), primal(positn[3]))
     a0, b0, c0 = primal(a), primal(b), primal(c)
-    np0, alt0 = _m_nearpt(p0, a0, b0, c0)
+    np0, alt0 = _m_nearpt_plain(p0, a0, b0, c0)
     T = typeof(positn[1] * a * b * c / 1.0)
     flat = SVector{3, T}(np0[1], np0[2], np0[3]), convert(T, alt0)
     ax0 = (a0, b0, c0)
@@ -555,7 +561,7 @@ function _m_nearpt(positn::SVector{3}, a::Real, b::Real, c::Real)
     end
     axs = (a * one(T), b * one(T), c * one(T))
     lam = convert(T, lam0)
-    for _ in 1:_ad_order(T)       # invariant: one more derivative order of lam is exact
+    for _ in 1:max(1, _ad_order(T))   # invariant: one more derivative order of lam is exact
         q = -one(T)
         dq = zero(T)
         for i in 1:3
@@ -564,14 +570,16 @@ function _m_nearpt(positn::SVector{3}, a::Real, b::Real, c::Real)
             q += r * r
             dq -= 2.0 * r * r / den
         end
-        lam -= _with_primal(q, 0.0) / dq
+        lam -= _ad_pin(q, 0.0) / dq
     end
-    # `lam` is assigned in the loop above; a closure that captured it would hold it in a box.
-    s = let lam = lam
-        SVector(ntuple(i -> _with_primal(positn[i] * axs[i] * axs[i] / (axs[i] * axs[i] + lam), np0[i]), Val(3)))
-    end
+    # (no closure over `lam`, which the loop assigns: it would hold it in a box)
+    s = SVector(
+        _m_nearpt_coord(positn[1], axs[1], lam, np0[1]),
+        _m_nearpt_coord(positn[2], axs[2], lam, np0[2]),
+        _m_nearpt_coord(positn[3], axs[3], lam, np0[3])
+    )
     n = _m_surfnm(axs[1], axs[2], axs[3], s)
-    return s, _with_primal(_m_dot(positn - s, n), alt0)
+    return s, _ad_pin(_m_dot(positn - s, n), alt0)
 end
 
 """
@@ -586,8 +594,9 @@ The results have the unit of the arguments.
 
 The arguments can be `ForwardDiff.Dual` or `Almanac.Taylor` numbers (the truncated
 Taylor series of [`spkder`](@ref)). The value is then equal to the `Float64` result.
-The derivatives are zero at the center and at an interior point whose nearest point is
-not unique.
+The packages of [Differentiate with other AD packages](@ref) take the same derivatives
+with `Float64` arguments. The derivatives are zero at the center and at an interior
+point whose nearest point is not unique.
 
 Throws `SpiceError(:badaxislength)` if a semi-axis is not positive or if the ratio of
 the longest to the shortest one is above about 1.3e153. Throws
@@ -1699,6 +1708,7 @@ The call needs SPK data for the three bodies, the orientation of `fixref`, and t
 `BODY<id>_RADII` of the source and the target.
 
 Throws:
+- `SpiceError(:emptystring)` if a string argument is `""`.
 - `SpiceError(:notranslation)` if a body or frame name is not known.
 - `SpiceError(:invalidfixref)` if `fixref` does not have its center at the target.
 - `SpiceError(:spkinvalidoption)` if `abcorr` is not known.
@@ -1722,7 +1732,13 @@ function edterm(
         ks::KernelSet, trmtyp::AbstractString, source::NameOrID, target::NameOrID,
         et::Real, fixref::NameOrID, abcorr::AbstractString, obsrvr::NameOrID, npts::Integer
     )
-    frcode = fixref isa Integer ? Int(fixref) : namfrm(ks, fixref)
+    _chkfstr("edterm", "string `trmtyp`", trmtyp)
+    source isa AbstractString && _chkfstr("edterm", "string `source`", source)
+    target isa AbstractString && _chkfstr("edterm", "string `target`", target)
+    fixref isa AbstractString && _chkfstr("edterm", "string `fixref`", fixref)
+    _chkfstr("edterm", "string `abcorr`", abcorr)
+    obsrvr isa AbstractString && _chkfstr("edterm", "string `obsrvr`", obsrvr)
+    frcode = fixref isa Integer ? Int(fixref) : _namfrm(ks, fixref)
     frcode == 0 && throw(SpiceError(:notranslation, "the frame $fixref has no frame ID code"))
     fd = frame_def(ks, frcode)
     trgid = _m_bodyid(ks, target, :notranslation)

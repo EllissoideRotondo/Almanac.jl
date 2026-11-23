@@ -169,7 +169,7 @@ function _geo_body(ks::KernelSet, name::AbstractString, what::AbstractString)
 end
 
 @inline _geo_namfrm(::KernelSet, ref::Integer) = Int32(ref)
-_geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(namfrm(ks, ref))
+_geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
 
 """
     _geo_frinfo(ks, id) -> (center, class, found)
@@ -177,13 +177,9 @@ _geo_namfrm(ks::KernelSet, ref::AbstractString) = Int32(namfrm(ks, ref))
 `frinfo` without the class ID. Does not allocate.
 """
 @inline function _geo_frinfo(ks::KernelSet, id::Int32)
-    id == Int32(0) && return Int32(0), Int32(0), false
-    f = get(BUILTIN_FRAMES, id, nothing)
-    f === nothing || return f.center, f.class, true
-    f = get(ks.frames, id, nothing)
-    f === nothing || return f.center, f.class, true
-    13000 <= id < 14000 && return Int32(399), Int32(2), true
-    return Int32(0), Int32(0), false
+    f = _frame_def_or_nothing(ks, id)
+    f === nothing && return Int32(0), Int32(0), false
+    return f.center, f.class, true
 end
 
 @noinline _geo_no_frame(ref) = throw(
@@ -273,7 +269,10 @@ end
 The target shape of a geometry call, the saved values of `zzsinutl`: `dsk` (DSK data,
 else the ellipsoid with the radii `a`, `b`, `c`), the target `trgcde`, its body-fixed
 frame `fixfid`, the radius `maxrad` of the outer bounding sphere, the surface list and
-the DSK tolerances.
+the DSK tolerances. For DSK data, `segs` is the list of loaded segments of the target
+(`ks.dsk[trgcde]` of the snapshot that built the shape), and `segok` tells whether the
+checks of `_dsk_body_segments` pass on it; the ray intercepts of `_geo_rayx` use both,
+so the segments are looked up once per shape, not once per ray.
 """
 struct _GeoShape
     dsk::Bool
@@ -285,7 +284,16 @@ struct _GeoShape
     maxrad::Float64
     srflst::Vector{Int}
     tols::DSKTolerances
+    segs::Vector{DSKSegment}
+    segok::Bool
 end
+
+"The segment list of a shape without DSK data (never modified)."
+const _GEO_NOSEGS = DSKSegment[]
+
+# A DSK shape built without its segments looks them up at each ray (`segok` false).
+_GeoShape(dsk, trgcde, fixfid, a, b, c, maxrad, srflst, tols) =
+    _GeoShape(dsk, trgcde, fixfid, a, b, c, maxrad, srflst, tols, _GEO_NOSEGS, !dsk)
 
 "`zzsuelin`: the ellipsoid of the body `trgcde`."
 @inline function _geo_ellshape(ks::KernelSet, trgcde::Int32, fixfid::Int32)
@@ -298,17 +306,19 @@ end
 
 "`zzdsksph` for the body `trgcde`; `SpiceError(:noloadeddskfiles)` without DSK files,
 `SpiceError(:dskdatanotfound)` without DSK data for the body."
-function _geo_dsksph(ks::KernelSet, trgcde::Int32, srflst)
-    _dsk_check_files(ks)
-    segs = get(ks.dsk, trgcde, nothing)
-    segs === nothing && _dsk_no_segments(trgcde, srflst)
-    return _dsk_sph(ks, segs, trgcde, srflst)
-end
+_geo_dsksph(ks::KernelSet, trgcde::Int32, srflst) = _dsk_body_sph(ks, trgcde, srflst)
 
 "`zzsudski`: the DSK surface of the body `trgcde` with the surfaces `srflst`."
 function _geo_dskshape(ks::KernelSet, tols::DSKTolerances, trgcde::Int32, fixfid::Int32, srflst)
     _, maxrad = _geo_dsksph(ks, trgcde, srflst)
-    return _GeoShape(true, trgcde, fixfid, 0.0, 0.0, 0.0, maxrad, srflst, tols)
+    # `_geo_dsksph` has thrown unless a DSK file is loaded and the target has segments.
+    segs = ks.dsk[trgcde]
+    sh = _GeoShape(
+        true, trgcde, fixfid, 0.0, 0.0, 0.0, maxrad, srflst, tols, segs,
+        _dsk_segments_ok(ks, segs)
+    )
+    @assert !isempty(sh.segs) && sh.maxrad >= 0.0
+    return sh
 end
 
 @inline _geo_shape(ks::KernelSet, tols::DSKTolerances, m::_GeoMethod, trgcde::Int32, fixfid::Int32) =
@@ -330,15 +340,18 @@ _geo_plain(::Any) = _geo_dsk_epoch()
 
 `zzraysfx`: the first point where the ray from `vertex` along `raydir` (body-fixed
 frame of the shape, epoch `et` for the DSK segment selection) meets the surface.
-Generic over the number type for an ellipsoid; no allocation.
+Generic over the number type for an ellipsoid; no allocation. `ks` must be the
+snapshot that built `sh`. The result is that of `_dsk_bux` for the same ray.
 """
 @inline function _geo_rayx(
         ks::KernelSet, sh::_GeoShape, vertex::SVector{3, T},
         raydir::SVector{3, T}, et
     ) where {T}
     if sh.dsk
-        xpt, _, _, found = _dsk_bux(
-            ks, sh.tols, sh.trgcde, sh.srflst, _geo_plain(et),
+        # The errors of `zzdsksba` come with the first ray, as in `_dsk_bux`.
+        sh.segok || _dsk_body_segments(ks, sh.trgcde)
+        xpt, _, _, found = _dsk_bux_ray(
+            ks, sh.tols, sh.segs, sh.maxrad, sh.trgcde, sh.srflst, _geo_plain(et),
             sh.fixfid, _geo_plain(vertex), _geo_plain(raydir)
         )
         return found, SVector{3, T}(xpt)

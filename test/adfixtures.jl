@@ -11,6 +11,7 @@
 #   behaviour                                             layer      test set
 #   first derivative of every derivative point, through   invariant  "first derivatives"
 #     public calls, equals the ForwardDiff derivative
+#     (and through the root solvers of nearpt and prop2b)
 #   the value of a call is not changed by a backend       invariant  "first derivatives"
 #   batched forward rule (two tangents at once)           invariant  "batched forward"
 #   gradient over many epochs (reverse mode)              invariant  "gradient"
@@ -21,7 +22,8 @@
 #   gradient of the Orbit calls with respect to a state  invariant  "Orbit gradients"
 #     or elements (elements, local frame, relative state,
 #     `two_body` and `keplerian_orbit` through the Kepler
-#     solver, at E = pi too) equals the ForwardDiff one
+#     solver, at E = pi too; the angles at pi through
+#     `_ad_pin`) equals the ForwardDiff one
 #   derivative of the local frame (exhaustive run: and    invariant  "first derivatives"
 #     of `:sma`) of `orbit` with respect to the epoch
 #     (through `spkezr`) equals the ForwardDiff one
@@ -35,7 +37,8 @@
 # (5e-14) is that of the gradients of the Orbit calls with respect to a state or to
 # elements, a margin of about 20 over the largest measured difference (2.1e-15, `:ta` with
 # Tracker); there the backends differentiate the arithmetic of the Orbit layer themselves,
-# and only the Kepler solver has a rule (`_ma_to_ta`, see `src/analysis/brouwer.jl`).
+# and only the Kepler solver (`_ma_to_ta`, see `src/analysis/brouwer.jl`) and the angles
+# (`_ad_pin`, see `src/ad.jl`) have rules.
 #
 # Size. The compilation of a backend for a call takes most of the time. The default run
 # differentiates one function per backend that passes through every derivative point
@@ -67,8 +70,10 @@ Scalar functions of the epoch, by name. The default cases reach each derivative 
 of `src/ad.jl` once: `spk_jet` (orders 0 and 2), `abcorr_position`, `abcorr_state`,
 `abcorr_jet`, `frame_rotation` (PCK and binary PCK frames), `frame_jet` (`sxform`), the
 geometry of `subpnt`, the time scales, the tables and the local frame of `orbit` (the
-state of `spkezr` through the Orbit layer). The full cases add the other calls of the
-list in the manual and an element of `orbit`.
+state of `spkezr` through the Orbit layer); and the two root solvers that run on plain
+numbers, that of `nearpt` (`subpnt` with `NEAR POINT`) and that of `prop2b`, whose
+derivative a `Float64` takes through `_ad_pin`. The full cases add the other calls of
+the list in the manual, `subslr` with `NEAR POINT`, `conics` and an element of `orbit`.
 """
 function ad_cases(ctx, tab, rtab, dvec)
     default = [
@@ -86,6 +91,10 @@ function ad_cases(ctx, tab, rtab, dvec)
         "unitim" => t -> unitim(ctx, t, "ET", "TDT"),
         "table_position" => t -> dot(W3, table_position(tab, t)),
         "orbit local_frame" => t -> sum(W33 .* local_frame(orbit(ctx, "MOON", t, "J2000", "NONE", "EARTH"), :ric)),
+        "subpnt NEAR POINT" => t -> dot(W3, subpnt(ctx, "NEAR POINT/ELLIPSOID", "EARTH", t, "IAU_EARTH", "LT+S", "MOON")[1]),
+        # dt = t / 1e7 (a few revolutions over the span of the epochs); the factor 1e5
+        # gives the derivative the size of the others in the combined sum
+        "prop2b" => t -> 1.0e5 * dot(W6, prop2b(1.0, SVector(1.0, 0.0, 0.0, 0.0, 1.1, 0.1), 1.0e-7 * t)),
     ]
     full = [
         "spkgeo" => t -> dot(W6, spkgeo(ctx, 301, t, "J2000", 399)[1]),
@@ -109,6 +118,8 @@ function ad_cases(ctx, tab, rtab, dvec)
         "deltet" => t -> deltet(ctx, t, "ET"),
         "table_rotation" => t -> sum(W33 .* table_rotation(rtab, t)),
         "orbit sma" => t -> element(orbit(ctx, "MOON", t, "J2000", "NONE", "EARTH"), :sma),
+        "subslr NEAR POINT" => t -> dot(W3, subslr(ctx, "NEAR POINT/ELLIPSOID", "MOON", t, "IAU_MOON", "LT+S", "EARTH")[1]),
+        "conics" => t -> 1.0e5 * dot(W6, conics(SVector(1.0, 0.2, 0.3, 0.4, 0.5, 0.6, 0.0, 1.0), 1.0e-7 * t)),
     ]
     return default, full
 end
@@ -227,9 +238,11 @@ cases are those of `keplerian_orbit`, which reach every path of the Kepler solve
 `_ma_to_ta`, the one derivative point of the Orbit layer: the ellipse, the hyperbola, and
 the branch at E = pi (the mean anomaly pi, where ANISE returns E for the true anomaly and
 the derivative is that of the true anomaly). The three are one function (`ad_kep_w`) at
-three points, so that a backend compiles it once. The full cases add `two_body`, the elements,
-the local frames and the relative state, which the backends differentiate as plain
-arithmetic. They are left out of the default run for their compilation: `two_body` takes
+three points, so that a backend compiles it once. The fourth case is the true longitude
+(the sum of :raan, :aop and :ta, without the dispatch on the name of `element`) with the
+three angles at pi, where each reaches `_ad_pin` at an arc cosine of about -1. The full
+cases add `two_body`, the elements, the local frames and the relative state, which the
+backends differentiate as plain arithmetic. They are left out of the default run for their compilation: `two_body` takes
 Mooncake 8 s for each mode, and a backend other than Zygote compiles every branch of
 `element` (it dispatches on the name at run time), 4 s (Tracker) to 44 s (Enzyme
 reverse). Each function is divided by its value at the point.
@@ -252,10 +265,21 @@ function ad_orbit_cases()
     xpi = [8000.0, 0.6, 0.5, 1.0, 2.0, Float64(π)]
     xe, xh = [8000.0, 0.1, 0.5, 1.0, 2.0, 2.0], [-20000.0, 1.5, 0.7, 0.4, 1.1, 0.3]
     element_case(q, s0) = "element $q" => (s -> element(ad_orbit(s), q), s0)
+    # raan, aop and ta at pi, where the arc cosines of ANISE have an infinite derivative.
+    # The velocity is given in m/s: its partials are zero by symmetry here, and in km/s
+    # their rounding (2e-16) would count against partials of position of 1e-4.
+    sa = Vector(
+        keplerian_orbit(
+            0.0, 399, 1; sma = 8000.0, ecc = 0.1, inc = 0.5, raan = Float64(π),
+            aop = Float64(π), ta = Float64(π), gm = AD_GM
+        ).state .* SVector(1.0, 1.0, 1.0, 1.0e3, 1.0e3, 1.0e3)
+    )
+    ad_orbit_ms(s) = ad_orbit(vcat(s[1:3], s[4:6] ./ 1.0e3))
     default = [
         "keplerian_orbit ellipse" => (ad_kep_w, xe),
         "keplerian_orbit ma = pi" => (ad_kep_w, xpi),
         "keplerian_orbit hyperbola" => (ad_kep_w, xh),
+        "tlong at the apoapsis" => (s -> Almanac._el_tlong(ad_orbit_ms(s)), sa),
     ]
     full = vcat(
         [

@@ -54,8 +54,11 @@ end
 # `spkezr` the value of the velocity is the velocity that CSPICE defines and its partials
 # are the next orders of the same jet; for the `LT` forms that velocity is not the
 # derivative of the position, so the partial of the position and the value of the
-# velocity differ there, as they do between `spkder` and `spkezr`. The light time is
-# `|r| / c`, because the stellar aberration and the frame change are rotations.
+# velocity differ there, as they do between `spkder` and `spkezr`. The light time has the
+# value of the plain call and the derivative of `|r| / c`, because the stellar aberration
+# and the frame change are rotations. In the same way the value of order 1 of
+# `frame_jet` (the rate block of `sxform`) is the rate of the plain call, and `pxder`
+# keeps the exact derivative.
 Almanac.@_ad_epoch_methods Dual
 
 end # module

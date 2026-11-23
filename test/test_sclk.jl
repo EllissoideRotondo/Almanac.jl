@@ -127,6 +127,9 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
                     "1/100.5", "100.5", "1/0000000100.005", "2/2000.000",
                     "2/ 2000 . 17", "  1/  77 12", "9999.255", "2/9999:255", "1/100", "100,3",
                     "2/2000-1", "1/.7", "1/7.", "2000.001", "1.5/100.5",
+                    # Regression: a tab next to a field was taken as a blank; `nparsd`
+                    # treats it as a character of the number.
+                    "1/100.5\t", "1/\t100",
                 ],
             ),
             (
@@ -147,6 +150,10 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
         # At least one string of each clock is valid, so the comparison is not vacuous.
         @test scencd(ctx, CKFix.SC_TDB, "2/2000.001") == SPICE.scencd(CKFix.SC_TDB, "2/2000.001")
         @test scencd(ctx, CKFix.SC_TDT, "1/1:0:0") == 0.0
+        # Regression: a field of more than 30 characters was read whole; `sctk01` reads
+        # its fields from items of 30 characters, so that the 31st is lost.
+        long = "0"^30 * "1.5"
+        @test sctiks(ctx, CKFix.SC_TDB, long) == SPICE.sctiks(CKFix.SC_TDB, long) == sctiks(ctx, CKFix.SC_TDB, "0.5")
     end
 
     @apart @testset "errors" begin
@@ -273,6 +280,35 @@ group("9. spacecraft clocks against CSPICE", Kernels.LSK) do
             @test length(cases) == 20
             @test all(x -> scfmt(nano, -91, x) == SPICE.scfmt(-91, x), cases)
             @test scfmt(nano, -91, 8.723322218999999e18) == "08723322219:000001024"
+        finally
+            foreach(SPICE.dvpool, names)
+        end
+    end
+
+    @apart @testset "scfmt of a field of 1e14 or more" begin
+        # Regression: every digit of a field was written; `scfm01` writes a field with
+        # `dpstrf(value, 30, 'F')`, which keeps 14 significant digits.
+        lines = [
+            "SCLK_KERNEL_ID = ( @2000-01-01 )", "SCLK_DATA_TYPE_94 = ( 1 )",
+            "SCLK01_TIME_SYSTEM_94 = ( 1 )", "SCLK01_N_FIELDS_94 = ( 2 )",
+            "SCLK01_MODULI_94 = ( 1000000000000000000 10 )", "SCLK01_OFFSETS_94 = ( 0 0 )",
+            "SCLK01_OUTPUT_DELIM_94 = ( 2 )", "SCLK_PARTITION_START_94 = ( 0.0 )",
+            "SCLK_PARTITION_END_94 = ( 1.0E19 )", "SCLK01_COEFFICIENTS_94 = ( 0.0 0.0 1.0 )",
+        ]
+        names = [String(strip(first(split(l, '=')))) for l in lines[2:end]]
+        big = neo_context(String[])
+        lmpool(big, lines)
+        try
+            SPICE.lmpool(lines)
+            cases = (
+                12345.0, 9.99999999999999e14, 1.0e15, 1.0e15 + 10.0, 1.2345678901234567e16,
+                9.876543219876543e17, 5.0e18 + 70.0,
+            )
+            for x in cases
+                @test scfmt(big, -94, x) == SPICE.scfmt(-94, x)
+            end
+            # the field 100000000000001 keeps 14 digits
+            @test endswith(scfmt(big, -94, 1.0e15 + 10.0), "0100000000000000:0")
         finally
             foreach(SPICE.dvpool, names)
         end

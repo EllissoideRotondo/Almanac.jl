@@ -900,30 +900,6 @@ with the derivative of `tisbod_` (`_body_state`), in the exact mode as `_frame_s
     (_J2000_FRAME, Mat3{Taylor{1, Float64}}(transpose(_body_state(ks, fd.classid, et))))
 
 """
-    _ck_chain_to(mode, ks, id, stop, et) -> Mat3
-
-Matrix from frame `id` to frame `stop` at `et`, for a chain that may hold class 3
-frames: a CK frame is linked to the reference frame of its segment (which may be any
-frame, also a second CK frame), every other frame as `_frame_step` links it. `mode` is
-`_CKExact()` (number type of `et`) or `_CKState()` (order 1 jet with the CSPICE angular
-velocity for the CK links and the time derivative for the others). Requires `stop` to
-be `id`, or a frame that the chain of `id` reaches before its first CK frame, or J2000.
-At most `MAX_FRAME_CHAIN` links. Does not allocate.
-"""
-function _ck_chain_to(mode, ks::KernelSet, id::Int32, stop::Int32, et::T) where {T <: Real}
-    rot = one(Mat3{_ck_numtype(mode, T)})
-    cur = id
-    n = 0
-    while cur != stop       # invariant: rot takes vectors from frame id to frame cur
-        n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(id)
-        cur, step = _chain_step(mode, ks, cur, et)
-        rot = n == 1 ? step : _ck_mxm(mode, step, rot)
-    end
-    return rot
-end
-
-"""
     _chain_step(mode, ks, id, et) -> (parent, Mat3)
 
 One link of a frame chain as `zzrotgt0_` (exact mode) and `zzfrmgt0_` (state mode) give
@@ -959,6 +935,13 @@ end
 @inline _ck_mtxm(::_CKState, a, b) = _sx_mtxm(a, b)
 @inline _ck_mtxm(::_CKExact, a, b) = _m_mtxm(a, b)
 
+"Throw `SpiceError(:unknownframe)` unless `from`, then `to`, is a known frame, as `zzrefch0_` checks them before the first link."
+@inline function _check_frame_pair(ks::KernelSet, from::Int32, to::Int32)
+    frame_def(ks, from)
+    frame_def(ks, to)
+    return nothing
+end
+
 "`(k, rots[k])` for the first `k <= len` with `nodes[k] == id`, or `(0, rots[1])`."
 @inline function _chain_find(nodes::NTuple{M, Int32}, rots, len::Int, id::Int32) where {M}
     for k in 1:len
@@ -976,28 +959,43 @@ that a CK or switch frame is followed through the frame its segment or base give
 `et`, until it reaches `to` or J2000; the chain of `to` is then evaluated until it meets
 a frame of that chain, and the two parts are joined there. The first frame met can be
 other than J2000 only when it is the frame of a CK segment or of a switch base (the
-static parents of those frames are J2000). At most `MAX_FRAME_CHAIN` links each. Does not
-allocate.
+static parents of those frames are J2000). As in `zzrefch0_`, the chain of `from` keeps
+`MAX_FRAME_CHAIN` frames and folds the links after them into the last one, and the chain
+of `to` meets only the frames kept; each chain throws `SpiceError(:framechain)` after
+`_FRAME_CHAIN_LIMIT` links, where CSPICE loops forever. Does not allocate.
 """
 function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) where {T <: Real}
     S = _ck_numtype(mode, T)
     from == to && return one(Mat3{S})
-    nodes = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN + 1))
-    rots = ntuple(_ -> one(Mat3{S}), Val(MAX_FRAME_CHAIN + 1))
+    _check_frame_pair(ks, from, to)
+    nodes = ntuple(_ -> Int32(0), Val(MAX_FRAME_CHAIN))
+    rots = ntuple(_ -> one(Mat3{S}), Val(MAX_FRAME_CHAIN))
     nodes = Base.setindex(nodes, from, 1)
     len = 1
+    links = 0
     cur = from
     rot = one(Mat3{S})
+    tail = rot
     found = true
-    # invariant: nodes[1:len] is the chain of `from` to cur, rots[k] the matrix from
-    # `from` to nodes[k], and rot = rots[len]; the chain ends at a CK frame without
-    # a segment for `et` (found false), as in `zzrefch0_`
+    # invariant: nodes[1:len] is the chain of `from` to cur, with the frames after
+    # nodes[MAX_FRAME_CHAIN - 1] but the last folded away; rots[k] is the matrix from
+    # `from` to nodes[k], rot = rots[len], and once len == MAX_FRAME_CHAIN, tail is the
+    # matrix from nodes[len - 1] to cur, which `zzrefch0_` folds into its last link and
+    # multiplies last. The chain ends at a CK frame without a segment for `et` (found
+    # false), as in `zzrefch0_`.
     while cur != _J2000_FRAME && cur != to
-        len > MAX_FRAME_CHAIN && _chain_too_long(from)
+        links += 1
+        links > _FRAME_CHAIN_LIMIT && _chain_too_long(from)
         found, cur, step = _chain_step_found(mode, ks, cur, et)
         found || break
-        rot = len == 1 ? step : _ck_mxm(mode, step, rot)
-        len += 1
+        if len < MAX_FRAME_CHAIN
+            rot = len == 1 ? step : _ck_mxm(mode, step, rot)
+            len += 1
+            tail = step
+        else
+            tail = _ck_mxm(mode, step, tail)
+            rot = _ck_mxm(mode, tail, rots[len - 1])
+        end
         nodes = Base.setindex(nodes, cur, len)
         rots = Base.setindex(rots, rot, len)
     end
@@ -1012,7 +1010,7 @@ function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) whe
         # no common frame: the error of the link where the chain of `from` ended
         cur == _J2000_FRAME && _chain_step(mode, ks, nodes[len], et)
         n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(to)
+        n > _FRAME_CHAIN_LIMIT && _chain_too_long(to)
         cur, step = _chain_step(mode, ks, cur, et)
         down = n == 1 ? step : _ck_mxm(mode, step, down)
         k, up = _chain_find(nodes, rots, len, cur)
@@ -1022,21 +1020,21 @@ function _chain_rotation(mode, ks::KernelSet, from::Int32, to::Int32, et::T) whe
 end
 
 """
-    _ck_in_chain(ks, id, pck = false) -> Bool
+    _ck_in_chain(ks, id) -> Bool
 
 True if the chain of frame `id` towards J2000 holds a frame of class 3, 5 or 6 (the
-classes whose CSPICE state transformation is not the time derivative of the rotation),
-or with `pck` of class 2 (whose derivative `tisbod_` computes with other arithmetic),
-before any other link needs an evaluation. Throws as `_frame_parent` does.
+classes whose CSPICE state transformation is not the time derivative of the rotation)
+or of class 2 (whose derivative `tisbod_` computes with other arithmetic), before any
+other link needs an evaluation. Throws as `_frame_parent` does.
 """
-function _ck_in_chain(ks::KernelSet, id::Int32, pck::Bool = false)
+function _ck_in_chain(ks::KernelSet, id::Int32)
     cur = id
     n = 0
-    while cur != _J2000_FRAME       # invariant: no frame from id to before cur is class 3
+    while cur != _J2000_FRAME       # invariant: no frame from id to before cur is class 2, 3, 5 or 6
         n += 1
-        n > MAX_FRAME_CHAIN && _chain_too_long(id)
+        n > _FRAME_CHAIN_LIMIT && _chain_too_long(id)
         class = frame_def(ks, cur).class
-        (class == 3 || class == 5 || class == 6 || (pck && class == 2)) && return true
+        (class == 2 || class == 3 || class == 5 || class == 6) && return true
         cur = _frame_parent(ks, cur)
     end
     return false

@@ -36,6 +36,10 @@ function find_segment(list::SegmentList, et::Float64)
     return @inbounds Int(list.win[2lo])
 end
 
+"Index from 0 of the record for the epoch `t` among `nrec` records of length `intlen` from `init`, as `spkr02`: `(integer)((t - init)/intlen)`, clamped to `0:nrec-1`."
+@inline _cheb_index(t::Float64, init::Float64, intlen::Float64, nrec::Int) =
+    clamp(unsafe_trunc(Int, (t - init) / intlen), 0, nrec - 1)
+
 """
     _cheb_record(data, seg, et) -> Int
 
@@ -45,9 +49,7 @@ Address of the first double (MID) of the record of `seg` that covers `primal(et)
 `SpiceError(:baddaf)` if the record is not inside `data`.
 """
 @inline function _cheb_record(data::Vector{Float64}, seg::Segment, et)
-    k = unsafe_trunc(Int, (primal(et) - seg.init) / seg.intlen)
-    k = clamp(k, 0, Int(seg.nrec) - 1)
-    addr = seg.baddr + k * Int(seg.rsize)
+    addr = seg.baddr + _cheb_index(primal(et), seg.init, seg.intlen, Int(seg.nrec)) * Int(seg.rsize)
     (addr >= 1 && addr + Int(seg.rsize) - 1 <= length(data)) ||
         throw(SpiceError(:baddaf, "segment record is outside the data array"))
     return addr
@@ -131,17 +133,23 @@ end
         data::Vector{Float64}, seg::Segment, et::T, nsets::Int,
         skip::Int, v::Val{N}
     ) where {T, N}
+    a, ncoef, s, radius = _cheb_at(data, seg, et, nsets)
+    return _cheb3(data, a + skip * ncoef, ncoef, s, radius, v)
+end
+
+"Address of the first coefficient of the record of `seg` at `et`, the coefficient count of a series (`nsets` series in a record), the scaled epoch and the radius."
+@inline function _cheb_at(data::Vector{Float64}, seg::Segment, et, nsets::Int)
     addr = _cheb_record(data, seg, et)
     ncoef = (Int(seg.rsize) - 2) ÷ nsets
     @inbounds mid, radius = data[addr], data[addr + 1]
-    s = (et - mid) / radius
-    return _cheb3(data, addr + 2 + skip * ncoef, ncoef, s, radius, v)
+    return addr + 2, ncoef, (et - mid) / radius, radius
 end
 
 @inline _spk3(data, seg, et, ::Val{0}) = _cheb_eval(data, seg, et, 6, 0, Val(0))
 @inline function _spk3(data, seg, et, ::Val{N}) where {N}
-    p = _cheb_eval(data, seg, et, 6, 0, Val(0))
-    v = _cheb_eval(data, seg, et, 6, 3, Val(N - 1))
+    a, ncoef, s, radius = _cheb_at(data, seg, et, 6)     # one record search for both series
+    p = _cheb3(data, a, ncoef, s, radius, Val(0))
+    v = _cheb3(data, a + 3 * ncoef, ncoef, s, radius, Val(N - 1))
     return (p[1], v...)
 end
 

@@ -32,7 +32,11 @@ For an SPK segment `target` moves relative to `center` and the data are in frame
 number `file` of the owning `KernelSet` (`file == 0` until the segment is placed in a
 set). `init`, `intlen`, `rsize` and `nrec` are the four directory values that end a
 segment of the fixed-interval Chebyshev types (SPK 2, 3, 20 and PCK 2), and are zero
-for the other types.
+for the other types. `layout` is the layout of an SPK type 10, 14 or 19 or a binary PCK
+type 3 segment, checked once at load (`_segment_layout`, in `spk/spk_layout.jl`); it is
+zero for the other types, for a segment that fails the checks, and for a segment of
+the constructor without `layout`, whose evaluator then checks the meta data at each
+call.
 """
 struct Segment
     target::Int32
@@ -48,11 +52,18 @@ struct Segment
     intlen::Float64
     rsize::Int32
     nrec::Int32
+    layout::NTuple{6, Int32}
 end
+
+Segment(target, center, frame, dtype, t0, t1, file, baddr, eaddr, init, intlen, rsize, nrec) =
+    Segment(
+    target, center, frame, dtype, t0, t1, file, baddr, eaddr, init, intlen, rsize, nrec,
+    ntuple(_ -> Int32(0), Val(6))
+)
 
 withfile(s::Segment, file::Integer) = Segment(
     s.target, s.center, s.frame, s.dtype, s.t0,
-    s.t1, Int32(file), s.baddr, s.eaddr, s.init, s.intlen, s.rsize, s.nrec
+    s.t1, Int32(file), s.baddr, s.eaddr, s.init, s.intlen, s.rsize, s.nrec, s.layout
 )
 
 "Segments of one body below which `SegmentList` keeps no index: a linear scan is faster."
@@ -154,8 +165,9 @@ One opened binary DAF kernel. `data[a]` is the double at DAF address `a` (the wh
 file viewed as doubles, memory-mapped when the byte order is native and converted
 into an owned array when it is not). `kind` is `:SPK`, `:PCK` or `:CK`. `segments`
 (SPK and PCK) and `cksegments` (CK) are in file order, so a later segment has priority
-over an earlier one; the vector that does not fit `kind` is empty. `bodies` are the body
-names of a kernel loaded from memory (`furnsh` of a `DAFHandle`), empty for a file.
+over an earlier one; the vector that does not fit `kind` is empty. `names[k]` is the
+name of array `k` (`dafgn`), in the same order. `bodies` are the body names of a kernel
+loaded from memory (`furnsh` of a `DAFHandle`), empty for a file.
 """
 struct DAF
     path::String
@@ -163,13 +175,12 @@ struct DAF
     data::Vector{Float64}
     segments::Vector{Segment}
     cksegments::Vector{CKSegment}
+    names::Vector{String}
     bodies::Vector{Tuple{String, Int32}}   # body names of the kernel (in memory only)
 end
 
-DAF(path, kind, data, segments::Vector{Segment}) =
-    DAF(path, kind, data, segments, CKSegment[])
-DAF(path, kind, data, segments::Vector{Segment}, cksegments::Vector{CKSegment}) =
-    DAF(path, kind, data, segments, cksegments, Tuple{String, Int32}[])
+DAF(path, kind, data, segments::Vector{Segment}, cksegments::Vector{CKSegment}, names::Vector{String}) =
+    DAF(path, kind, data, segments, cksegments, names, Tuple{String, Int32}[])
 
 "Value of a kernel-pool variable: numeric or character, always a vector."
 const PoolValue = Union{Vector{Float64}, Vector{String}}

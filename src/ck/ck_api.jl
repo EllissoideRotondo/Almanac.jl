@@ -33,7 +33,8 @@ definition throws `SpiceError(:invalidoption)`, the kind of `zzprscor_` in `zzdy
 """
 @noinline function _ck_frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Float64)
     try
-        (_ck_in_chain(ks, from, true) || _ck_in_chain(ks, to, true)) ||
+        from == to || _check_frame_pair(ks, from, to)
+        (_ck_in_chain(ks, from) || _ck_in_chain(ks, to)) ||
             return rotation_jet(ks, from, to, et, Val(1))
         x = _ck_state_rotation(ks, from, to, et)
         return map(e -> e.v, x), map(e -> e.d[1], x)
@@ -86,8 +87,8 @@ clock value `sclkdp`, as
 
 - `inst`: CK ID of the instrument or structure.
 - `sclkdp`: encoded spacecraft clock, in ticks (see [`sce2c`](@ref)).
-- `tol`: time tolerance in ticks, `>= 0`. A pointing within `tol` of `sclkdp` is
-  accepted.
+- `tol`: time tolerance in ticks. A pointing within `tol` of `sclkdp` is accepted. A
+  negative `tol` gives `nothing`, as in CSPICE.
 - `ref`: name or ID of the reference frame of the result.
 
 The result is `(cmat, clkout)`: `cmat` is an `SMatrix{3,3}` that rotates a vector from
@@ -100,8 +101,7 @@ If `ref` is not the frame of the segment, the matrix is changed with the rotatio
 between the two frames at the epoch of `clkout`. This needs the SCLK kernel of the
 spacecraft, unless both frames are inertial.
 
-Throws `SpiceError(:valueoutofrange)` if `tol < 0`. Throws
-`SpiceError(:unknownframe)` if `ref` is not a known frame name; `ref` is read only
+Throws `SpiceError(:unknownframe)` if `ref` is not a known frame name; `ref` is read only
 when a pointing is found. The change of frame throws the kinds of [`pxform`](@ref),
 and the kinds of [`sct2e`](@ref) if the SCLK kernel is not loaded: [`ckfrot`](@ref)
 returns `nothing` in this case, and `ckgp` throws, both as in CSPICE.
@@ -122,7 +122,8 @@ See also [`ckgpav`](@ref), [`ckcov`](@ref), [`pxform`](@ref).
 """
 function ckgp(ks::KernelSet, inst::Integer, sclkdp::Real, tol::Real, ref::NameOrID)
     i = Int32(inst)
-    found, cmat, _, clkout, refseg = _ck_search(ks, i, Float64(sclkdp), _ck_check_tol(tol), false)
+    tol < 0 && return nothing                # `ckgp_`/`ckgpav_`: not found, no error
+    found, cmat, _, clkout, refseg = _ck_search(ks, i, Float64(sclkdp), Float64(tol), false)
     found || return nothing
     refreq = frame_id(ks, ref)
     if refreq != refseg
@@ -146,7 +147,8 @@ pointing. The other arguments, results and errors are those of [`ckgp`](@ref).
 """
 function ckgpav(ks::KernelSet, inst::Integer, sclkdp::Real, tol::Real, ref::NameOrID)
     i = Int32(inst)
-    found, cmat, av, clkout, refseg = _ck_search(ks, i, Float64(sclkdp), _ck_check_tol(tol), true)
+    tol < 0 && return nothing                # `ckgp_`/`ckgpav_`: not found, no error
+    found, cmat, av, clkout, refseg = _ck_search(ks, i, Float64(sclkdp), Float64(tol), true)
     found || return nothing
     refreq = frame_id(ks, ref)
     if refreq != refseg

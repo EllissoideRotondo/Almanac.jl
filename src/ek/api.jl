@@ -417,6 +417,8 @@ The rows differ from those of CSPICE N0067 only where CSPICE has a defect:
   twice, or drop other rows;
 - a double precision value compared with an indexed integer column: `ID < 17.4` loses
   the rows with `ID = 17` in CSPICE;
+- an integer value outside the 32-bit range: CSPICE compares with the smallest 32-bit
+  integer, so `DCOL > 10000000000` holds for every row that is not null;
 - a number such as `2.756`: the number parser of CSPICE gives a value that is wrong by
   one unit in the last place.
 

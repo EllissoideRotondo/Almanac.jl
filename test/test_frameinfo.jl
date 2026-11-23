@@ -112,7 +112,7 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
             names = [
                 "EARTH", "earth", "  Moon ", "MARS", "JUPITER", "SUN", "PHOBOS", "TEST_PROBE", "VENUS",
                 "SOLAR SYSTEM BARYCENTER", "MARS BARYCENTER", "NOT A BODY", "TITAN", "CERES",
-                "PLUTO", "IO", "Earth  Barycenter", "399", "-77", "499",
+                "PLUTO", "IO", "Earth  Barycenter", "399", "-77", "499", " ",
             ]
             for n in names
                 want = SPICE.cnmfrm(n)
@@ -121,6 +121,9 @@ group("19. frame information, body constants, local solar time", Kernels.FULL_SE
                 check!(fails, got == want, "cnmfrm", n)
             end
             @test isempty(fails)
+            @test throws_kind(() -> cnmfrm(ctx, ""), :emptystring)     # `CHKFSTR` of `cnmfrm_c`
+            @test throws_kind(() -> namfrm(ctx, ""), :emptystring)     # `CHKFSTR` of `namfrm_c`
+            @test namfrm(ctx, " ") == SPICE.namfrm(" ") == 0
             # Regression: the frame name of `OBJECT_<body>_FRAME` is compared exactly with
             # the built-in names (`zzhscchk_`), so `iau_saturn` and ` IAU_SATURN` are not
             # the frame IAU_SATURN.

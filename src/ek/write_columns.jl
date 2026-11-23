@@ -132,63 +132,26 @@ _ekw_cnam(s, coldsc::AbstractVector{Int32}) =
     _ek_rstr(s.chars, Int(coldsc[_EK_NAMIDX]) + 1, Int(coldsc[_EK_NAMIDX]) + _EK_CNAMSZ)
 
 """
-    _ekw_cmpc(a, b) -> Int
-
-Order of two strings as Fortran compares them: byte by byte, the shorter one continued
-with blanks. Returns -1, 0 or 1.
-"""
-function _ekw_cmpc(a::AbstractVector{UInt8}, b::AbstractVector{UInt8})
-    la = length(a)
-    lb = length(b)
-    for k in 1:max(la, lb)               # invariant: the characters before k are equal
-        ca = k <= la ? a[k] : UInt8(' ')
-        cb = k <= lb ? b[k] : UInt8(' ')
-        ca == cb || return ca < cb ? -1 : 1
-    end
-    return 0
-end
-
-"The first `min(length, 1024)` bytes of a character key, as `zzekscmp` uses them."
-@inline _ekw_key1024(key::AbstractVector{UInt8}) = view(key, 1:min(length(key), 1024))
-
-"""
     _ekw_rel(s, coldsc, row, key, null) -> Int
 
 Relation of the first element of the entry of the column `coldsc` in the row `row` (a
 record pointer; a row number for the classes 7 to 9) to the key, as `zzekscmp` finds
 it: -1 less, 0 equal, 1 greater. A null entry is less than every value and equal to a
 null key (`null` true). `key` is a byte vector for a character column and a number for
-the other types; an integer column is compared with a double key as doubles. Of a
-string, the first 1024 characters count. Throws `SpiceError`: `:invaliddatatype` for
-an unknown column type, `:bug` for a key of the wrong type, and the errors of the
-readers (`:uninitializedvalue`, `:uninitialized`).
+the other types, which is compared as a double. Of a string, the first 1024 characters
+count. Throws `SpiceError`: `:invaliddatatype` for an unknown column type, `:bug` for a
+key of the wrong type, `:invalidindex` for a missing first element (as `zzekscmp`), and
+the errors of the readers (`:uninitializedvalue`, `:uninitialized`).
 """
 function _ekw_rel(s, coldsc::AbstractVector{Int32}, row::Integer, key, null::Bool)
     col = _ekw_col(coldsc)
-    dtype = col.dtype
-    if dtype == _EK_CHR
-        cv, enull, _ = _ek_elt_c(s, col, row, 1)
-        enull && return null ? 0 : -1
-        null && return 1
-        key isa AbstractVector{UInt8} || _ekw_bug("Column type is $dtype; value type is not character.")
-        elt = codeunits(cv)
-        return _ekw_cmpc(view(elt, 1:min(length(elt), 1024)), _ekw_key1024(key))
-    elseif dtype == _EK_DP || dtype == _EK_TIME
-        dv, enull, _ = _ek_elt_d(s, col, row, 1)
-        enull && return null ? 0 : -1
-        null && return 1
-        key isa Real || _ekw_bug("Column type is $dtype; value type is not numeric.")
-        numval = Float64(key)
-        return dv < numval ? -1 : dv > numval ? 1 : 0
-    elseif dtype == _EK_INT
-        iv, enull, _ = _ek_elt_i(s, col, row, 1)
-        enull && return null ? 0 : -1
-        null && return 1
-        key isa Real || _ekw_bug("Column type is $dtype; value type is not numeric.")
-        numval = Float64(key)
-        return iv < numval ? -1 : iv > numval ? 1 : 0
+    rel, _, _ = if key isa AbstractVector{UInt8}
+        _ek_vrel(s, col, row, _EK_CHR, key, 0.0, 0, null, true)
+    else
+        key isa Real || _ekw_bug("Column type is $(col.dtype); value type is $(typeof(key)).")
+        _ek_vrel(s, col, row, _EK_DP, UInt8[], Float64(key), 0, null, true)
     end
-    throw(SpiceError(:invaliddatatype, "Data type code $dtype not recognized."))
+    return rel == _EK_LT ? -1 : rel == _EK_GT ? 1 : 0
 end
 
 # ---------------------------------------------------------------------------------------
@@ -277,10 +240,8 @@ function _ekw_own_key(s, coldsc::AbstractVector{Int32}, recptr::Integer)
     col = _ekw_col(coldsc)
     dtype = col.dtype
     if dtype == _EK_CHR
-        cv, isnull, _ = _ek_elt_c(s, col, recptr, 1)
-        bytes = Vector{UInt8}(codeunits(cv))
-        length(bytes) > 1024 && resize!(bytes, 1024)
-        return bytes, isnull
+        r, isnull, _ = _ek_cref(s, col, recptr, 1)
+        return _ek_cbytes(s.chars, _ek_cfirst(r, _EK_MAXSTR)), isnull
     elseif dtype == _EK_DP || dtype == _EK_TIME
         dv, isnull, _ = _ek_elt_d(s, col, recptr, 1)
         return dv, isnull
@@ -969,7 +930,7 @@ _ekw_order_n(vals::AbstractVector, n::Int, nullok::Bool, nlflgs) = _ekw_order(
 
 "Order vector of strings (`zzekordc`): equal strings are not swapped."
 _ekw_order_c(vals::Vector{Vector{UInt8}}, n::Int, nullok::Bool, nlflgs) =
-    _ekw_order(n, nullok, nlflgs, (a, b) -> _ekw_cmpc(vals[a], vals[b]) <= 0)
+    _ekw_order(n, nullok, nlflgs, (a, b) -> _ek_bcmp(vals[a], vals[b], length(vals[a]), length(vals[b])) <= 0)
 
 # ---------------------------------------------------------------------------------------
 # Fast writers: one whole column (classes 1 to 9)
@@ -1493,6 +1454,7 @@ function _ekw_ac09(
             "String length $l is just plain wrong."
         )
     )
+    _das_check_write(h, "ekaclc")        # CSPICE meets it at the first write
     spp = _EK_CPSIZE ÷ l
     nrows = Int(segdsc[_EK_NRIDX])
     p, datbas = _ekw_acps(h, segdsc, 1, (nrows + spp - 1) ÷ spp)

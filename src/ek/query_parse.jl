@@ -212,27 +212,11 @@ end
 # Messages: REPMC, REPMI
 # ---------------------------------------------------------------------------------
 
-"""
-    _ek_qrep(msg, value) -> String
-
-Contract: returns `msg` with its first `#` replaced by `value`, as `repmc_` and
-`repmi_`: a string loses its leading and trailing blanks and a blank string becomes
-one blank. `msg` without `#` is returned as it is.
-"""
-function _ek_qrep(msg::String, value::Union{AbstractString, Integer})::String
-    r = findfirst(==(UInt8('#')), codeunits(msg))
-    r === nothing && return msg
-    v = value isa Integer ? string(value) : String(strip(value, ' '))
-    isempty(v) && (v = " ")
-    c = codeunits(msg)
-    return string(String(c[1:(r - 1)]), v, String(c[(r + 1):end]))
-end
-
 _ek_qlex(qb::AbstractVector{UInt8}, b::Int, e::Int) = String(qb[b:min(e, length(qb))])
 
 function _ek_qlexmsg(template::String, qb, lxb::Int, lxe::Int, locfirst::Bool)
-    locfirst && return _ek_qrep(_ek_qrep(template, lxb), _ek_qlex(qb, lxb, lxe))
-    return _ek_qrep(_ek_qrep(template, _ek_qlex(qb, lxb, lxe)), lxb)
+    locfirst && return _repmc(_repmc(template, lxb), _ek_qlex(qb, lxb, lxe))
+    return _repmc(_repmc(template, _ek_qlex(qb, lxb, lxe)), lxb)
 end
 
 @noinline _ek_qsignal(kind::Symbol, msg::String) = throw(SpiceError(kind, msg))
@@ -631,8 +615,8 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         tq[cptr] == UInt8(' ') && break
         chr = tq[cptr]
         if ntoken == maxntk
-            return nothing, _ek_qrep(
-                    _ek_qrep(
+            return nothing, _repmc(
+                    _repmc(
                         "Maximum allowed number of tokens is #; " *
                         "at least # tokens are present in QUERY.", maxntk
                     ), maxntk + 1
@@ -653,17 +637,17 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         if kind == 4                                    # quoted string
             last, nchars = _ek_qlxqstr(tq, chr, cptr)
             nchars == 0 &&
-                return nothing, _ek_qrep("Invalid quoted string at location #.", cptr)
+                return nothing, _repmc("Invalid quoted string at location #.", cptr)
             room = buflen - chcard
             if nchars > room
                 msg = "Insufficient space to store quoted string at location #; # " *
                     "chars needed; only # are available."
-                return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), nchars), room)
+                return nothing, _repmc(_repmc(_repmc(msg, cptr), nchars), room)
             end
             value, perr = _ek_qparsqs(view(tq, cptr:(cptr + nchars - 1)), chr, room)
             if !isempty(perr)
                 msg = "Error occurred while parsing quoted string token at location #:"
-                return nothing, string(_ek_qrep(msg, cptr), "  ", perr)
+                return nothing, string(_repmc(msg, cptr), "  ", perr)
             end
             append!(chrbuf, value)
             push!(chbegs, chcard + 1)
@@ -672,17 +656,17 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
         elseif kind == 6                                # number
             last, nchars = _ek_qlx4num(tq, cptr)
             nchars == 0 &&
-                return nothing, _ek_qrep("Invalid numeric token at location #.", cptr)
+                return nothing, _repmc("Invalid numeric token at location #.", cptr)
             if maxnum - length(numvls) < 1
                 msg = "Insufficient space to store value of number at location #; # " *
                     "elements are available in the NUMVLS array; # are required."
-                return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), maxnum), maxnum + 1)
+                return nothing, _repmc(_repmc(_repmc(msg, cptr), maxnum), maxnum + 1)
             end
             lexeme = view(tq, cptr:last)
             x, nerr, ptr = _ek_qnparsd(lexeme)
             if !isempty(nerr)
                 msg = "Error found in numeric token at location #:"
-                return nothing, string(_ek_qrep(msg, cptr + ptr - 1), "  ", nerr)
+                return nothing, string(_repmc(msg, cptr + ptr - 1), "  ", nerr)
             end
             push!(numvls, x)
             push!(numexact, _ek_qexact(lexeme, x))
@@ -700,7 +684,7 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
             if nchars > room
                 msg = "Insufficient space to store identifier string at location #; # " *
                     "chars needed; only # are available."
-                return nothing, _ek_qrep(_ek_qrep(_ek_qrep(msg, cptr), nchars), room)
+                return nothing, _repmc(_repmc(_repmc(msg, cptr), nchars), room)
             end
             name = map(_upper, view(tq, cptr:last))
             kw = nchars <= 8 ? findfirst(==(String(copy(name))), _EKQ_KEYWORDS) : nothing
@@ -729,11 +713,11 @@ function _ek_qscan(qb::AbstractVector{UInt8}, maxntk::Int, maxnum::Int, buflen::
                 end
             end
             if !found
-                msg = _ek_qrep("Invalid character found at location #.", cptr)
+                msg = _repmc("Invalid character found at location #.", cptr)
                 if 33 <= chr <= 126
-                    msg = _ek_qrep(msg * "  <character> = '#'", String([chr]))
+                    msg = _repmc(msg * "  <character> = '#'", String([chr]))
                 else
-                    msg = _ek_qrep(msg * "  ICHAR(<character>) = #", Int(chr))
+                    msg = _repmc(msg * "  ICHAR(<character>) = #", Int(chr))
                 end
                 return nothing, msg
             end
@@ -932,7 +916,7 @@ function _ek_qnrml!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
     ntoken = tk.n
     tokens, values = tk.tokens, tk.values
     ntoken > _EKQ_MAXTOK &&
-        return _ek_qrep("Too many tokens in query; max allowed is #.", _EKQ_MAXTOK)
+        return _repmc("Too many tokens in query; max allowed is #.", _EKQ_MAXTOK)
     whrbeg, fnd = _ek_qtloc(tk, _EKQ_TKKEY, _EKQ_KWWHER)
     whrbeg += 1
     fnd || return "Missing WHERE keyword."
@@ -1735,15 +1719,15 @@ function _ek_qpars!(q::_EKQEnc, qb::AbstractVector{UInt8}, tk::_EKQTokens)
     errtyp == "BY_EXPECTED" &&
         return "The BY keyword was not found following the ORDER keyword."
     errtyp == "MORE_TOKENS_EXP" && return "More tokens were expected in query."
-    errtyp == "TOO_MANY_TABLES" && return _ek_qrep(
+    errtyp == "TOO_MANY_TABLES" && return _repmc(
         "Number of tables in \"FROM\" " *
             "clause exceeds allowed maximum of #.", _EKQ_MAXTAB
     )
-    errtyp == "TOO_MANY_ORD_COLS" && return _ek_qrep(
+    errtyp == "TOO_MANY_ORD_COLS" && return _repmc(
         "Number of order-by columns " *
             "exceeds allowed maximum of #.", _EKQ_MAXORD
     )
-    errtyp == "TOO_MANY_SEL_COLS" && return _ek_qrep(
+    errtyp == "TOO_MANY_SEL_COLS" && return _repmc(
         "Number of SELECT columns " *
             "exceeds allowed maximum of #.", _EKQ_MAXSEL
     )
@@ -1812,11 +1796,11 @@ function _ek_qcchk!(
                 tabidx = i
             end
         end
-        nmatch == 0 && return _ek_qrep(
+        nmatch == 0 && return _repmc(
             "Column <#> is not present in any table in " *
                 "FROM clause.", column
         )
-        nmatch > 1 && return _ek_qrep(
+        nmatch > 1 && return _repmc(
             "Column name <#> is ambiguous; a qualifying " *
                 "table name or alias is required.", column
         )
@@ -1824,10 +1808,10 @@ function _ek_qcchk!(
         qual = _ek_qstr(q, tb, te)
         tabidx = something(findfirst(==(qual), table), findfirst(==(qual), alias), 0)
         tabidx == 0 &&
-            return _ek_qrep("Table name <#> is not present in FROM clause.", qual)
+            return _repmc("Table name <#> is not present in FROM clause.", qual)
         colidx = something(findfirst(==(column), tables[tabcat[tabidx]].cnames), 0)
-        colidx == 0 && return _ek_qrep(
-            _ek_qrep(
+        colidx == 0 && return _repmc(
+            _repmc(
                 "Column <#> does not exist in table " *
                     "<#>.", column
             ), qual
@@ -1862,7 +1846,7 @@ function _ek_qnres!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTabl
     lexeme(base) = _ek_qlex(qb, _ek_qget(q, base + 7), _ek_qget(q, base + 8))
     for i in 1:(ntab - 1), j in (i + 1):ntab
         if alias[i] == alias[j] && alias[i] != ""
-            return none, _ek_qrep(
+            return none, _repmc(
                     "Non-distinct alias <#> was found.",
                     lexeme(((j - 1) * 2 + 1) * 6 + 19)
                 )
@@ -1871,7 +1855,7 @@ function _ek_qnres!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTabl
     for i in 1:ntab
         j = alias[i] == "" ? nothing : findfirst(==(alias[i]), table)
         if j !== nothing && j != i
-            return none, _ek_qrep(
+            return none, _repmc(
                     "Alias <#> conflicts with table name.",
                     lexeme(((i - 1) * 2 + 1) * 6 + 19)
                 )
@@ -1880,7 +1864,7 @@ function _ek_qnres!(q::_EKQEnc, qb::AbstractVector{UInt8}, tables::Vector{EKTabl
     tabcat = Int[]
     for i in 1:ntab
         j = findfirst(t -> t.name == table[i], tables)
-        j === nothing && return none, _ek_qrep(
+        j === nothing && return none, _repmc(
                 "Table <#> is not currently loaded.",
                 lexeme((i - 1) * 12 + 19)
             )
@@ -1941,139 +1925,6 @@ function _ek_scn2id(ks::KernelSet, clknam::AbstractString)
 end
 
 """
-    _ek_qsclkfields(clkstr) -> Vector{String}
-
-Contract: returns the fields of the clock string `clkstr` as `lparsm_` gives them with
-the clock delimiters. `_lparsm` takes byte positions and so accepts ASCII text only:
-each other byte is replaced by a placeholder for the split and put back afterwards, in
-order, so that the fields hold the bytes of `clkstr` unchanged.
-"""
-function _ek_qsclkfields(clkstr::AbstractString)
-    isascii(clkstr) && return String.(_lparsm(clkstr, _SCLK_DELIMS, _SCLK_MXNFLD))
-    bytes = Vector{UInt8}(codeunits(String(clkstr)))
-    held = filter(b -> b >= 0x80 || b == 0x01, bytes)
-    safe = String(map(b -> b >= 0x80 ? 0x01 : b, bytes))
-    k = 0
-    fields = String[]
-    for item in _lparsm(safe, _SCLK_DELIMS, _SCLK_MXNFLD)
-        raw = Vector{UInt8}(codeunits(String(item)))
-        for j in eachindex(raw)             # invariant: k placeholders are put back
-            raw[j] == 0x01 && (k += 1; raw[j] = held[k])
-        end
-        push!(fields, String(raw))
-    end
-    return fields
-end
-
-"""
-    _ek_qscps01(clock, clkstr) -> (ticks, error)
-
-Contract: `clkstr` is a clock string without partition number. Returns its ticks and
-`""`, or 0 and the error message of `scps01_`.
-"""
-function _ek_qscps01(clock::SclkType1, clkstr::AbstractString)
-    isempty(strip(clkstr, ' ')) &&
-        return 0.0, "Non partition part of the input clock string is blank."
-    cmptks = _sclk_cmptks(clock)
-    items = _ek_qsclkfields(clkstr)
-    n = length(items)
-    n > clock.nfield && return 0.0, _ek_qrep(
-            _ek_qrep(
-                _ek_qrep(
-                    "Input clock string # " *
-                    "has # fields; maximum for this spacecraft clock is #.", clkstr
-                ), n
-            ),
-            Int(clock.nfield)
-        )
-    ticks = 0.0
-    for (i, item) in enumerate(items)       # invariant: ticks = sum over the fields 1:i-1
-        value = clock.offsets[i]
-        if !isempty(strip(item, ' '))
-            try
-                isascii(item) || throw(SpiceError(:notanumber, "not a number"))
-                value = _nparsd(strip(item, ' '))
-            catch err
-                err isa SpiceError || rethrow()
-                return 0.0, _ek_qrep(
-                        _ek_qrep(
-                            "Could not parse SCLK component # from " *
-                            "# as a number.", item
-                        ), clkstr
-                    )
-            end
-        end
-        value -= clock.offsets[i]
-        _dnint(value) < 0 && return 0.0, _ek_qrep(
-                _ek_qrep(
-                    _ek_qrep(
-                        "Component number " *
-                        "#, # in the SCLK string  # is invalid.", i
-                    ), item
-                ), clkstr
-            )
-        ticks += value * cmptks[i]
-    end
-    return ticks, ""
-end
-
-"""
-    _ek_qscpars(ks, sc, sclkch) -> (sclkdp, error)
-
-Contract: returns the encoded clock value of the clock string `sclkch`
-(`"partition/fields"`, the partition optional) of the clock `sc` and `""`, or 0 and the
-error message of `scpars_`. Throws `SpiceError` if the clock `sc` is not loaded.
-"""
-function _ek_qscpars(ks::KernelSet, sc::Int, sclkch::AbstractString)
-    clock = _sclk(ks, sc)
-    pstart, pstop, ptotls = _sclk_partitions(clock)
-    nparts = length(pstart)
-    isempty(strip(sclkch, ' ')) && return 0.0, "Input spacecraft clock string is blank."
-    pos = something(findfirst('/', sclkch), 0)
-    badpart = "Unable to parse the partition number from SCLK string #."
-    pos == 1 && return 0.0, _ek_qrep(badpart, sclkch)
-    fields = sclkch[(pos + 1):end]
-    ticks, pserr = _ek_qscps01(clock, fields)
-    isempty(pserr) || return 0.0, pserr
-    part = 1
-    if pos > 1
-        x = try
-            _nparsd(SubString(sclkch, 1, prevind(sclkch, pos)))
-        catch err
-            err isa SpiceError || rethrow()
-            return 0.0, _ek_qrep(badpart, sclkch)
-        end
-        abs(x) < 2.0^31 || return 0.0, _ek_qrep(badpart, sclkch)
-        part = Int(_dnint(x))
-        (part <= 0 || part > nparts) && return 0.0, _ek_qrep(
-                _ek_qrep(
-                    _ek_qrep(
-                        "Partition number # taken from SCLK string # is not in acceptable range " *
-                        "1 to #.", part
-                    ), sclkch
-                ), nparts
-            )
-        (ticks < pstart[part] || ticks > pstop[part]) && return 0.0, _ek_qrep(
-                _ek_qrep(
-                    "SCLK count from # does not fall in the boundaries of partition number #.",
-                    fields
-                ), part
-            )
-    else
-        while part <= nparts && (ticks < pstart[part] || ticks > pstop[part])
-            part += 1                # invariant: partitions 1:part-1 do not hold `ticks`
-        end
-        part > nparts && return 0.0, _ek_qrep(
-                _ek_qrep(
-                    "SCLK count # does not fall in " *
-                    "the boundaries of any of the partitions for spacecraft #.", fields
-                ), sc
-            )
-    end
-    return part > 1 ? ticks - pstart[part] + ptotls[part - 1] : ticks - pstart[part], ""
-end
-
-"""
     _ek_qtcnv(ks, td, timstr) -> (et, error)
 
 Contract: `timstr` holds the 32 bytes of a time value of a query. Returns its
@@ -2103,16 +1954,16 @@ function _ek_qtcnv(ks::KernelSet, td::TimeDefaults, timstr::AbstractVector{UInt8
         pos = first(r)
         clkid = _ek_scn2id(ks, locstr[1:(pos + 3)])
         if clkid === nothing
-            pos > 1 && return 0.0, _ek_qrep(
+            pos > 1 && return 0.0, _repmc(
                     "Time conversion failed; SCLK type <#> " *
                     "was not recognized.", String(timstr[1:(pos - 1)])
                 )
             return 0.0, "Time conversion failed; SCLK name was not supplied."
         end
         try
-            sclkdp, msg = _ek_qscpars(ks, clkid, locstr[(pos + 4):end])
+            sclkdp, _, msg = _sclk_encode(_sclk(ks, clkid), clkid, locstr[(pos + 4):end], false)
             isempty(msg) || return 0.0, string(
-                    _ek_qrep(
+                    _repmc(
                         "The string <#> didn't parse " *
                         "as a spacecraft clock string.", orig
                     ), "   ", msg
@@ -2205,8 +2056,8 @@ function _ek_qsemc!(
     ntab, ncns, ncnj, nord = (Int(q.i[k]) for k in (8, 9, 10, 11))
     attr(tabidx, colidx) = tables[tabcat[tabidx]].attrs[colidx]
     lxe1 = 0            # LXE(2) of ZZEKSEMC: 0 while CSPICE has not set it
-    nonscalar(what, lxb, lxe, size) = _ek_qrep(
-        _ek_qrep(
+    nonscalar(what, lxb, lxe, size) = _repmc(
+        _repmc(
             "Non-scalar column <#> having " *
                 "size # found in $what.", _ek_qlex(qb, lxb, lxe)
         ), size
@@ -2224,8 +2075,8 @@ function _ek_qsemc!(
         )
         opcode = _ek_qget(q, base + 19)
         if (opcode == _EKQ_LIKE || opcode == _EKQ_UNLIKE) && lhstyp != _EK_CHR
-            return _ek_qrep(
-                _ek_qrep(
+            return _repmc(
+                _repmc(
                     "LIKE and NOT LIKE operators may be used only " *
                         "with character columns.  Column <#> has type #.",
                     _ek_qlex(qb, lxb0, lxe0)
@@ -2249,11 +2100,11 @@ function _ek_qsemc!(
                 lhstyp == _EK_TIME || lhstyp == _EK_CHR ||
                     rhstyp == _EK_TIME || rhstyp == _EK_CHR
             )
-            msg = _ek_qrep(mismatch, _ek_qlex(qb, lxb0, lxe0))
-            msg = _ek_qrep(msg, _EKQ_TYPSTR[lhstyp])
-            msg = _ek_qrep(msg, what)
-            msg = _ek_qrep(msg, _ek_qlex(qb, lxb1, lxe1))
-            return _ek_qrep(msg, _EKQ_TYPSTR[rhstyp])
+            msg = _repmc(mismatch, _ek_qlex(qb, lxb0, lxe0))
+            msg = _repmc(msg, _EKQ_TYPSTR[lhstyp])
+            msg = _repmc(msg, what)
+            msg = _repmc(msg, _ek_qlex(qb, lxb1, lxe1))
+            return _repmc(msg, _EKQ_TYPSTR[rhstyp])
         end
     end
     for i in 1:nord
@@ -2284,8 +2135,8 @@ function _ek_qencode(
     qb = codeunits(String(query))
     l = something(findlast(!=(UInt8(' ')), qb), 0)
     none = Int[]
-    l > _EKQ_MAXQRY && return nothing, none, true, _ek_qrep(
-            _ek_qrep(
+    l > _EKQ_MAXQRY && return nothing, none, true, _repmc(
+            _repmc(
                 "Query has # " *
                 "characters; the maximum allowed is #.", l
             ), _EKQ_MAXQRY

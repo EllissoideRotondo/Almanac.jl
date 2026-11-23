@@ -221,6 +221,9 @@ function spk_jet(
     depth = 0
     common = chain_index(tbody, nt, body)
     while common == 0
+        # `spkgeo` ends the observer chain at the barycenter (0), even with a segment
+        # whose target is 0.
+        body == 0 && throw_no_connection(ks, targ, obs, t, tbody[nt], body)
         segs = get(ks.spk, body, nothing)
         segs === nothing && throw_no_connection(ks, targ, obs, t, tbody[nt], body)
         i = find_segment(segs, t)
@@ -276,6 +279,7 @@ end
     depth = 0
     common = findfirst(==(body), tbody)
     while common === nothing
+        body == 0 && throw_no_connection(ks, targ, obs, t, last(tbody), body)
         segs = get(ks.spk, body, nothing)
         segs === nothing && throw_no_connection(ks, targ, obs, t, last(tbody), body)
         i = find_segment(segs, t)

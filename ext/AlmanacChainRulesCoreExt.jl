@@ -2,7 +2,7 @@ module AlmanacChainRulesCoreExt
 
 using Almanac
 using Almanac: Orbit, element, elements, _orbit_property, _ORBIT_FIELDS, _ma_to_ta,
-    _ad_rule, _AD_POINTS, _AD_CONSTANT, _ad_typeof
+    _ad_pin, _ad_rule, _AD_POINTS, _AD_CONSTANT, _AD_CONSTANT_ORBIT, _ad_typeof
 using ChainRulesCore: ChainRulesCore
 using ChainRulesCore: AbstractZero, AbstractThunk, NoTangent, Tangent, unthunk, backing,
     RuleConfig, HasReverseMode, rrule_via_ad
@@ -70,6 +70,11 @@ function ChainRulesCore.rrule(::typeof(_ma_to_ta), m::Real, e::Real)
     return y, pullback
 end
 
+# The value of one formula with the derivatives of another (see `src/ad.jl`).
+ChainRulesCore.frule((_, Δa, _), ::typeof(_ad_pin), a::Real, p::Float64) = _ad_pin(a, p), Δa
+ChainRulesCore.rrule(::typeof(_ad_pin), a::Real, p::Float64) =
+    _ad_pin(a, p), ȳ -> (NoTangent(), unthunk(ȳ), NoTangent())
+
 # `element(o, name)` and the properties of an `Orbit` take the name at run time, so Zygote
 # would compile the pullback of every branch of `element` for the first property it
 # meets (`o.state` as well), which takes about 35 s. These rules differentiate only the
@@ -95,7 +100,7 @@ function ChainRulesCore.rrule(
 end
 
 # Lookups, the snapshot of a context and the parsing of strings have no derivative.
-for f in _AD_CONSTANT
+for f in (_AD_CONSTANT..., _AD_CONSTANT_ORBIT...)
     @eval begin
         ChainRulesCore.frule(ṫ, ::$(_ad_typeof(f)), args...; kw...) = ($f(args...; kw...), NoTangent())
         ChainRulesCore.rrule(::$(_ad_typeof(f)), args...; kw...) =

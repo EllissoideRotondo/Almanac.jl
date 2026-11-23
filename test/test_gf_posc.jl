@@ -39,6 +39,12 @@ function gf_inequality_holds(
     return ok
 end
 
+"Allocation of the second call of `Almanac._gf_coords(q, p)`; the first call compiles."
+function gf_coords_alloc(q, p)
+    Almanac._gf_coords(q, p)
+    return @allocated Almanac._gf_coords(q, p)
+end
+
 @gf_light group("gf coordinates: gfposc, longitude and right ascension", Kernels.FULL_SET_FILES...) do
     oracle_load(Kernels.full_set())
     ctx = neo_context(Kernels.full_set())
@@ -246,6 +252,72 @@ end
         end
     end
 
+    @testset "longitude and right ascension of reclat_, as zzgfcoq" begin
+        # Regression: `zzgfcoq` and the cosine and sine proxies of `zzgflong` take the
+        # longitude and the right ascension from the Fortran `reclat_` and `recrad_`,
+        # the arc tangent of the components as they are. Almanac took them from
+        # `reclat_c` and `recrad_c`, which divide the components by the largest one
+        # first, and so gave another last bit for about one vector in sixteen. Julia's
+        # `atan` can differ in the last bit from the `atan2` of the C library, so a
+        # random vector is compared with the formula of `reclat_` bit for bit and with
+        # the library within 4 ulps; the vectors with denormal x and y, whose longitude
+        # is 0 in `reclat_c`, are compared with the library bit for bit. Own random
+        # stream.
+        r2 = MersenneTwister(SEED + 6301)
+        qlon = Almanac._gf_position_coordinate(
+            ks, "MOON", "J2000", "LT+S", "EARTH", "LATITUDINAL", "LONGITUDE"
+        )
+        qra = Almanac._gf_position_coordinate(
+            ks, "MOON", "J2000", "LT+S", "EARTH", "RA/DEC", "RIGHT ASCENSION"
+        )
+        fails = Failures()
+        for _ in 1:500
+            p = SVector{3}(randn(r2, 3) .* 10.0 .^ rand(r2, 0:8))
+            lon = atan(p[2], p[1])
+            ra = lon < 0 ? lon + 2pi : lon
+            a = Almanac._gf_coords(qlon, p)
+            b = Almanac._gf_coords(qra, p)
+            check!(fails, a[2] == lon, "longitude, the formula of reclat_", p)
+            check!(fails, b[2] == ra, "right ascension, the formula of recrad_", p)
+            check!(fails, isapprox(a[2], GFO.reclat_f(p)[2]; rtol = 4 * eps()), "longitude, reclat_", p)
+            check!(fails, isapprox(b[2], GFO.recrad_f(p)[2]; rtol = 4 * eps()), "right ascension, recrad_", p)
+        end
+        for p in (SVector(5.0e-324, 5.0e-324, 1.0e10), SVector(0.0, -5.0e-324, 3.0e10))
+            check!(fails, Almanac._gf_coords(qlon, p) == GFO.reclat_f(p), "denormal, reclat_", p)
+            check!(fails, Almanac._gf_coords(qra, p) == GFO.recrad_f(p), "denormal, recrad_", p)
+        end
+        # the value of the quantity, from the position of the search
+        for _ in 1:40
+            t = -3.0e8 + 1.4e9 * rand(r2)
+            p = spkpos(ctx, "MOON", t, "J2000", "LT+S", "EARTH")[1]
+            lon = atan(p[2], p[1])
+            check!(fails, Almanac._gf_value(qlon, t) == lon, "value, longitude", t)
+            check!(fails, Almanac._gf_value(qra, t) == (lon < 0 ? lon + 2pi : lon), "value, right ascension", t)
+        end
+        @test isempty(fails)
+    end
+
+    @testset "planetographic coordinates without a lookup in the kernel pool" begin
+        # Regression: each evaluation of a planetographic coordinate called `recpgr`,
+        # which reads the sense of the longitude from the kernel pool (two lookups, each
+        # with a new key string) although the sense is fixed for the search. The
+        # coordinates are those of `recpgr`, bit for bit, and the conversion does not
+        # allocate. Own random stream.
+        r3 = MersenneTwister(SEED + 6302)
+        for (targ, frame) in (("SUN", "IAU_MARS"), ("MOON", "IAU_EARTH"))
+            q = Almanac._gf_position_coordinate(
+                ks, targ, frame, "NONE", "EARTH", "PLANETOGRAPHIC", "LONGITUDE"
+            )
+            fails = Failures()
+            for _ in 1:200
+                p = SVector{3}(randn(r3, 3) .* 10.0 .^ rand(r3, 3:8))
+                check!(fails, Almanac._gf_coords(q, p) == recpgr(ks, q.center, p, q.re, q.f), frame, p)
+            end
+            @test isempty(fails)
+            @test gf_coords_alloc(q, SVector(1.0e4, -2.0e4, 3.0e3)) == 0
+        end
+    end
+
     @testset "errors, with the kinds of CSPICE" begin
         cn = Window([0.0, 30 * day])
         c = collect(cn)
@@ -273,6 +345,15 @@ end
             )
             @test neo(a...) === kind
             @test ora(a...) === kind
+        end
+        # Regression: a NaN reference value is `:invalidvalue` for a longitude and a right
+        # ascension too (`_gf_long`, `zzgflong`), as for the other coordinates
+        # (`_gf_relx`), before the test for an empty window. CSPICE takes the NaN.
+        for (sys, crd) in (("LATITUDINAL", "LONGITUDE"), ("RA/DEC", "RIGHT ASCENSION"), ("RECTANGULAR", "X")),
+                rel in ("<", "="), w in (cn, Window())
+            @test gf_kind(
+                () -> gfposc(ctx, "MOON", "J2000", "NONE", "EARTH", sys, crd, rel, NaN, 0.0, day, w)
+            ) === :invalidvalue
         end
         # names are read without regard to case and blanks
         a = gfposc(ctx, "MOON", "J2000", "NONE", "EARTH", "RA/DEC", "RIGHT ASCENSION", "=", 1.0, 0.0, day, cn)

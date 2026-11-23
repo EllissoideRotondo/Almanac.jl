@@ -112,7 +112,15 @@ struct DSKSegment
     boxctr::SVector{3, Float64}
     boxrad::Float64
     hdr::DSK02Header
+    # For a type 2 segment of a loaded file, `voxtop[i]` is the sum of the 2^(i-1)
+    # largest plate counts of the voxels (`_dsk_voxtop`); all -1 if not known (a segment
+    # built for a call on a handle). A bound for the plate buffer of `dskx02`
+    # (`_dsk_plate_buffer`).
+    voxtop::NTuple{17, Int}
 end
+
+"The `voxtop` of a segment without one."
+const _DSK_NOTOP = ntuple(_ -> -1, 17)
 
 """
     DSKFile
@@ -155,7 +163,7 @@ DSKTolerances() = DSKTolerances(1.0e-10, 1.0e-8, 1.0e-10, 1.0e-7, 1.0e-12, 1.0e-
 
 _dsk_withfile(s::DSKSegment, file::Integer) = DSKSegment(
     Int32(file), s.dladsc, s.dskdsc, s.boxctr,
-    s.boxrad, s.hdr
+    s.boxrad, s.hdr, s.voxtop
 )
 
 """

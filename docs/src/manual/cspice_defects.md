@@ -44,6 +44,7 @@ error or the correct result.
 | `tisbod` (`sxform`, states in a body-fixed frame) | For a body whose angles are cubic (`BODY<sys>_MAX_PHASE_DEGREE = 3`, `<sys>` the ID of the system barycenter), the rate of the cubic term is divided by the square of the seconds per century instead of by the seconds per century, so the derivative block of the rotation misses that term | The exact derivative; see [Derivatives of rotations](@ref) | `frameinfo` |
 | `str2et`, `tparch` | Converting a second 60 in a time zone, or a date on the Julian calendar, turns on the range check of `tparch` for the rest of the process, so later conversions depend on history | Conversions do not change the setting of `tparch`, which belongs to the context | `time` |
 | `ttrans` (`str2et`) | A month outside 1 to 12 in a year-month-weekday input aborts with a subscript error | `:badsubscript` | `time` |
+| `zzrefch0`, `zzfrmch0` (`pxform`, `sxform`, every query in a frame) | Frame definitions that form a cycle (frame A relative to B, B relative to A) make the search of the chain loop forever | `:framechain` after 1000 links | `rotations` |
 | `et2lst` | The short message is cut to `SPICE(CANTGETROTATIONTYPE`, without its closing parenthesis | `:cantgetrotationtype` | `frameinfo` |
 | `ccifrm` | Finds the `FRAME_<ID>_NAME` variable by replacing the first `_CLASS` of the key `FRAME_<name>_CLASS`, so a frame name that contains `_CLASS` gives a wrong variable | Replaces the trailing `_CLASS` | `frameinfo` |
 
@@ -52,6 +53,7 @@ error or the correct result.
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
 | `spkpvn` (types 1, 2, 3, 5, 10, 20, 21) | No check of the time bounds: the reader extrapolates, reads outside the segment, or stops the process (type 1) | `:timeoutofbounds`. Types 15 and 17 hold one set of elements and are evaluated at any epoch, as in CSPICE | `dafwrite` |
+| `spke01` (SPK type 1) | No check of the step sizes of a difference line: a zero step divides by zero (`spke21` signals `SPICE(ZEROSTEP)` for type 21) | `:baddaf` | `spktypes` |
 | `spks19` (`spksub` of type 19) | Reads `data[0]` and aborts when the last group of 100 epochs in the epoch directory starts after the `stop` epoch given to `spksub` | `:spkstructureerror` | `dafwrite` |
 | `spkgeo` | An SPK chain with a cycle never returns | `SpkInsufficientDataError`, kind `:spkinsuffdata` | `management` |
 | `ckw04a` | With more than one record in one call, packs the array in place and copies the midpoint and the radius of the second and later records after their coefficients have overwritten them | The values given | `dafwrite` |
@@ -73,19 +75,22 @@ error or the correct result.
 | `dskxsi`, `dskxv` | A call whose frame is not centred at the target (`INVALIDFRAME`) keeps the ID of that frame. The next call with the same target and the frame of the last call that passed then uses the ID of the failed frame, until the kernel pool changes: the ray is taken in the wrong frame, or the call fails if that frame has no orientation data | Each call uses the frame it names | `dsk`, `tspice F_DSKXSI` |
 | `dski02` | For item 1 (the number of vertices) with `start > 1`, gives `INDEXOUTOFRANGE`, `DASNOSUCHADDRESS` or no error, depending on earlier calls | `:indexoutofrange` | `dsk` |
 | `dskmi2` | Does not check that the vertex indices are in 1 to `nv` | `:badvertexindex` | `dsk` |
+| `zzmkspin`, `dskw02` (`dskmi2`, `dskw02`) | The fine voxel count is the 32-bit product of the three grid extents, so a grid of more than 2³¹ voxels can wrap to a count that passes the check against 100000000: 1000 × 1000 × 4295 voxels pass as 32704 | The product in 64 bits: `:valueoutofrange` | `dsk` |
+| `zzdsksba` (`dskxsi`, `dskxv`, `srfnrm`, `latsrf` and the geometry calls with a DSK shape) | The segment table of a body looks up the SPK offset of every segment whose frame is not centred on the body, also of segments that no search uses (other surfaces, other times): missing ephemeris data for one of them makes every call for the body fail | The offset of a segment is looked up when a search uses it | `dsk` |
+| `zzdsksph`, `zzdskbux`, `zzdskbun` (the same calls) | A segment whose frame is that of the segment examined before it reuses the offset of that segment, which is taken at the middle of the coverage of that segment, not of its own. In `zzdskbux` this affects the test of which segments the ray meets, so a ray can miss a segment that it crosses; in `zzdskbun` a point on a segment can be found in no segment (`POINTNOTINSEGMENT`) | The offset of each segment | `dsk` |
 | `zzgflong` (`gfposc`, `gfsubc`, `gfsntc`) | For ABSMIN or ABSMAX with `adjust` on a longitude or right ascension, reads the first interval of an empty result window | Returns the empty window | `gf_posc` |
 | `gfevnt` | A blank quantity name matches one of the two blank entries of the table of quantities, whose search does nothing: the call returns with no error and the result is left as it was | `:notrecognized` | `gf_quantities` |
 | GF searches | A step below the spacing of doubles at the epoch makes the search sample the same epoch forever | `:invalidstep` | `gf_solver` |
 | `zzgfrelx`, `zzgflong` (`gfuds`, `gfdist`, `gfposc` and the other GF searches with `adjust`) | Take a NaN or infinite `adjust` for ABSMIN and ABSMAX, since only `adjust < 0` and, for the other relations, `adjust != 0` are tested | `:invalidvalue` for every relation, the kind that CSPICE gives for the other relations | `gf_solver` |
-| `zzgfrelx` (`gfuds`, `gfdist` and the other GF searches with `refval`) | Takes a NaN reference value: every comparison with it is false, so `<`, `>` and `=` find no event | `:invalidvalue` for every relation | `gf_solver` |
+| `zzgfrelx`, `zzgflong` (`gfuds`, `gfdist`, `gfposc` and the other GF searches with `refval`) | Take a NaN reference value: every comparison with it is false, so `<`, `>` and `=` find no event | `:invalidvalue` for every relation | `gf_solver`, `gf_posc` |
 | `wnsumd` | Where rounding makes the variance of the interval lengths negative (intervals of equal length), the standard deviation is NaN | 0 | `windows` |
 | `vperp_c` | The header says that a zero `b` gives `a`; the code gives the zero vector | `a`, as the header says | `math_vectors` |
 | `vsepg_c` | Loses up to half the digits near 0 and π | The method of `vsep` | `math_vectors` |
 
 ### EK queries
 
-The first four rows change the rows that `ekfind` returns; its docstring states the
-cases. The tests reproduce each of the four with a switch of the search that is not
+The first five rows change the rows that `ekfind` returns; its docstring states the
+cases. The tests reproduce each of the five with a switch of the search that is not
 part of the API, to show that every difference from CSPICE comes from them.
 
 | Where | Defect | In Almanac.jl | Test |
@@ -94,6 +99,7 @@ part of the API, to show that every difference from CSPICE comes from them.
 | `zzekillt`, `zzekille` | A double compared with an indexed integer column is rounded: `ID < 17.4` loses `ID = 17` | The exact comparison | `ek_query` |
 | `zzekjsqz` | After `zzekweed` empties a segment, the rows of the next segment are lost and later rows are read from the wrong segment | The correct rows | `ek_query` |
 | `nparsd` (query scanner) | `2.756` in a query gives the next double above the one nearest to 2.756, so it is not equal to a stored 2.756 | The nearest double | `ek_query` |
+| `zzekqcon`, `zzekscmp` | An integer value outside the 32-bit range becomes the smallest 32-bit integer (`i_dnnt`): `DCOL > 10000000000` holds for every row that is not null | The value compared as a double | `ek_query` |
 | `zzekjsrt` | ORDER BY or a join on a fixed-count string column longer than 32 characters fails with `STRINGTRUNCATED` | The sorted rows | `ek_query` |
 | `zzekscan` | Reads past its buffer for a query over 2000 characters | A parse error, reported in `errmsg` | `ek_parse` |
 | `zzeknrml` | A WHERE clause that ends with NOT reads one token past the end of the query | Reads no token past the end | `ek_parse` |

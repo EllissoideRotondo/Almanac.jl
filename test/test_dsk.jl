@@ -397,6 +397,123 @@ function dsk_part_3(env)
     @test nbad == 0
     @test maxerr == 0.0
     @test nhit > nsample(250, 8_000)
+    # (fault fixed: `xdda` lists every voxel of the ray before `dskx02` tests a plate,
+    # and signals ARRAYTOOSMALL from 50000 voxels in the grid on; Almanac threw only for
+    # a ray that met no plate, and from 50001 voxels on.) A plate 60000 km long sets a
+    # grid of about 60006 x 6 x 6 voxels of 1 km; a small plate at x = 1 faces the rays
+    # along +x, which run beside the long plate.
+    lv = [
+        V3(0.0, 0.5, 0.5), V3(60000.0, 0.5, 0.5), V3(0.0, 0.501, 0.5),
+        V3(1.0, 0.5, 0.5), V3(1.0, 0.5, 0.501), V3(1.0, 0.501, 0.5),
+    ]
+    lp = [P3(1, 2, 3), P3(4, 5, 6)]
+    lpath = joinpath(dir, "long.bds")
+    rm(lpath; force = true)
+    lxd, lxi = dskmi2(lv, lp, 1.0e-4, 3, 700_000, 700_000, 700_000, true, 1_600_000)
+    lmn, lmx = dskrb2(lv, lp, 3, zeros(10))
+    lw = dskopn(lpath, "long", 0)
+    dskw02(
+        lw, 499, 1, 2, "IAU_MARS", 3, zeros(10), -1.0, 60001.0, 0.0, 1.0, lmn, lmx,
+        -1.0e9, 1.0e9, lv, lp, lxd, lxi
+    )
+    dskcls(lw)
+    lh = dasopr(lpath)
+    lch = c_dasopr(lpath)
+    try
+        ld = dlabfs(lh)
+        lcd = SPICE.dlabfs(lch)
+        b02 = dskb02(lh, ld)
+        voxsiz, voxori, n1 = b02[5], b02[6], b02[7][1]
+        @test n1 > 50_000
+        dirx = V3(1.0, 0.0, 0.0)
+        # the vertex in the voxel from which `count` voxels of the ray are in the grid
+        from(count) = V3(voxori[1] + (n1 - count + 0.5) * voxsiz, 0.5002, 0.5002)
+        for (vtx, kind) in ((V3(-5.0, 0.5002, 0.5002), :arraytoosmall), (from(50_000), :arraytoosmall), (from(49_999), nothing))
+            @test (vtx, neo_kind(() -> dskx02(lh, ld, vtx, dirx))) ==
+                (vtx, kind) == (vtx, c_kind(() -> c_dskx02(lch, lcd, vtx, dirx)))
+        end
+        @test dskx02(lh, ld, from(49_999), dirx) === nothing && !c_dskx02(lch, lcd, from(49_999), dirx)[1]
+    finally
+        c_dascls(lch)
+        dascls(lh)
+    end
+    dsk_plate_buffer(dir)
+    return nothing
+end
+
+"""
+    dsk_plate_buffer(dir)
+
+The plate buffer of `dskx02`. CSPICE splits the voxels of the ray that are not in an
+empty coarse voxel into two groups (the first half, then the rest), collects the plate
+lists of a group with their repetitions, and signals ARRAYTOOSMALL from 256001 plates
+on, before it tests a plate; the second group is collected only if the first has no
+hit. The plates are 1200 wedges in the planes y = const of a row of about 440 voxels of
+2 km along x: 600 reach along the whole row, 600 along the half x < 440, so a voxel
+of that half lists 1200 plates and a voxel of the other half 600. The rays run along
+the row beside the wedges; a plate at x = 800 faces the rays along -x at z = 0.5.
+"""
+function dsk_plate_buffer(dir)
+    len = 880.0
+    verts = V3[]
+    plates = P3[]
+    for (i, reach) in enumerate((len, len / 2)), k in 1:600
+        y = 0.1 + 0.8 * (k - 1) / 599 + 1.0e-4 * (i - 1)
+        append!(verts, (V3(0.0, y, 0.0), V3(reach, y, 0.0), V3(0.0, y, 1.0)))
+        push!(plates, P3(length(verts) - 2, length(verts) - 1, length(verts)))
+    end
+    append!(verts, (V3(800.0, 1.2, 0.2), V3(800.0, 1.8, 0.5), V3(800.0, 1.2, 0.8)))
+    push!(plates, P3(length(verts) - 2, length(verts) - 1, length(verts)))
+    avext = sum(plates) do p
+        a, b, c = verts[p[1]], verts[p[2]], verts[p[3]]
+        sum(i -> maximum((a[i], b[i], c[i])) - minimum((a[i], b[i], c[i])), 1:3)
+    end / (3 * length(plates))
+    xd, xi = dskmi2(verts, plates, 2.0 / avext, 1, 1_000_000, 10_000, 1_000_000, false, 1_200_000)
+    mn, mx = dskrb2(verts, plates, 3, zeros(10))
+    path = joinpath(dir, "plates.bds")
+    rm(path; force = true)
+    w = dskopn(path, "plates", 0)
+    dskw02(w, 499, 1, 2, "IAU_MARS", 3, zeros(10), -1.0, len + 1, 0.0, 2.0, mn, mx, -1.0e9, 1.0e9, verts, plates, xd, xi)
+    dskcls(w)
+    h = dasopr(path)
+    ch = c_dasopr(path)
+    try
+        d = dlabfs(h)
+        cd = SPICE.dlabfs(ch)
+        voxsiz, voxori, ext = dskb02(h, d)[5:7]
+        @test 400 < ext[1] < 480 && ext[2] <= 3 && ext[3] <= 3     # a row of voxels along x
+        px, mx_ = V3(1.0, 0.0, 0.0), V3(-1.0, 0.0, 0.0)
+        # A ray along +x from the voxel `k` of the row.
+        from(k) = V3(voxori[1] + (k - 0.5) * voxsiz, 1.5, 0.5)
+        cases = [
+            (from(1), px, :arraytoosmall),                    # the first group
+            (V3(len + 1.0, 1.5, 0.5), mx_, nothing),          # a hit in the first group
+            (V3(len + 1.0, 1.5, 1.5), mx_, :arraytoosmall),   # the second group
+            [(from(k), px, nothing) for k in 8:16]...,        # about the limit
+        ]
+        kinds = [c_kind(() -> c_dskx02(ch, cd, v, r)) for (v, r) in cases]
+        @test (kinds[1], kinds[3]) == (:arraytoosmall, :arraytoosmall) && kinds[2] === nothing
+        @test any(isnothing, kinds[4:end]) && any(==(:arraytoosmall), kinds[4:end])
+        @test [neo_kind(() -> dskx02(h, d, v, r)) for (v, r) in cases] == kinds
+        @test dskx02(h, d, cases[2][1], mx_) == c_dskx02(ch, cd, cases[2][1], mx_)[2:3]
+        # A loaded segment bounds the plates of the rest of the ray by its largest lists.
+        ctx = neo_context([path])
+        seg = Almanac.kernelset(ctx).dsk[Int32(499)][1]
+        @test [neo_kind(() -> dskx02(ctx, seg, v, r)) for (v, r) in cases] == kinds
+        # Regression: a header with grid extents of zero gives no bound (and no write past
+        # the bound list) at load; `dskx02` reports the header when the segment is used.
+        hd = seg.hdr
+        bad = Almanac.DSK02Header(
+            hd.nv, hd.np, hd.nvxtot, hd.vtxbds, hd.voxsiz, hd.voxori, (0, 0, 0), hd.cgscal,
+            hd.vtxnpl, hd.voxnpt, hd.voxnpl
+        )
+        badseg = DSKSegment(seg.file, seg.dladsc, seg.dskdsc, seg.boxctr, seg.boxrad, bad, seg.voxtop)
+        ints = Almanac.kernelset(ctx).dskfiles[seg.file].ints
+        @test Almanac._dsk_voxtop(ints, badseg) == Almanac._DSK_NOTOP
+    finally
+        c_dascls(ch)
+        dascls(h)
+    end
     return nothing
 end
 
@@ -780,6 +897,51 @@ function dsk_part_8(env)
         @test (method, nk) == (method, c_srfnrm_kind(method, "MARS", "IAU_MARS", p))
     end
     @test neo_kind(() -> latsrf(ctx, "ELLIPSOID", "EARTH", 0.0, "IAU_EARTH", [[0.1, 0.2]])) !== nothing
+    # (fault fixed: four radii gave `badaxislength`; `zzbodvcd` has room for 3 values,
+    # so `bodvcd` signals ARRAYTOOSMALL)
+    four = SpiceContext()
+    pdpool(four, "BODY402_RADII", [1.0, 1.0, 1.0, 1.0])
+    p402 = V3(1.0, 0.0, 0.0)
+    try
+        SPICE.pdpool("BODY402_RADII", [1.0, 1.0, 1.0, 1.0])
+        @test neo_kind(() -> latsrf(four, "ELLIPSOID", "DEIMOS", 0.0, "IAU_DEIMOS", [[0.1, 0.2]])) ===
+            :arraytoosmall === c_latsrf_kind("ELLIPSOID", "DEIMOS", "IAU_DEIMOS")
+        @test neo_kind(() -> srfnrm(four, "ELLIPSOID", "DEIMOS", 0.0, "IAU_DEIMOS", [p402])) ===
+            :arraytoosmall === c_srfnrm_kind("ELLIPSOID", "DEIMOS", "IAU_DEIMOS", p402)
+    finally
+        SPICE.dvpool("BODY402_RADII")
+    end
+    # (fault fixed: `latsrf` gave `noframeinfo` for a segment frame that is not known;
+    # it calls `zzdsksph` first, which signals NOFRAMEDATA, while `dskxsi` and `srfnrm`
+    # meet the check of `zzdsksba`, NOFRAMEINFO)
+    tv = [V3(0.0, 0.0, 1.0), V3(1.0, 0.0, -0.5), V3(-0.5, 0.8, -0.5), V3(-0.5, -0.8, -0.5)]
+    tp = [P3(1, 2, 3), P3(1, 3, 4), P3(1, 4, 2), P3(2, 4, 3)]
+    fpath = joinpath(dir, "noframe.bds")
+    rm(fpath; force = true)
+    fxd, fxi = dskmi2(tv, tp, 1.0, 1, 1000, 1000, 1000, true, 103_000)
+    fmn, fmx = dskrb2(tv, tp, 1, zeros(10))
+    fw = dskopn(fpath, "noframe", 0)
+    dskw02(fw, 402, 9, 2, 1_234_567, 1, zeros(10), DSK_FULL..., fmn, fmx, -1.0e9, 1.0e9, tv, tp, fxd, fxi)
+    dskcls(fw)
+    bad = SpiceContext()
+    furnsh(bad, fpath)
+    fv = V3(5.0, 0.0, 0.0)
+    fp = V3(0.0, 0.0, 1.0)
+    fm = "DSK/UNPRIORITIZED/SURFACES = 9"
+    # The file is loaded again before each CSPICE call: a call that fails leaves the
+    # body half buffered in `zzdsksbf`, and the next call then fails otherwise.
+    fresh(f) = (SPICE.unload(fpath); SPICE.furnsh(fpath); f())
+    SPICE.furnsh(fpath)
+    try
+        @test neo_kind(() -> latsrf(bad, fm, "DEIMOS", 0.0, "IAU_DEIMOS", [[0.1, 0.2]])) ===
+            :noframedata === fresh(() -> c_latsrf_kind(fm, "DEIMOS", "IAU_DEIMOS"))
+        @test neo_kind(() -> dskxsi(bad, false, 402, [9], 0.0, "IAU_DEIMOS", fv, -fv)) ===
+            :noframeinfo === fresh(() -> c_kind(() -> c_dskxsi("DEIMOS", [9], 0.0, "IAU_DEIMOS", fv, -fv)))
+        @test neo_kind(() -> srfnrm(bad, fm, "DEIMOS", 0.0, "IAU_DEIMOS", [fp])) ===
+            :noframeinfo === fresh(() -> c_srfnrm_kind(fm, "DEIMOS", "IAU_DEIMOS", fp))
+    finally
+        SPICE.unload(fpath)
+    end
     return nothing
 end
 
@@ -860,6 +1022,34 @@ function dsk_part_10(env)
     @test neo_kind(() -> dskxsi(c2, false, 499, (), 0.0, "IAU_MARS", v, -v)) === :nodsksegments
     kclear(c2)
     @test ktotal(c2, "DSK") == 0
+    # (fault fixed: segments with equal entry distances were searched in list order;
+    # `zzdskbux` searches them in the order of `orderd`, a Shell sort that is not stable.)
+    # Four boxes hold the same square at x = 5; in the search order the ray enters them
+    # at the distances (b, a, a, c), a < b < c, which `orderd` orders as 3, 2, 1, 4. All
+    # four intercepts are equal, so the first segment searched wins: surface 13.
+    sq = [V3(5.0, -0.5, -0.5), V3(5.0, 0.5, -0.5), V3(5.0, 0.5, 0.5), V3(5.0, -0.5, 0.5)]
+    sqp = [P3(1, 2, 3), P3(1, 3, 4)]
+    box(srf, xmax) = DskSpec(
+        402, srf, 2, "IAU_DEIMOS", 3, Float64[], (-1.0, xmax, -1.0, 1.0), -1.0e9, 1.0e9,
+        1.0, 1, sq, sqp
+    )
+    tpath = neo_write_dsk(
+        joinpath(dir, "ties.bds"),
+        [box(14, 8.0), box(13, 9.5), box(12, 9.5), box(11, 9.0)]; ctx = wctx
+    )
+    tie = SpiceContext()
+    furnsh(tie, tpath)
+    tv, td = V3(10.0, 0.1, 0.2), V3(-1.0, 0.0, 0.0)
+    SPICE.furnsh(tpath)
+    try
+        @test [Int(g.dskdsc.surfce) for g in Almanac.kernelset(tie).dsk[Int32(402)]] == [11, 12, 13, 14]
+        cf, cx, _, _, _, cdsk = c_dskxsi("DEIMOS", (), 0.0, "IAU_DEIMOS", tv, td)
+        txpt, tseg, _ = dskxsi(tie, false, 402, (), 0.0, "IAU_DEIMOS", tv, td)
+        @test cf && isapprox(txpt, cx; atol = 1.0e-12)
+        @test Int(tseg.dskdsc.surfce) == Int(cdsk.surfce) == 13
+    finally
+        SPICE.unload(tpath)
+    end
     return nothing
 end
 
@@ -1097,6 +1287,46 @@ function dsk_part_12(env)
         )
     ) === :dasinvalidaccess
     dascls(h)
+    # (fault fixed: the handle was checked before the inputs; `dskw02` checks it in
+    # `dlabns`, after the inputs)
+    ro = joinpath(dir, "readonly.bds")
+    cp(files[:a][1], ro; force = true)
+    h = dasopr(ro)
+    ch = c_dasopr(ro)
+    try
+        @test neo_kind(
+                () -> dskw02(
+                    wctx, h, s.center, s.surfid, s.dclass, "NO_SUCH_FRAME", s.corsys, zeros(10),
+                    s.bounds..., mn3, mx3, s.first, s.last, s.verts, s.plates, spaixd, spaixi
+                )
+            ) === :frameidnotfound === c_kind(
+                () -> c_dskw02(ch, s, mn3, mx3, spaixd, Cint.(spaixi); frame = "NO_SUCH_FRAME")
+            )
+    finally
+        c_dascls(ch)
+        dascls(h)
+    end
+    # (fault fixed: a vertex number or an index value beyond 32 bits threw `InexactError`,
+    # the second one after `dlabns`, which left a partial segment in the file)
+    wide = joinpath(dir, "wide.bds")
+    rm(wide; force = true)
+    wh = dskopn(wide, "x", 0)
+    before = daslla(wh)
+    w02(plates, ixi) = neo_kind(
+        () -> dskw02(
+            wctx, wh, s.center, s.surfid, s.dclass, s.frame, s.corsys, zeros(10),
+            s.bounds..., mn3, mx3, s.first, s.last, s.verts, plates, spaixd, ixi
+        )
+    )
+    big = Int.(spaixi)
+    big[Almanac._DSK_IXIFIX + 1] = 2^40
+    @test w02(s.plates, big) === :valueoutofrange
+    @test w02(vcat(s.plates[1:(end - 1)], [P3(1, 2, 2^40)]), spaixi) === :badvertexindex
+    # (a defect of CSPICE that Almanac fixes: the fine voxel count is a 32-bit product
+    # there, and 1000 x 1000 x 4295 voxels pass as 32704)
+    @test w02(s.plates, (x = Int.(spaixi); x[1:3] .= (1000, 1000, 4295); x)) === :valueoutofrange
+    @test daslla(wh) == before
+    dskcls(wh)
     @test neo_kind(() -> dskopn(files[:a][1], "x", 0)) === :fileopenfail
     @test neo_kind(() -> dskopn(joinpath(dir, "neg.bds"), "x", -1)) === :badrecordcount
     return nothing
@@ -1462,6 +1692,87 @@ function dsk_part_17()
     return nothing
 end
 
+"""
+Part of group 12: (h) the offsets of segments in frames centred on another body, two
+defects of CSPICE that Almanac fixes. The reference is CSPICE with the one segment
+that the call uses; CSPICE with all the files must differ, so that the fixture shows
+the defect.
+
+- `zzdsksba` looks up the offset of every segment of the body: a segment of surface 10
+  in a frame centred on Deimos (402), for which no SPK data are loaded, makes every
+  search for Mars fail, also one for surface 9 only.
+- `zzdskbux` (in the loop that collects the hit segments) and `zzdskbun` reuse the
+  offset of the segment examined before, in the same frame: segment A (surface 8,
+  searched first) and segment B (surface 9) are in `MARS_OFF`, whose centre (the Mars
+  barycentre) moves in that frame, and the middles of their coverages are a quarter of
+  a Mars day apart. With the offset of A, CSPICE finds that the ray misses B and that
+  the intercept on B is in no segment.
+"""
+function dsk_part_18(env)
+    (; dir, tk, spk) = env
+    fk = joinpath(dir, "far.tf")
+    write(
+        fk, """
+        KPL/FK
+        \\begindata
+        FRAME_MARS_FAR           = 1499004
+        FRAME_1499004_NAME       = 'MARS_FAR'
+        FRAME_1499004_CLASS      = 4
+        FRAME_1499004_CLASS_ID   = 1499004
+        FRAME_1499004_CENTER     = 402
+        TKFRAME_1499004_RELATIVE = 'IAU_MARS'
+        TKFRAME_1499004_SPEC     = 'ANGLES'
+        TKFRAME_1499004_UNITS    = 'DEGREES'
+        TKFRAME_1499004_AXES     = ( 1 2 3 )
+        TKFRAME_1499004_ANGLES   = ( 0 0 0 )
+        \\begintext
+        """
+    )
+    bv, bp = cube_shape(1.5)
+    av, ap = cube_shape(0.05)
+    av = [v + V3(0.0, 0.0, 1.3) for v in av]          # inside B, off the rays below
+    quarter = 88642.66 / 4                            # a quarter of a Mars day (s)
+    spec_b = DskSpec(499, 9, 2, "MARS_OFF", 3, Float64[], (-1.5, 1.5, -1.5, 1.5), -1.0e5, 1.0e5, 1.0, 1, bv, bp)
+    spec_a = DskSpec(
+        499, 8, 2, "MARS_OFF", 3, Float64[], (-0.05, 0.05, -0.05, 0.05), -1.0e5,
+        1.0e5 + 2quarter, 1.0, 1, av, ap
+    )
+    spec_c = DskSpec(499, 10, 2, "MARS_FAR", 3, Float64[], (-1.5, 1.5, -1.5, 1.5), -1.0e5, 1.0e5, 1.0, 1, bv, bp)
+    oracle_load([tk, spk, fk])
+    alone = c_write_dsk(joinpath(dir, "off_b.bds"), [spec_b])
+    pair = c_write_dsk(joinpath(dir, "off_ba.bds"), [spec_b, spec_a])    # A comes first in the search
+    far = c_write_dsk(joinpath(dir, "off_far.bds"), [spec_c])
+    v = V3(10.0, -1.5, 0.5)       # near the edge of B, which A's offset moves off the ray
+    d = V3(-1.0, 0.0, 0.0)
+    ray(srf) = c_dskxsi("MARS", srf, 0.0, "IAU_MARS", v, d)
+
+    oracle_load([tk, spk, fk, alone])
+    want_f, want_x = ray(Int[])[1:2]
+    want_n = c_srfnrm("DSK/UNPRIORITIZED", "MARS", 0.0, "IAU_MARS", [want_x])[1]
+    @test want_f
+
+    # zzdsksba: the segment without SPK data for the centre of its frame is not used.
+    list = [tk, spk, fk, far, alone]
+    oracle_load(list)
+    ctx = neo_context(list)
+    @test c_kind(() -> ray([9])) === :spkinsuffdata
+    @test neo_kind(() -> dskxsi(ctx, false, "MARS", [10], 0.0, "IAU_MARS", v, d)) === :spkinsuffdata ===
+        c_kind(() -> ray([10]))
+    r = dskxsi(ctx, false, "MARS", [9], 0.0, "IAU_MARS", v, d)
+    @test r !== nothing && r[1] == want_x
+
+    # zzdskbux, zzdskbun: B takes its own offset, not that of A.
+    list = [tk, spk, fk, pair]
+    oracle_load(list)
+    ctx = neo_context(list)
+    @test !ray(Int[])[1]
+    @test c_kind(() -> c_srfnrm("DSK/UNPRIORITIZED", "MARS", 0.0, "IAU_MARS", [want_x])) === :pointnotinsegment
+    r = dskxsi(ctx, false, "MARS", Int[], 0.0, "IAU_MARS", v, d)
+    @test r !== nothing && r[1] == want_x && r[2].dskdsc.surfce == 9
+    @test srfnrm(ctx, "DSK/UNPRIORITIZED", "MARS", 0.0, "IAU_MARS", [want_x])[1] == want_n
+    return nothing
+end
+
 group("12. DSK type 2 against CSPICE") do
     rng = MersenneTwister(SEED + 12)
     dir = mktempdir()
@@ -1553,6 +1864,10 @@ group("12. DSK type 2 against CSPICE") do
 
     @apart @testset "(h) volume element routines on special inputs" begin
         dsk_part_17()
+    end
+
+    @apart @testset "(h) offsets of segments in frames centred on another body" begin
+        dsk_part_18(env)
     end
 end
 

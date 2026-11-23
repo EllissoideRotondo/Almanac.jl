@@ -894,8 +894,9 @@ double address space, and `SpiceError(:badarg)` if `data` is too short. If they 
 addresses and `first > last`, nothing changes.
 """
 function dasudd(h::DASHandle, first::Integer, last::Integer, data::AbstractVector{<:Real})
-    # the addresses first, as SPICELIB: an update of a file open for read with a bad
-    # address is `invalidaddress`
+    # an open handle first (`daslla` signals DASNOSUCHHANDLE), then the addresses, as
+    # SPICELIB: an update of a file open for read with a bad address is `invalidaddress`
+    _das_check_open(h, "dasudd")
     _das_check_update(h, "dasudd", first, last, length(h.dps))
     _das_check_write(h, "dasudd")
     first > last && return nothing
@@ -917,8 +918,9 @@ integer address space, `SpiceError(:badarg)` if `data` is too short, and
 and `first > last`, nothing changes.
 """
 function dasudi(h::DASHandle, first::Integer, last::Integer, data::AbstractVector{<:Integer})
-    # the addresses first, as SPICELIB: an update of a file open for read with a bad
-    # address is `invalidaddress`
+    # an open handle first (`daslla` signals DASNOSUCHHANDLE), then the addresses, as
+    # SPICELIB: an update of a file open for read with a bad address is `invalidaddress`
+    _das_check_open(h, "dasudi")
     _das_check_update(h, "dasudi", first, last, length(h.ints))
     _das_check_write(h, "dasudi")
     first > last && return nothing
@@ -943,8 +945,9 @@ addresses and `first > last`, nothing changes.
 See also [`dasadc`](@ref), [`dasrdc`](@ref).
 """
 function dasudc(h::DASHandle, first::Integer, last::Integer, data::AbstractString)
-    # the addresses first, as SPICELIB: an update of a file open for read with a bad
-    # address is `invalidaddress`
+    # an open handle first (`daslla` signals DASNOSUCHHANDLE), then the addresses, as
+    # SPICELIB: an update of a file open for read with a bad address is `invalidaddress`
+    _das_check_open(h, "dasudc")
     _das_check_update(h, "dasudc", first, last, length(h.chars))
     _das_check_write(h, "dasudc")
     first > last && return nothing

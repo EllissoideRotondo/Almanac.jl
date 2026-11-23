@@ -84,7 +84,7 @@ an atomic reference to one of them is a single word.
 | `core/` | `types.jl`, `errors.jl`, `strings.jl`, `taylor.jl` (`Taylor`, `primal`), `bytebuf.jl` (buffers of the number and time formats), `hex.jl` |
 | `files/` (DAF, DAS) | `daf.jl` (read), `daf_access.jl`, `daf_write.jl`, `das.jl`, `dla.jl` |
 | `kernels/` (contexts, pool) | `context.jl`, `textkernel.jl`, `jsonkernel.jl`, `pool_api.jl`, `pool_write.jl`, `names.jl`, `kernel_info.jl`, `memkernels.jl` (kernels built in memory: `furnsh` of a handle, `load_samples!`, `load_function!`) |
-| `spk/` | `spk_eval.jl` (types 2, 3; PCK segments, `_cheb3`, `find_segment`), `spk_more.jl`, `types/` (`conic.jl`, `interp.jl`, `mda.jl`, `sgp4.jl`, ...), `spk_api.jl`, `aberration.jl`, `spk_segments.jl`, `spk_write.jl`, `tle.jl` |
+| `spk/` | `spk_layout.jl` (layouts of types 10, 14, 19 and PCK 3, checked at load), `spk_eval.jl` (types 2, 3; PCK segments, `_cheb3`, `find_segment`), `spk_more.jl`, `types/` (`conic.jl`, `interp.jl`, `mda.jl`, `sgp4.jl`, ...), `spk_api.jl`, `aberration.jl`, `spk_segments.jl`, `spk_write.jl`, `tle.jl` |
 | `ck/` | `ck.jl`, `ck_api.jl`, `ck_records.jl`, `ck_write.jl` |
 | `frames/` | `dyntypes.jl`, `frames.jl`, `rotations.jl`, `dynframes.jl`, `switchframes.jl`, `frame_api.jl`, `frame_info.jl`, `pck_write.jl` |
 | `time/` | `time.jl`, `timeparse.jl`, `timeout.jl`, `time_api.jl`, `sclk.jl`, `lst.jl` |
@@ -114,8 +114,10 @@ an atomic reference to one of them is a single word.
   code that reads `ks.daf[seg.file]` must test for this first. A `FrameProvider` frame
   has class 7, so dispatch on dynamic frames with `class == 5 || class == 6`, never
   `class >= 5`.
-- **Frame chains.** A chain is followed to its first common frame, as in `refchg_`,
-  for at most `MAX_FRAME_CHAIN` (10) links. Dynamic frames recurse through
+- **Frame chains.** A chain is followed to its first common frame, as in `zzrefch0_`:
+  the chain of the first frame keeps `MAX_FRAME_CHAIN` (10) frames and folds later
+  links into the last, and a chain of `_FRAME_CHAIN_LIMIT` (1000) links is taken to be
+  a cycle (`:framechain`; CSPICE loops). Dynamic frames recurse through
   `ks.inner`, which is `_DYN_LEVELS` (2) deep, and throw `:recursiontoodeep` below
   that.
 - **CK rates.** `_CKState()` takes its derivative from the angular velocity of the
@@ -127,6 +129,12 @@ an atomic reference to one of them is a single word.
   series (`_pck03_state`, as `pcke03`), through the state path of class 2 frames; an AD
   or `Taylor` epoch differentiates the angle series (`_pck03_angles`). W is not reduced
   by whole turns, as in `pcke03`.
+- **Segment layouts.** `_daf_parse` checks the meta data of SPK type 10, 14 and 19
+  and binary PCK type 3 segments once (`_segment_layout`) and stores the layout in
+  `Segment.layout`. A segment that fails the checks loads with a zero layout, as CSPICE
+  loads it, and its evaluator makes the checks at each call and throws there. Any other
+  code that builds a `Segment` over data that it did not check leaves `layout` zero, and
+  a `Segment` must not be evaluated over data other than the data it was loaded from.
 - **SPK type 3** (separate velocity series): order k >= 1 of the jet is derivative k-1
   of the velocity series, as in `spkder`.
 - **Kernels in memory.** A handle of `dafops` (`spkops`, `ckops`, `pckops`) has an
@@ -157,14 +165,21 @@ an atomic reference to one of them is a single word.
   jet. The Orbit layer has one more, the Kepler solver `_ma_to_ta(M, e)` of
   `analysis/brouwer.jl`, whose rules take the partials of the implicit function at the
   converged anomaly (ForwardDiff and the tracked numbers get them from the carried
-  Newton step `_carry`). `AlmanacForwardDiffExt` assembles `Dual` results from the jet
+  Newton step `_carry`). The bisections of `nearpt` and `prop2b` (`_m_nearpt_plain`,
+  `_prop2b_root`) are in `_AD_CONSTANT`; their callers take the derivative of the root
+  by Newton steps in the number type, one for `Float64` through `_ad_pin(a, p)` (value
+  `p`, derivative of `a`, with a rule in the ChainRulesCore, Enzyme and Mooncake
+  extensions), so the plain value stays bit for bit. The angles `:ta`, `:aop` and
+  `:raan` use `_ad_pin` too: the arc cosine of ANISE for the value
+  (`_AD_CONSTANT_ORBIT`), the arc tangent for the derivative. `AlmanacForwardDiffExt` assembles `Dual` results from the jet
   at `primal(et)`; `src/ad.jl` gives `_ad_rule` (value and derivative, for the rules of
   ChainRulesCore, Enzyme and Mooncake) and `_ad_lift` (for the tracked numbers of
   ReverseDiff and Tracker). A new derivative point, or a new path to the epoch that
   bypasses them, needs a method in every extension. Lookups and string parsing on the
   way to a derivative point go into `_AD_CONSTANT`. Enzyme compiles the bodies of the
   derivative points too, and fails when two calls of different result types share a
-  storage slot (see `_ssbpos_still` in `aberration.jl`); the groups `ad_enzyme`,
+  storage slot (see `_ssbpos_still` in `aberration.jl`), and applies a rule only to a
+  call that is not inlined (`_ad_pin` is `@noinline`); the groups `ad_enzyme`,
   `ad_mooncake`, `ad_zygote` and `ad_tracked` (fixture `test/adfixtures.jl`) cover every
   backend. `element` and the properties of an `Orbit` take the name at run time:
   `getproperty` stays `@inline` (so that Mooncake and Enzyme see one branch), and the

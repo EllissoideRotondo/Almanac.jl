@@ -442,7 +442,26 @@ group(
         pw_both(() -> SPICE.kclear(), () -> kclear(ctx))
         compare()
         @test bodn2c(ctx, "PW_BODDEF_ONE") == 7654323
-        @test throws_kind(() -> boddef(ctx, "   ", 5), :badarg)
+        # Regression: a blank name was `:badarg`, an empty one was accepted.
+        for (name, kind) in (("   ", :blanknameassigned), ("", :emptystring))
+            ccall((:boddef_c, SPICE.libcspice), Cvoid, (Cstring, Cint), name, 7654326)
+            @test cspice_kind() === kind
+            @test throws_kind(() -> boddef(ctx, name, 7654326), kind)
+        end
+        # Regression: a name over 36 characters counts by its first 36, as in `zzbodtrn`;
+        # the key is made from the compressed full name and then cut, the name kept is
+        # the first 36 characters as given.
+        long = "PW  BODDEF  LONG  NAME  OF  MORE  THAN  36  CHARACTERS"
+        # `boddef_c` directly: `SPICE.boddef` refuses a name of more than 35 characters.
+        pw_both(
+            () -> ccall((:boddef_c, SPICE.libcspice), Cvoid, (Cstring, Cint), long, 7654325),
+            () -> boddef(ctx, long, 7654325)
+        )
+        @test bodc2n(ctx, 7654325) == c_bodc2n(7654325)
+        for n in (long, "PW BODDEF LONG NAME OF MORE THAN 36 XYZ", "pw boddef long name of more than 36", first(long, 36))
+            @test bodn2c(ctx, n) == SPICE.bodn2c(n)
+        end
+        @test bodn2c(ctx, long) == 7654325
         @test bodn2c(SpiceContext(), "PW_BODDEF_ONE") === nothing
         # CSPICE N0067 (`zzboddef`) signals TOOMANYPAIRS past 161 pairs; Almanac has no
         # limit. CSPICE is not called: it would keep the pairs for the whole process.
@@ -561,6 +580,26 @@ group(
         lmpool(ctx, ["PW_LONGSTR = ( '" * "a"^100 * "', 'b' )", "PW_NEXT = 'c'"])
         @test gcpool(ctx, "PW_LONGSTR") == ["a"^80, "b"]
         @test gcpool(ctx, "PW_NEXT") == ["c"]
+        # Regression: `lmpool` took `\begintext` and `\begindata` as markers and replaced
+        # tabs by blanks. `zzrvbf` has no markers, and a tab is kept inside a string.
+        function lmpool_c(lines)
+            len = maximum(ncodeunits, lines) + 1
+            buf = zeros(UInt8, len, length(lines))
+            for (j, l) in enumerate(lines)
+                buf[1:ncodeunits(l), j] .= codeunits(l)
+            end
+            ccall((:lmpool_c, SPICE.libcspice), Cvoid, (Ptr{UInt8}, Cint, Cint), buf, len, length(lines))
+            return cspice_kind()
+        end
+        marked = ["\\begintext", "PW_MARKED = 1"]
+        kind = lmpool_c(marked)
+        SPICE.dvpool("PW_MARKED")
+        @test kind !== :none
+        @test throws_kind(() -> lmpool(ctx, marked), kind)
+        tabbed = ["PW_TAB = ( 'a\tb'\t'c' )"]
+        pw_both(() -> SPICE.lmpool(tabbed), () -> lmpool(ctx, tabbed))
+        @test gcpool(ctx, "PW_TAB") == SPICE.gcpool("PW_TAB") == ["a\tb", "c"]
+        pw_both(() -> SPICE.dvpool("PW_TAB"), () -> dvpool(ctx, "PW_TAB"))
         @test throws_kind(() -> ldpool(ctx, "/no/such/file.tpc"), :fileopenfailed)
         @test throws_kind(() -> gnpool(ctx, "*", 1, -1), :badarraysize)
     end
@@ -597,6 +636,26 @@ group(
             @test throws_kind(() -> furnsh(edited, k), kc)
             any(l -> startswith(l, "NAIF"), lines) ||
                 @test throws_kind(() -> ldpool(SpiceContext(), k), kc)
+        end
+    end
+
+    # Regression: NAIF_BODY_NAME and NAIF_BODY_CODE of the wrong types were MISSINGKPV or
+    # BADDIMENSIONS. `zzbodker` reads them with `gcpool` and `gipool`, which find neither,
+    # and then defines no names and signals nothing.
+    @apart @testset "body name variables of the wrong type" begin
+        for (i, lines) in enumerate(
+                (["NAIF_BODY_NAME = 5", "NAIF_BODY_CODE = 'PW_X'"], ["NAIF_BODY_NAME = ( 5, 6 )"])
+            )
+            k = pw_kernel("types$i.tpc", lines)
+            ctx = SpiceContext()
+            try
+                pw_both(() -> SPICE.furnsh(k), () -> furnsh(ctx, k))
+                @test bodn2c(ctx, "EARTH") == SPICE.bodn2c("EARTH") == 399
+                @test bodc2n(ctx, 301) == SPICE.bodc2n(301) == "MOON"
+            finally
+                SPICE.unload(k)
+                cspice_kind()
+            end
         end
     end
 

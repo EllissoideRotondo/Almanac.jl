@@ -1250,7 +1250,11 @@ end
 
 @inline _dsk_bounds(d::DSKDescr) = (d.co1min, d.co1max, d.co2min, d.co2max, d.co3min, d.co3max)
 
-"`zzrytelt`: the nearest point of the ray on the volume element of the segment descriptor `d`, with `margin`."
+"""
+`zzrytelt`: the nearest point of the ray on the volume element of the segment descriptor
+`d`, with `margin`. The system of `d` is 1, 3 or 4: `_dsk_body_segments` has thrown the
+error of `zzsegbox` for any other, which comes before that of `zzrytelt`.
+"""
 @inline function _dsk_rytelt(
         vertex::Vec3{Float64}, raydir::Vec3{Float64}, d::DSKDescr,
         margin::Float64
@@ -1258,8 +1262,7 @@ end
     b = _dsk_bounds(d)
     d.corsys == 1 && return _dsk_rytlat(vertex, raydir, b, margin)
     d.corsys == 3 && return _dsk_rytrec(vertex, raydir, b, margin)
-    d.corsys == 4 && return _dsk_rytpdt(vertex, raydir, b, d.corpar[1], d.corpar[2], margin)
-    _dsk_throw(:badcoordsys, "the coordinate system code $(d.corsys) is not recognized")
+    return _dsk_rytpdt(vertex, raydir, b, d.corpar[1], d.corpar[2], margin)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -1528,18 +1531,20 @@ const _DSK_NO_HEADER = DSK02Header(
 @inline _dsk_ncgr(hdr::DSK02Header) = hdr.nvxtot ÷ (hdr.cgscal * (hdr.cgscal * hdr.cgscal))
 
 """
-    _dsk_segment(ints, dps, d, file, path) -> DSKSegment
+    _dsk_segment(ints, dps, d, file, path, scan = false) -> DSKSegment
 
 The descriptor of the segment `d` of a DSK file with the arrays `ints`, `dps`. For a
 type 2 segment the sizes of the header are checked against the sizes of the DLA
 segment, so that only the pointers inside the data can be out of range later; throws
 `SpiceError(:invalidformat)` if they do not fit. The bounding sphere has a NaN radius
 if the coordinate system is not 1, 3 or 4 or its bounds are not valid; a query on
-such a segment then throws the error that CSPICE throws.
+such a segment then throws the error that CSPICE throws. With `scan`, the voxel
+pointers of a type 2 segment are read once for its `voxtop` (`_dsk_voxtop`); else its
+elements are -1.
 """
 function _dsk_segment(
         ints::Vector{Int32}, dps::Vector{Float64}, d::DLADescr, file::Integer,
-        path::AbstractString
+        path::AbstractString, scan::Bool = false
     )
     dsc = _dsk_descr(dps, d, path)
     (
@@ -1574,7 +1579,92 @@ function _dsk_segment(
             )
         )
     end
-    return DSKSegment(Int32(file), d, dsc, ctr, rad, hdr)
+    seg = DSKSegment(Int32(file), d, dsc, ctr, rad, hdr, _DSK_NOTOP)
+    (scan && dsc.dtype == 2) || return seg
+    return DSKSegment(Int32(file), d, dsc, ctr, rad, hdr, _dsk_voxtop(ints, seg))
+end
+
+"""
+    _dsk_voxtop(ints, seg) -> NTuple{17,Int}
+
+Element `i`: the sum of the `min(2^(i-1), k)` largest plate counts of the voxels of
+the type 2 segment `seg`, where `k` is the sum of its grid extents (more voxels than a
+ray crosses); the sum of all counts if fewer voxels have a positive count. A voxel is
+an entry of the voxel pointer array that points into the voxel-plate list, so voxels
+that share a list count once each. See `_dsk_top_bound`.
+"""
+function _dsk_voxtop(ints::Vector{Int32}, seg::DSKSegment)
+    offptr = _dsk_off_voxptr(seg)
+    offlst = _dsk_off_voxlst(seg)
+    voxnpl = seg.hdr.voxnpl
+    voxnpt = seg.hdr.voxnpt
+    # A damaged header gives no bound; `dskx02` reports it when the segment is used.
+    (
+        all(>=(1), seg.hdr.vgrext) && voxnpt >= 0 && 0 <= offptr && 0 <= offlst &&
+            offptr + voxnpt <= length(ints) && offlst + voxnpl <= length(ints)
+    ) || return _DSK_NOTOP
+    k = min(sum(Int, seg.hdr.vgrext), voxnpt)     # no more counts than pointers
+    heap = Int[]                         # a min-heap of the largest counts so far
+    sizehint!(heap, k)
+    for j in 1:voxnpt
+        # invariant: heap holds the min(k, m) largest positive counts of the pointers
+        # 1 .. j-1, of which m are positive
+        p = Int(@inbounds ints[offptr + j])
+        1 <= p <= voxnpl || continue
+        c = Int(@inbounds ints[offlst + p])
+        c > 0 || continue
+        if length(heap) < k
+            push!(heap, c)
+            _dsk_sift_up!(heap, length(heap))
+        elseif c > heap[1]
+            heap[1] = c
+            _dsk_sift_down!(heap, 1)
+        end
+    end
+    top = cumsum(sort!(heap; rev = true))
+    @assert length(top) <= k && issorted(top)
+    isempty(top) && return ntuple(_ -> 0, 17)
+    return ntuple(i -> top[min(1 << (i - 1), length(top))], 17)
+end
+
+"""
+    _dsk_top_bound(top, left) -> Int
+
+An upper bound of the plate counts of any `left` voxels of a segment with the
+`voxtop` `top`. For `2^(i-1) = a <= left`, the counts of the ranks after `a` are at
+most the smallest count of the ranks `a/2 + 1` to `a`, so at most their mean.
+"""
+function _dsk_top_bound(top::NTuple{17, Int}, left::Int)
+    @assert left >= 0 && top[1] >= 0
+    left == 0 && return 0
+    i = min(8 * sizeof(Int) - leading_zeros(left), 17)     # 2^(i-1) <= left
+    i == 1 && return top[1]
+    a = 1 << (i - 1)
+    per = (top[i] - top[i - 1]) ÷ (a ÷ 2)
+    b = top[i] + (left - a) * per
+    @assert b >= top[i]
+    return b
+end
+
+function _dsk_sift_up!(h::Vector{Int}, i::Int)
+    while i > 1 && h[i ÷ 2] > h[i]       # invariant: h is a min-heap but for the node i
+        h[i ÷ 2], h[i] = h[i], h[i ÷ 2]
+        i ÷= 2
+    end
+    return h
+end
+
+function _dsk_sift_down!(h::Vector{Int}, i::Int)
+    n = length(h)
+    while true                           # invariant: h is a min-heap but for the node i
+        m = i
+        2i <= n && h[2i] < h[m] && (m = 2i)
+        2i + 1 <= n && h[2i + 1] < h[m] && (m = 2i + 1)
+        m == i && return h
+        h[i], h[m] = h[m], h[i]
+        i = m
+    end
+    return
 end
 
 """
@@ -1598,7 +1688,7 @@ function open_dsk(path::AbstractString)
                 "the DAS file $path has the ID word $(repr(h.idword)), not DAS/DSK"
             )
         )
-        DSKSegment[_dsk_segment(h.ints, h.dps, d, 0, path) for d in _dla_segments(h.ints, path)]
+        DSKSegment[_dsk_segment(h.ints, h.dps, d, 0, path, true) for d in _dla_segments(h.ints, path)]
     catch
         _das_release!(h)                 # see `_unmap!`
         rethrow()
@@ -1662,9 +1752,11 @@ tested (within the tolerance `xfract`) and in the volume element of the segment
 (within `sgreed`), and the nearest hit of the first voxel that has one is returned.
 CSPICE first collects the voxels and the plates in buffers, splits the voxels in two
 groups and removes the plates that occur twice. The result here is the same, because
-a second test of a plate has the same outcome as the first; the buffers and their
-limits are not needed, with one exception: a ray that meets no plate and crosses more
-than 50000 voxels throws `SpiceError(:arraytoosmall)`, as `xdda` does.
+a second test of a plate has the same outcome as the first. The limits of two buffers
+are kept, and both throw `SpiceError(:arraytoosmall)`, whether the ray meets a plate or
+not: `xdda` lists every voxel of the ray before a plate is tested, so a ray with 50000
+voxels or more in the grid throws (`_dsk_xdda_rest`); and the plate lists of a group of
+voxels hold 256000 plates at most (`_dsk_plate_buffer`).
 """
 function _dsk_x02(
         ints::Vector{Int32}, dps::Vector{Float64}, seg::DSKSegment,
@@ -1763,11 +1855,14 @@ function _dsk_x02(
     corsys = dsc.corsys
     bounds = _dsk_bounds(dsc)
 
+    start = (ic1, ic2, ic3, ax2err, ax3err)
     have = false
     near = 0.0
     plid = 0
     xpt = _DSK_ORIGIN
     nvx = 0
+    nc = 0                           # voxels of the walk that are in a non-empty coarse voxel
+    nref = 0                         # entries of their plate lists
     while true
         # invariant: (ic1, ic2, ic3) is voxel number nvx + 1 of the ray in the axis order
         # (ax1, ax2, ax3), and it is inside the grid; no voxel before it has a valid hit
@@ -1782,6 +1877,7 @@ function _dsk_x02(
         (1 <= cvid <= ncgr) || _dsk_bad_pointer("coarse voxel number", cvid, ncgr)
         cgrptr = Int(@inbounds ints[offcgr + cvid])
         if cgrptr > 0
+            nc += 1
             fx = vx1 - cgscal * (g1 - 1)
             fy = vx2 - cgscal * (g2 - 1)
             fz = vx3 - cgscal * (g3 - 1)
@@ -1793,6 +1889,7 @@ function _dsk_x02(
                 nplate = Int(@inbounds ints[offlst + voxptr])
                 (nplate <= 0 || voxptr + nplate <= hdr.voxnpl) ||
                     _dsk_bad_pointer("voxel-plate list end", voxptr + nplate, hdr.voxnpl)
+                nref += max(nplate, 0)
                 for k in 1:nplate
                     # invariant: (have, near, plid, xpt) is the nearest valid hit among
                     # the plates 1 .. k-1 of this voxel
@@ -1823,30 +1920,220 @@ function _dsk_x02(
                     near = scale
                     plid = pj
                 end
-                have && return plid, xpt, true
+                if have
+                    _dsk_xdda_rest(
+                        nvx, ic1, ic2, ic3, ax2err, ax3err, s12, s13, step1, step2, step3,
+                        vg[ax1], vg[ax2], vg[ax3]
+                    )
+                    _dsk_plate_buffer(
+                        ints, seg, (ax1, ax2, ax3), (s12, s13), (step1, step2, step3), start,
+                        nc, nref, (ic1, ic2, ic3, ax2err, ax3err)
+                    )
+                    return plid, xpt, true
+                end
             end
         end
-        # --- the step of `xdda` to the next voxel --------------------------------------
-        if ax2err < 0.0 || ax3err < 0.0
-            if ax2err < ax3err
-                ic2 += step2
-                ax2err += s12
-            else
-                ic3 += step3
-                ax3err += s13
-            end
-        else
-            ic1 += step1
-            step2 != 0 && (ax2err += -1.0)
-            step3 != 0 && (ax3err += -1.0)
-        end
+        # --- the step of `xdda` to the next voxel, counted before the grid test ------
+        ic1, ic2, ic3, ax2err, ax3err = _dsk_xdda_step(
+            ic1, ic2, ic3, ax2err, ax3err, s12, s13, step1, step2, step3
+        )
+        nvx + 1 > _DSK_MAXVXL && _dsk_xdda_full()
         (1 <= ic1 <= vg[ax1] && 1 <= ic2 <= vg[ax2] && 1 <= ic3 <= vg[ax3]) || break
-        nvx + 1 > _DSK_MAXVXL && _dsk_throw(
-            :arraytoosmall,
-            "the ray crosses more than $_DSK_MAXVXL voxels of a DSK segment"
+    end
+    _dsk_plate_buffer(
+        ints, seg, (ax1, ax2, ax3), (s12, s13), (step1, step2, step3), start, nc, nref, nothing
+    )
+    return nohit
+end
+
+"The room of the plate buffer of `dskx02` (`PLATID`, `SOURCE`, `ORDVEC`)."
+const _DSK_PLTBUF = 256000
+
+"The fixed quantities of the voxel walk of `dskx02` on one ray: the axis order, the
+steps and slopes of `xdda`, the grid extents in that order, the coarse grid, the
+offsets of the arrays of the segment and its `voxtop`."
+struct _DSKWalk
+    ax1::Int
+    ax2::Int
+    ax3::Int
+    s12::Float64
+    s13::Float64
+    step1::Int
+    step2::Int
+    step3::Int
+    n1::Int
+    n2::Int
+    n3::Int
+    cgscal::Int
+    cg1::Int
+    cg2::Int
+    ncgr::Int
+    offcgr::Int
+    offptr::Int
+    offlst::Int
+    voxnpt::Int
+    voxnpl::Int
+    voxtop::NTuple{17, Int}
+end
+
+"""
+    _dsk_walk_plates(ints, w, state, first, maxnc) -> (nc, nref)
+
+Walk the voxels of the ray from the voxel `state` (indices and errors of `xdda` in the
+axis order of `w`), that voxel itself if `first`, to the end of the grid or until `nc`
+reaches `maxnc`: `nc` voxels in a non-empty coarse voxel, whose plate lists have
+`nref` entries in all. A pointer out of range counts as an empty list; the walk does
+not throw.
+"""
+function _dsk_walk_plates(ints::Vector{Int32}, w::_DSKWalk, state, first::Bool, maxnc::Int)
+    ic1, ic2, ic3, ax2err, ax3err = state
+    nc = 0
+    nref = 0
+    if !first
+        ic1, ic2, ic3, ax2err, ax3err = _dsk_xdda_step(
+            ic1, ic2, ic3, ax2err, ax3err, w.s12, w.s13, w.step1, w.step2, w.step3
         )
     end
-    return nohit
+    cgscl2 = w.cgscal * w.cgscal
+    while nc < maxnc && 1 <= ic1 <= w.n1 && 1 <= ic2 <= w.n2 && 1 <= ic3 <= w.n3
+        # invariant: (nc, nref) count the voxels of the walk before (ic1, ic2, ic3)
+        vx1 = w.ax1 == 1 ? ic1 : w.ax2 == 1 ? ic2 : ic3
+        vx2 = w.ax1 == 2 ? ic1 : w.ax2 == 2 ? ic2 : ic3
+        vx3 = w.ax1 == 3 ? ic1 : w.ax2 == 3 ? ic2 : ic3
+        g1 = (vx1 - 1) ÷ w.cgscal + 1
+        g2 = (vx2 - 1) ÷ w.cgscal + 1
+        g3 = (vx3 - 1) ÷ w.cgscal + 1
+        cvid = g1 + w.cg1 * (g2 + g3 * w.cg2 - (w.cg2 + 1))
+        cgrptr = 1 <= cvid <= w.ncgr ? Int(@inbounds ints[w.offcgr + cvid]) : 0
+        if cgrptr > 0
+            nc += 1
+            j = cgrptr + (
+                vx1 - w.cgscal * (g1 - 1) + w.cgscal * (vx2 - w.cgscal * (g2 - 1) - 1) +
+                    cgscl2 * (vx3 - w.cgscal * (g3 - 1) - 1)
+            ) - 1
+            voxptr = 1 <= j <= w.voxnpt ? Int(@inbounds ints[w.offptr + j]) : -1
+            if 1 <= voxptr <= w.voxnpl
+                nref += max(Int(@inbounds ints[w.offlst + voxptr]), 0)
+            end
+        end
+        ic1, ic2, ic3, ax2err, ax3err = _dsk_xdda_step(
+            ic1, ic2, ic3, ax2err, ax3err, w.s12, w.s13, w.step1, w.step2, w.step3
+        )
+    end
+    return nc, nref
+end
+
+@noinline _dsk_plate_buffer_full(n::Int) = _dsk_throw(
+    :arraytoosmall,
+    "the plate lists of a group of voxels of the ray have $n entries; the plate " *
+        "buffer of dskx02 has room for $_DSK_PLTBUF"
+)
+
+"""
+    _dsk_plate_buffer(ints, seg, axes, slopes, steps, start, nc, nref, hit)
+
+The plate buffer of `dskx02` for the ray whose walk in the segment `seg` (axis order,
+slopes and steps of `xdda`) begins at the voxel `start`: `nc`
+voxels of the walk, to the voxel `hit` of the first valid hit (`nothing`: to the end of
+the grid), are in a non-empty coarse voxel and have `nref` plate list entries. CSPICE
+splits the `n` such voxels of the whole ray into a first group of `max(1, (n + 1) ÷ 2)`
+and a second group of the rest, collects the plate lists of the first group, then, if
+the first group has no hit, those of the second, and throws
+`SpiceError(:arraytoosmall)` for a group with more than `_DSK_PLTBUF` entries. After a
+hit, the rest of the ray is walked unless the voxels left (at most the steps left in
+the three axes) are bound by `voxtop` to keep the whole ray within `_DSK_PLTBUF`; the
+first group is walked again only if the ray has more than `_DSK_PLTBUF` entries in all.
+"""
+@noinline function _dsk_plate_buffer(
+        ints::Vector{Int32}, seg::DSKSegment, axes::NTuple{3, Int},
+        slopes::NTuple{2, Float64}, steps::NTuple{3, Int}, start, nc::Int, nref::Int, hit
+    )
+    @assert nc >= 0 && nref >= 0
+    hdr = seg.hdr
+    vg = hdr.vgrext
+    cgscal = hdr.cgscal
+    w = _DSKWalk(
+        axes..., slopes..., steps..., vg[axes[1]], vg[axes[2]], vg[axes[3]], cgscal,
+        vg[1] ÷ cgscal, vg[2] ÷ cgscal, _dsk_ncgr(hdr), _dsk_off_cgrptr(seg),
+        _dsk_off_voxptr(seg), _dsk_off_voxlst(seg), hdr.voxnpt, hdr.voxnpl, seg.voxtop
+    )
+    n, total = nc, nref
+    if hit !== nothing && w.voxtop[1] >= 0
+        left = _dsk_moves_left(hit[1], w.step1, w.n1) + _dsk_moves_left(hit[2], w.step2, w.n2) +
+            _dsk_moves_left(hit[3], w.step3, w.n3)
+        nref + _dsk_top_bound(w.voxtop, left) <= _DSK_PLTBUF && return nothing
+    end
+    if hit !== nothing
+        rc, rref = _dsk_walk_plates(ints, w, hit, false, typemax(Int))
+        n += rc
+        total += rref
+    end
+    total <= _DSK_PLTBUF && return nothing
+    ngrp1 = max(1, (n + 1) ÷ 2)
+    _, ref1 = _dsk_walk_plates(ints, w, start, true, ngrp1)
+    ref1 > _DSK_PLTBUF && _dsk_plate_buffer_full(ref1)
+    # The second group is collected if it exists and the first group has no hit.
+    (n > ngrp1 && (hit === nothing || nc > ngrp1) && total - ref1 > _DSK_PLTBUF) &&
+        _dsk_plate_buffer_full(total - ref1)
+    return nothing
+end
+
+"One step of `xdda`: the indices (axis order of the walk) and errors of the next voxel."
+@inline function _dsk_xdda_step(
+        ic1::Int, ic2::Int, ic3::Int, ax2err::Float64, ax3err::Float64, s12::Float64,
+        s13::Float64, step1::Int, step2::Int, step3::Int
+    )
+    if ax2err < 0.0 || ax3err < 0.0
+        if ax2err < ax3err
+            ic2 += step2
+            ax2err += s12
+        else
+            ic3 += step3
+            ax3err += s13
+        end
+    else
+        ic1 += step1
+        step2 != 0 && (ax2err += -1.0)
+        step3 != 0 && (ax3err += -1.0)
+    end
+    return ic1, ic2, ic3, ax2err, ax3err
+end
+
+@noinline _dsk_xdda_full() = _dsk_throw(
+    :arraytoosmall,
+    "the ray has $_DSK_MAXVXL voxels or more in the voxel grid of a DSK segment; " *
+        "the voxel list of xdda has room for $_DSK_MAXVXL"
+)
+
+# Steps left in one axis before the walk leaves the grid of extent `n` there.
+@inline _dsk_moves_left(ic::Int, step::Int, n::Int) = step > 0 ? n - ic : step < 0 ? ic - 1 : 0
+
+"""
+    _dsk_xdda_rest(nvx, ic1, ic2, ic3, ax2err, ax3err, s12, s13, step1, step2, step3, n1, n2, n3)
+
+The rest of the walk of `xdda` after a hit in the voxel number `nvx` (`n1`, `n2`, `n3`
+are the extents of the grid in the axis order of the walk): `SpiceError(:arraytoosmall)`
+if the ray has `_DSK_MAXVXL` voxels or more in the grid. Each step moves one index by
+one in a fixed direction, so the walk is needed only when the steps left in the three
+axes could reach the limit.
+"""
+function _dsk_xdda_rest(
+        nvx::Int, ic1::Int, ic2::Int, ic3::Int, ax2err::Float64, ax3err::Float64,
+        s12::Float64, s13::Float64, step1::Int, step2::Int, step3::Int,
+        n1::Int, n2::Int, n3::Int
+    )
+    nvx + _dsk_moves_left(ic1, step1, n1) + _dsk_moves_left(ic2, step2, n2) +
+        _dsk_moves_left(ic3, step3, n3) < _DSK_MAXVXL && return nothing
+    while true
+        # invariant: (ic1, ic2, ic3) is voxel number nvx of the ray, inside the grid
+        ic1, ic2, ic3, ax2err, ax3err = _dsk_xdda_step(
+            ic1, ic2, ic3, ax2err, ax3err, s12, s13, step1, step2, step3
+        )
+        nvx + 1 > _DSK_MAXVXL && _dsk_xdda_full()
+        (1 <= ic1 <= n1 && 1 <= ic2 <= n2 && 1 <= ic3 <= n3) || return nothing
+        nvx += 1
+    end
+    return
 end
 
 # ---------------------------------------------------------------------------------------
@@ -1872,14 +2159,11 @@ end
 Position of the center of the frame of the segment relative to the center body of the
 segment, in the frame of the segment at the middle of its coverage (the vector
 `STOFF` of `zzdsksba`): zero when the frame is centered on the body. Throws
-`SpiceError(:noframeinfo)` or `:noframename` if the frame is unknown.
+`SpiceError(:noframeinfo)` if the frame is unknown.
 """
 function _dsk_offset(ks::KernelSet, dsc::DSKDescr)
-    fd = _dsk_frame_def(ks, dsc.frmcde)
-    fd === nothing && _dsk_throw(
-        :noframeinfo,
-        "could not look up frame info for segment frame having ID $(dsc.frmcde)"
-    )
+    fd = _frame_def_or_nothing(ks, dsc.frmcde)
+    fd === nothing && _dsk_no_frame_info(dsc.frmcde)
     fd.center == dsc.center && return _DSK_ORIGIN
     return _dsk_offset_spk(ks, dsc, fd.center)
 end
@@ -1889,17 +2173,14 @@ end
     return spk_jet(ks, frmctr, et, Int32(dsc.frmcde), Int32(dsc.center), Val(0))[1]
 end
 
-"Definition of the frame `id`, or `nothing` if it is unknown (as `frinfo` with FOUND false)."
-@inline function _dsk_frame_def(ks::KernelSet, id::Integer)
-    (typemin(Int32) <= id <= typemax(Int32)) || return nothing
-    i = Int32(id)
-    f = get(BUILTIN_FRAMES, i, nothing)
-    f === nothing || return f
-    f = get(ks.frames, i, nothing)
-    f === nothing || return f
-    13000 <= i < 14000 && return FrameDef(i, "", 2, i - Int32(10000), 399)
-    return nothing
-end
+# `zzdsksba` signals SPICE(NOFRAMEINFO) and `zzdsksph` SPICE(NOFRAMEDATA) for a segment
+# frame that `frinfo` does not know.
+@noinline _dsk_no_frame_info(id::Integer) = _dsk_throw(
+    :noframeinfo, "could not look up frame info for segment frame having ID $id"
+)
+@noinline _dsk_no_frame_data(id::Integer) = _dsk_throw(
+    :noframedata, "no frame specification was found for frame ID $id"
+)
 
 # `zzdskbss`, which begins every search for DSK segments, signals SPICE(NOLOADEDDSKFILES)
 # when no DSK file is loaded; with a DSK file loaded for another body the search finds
@@ -1927,12 +2208,57 @@ end
     )
 end
 
+@noinline _dsk_no_body_segments(bodyid::Integer) = _dsk_throw(
+    :nodsksegments, "the input segment " *
+        "list was empty. This may be due to no DSKs containing data for body $bodyid " *
+        "having been loaded."
+)
+
+"""
+    _dsk_body_segments(ks, bodyid) -> Vector{DSKSegment}
+
+The loaded segments of `bodyid` in the search order, with the checks that `zzdsksba`
+makes on every one of them when it builds the segment table of the body, before a
+search selects segments by surface and time: the error of `zzsegbox` and
+`SpiceError(:noframeinfo)`. Throws `SpiceError(:noloadeddskfiles)` if no DSK file is
+loaded and `:nodsksegments` (from `zzdskbux` and `zzdskbun`) if the body has no
+segment. The SPK offset of a frame centered on another body is looked up only for the
+segments that a search uses (see the page of CSPICE defects).
+"""
+function _dsk_body_segments(ks::KernelSet, bodyid::Int32)
+    _dsk_check_files(ks)
+    segs = get(ks.dsk, bodyid, nothing)
+    (segs === nothing || isempty(segs)) && _dsk_no_body_segments(bodyid)
+    for seg in segs
+        dsc = seg.dskdsc
+        isnan(seg.boxrad) && _dsk_segbox(dsc)        # throws the error of `zzsegbox`
+        _frame_def_or_nothing(ks, dsc.frmcde) === nothing && _dsk_no_frame_info(dsc.frmcde)
+    end
+    return segs
+end
+
+"""
+    _dsk_segments_ok(ks, segs) -> Bool
+
+Whether the checks that `_dsk_body_segments` makes on the loaded segments `segs` of a
+body pass: `false` if one of them would throw. Does not throw.
+"""
+function _dsk_segments_ok(ks::KernelSet, segs::Vector{DSKSegment})
+    isempty(segs) && return false
+    for seg in segs                      # invariant: the segments before `seg` pass
+        isnan(seg.boxrad) && return false  # `_dsk_segment` set NaN where `zzsegbox` throws
+        _frame_def_or_nothing(ks, seg.dskdsc.frmcde) === nothing && return false
+    end
+    return true
+end
+
 """
     _dsk_sph(ks, segs, bodyid, srflst) -> (minrad, maxrad)
 
 `zzdsksph`: radii of an inner and an outer bounding sphere, centered on the body, of
 all segments of `bodyid` with a surface in `srflst` (any time). Throws
-`SpiceError(:dskdatanotfound)` if there is no such segment.
+`SpiceError(:noframedata)` if the frame of such a segment is unknown, and
+`:dskdatanotfound` if there is no such segment.
 """
 function _dsk_sph(ks::KernelSet, segs::Vector{DSKSegment}, bodyid::Int32, srflst)
     maxr = -1.0
@@ -1940,7 +2266,9 @@ function _dsk_sph(ks::KernelSet, segs::Vector{DSKSegment}, bodyid::Int32, srflst
     for seg in segs                      # invariant: minr, maxr bound the segments before `seg`
         dsc = seg.dskdsc
         _dsk_surfok(srflst, dsc.surfce) || continue
-        offmag = _m_norm(_dsk_offset(ks, dsc))
+        fd = _frame_def_or_nothing(ks, dsc.frmcde)
+        fd === nothing && _dsk_no_frame_data(dsc.frmcde)
+        offmag = fd.center == bodyid ? 0.0 : _m_norm(_dsk_offset_spk(ks, dsc, fd.center))
         if dsc.corsys == 1
             sgminr = dsc.co3min
             sgmaxr = dsc.co3max
@@ -1966,6 +2294,14 @@ function _dsk_sph(ks::KernelSet, segs::Vector{DSKSegment}, bodyid::Int32, srflst
     return minr, maxr
 end
 
+"`zzdsksph` of the body `bodyid` (`_dsk_sph` on its loaded segments), as `zzsudski` calls it."
+function _dsk_body_sph(ks::KernelSet, bodyid::Int32, srflst)
+    _dsk_check_files(ks)
+    segs = get(ks.dsk, bodyid, nothing)
+    segs === nothing && _dsk_no_segments(bodyid, srflst)
+    return _dsk_sph(ks, segs, bodyid, srflst)
+end
+
 "The ray in the frame of the segment: rotation from the fixed frame, vertex and direction."
 @inline function _dsk_to_segment(
         ks::KernelSet, dsc::DSKDescr, fixfid::Int32, et::Float64,
@@ -1976,31 +2312,34 @@ end
     return xform, segvtx, _m_mxv(xform, raydir)
 end
 
-"""
-    _dsk_scan(ks, segs, tols, bodyid, srflst, et, fixfid, vertex, sphvtx, raydir, pdist, pidx)
-        -> (nhit, multfr, idx, dist)
+const _DSK_MAXHIT = 1000             # the hit list of `zzdskbux`
+const _DSK_HITBUF = 64               # hits kept on the stack; more go to `_dsk_bux_heap`
 
-The first loop of `zzdskbux`: among the eligible segments whose volume element the ray
-meets, count them (`nhit`) and find the one that follows the key `(pdist, pidx)` in
-the order of increasing distance of the entry point, ties in list order. `idx` is 0
-if there is none. `multfr` tells whether an eligible segment has a frame other than
-`fixfid`. `sphvtx` is the vertex moved onto the outer bounding sphere; it is used for
-the segments in the frame `fixfid` that come before the first segment of another
-frame, as in CSPICE.
 """
-function _dsk_scan(
-        ks::KernelSet, segs::Vector{DSKSegment}, tols::DSKTolerances,
-        bodyid::Int32, srflst, et::Float64, fixfid::Int32, vertex::Vec3{Float64},
-        sphvtx::Vec3{Float64}, raydir::Vec3{Float64}, pdist::Float64, pidx::Int
+    _dsk_collect!(hitseg, hitdst, ks, segs, tols, bodyid, srflst, et, fixfid, vertex,
+                  sphvtx, raydir) -> (nhit, multfr)
+
+The first loop of `zzdskbux`: the eligible segments whose volume element the ray meets,
+in list order. Hit `k` is the segment `segs[hitseg[k]]`, whose volume element the ray
+enters at the distance `hitdst[k]` from its vertex. The first `length(hitseg)` hits
+are stored and `nhit` counts all of them; hit 1001 is `SpiceError(:buffertoosmall)`.
+`multfr` tells whether an eligible segment has a frame other than `fixfid`. `sphvtx` is
+the vertex moved onto the outer bounding sphere; it is used for the segments in the
+frame `fixfid` that come before the first segment of another frame, as in CSPICE.
+"""
+@inline function _dsk_collect!(
+        hitseg::AbstractVector{Int}, hitdst::AbstractVector{Float64}, ks::KernelSet,
+        segs::Vector{DSKSegment}, tols::DSKTolerances, bodyid::Int32, srflst,
+        et::Float64, fixfid::Int32, vertex::Vec3{Float64}, sphvtx::Vec3{Float64},
+        raydir::Vec3{Float64}
     )
     sgmarg = tols.sgreed
+    room = length(hitseg)
     nhit = 0
     multfr = false
-    bidx = 0
-    bdist = Inf
     for i in eachindex(segs)
-        # invariant: (bidx, bdist) is the least key after (pdist, pidx) among the hit
-        # segments before i, and nhit counts all hit segments before i
+        # invariant: nhit counts the hit segments before i, and the first min(nhit, room)
+        # of them are stored
         seg = @inbounds segs[i]
         _dsk_eligible(seg, bodyid, srflst, et) || continue
         dsc = seg.dskdsc
@@ -2012,72 +2351,79 @@ function _dsk_scan(
         elseif multfr
             segvtx = vertex
         end
-        isnan(seg.boxrad) && _dsk_segbox(dsc)        # throws the error of `zzsegbox`
         _dsk_nplnpt_dist(segvtx, segdir, seg.boxctr) <= seg.boxrad || continue
         nxpts, xpt = _dsk_rytelt(segvtx, segdir, dsc, sgmarg)
         nxpts > 0 || continue
-        nhit == 1000 && _dsk_throw(
+        nhit == _DSK_MAXHIT && _dsk_throw(
             :buffertoosmall,
-            "too many segments were hit by the input ray; the buffer size is 1000"
+            "too many segments were hit by the input ray; the buffer size is $_DSK_MAXHIT"
         )
         nhit += 1
-        dist = _m_norm(segvtx - xpt)
-        after = dist > pdist || (dist == pdist && i > pidx)
-        if after && (bidx == 0 || dist < bdist)
-            bidx = i
-            bdist = dist
+        if nhit <= room
+            @inbounds hitseg[nhit] = i
+            @inbounds hitdst[nhit] = _m_norm(segvtx - xpt)
         end
     end
-    return nhit, multfr, bidx, bdist
+    return nhit, multfr
 end
 
 """
-    _dsk_bux(ks, tols, bodyid, srflst, et, fixfid, vertex, raydir) -> (xpt, segidx, plid, found)
+    _dsk_orderd!(iorder, a, n) -> iorder
 
-`zzdskbux` with `zzsbfxri`: the first point where the ray from `vertex` along `raydir`
-(in the body-fixed frame `fixfid`, at the epoch `et`) meets the surface that the
-loaded DSK segments of `bodyid` with a surface in `srflst` define (an empty `srflst`
-accepts every surface). All matching segments have the same priority and the nearest
-intercept wins. `segidx` indexes `ks.dsk[bodyid]`, and `plid` is the plate.
-
-Contract: no allocation and no write; throws `SpiceError(:nodsksegments)` if no DSK
-segment of the body is loaded and `SpiceError(:dskdatanotfound)` if none has a surface
-of `srflst`.
+`orderd`: the order vector of `a[1:n]` in `iorder[1:n]`, by the Shell sort of SPICELIB.
+The sort is not stable; equal values come in the order that `orderd` gives them, which
+is the order in which `zzdskbux` searches segments with equal entry distances.
 """
-function _dsk_bux(
-        ks::KernelSet, tols::DSKTolerances, bodyid::Int32, srflst, et::Float64,
-        fixfid::Int32, vertex::Vec3{Float64}, raydir::Vec3{Float64}
-    )
-    nohit = (_DSK_ORIGIN, 0, 0, false)
-    _dsk_check_files(ks)
-    segs = get(ks.dsk, bodyid, nothing)
-    (segs === nothing || isempty(segs)) && _dsk_throw(
-        :nodsksegments, "the input segment " *
-            "list was empty. This may be due to no DSKs containing data for body $bodyid " *
-            "having been loaded."
-    )
-    _, maxrad = _dsk_sph(ks, segs, bodyid, srflst)
-    maxrad *= 1.01
-    sphvtx = vertex
-    if _m_norm(vertex) > maxrad
-        sphvtx, xfnd = _dsk_surfpt(vertex, raydir, maxrad, maxrad, maxrad)
-        xfnd || return nohit
+@inline function _dsk_orderd!(iorder::AbstractVector{Int}, a::AbstractVector{Float64}, n::Int)
+    for i in 1:n
+        @inbounds iorder[i] = i
     end
-    nhit, multfr, idx, dist = _dsk_scan(
-        ks, segs, tols, bodyid, srflst, et, fixfid, vertex,
-        sphvtx, raydir, -Inf, 0
+    gap = n ÷ 2
+    while gap > 0
+        for i in (gap + 1):n
+            j = i - gap
+            while j > 0
+                jg = j + gap
+                oj = @inbounds iorder[j]
+                ojg = @inbounds iorder[jg]
+                if @inbounds(a[oj]) <= @inbounds(a[ojg])
+                    j = 0
+                else
+                    @inbounds iorder[j] = ojg
+                    @inbounds iorder[jg] = oj
+                end
+                j -= gap
+            end
+        end
+        gap ÷= 2
+    end
+    return iorder
+end
+
+"""
+    _dsk_search(ks, segs, tols, hitseg, hitdst, iorder, nhit, multfr, et, fixfid,
+                vertex, sphvtx, raydir) -> (xpt, segidx, plid, found)
+
+The second loop of `zzdskbux` and its end: the hit segments in the order `iorder`, until
+the nearest intercept found so far is no farther from the vertex than the entry point
+of the next segment. `xpt` is in the frame `fixfid`, and `segidx` indexes `segs`.
+"""
+@inline function _dsk_search(
+        ks::KernelSet, segs::Vector{DSKSegment}, tols::DSKTolerances,
+        hitseg::AbstractVector{Int}, hitdst::AbstractVector{Float64},
+        iorder::AbstractVector{Int}, nhit::Int, multfr::Bool, et::Float64, fixfid::Int32,
+        vertex::Vec3{Float64}, sphvtx::Vec3{Float64}, raydir::Vec3{Float64}
     )
-    nhit == 0 && return nohit
     found = false
     dmin = 0.0
     xpt = _DSK_ORIGIN
     winner = 0
     plid = 0
-    done = 0
-    while idx != 0
-        # invariant: the `done` nearest hit segments are searched, and (found, dmin, xpt,
-        # winner, plid) is the nearest intercept in them
-        seg = segs[idx]
+    for k in 1:nhit
+        # invariant: (found, dmin, xpt, winner, plid) is the nearest intercept in the
+        # segments of the hits iorder[1:k-1]
+        idx = @inbounds hitseg[iorder[k]]
+        seg = @inbounds segs[idx]
         dsc = seg.dskdsc
         segvtx = multfr ? vertex : sphvtx
         segdir = raydir
@@ -2100,15 +2446,9 @@ function _dsk_bux(
                 plid = p
             end
         end
-        done += 1
-        done == nhit && break
-        _, _, idx, dist = _dsk_scan(
-            ks, segs, tols, bodyid, srflst, et, fixfid, vertex, sphvtx,
-            raydir, dist, idx
-        )
-        (found && dmin <= dist) && break
+        (found && k < nhit && dmin <= @inbounds(hitdst[iorder[k + 1]])) && break
     end
-    found || return nohit
+    found || return _DSK_ORIGIN, 0, 0, false
     dsc = segs[winner].dskdsc
     if dsc.frmcde != fixfid
         xform = Mat3{Float64}(frame_rotation(ks, fixfid, Int32(dsc.frmcde), et))
@@ -2117,6 +2457,84 @@ function _dsk_bux(
         xpt = _m_mtxv(xform, xpt)
     end
     return xpt, winner, plid, true
+end
+
+"""
+    _dsk_bux_ray(ks, tols, segs, maxrad, bodyid, srflst, et, fixfid, vertex, raydir)
+        -> (xpt, segidx, plid, found)
+
+`zzdskbux` after its set-up, for one ray: `segs` is the list of `_dsk_body_segments`
+and `maxrad` the outer radius of `_dsk_sph`, which a caller with many rays computes
+once. Allocates nothing when the ray meets at most `_DSK_HITBUF` volume elements.
+"""
+function _dsk_bux_ray(
+        ks::KernelSet, tols::DSKTolerances, segs::Vector{DSKSegment}, maxrad::Float64,
+        bodyid::Int32, srflst, et::Float64, fixfid::Int32, vertex::Vec3{Float64},
+        raydir::Vec3{Float64}
+    )
+    nohit = (_DSK_ORIGIN, 0, 0, false)
+    maxrad *= 1.01
+    sphvtx = vertex
+    if _m_norm(vertex) > maxrad
+        sphvtx, xfnd = _dsk_surfpt(vertex, raydir, maxrad, maxrad, maxrad)
+        xfnd || return nohit
+    end
+    hitseg = MVector{_DSK_HITBUF, Int}(undef)
+    hitdst = MVector{_DSK_HITBUF, Float64}(undef)
+    nhit, multfr = _dsk_collect!(
+        hitseg, hitdst, ks, segs, tols, bodyid, srflst, et, fixfid, vertex, sphvtx, raydir
+    )
+    nhit == 0 && return nohit
+    nhit > _DSK_HITBUF && return _dsk_bux_heap(
+        ks, tols, segs, nhit, bodyid, srflst, et, fixfid, vertex, sphvtx, raydir
+    )
+    iorder = MVector{_DSK_HITBUF, Int}(undef)
+    _dsk_orderd!(iorder, hitdst, nhit)
+    return _dsk_search(
+        ks, segs, tols, hitseg, hitdst, iorder, nhit, multfr, et, fixfid, vertex,
+        sphvtx, raydir
+    )
+end
+
+# `_dsk_bux_ray` for a ray that meets more than `_DSK_HITBUF` volume elements: the hits
+# are collected again into buffers of length `nhit`.
+@noinline function _dsk_bux_heap(
+        ks::KernelSet, tols::DSKTolerances, segs::Vector{DSKSegment}, nhit::Int,
+        bodyid::Int32, srflst, et::Float64, fixfid::Int32, vertex::Vec3{Float64},
+        sphvtx::Vec3{Float64}, raydir::Vec3{Float64}
+    )
+    hitseg = Vector{Int}(undef, nhit)
+    hitdst = Vector{Float64}(undef, nhit)
+    iorder = Vector{Int}(undef, nhit)
+    _, multfr = _dsk_collect!(
+        hitseg, hitdst, ks, segs, tols, bodyid, srflst, et, fixfid, vertex, sphvtx, raydir
+    )
+    _dsk_orderd!(iorder, hitdst, nhit)
+    return _dsk_search(
+        ks, segs, tols, hitseg, hitdst, iorder, nhit, multfr, et, fixfid, vertex,
+        sphvtx, raydir
+    )
+end
+
+"""
+    _dsk_bux(ks, tols, bodyid, srflst, et, fixfid, vertex, raydir) -> (xpt, segidx, plid, found)
+
+`zzdskbux` with `zzsbfxri`: the first point where the ray from `vertex` along `raydir`
+(in the body-fixed frame `fixfid`, at the epoch `et`) meets the surface that the
+loaded DSK segments of `bodyid` with a surface in `srflst` define (an empty `srflst`
+accepts every surface). All matching segments have the same priority and the nearest
+intercept wins. `segidx` indexes `ks.dsk[bodyid]`, and `plid` is the plate.
+
+Throws the errors of `_dsk_body_segments`, then `SpiceError(:dskdatanotfound)` if no
+segment has a surface of `srflst`. Allocates nothing (see `_dsk_bux_ray`).
+"""
+function _dsk_bux(
+        ks::KernelSet, tols::DSKTolerances, bodyid::Int32, srflst, et::Float64,
+        fixfid::Int32, vertex::Vec3{Float64}, raydir::Vec3{Float64}
+    )
+    segs = _dsk_body_segments(ks, bodyid)
+    _, maxrad = _dsk_sph(ks, segs, bodyid, srflst)
+    return _dsk_bux_ray(ks, tols, segs, maxrad, bodyid, srflst, et, fixfid, vertex, raydir)
 end
 
 # ---------------------------------------------------------------------------------------
@@ -2195,37 +2613,31 @@ end
 `zzdskbun` with `zzsbfnrm`: the outward unit normal, in the frame `fixfid`, of the
 plate that holds the surface point `point` (frame `fixfid`). The first segment in the
 search order whose volume element holds the point and that has a plate there decides.
-Throws `SpiceError` (`:nodsksegments`, `:pointnotinsegment`, `:pointoffsurface`).
+As in `zzdskbun`, a first pass finds all the segments whose volume element holds the
+point, and a second pass looks for the plate in them.
+
+Throws the errors of `_dsk_body_segments`, then `SpiceError(:toomanyhits)`,
+`:pointnotinsegment`, `:notsupported` (a data type other than 2) or `:pointoffsurface`.
 """
 function _dsk_bun(
         ks::KernelSet, tols::DSKTolerances, bodyid::Int32, srflst, et::Float64,
         fixfid::Int32, point::Vec3{Float64}
     )
-    _dsk_check_files(ks)
-    segs = get(ks.dsk, bodyid, nothing)
-    (segs === nothing || isempty(segs)) && _dsk_throw(
-        :nodsksegments, "the input segment " *
-            "list was empty. This may be due to no DSKs containing data for body $bodyid " *
-            "having been loaded."
-    )
-    sgmarg = tols.sgreed
+    segs = _dsk_body_segments(ks, bodyid)
     nhit = 0
-    for seg in segs                      # invariant: no hit segment before `seg` has a plate at the point
-        _dsk_eligible(seg, bodyid, srflst, et) || continue
-        dsc = seg.dskdsc
-        segpt = point
-        xform = one(Mat3{Float64})
-        if dsc.frmcde != fixfid
-            xform = Mat3{Float64}(frame_rotation(ks, fixfid, Int32(dsc.frmcde), et))
-            segpt = _m_mxv(xform, point) - _dsk_offset(ks, dsc)
-        end
-        isnan(seg.boxrad) && _dsk_segbox(dsc)
-        _m_norm(seg.boxctr - segpt) <= seg.boxrad || continue
-        (dsc.corsys == 1 || dsc.corsys == 3 || dsc.corsys == 4) ||
-            _dsk_throw(:badcoordsys, "the coordinate system code $(dsc.corsys) is not recognized")
-        _dsk_invelt(segpt, dsc.corsys, dsc.corpar, _dsk_bounds(dsc), sgmarg, 0) || continue
-        nhit == 1000 && _dsk_throw(:toomanyhits, "too many segments contain the input point")
+    for seg in segs                      # invariant: nhit counts the hit segments before `seg`
+        _dsk_bun_inside(ks, tols, seg, bodyid, srflst, et, fixfid, point)[1] || continue
+        nhit == _DSK_MAXHIT && _dsk_throw(:toomanyhits, "too many segments contain the input point")
         nhit += 1
+    end
+    nhit == 0 && _dsk_throw(
+        :pointnotinsegment,
+        "the input point is not contained in any DSK segment for body $bodyid"
+    )
+    for seg in segs                      # invariant: no hit segment before `seg` has a plate at the point
+        inside, xform, segpt = _dsk_bun_inside(ks, tols, seg, bodyid, srflst, et, fixfid, point)
+        inside || continue
+        dsc = seg.dskdsc
         dsc.dtype == 2 || _dsk_throw(:notsupported, "the DSK data type $(dsc.dtype) is not supported")
         file = ks.dskfiles[seg.file]
         _, p1, p2, p3, xfnd = _dsk_ptpl02(file.ints, file.dps, seg, tols, segpt)
@@ -2233,12 +2645,27 @@ function _dsk_bun(
         normal = _m_hat(_dsk_pltnrm(p1, p2, p3))
         return dsc.frmcde != fixfid ? _m_mtxv(xform, normal) : normal
     end
-    nhit == 0 && _dsk_throw(
-        :pointnotinsegment,
-        "the input point is not contained in any DSK segment for body $bodyid"
-    )
     _dsk_throw(
         :pointoffsurface, "the input point is not on the surface defined by the " *
             "DSK segments for body $bodyid"
     )
+end
+
+# The test of the first loop of `zzdskbun`: whether `seg` is eligible and its volume
+# element holds the point, with the rotation to the frame of `seg` and the point there.
+@inline function _dsk_bun_inside(
+        ks::KernelSet, tols::DSKTolerances, seg::DSKSegment, bodyid::Int32, srflst,
+        et::Float64, fixfid::Int32, point::Vec3{Float64}
+    )
+    xform = one(Mat3{Float64})
+    _dsk_eligible(seg, bodyid, srflst, et) || return false, xform, point
+    dsc = seg.dskdsc
+    segpt = point
+    if dsc.frmcde != fixfid
+        xform = Mat3{Float64}(frame_rotation(ks, fixfid, Int32(dsc.frmcde), et))
+        segpt = _m_mxv(xform, point) - _dsk_offset(ks, dsc)
+    end
+    _m_norm(seg.boxctr - segpt) <= seg.boxrad || return false, xform, segpt
+    inside = _dsk_invelt(segpt, dsc.corsys, dsc.corpar, _dsk_bounds(dsc), tols.sgreed, 0)
+    return inside, xform, segpt
 end

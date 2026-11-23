@@ -48,6 +48,20 @@ end
 end
 
 """
+    _daf_name(raw, rec, i, ss) -> String
+
+Name of summary `i` of the summary record `rec`, as `dafgn` reads it: the `8ss` bytes in
+the name record `rec + 1`, without trailing blanks and nulls. The bytes are characters,
+so the byte order does not matter. A name record that is not in `raw` gives `""`.
+"""
+function _daf_name(raw::AbstractVector{UInt8}, rec::Int, i::Int, ss::Int)
+    namsiz = 8 * ss
+    off = rec * _DAF_RECLEN + (i - 1) * namsiz      # 0-based; record `rec + 1` starts at `rec * 1024`
+    off + namsiz <= length(raw) || return ""
+    return String(rstrip(String(raw[(off + 1):(off + namsiz)]), [' ', '\0']))
+end
+
+"""
     _daf_little(io, rec1, path, who) -> Bool
 
 Byte order of the DAF open on `io` whose file record is `rec1`: `true` for `LTL-IEEE`,
@@ -120,26 +134,47 @@ function _daf_directory(
         data::Vector{Float64}, path::AbstractString, kind::Symbol,
         dtype::Int32, baddr::Int, eaddr::Int
     )
+    _daf_directory_length(path, dtype, baddr, eaddr)
+    return _daf_directory_values(
+        data[eaddr - 3], data[eaddr - 2], data[eaddr - 1], data[eaddr], path, dtype,
+        baddr, eaddr
+    )
+end
+
+"Throws `SpiceError(:baddaf)` unless the segment `baddr:eaddr` of type `dtype` is longer than its directory."
+function _daf_directory_length(path::AbstractString, dtype::Integer, baddr::Int, eaddr::Int)
     len = eaddr - baddr + 1
     # SPK type 20 ends with DSCALE, TSCALE, INITJD, INITFR, INTLEN, RSIZE, N, and binary
     # PCK type 20 the same way, with ASCALE (radians) in the place of DSCALE.
-    trailer = dtype == 20 ? 7 : 4
-    len > trailer || throw(
+    len > (dtype == 20 ? 7 : 4) || throw(
         SpiceError(
             :baddaf,
             "segment of type $dtype at $baddr:$eaddr is too short ($len doubles) in $path"
         )
     )
-    init = data[eaddr - 3]
-    intlen = data[eaddr - 2]
+    return nothing
+end
+
+"""
+    _daf_directory_values(init, intlen, rs, nr, path, dtype, baddr, eaddr) -> (init, intlen, rsize, nrec)
+
+The checks of `_daf_directory` on the last four doubles of the segment `baddr:eaddr`,
+given as values. Requires that `_daf_directory_length` has accepted the segment.
+"""
+function _daf_directory_values(
+        init::Float64, intlen::Float64, rs::Float64, nr::Float64, path::AbstractString,
+        dtype::Integer, baddr::Int, eaddr::Int
+    )
+    len = eaddr - baddr + 1
+    trailer = dtype == 20 ? 7 : 4
     (isfinite(init) && isfinite(intlen) && intlen > 0) || throw(
         SpiceError(
             :baddaf,
             "segment at $baddr:$eaddr has INIT = $init, INTLEN = $intlen in $path"
         )
     )
-    rsize = _daf_int(data[eaddr - 1], 1, Int(typemax(Int32)), "RSIZE", path)
-    nrec = _daf_int(data[eaddr], 1, Int(typemax(Int32)), "N", path)
+    rsize = _daf_int(rs, 1, Int(typemax(Int32)), "RSIZE", path)
+    nrec = _daf_int(nr, 1, Int(typemax(Int32)), "N", path)
     Int128(rsize) * nrec + trailer == len || throw(
         SpiceError(
             :baddaf,
@@ -230,7 +265,8 @@ and `1 <= baddr <= eaddr <= length(data)`. A CK file has its descriptors in
 `cksegments` (instrument, reference frame, data type, angular-velocity flag, and the
 encoded SCLK start and stop as `t0`, `t1`) and an empty `segments`. For SPK types 2, 3, 20 and PCK type 2 the
 fields `init`, `intlen`, `rsize`, `nrec` hold the last four doubles of the segment and
-`rsize`, `nrec` agree with the segment length. Throws `SpiceError` with kind
+`rsize`, `nrec` agree with the segment length. `names` holds the array names in file
+order. Throws `SpiceError` with kind
 `:filenotfound` or `:baddaf` if the file does not meet these conditions, and the kinds
 of [`_daf_little`](@ref) if its byte order cannot be read.
 
@@ -329,6 +365,7 @@ function _daf_parse(io::IO, raw::Vector{UInt8}, path::AbstractString, native)
             maxsum = (_DAF_RECWORDS - 3) ÷ ss
             segments = Segment[]
             cksegments = CKSegment[]
+            names = String[]
             rec = fward
             visited = 0
             while rec != 0
@@ -361,6 +398,7 @@ function _daf_parse(io::IO, raw::Vector{UInt8}, path::AbstractString, native)
                         )
                     )
                     ic = ntuple(j -> _daf_i32(raw, off + 16 + 4 * (j - 1), little), 6)
+                    push!(names, _daf_name(raw, rec, i, ss))
                     if idword == "NAIF/DAF" && ni == 6 && visited == 1 && i == 1
                         kind = _daf_ckspk(data, ic, nwords)
                     end
@@ -402,17 +440,16 @@ function _daf_parse(io::IO, raw::Vector{UInt8}, path::AbstractString, native)
                     init, intlen, rsize, nrec = (chebyshev && !empty) ?
                         _daf_directory(data, path, kind, dtype, b, e) :
                         (0.0, 0.0, Int32(0), Int32(0))
-                    push!(
-                        segments, Segment(
-                            target, center, frame, dtype, t0, t1, Int32(0),
-                            b, e, init, intlen, rsize, nrec
-                        )
+                    seg = Segment(
+                        target, center, frame, dtype, t0, t1, Int32(0),
+                        b, e, init, intlen, rsize, nrec
                     )
+                    push!(segments, _segment_layout(data, kind, seg))
                 end
                 rec = next
             end
             done = true
-            DAF(String(path), kind, data, segments, cksegments)
+            DAF(String(path), kind, data, segments, cksegments, names)
         finally
             # The result does not refer to `raw`. Unmap it now, and `data` after an error:
             # Windows cannot delete or replace a file while a map of it exists.

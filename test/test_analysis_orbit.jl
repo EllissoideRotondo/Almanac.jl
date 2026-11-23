@@ -457,8 +457,8 @@ group(
         # The same states with a ForwardDiff.Dual state (every component carries a derivative):
         # ForwardDiff's norm of a zero vector is 0/0, so a value of NaN would escape at an
         # exactly circular orbit (ecc), a zero radius or velocity, and a rectilinear orbit
-        # (hmag); each is a :degeneratecase error. Only the values are checked: the partials
-        # of :ta and what is built on it are NaN at an exact apsis (acos at +-1, as in ANISE).
+        # (hmag); each is a :degeneratecase error. Only the values are checked here; the
+        # partials at an apsis or a node are checked below.
         dual(v, seed) = SVector{6}(
             ntuple(i -> ForwardDiff.Dual(Float64(v[i]), i == seed ? 1.0 : 0.0), 6)
         )
@@ -477,6 +477,21 @@ group(
             y isa Symbol || check!(fails, !any(v -> isnan(ForwardDiff.value(v)), y), "!any(v -> isnan(ForwardDiff.value(v)), y)", s, seed, n)
         end
         @test isempty(fails)
+        # Regression: :ta, :raan and :aop are the arc cosines of ANISE, whose derivative is
+        # infinite at 0 and pi; the partials were NaN at an exact apsis. They now come from
+        # the arc tangent form. Along the two-body flow (v, -gm r / r^3) at the periapsis,
+        # d(ta)/dt = |h| / r^2 = 8 / 7000; at raan = 0, d(raan)/d(y) = vz / n_x = 1 / 7000.
+        flow = SVector{6}(
+            ntuple(i -> ForwardDiff.Dual(Float64(pro.state[i]), (0.0, 8.0, 0.0, -gm / 7000^2, 0.0, 0.0)[i]), 6)
+        )
+        tad = Orbit(flow, 0.0, 399, 1, gm, VALLADO_RADII).ta
+        @test ForwardDiff.value(tad) == pro.ta
+        @test ForwardDiff.partials(tad)[1] ≈ 8 / 7000 rtol = 1.0e-14
+        node(y) = Orbit(SVector(7000.0, y, 0, 0, 5.0, 5.0), 0.0, 399, 1, gm, VALLADO_RADII)
+        @test node(0.0).raan == 0
+        @test ForwardDiff.derivative(y -> node(y).raan, 0.0) ≈ 1 / 7000 rtol = 1.0e-14
+        @test node(0.0).aop == Float64(π)                        # e along -x, the node along +x
+        @test all(isfinite, ForwardDiff.gradient(s -> Orbit(SVector{6}(s), 0.0, 399, 1, gm, VALLADO_RADII).aop, Vector(node(0.0).state)))
         odc = Orbit(dual(dual_states[1], 1), 0.0, 399, 1, gm, VALLADO_RADII)
         for n in (:ecc, :ta, :ma, :semi_minor_axis, :equinoctial_h)
             @test throws_kind(() -> element(odc, n), :degeneratecase)
@@ -857,6 +872,9 @@ group(
         @test keplerian_orbit(0.0, 399, 1; sma = -8000.0, ecc = 0.1, ta = 0.3, kw...).state == o.state
         h = keplerian_orbit(0.0, 399, 1; sma = -20000.0, ecc = 1.5, ta = 0.3, kw...)
         @test keplerian_orbit(0.0, 399, 1; sma = 20000.0, ecc = 1.5, ta = 0.3, kw...).state == h.state
+        # Regression: integer ecc and ma reached Int(π) in the Kepler solver (InexactError)
+        @test keplerian_orbit(0.0, 399, 1; sma = 8000.0, ecc = 0, ma = -1, kw...).state ==
+            keplerian_orbit(0.0, 399, 1; sma = 8000.0, ecc = 0.0, ma = -1.0, kw...).state
         # periapsis above apoapsis: the eccentricity is negative, and its sign changes
         @test keplerian_orbit(0.0, 399, 1; periapsis = 9000.0, apoapsis = 7000.0, ta = 0.3, kw...).ecc ≈ 0.125 rtol = 1.0e-12
         # argument errors

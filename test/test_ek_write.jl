@@ -1021,6 +1021,8 @@ group("EK write: input checks give the errors of CSPICE") do
     one = ["DATATYPE = INTEGER"]
     # ekbseg: names.
     same("table name too long", :ekbseg, "T"^65, ["A"], one; expect = :idstringtoolong)
+    # `ekbseg` allows 32 characters, although the file has room for 64.
+    same("table name of 33 characters", :ekbseg, "T"^33, ["A"], one; expect = :idstringtoolong)
     same("table name not printable", :ekbseg, "T\tX", ["A"], one; expect = :nonprintablechars)
     same("table name starts with digit", :ekbseg, "1T", ["A"], one; expect = :invalidname)
     same("table name with blank", :ekbseg, "T X", ["A"], one; expect = :invalidname)
@@ -1191,11 +1193,24 @@ group("EK write: input checks give the errors of CSPICE") do
     for (fname, args) in calls
         same("$fname with a read handle", fname, args...; expect = :dasinvalidaccess)
     end
+    # (fault fixed: the add calls checked the write access first.) CSPICE meets the
+    # access only at the first write, after the checks of `zzekad01` to `zzekad06`, and
+    # the C wrapper checks the column name before everything.
+    same("ekacei null without nulls, read handle", :ekacei, 1, 1, "I", [0], true; expect = :badattribute)
+    same("ekacei full entry, read handle", :ekacei, 1, 1, "I", [5], false; expect = :nonemptyentry)
+    same("ekacei wrong entry size, read handle", :ekacei, 1, 1, "IA", [1, 2], false; expect = :invalidcount)
+    same("ekacec null without nulls, read handle", :ekacec, 1, 1, "C", [" "], true; expect = :badattribute)
+    same("ekacei empty column name, read handle", :ekacei, 1, 1, "", [1], false; expect = :emptystring)
+    # The fast writers: the column checks come before the access, as in `ekacli`.
+    fl = Almanac.EKFastLoad(hn, 1, Int32[], Int32[], Int32[])
+    @test neo_kind(() -> Almanac.ekacli(hn, 1, "", [1], Int[], Bool[], fl)) === :emptystring
+    @test neo_kind(() -> Almanac.ekacli(hn, 1, "D", [1], Int[], Bool[], fl)) === :wrongdatatype
     c_ekcls(hc)
     ekcls(hn)
     for (fname, args) in calls
         same("$fname with a closed handle", fname, args...; expect = :dasnosuchhandle)
     end
+    same("ekacei empty column name, closed handle", :ekacei, 1, 1, "", [1], false; expect = :emptystring)
     same(
         "ekopn with a negative comment count", :ekopn, joinpath(dir, "neg.bes"), "X", -1;
         expect = :invalidcount, handle = false

@@ -5,12 +5,8 @@
 
 const _LOCAL_FRAME_KINDS = (:ric, :vnc, :rcn, :tnw)
 
-# The 3 by 3 matrix of the columns `a`, `b`, `c`. The element types can differ: the tracked
-# numbers of ReverseDiff have a type for each origin.
-@inline function _lf_cols(a::SVector{3}, b::SVector{3}, c::SVector{3})
-    T = promote_type(eltype(a), eltype(b), eltype(c))
-    return SMatrix{3, 3, T, 9}(a[1], a[2], a[3], b[1], b[2], b[3], c[1], c[2], c[3])
-end
+# `_m_cols` makes the 3 by 3 matrix of three columns; StaticArrays promotes their element
+# types, which can differ (the tracked numbers of ReverseDiff have a type for each origin).
 
 # The matrix of the local axes and its time derivative along the two-body motion. The
 # angular momentum is constant there, so only the unit vectors of the radius and of the
@@ -40,14 +36,14 @@ function _local_frame_axes(o::Orbit{T}, kind::Symbol) where {T}
     if kind === :ric || kind === :rcn
         rh = r / rm
         rd = (v - rh * dot(rh, v)) / rm
-        return _lf_cols(rh, cross(hh, rh), hh), _lf_cols(rd, cross(hh, rd), z)
+        return _m_cols(rh, cross(hh, rh), hh), _m_cols(rd, cross(hh, rd), z)
     end
     vm = norm(v)
     vh = v / vm
     a = (-getfield(o, :gm) / rm^3) * r
     vd = (a - vh * dot(vh, a)) / vm
-    kind === :vnc && return _lf_cols(vh, hh, cross(vh, hh)), _lf_cols(vd, z, cross(vd, hh))
-    return _lf_cols(vh, cross(hh, vh), hh), _lf_cols(vd, cross(hh, vd), z)
+    kind === :vnc && return _m_cols(vh, hh, cross(vh, hh)), _m_cols(vd, z, cross(vd, hh))
+    return _m_cols(vh, cross(hh, vh), hh), _m_cols(vd, cross(hh, vd), z)
 end
 
 """

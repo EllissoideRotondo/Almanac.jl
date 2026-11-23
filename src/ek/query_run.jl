@@ -20,7 +20,7 @@
 # CSPICE keeps these row sets in a global scratch file. Here they are local arrays, and
 # the search is a pure function of the snapshot and the query: it runs on many threads.
 #
-# Three defects of CSPICE N0067 change results; the search has a switch `compat` that
+# Four defects of CSPICE N0067 change results; the search has a switch `compat` that
 # reproduces them, and the tests use it to show that every difference from CSPICE comes
 # from these defects. With `compat = false` (the public calls) the results are correct.
 #
@@ -39,8 +39,12 @@
 #       segment vector of the conjunction gets the rows of the one before it: the rows
 #       of the next segment are lost, and the rows after it are read from a wrong
 #       segment.
+#   (d) `zzekqcon` converts an integer value of a query with `i_dnnt`, which gives the
+#       smallest 32-bit integer for a value outside the 32-bit range, and `zzekscmp`
+#       compares with that integer: `DCOL > 10000000000` holds for every row that is
+#       not null. The public search compares such a value as a double.
 #
-# A fourth difference is not a defect of the search. The scanner of CSPICE reads a number
+# A fifth difference is not a defect of the search. The scanner of CSPICE reads a number
 # of a query with `nparsd`, whose result can be one unit in the last place away from the
 # correctly rounded double ("2.756" gives the double after 2.756), so that a row with
 # the value 2.756 is not equal to the number 2.756 of a query. The public calls compare
@@ -72,23 +76,27 @@ end
 # ---------------------------------------------------------------------------------------
 
 """
-    _ek_fcmp(a, b) -> Int
+    _ek_bcmp(a, b, na, nb) -> Int
 
-Compare two strings as Fortran does (`l_lt`, `l_gt`): by character code, the shorter one
-padded with blanks; only the first 1024 characters of each take part. Returns the
-relation code `_EK_LT`, `_EK_EQ` or `_EK_GT`.
+Order of the first `na` bytes of `a` and the first `nb` bytes of `b` as Fortran compares
+strings (`l_lt`, `l_gt`): byte by byte, the shorter one continued with blanks. Returns
+-1, 0 or 1.
 """
+function _ek_bcmp(a::AbstractVector{UInt8}, b::AbstractVector{UInt8}, na::Int, nb::Int)
+    for i in 1:max(na, nb)               # invariant: the characters before i are equal
+        x = i <= na ? a[i] : UInt8(' ')
+        y = i <= nb ? b[i] : UInt8(' ')
+        x == y || return x < y ? -1 : 1
+    end
+    return 0
+end
+
+"Relation code (`_EK_LT`, `_EK_EQ`, `_EK_GT`) of two strings; the first 1024 characters count."
 function _ek_fcmp(a::AbstractString, b::AbstractString)
     ca = codeunits(a)
     cb = codeunits(b)
-    na = min(length(ca), _EK_MAXSTR)
-    nb = min(length(cb), _EK_MAXSTR)
-    for i in 1:max(na, nb)               # invariant: the characters before i are equal
-        x = i <= na ? ca[i] : UInt8(' ')
-        y = i <= nb ? cb[i] : UInt8(' ')
-        x == y || return x < y ? _EK_LT : _EK_GT
-    end
-    return _EK_EQ
+    r = _ek_bcmp(ca, cb, min(length(ca), _EK_MAXSTR), min(length(cb), _EK_MAXSTR))
+    return r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
 end
 
 @inline _ek_ncmp(x, y) = x < y ? _EK_LT : x > y ? _EK_GT : _EK_EQ
@@ -110,41 +118,52 @@ end
     )
 )
 
-_ek_trunc(s::String) = sizeof(s) > _EK_MAXSTR ? String(codeunits(s)[1:_EK_MAXSTR]) : s
+"The first `_EK_MAXSTR` characters of the element `r` of the store `f` as a `String`."
+_ek_ctrunc(f, r::_EKCRef) = _ek_cstring(f.chars, _ek_cfirst(r, _EK_MAXSTR))
 
 """
-    _ek_scmp(op, f, col, recptr, dtype, cval, dval, ival) -> Bool
+    _ek_vrel(f, col, recptr, dtype, cval, dval, ival, keynull, writer) -> (rel, enull, cref)
 
-Port of `zzekscmp`: true if the first element of the entry of column `col` in the record
-`recptr` of the store `f` has the relation `op` to a value of type code `dtype`
-(`cval`, `dval` or `ival`). A null entry is less than every value; LIKE and UNLIKE are
-false for it. Throws `SpiceError(:bug)` for types that cannot be compared and
-`:unnaturalrelation` for an operator that the types do not have.
+Relation code (`_EK_LT`, `_EK_EQ`, `_EK_GT`) of the first element of the entry of
+column `col` in the record `recptr` of the store `f` to a value of type code `dtype`
+(the bytes `cval`, `dval` or `ival`), as `zzekscmp` finds it; `enull` tells that the
+entry is null, and `cref` is the place of the element of a character column. A null
+entry is less than every value. With `keynull` the value is null, which is equal to a
+null entry and less than the others (the index searches of the writers). Of a string,
+the first 1024 characters count.
+
+Throws `SpiceError(:bug)` for types that cannot be compared, `:invalidindex` for an
+entry without elements, and the errors of the readers. A column type other than the
+four is read as integer, or with `writer` throws `:invaliddatatype`.
 """
-function _ek_scmp(
-        op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval::String,
-        dval::Float64, ival::Int
+function _ek_vrel(
+        f, col::_EKColumn, recptr::Integer, dtype::Int, cval::AbstractVector{UInt8},
+        dval::Float64, ival::Int, keynull::Bool, writer::Bool
     )
     coltyp = Int(col.dtype)
-    eltc = ""
+    cref = _EKCRef(0)
     eltd = 0.0
     elti = 0
     if coltyp == _EK_CHR
-        eltc, enull, found = _ek_elt_c(f, col, recptr, 1)
+        cref, enull, found = _ek_cref(f, col, recptr, 1)
     elseif coltyp == _EK_DP || coltyp == _EK_TIME
         eltd, enull, found = _ek_elt_d(f, col, recptr, 1)
-    else
+    elseif coltyp == _EK_INT || !writer
         elti, enull, found = _ek_elt_i(f, col, recptr, 1)
+    else
+        throw(SpiceError(:invaliddatatype, "Data type code $coltyp not recognized."))
     end
     found || _ek_noelt(col, recptr)
-    op == _EK_ISNULL && return enull
-    op == _EK_NOTNUL && return !enull
+    enull && return (keynull ? _EK_EQ : _EK_LT), true, cref
+    keynull && return _EK_GT, false, cref
     badtype() = throw(SpiceError(:bug, "Column type is $coltyp; value type is $dtype."))
-    rel = if enull
-        _EK_LT
-    elseif coltyp == _EK_CHR
+    rel = if coltyp == _EK_CHR
         dtype == _EK_CHR || badtype()
-        _ek_fcmp(eltc, cval)
+        r = _ek_ccmp(
+            f.chars, _ek_cfirst(cref, _EK_MAXSTR), cval,
+            _EKCRef(min(length(cval), _EK_MAXSTR))
+        )
+        r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
     elseif coltyp == _EK_TIME
         (dtype == _EK_TIME || dtype == _EK_DP) || badtype()
         _ek_ncmp(eltd, dval)
@@ -155,10 +174,39 @@ function _ek_scmp(
         (dtype == _EK_INT || dtype == _EK_DP) || badtype()
         _ek_ncmp(Float64(elti), dtype == _EK_INT ? Float64(ival) : dval)
     end
+    return rel, false, cref
+end
+
+"True if the entry of `col` in the record `recptr` is null; `:invalidindex` if it has no elements."
+function _ek_isnull(f, col::_EKColumn, recptr::Integer)
+    coltyp = Int(col.dtype)
+    _, enull, found = coltyp == _EK_CHR ? _ek_cref(f, col, recptr, 1) :
+        (coltyp == _EK_DP || coltyp == _EK_TIME) ? _ek_elt_d(f, col, recptr, 1) :
+        _ek_elt_i(f, col, recptr, 1)
+    found || _ek_noelt(col, recptr)
+    return enull
+end
+
+"""
+    _ek_scmp(op, f, col, recptr, dtype, cval, dval, ival) -> Bool
+
+Port of `zzekscmp`: true if the first element of the entry of column `col` in the record
+`recptr` of the store `f` has the relation `op` to a value of type code `dtype`
+(`cval`, `dval` or `ival`), with the rules of [`_ek_vrel`](@ref). LIKE and UNLIKE are
+false for a null entry. Throws as `_ek_vrel`, and `:unnaturalrelation` for an operator
+that the types do not have.
+"""
+function _ek_scmp(
+        op::Int, f, col::_EKColumn, recptr::Integer, dtype::Int, cval::String,
+        dval::Float64, ival::Int
+    )
+    op == _EK_ISNULL && return _ek_isnull(f, col, recptr)
+    op == _EK_NOTNUL && return !_ek_isnull(f, col, recptr)
+    rel, enull, cref = _ek_vrel(f, col, recptr, dtype, codeunits(cval), dval, ival, false, false)
     op <= _EK_NE && return _ek_relop(op, rel)
     if (op == _EK_LIKE || op == _EK_UNLIKE) && dtype == _EK_CHR
         enull && return false
-        m = _matchi(_ek_trunc(eltc), cval)
+        m = _matchi(_ek_ctrunc(f, cref), cval)
         return op == _EK_LIKE ? m : !m
     end
     throw(
@@ -183,12 +231,15 @@ function _ek_ecmp(f1, col1::_EKColumn, row1::Integer, f2, col2::_EKColumn, row2:
     bad() = throw(SpiceError(:bug, "LHS data type is $lt; RHSTYP is $rt."))
     if lt == _EK_CHR
         rt == _EK_CHR || bad()
-        a, n1, fnd1 = _ek_elt_c(f1, col1, row1, 1)
-        b, n2, fnd2 = _ek_elt_c(f2, col2, row2, 1)
+        a, n1, fnd1 = _ek_cref(f1, col1, row1, 1)
+        b, n2, fnd2 = _ek_cref(f2, col2, row2, 1)
         fnd1 || _ek_noelt(col1, row1)
         fnd2 || _ek_noelt(col2, row2)
         (n1 || n2) && return n1 && n2 ? _EK_EQ : n1 ? _EK_LT : _EK_GT
-        return _ek_fcmp(a, b)
+        r = _ek_ccmp(
+            f1.chars, _ek_cfirst(a, _EK_MAXSTR), f2.chars, _ek_cfirst(b, _EK_MAXSTR)
+        )
+        return r < 0 ? _EK_LT : r > 0 ? _EK_GT : _EK_EQ
     end
     if lt == _EK_TIME
         rt == _EK_TIME || bad()
@@ -230,11 +281,11 @@ function _ek_colmatch(
             :unnaturalrelation, "The relational operator $op was not recognized."
         )
     )
-    a, n1, fnd1 = _ek_elt_c(f1, col1, row1, 1)
-    b, n2, fnd2 = _ek_elt_c(f2, col2, row2, 1)
+    a, n1, fnd1 = _ek_cref(f1, col1, row1, 1)
+    b, n2, fnd2 = _ek_cref(f2, col2, row2, 1)
     fnd1 || _ek_noelt(col1, row1)
     fnd2 || _ek_noelt(col2, row2)
-    m = _matchi(n1 ? "" : _ek_trunc(a), n2 ? "" : _ek_trunc(b))
+    m = _matchi(n1 ? "" : _ek_ctrunc(f1, a), n2 ? "" : _ek_ctrunc(f2, b))
     return op == _EK_LIKE ? m : !m
 end
 
@@ -243,13 +294,15 @@ end
 # ---------------------------------------------------------------------------------------
 
 """
-    _ek_ixlk(f, col, key) -> Int
+    _ek_ixlk(f, col, key, ix = _EK_NOIX) -> Int
 
 Record pointer at position `key` of the index of column `col`, as `zzekixlk`. An index
 of type 1 is a tree; an index of type 2 (fast writers) is an order vector in adjacent
-integer pages. Throws `SpiceError(:invalidtype)` for another index type.
+integer pages. `ix` is the index decoded at load ([`_ek_ixvals`](@ref)); if it is
+empty the file is read. Throws `SpiceError(:invalidtype)` for another index type.
 """
-function _ek_ixlk(f, col::_EKColumn, key::Int)
+function _ek_ixlk(f, col::_EKColumn, key::Int, ix::Vector{Int32} = _EK_NOIX)
+    isempty(ix) || return Int(ix[key])
     col.ixtype == 1 && return _ek_trdp(f.ints, col.ixptr, key)
     col.ixtype == 2 || throw(
         SpiceError(
@@ -257,25 +310,38 @@ function _ek_ixlk(f, col::_EKColumn, key::Int)
             "The index type $(col.ixtype) is not supported."
         )
     )
-    q = (key - 1) ÷ _EK_IPSIZE
-    return Int(f.ints[Int(col.ixptr) + q * 256 + (key - q * _EK_IPSIZE)])
+    return _ek_ordvec_value(f.ints, col.ixptr, key)
 end
 
 """
-    _ek_ixlast(f, col, nrows, strict, dtype, cval, dval, ival) -> Int
+    _ek_ixvals(qs, col) -> Vector{Int32}
+
+The record pointers of the index of the column `col` of the segment of `qs` in index
+order, as `_ek_segment` decoded them at load; empty if they were not decoded.
+"""
+function _ek_ixvals(qs::_EKQSeg, col::_EKColumn)
+    cols = qs.seg.columns
+    j = Int(col.ord)
+    (1 <= j <= length(cols) && cols[j] == col) || (j = something(findfirst(==(col), cols), 0))
+    return j == 0 ? _EK_NOIX : qs.seg.ixvals[j]
+end
+
+"""
+    _ek_ixlast(f, col, nrows, strict, dtype, cval, dval, ival, ix = _EK_NOIX) -> Int
 
 Position of the last entry in the index of `col` that is less than (`strict`) or not
 greater than the value, 0 if there is none: the binary search of `zzeklltc`/`zzekllec`
-and their integer and double forms. Precondition: `col` has an index over `nrows` rows.
+and their integer and double forms. `ix` as in [`_ek_ixlk`](@ref). Precondition: `col`
+has an index over `nrows` rows.
 """
 function _ek_ixlast(
         f, col::_EKColumn, nrows::Int, strict::Bool, dtype::Int, cval::String,
-        dval::Float64, ival::Int
+        dval::Float64, ival::Int, ix::Vector{Int32} = _EK_NOIX
     )
     nrows == 0 && return 0
     notbelow = strict ? _EK_GE : _EK_GT       # the first entry is too large
     below = strict ? _EK_LT : _EK_LE
-    cmp(op, pos) = _ek_scmp(op, f, col, _ek_ixlk(f, col, pos), dtype, cval, dval, ival)
+    cmp(op, pos) = _ek_scmp(op, f, col, _ek_ixlk(f, col, pos, ix), dtype, cval, dval, ival)
     cmp(notbelow, 1) && return 0
     cmp(below, nrows) && return nrows
     b = 1
@@ -292,28 +358,30 @@ function _ek_ixlast(
 end
 
 """
-    _ek_ixbound(f, col, nrows, strict, con, compat) -> Int
+    _ek_ixbound(f, col, nrows, strict, con, compat, ix) -> Int
 
 `zzekillt` (`strict`) or `zzekille` for the value of the constraint `con` and the key
-column `col`. With `compat` the value is converted as CSPICE converts it (see defect
+column `col`, whose decoded index is `ix`. With `compat` the value is converted as CSPICE converts it (see defect
 (b) in the file header); else it is compared as it is.
 """
-function _ek_ixbound(f, col::_EKColumn, nrows::Int, strict::Bool, con, compat::Bool)
+function _ek_ixbound(
+        f, col::_EKColumn, nrows::Int, strict::Bool, con, compat::Bool, ix::Vector{Int32}
+    )
     coltyp = Int(col.dtype)
     dtype = Int(con.dtype)
-    coltyp == _EK_CHR && return _ek_ixlast(f, col, nrows, strict, _EK_CHR, con.cval, 0.0, 0)
+    coltyp == _EK_CHR && return _ek_ixlast(f, col, nrows, strict, _EK_CHR, con.cval, 0.0, 0, ix)
     if !compat
         vt = dtype == _EK_INT ? _EK_INT : coltyp == _EK_TIME ? _EK_TIME : _EK_DP
-        return _ek_ixlast(f, col, nrows, strict, vt, "", con.dval, con.ival)
+        return _ek_ixlast(f, col, nrows, strict, vt, "", con.dval, con.ival, ix)
     end
     if coltyp == _EK_DP
         dnum = dtype == _EK_DP ? con.dval : Float64(con.ival)
-        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", dnum, 0)
+        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", dnum, 0, ix)
     elseif coltyp == _EK_TIME
-        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", con.dval, 0)
+        return _ek_ixlast(f, col, nrows, strict, _EK_DP, "", con.dval, 0, ix)
     end
     inum = dtype == _EK_DP ? round(Int, con.dval, RoundNearestTiesAway) : con.ival
-    return _ek_ixlast(f, col, nrows, strict, _EK_INT, "", 0.0, inum)
+    return _ek_ixlast(f, col, nrows, strict, _EK_INT, "", 0.0, inum, ix)
 end
 
 """
@@ -342,20 +410,21 @@ function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
     col = best
     for outer col in idxset
         kc = qs.cols[col]
+        ix = _ek_ixvals(qs, kc)
         minptr = 1
         maxptr = nrows
         for (i, c) in enumerate(cons)    # invariant: minptr:maxptr satisfies constraints before i
             (c.lhs.colidx == col && active[i]) || continue
             op = c.opcode
             if op == _EK_LT
-                maxptr = min(_ek_ixbound(f, kc, nrows, true, c, compat), maxptr)
+                maxptr = min(_ek_ixbound(f, kc, nrows, true, c, compat, ix), maxptr)
                 elim = maxptr == 0
             elseif op == _EK_LE
-                maxptr = min(_ek_ixbound(f, kc, nrows, false, c, compat), maxptr)
+                maxptr = min(_ek_ixbound(f, kc, nrows, false, c, compat, ix), maxptr)
                 elim = maxptr == 0
             elseif op == _EK_EQ
-                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat)
-                lastle = _ek_ixbound(f, kc, nrows, false, c, compat)
+                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat, ix)
+                lastle = _ek_ixbound(f, kc, nrows, false, c, compat, ix)
                 if lastlt < lastle
                     minptr = max(lastlt + 1, minptr)
                     maxptr = min(lastle, maxptr)
@@ -363,11 +432,11 @@ function _ek_key(qs::_EKQSeg, cons::Vector, active::Vector{Bool}, compat::Bool)
                     elim = true
                 end
             elseif op == _EK_GT
-                lastle = _ek_ixbound(f, kc, nrows, false, c, compat)
+                lastle = _ek_ixbound(f, kc, nrows, false, c, compat, ix)
                 minptr = max(lastle + 1, minptr)
                 elim = lastle == nrows
             elseif op == _EK_GE
-                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat)
+                lastlt = _ek_ixbound(f, kc, nrows, true, c, compat, ix)
                 minptr = max(lastlt + 1, minptr)
                 elim = lastlt == nrows
             end
@@ -481,9 +550,9 @@ function _ek_pushkey!(keys::_EKKeys, f, col::_EKColumn, recptr::Integer)
         )
     )
     if keys.dtype == _EK_CHR
-        v, isnull, found = _ek_elt_c(f, col, recptr, 1)
+        r, isnull, found = _ek_cref(f, col, recptr, 1)
         found || _ek_noelt(col, recptr)
-        push!(keys.strs, _ek_trunc(v))
+        push!(keys.strs, _ek_ctrunc(f, r))
     elseif keys.dtype == _EK_INT
         v, isnull, found = _ek_elt_i(f, col, recptr, 1)
         found || _ek_noelt(col, recptr)
@@ -541,9 +610,10 @@ function _ek_table_rows(
             activv[i] = c.cnstyp == 2 && c.lhs.tabidx == t
         end
         keyfnd, keycol, begidx, endidx = _ek_key(qs, cons, activv, compat)
+        ix = keyfnd ? _ek_ixvals(qs, keycol) : _EK_NOIX
         rows = Int32[]
         for r in begidx:endidx           # invariant: `rows` holds the matches before position r
-            recptr = keyfnd ? _ek_ixlk(f, keycol, r) : Int(qs.seg.recptrs[r])
+            recptr = keyfnd ? _ek_ixlk(f, keycol, r, ix) : Int(qs.seg.recptrs[r])
             ok = true
             for (i, c) in enumerate(cons)
                 activv[i] || continue
@@ -776,30 +846,89 @@ header), and the empty segment vectors are removed as CSPICE does it (defect (c)
 function _ek_weed!(sets::Vector{_EKRowSet}, compat::Bool)
     isempty(sets) && return sets
     nt = sets[1].nt
-    seen = Set{Tuple{Vector{Int}, Vector{Int32}}}()
+    seen = _EKRowIndex(nt)
+    tagids = Dict{Vector{Int}, Int}()   # segment vector -> tag, without `compat`
+    tags = Int[]
     for (c, rs) in enumerate(sets)
         # invariant: `seen` holds the row vectors of the row sets before c
-        newkeys = Tuple{Vector{Int}, Vector{Int32}}[]
         counts = Int[length(r) ÷ nt for r in rs.rows]
+        resize!(tags, length(rs.segvecs))
         for (pos, sv) in enumerate(rs.segvecs)
             rows = rs.rows[pos]
-            kept = Int32[]
-            tag = compat ? [pos] : sv
-            for i in 1:counts[pos]
-                rv = rows[((i - 1) * nt + 1):(i * nt)]
-                if c > 1 && (tag, rv) in seen
-                    continue
-                end
-                append!(kept, rv)
-                push!(newkeys, (tag, rv))
+            tag = compat ? pos : get!(tagids, sv, length(tagids) + 1)
+            tags[pos] = tag
+            c > 1 || continue
+            w = 0
+            for i in 1:counts[pos]       # invariant: rows[1:w*nt] holds the kept row vectors before i
+                off = (i - 1) * nt
+                _ek_rowindex_has(seen, tag, rows, off) && continue
+                w != i - 1 && copyto!(rows, w * nt + 1, rows, off + 1, nt)
+                w += 1
             end
-            rs.rows[pos] = kept
+            resize!(rows, w * nt)
         end
-        union!(seen, newkeys)
+        for (pos, rows) in enumerate(rs.rows), i in 1:(length(rows) ÷ nt)
+            # invariant: `seen` holds the kept row vectors of the earlier sets, and those of
+            # this set before (pos, i)
+            _ek_rowindex_add!(seen, tags[pos], rows, (i - 1) * nt)
+        end
         compat ? _ek_squeeze_compat!(rs, counts) : _ek_squeeze!(rs)
     end
     filter!(rs -> _ek_nrows(rs) > 0, sets)
     return sets
+end
+
+"""
+    _EKRowIndex
+
+A set of tagged row vectors of `nt` record pointers each, for `_ek_weed!`: entry `k`
+has the tag `tags[k]` and the row vector `rows[(k-1)*nt+1:k*nt]`. `last[h]` is the last
+entry with the hash `h`, and `prev[k]` the entry with the hash of entry `k` before it
+(0 if none), so that a lookup allocates nothing.
+"""
+struct _EKRowIndex
+    nt::Int
+    tags::Vector{Int}
+    rows::Vector{Int32}
+    last::Dict{UInt64, Int}
+    prev::Vector{Int}
+end
+
+_EKRowIndex(nt::Int) = _EKRowIndex(nt, Int[], Int32[], Dict{UInt64, Int}(), Int[])
+
+@inline function _ek_rowhash(tag::Int, rows::Vector{Int32}, off::Int, nt::Int)
+    h = hash(tag)
+    for j in 1:nt                        # invariant: h hashes the tag and rows[off+1:off+j-1]
+        h = hash(rows[off + j], h)
+    end
+    return UInt64(h)
+end
+
+"True if `ix` holds the tag `tag` with the row vector `rows[off+1:off+nt]`."
+function _ek_rowindex_has(ix::_EKRowIndex, tag::Int, rows::Vector{Int32}, off::Int)
+    nt = ix.nt
+    k = get(ix.last, _ek_rowhash(tag, rows, off, nt), 0)
+    while k > 0                          # invariant: the entries after k with this hash differ
+        if ix.tags[k] == tag
+            same = true
+            for j in 1:nt                # invariant: the first j-1 pointers of both agree
+                ix.rows[(k - 1) * nt + j] == rows[off + j] || (same = false; break)
+            end
+            same && return true
+        end
+        k = ix.prev[k]
+    end
+    return false
+end
+
+"Add the tag `tag` with the row vector `rows[off+1:off+nt]` to `ix`."
+function _ek_rowindex_add!(ix::_EKRowIndex, tag::Int, rows::Vector{Int32}, off::Int)
+    h = _ek_rowhash(tag, rows, off, ix.nt)
+    push!(ix.tags, tag)
+    append!(ix.rows, view(rows, (off + 1):(off + ix.nt)))
+    push!(ix.prev, get(ix.last, h, 0))
+    ix.last[h] = length(ix.tags)
+    return ix
 end
 
 # ---------------------------------------------------------------------------------------
@@ -857,16 +986,29 @@ _ek_empty_result() = EKResult(
     Matrix{Int32}(undef, 0, 0), Int[], Int[], Symbol[], String[]
 )
 
-"Contract: returns `c` with the correctly rounded value `c.dexact` in place of `c.dval`."
-_ek_exact_constraint(c::_EKQConstraint) = c.dval === c.dexact ? c :
-    _EKQConstraint(c.cnstyp, c.lhs, c.opcode, c.rhs, c.dtype, c.cval, c.dexact, c.ival, c.dexact)
+"""
+    _ek_exact_constraint(c) -> _EKQConstraint
+
+`c` as the public search compares it: with the correctly rounded value `c.dexact` in
+place of `c.dval`, and an integer value outside the 32-bit range as a double. CSPICE
+compares such a value through `i_dnnt`, which gives the smallest 32-bit integer (defect
+(d) of the file header).
+"""
+function _ek_exact_constraint(c::_EKQConstraint)
+    big = c.dtype == _EK_INT && !(-2147483648.0 <= c.dexact <= 2147483647.0)
+    (c.dval === c.dexact && !big) && return c
+    return _EKQConstraint(
+        c.cnstyp, c.lhs, c.opcode, c.rhs, big ? _EK_DP : c.dtype, c.cval, c.dexact,
+        c.ival, c.dexact
+    )
+end
 
 """
     _ek_search(ks, q; compat=false) -> EKResult
 
 Port of `eksrch`: run the encoded query `q` (the result of `_ek_encode_query` for the
 tables of `ks`) on the snapshot `ks`. Pure function of its arguments. `compat = true`
-reproduces three defects of CSPICE (see the file header); it exists for the tests.
+reproduces four defects of CSPICE (see the file header); it exists for the tests.
 """
 function _ek_search(ks::KernelSet, q; compat::Bool = false)
     ntab = length(q.tables)

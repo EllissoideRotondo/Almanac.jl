@@ -1,13 +1,14 @@
 # Geometry finder, concurrent use. A search holds no global state: the step, the
 # tolerance and the callbacks are arguments, and the search reads one immutable snapshot
-# of the loaded kernels. This group checks three properties, each bit for bit:
+# of the loaded kernels. This group checks four properties, the first three bit for bit:
 #
 # 1. the same search made on many tasks at the same time gives the window of the serial
 #    search;
 # 2. a search that uses tasks inside (`threads=true`) gives the window of the serial
 #    search, for every relation;
 # 3. searches on a context give the serial window while another task loads and unloads
-#    a kernel that the search does not use.
+#    a kernel that the search does not use;
+# 4. a search with `threads=true` throws the error of the serial search.
 #
 # CSPICE is not used here, because it keeps one process-wide state.
 #
@@ -129,6 +130,37 @@ end
                 out[k] = collect(jobs[mod1(k, length(jobs))].run(ctx))
             end
             @test all(k -> out[k] == serial[mod1(k, length(jobs))], eachindex(out))
+        end
+
+        @testset "threads keyword: the error of the serial search" begin
+            # Regression: with `threads = true` the error of a task reached the caller
+            # wrapped in the `CompositeException` of `Threads.@threads`. Now it is the
+            # error of the first interval that fails, as in the serial search, and an
+            # `InterruptException` of `bail` comes before any other error.
+            function caught(f)
+                try
+                    f()
+                catch e
+                    return e
+                end
+                return nothing
+            end
+            cn = Window([0.0, 10.0, 20.0, 30.0, 40.0, 50.0, 60.0, 70.0])
+            fails34 = GFState(
+                et -> et >= 60.0 ? throw(SpiceError(:spkinsuffdata, "interval 4")) :
+                    et >= 40.0 ? throw(SpiceError(:spkinsuffdata, "interval 3")) : sin(et) > 0
+            )
+            for threads in (false, true)
+                e = caught(() -> gfudb(ctx, fails34, 1.0, cn; threads))
+                @test e isa SpiceError && e.kind === :spkinsuffdata && e.msg == "interval 3"
+            end
+            # Interval 1 fails at its first epoch; the other three call `bail` at their
+            # second epoch, because the state does not change.
+            fails1 = GFState(et -> et < 10.5 ? throw(SpiceError(:spkinsuffdata, "interval 1")) : false)
+            @test caught(() -> gfudb(ctx, fails1, 1.0, cn; threads = true, bail = GFStop(true))) isa
+                InterruptException
+            @test caught(() -> gfudb(ctx, GFState(et -> false), 1.0, cn; threads = true, bail = GFStop(true))) isa
+                InterruptException
         end
 
         @testset "the tolerance of one context does not reach another" begin

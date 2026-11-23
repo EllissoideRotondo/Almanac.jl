@@ -91,8 +91,11 @@ end
 
 One segment of a loaded EK file. `stype` is the segment type (1: rows are records
 found through the record tree; 2: fixed layout of the fast writers). `recptrs[r]` is
-the record pointer of row `r` (for type 2 the row number itself). `segdsc` holds the 24
-integers of the segment descriptor. Never modified after it was built.
+the record pointer of row `r` (for type 2 the row number itself). `ixvals[j]` holds the
+record pointers of the index of column `columns[j]` in index order, or nothing (an
+empty vector) if the column has no index or its index could not be decoded at load.
+`segdsc` holds the 24 integers of the segment descriptor. Never modified after it was
+built.
 """
 struct _EKSegment
     segno::Int32
@@ -101,6 +104,7 @@ struct _EKSegment
     nrows::Int32
     columns::Vector{_EKColumn}
     recptrs::Vector{Int32}
+    ixvals::Vector{Vector{Int32}}
     segdsc::Vector{Int32}
 end
 
@@ -152,14 +156,23 @@ _ek_same_attributes(a::_EKColumn, b::_EKColumn) = a.cclass == b.cclass && a.dtyp
 
 The table catalog of the loaded EK `files` (load order), as `eklef` builds it: tables
 in the order of their first segment, the segments of a table in load order, the columns
-of a table in the order of its first segment. Throws `SpiceError` as `eklef` if a
-segment does not fit a table that an earlier segment defined: `:ekcolnummismatch`
+of a table in the order of its first segment. Throws `SpiceError` as `eklef`, for the
+first segment in load order that has a fault (`eklef` checks one segment completely
+before the next): `:ekcolnummismatch` if the segment has two columns of the same name;
+and if it does not fit a table that an earlier segment defined, `:ekcolnummismatch`
 (number of columns), `:ekmissingcolumn`, `:badattributes` (class, type, string length,
 size, index or null attribute of a column differs).
 """
 function _ek_build_tables(files::Vector{EKFile})
     tables = EKTable[]
     for (fno, file) in enumerate(files), seg in file.segments
+        allunique(c.name for c in seg.columns) || throw(
+            SpiceError(
+                :ekcolnummismatch,
+                "The EK file $(file.path) could not be loaded; the segment $(seg.segno) " *
+                    "contains duplicate column names in table $(seg.table)."
+            )
+        )
         k = findfirst(t -> t.name == seg.table, tables)
         if k === nothing
             push!(

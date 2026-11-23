@@ -88,7 +88,7 @@ function build_kernelset(
     end
     _pool_x_bodydefs!(name2code, code2name, kbodies)
     _pool_x_bodydefs!(name2code, code2name, bodydefs)
-    frames, framename2id = build_frames(npool)
+    frames, framename2id = build_frames(npool, name2code)
     for (i, entry) in enumerate(loaded)     # frames of add_frame!, later ones first
         p = entry.content
         p isa FrameProvider || continue
@@ -169,21 +169,42 @@ function load_entries(path::AbstractString, yearbound::Int = 1969, check::Bool =
     content = read_kernel(p, yearbound, check)
     entries = Loaded[Loaded(p, "", content)]
     if content isa TextKernel
-        for file in metakernel_files(content)
-            sub = read_kernel(file, yearbound, check)
-            if sub isa TextKernel && !isempty(metakernel_files(sub))
-                throw(
-                    SpiceError(
-                        :recursiveloading,
-                        "meta-kernel $p lists the meta-kernel $file; CSPICE does not allow this"
+        try
+            for file in metakernel_files(content)
+                sub = read_kernel(file, yearbound, check)
+                push!(entries, Loaded(String(file), p, sub))
+                if sub isa TextKernel && !isempty(metakernel_files(sub))
+                    throw(
+                        SpiceError(
+                            :recursiveloading,
+                            "meta-kernel $p lists the meta-kernel $file; CSPICE does not allow this"
+                        )
                     )
-                )
+                end
             end
-            push!(entries, Loaded(String(file), p, sub))
+        catch
+            _release_entries!(entries)
+            rethrow()
         end
     end
     return entries
 end
+
+"""
+    _release_entries!(entries) -> Nothing
+
+Contract: remove now the memory maps of the binary kernels of `entries`, which a load
+read and that no snapshot holds, because the load failed (see `_unmap!`). The arrays
+must not be read afterwards.
+"""
+function _release_entries!(entries::Vector{Loaded})
+    foreach(e -> _release_content!(e.content), entries)
+    return nothing
+end
+_release_content!(c::DAF) = _unmap!(c.data)
+_release_content!(c::DSKFile) = (_unmap!(c.ints); _unmap!(c.dps); nothing)
+_release_content!(c::EKFile) = (_unmap!(c.chars); _unmap!(c.dps); _unmap!(c.ints); nothing)
+_release_content!(::Any) = nothing
 
 """
     furnsh([ctx,] path) -> Nothing
@@ -230,9 +251,16 @@ function furnsh(ctx::SpiceContext, path::AbstractString)
     lock(ctx.lock) do
         defs = @atomic ctx.timedefs
         entries = load_entries(path, defs.yearbound, defs.check)
-        list = copy(kernelset(ctx).loaded)
+        old = kernelset(ctx)
+        list = copy(old.loaded)
         append!(list, entries)
-        _pool_x_swap_loaded!(ctx, list, entries)
+        try
+            _pool_x_swap_loaded!(ctx, list, entries)
+        catch
+            # e.g. an EK whose tables do not match; only while no snapshot holds them
+            kernelset(ctx) === old && _release_entries!(entries)
+            rethrow()
+        end
     end
     return nothing
 end

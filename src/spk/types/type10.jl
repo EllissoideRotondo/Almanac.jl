@@ -11,67 +11,7 @@
 # of the kernel set as an argument and `spk_eval`, which has no kernel set, cannot
 # evaluate it.
 
-@noinline _t10_error(seg::Segment, msg::String) = throw(
-    SpiceError(
-        :baddaf,
-        "SPK type 10 segment at $(seg.baddr):$(seg.eaddr): $msg"
-    )
-)
-
 # --- the generic segment ------------------------------------------------------------------
-
-"""
-    _t10_layout(data, seg) -> NamedTuple
-
-Addresses of the parts of the generic segment `seg`, from its meta data (`sgmeta`):
-`con` is the address before the first constant, `pkt` the address before the first
-packet record, `ref` the address before the first reference epoch, `n` the count of
-packets, `pksz` the packet size (10 or 14) and `stride` the size of a packet record
-(the packet and the `pktoff` doubles that precede it).
-
-The last double of the segment is the count of meta items. A segment with 15 or 16
-items has no packet offset (item 16), as `sgmeta` reads the old files; with 17 or more
-items the first 17 are used. Throws `SpiceError(:baddaf)` unless the segment has
-fixed-size packets of 10 or 14 doubles, one reference epoch for each packet with the
-reference index type 4 (closest epoch), at least 8 constants, and all its parts
-inside the segment.
-"""
-function _t10_layout(data::Vector{Float64}, seg::Segment)
-    b, e = seg.baddr, seg.eaddr
-    len = e - b + 1
-    (b >= 1 && e <= length(data) && len >= 16) || _t10_error(seg, "the segment is too short")
-    nmeta = _seg_count(seg, @inbounds(data[e]), 15, _MAXCOUNT, "meta item count")
-    m, hasoff = _sg_meta_base(nmeta, e)      # meta item k is data[m + k]
-    span = e - m                             # doubles from the first meta item to the end
-    span <= len || _t10_error(seg, "the meta data is longer than the segment")
-    item(k, lo, what) = _seg_count(seg, @inbounds(data[m + k]), lo, _MAXCOUNT, what)
-    conbas = item(1, 0, "constants base")
-    ncon = item(2, 0, "constants count")
-    rdrtyp = item(5, 0, "reference index type")
-    refbas = item(6, 0, "reference base")
-    nref = item(7, 0, "reference count")
-    pdrtyp = item(10, 0, "packet directory type")
-    pktbas = item(11, 0, "packet base")
-    npkt = item(12, 1, "packet count")
-    pksz = item(15, 1, "packet size")
-    pktoff = hasoff ? item(16, 0, "packet offset") : 0
-    ncon >= 8 || _t10_error(seg, "the segment has $ncon constants, 8 are needed")
-    pdrtyp == 0 || _t10_error(seg, "the packets do not have a fixed size")
-    (pksz == 10 || pksz == 14) || _t10_error(seg, "the packet size $pksz is not 10 or 14")
-    rdrtyp == 4 || _t10_error(seg, "the reference index type $rdrtyp is not 4")
-    nref == npkt || _t10_error(seg, "the counts of packets and reference epochs differ")
-    stride = pksz + pktoff
-    data_len = len - span
-    (
-        conbas + 8 <= data_len && pktoff <= data_len && npkt <= (data_len - pktbas) ÷ stride &&
-            pktbas <= data_len && refbas <= data_len && nref <= data_len - refbas
-    ) ||
-        _t10_error(seg, "a part of the segment is outside the segment")
-    return (;
-        con = b - 1 + conbas, pkt = b - 1 + pktbas + pktoff, ref = b - 1 + refbas, n = npkt,
-        pksz, stride,
-    )
-end
 
 "The ten elements of packet `i` of the segment with the layout `lay`."
 @inline _t10_elems(data::Vector{Float64}, lay, i::Int) =
@@ -242,16 +182,8 @@ function _t10_state(data::Vector{Float64}, seg::Segment, et::T, l::LeapSeconds) 
     p1, v1 = _t10_propagate(l, geophs, e1, et)
     t1 == t2 && return _t10_to_j2000(et, p1, v1)
     p2, v2 = _t10_propagate(l, geophs, e2, et)
-    denom = t2 - t1
-    arg = (et - t1) * _PI / denom
-    dargdt = _PI / denom
-    s, c = sincos(arg)
-    w = c * 0.5 + 0.5
-    dwdt = s * -0.5 * dargdt
-    return _t10_to_j2000(
-        et, w * p1 + (1.0 - w) * p2,
-        (w * v1 + (1.0 - w) * v2) + (dwdt * p1 + (-dwdt) * p2)
-    )
+    pos, vel = _cos_blend(et, t1, t2, p1, v1, p2, v2)
+    return _t10_to_j2000(et, pos, vel)
 end
 
 """

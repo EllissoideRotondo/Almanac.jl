@@ -232,6 +232,18 @@ group("14. math: coordinates", Kernels.PCK11) do
         @test throws_kind(() -> xfmsta(ctx, s, "RECTANGULAR", "GEODETIC", "NOSUCHBODY"), :idcodenotfound)
         @test throws_kind(() -> xfmsta(ctx, [0.0, 0, 1, 1, 0, 0], "RECTANGULAR", "SPHERICAL", "EARTH"), :invalidstate)
         @test xfmsta(ctx, [0.0, 0, 2, 0, 0, 3], "RECTANGULAR", "LATITUDINAL", "EARTH") == [2.0, 0.0, pi / 2, 3.0, 0.0, 0.0]
+        # Regression: the C wrappers reject an empty string (CHKFSTR) before any other
+        # check, for each string argument in order; an ID body is not a string.
+        @test throws_kind(() -> xfmsta(ctx, [1.0], "", "POLAR", "EARTH"), :emptystring)
+        @test throws_kind(() -> xfmsta(ctx, s, "RECTANGULAR", "", "EARTH"), :emptystring)
+        @test throws_kind(() -> xfmsta(ctx, s, "RECTANGULAR", "LATITUDINAL", ""), :emptystring)
+        @test xfmsta(ctx, s, "RECTANGULAR", "LATITUDINAL", 0) == lat
+        @test throws_kind(() -> convrt(1.0, "", "FURLONGS"), :emptystring)
+        @test throws_kind(() -> convrt(1.0, "KM", ""), :emptystring)
+        @test throws_kind(() -> recpgr(ctx, "", [1.0], 1.0, 0.1), :emptystring)
+        @test throws_kind(() -> pgrrec(ctx, "", 0.1, 0.2, 3.0, -1.0, 0.06), :emptystring)
+        @test throws_kind(() -> drdpgr(ctx, "", 0.1, 0.2, 3.0, -1.0, 0.06), :emptystring)
+        @test throws_kind(() -> dpgrdr(ctx, "", 1.0, 2.0, 3.0, -1.0, 0.06), :emptystring)
     end
 
     @apart @testset "unit conversion" begin

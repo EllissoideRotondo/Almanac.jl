@@ -274,9 +274,6 @@ the packet set. Postcondition: `1 <= first` and `first + count - 1 <= n`.
     return low - lsize + 1, lsize + rsize
 end
 
-"Packet size of a subtype of types 18 and 19: 12 for Hermite with two derivative sets, else 6."
-@inline _packet_size(subtyp::Int) = subtyp == 0 ? 12 : 6
-
 """
     _packet_state(seg, data, subtyp, pbase, n, xbase, et::T) -> (pos, vel)
 
@@ -313,10 +310,18 @@ function _spk18(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
     b, e = seg.baddr, seg.eaddr
     len = e - b + 1
     len >= 10 || _badsegment(seg, "the segment is too short")
-    subtyp = _seg_count(seg, @inbounds(data[e - 2]), 0, 1, "subtype")
-    wnd = _seg_count(seg, @inbounds(data[e - 1]), 2, subtyp == 0 ? 8 : 16, "window size")
-    iseven(wnd) || _badsegment(seg, "the window size is odd")
-    n = _seg_count(seg, @inbounds(data[e]), 2, _MAXCOUNT, "packet count")
+    # The checks and kinds of `spkr18`, in its order: the count, the subtype, the window.
+    subtyp = _seg_count(seg, @inbounds(data[e - 2]), -_MAXCOUNT, _MAXCOUNT, "subtype")
+    wnd = _seg_count(seg, @inbounds(data[e - 1]), -_MAXCOUNT, _MAXCOUNT, "window size")
+    n = _seg_count(seg, @inbounds(data[e]), -_MAXCOUNT, _MAXCOUNT, "packet count")
+    n < 2 && _segerror(:toofewstates, seg, "the packet count $n is less than 2")
+    (subtyp == 0 || subtyp == 1) ||
+        _segerror(:notsupported, seg, "the subtype $subtyp is not supported")
+    maxwnd = subtyp == 0 ? 8 : 16
+    (0 < wnd <= maxwnd && iseven(wnd)) || _segerror(
+        :invalidvalue, seg,
+        "the window size $wnd is not even and in 2:$maxwnd for subtype $subtyp"
+    )
     psize = _packet_size(subtyp)
     n * (psize + 1) + (n - 1) ÷ 100 + 3 == len ||
         _badsegment(seg, "the packet count does not agree with the length")
@@ -339,34 +344,30 @@ to the segment start, the selection flag and `n`.
 
 For an epoch that is a bound between two intervals the flag selects the later
 interval (1) or the earlier one (0). The window size is even and not above 14
-(subtype 0) or 28 (subtypes 1 and 2).
+(subtype 0) or 28 (subtypes 1 and 2). A segment with a `layout` passed these checks at
+load; another one is checked at each call (`_spk19_head`, `_spk19_mini`).
 """
 function _spk19(data::Vector{Float64}, seg::Segment, et::T) where {T <: Real}
-    b, e = seg.baddr, seg.eaddr
-    len = e - b + 1
-    len >= 6 || _badsegment(seg, "the segment is too short")
-    later = @inbounds(data[e - 1]) == 1.0         # the writer of CSPICE stores -1 for "earlier"
-    n = _seg_count(seg, @inbounds(data[e]), 1, _MAXCOUNT, "interval count")
-    pbas = e - 2 - (n + 1)                      # pointer i is data[pbas+i]
-    ivbas = pbas - n ÷ 100 - (n + 1)            # interval bound i is data[ivbas+i]
-    # The last pointer is the place after the last mini-segment: the first bound.
-    (ivbas >= b && @inbounds(data[pbas + n + 1]) == ivbas - b + 2) ||
-        _badsegment(seg, "the interval count does not agree with the length")
+    b = seg.baddr
+    if _has_layout(seg)                         # checked at load (`_spk19_check`)
+        l = seg.layout
+        @inbounds n, pbas, ivbas, later = Int(l[1]), b - 1 + Int(l[2]), b - 1 + Int(l[3]), l[4] == 1
+    else
+        later, n, pbas, ivbas = _spk19_head(data, seg)
+    end
     t = primal(et)
     mini = later ? min(_lstled(data, ivbas, n + 1, t), n) : _lstltd(data, ivbas, n + 1, t)
     mini = clamp(mini, 1, n)
-    @inbounds p1, p2 = data[pbas + mini], data[pbas + mini + 1]
-    minib = _seg_count(seg, p1, 1, len, "mini-segment pointer") + b - 1
-    minie = _seg_count(seg, p2, 1, len, "mini-segment pointer") + b - 2
-    (minie - minib >= 3 && minie <= ivbas) ||
-        _badsegment(seg, "the pointers of mini-segment $mini are not valid")
-    subtyp = _seg_count(seg, @inbounds(data[minie - 2]), 0, 2, "subtype")
-    wnd = _seg_count(seg, @inbounds(data[minie - 1]), 2, subtyp == 0 ? 14 : 28, "window size")
-    iseven(wnd) || _badsegment(seg, "the window size is odd")
-    npkt = _seg_count(seg, @inbounds(data[minie]), 1, _MAXCOUNT, "packet count")
+    if _has_layout(seg)
+        @inbounds begin
+            minib = _nint(data[pbas + mini]) + b - 1
+            minie = _nint(data[pbas + mini + 1]) + b - 2
+            subtyp, wnd, npkt = _nint(data[minie - 2]), _nint(data[minie - 1]), _nint(data[minie])
+        end
+    else
+        minib, _, subtyp, wnd, npkt = _spk19_mini(data, seg, pbas, ivbas, mini)
+    end
     psize = _packet_size(subtyp)
-    npkt * (psize + 1) + (npkt - 1) ÷ 100 + 3 == minie - minib + 1 ||
-        _badsegment(seg, "the packet count of mini-segment $mini does not agree with its length")
     ebase = minib - 1 + npkt * psize
     first, count = _packet_window(data, ebase, npkt, wnd, t)
     return _packet_state(

@@ -146,7 +146,6 @@ struct GFSubObserverVector <: GFVector
     radii::NTuple{3, Float64}
 end
 
-_gf_ks(v::GFSubObserverVector) = v.ks
 _gf_vecframe(v::GFSubObserverVector) = v.ref
 _gf_vecexist(::GFSubObserverVector, cnfine::Window, run::_GFRun) = copy(cnfine)
 
@@ -245,7 +244,6 @@ struct GFInterceptVector <: GFVector
     dvec::Vec3{Float64}
 end
 
-_gf_ks(v::GFInterceptVector) = v.ks
 _gf_vecframe(v::GFInterceptVector) = v.ref
 
 @inline function _gf_vecpos(v::GFInterceptVector, et::Float64)
@@ -352,13 +350,7 @@ function _gf_surface_coordinate(
     )
     targ = _gf_body(ks, target, "target object")
     obs = _gf_body(ks, obsrvr, "observer")
-    targ == obs && throw(
-        SpiceError(
-            :bodiesnotdistinct,
-            "The observer and target must be distinct objects, but are not: " *
-                "OBSRVR = $obsrvr; TARGET = $target."
-        )
-    )
+    _gf_distinct(targ, obs, target, obsrvr)
     corr = _geo_abcorr(abcorr)
     sys, idx = _gf_sysidx(crdsys, coord)
     ref = _geo_namfrm(ks, frame isa AbstractString ? strip(frame, ' ') : frame)

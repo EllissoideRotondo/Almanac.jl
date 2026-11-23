@@ -139,14 +139,14 @@ The file is on disk when the call returns: the file record, `resv` comment recor
 empty comment area, one empty summary record and one name record, byte for byte as CSPICE
 writes them. The byte order is the native one. An existing file is never replaced.
 
-Throws `SpiceError`:
-- `:blankfilename` if `path` is blank;
-- `:fileopenfail` if the file exists or cannot be created;
+Throws `SpiceError`, in this order:
 - `:blankfiletype` if `ftype` is blank, `:illegalcharacter` if it has a character that is
   not printable;
 - `:dafinvalidparams` unless `0 <= nd <= 124`, `2 <= ni <= 250` and
   `nd + (ni + 1) ÷ 2 <= 125`;
-- `:dafnoresv` if `resv < 0`.
+- `:dafnoresv` if `resv < 0`;
+- `:blankfilename` if `path` is blank;
+- `:fileopenfail` if the file exists or cannot be created.
 
 See also [`spkopn`](@ref), [`ckopn`](@ref), [`dafbna`](@ref), [`dafcls`](@ref).
 """
@@ -154,8 +154,9 @@ function dafonw(
         path::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer,
         ifname::AbstractString, resv::Integer
     )
-    isempty(strip(path)) && throw(SpiceError(:blankfilename, "dafonw: the file name is blank"))
     ttype = _daf_new_checks("dafonw", ftype, nd, ni, resv)
+    # `zzddhopn` checks the name after the checks of `dafonw`.
+    isempty(strip(path)) && throw(SpiceError(:blankfilename, "dafonw: the file name is blank"))
     # Exclusive creation: the call fails if the path exists, so no file is ever truncated.
     io = try
         fd = Base.Filesystem.open(

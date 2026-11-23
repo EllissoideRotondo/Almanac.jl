@@ -11,75 +11,28 @@
 #
 # A type other than 2, 3 and 20 has no directory values in its `Segment` descriptor:
 # the evaluator reads them from the end of the segment (`data[seg.eaddr - k]`) at each
-# call and checks them, because `open_daf` does not validate these types.
-
-@noinline _badsegment(seg::Segment, msg::String) = throw(
-    SpiceError(
-        :baddaf,
-        "SPK type $(seg.dtype) segment at $(seg.baddr):$(seg.eaddr): $msg"
-    )
-)
-
-"""
-    _seg_count(seg, x::Float64, lo::Int, hi::Int, what) -> Int
-
-Nearest whole number to `x` (as `i_dnnt` of f2c); throws `SpiceError(:baddaf)` that
-names `what` unless `x` is finite and the result is in `lo:hi`.
-"""
-@inline function _seg_count(seg::Segment, x::Float64, lo::Int, hi::Int, what::String)
-    (isfinite(x) && lo - 0.5 < x < hi + 0.5) || _badsegment(seg, _count_msg(what, x, lo, hi))
-    n = _nint(x)
-    (lo <= n <= hi) || _badsegment(seg, _count_msg(what, x, lo, hi))
-    return n
-end
-@noinline _count_msg(what::String, x::Float64, lo::Int, hi::Int) = "$what = $x is not in $lo:$hi"
-
-"Largest whole number that a segment count may be (the 32-bit address range of a DAF)."
-const _MAXCOUNT = Int(typemax(Int32))
-
-"""
-    _sg_meta_base(nmeta, e) -> (m, haspktoff)
-
-Addresses of the meta data of a generic segment that ends at the address `e` and
-reports `nmeta >= 15` items, as `sgmeta_` reads them: item k is at `m + k`. A segment
-of 15 items was written as 16 doubles. Only a segment of 17 or more items has a packet
-offset (item 16): `sgmeta_` clears item 16 of a segment of 15 or 16 items. Items after
-the 17th are not used.
-"""
-@inline _sg_meta_base(nmeta::Int, e::Int) = e - (nmeta == 15 ? 16 : nmeta), nmeta >= 17
+# call and checks them, because `open_daf` does not validate these types. Types 10, 14
+# and 19 read the places of their parts from `seg.layout` when the segment has one
+# (`spk/spk_layout.jl`).
 
 """
     _lstltd(data, base, n, x) -> Int
-
-Number of elements of the ascending range `data[base+1:base+n]` that are less than
-`x` (the index of the last such element, as `lstltd` of CSPICE). Requires `n >= 0`
-and the range inside `data` (not checked).
-"""
-@inline function _lstltd(data::Vector{Float64}, base::Int, n::Int, x::Float64)
-    lo, hi = 0, n
-    # invariant: data[base+i] < x for 1 <= i <= lo, and data[base+i] >= x for i > hi
-    @inbounds while lo < hi
-        mid = (lo + hi + 1) >>> 1
-        if data[base + mid] < x
-            lo = mid
-        else
-            hi = mid - 1
-        end
-    end
-    return lo
-end
-
-"""
     _lstled(data, base, n, x) -> Int
 
-As `_lstltd`, for the elements that are less than or equal to `x` (`lstled`).
+Number of elements of the ascending range `data[base+1:base+n]` that are less than
+`x` (`_lstltd`), or less than or equal to `x` (`_lstled`): the index of the last such
+element, as `lstltd` and `lstled` of CSPICE. Requires `n >= 0` and the range inside
+`data` (not checked).
 """
-@inline function _lstled(data::Vector{Float64}, base::Int, n::Int, x::Float64)
+@inline _lstltd(data::Vector{Float64}, base::Int, n::Int, x::Float64) = _lstcount(<, data, base, n, x)
+@inline _lstled(data::Vector{Float64}, base::Int, n::Int, x::Float64) = _lstcount(<=, data, base, n, x)
+
+@inline function _lstcount(below::F, data::Vector{Float64}, base::Int, n::Int, x::Float64) where {F}
     lo, hi = 0, n
-    # invariant: data[base+i] <= x for 1 <= i <= lo, and data[base+i] > x for i > hi
+    # invariant: below(data[base+i], x) for 1 <= i <= lo, and not for i > hi
     @inbounds while lo < hi
         mid = (lo + hi + 1) >>> 1
-        if data[base + mid] <= x
+        if below(data[base + mid], x)
             lo = mid
         else
             hi = mid - 1

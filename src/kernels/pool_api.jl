@@ -18,7 +18,8 @@ the call has no `start` and `room` arguments and no `found` flag: an absent vari
 is an error. Use [`expool`](@ref) or [`dtpool`](@ref) to test first. Blanks around
 `name` are ignored; letter case is significant.
 
-Throws `SpiceError(:kernelvarnotfound)` if the variable is not in the pool and
+Throws `SpiceError(:emptystring)` if `name` is the empty string,
+`SpiceError(:kernelvarnotfound)` if the variable is not in the pool and
 `SpiceError(:typemismatch)` if it holds character values.
 
 # Examples
@@ -37,6 +38,7 @@ julia> gdpool(ctx, "BODY399_RADII")
 See also [`gipool`](@ref), [`gcpool`](@ref), [`bodvrd`](@ref), [`pdpool`](@ref).
 """
 function gdpool(ks::KernelSet, name::AbstractString)
+    _chkfstr("gdpool", "variable name", name)     # CHKFSTR of gdpool_c
     v = pool_value(ks, name)
     v isa Vector{Float64} || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not numeric"))
     return copy(v)
@@ -51,11 +53,14 @@ integers, a tie away from zero, as
 
 The result holds every value; there is no `found` flag (see [`gdpool`](@ref)).
 
-Throws `SpiceError(:kernelvarnotfound)` if the variable is not in the pool,
-`SpiceError(:typemismatch)` if it holds character values, and
-`SpiceError(:intoutofrange)` if a value is outside the 32-bit integers or NaN.
+Throws `SpiceError`:
+- `:emptystring` if `name` is the empty string;
+- `:kernelvarnotfound` if the variable is not in the pool;
+- `:typemismatch` if it holds character values;
+- `:intoutofrange` if a value is outside the 32-bit integers or NaN.
 """
 function gipool(ks::KernelSet, name::AbstractString)
+    _chkfstr("gipool", "variable name", name)     # CHKFSTR of gipool_c
     v = gdpool(ks, name)
     for (i, x) in enumerate(v)
         # `gipool` of CSPICE: DBLE(INTMIN()) <= x <= DBLE(INTMAX()), then NINT
@@ -73,10 +78,12 @@ Return the character values of the kernel-pool variable `name`, as
 The result is a new vector with every value; there is no `found` flag (see
 [`gdpool`](@ref)).
 
-Throws `SpiceError(:kernelvarnotfound)` if the variable is not in the pool and
+Throws `SpiceError(:emptystring)` if `name` is the empty string,
+`SpiceError(:kernelvarnotfound)` if the variable is not in the pool and
 `SpiceError(:typemismatch)` if it holds numeric values.
 """
 function gcpool(ks::KernelSet, name::AbstractString)
+    _chkfstr("gcpool", "variable name", name)     # CHKFSTR of gcpool_c
     v = pool_value(ks, name)
     v isa Vector{String} || throw(SpiceError(:typemismatch, "kernel-pool variable $name is not character"))
     return copy(v)
@@ -124,13 +131,11 @@ _body_key(code::Integer, item::AbstractString) = _pool_key("BODY", code, "_", st
 
 # `bodvrd_c` signals SPICE(NOTRANSLATION) for a name without a code, where the state
 # calls signal SPICE(IDCODENOTFOUND).
-function _bodvrd_code(ks::KernelSet, body)
-    try
-        return body_code(ks, body)
-    catch e
-        (e isa SpiceError && e.kind === :idcodenotfound) || rethrow()
-        throw(SpiceError(:notranslation, "bodvrd: the body name '$body' has no NAIF ID code"))
-    end
+_bodvrd_code(::KernelSet, body::Integer) = Int32(body)
+function _bodvrd_code(ks::KernelSet, body::AbstractString)
+    c = _body_code_lookup(ks.name2code, body)
+    c === nothing && throw(SpiceError(:notranslation, "bodvrd: the body name '$body' has no NAIF ID code"))
+    return c
 end
 
 """
@@ -144,9 +149,11 @@ code. `item` is case sensitive, as in CSPICE;
 blanks around it are ignored. The values have the units of the kernel: km for
 `"RADII"`, km^3/s^2 for `"GM"` in the NAIF kernels. There is no `maxn` argument.
 
-Throws `SpiceError(:notranslation)` if the body name is not known,
-`SpiceError(:kernelvarnotfound)` if the variable is not in the pool and `SpiceError(:typemismatch)`
-if it holds character values.
+Throws `SpiceError`:
+- `:emptystring` if `body` or `item` is the empty string;
+- `:notranslation` if the body name is not known;
+- `:kernelvarnotfound` if the variable is not in the pool;
+- `:typemismatch` if it holds character values.
 
 # Examples
 ```julia
@@ -156,8 +163,11 @@ a, b, c = bodvrd("EARTH", "RADII")    # km
 
 See also [`bodvcd`](@ref), [`gdpool`](@ref).
 """
-bodvrd(ks::KernelSet, body::NameOrID, item::AbstractString) =
-    gdpool(ks, _body_key(_bodvrd_code(ks, body), item))
+function bodvrd(ks::KernelSet, body::NameOrID, item::AbstractString)
+    body isa AbstractString && _chkfstr("bodvrd", "body name", body)   # CHKFSTR of bodvrd_c,
+    _chkfstr("bodvrd", "item", item)                                     # body then item
+    return gdpool(ks, _body_key(_bodvrd_code(ks, body), item))
+end
 
 """
     bods2c([ctx,] name) -> Union{Int,Nothing}
@@ -167,8 +177,10 @@ Return the NAIF ID code of the body `name`, or `nothing` if the name is not know
 
 `name` is a body name or a string that holds an integer, such as `"399"`. Letter case
 and blanks around the name are ignored. Names from the kernel pool and from
-[`boddef`](@ref) have priority over the built-in names. `nothing` takes the place of
-the `found` flag of CSPICE.
+[`boddef`](@ref) have priority over the built-in names; only the first 36 characters
+of a name count, as in CSPICE. `nothing` takes the place of the `found` flag of CSPICE.
+
+Throws `SpiceError(:emptystring)` if `name` is the empty string.
 
 # Examples
 ```jldoctest
@@ -179,12 +191,9 @@ julia> bods2c("Earth"), bods2c("-77"), bods2c("NO SUCH BODY")
 See also [`bodn2c`](@ref), [`bodc2n`](@ref).
 """
 function bods2c(ks::KernelSet, name::AbstractString)
-    try
-        return Int(body_code(ks, name))
-    catch e
-        e isa SpiceError && e.kind === :idcodenotfound && return nothing
-        rethrow()
-    end
+    _chkfstr("bods2c", "body name", name)         # CHKFSTR of bods2c_c
+    c = _body_code_lookup(ks.name2code, name)
+    return c === nothing ? nothing : Int(c)
 end
 
 """
@@ -197,6 +206,8 @@ known, as
 Different from [`bods2c`](@ref), a string that holds an integer is not a name.
 `nothing` takes the place of the `found` flag of CSPICE.
 
+Throws `SpiceError(:emptystring)` if `name` is the empty string.
+
 # Examples
 ```jldoctest
 julia> bodn2c("MOON"), bodn2c("301")
@@ -204,14 +215,9 @@ julia> bodn2c("MOON"), bodn2c("301")
 ```
 """
 function bodn2c(ks::KernelSet, name::AbstractString)
-    code = bods2c(ks, name)
-    code === nothing && return nothing
-    # `bods2c` also accepts integer strings (`_parse_int_name`, as `beint`); accept one
-    # only if it is a defined name.
-    if _parse_int_name(name) !== nothing
-        haskey(ks.name2code, normalize_name(name)) || return nothing
-    end
-    return code
+    _chkfstr("bodn2c", "body name", name)         # CHKFSTR of bodn2c_c
+    c = _body_name_code(ks.name2code, name)
+    return c === nothing ? nothing : Int(c)
 end
 
 """
@@ -322,7 +328,8 @@ end
 Return the ID of the frame `name`, or 0 if the frame is not known, as
 [`namfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/namfrm_c.html).
 
-Built-in frames and frames defined in the kernel pool are known.
+Built-in frames and frames defined in the kernel pool are known. Throws
+`SpiceError(:emptystring)` if `name` is empty.
 
 # Examples
 ```jldoctest
@@ -333,12 +340,16 @@ julia> namfrm("J2000"), namfrm("eclipj2000"), namfrm("NO_SUCH_FRAME")
 See also [`frmnam`](@ref), [`frinfo`](@ref).
 """
 function namfrm(ks::KernelSet, name::AbstractString)
-    try
-        return Int(frame_id(ks, name))
-    catch e
-        e isa SpiceError && e.kind === :unknownframe && return 0
-        rethrow()
-    end
+    _chkfstr("namfrm", "frame name", name)
+    return _namfrm(ks, name)
+end
+
+"Contract: `namfrm_` of SPICELIB, without the empty-string check of `namfrm_c`: the frame ID of `name`, or 0."
+function _namfrm(ks::KernelSet, name::AbstractString)
+    # The lookups of `frame_id`, without its error for an unknown name.
+    id = name_lookup(BUILTIN_FRAMENAME2ID, name)
+    id === nothing && (id = name_lookup(ks.framename2id, name))
+    return id === nothing ? 0 : Int(id)
 end
 
 """

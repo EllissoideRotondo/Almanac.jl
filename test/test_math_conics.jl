@@ -154,6 +154,11 @@ group("16. math: conics") do
         mu = 398600.4418
         s = SVector(7000.0, 100.0, -300.0, 0.3, 7.2, 1.9)
         @test prop2b(mu, s, 0.0) ≈ s rtol = 4eps()
+        # dt = 0 returns the initial state as CSPICE does, signed zeros included (the
+        # formulas, which give the derivative of the root to the AD packages, would not)
+        z = SVector(-0.0, 7000.0, 0.0, 7.2, -0.0, 1.9)
+        @test isequal(prop2b(mu, z, 0.0), z)
+        @test ForwardDiff.derivative(τ -> prop2b(mu, s, τ), 0.0)[SVector(1, 2, 3)] ≈ s[SVector(4, 5, 6)] rtol = 4eps()
         @test prop2b(mu, prop2b(mu, s, 5000.0), -5000.0) ≈ s rtol = 1.0e-12
         @test prop2b(mu, prop2b(mu, s, 1234.0), 4321.0) ≈ prop2b(mu, s, 5555.0) rtol = 1.0e-12
         @test throws_kind(() -> prop2b(0.0, s, 1.0), :nonpositivemass)

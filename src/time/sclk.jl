@@ -373,16 +373,18 @@ end
     _lparsm(list, delims, nmax) -> Vector{SubString{String}}
 
 Items of `list` separated by any character of `delims`, at most `nmax`, as `lparsm_`:
-blanks around an item are dropped, two delimiters in a row give a blank item, a run of
-blanks counts as one delimiter and joins a non-blank delimiter next to it, and a list
-that ends with a delimiter has a last blank item. A blank list has one blank item.
+leading blanks of an item are dropped, two delimiters in a row give a blank item, and a
+list that ends with a delimiter has a last blank item. A blank list has one blank item.
+A blank is a delimiter only if `delims` holds one; then a run of blanks counts as one
+delimiter and joins a non-blank delimiter next to it. Without a blank in `delims` an
+item keeps the blanks before the delimiter that ends it, as the item of `lparsm_` does.
 """
 function _lparsm(list::AbstractString, delims::AbstractString, nmax::Int)
     s = String(rstrip(list, ' '))
     items = SubString{String}[]
     isempty(s) && return push!(items, SubString(s, 1, 0))
     c = codeunits(s)
-    isdelim(k) = UInt8(' ') == c[k] || Char(c[k]) in delims
+    isdelim(k) = Char(c[k]) in delims
     eol = length(c)
     b = 1
     while b <= eol
@@ -430,7 +432,8 @@ Return the tick count of the clock string `clkstr` of the clock `sc`, as
 `clkstr` has no partition number. Its fields are given most significant first and are
 separated by `.`, `:`, `-`, `,` or blanks. Each field counts from its offset, the
 value of `SCLK01_OFFSETS` in the SCLK kernel (the value of the field when the count is
-zero). A blank field counts as its offset. The result is a count inside one partition,
+zero). A blank field counts as its offset. Only the first 30 characters of a field are
+read, as in CSPICE. The result is a count inside one partition,
 not an encoded clock value; see [`scencd`](@ref).
 
 Throws `SpiceError(:invalidsclkstring)` if the string is blank, has too many fields,
@@ -440,44 +443,60 @@ Also throws the SCLK kernel errors of [`sct2e`](@ref).
 See also [`scfmt`](@ref).
 """
 function sctiks(ks::KernelSet, sc::Integer, clkstr::AbstractString)
-    clock = _sclk(ks, sc)
-    isempty(strip(clkstr)) && throw(SpiceError(:invalidsclkstring, "the clock string is blank"))
+    ticks, msg = _sclk_ticks(_sclk(ks, sc), clkstr)
+    isempty(msg) || throw(SpiceError(:invalidsclkstring, msg))
+    return ticks
+end
+
+"""
+    _sclk_ticks(clock, clkstr) -> (ticks, errmsg)
+
+Tick count of the clock string `clkstr` (no partition number) of `clock`, and `""`; or
+0 and the message of `scps01_` for a string that is blank, has too many fields, has a
+field that is not a number or a field below its offset. A field is cut to 30 bytes, and
+only the blank counts as white space, as in `scps01_`. [`sctiks`](@ref) and the time
+values of EK queries share it.
+"""
+function _sclk_ticks(clock::SclkType1, clkstr::AbstractString)
+    isempty(strip(clkstr, ' ')) &&
+        return 0.0, "Non partition part of the input clock string is blank."
     cmptks = _sclk_cmptks(clock)
     items = _lparsm(clkstr, _SCLK_DELIMS, _SCLK_MXNFLD)
-    length(items) > clock.nfield && throw(
-        SpiceError(
-            :invalidsclkstring,
-            "the clock string '$clkstr' has $(length(items)) fields, which is too many"
+    n = length(items)
+    n > clock.nfield && return 0.0, _repmc(
+            _repmc(
+                _repmc(
+                    "Input clock string # has # fields; maximum for this spacecraft clock is #.",
+                    clkstr
+                ), n
+            ), Int(clock.nfield)
         )
-    )
     ticks = 0.0
-    for (i, item) in enumerate(items)       # invariant: ticks = sum over the fields 1:i-1
-        value = if isempty(strip(item))
-            clock.offsets[i]
-        else
+    for (i, field) in enumerate(items)      # invariant: ticks = sum over the fields 1:i-1
+        item = _cut_bytes(field, 30)         # `scps01_` reads items of 30 characters
+        value = clock.offsets[i]
+        if !isempty(strip(item, ' '))
             try
-                _nparsd(strip(item))
+                isascii(item) || throw(SpiceError(:badnumber, "not a number"))
+                value = _nparsd(strip(item, ' '))
             catch err
                 err isa SpiceError || rethrow()
-                throw(
-                    SpiceError(
-                        :invalidsclkstring,
-                        "could not parse SCLK component '$item' of '$clkstr' as a number"
+                return 0.0, _repmc(
+                        _repmc("Could not parse SCLK component # from # as a number.", item),
+                        clkstr
                     )
-                )
             end
         end
         value -= clock.offsets[i]
-        _dnint(value) < 0 && throw(
-            SpiceError(
-                :invalidsclkstring,
-                "component number $i of the SCLK string '$clkstr' is less than its field " *
-                    "offset $(clock.offsets[i])"
+        _dnint(value) < 0 && return 0.0, _repmc(
+                _repmc(
+                    _repmc("Component number #, # in the SCLK string  # is invalid.", i),
+                    item
+                ), clkstr
             )
-        )
         ticks += value * cmptks[i]
     end
-    return ticks
+    return ticks, ""
 end
 
 """
@@ -488,7 +507,8 @@ partition number, as
 [`scfmt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scfmt_c.html).
 
 `ticks` is rounded to a whole number and split into the fields of the clock. Each
-field is written with leading zeros to the width of its largest value, with the
+field is written with leading zeros to the width of its largest value (a field of
+1e14 or more with its first 14 significant digits only, as in CSPICE), with the
 output delimiter of the clock between the fields: the character `.`, `:`, `-`, `,` or
 blank that `SCLK01_OUTPUT_DELIM_<-sc>` selects with 1 to 5. This is the inverse of
 [`sctiks`](@ref).
@@ -527,15 +547,35 @@ function scfmt(ks::KernelSet, sc::Integer, ticks::Real)
         end
         width = trunc(Int, log10(clock.moduli[i] + clock.offsets[i] - 1.0 + 0.5)) + 1
         i > 1 && print(io, delim)
-        print(io, lpad(string(trunc(BigInt, abs(value))), width, '0'))
+        print(io, lpad(_sclk_field_digits(value), width, '0'))
     end
     return String(take!(io))
 end
 
-"Rounded partition bounds and rounded running totals of `clock` (`scencd_`, `scdecd_`)."
-function _sclk_partitions(clock::SclkType1)
-    pstart = _dnint.(clock.pstart)
-    pstop = _dnint.(clock.pstop)
+"""
+    _sclk_field_digits(value) -> String
+
+The digits that `scfm01` writes for a field: the characters before the decimal point of
+`dpstrf_(value, 30, 'F')` without its sign. `dpstrf` keeps at most 14 significant
+digits, so a field of 1e14 or more is rounded to them and ends in zeros.
+"""
+function _sclk_field_digits(value::Float64)
+    abs(value) < 1.0e14 && return string(trunc(Int, abs(value)))    # all digits are exact
+    s = String(_inline(_dpstrf(_ByteBuf(), value, 30)))
+    dot = something(findfirst(==('.'), s), ncodeunits(s) + 1)
+    return s[2:(dot - 1)]
+end
+
+"""
+    _sclk_partitions(clock, rounded = true) -> (pstart, pstop, ptotls)
+
+Partition bounds of `clock` and the rounded running totals of the partition lengths.
+`rounded` rounds the bounds to whole ticks first, as `scencd_` and `scdecd_` do;
+`scpars_` takes them as they are.
+"""
+function _sclk_partitions(clock::SclkType1, rounded::Bool = true)
+    pstart = rounded ? _dnint.(clock.pstart) : copy(clock.pstart)
+    pstop = rounded ? _dnint.(clock.pstop) : copy(clock.pstop)
     ptotls = similar(pstart)
     acc = 0.0
     for i in eachindex(pstart)      # invariant: acc = rounded length of partitions 1:i-1
@@ -569,65 +609,71 @@ Also throws the SCLK kernel errors of [`sct2e`](@ref).
 See also [`scdecd`](@ref), [`scs2e`](@ref).
 """
 function scencd(ks::KernelSet, sc::Integer, sclkch::AbstractString)
-    clock = _sclk(ks, sc)
-    pstart, pstop, ptotls = _sclk_partitions(clock)
+    sclkdp, kind, msg = _sclk_encode(_sclk(ks, sc), sc, sclkch, true)
+    isempty(msg) || throw(SpiceError(kind, msg))
+    return sclkdp
+end
+
+"""
+    _sclk_encode(clock, sc, sclkch, scencd) -> (sclkdp, kind, errmsg)
+
+Encoded clock value of the clock string `sclkch` (`"partition/fields"`, the partition
+optional) of `clock`, the clock of the spacecraft `sc`, with `:none` and `""`; or 0, the error kind of `scencd_` and the
+message of `scpars_`. The fields are read before the partition number, which is cut
+toward zero (`nparsi_`). With `scencd` true the count and the partition bounds are
+rounded to whole ticks, as in `scencd_`; with `scencd` false they are not, and a blank
+string is an error of its own, as in `scpars_`, which the time values of EK queries use.
+"""
+function _sclk_encode(clock::SclkType1, sc::Integer, sclkch::AbstractString, scencd::Bool)
+    pstart, pstop, ptotls = _sclk_partitions(clock, scencd)
     nparts = length(pstart)
-    pos = findfirst('/', sclkch)
-    # As `scencd_`: a slash in the first column is BADPARTNUMBER; then the fields are
-    # converted (no fields is INVALIDSCLKSTRING), and only then is the partition number
-    # read.
-    pos == 1 && throw(
-        SpiceError(
-            :badpartnumber,
-            "unable to parse the partition number from the SCLK string '$sclkch'"
-        )
-    )
-    fields = pos === nothing ? sclkch : SubString(sclkch, nextind(sclkch, pos))
-    isempty(strip(fields)) && throw(
-        SpiceError(
-            :invalidsclkstring,
-            "no SCLK components follow the slash in the SCLK string '$sclkch'"
-        )
-    )
-    ticks = _dnint(sctiks(ks, sc, fields))
+    !scencd && isempty(strip(sclkch, ' ')) &&
+        return 0.0, :invalidsclkstring, "Input spacecraft clock string is blank."
+    pos = something(findfirst('/', sclkch), 0)
+    badpart = "Unable to parse the partition number from SCLK string #."
+    kind = :badpartnumber    # the kinds are named by `kind = ...` for the registry test
+    pos == 1 && return 0.0, kind, _repmc(badpart, sclkch)
+    fields = SubString(sclkch, pos == 0 ? 1 : nextind(sclkch, pos))
+    ticks, msg = _sclk_ticks(clock, fields)
+    isempty(msg) || return 0.0, :invalidsclkstring, msg
+    scencd && (ticks = _dnint(ticks))
     part = 1
-    if pos !== nothing
-        x = try
-            _nparsd(strip(SubString(sclkch, 1, prevind(sclkch, pos))))
+    if pos > 1
+        part = try
+            _nparsi(SubString(sclkch, 1, prevind(sclkch, pos)))
         catch err
             err isa SpiceError || rethrow()
-            throw(
-                SpiceError(
-                    :badpartnumber,
-                    "unable to parse the partition number from the SCLK string '$sclkch'"
-                )
-            )
+            return 0.0, kind, _repmc(badpart, sclkch)
         end
-        (1 <= trunc(x) <= nparts) || throw(
-            SpiceError(
-                :badpartnumber,
-                "partition number $(trunc(x)) of the SCLK string '$sclkch' is not in 1:$nparts"
+        (part <= 0 || part > nparts) && return 0.0, kind, _repmc(
+                _repmc(
+                    _repmc(
+                        "Partition number # taken from SCLK string # is not in acceptable " *
+                        "range 1 to #.", part
+                    ), sclkch
+                ), nparts
             )
-        )
-        part = trunc(Int, x)
-        (ticks < pstart[part] || ticks > pstop[part]) && throw(
-            SpiceError(
-                :notinpart,
-                "SCLK count $ticks is not inside partition number $part"
+        kind = :notinpart
+        (ticks < pstart[part] || ticks > pstop[part]) && return 0.0, kind, _repmc(
+                _repmc(
+                    "SCLK count from # does not fall in the boundaries of partition number #.",
+                    fields
+                ), part
             )
-        )
     else
         while part <= nparts && (ticks < pstart[part] || ticks > pstop[part])
             part += 1                # invariant: partitions 1:part-1 do not hold `ticks`
         end
-        part > nparts && throw(
-            SpiceError(
-                :nopartition,
-                "SCLK count $ticks is not inside any partition of the spacecraft clock $sc"
+        kind = :nopartition
+        part > nparts && return 0.0, kind, _repmc(
+                _repmc(
+                    "SCLK count # does not fall in the boundaries of any of the partitions " *
+                    "for spacecraft #.", fields
+                ), Int(sc)
             )
-        )
     end
-    return part > 1 ? ticks - pstart[part] + ptotls[part - 1] : ticks - pstart[part]
+    sclkdp = part > 1 ? ticks - pstart[part] + ptotls[part - 1] : ticks - pstart[part]
+    return sclkdp, :none, ""
 end
 
 """

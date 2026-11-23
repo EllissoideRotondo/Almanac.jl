@@ -17,7 +17,9 @@ Set or get a default of the time conversions of `ctx`, as
 [`timdef_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/timdef_c.html).
 
 `action` is `"SET"` or `"GET"` and `item` is `"CALENDAR"`, `"SYSTEM"` or `"ZONE"`;
-letter case is ignored. `"GET"` returns the default (`""` if the item is not set).
+letter case is ignored. As in CSPICE, only the first 16 characters of the item and of
+the value count, after the leading blanks, and a zone keeps its first 14 characters.
+`"GET"` returns the default (`""` if the item is not set).
 `"SET"` stores `value` and returns the stored form.
 
 | `item`       | Values                                                                 | At start      |
@@ -65,7 +67,7 @@ function timdef(
             "timdef: the action and the item must not be empty strings"
         )
     )
-    act = uppercase(strip(action, ' '))
+    act = _ljucase(action)
     act == "GET" && return _timdef_get(timedefaults(ctx), item)
     act == "SET" && isempty(value) && throw(
         SpiceError(
@@ -190,7 +192,7 @@ julia> try
 """
 function tparch(ctx::SpiceContext, type::AbstractString)
     _chkfstr("tparch", "argument type", type)
-    check = uppercase(replace(type, ' ' => "")) == "YES"
+    check = _eqstr(type, "YES")                     # `eqstr_` of `tparch_`
     lock(ctx.lock) do
         d = timedefaults(ctx)
         @atomic ctx.timedefs = TimeDefaults(d.calendar, d.system, d.zone, d.yearbound, check)

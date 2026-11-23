@@ -6,8 +6,18 @@
 const _SEC_PER_CENTURY = _SPD * 36525.0          # seconds per Julian century
 const _RPD = pi / 180                # radians per degree, `rpd_`
 
-"Maximum number of frames between a frame and J2000 that `frame_rotation` follows."
+"""
+Number of frames of the chain of the first frame that `frame_rotation` keeps, as the
+arrays of `zzrefch0_` hold them: further links are folded into the last one, so a chain
+can be of any length, but a frame of the second chain meets only those frames.
+"""
 const MAX_FRAME_CHAIN = 10
+
+"""
+Number of links after which a frame chain is taken to be a cycle of frame definitions
+and throws `SpiceError(:framechain)`; `zzrefch0_` has no bound and never returns.
+"""
+const _FRAME_CHAIN_LIMIT = 1000
 
 # --- small rotation helpers -----------------------------------------------------------
 
@@ -74,11 +84,6 @@ Barycenter code of the planetary system of `body` (planets and satellites `PNN` 
 """
 _bodbry(body::Integer) =
     100 <= body <= 999 ? Int(body) ÷ 100 : 10000 <= body <= 99999 ? Int(body) ÷ 10000 : Int(body)
-
-function _pool_numbers(pool::AbstractDict, name::AbstractString)
-    v = get(pool, name, nothing)
-    return v isa Vector{Float64} ? v : nothing
-end
 
 _pool_numbers_or_empty(pool, name) = something(_pool_numbers(pool, name), Float64[])
 
@@ -732,10 +737,9 @@ end
     _frame_step(ks, id, et::T) -> (parent::Int32, rot::Mat3{T})
 
 One link of the frame chain: the frame that `id` is defined relative to and the matrix
-from frame `id` to that parent at `et`. Requires `id != 1`. A class 3 (CK) frame is
-linked to J2000 directly and throws `SpiceError(:noframeconnect)` without a CK segment
-for `et`. A class 5 (dynamic) frame is linked to its base frame and a class 6 (switch)
-frame to J2000. A class 4 frame without data throws the error of `_tk_missing`.
+from frame `id` to that parent at `et`, for a frame of class 1, 2, 4 or 7; `_chain_step`
+links the frames of classes 3, 5 and 6. Requires `id != 1`. A class 4 frame without
+data throws the error of `_tk_missing`.
 """
 function _frame_step(ks::KernelSet, id::Int32, et::T) where {T <: Real}
     fd = frame_def(ks, id)
@@ -748,14 +752,6 @@ function _frame_step(ks::KernelSet, id::Int32, et::T) where {T <: Real}
         tk = get(ks.tk, id, nothing)
         tk === nothing && _tk_missing(ks, fd)
         return tk.relative, Mat3{T}(tk.rot)
-    elseif class == 3 || class == 6
-        # A CK frame is linked to J2000 in one step, through the reference frame of
-        # the CK segment that covers the epoch (`ck.jl`); a switch frame through the
-        # base frame that is selected for the epoch (`switchframes.jl`).
-        return _J2000_FRAME, _ck_chain_to(_CKExact(), ks, id, _J2000_FRAME, et)
-    elseif class == 5
-        # A dynamic frame is linked to its base frame (`dynframes.jl`).
-        return _dyn_frame_step(_CKExact(), ks, fd, et)
     elseif class == FRAME_PROVIDER_CLASS
         p = frame_provider(ks, fd)
         p === nothing || return p.relative, provider_rotation(p, et)
@@ -771,21 +767,19 @@ end
 """
     _frame_parent(ks, id) -> Int32
 
-The frame that `id != 1` is defined relative to, without any evaluation: the relative
-frame of a class 4 frame, the base frame of a class 5 frame, J2000 for classes 1, 2, 3
-and 6. Throws as `_frame_step` does.
+The frame that `id != 1` is defined relative to, without any evaluation, for a frame
+of class 1, 4 or 7 (`_ck_in_chain` stops at the other classes): the relative frame of a
+class 4 frame, J2000 for class 1. Throws as `_frame_step` does.
 """
 function _frame_parent(ks::KernelSet, id::Int32)
     fd = frame_def(ks, id)
     class = fd.class
-    (class == 1 || class == 2) && return _J2000_FRAME
+    class == 1 && return _J2000_FRAME
     if class == 4
         tk = get(ks.tk, id, nothing)
         tk === nothing && _tk_missing(ks, fd)
         return tk.relative
     end
-    (class == 3 || class == 6) && return _J2000_FRAME
-    class == 5 && return _dyn_base(ks, id)
     if class == FRAME_PROVIDER_CLASS
         p = frame_provider(ks, fd)
         p === nothing || return p.relative
@@ -801,7 +795,7 @@ end
 @noinline _chain_too_long(id) = throw(
     SpiceError(
         :framechain,
-        "the chain of frame $id does not reach J2000 in $MAX_FRAME_CHAIN steps"
+        "the chain of frame $id does not reach J2000 in $_FRAME_CHAIN_LIMIT links; the frame definitions may form a cycle"
     )
 )
 
@@ -812,7 +806,7 @@ Matrix that rotates vectors from frame `from` to frame `to` at `et` (ET seconds)
 generic over the epoch type. The chain of `from` is evaluated link by link (class 4 to
 its relative frame, class 3 to the reference frame of its CK segment for `et`, classes 1
 and 2 to J2000) until it reaches `to` or J2000, then the chain of `to` until it meets it,
-as `zzrefch0_` of CSPICE does (`_chain_rotation`), at most `MAX_FRAME_CHAIN` links each.
+as `zzrefch0_` of CSPICE does (`_chain_rotation`).
 `from == to` gives the identity.
 A class 3 (CK) frame is evaluated as `ckfrot_` does, see `_ck_frame_step`; with a
 `Taylor` epoch the result holds the derivatives of the interpolated rotation. Class 5

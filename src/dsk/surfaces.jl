@@ -424,9 +424,9 @@ function _dsk_surface_setup(
     fixref isa AbstractString && _chkfstr("latsrf/srfnrm", "string `fixref`", fixref)
     trgcde = _dsk_target(ks, target)
     fixfid = _dsk_frame_code(ks, fixref)
-    center = fixfid == 0 ? nothing : _dsk_frame_center(ks, fixfid)
-    center === nothing && throw(SpiceError(:noframe, "the reference frame $fixref is not recognized"))
-    center == trgcde || throw(
+    fd = fixfid == 0 ? nothing : _frame_def_or_nothing(ks, fixfid)
+    fd === nothing && throw(SpiceError(:noframe, "the reference frame $fixref is not recognized"))
+    fd.center == trgcde || throw(
         SpiceError(
             :invalidframe, "the reference frame $fixref is " *
                 "not centered at the target body $target"
@@ -442,9 +442,22 @@ function _dsk_surface_setup(
     return trgcde, fixfid, shape, srflst
 end
 
-"The three radii of the body `code` from the kernel pool; throws `SpiceError(:badaxislength)` unless all are positive."
+"""
+    _dsk_radii(ks, code) -> NTuple{3,Float64}
+
+The radii of the body `code` as `latsrf` and `srfnrm` read them, with `zzbodvcd` and
+room for 3 values: more values are `SpiceError(:arraytoosmall)`, as in `bodvcd`. With
+fewer, CSPICE uses the radius that its saved array still holds (0 on the first call),
+which is `:badaxislength` here, as is a radius that is not positive.
+"""
 function _dsk_radii(ks::KernelSet, code::Integer)
     radii = bodvrd(ks, code, "RADII")
+    length(radii) > 3 && throw(
+        SpiceError(
+            :arraytoosmall,
+            "BODY$(code)_RADII has $(length(radii)) values; there is room for 3"
+        )
+    )
     length(radii) == 3 || throw(
         SpiceError(
             :badaxislength,
@@ -499,10 +512,11 @@ Throws `SpiceError`:
   target;
 - `:badmethodsyntax` if `method` is not valid, `:badpriorityspec` if a DSK method does not
   have `UNPRIORITIZED`, `:invalidmethod` if `method` has a sub-observer point type;
-- `:kernelvarnotfound` if the radii are not loaded, `:badaxislength` if they are not three
-  positive values (ellipsoid);
+- `:kernelvarnotfound` if the radii are not loaded, `:arraytoosmall` if there are more
+  than three, `:badaxislength` if there are fewer or one is not positive (ellipsoid);
 - `:noloadeddskfiles` if no DSK file is loaded, `:dskdatanotfound` if no DSK segment of
-  the target with a listed surface is loaded,
+  the target with a listed surface is loaded, `:noframedata` if the frame of such a
+  segment is not known, `:noframeinfo` if that of another segment of the target is not,
   `:pointnotfound` if a ray meets no surface, `:shapenotsupported` if an intercept is on
   the far side of the center (DSK).
 
@@ -543,15 +557,16 @@ function _dsk_latsrf(
         end
         return out
     end
-    _dsk_check_files(ks)
-    segs = get(ks.dsk, trgcde, nothing)
-    segs === nothing && _dsk_no_segments(trgcde, srflst)
-    r = _dsk_sph(ks, segs, trgcde, srflst)[2] * 2
+    # `zzsudski` (`zzdsksph`) first; the checks of `zzdsksba` come with the first ray
+    maxrad = _dsk_body_sph(ks, trgcde, srflst)[2]
+    r = maxrad * 2
+    npts == 0 && return out
+    segs = _dsk_body_segments(ks, trgcde)
     t = Float64(et)
     for i in 1:npts                      # invariant: out[1:i-1] holds the points 1 .. i-1
         lon, lat = _dsk_get2(lonlat, i)
         x = _dsk_latrec(r, lon, lat)
-        xpt, _, _, found = _dsk_bux(ks, tols, trgcde, srflst, t, fixfid, x, -x)
+        xpt, _, _, found = _dsk_bux_ray(ks, tols, segs, maxrad, trgcde, srflst, t, fixfid, x, -x)
         found || throw(
             SpiceError(
                 :pointnotfound, "no surface point was found on body " *
@@ -583,11 +598,13 @@ point lies.
 
 Throws `SpiceError`:
 - the kinds of [`latsrf`](@ref) for `method`, `target` and `fixref`;
-- `:kernelvarnotfound` if the radii are not loaded, `:badaxislength` if they are not three
-  positive values, `:pointnotonsurface` if a point is not on the ellipsoid within the
+- `:kernelvarnotfound` if the radii are not loaded, `:arraytoosmall` if there are more
+  than three, `:badaxislength` if there are fewer or one is not positive,
+  `:pointnotonsurface` if a point is not on the ellipsoid within the
   point-membership margin `PTMEMM`, 1e-7 unless [`dskstl`](@ref) set another (ellipsoid);
 - `:noloadeddskfiles` if no DSK file is loaded, `:nodsksegments` if no DSK segment of
-  the target is loaded, `:pointnotinsegment` if no segment holds a point,
+  the target is loaded, `:noframeinfo` if the frame of a segment of the target is not
+  known, `:pointnotinsegment` if no segment holds a point,
   `:pointoffsurface` if a point is not on a plate (DSK).
 """
 function srfnrm(
