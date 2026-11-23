@@ -228,6 +228,16 @@ function _nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Int
     return Int(t)
 end
 
+"The number of `s` (`_nparsd`), or `nothing` where `nparsd` signals an error."
+function _try_nparsd(s::Union{AbstractString, AbstractVector{UInt8}})::Union{Float64, Nothing}
+    return try
+        _nparsd(s)
+    catch err
+        err isa SpiceError || rethrow()
+        nothing
+    end
+end
+
 "The integer of `s` (`_nparsi`), or `nothing` where `nparsi` signals an error."
 function _try_nparsi(s::Union{AbstractString, AbstractVector{UInt8}})::Union{Int, Nothing}
     return try

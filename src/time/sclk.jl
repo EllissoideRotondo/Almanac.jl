@@ -469,16 +469,12 @@ function _sclk_ticks(clock::SclkType1, clkstr::AbstractString)
         item = _cut_bytes(field, 30)         # `scps01_` reads items of 30 characters
         value = clock.offsets[i]
         if !isempty(strip(item, ' '))
-            try
-                isascii(item) || throw(SpiceError(:badnumber, "not a number"))
-                value = _nparsd(strip(item, ' '))
-            catch err
-                err isa SpiceError || rethrow()
-                return 0.0, _repmc(
-                        _repmc("Could not parse SCLK component # from # as a number.", item),
-                        clkstr
-                    )
-            end
+            x = isascii(item) ? _try_nparsd(strip(item, ' ')) : nothing
+            x === nothing && return 0.0, _repmc(
+                    _repmc("Could not parse SCLK component # from # as a number.", item),
+                    clkstr
+                )
+            value = x
         end
         value -= clock.offsets[i]
         _dnint(value) < 0 && return 0.0, _repmc(

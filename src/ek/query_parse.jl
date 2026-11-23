@@ -528,11 +528,8 @@ the message and the pointer of `nparsd_` for a number that is too large for a do
 (the only error that such a token can have).
 """
 function _ek_qnparsd(s::AbstractVector{UInt8})
-    try
-        return _nparsd(s), "", 0
-    catch err
-        err isa SpiceError || rethrow()
-    end
+    x = _try_nparsd(s)
+    x === nothing || return x, "", 0
     # The pointer of NPARSD: the exponent digit at which the exponent, with the count
     # of the mantissa digits that did not fit, passes 308; or one past the end.
     intval = decval = ecount = expval = 0.0

@@ -560,12 +560,8 @@ end
 
 "Return the value of the number in `s[j:k]` as `nparsd` computes it, or `old` if the text is not a number (`nparsd` leaves its output unchanged then)."
 function _tokval(s::Vector{UInt8}, j::Int, k::Int, old::Float64)::Float64
-    try
-        return _nparsd(@view s[j:k])
-    catch err
-        err isa SpiceError || rethrow()
-        return old
-    end
+    x = _try_nparsd(@view s[j:k])
+    return x === nothing ? old : x
 end
 
 """

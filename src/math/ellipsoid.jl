@@ -1522,12 +1522,7 @@ function edterm(
     srcrad = _positive_radii(ks, srcid)
     r = max(srcrad[1], srcrad[2], srcrad[3])
     t0 = Float64(et)
-    corr = try
-        Aberration(abcorr)
-    catch e
-        e isa SpiceError || rethrow()
-        throw(SpiceError(:spkinvalidoption, "the aberration correction $abcorr is not recognized"))
-    end
+    corr = _spk_abcorr(abcorr)
     trgpos, lttarg = spkpos(ks, Int(trgid), t0, frcode, abcorr, Int(obsid))
     trgepc = corr.uselt ? (corr.transmit ? t0 + lttarg : t0 - lttarg) : t0
     srcpos, _ = spkpos(ks, Int(srcid), trgepc, frcode, abcorr, Int(trgid))
