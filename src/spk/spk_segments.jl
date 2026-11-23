@@ -216,13 +216,7 @@ segment, then the one record. `seg` describes `rec` as a segment of one record a
 """
 function _spkpvn_record(h::DAFHandle, dc, ic, t::Float64)
     b, e, dtype = ic[5], ic[6], Int32(ic[4])
-    b <= 0 && throw(SpiceError(:dafnegaddr, "spkpvn: negative value for the first address: $b"))
-    b > e && throw(
-        SpiceError(
-            :dafbeggtend,
-            "spkpvn: beginning address ($b) greater than ending address ($e)"
-        )
-    )
+    _daf_check_range("spkpvn", b, e)
     _daf_directory_length(h.path, dtype, b, e)
     dir = dafgda(h, e - 3, e)
     init, intlen, rsize, nrec = _daf_directory_values(
@@ -324,13 +318,7 @@ function spkpvn(ks::KernelSet, file::AbstractString, descr::AbstractVector{<:Rea
     _, ic = dafus(descr, 2, 6)
     t = _spkpvn_epoch(ic[4], et)
     b, e = ic[5], ic[6]
-    b <= 0 && throw(SpiceError(:dafnegaddr, "spkpvn: negative value for the first address: $b"))
-    b > e && throw(
-        SpiceError(
-            :dafbeggtend,
-            "spkpvn: beginning address ($b) greater than ending address ($e)"
-        )
-    )
+    _daf_check_range("spkpvn", b, e)
     e <= length(daf.data) || throw(
         SpiceError(
             :filereadfailed,

@@ -281,6 +281,39 @@ function idw2at(idword::AbstractString)
 end
 
 """
+    _daf_check_arch(raw, path, who, want) -> Nothing
+
+The checks of the file record `raw` of `path` that `dafopr` and `dasopr` make before the
+byte order: the architecture is `want` (`"DAF"` or `"DAS"`; the other gives
+`SpiceError(:filarchmismatch)`, anything else `:unknownfilarc`), and an FTP validation
+string that is present is intact (`:ftpxfererror`).
+"""
+function _daf_check_arch(
+        raw::AbstractVector{UInt8}, path::AbstractString, who::AbstractString, want::String
+    )
+    other = want == "DAF" ? "DAS" : "DAF"
+    arch, _ = idw2at(String(raw[1:8]))
+    arch == other && throw(
+        SpiceError(:filarchmismatch, "$who: the file $path is a $other file, not a $want file")
+    )
+    arch == want || throw(
+        SpiceError(
+            :unknownfilarc,
+            "$who: the file $path is neither a DAF nor a DAS file"
+        )
+    )
+    if raw[700:705] == _DAF_FTPSTR[1:6] && raw[700:727] != _DAF_FTPSTR
+        throw(
+            SpiceError(
+                :ftpxfererror, "$who: the FTP validation string of $path is " *
+                    "damaged; the file was most likely moved in text mode"
+            )
+        )
+    end
+    return nothing
+end
+
+"""
     _daf_probe(path, who) -> (nd, ni, swap)
 
 Check that `path` is an existing DAF file that this machine can read, and return its
@@ -300,27 +333,7 @@ function _daf_probe(path::AbstractString, who::AbstractString)
                 "$who: $path is too short ($(length(raw)) bytes) to hold a DAF file record"
             )
         )
-        arch, _ = idw2at(String(raw[1:8]))
-        arch == "DAS" && throw(
-            SpiceError(
-                :filarchmismatch,
-                "$who: the file $path is a DAS file, not a DAF"
-            )
-        )
-        arch == "DAF" || throw(
-            SpiceError(
-                :unknownfilarc,
-                "$who: the file $path is neither a DAF nor a DAS file"
-            )
-        )
-        if raw[700:705] == _DAF_FTPSTR[1:6] && raw[700:727] != _DAF_FTPSTR
-            throw(
-                SpiceError(
-                    :ftpxfererror, "$who: the FTP validation string of $path is " *
-                        "damaged; the file was most likely moved in text mode"
-                )
-            )
-        end
+        _daf_check_arch(raw, path, who, "DAF")
         raw, _daf_little(io, raw, path, who)
     end
     swap = little != _DAF_NATIVE_LITTLE
@@ -824,6 +837,18 @@ end
 # Data
 # ---------------------------------------------------------------------------------------
 
+"Throws `SpiceError(:dafnegaddr)` if `first < 1` and `:dafbeggtend` if `first > last`."
+function _daf_check_range(who::AbstractString, first::Integer, last::Integer)
+    first <= 0 && throw(SpiceError(:dafnegaddr, "$who: negative value for the first address: $first"))
+    first > last && throw(
+        SpiceError(
+            :dafbeggtend,
+            "$who: beginning address ($first) greater than ending address ($last)"
+        )
+    )
+    return nothing
+end
+
 """
     dafgda(handle, first, last) -> Vector{Float64}
 
@@ -841,13 +866,7 @@ Throws `SpiceError(:dafnegaddr)` if `first < 1`, `:dafbeggtend` if `first > last
 """
 function dafgda(h::DAFHandle, first::Integer, last::Integer)
     _daf_check_open(h, "dafgda")
-    first <= 0 && throw(SpiceError(:dafnegaddr, "dafgda: negative value for the first address: $first"))
-    first > last && throw(
-        SpiceError(
-            :dafbeggtend,
-            "dafgda: beginning address ($first) greater than ending address ($last)"
-        )
-    )
+    _daf_check_range("dafgda", first, last)
     n = Int(last) - Int(first) + 1
     data = Vector{Float64}(undef, n)
     8 * Int(last) <= _daf_size(h) || throw(
