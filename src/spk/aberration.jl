@@ -109,11 +109,28 @@ function _abcode(s::AbstractString)
     return code
 end
 
+"The nine valid corrections in the spelling of CSPICE, with their flags."
+const _AB_SPELLINGS = (
+    ("NONE", 0x00), ("LT", _AB_LT), ("LT+S", _AB_LT | _AB_S), ("CN", _AB_LT | _AB_CN),
+    ("CN+S", _AB_LT | _AB_CN | _AB_S), ("XLT", _AB_X | _AB_LT),
+    ("XLT+S", _AB_X | _AB_LT | _AB_S), ("XCN", _AB_X | _AB_LT | _AB_CN),
+    ("XCN+S", _AB_X | _AB_LT | _AB_CN | _AB_S),
+)
+const _AB_CODES = map(p -> (_abcode(p[1]), p[2]), _AB_SPELLINGS)
+
+"The flags of the spelling packed in `code` by `_abcode`, or `0xff` if it is not valid."
+function _abcorr_flags(code::UInt64)
+    for (c, f) in _AB_CODES
+        c == code && return f
+    end
+    return 0xff
+end
+
 @noinline _throw_abcorr(s, why) = throw(
     SpiceError(
         :invalidoption,
-        "aberration correction \"$s\" $why; the valid values are NONE, LT, LT+S, CN, CN+S, " *
-            "XLT, XLT+S, XCN, XCN+S"
+        "aberration correction \"$s\" $why; the valid values are " *
+            join(first.(_AB_SPELLINGS), ", ")
     )
 )
 
@@ -144,15 +161,8 @@ end
         code = (code << 8) | UInt64(UInt8(uppercase(ch)))
         n += 1
     end
-    code == _abcode("NONE") && return _aberration(0x00)
-    code == _abcode("LT") && return _aberration(_AB_LT)
-    code == _abcode("LT+S") && return _aberration(_AB_LT | _AB_S)
-    code == _abcode("CN") && return _aberration(_AB_LT | _AB_CN)
-    code == _abcode("CN+S") && return _aberration(_AB_LT | _AB_CN | _AB_S)
-    code == _abcode("XLT") && return _aberration(_AB_X | _AB_LT)
-    code == _abcode("XLT+S") && return _aberration(_AB_X | _AB_LT | _AB_S)
-    code == _abcode("XCN") && return _aberration(_AB_X | _AB_LT | _AB_CN)
-    code == _abcode("XCN+S") && return _aberration(_AB_X | _AB_LT | _AB_CN | _AB_S)
+    f = _abcorr_flags(code)
+    f == 0xff || return _aberration(f)
     (
         code == _abcode("RL") || code == _abcode("RL+S") || code == _abcode("XRL") ||
             code == _abcode("XRL+S")
@@ -172,15 +182,9 @@ The flags of the nine common spellings of a correction, compared as they are, or
 (no valid set of flags) for any other string.
 """
 @inline function _abcorr_fast(s::AbstractString)
-    s == "NONE" && return 0x00
-    s == "LT" && return _AB_LT
-    s == "LT+S" && return _AB_LT | _AB_S
-    s == "CN" && return _AB_LT | _AB_CN
-    s == "CN+S" && return _AB_LT | _AB_CN | _AB_S
-    s == "XLT" && return _AB_X | _AB_LT
-    s == "XLT+S" && return _AB_X | _AB_LT | _AB_S
-    s == "XCN" && return _AB_X | _AB_LT | _AB_CN
-    s == "XCN+S" && return _AB_X | _AB_LT | _AB_CN | _AB_S
+    for (name, f) in _AB_SPELLINGS
+        s == name && return f
+    end
     return 0xff
 end
 
