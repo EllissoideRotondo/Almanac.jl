@@ -728,6 +728,9 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         @test occursin("blank", msg("  "))
         @test throws_kind(() -> str2et(Almanac.empty_kernelset(), "2000 Jan 1"), :noleapseconds)
         @test throws_kind(() -> str2et(ctx, "not a time"), :unparsedtime)
+        # The limits of `tpartv_`: 64 tokens, and a picture of 320 bytes.
+        @test throws_kind(() -> str2et(ctx, join(fill("1", 70), " ")), :unparsedtime)
+        @test throws_kind(() -> str2et(ctx, "2000 JAN 01 12:00:00." * repeat("1", 330)), :unparsedtime)
         @test throws_kind(() -> str2et(ctx, "2000 JAN 1 12:00 TDB PST"), :timeconflict)
         @test throws_kind(() -> str2et(ctx, "2000 JAN 1 12:00 UTC+13"), :timezoneerror)
     end
