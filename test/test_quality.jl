@@ -27,6 +27,8 @@ alloc_names(ctx, et) = @allocated spkezr(ctx, "MOON", et, "J2000", "NONE", "EART
 alloc_pxform_names(ctx, et) = @allocated pxform(ctx, "J2000", "IAU_EARTH", et)
 nalloc_mixed_names(ctx, et) = @allocations spkezr(ctx, "Moon", et, "J2000", "NONE", "Earth")
 nalloc_normalize(s) = @allocations Almanac.normalize_name(s)
+nalloc_str2et(ctx, s) = @allocations str2et(ctx, s)
+nalloc_timout(ctx, et, pictur) = @allocations timout(ctx, et, pictur)
 
 "Allocation of the second call of `f(args...)` (the first call compiles)."
 function warm(f, args...)
@@ -116,6 +118,23 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
         @test bodn2c(pctx, "étoile") == bodn2c(pctx, " ÉTOILE") == -78   # not ASCII: `uppercase`
         @test namfrm(pctx, " my frame ") == -77001 && namfrm(pctx, "MYFRAME") == 0
         @test Almanac.name_lookup(Almanac.NameTable(), "EARTH") === nothing
+    end
+
+    @apart @testset "time strings: str2et allocates nothing, timout only its result" begin
+        # The parser state (64 tokens, a picture of 320 bytes) and the line of `timout`
+        # stay on the stack.
+        for s in (
+                "2020-01-01T00:00:00", "2020 JAN 01 12:00:00.000 TDB", "JD 2451545.0",
+                "March 1, 2025 4:00 AM PST", "2025-03-01 12:00:00 UTC+5:30", "2025-060 // 12:00",
+            )
+            @test warm(nalloc_str2et, ctx, s) == 0
+        end
+        for pictur in (
+                "YYYY-MON-DD HR:MN:SC.### ::TDB", "Mon DD, YYYY AP:MN ampm ::UTC-8 ::RND",
+                "JULIAND.##### ::TDB", "Weekday ?ERA? YYYY-DOY HR:MN:SC.###### ::MCAL",
+            )
+            @test warm(nalloc_timout, ctx, et, pictur) == 1
+        end
     end
 
     @apart @testset "inferred return types" begin
