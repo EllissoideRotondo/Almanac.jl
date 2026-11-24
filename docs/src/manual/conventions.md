@@ -13,13 +13,22 @@ specification; the docstring gives the Julia signature, the units and what diffe
 ## Names, arguments and results
 
 - **Names.** The `_c` suffix is dropped: `spkezr_c` is [`spkezr`](@ref). A call that
-  changes one of its arguments ends in `!`, as [`wninsd!`](@ref).
+  changes a cell, a window or an array of the caller ends in `!`, as [`wninsd!`](@ref).
+  The writers keep the CSPICE names: `spkw05(handle, ...)` adds to the file of
+  `handle`.
 - **Results** are returned. Several results come back as a tuple:
   `state, lt = spkezr(...)`. The exceptions end in `!` and fill a container that the
   caller passes first: the cells below, the windows, and [`dskxv!`](@ref), which writes
   the intercepts into arrays of the caller so that it does not allocate.
 - **Arrays.** Vectors and matrices are returned as `SVector` and `SMatrix` of
   StaticArrays.jl. Inputs can be any `AbstractVector` or `AbstractMatrix`.
+
+### Allocation
+
+The state and rotation calls ([`spkezr`](@ref), [`spkpos`](@ref), [`spkder`](@ref),
+[`pxform`](@ref), [`sxform`](@ref), [`pxder`](@ref)) allocate nothing for a `Float64`
+epoch, with integer IDs or with names in any case. A call that throws allocates, and so
+does a chain of more than 10 SPK segments from a body to the common center.
 - **Strings** are returned as a `String`, so no call takes a string length.
 - **Memory arguments.** Counts, sizes, `room` and workspaces, which serve only C
   memory, are absent: [`gdpool`](@ref) takes only the name of the variable, and
@@ -51,8 +60,9 @@ also accepts a [`Almanac.KernelSet`](@ref), the immutable snapshot of a context 
 ## Errors and `found` flags
 
 - A call that fails throws a [`SpiceError`](@ref), in place of setting the error flag
-  of CSPICE. Most failures throw its subtype [`SpiceKindError`](@ref). The `kind` is
-  the CSPICE short message as a lower-case symbol
+  of CSPICE. Most failures throw its subtype [`SpiceKindError`](@ref).
+  `SpiceError(:x)` in the docstrings means an error of either subtype whose `kind` is
+  `:x`. The `kind` is the CSPICE short message as a lower-case symbol
   (`SPICE(INVALIDDEGREE)` is `:invaliddegree`), and its `msg` is the text. Conditions
   that CSPICE does not check have kinds of Almanac.jl, such as `:badarg`.
   [`Almanac.ERROR_KINDS`](@ref) lists every kind.
@@ -61,9 +71,12 @@ also accepts a [`Almanac.KernelSet`](@ref), the immutable snapshot of a context 
 - Missing SPK data throw the subtype [`SpkInsufficientDataError`](@ref), whose fields
   name the bodies and the epoch, and say whether the missing body has data at other
   epochs.
-- A lookup that has a `found` flag in CSPICE returns `nothing` when nothing is found:
-  [`bodn2c`](@ref) for an unknown name, [`ckgp`](@ref) without pointing data. A call
-  that must return a value throws instead, as [`gdpool`](@ref) for a missing variable.
+- A call that has a `found` flag in CSPICE returns `nothing` when nothing is found:
+  [`bodn2c`](@ref) for an unknown name, [`ckgp`](@ref) without pointing data. The
+  pool readers [`gdpool`](@ref), [`gcpool`](@ref) and [`gipool`](@ref) are the
+  exception: they return the values themselves, so they have no `found` flag and throw
+  `SpiceError(:kernelvarnotfound)` for a missing variable. [`expool`](@ref) and
+  [`dtpool`](@ref) test first.
 
 ## File handles and files open for write
 

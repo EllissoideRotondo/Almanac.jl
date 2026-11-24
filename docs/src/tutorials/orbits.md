@@ -8,6 +8,8 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
+[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
+
 ## Read the elements
 
 [`orbit`](@ref) takes the arguments of [`spkezr`](@ref), any aberration correction included, and the GM and radii of the observer from the kernel pool. The epoch of the orbit is `et`, the epoch of the observer:
@@ -61,7 +63,7 @@ round(leo.period / 60; digits=2)
 
 ## Propagate by two-body motion
 
-[`two_body`](@ref) moves an orbit to a new epoch (not by a step), forward or back, by Kepler motion without perturbations. The kernels of the manual hold two-body motion, so the result matches the SPK six hours later, here to a few µm (km, km/s):
+[`two_body`](@ref)`(o, t)` returns the orbit at the epoch `t`, before or after the epoch of `o`, by Kepler motion without perturbations. `t` is an epoch, not a time step. The kernels of the manual hold two-body motion, so the result matches the SPK six hours later, here to a few µm (km, km/s):
 
 ```@example orbits
 later = et + 6 * 3600.0
@@ -72,7 +74,7 @@ maximum(abs.(p.state - q.state))
 
 ## Compute a relative state
 
-[`relative_state`](@ref) gives the state of one orbit minus a chief orbit, in a local frame of the chief: `:ric` (radial, in-track, cross-track), `:vnc`, `:rcn` or `:tnw`, whose axes [`local_frame`](@ref) lists. Both orbits must have the same epoch, center and frame, so advance both:
+[`relative_state`](@ref) gives the state of one orbit, the deputy, minus that of a reference orbit, the chief, in a local frame of the chief: `:ric` (radial, in-track, cross-track), `:vnc`, `:rcn` or `:tnw`, whose axes [`local_frame`](@ref) lists. Both orbits must have the same epoch, center and frame, so advance both:
 
 ```@example orbits
 chief = two_body(o, later)

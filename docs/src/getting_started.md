@@ -9,7 +9,7 @@ include(joinpath(@__DIR__, "..", "fixture.jl"))
 
 ## Load kernels
 
-This page runs on [the example kernels](@ref "The example kernels") of the manual. `DocKernels.write`, defined in [`docs/fixture.jl`](https://github.com/Orbitology/Almanac.jl/blob/main/docs/fixture.jl) of the repository and not part of the package, writes them into a directory and returns their three paths: leap seconds, constants of the Sun and the Earth, and an SPK with the Earth and the spacecraft `PROBE`. To run the page without that file, load the real kernels shown below and replace `PROBE` with `MOON`.
+This page runs on [the example kernels](@ref "The example kernels") of the manual. `DocKernels.write`, defined in [`docs/fixture.jl`](https://github.com/Orbitology/Almanac.jl/blob/main/docs/fixture.jl) of the repository and not part of the package, writes them into a directory and returns their three paths: leap seconds, constants of the Sun and the Earth, and an SPK for the year 2025. The SPK holds the Sun at the solar system barycenter, the Earth on a two-body orbit around the Sun, and the spacecraft `PROBE` (NAIF ID -999) on a two-body orbit around the Earth. To run the page without that file, load the real kernels shown below and replace `PROBE` with `MOON`.
 
 ```@example first
 using Almanac
@@ -60,7 +60,7 @@ state, lt = spkezr("PROBE", et, "J2000", "NONE", "EARTH")
 state
 ```
 
-The state is an `SVector{6}`. The call does not allocate when the bodies and the frame are integer IDs, or upper-case names with single blanks such as `"MARS BARYCENTER"`. [`spkpos`](@ref) returns only the position:
+The state is an `SVector{6}`, and the call does not [allocate](@ref "Allocation"). [`spkpos`](@ref) returns only the position:
 
 ```@example first
 sun, lt_sun = spkpos("SUN", et, "J2000", "LT+S", "PROBE")
@@ -125,7 +125,7 @@ catch err
 end
 ```
 
-Missing SPK data throw the subtype [`SpkInsufficientDataError`](@ref), whose fields name the bodies and the epoch, and say whether the missing body has data at other epochs. [Conventions](@ref "Errors and `found` flags") gives the other rules for errors.
+[Conventions](@ref "Errors and `found` flags") gives the other rules for errors, among them the subtype for missing SPK data.
 
 ## Next steps
 

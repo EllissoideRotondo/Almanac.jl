@@ -25,15 +25,12 @@ pkg> add Almanac
   CK, binary PCK, DSK and EK files.
 - Beyond CSPICE: time derivatives of any order and automatic differentiation, tables
   for inner loops and GPU kernels, bodies and frames defined by Julia functions, and
-  orbital elements after ANISE. [What Almanac.jl adds](@ref) lists them all.
+  orbital elements after ANISE, a Rust astrodynamics library. [What Almanac.jl adds](@ref) lists them all.
 
 Use the wrapper [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl) instead when results
 must be bit-identical to the CSPICE library on every platform.
 
 ## Contents
-
-[Getting started](@ref) loads kernels, computes a state, a rotation and a sub-observer
-point, and searches for events.
 
 ### Tutorials
 
@@ -108,9 +105,13 @@ Depth = 1
 
 ## The example kernels
 
-The examples run on three small kernels that the manual writes itself: leap seconds,
-constants of the Sun and the Earth with a spacecraft named `PROBE`, and two-body orbits
-of the Earth and of `PROBE`, so the positions are not those of the real bodies.
+The examples run on three small kernels that
+[`docs/fixture.jl`](https://github.com/Orbitology/Almanac.jl/blob/main/docs/fixture.jl)
+of the repository writes: leap seconds, constants of the Sun and the Earth with the
+name of a spacecraft `PROBE`, and an SPK for the year 2025. The SPK holds the Sun at
+the solar system barycenter, the Earth on a two-body orbit around the Sun, and `PROBE`
+on a two-body orbit around the Earth, so the positions are not those of the real
+bodies.
 
 ## Reporting issues
 

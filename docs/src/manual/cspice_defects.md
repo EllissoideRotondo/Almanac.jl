@@ -5,8 +5,8 @@ those of CSPICE, or fixes it, so that its results differ for the inputs that the
 concerns. This page lists the known defects of the routines that Almanac.jl ports, and
 what Almanac.jl does about each.
 
-The defects come from the tests of Almanac.jl, from [NAIF's test suite](@ref "Run
-NAIF's test suite") replayed against Almanac.jl, and from the
+The defects come from the tests of Almanac.jl, from [NAIF's test suite](@ref "NAIF's test suite")
+replayed against Almanac.jl, and from the
 [list of SPICELIB bugs](https://github.com/jacobwilliams/pepper/blob/master/spicelib_bugs.md)
 of [PEPPER](https://github.com/jacobwilliams/pepper), a Fortran port of SPICELIB. Not
 listed: defects of routines that Almanac.jl does not port, and defects of the Fortran

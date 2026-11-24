@@ -8,6 +8,8 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
+[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
+
 ## Define the search window
 
 A [`Window`](@ref) is a sorted list of disjoint intervals. [`wninsd!`](@ref) adds an interval, [`wncard`](@ref) counts the intervals, and [`wnfetd`](@ref) returns one of them, counting from 1.
@@ -70,7 +72,7 @@ wncard(fast)                                # intervals with a speed above 8 km/
 
 ## Search on several threads
 
-Every search takes the keyword `threads`, `false` by default. With `threads=true` a search processes intervals on separate threads, and its result does not change.
+Every search takes the keyword `threads`, `false` by default. With `threads=true` a search processes intervals on separate threads, if Julia started with `--threads` or `JULIA_NUM_THREADS`, and its result does not change.
 
 - Every search runs the intervals of its confinement window in parallel.
 - `"="`, `"<"`, `">"`, and `"ABSMIN"` or `"ABSMAX"` with a nonzero adjustment, also run in parallel on the monotone intervals that they find first, so they gain even on a window of one interval.

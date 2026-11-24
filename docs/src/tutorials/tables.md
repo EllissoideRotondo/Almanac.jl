@@ -8,6 +8,8 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
+[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
+
 ## Build and evaluate an ephemeris table
 
 ```@example tab
@@ -19,7 +21,7 @@ tab = ephemeris_table("PROBE", t0, t1, "J2000", "NONE", "EARTH"; tol=1e-6)
 (tab.nint, tab.ncoef, tab.maxerr)           # intervals, coefficients per interval, measured error (km)
 ```
 
-`tol` is the accepted error in km; its default is 1e-12 times the largest distance in the table. [`table_position`](@ref), [`table_state`](@ref) and [`table_jet`](@ref) return the position, the state, and the position with its derivatives of any order.
+`tol` is the accepted error in km; its default is 1e-12 times the largest distance in the table. [`table_position`](@ref), [`table_state`](@ref) and [`table_jet`](@ref) return the position, the state, and the jet: the position with its time derivatives of orders 0 to `N`.
 
 ```@example tab
 et = t0 + 3600.0
@@ -33,7 +35,7 @@ acceleration                                # km/s²
 
 Epochs can be `ForwardDiff.Dual` numbers, also on the GPU.
 
-An epoch outside the table throws `SpiceError(:spkinsuffdata)`, not the [`SpkInsufficientDataError`](@ref) of `spkezr`. The check is a bounds check, which `@inbounds` removes, as GPU code requires; an epoch outside the table then extrapolates the nearest interval.
+An epoch outside the table throws a [`SpiceKindError`](@ref) of kind `:spkinsuffdata`, without the fields of the [`SpkInsufficientDataError`](@ref) that `spkezr` throws. The check is a bounds check, which `@inbounds` removes, as GPU code requires; an epoch outside the table then extrapolates the nearest interval.
 
 ## How the table is built
 
@@ -63,7 +65,7 @@ The tables that reach the Earth stop at 1.5e-11 because of the rounding of the r
 
 ## Measured accuracy and speed
 
-The figures below cover 400 days of `de440s.bsp` and 4,000,000 epochs, measured by `benchmark/table_gpu.jl` on one thread of an Intel CPU and on an NVIDIA RTX 3090. The error is the largest difference from the kernels, and the tolerance is the default unless stated.
+The figures below cover 400 days of `de440s.bsp` and 4,000,000 epochs, measured on one machine, on one CPU thread and on a GPU. The error is the largest difference from the kernels, and the tolerance is the default unless stated.
 
 | Case | Intervals | Error (km) | Table (ns per epoch) | `spkezr` (ns per epoch) |
 |---|---:|---:|---:|---:|
