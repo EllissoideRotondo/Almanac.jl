@@ -1,7 +1,7 @@
-# Conventions
+# API differences
 
 Almanac.jl keeps the names and the units of CSPICE N0067, its numerical results to
-rounding ([Numerical results and derivatives](@ref) gives the differences), and its
+rounding ([Numerical accuracy](@ref) gives the differences), and its
 argument order with the few exceptions below. It departs from CSPICE where the C
 interface relies on hidden state, on output arguments or on arguments that only manage
 C memory.
@@ -23,12 +23,6 @@ specification; the docstring gives the Julia signature, the units and what diffe
 - **Arrays.** Vectors and matrices are returned as `SVector` and `SMatrix` of
   StaticArrays.jl. Inputs can be any `AbstractVector` or `AbstractMatrix`.
 
-### Allocation
-
-The state and rotation calls ([`spkezr`](@ref), [`spkpos`](@ref), [`spkder`](@ref),
-[`pxform`](@ref), [`sxform`](@ref), [`pxder`](@ref)) allocate nothing for a `Float64`
-epoch, with integer IDs or with names in any case. A call that throws allocates, and so
-does a chain of more than 10 SPK segments from a body to the common center.
 - **Strings** are returned as a `String`, so no call takes a string length.
 - **Memory arguments.** Counts, sizes, `room` and workspaces, which serve only C
   memory, are absent: [`gdpool`](@ref) takes only the name of the variable, and
@@ -44,6 +38,13 @@ does a chain of more than 10 SPK segments from a body to the common center.
   [`pckfrm!`](@ref), [`pckcov!`](@ref), [`dskobj!`](@ref), [`dsksrf!`](@ref)) take it
   first, where CSPICE takes it last; SPICE.jl also puts it first, except in `ckobj!` and
   `ckcov!`.
+
+### Allocation
+
+The state and rotation calls ([`spkezr`](@ref), [`spkpos`](@ref), [`spkder`](@ref),
+[`pxform`](@ref), [`sxform`](@ref), [`pxder`](@ref)) allocate nothing for a `Float64`
+epoch, with integer IDs or with names in any case. A call that throws allocates, and so
+does a chain of more than 10 SPK segments from a body to the common center.
 
 ## Contexts in place of global state
 

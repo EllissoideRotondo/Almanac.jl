@@ -427,7 +427,7 @@ leap-second and clock kernels of the context.
 
 The call changes nothing, so many tasks can run queries at the same time. The rows
 differ from those of CSPICE N0067 only where CSPICE has a defect (see
-[Defects of CSPICE N0067](@ref)).
+[CSPICE defects](@ref)).
 
 Throws `SpiceError` for a query that is over a size limit:
 - `:celltoosmall` if the WHERE clause expands to more than 1000 constraints (fewer if

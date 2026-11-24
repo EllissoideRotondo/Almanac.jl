@@ -1,4 +1,4 @@
-# Defects of CSPICE N0067
+# CSPICE defects
 
 Where CSPICE N0067 has a defect, Almanac.jl either copies it, so that its results equal
 those of CSPICE, or fixes it, so that its results differ for the inputs that the defect

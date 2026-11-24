@@ -15,13 +15,13 @@ makedocs(;
     pages = [
         "Home" => "index.md",
         "Getting started" => [
-            "tutorials/events.md",
             "tutorials/contexts.md",
             "tutorials/derivatives.md",
             "tutorials/tables.md",
             "tutorials/providers.md",
             "tutorials/writing.md",
             "tutorials/orbits.md",
+            "tutorials/events.md",
         ],
         "Porting from CSPICE" => [
             "manual/conventions.md",
@@ -29,10 +29,9 @@ makedocs(;
             "manual/additions.md",
             "manual/cspice_defects.md",
         ],
-        "Accuracy and validation" => [
+        "Validation" => [
             "manual/numerics.md",
             "manual/validation.md",
-            "manual/orbit_validation.md",
         ],
         "API reference" => [
             "reference/kernels.md",

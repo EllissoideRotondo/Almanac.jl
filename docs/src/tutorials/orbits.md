@@ -1,6 +1,6 @@
 # Orbits and relative motion
 
-An [`Orbit`](@ref) is a state about a central body, with the GM (km³/s²) and the radii (km) of that body. It gives the orbital elements, is built from elements, advances by two-body motion and gives the state of one orbit relative to another. CSPICE has the conversions (`oscltx`, `conics`, `prop2b`) but no such object; the definitions follow [ANISE](https://github.com/nyx-space/anise), with the [deviations from ANISE](@ref "Deviations from ANISE"). Lengths are in km, times in s, angles in rad, where ANISE uses degrees.
+An [`Orbit`](@ref) is a state about a central body, with the GM (km³/s²) and the radii (km) of that body. It gives the orbital elements, is built from elements, advances by two-body motion and gives the state of one orbit relative to another. CSPICE has the conversions (`oscltx`, `conics`, `prop2b`) but no such object; the definitions follow [ANISE](https://github.com/nyx-space/anise), with the [differences from ANISE](@ref "Differences from ANISE"). Lengths are in km, times in s, angles in rad, where ANISE uses degrees.
 
 ## Read the elements
 

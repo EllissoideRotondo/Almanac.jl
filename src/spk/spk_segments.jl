@@ -273,7 +273,7 @@ Throws `SpiceError`:
   coefficients, as CSPICE, whose record buffer has 198 doubles;
 - `:timeoutofbounds` if `et` is outside the coverage of `descr`, for every type but 15
   and 17, whose single set of elements is propagated to `et` as CSPICE does (CSPICE
-  checks only some types; see [Defects of CSPICE N0067](@ref));
+  checks only some types; see [CSPICE defects](@ref));
 - `:dafnegaddr`, `:dafbeggtend` or `:filereadfailed` if the addresses of `descr` are not
   a range in the file;
 - the kinds of the evaluators of CSPICE for the values that they refuse: type 5 those of

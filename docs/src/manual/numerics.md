@@ -1,4 +1,4 @@
-# Numerical results and derivatives
+# Numerical accuracy
 
 This page says how closely the results of Almanac.jl follow those of CSPICE, where they
 differ, and how the derivatives of states and rotations are defined.
@@ -8,7 +8,7 @@ differ, and how the derivatives of states and rotations are defined.
 Each routine follows the arithmetic of its CSPICE counterpart operation by operation,
 including the order of summation, and uses no fused multiply-add. With the same kernels
 and `Float64` inputs, a result equals that of CSPICE bit for bit or differs by
-rounding. [Validation](@ref) lists the checks, and [Known limits of accuracy](@ref)
+rounding. [Tests and comparisons](@ref) lists the checks, and [Known limits of accuracy](@ref)
 the measured differences.
 
 The elementary functions (`sin`, `cos`, `exp`, ...) are those of Julia, while CSPICE
@@ -23,7 +23,7 @@ change of the epoch by one unit in the last place moves the limb point of CSPICE
 by 3e-3 km. With the `sin` and `cos` of glibc in place of Julia's, these results equal
 those of CSPICE.
 
-## Exact derivatives and the rates of CSPICE
+## Derivatives and stored rates
 
 Order 0 of [`spkder`](@ref) and [`pxder`](@ref) is the result of `spkpos` and `pxform`.
 Each higher order is the derivative of that result with respect to the epoch, with the
@@ -81,7 +81,7 @@ The velocity of `spkezr` differs from order 1 for two reasons:
 
 For a body whose text PCK has cubic nutation and precession angles
 (`BODY<sys>_MAX_PHASE_DEGREE = 3`), the rate block of `tisbod_` misses the cubic term
-(see [Defects of CSPICE N0067](@ref)), while [`tisbod`](@ref), [`sxform`](@ref) and
+(see [CSPICE defects](@ref)), while [`tisbod`](@ref), [`sxform`](@ref) and
 states in such frames give the exact derivative. With the Moon constants of the NAIF
 test suite, CSPICE differs from a central difference of `tipbod` by 1.1e-9 and
 Almanac.jl by 1.6e-13; degrees 1 and 2 agree to rounding.

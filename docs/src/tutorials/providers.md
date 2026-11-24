@@ -1,4 +1,4 @@
-# Bodies and frames from your own functions
+# Custom bodies and frames
 
 A trajectory that the program computes (with a propagator, an optimizer, an interpolation) can be used directly, without writing an SPK. [`add_ephemeris!`](@ref) makes a function the source of the state of a body, and [`add_frame!`](@ref) of the orientation of a frame. Every call that takes a body or a frame then uses them: with any aberration correction, in surface geometry, in event searches and in tables.
 
@@ -31,6 +31,8 @@ The body acts as if it were a file loaded at the time of the call: queries that 
 kinfo("my orbit")                           # (file type, meta-kernel or "", handle 0)
 ```
 
+The function is called at every query. When it is expensive, or when the states exist as samples, load them as a kernel in memory instead, as [Kernels in memory](@ref) shows.
+
 ## Define a frame
 
 The function returns the rotation from the new frame to its relative frame, the matrix of [`pxform`](@ref)`(new, relative, et)`. The other arguments are the name and the ID code of the new frame, its center and its relative frame:
@@ -43,41 +45,6 @@ spkpos(-1000, t0 + 600.0, "ORBIT_FIXED", "NONE", "EARTH")[1]
 ```
 
 In that frame the spacecraft stays on the X axis.
-
-## Load states as a kernel, with no file
-
-[`add_ephemeris!`](@ref) calls the function at every query. When the function is expensive (a numerical propagator), or when the states already exist as samples, load them as a kernel instead. The kernel lives in memory: no file is written, and queries cost what they cost on an SPK file.
-
-[`load_samples!`](@ref) loads states at epochs, which queries interpolate with SPK type 13 (Hermite, which uses the velocities) or type 9 (Lagrange):
-
-```@example prov
-ets = collect(t0:60.0:(t0 + 3600.0))
-load_samples!("samples", -1001, "EARTH", "J2000", ets, circular.(ets))
-vnorm(spkpos(-1001, t0 + 1234.5, "J2000", "NONE", "EARTH")[1] - circular(t0 + 1234.5)[1:3])  # km
-```
-
-[`load_function!`](@ref) fits any function with Chebyshev polynomials to a tolerance and returns the measured errors in position (km) and velocity (km/s). The function is called only during the fit:
-
-```@example prov
-poserr, velerr = load_function!("fit", circular, -1002, "EARTH", "J2000", t0, t0 + 86400.0; tol = 1e-6)
-```
-
-An `ODESolution` of DifferentialEquations.jl is such a function, through a closure such as `et -> sol(et - et0)[1:6]`. Check three things in it: the time of the solver is usually counted from a start epoch `et0`, not from J2000; the state may hold more than six components (a mass, a transition matrix); and the units must be km and km/s.
-
-For several arcs (a trajectory with burns) or another SPK type, write the segments yourself into an SPK in memory, from [`spkops`](@ref), with any writer, and load it with [`furnsh`](@ref). A kernel can bring names of bodies, which go away with it; [`save_kernel`](@ref) writes the same bytes to a file:
-
-```@example prov
-h = spkops()
-half = length(ets) ÷ 2
-spkw13(h, -1003, 399, "J2000", ets[1], ets[half], "arc 1", 7, circular.(ets[1:half]), ets[1:half])
-spkw13(h, -1003, 399, "J2000", ets[half], ets[end], "arc 2", 7, circular.(ets[half:end]), ets[half:end])
-furnsh(h; name = "arcs", bodies = ["MY PROBE" => -1003])
-save_kernel(h, joinpath(mktempdir(), "arcs.bsp"))
-spkcls(h)
-bodn2c("MY PROBE")
-```
-
-The load takes a copy, so close the handle after `furnsh` or `save_kernel`, not before.
 
 ## Epoch types and thread safety
 

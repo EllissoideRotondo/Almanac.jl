@@ -1,4 +1,4 @@
-# Coverage of CSPICE
+# Supported routines
 
 Almanac.jl covers the library of CSPICE N0067. The API reference lists every call
 (starting at [Kernels, contexts and the kernel pool](@ref)); this page says what is in
@@ -29,7 +29,7 @@ scope and what replaces the routines that are not.
   [`scn2id`](@ref) and [`scid2n`](@ref). Their docstrings say so.
 
 The features beyond CSPICE (derivatives, tables, user-defined bodies and frames,
-orbits) are in [What Almanac.jl adds](@ref).
+orbits) are in [Beyond CSPICE](@ref).
 
 ## What is left out
 

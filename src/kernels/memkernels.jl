@@ -330,7 +330,7 @@ measured largest position error (km) and velocity error (km/s, `NaN` for three n
 `segid` and `bodies` are as for [`load_samples!`](@ref).
 
 An `ODESolution` goes in through a closure; see
-[Load states as a kernel, with no file](@ref).
+[Kernels in memory](@ref).
 
 Throws `SpiceError`:
 

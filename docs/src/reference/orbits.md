@@ -1,6 +1,6 @@
 # Orbits
 
-These calls have no CSPICE counterpart; they follow [ANISE](https://github.com/nyx-space/anise), and [Validation of the orbit calls](@ref) gives their validation and the [deviations from ANISE](@ref "Deviations from ANISE"). Lengths are in km, times in s, angles in rad. [Orbits and relative motion](@ref) shows them in use.
+These calls have no CSPICE counterpart; they follow [ANISE](https://github.com/nyx-space/anise), with the [differences from ANISE](@ref "Differences from ANISE") listed at the end of this page, and [The orbit calls](@ref) says how they were tested. Lengths are in km, times in s, angles in rad. [Orbits and relative motion](@ref) shows them in use.
 
 ## Orbit objects
 
@@ -27,7 +27,7 @@ vinf_turn_angle
 - **Rates.** `:mean_motion` is `sqrt(gm / |sma|³)`, `:ta_dot` is `2π / period` (ANISE's definition: a mean rate).
 - **Altitudes** are a radius (`:rmag`, `:sma`, an apsis) minus the mean equatorial radius `(radii[1] + radii[2]) / 2`. `:latitude` (geodetic, in [-π/2, π/2]) and `:height` are on the spheroid with that equatorial radius and polar radius `radii[3]`, in the body-fixed frame of the center; `:longitude` is `atan(y, x)` in [-π, π).
 - **Equinoctial**: `:equinoctial_h`, `:equinoctial_k` are `ecc * sin(aop + raan)`, `ecc * cos(aop + raan)`; `:equinoctial_p`, `:equinoctial_q` are `sin(inc / 2) * sin(raan)`, `sin(inc / 2) * cos(raan)`; `:equinoctial_lambda` is `raan + aop + ma`, not wrapped; they throw where the elements they use throw.
-- **Brouwer mean elements** (short-period terms, the GMAT iteration that ANISE ports) use the J2 of the Earth. `:brouwer_inc` is in [0, π], the other angles in [0, 2π). They throw `SpiceError(:degeneratecase)` unless the center is body 399, the periapsis radius is above 3000 km and the orbit is elliptic, or if a Kepler equation has no solution. Above 175° of inclination `:brouwer_aop` has a [known error](@ref "Deviations from ANISE").
+- **Brouwer mean elements** (short-period terms, the GMAT iteration that ANISE ports) use the J2 of the Earth. `:brouwer_inc` is in [0, π], the other angles in [0, 2π). They throw `SpiceError(:degeneratecase)` unless the center is body 399, the periapsis radius is above 3000 km and the orbit is elliptic, or if a Kepler equation has no solution. Above 175° of inclination `:brouwer_aop` has a [known error](@ref "Differences from ANISE").
 
 ### Fallback values
 
@@ -109,3 +109,28 @@ local_frame
 local_frame_state
 relative_state
 ```
+
+## Differences from ANISE
+
+The calls follow the source of ANISE main (commit `b3aaadc`). The released ANISE
+1.0.0b0 differs from that source in the flight path angle, inbound hyperbolas, the
+`TNW` frame and v-infinity.
+
+- **Retrograde Brouwer elements** (an ANISE defect, reproduced). Above 175° of
+  inclination ANISE computes on a pseudo-state, the prograde orbit with the inclination
+  π - `inc` and the signs of `raan` and `aop` changed. It maps back the inclination and
+  `raan` but not the argument of periapsis, so `:brouwer_aop` carries an error of about twice its
+  short-period correction (0.6° for a 7200 km orbit). Brouwer elements are those of
+  the Earth; another center throws `SpiceError(:degeneratecase)`.
+- **Hyperbolic `two_body`.** ANISE recovers the mean anomaly as the mean longitude
+  minus `atan2(h, k)`, which is off by a multiple of 2π for a hyperbola when
+  `raan + aop` lies outside (-π, π]. `two_body` advances the mean anomaly of a
+  hyperbola directly and agrees with `prop2b`.
+- **Frame rate.** ANISE differences two frames 1 ms apart; `local_frame_state` uses the
+  exact rate of two-body motion.
+- **No NaN values.** Where ANISE returns NaN, the calls throw
+  `SpiceError(:degeneratecase)`, also for a dual-number state whose value has no
+  derivative ([Differentiate an orbit](@ref)). [Element names](@ref) lists the few
+  non-finite and fallback values that are returned. The rule holds for values only;
+  `:period` and `:ta_dot` of an orbit that is not elliptic are constants, with the
+  derivative 0.

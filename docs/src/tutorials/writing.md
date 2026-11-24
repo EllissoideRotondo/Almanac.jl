@@ -1,10 +1,10 @@
 # Writing kernels
 
-Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a file holds the data, word for word, of the file that CSPICE writes in a [new process](@ref "No state between calls"), and its bytes differ only where CSPICE leaves them [unset](@ref "Fixes that change only the bytes of a file"), such as the padding of DSK and EK records. Every writer follows the pattern open, write, close; this page writes an SPK and reads it back.
+Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a file holds the data, word for word, of the file that CSPICE writes in a [new process](@ref "No state between calls"), and its bytes differ only where CSPICE leaves them [unset](@ref "Fixes that change only the bytes of a file"), such as the padding of DSK and EK records. Every writer follows the pattern open, write, close; this page writes an SPK, reads it back, and builds kernels in memory.
 
 ## Write an SPK
 
-[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded; [Conventions](@ref "File handles and files open for write") says what a context then sees.
+[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded; [API differences](@ref "File handles and files open for write") says what a context then sees.
 
 Type 5 interpolates states with two-body motion, so a few states per revolution are enough. [`conics`](@ref) computes them from orbital elements.
 
@@ -60,6 +60,49 @@ state, _ = spkezr("-77", 3600.0, "J2000", "NONE", "399")
 kclear()
 state[1:3]                                   # km
 ```
+
+## Kernels in memory
+
+A kernel can also live in memory, with no file. This suits states that a program computes (a numerical propagator) or that exist as samples: unlike a body of [`add_ephemeris!`](@ref), whose function runs at every query, a kernel in memory costs at each query what an SPK file costs. The examples use a circular orbit of radius 8000 km around the Earth:
+
+```@example write
+r = 8000.0                                   # km
+n = sqrt(mu / r^3)                           # rad/s
+circular(et) = [r * cos(n * et), r * sin(n * et), 0.0,
+                -r * n * sin(n * et), r * n * cos(n * et), 0.0]
+nothing # hide
+```
+
+[`load_samples!`](@ref) loads states at epochs, which queries interpolate with SPK type 13 (Hermite, which uses the velocities) or type 9 (Lagrange):
+
+```@example write
+ets = collect(0.0:60.0:3600.0)
+load_samples!("samples", -1001, "EARTH", "J2000", ets, circular.(ets))
+vnorm(spkpos(-1001, 1234.5, "J2000", "NONE", "EARTH")[1] - circular(1234.5)[1:3])  # km
+```
+
+[`load_function!`](@ref) fits any function with Chebyshev polynomials to a tolerance and returns the measured errors in position (km) and velocity (km/s). The function is called only during the fit:
+
+```@example write
+poserr, velerr = load_function!("fit", circular, -1002, "EARTH", "J2000", 0.0, 86400.0; tol = 1e-6)
+```
+
+An `ODESolution` of DifferentialEquations.jl is such a function, through a closure such as `et -> sol(et - et0)[1:6]`. Check three things in it: the time of the solver is usually counted from a start epoch `et0`, not from J2000; the state may hold more than six components (a mass, a transition matrix); and the units must be km and km/s.
+
+For several arcs (a trajectory with burns) or another SPK type, write the segments yourself into an SPK in memory, from [`spkops`](@ref), with any writer, and load it with [`furnsh`](@ref). A kernel can bring names of bodies, which go away with it; [`save_kernel`](@ref) writes the same bytes to a file:
+
+```@example write
+h = spkops()
+half = length(ets) ÷ 2
+spkw13(h, -1003, 399, "J2000", ets[1], ets[half], "arc 1", 7, circular.(ets[1:half]), ets[1:half])
+spkw13(h, -1003, 399, "J2000", ets[half], ets[end], "arc 2", 7, circular.(ets[half:end]), ets[half:end])
+furnsh(h; name = "arcs", bodies = ["MY PROBE" => -1003])
+save_kernel(h, joinpath(mktempdir(), "arcs.bsp"))
+spkcls(h)
+bodn2c("MY PROBE")
+```
+
+The load takes a copy, so close the handle after `furnsh` or `save_kernel`, not before.
 
 ## Writers for each kind of kernel
 

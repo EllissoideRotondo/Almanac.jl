@@ -120,7 +120,7 @@ report one failure with different kinds, as in CSPICE: a file that does not exis
 docstring of the call lists. A failure that CSPICE does not check has a kind of this
 package, mainly `:badarg` for an argument of the wrong size or type.
 [`Almanac.ERROR_KINDS`](@ref) lists every kind; a kind that is not in the list cannot be
-constructed. The manual page [Conventions](@ref) describes the `nothing` result of a
+constructed. The manual page [API differences](@ref) describes the `nothing` result of a
 call that has a `found` flag in CSPICE.
 
 # Examples

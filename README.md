@@ -100,7 +100,7 @@ For information on using the package, see the
 quickstart, followed by tutorials, pages on the relation to CSPICE and on validation, and
 the API reference, in which the docstring of each ported routine links to its NAIF page. To port a program from CSPICE or
 SPICE.jl, start with the
-[conventions](https://orbitology.github.io/Almanac.jl/dev/manual/conventions/).
+[API differences](https://orbitology.github.io/Almanac.jl/dev/manual/conventions/).
 
 ## Citing
 

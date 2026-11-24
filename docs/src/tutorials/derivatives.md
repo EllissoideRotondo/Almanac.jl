@@ -82,4 +82,4 @@ Reverse mode pays off when one number depends on many epochs, as in the gradient
 
 ## Where order 1 differs from the velocity of `spkezr`
 
-For a geometric position, order 1 is the velocity of `spkezr`. With the `LT` corrections, CSPICE approximates the rate of the light time, so the two differ by about 1e-8 relative for the Moon seen from the Earth. For some frames, `pxder` likewise differs from the rate block of `sxform`. [Exact derivatives and the rates of CSPICE](@ref) gives each case.
+For a geometric position, order 1 is the velocity of `spkezr`. With the `LT` corrections, CSPICE approximates the rate of the light time, so the two differ by about 1e-8 relative for the Moon seen from the Earth. For some frames, `pxder` likewise differs from the rate block of `sxform`. [Derivatives and stored rates](@ref) gives each case.

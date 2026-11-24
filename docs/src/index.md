@@ -44,7 +44,7 @@ mxv(r, state[1:3])
 ```
 
 Results are returned, not written into arguments. A call that cannot answer throws a
-[`SpiceError`](@ref). Before porting a CSPICE or SPICE.jl program, read [Conventions](@ref).
+[`SpiceError`](@ref). Before porting a CSPICE or SPICE.jl program, read [API differences](@ref).
 
 ## Contents
 
@@ -55,21 +55,21 @@ downloads.
 
 ```@contents
 Pages = [
-    "tutorials/events.md",
     "tutorials/contexts.md",
     "tutorials/derivatives.md",
     "tutorials/tables.md",
     "tutorials/providers.md",
     "tutorials/writing.md",
     "tutorials/orbits.md",
+    "tutorials/events.md",
 ]
 Depth = 1
 ```
 
 ### Porting from CSPICE
 
-How Almanac.jl relates to CSPICE: its conventions, what it ports, what it adds, and
-the defects of CSPICE that it copies or fixes.
+How the API of Almanac.jl differs from that of CSPICE, which routines it ports, what it
+adds, and which defects of CSPICE it copies or fixes.
 
 ```@contents
 Pages = [
@@ -81,12 +81,12 @@ Pages = [
 Depth = 1
 ```
 
-### Accuracy and validation
+### Validation
 
 How close the results are to those of CSPICE, and how they were tested.
 
 ```@contents
-Pages = ["manual/numerics.md", "manual/validation.md", "manual/orbit_validation.md"]
+Pages = ["manual/numerics.md", "manual/validation.md"]
 Depth = 1
 ```
 
