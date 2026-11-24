@@ -1,0 +1,8 @@
+# Patch coverage: the share of changed lines that the tests run. Code that runs only
+# while the package loads (constant tables) is never counted as covered, so the patch
+# target is fixed below the project coverage. The project status keeps its default.
+coverage:
+  status:
+    patch:
+      default:
+        target: 90%
