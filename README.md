@@ -97,9 +97,8 @@ The package is under active development, and its interface may still change.
 
 For information on using the package, see the
 [documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a
-getting-started page that goes from loading kernels to an event search, followed by
-tutorials, a manual on the relation to CSPICE, and the API reference, in which the
-docstring of each ported routine links to its NAIF page. To port a program from CSPICE or
+quickstart, followed by tutorials, pages on the relation to CSPICE and on validation, and
+the API reference, in which the docstring of each ported routine links to its NAIF page. To port a program from CSPICE or
 SPICE.jl, start with the
 [conventions](https://orbitology.github.io/Almanac.jl/dev/manual/conventions/).
 

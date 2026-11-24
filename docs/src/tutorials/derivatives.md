@@ -2,30 +2,26 @@
 
 CSPICE gives a position and its velocity. Almanac.jl gives derivatives of any order, either from a direct call or by automatic differentiation of the ordinary calls. The two agree to rounding.
 
-```@setup der
-using Almanac
-include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
-foreach(furnsh, DocKernels.write(mktempdir()))
-```
-
-[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
-
 ## Derivatives from `spkder` and `pxder`
 
 [`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and the call does not [allocate](@ref "Allocation").
 
 ```@example der
-using Almanac
+using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+
+furnsh(naif0012_tls())                      # leap seconds
+furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
+furnsh(pck00011())                          # orientation and radii of the bodies
 
 et = str2et("2025 MAR 01 12:00:00 UTC")
-position, velocity, acceleration = spkder("PROBE", et, "J2000", "EARTH", Val(2))
+position, velocity, acceleration = spkder("MOON", et, "J2000", "EARTH", Val(2))
 acceleration                                # geometric, km/s²
 ```
 
 An aberration correction goes before the observer:
 
 ```@example der
-spkder("PROBE", et, "J2000", "LT+S", "EARTH", Val(2))[3]    # apparent, km/s²
+spkder("MOON", et, "J2000", "LT+S", "EARTH", Val(2))[3]    # apparent, km/s²
 ```
 
 ```@example der
@@ -55,7 +51,7 @@ A function built from these calls can be differentiated as a whole. The derivati
 ```@example der
 using ForwardDiff
 
-apparent(t) = spkpos("PROBE", t, "IAU_EARTH", "LT+S", "EARTH")[1]
+apparent(t) = spkpos("MOON", t, "IAU_EARTH", "LT+S", "EARTH")[1]
 ForwardDiff.derivative(apparent, et)        # km/s in the rotating frame
 ```
 

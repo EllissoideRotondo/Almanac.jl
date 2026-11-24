@@ -2,19 +2,14 @@
 
 Every call that reads kernels takes an optional [`SpiceContext`](@ref) as its first argument ([Conventions](@ref "Contexts in place of global state") gives the rule). Pure functions such as `vnorm` take no context. A program with one set of kernels never needs to name a context; this page is for programs with several sets, or with several threads.
 
-```@setup ctx
-using Almanac
-include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
-```
-
 ## One context per kernel set
 
-Contexts are independent of each other. Use one per version of an ephemeris, or one per mission. Here `kernels` holds the paths of [the example kernels](@ref "The example kernels"), written by `DocKernels`, which [Getting started](@ref "Load kernels") explains:
+Contexts are independent of each other. Use one per version of an ephemeris, or one per mission. [SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels) downloads the NAIF generic kernels and returns their paths:
 
 ```@example ctx
-using Almanac
+using Almanac, SPICEKernels
 
-kernels = DocKernels.write(mktempdir())
+kernels = [naif0012_tls(), de440s(), pck00011()]
 mission = SpiceContext()
 foreach(k -> furnsh(mission, k), kernels)
 
@@ -31,7 +26,7 @@ epochs = et .+ range(0, 86400; length=10_000)
 distance = Vector{Float64}(undef, length(epochs))
 
 Threads.@threads for i in eachindex(epochs)
-    position, _ = spkpos(mission, "PROBE", epochs[i], "J2000", "LT+S", "EARTH")
+    position, _ = spkpos(mission, "MOON", epochs[i], "J2000", "LT+S", "EARTH")
     distance[i] = vnorm(position)
 end
 
@@ -45,10 +40,10 @@ extrema(distance)                           # km
 [`state_query`](@ref) and [`rotation_query`](@ref) resolve the names, the frame and the correction once, on the current snapshot. Evaluating the query, as `q(t)` for the state or `spkpos(q, t)` for the position, gives the result of [`spkezr`](@ref) or [`spkpos`](@ref) bit for bit; a rotation query gives that of [`pxform`](@ref). The query skips the name lookup at each epoch, and keeps its snapshot even if another thread loads a kernel.
 
 ```@example ctx
-q = state_query(mission, "PROBE", "J2000", "LT+S", "EARTH")
+q = state_query(mission, "MOON", "J2000", "LT+S", "EARTH")
 
 positions = [spkpos(q, t)[1] for t in epochs]
-q(epochs[1]) == spkezr(mission, "PROBE", epochs[1], "J2000", "LT+S", "EARTH")
+q(epochs[1]) == spkezr(mission, "MOON", epochs[1], "J2000", "LT+S", "EARTH")
 ```
 
 To see kernels loaded later, make a new query.

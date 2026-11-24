@@ -2,23 +2,20 @@
 
 An [`Orbit`](@ref) is a state about a central body, with the GM (km³/s²) and the radii (km) of that body. It gives the orbital elements, is built from elements, advances by two-body motion and gives the state of one orbit relative to another. CSPICE has the conversions (`oscltx`, `conics`, `prop2b`) but no such object; the definitions follow [ANISE](https://github.com/nyx-space/anise), with the [deviations from ANISE](@ref "Deviations from ANISE"). Lengths are in km, times in s, angles in rad, where ANISE uses degrees.
 
-```@setup orbits
-using Almanac
-include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
-foreach(furnsh, DocKernels.write(mktempdir()))
-```
-
-[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
-
 ## Read the elements
 
-[`orbit`](@ref) takes the arguments of [`spkezr`](@ref), any aberration correction included, and the GM and radii of the observer from the kernel pool. The epoch of the orbit is `et`, the epoch of the observer:
+[`orbit`](@ref) takes the arguments of [`spkezr`](@ref), any aberration correction included, and the GM and radii of the observer from the kernel pool, here from `gm_de440.tpc` and `pck00011.tpc`. The epoch of the orbit is `et`, the epoch of the observer:
 
 ```@example orbits
-using Almanac
+using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+
+furnsh(naif0012_tls())                      # leap seconds
+furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
+furnsh(pck00011())                          # orientation and radii of the bodies
+furnsh(gm_de440())                          # gravitational parameters
 
 et = str2et("2025 MAR 18 12:00:00 TDB")
-o = orbit("PROBE", et, "J2000", "NONE", "EARTH")
+o = orbit("MOON", et, "J2000", "NONE", "EARTH")
 (o.sma, o.ecc)
 ```
 
@@ -31,7 +28,7 @@ rad2deg.((o.inc, o.raan, o.aop, o.ta))
 Altitudes are above the mean equatorial radius; [Element names](@ref) gives the unit and range of each name:
 
 ```@example orbits
-(o.periapsis_altitude, o.apoapsis_altitude, element(o, :period) / 3600)
+(o.periapsis_altitude, o.apoapsis_altitude, element(o, :period) / 86400)
 ```
 
 [`keplerian`](@ref) returns the six classical elements as a named tuple. An element that is undefined throws `SpiceError(:degeneratecase)` rather than returning NaN; a few [fallback values](@ref "Fallback values") are returned instead.
@@ -43,16 +40,20 @@ leo0 = Orbit([7000.0, 0.0, 0.0, 0.0, 7.5, 1.0], et, 399, 1, 398600.4418)
 (leo0.sma, leo0.ecc)
 ```
 
-## Change one element
+## Propagate by two-body motion
 
-[`with_element`](@ref) replaces one classical element. Raise the inclination to 51.6°, keeping `sma`, `ecc`, `raan`, `aop` and `ta`; the kept elements change by rounding only:
+[`two_body`](@ref)`(o, t)` returns the orbit at the epoch `t`, before or after the epoch of `o`, by Kepler motion without perturbations. `t` is an epoch, not a time step. The Sun perturbs the orbit of the Moon, so six hours later the result departs from the ephemeris (km, km/s):
 
 ```@example orbits
-o2 = with_element(o, :inc, deg2rad(51.6))
-(rad2deg(o2.inc), o2.sma - o.sma, o2.ta - o.ta)
+later = et + 6 * 3600.0
+p = two_body(o, later)
+q = orbit("MOON", later, "J2000", "NONE", "EARTH")
+maximum(abs.(p.state - q.state))
 ```
 
-[`keplerian_orbit`](@ref) builds an orbit from elements. With `gm` given it reads no kernels, so the orbit has no radii and its altitudes throw `SpiceError(:badarg)`. A nearly circular orbit with its semi-major axis 500 km above the equatorial radius:
+## Change one element
+
+[`keplerian_orbit`](@ref) builds an orbit from elements. With `gm` given it reads no kernels, so the orbit has no radii and its altitudes throw `SpiceError(:badarg)`. A nearly circular orbit with its semi-major axis 500 km above the equatorial radius of the Earth:
 
 ```@example orbits
 r = 6378.1366 + 500.0
@@ -61,15 +62,11 @@ leo = keplerian_orbit(et, 399, 1; sma=r, ecc=0.001, inc=deg2rad(98.0), raan=0.0,
 round(leo.period / 60; digits=2)
 ```
 
-## Propagate by two-body motion
-
-[`two_body`](@ref)`(o, t)` returns the orbit at the epoch `t`, before or after the epoch of `o`, by Kepler motion without perturbations. `t` is an epoch, not a time step. The kernels of the manual hold two-body motion, so the result matches the SPK six hours later, here to a few µm (km, km/s):
+[`with_element`](@ref) replaces one classical element. Raise the inclination by 0.1°, keeping `sma`, `ecc`, `raan`, `aop` and `ta`; the kept elements change by rounding only:
 
 ```@example orbits
-later = et + 6 * 3600.0
-p = two_body(o, later)
-q = orbit("PROBE", later, "J2000", "NONE", "EARTH")
-maximum(abs.(p.state - q.state))
+leo2 = with_element(leo, :inc, leo.inc + deg2rad(0.1))
+(rad2deg(leo2.inc), leo2.sma - leo.sma, leo2.ta - leo.ta)
 ```
 
 ## Compute a relative state
@@ -77,8 +74,8 @@ maximum(abs.(p.state - q.state))
 [`relative_state`](@ref) gives the state of one orbit, the deputy, minus that of a reference orbit, the chief, in a local frame of the chief: `:ric` (radial, in-track, cross-track), `:vnc`, `:rcn` or `:tnw`, whose axes [`local_frame`](@ref) lists. Both orbits must have the same epoch, center and frame, so advance both:
 
 ```@example orbits
-chief = two_body(o, later)
-deputy = two_body(o2, later)
+chief = two_body(leo, later)
+deputy = two_body(leo2, later)
 rel = relative_state(deputy, chief, :ric)
 (radial = rel[1], in_track = rel[2], cross_track = rel[3])
 ```

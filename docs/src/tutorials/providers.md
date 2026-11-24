@@ -2,20 +2,16 @@
 
 A trajectory that the program computes (with a propagator, an optimizer, an interpolation) can be used directly, without writing an SPK. [`add_ephemeris!`](@ref) makes a function the source of the state of a body, and [`add_frame!`](@ref) of the orientation of a frame. Every call that takes a body or a frame then uses them: with any aberration correction, in surface geometry, in event searches and in tables.
 
-```@setup prov
-using Almanac
-include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
-foreach(furnsh, DocKernels.write(mktempdir()))
-```
-
-[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
-
 ## Define a body
 
-The function takes an epoch (ET) and returns the position (km) and the velocity (km/s) relative to the center, in the given frame. Here, a circular orbit of radius 8000 km around the Earth, for a body with the ID -1000, which no example kernel uses:
+The function takes an epoch (ET) and returns the position (km) and the velocity (km/s) relative to the center, in the given frame. Here, a circular orbit of radius 8000 km around the Earth, for a body with the ID -1000, which no NAIF kernel uses:
 
 ```@example prov
-using Almanac
+using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+
+furnsh(naif0012_tls())                      # leap seconds
+furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
+furnsh(pck00011())                          # orientation and radii of the bodies
 
 μ = 3.986004418e5                           # km³/s², the Earth
 r = 8000.0                                  # km
@@ -25,7 +21,7 @@ circular(et) = [r * cos(n * et), r * sin(n * et), 0.0,
 
 t0 = str2et("2025 MAR 01 00:00:00 UTC")
 add_ephemeris!(circular, -1000, "EARTH", "J2000", t0, t0 + 86400.0; name = "my orbit")
-state, light_time = spkezr(-1000, t0 + 600.0, "J2000", "LT+S", "PROBE")
+state, light_time = spkezr(-1000, t0 + 600.0, "J2000", "LT+S", "MOON")
 round.(state; digits = 3)
 ```
 

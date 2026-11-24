@@ -2,22 +2,18 @@
 
 An inner loop or a GPU kernel that needs the position of a body many times over a known interval does not have to touch the kernels. [`ephemeris_table`](@ref) extracts the position into an [`EphemerisTable`](@ref): one flat array of Chebyshev coefficients on equal intervals, evaluated without loaded kernels, segment search or chain of bodies.
 
-```@setup tab
-using Almanac
-include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
-foreach(furnsh, DocKernels.write(mktempdir()))
-```
-
-[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
-
 ## Build and evaluate an ephemeris table
 
 ```@example tab
-using Almanac
+using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+
+furnsh(naif0012_tls())                      # leap seconds
+furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
+furnsh(pck00011())                          # orientation and radii of the bodies
 
 t0 = str2et("2025 MAR 01 12:00:00 UTC")
 t1 = t0 + 86400.0
-tab = ephemeris_table("PROBE", t0, t1, "J2000", "NONE", "EARTH"; tol=1e-6)
+tab = ephemeris_table("MOON", t0, t1, "J2000", "NONE", "EARTH"; tol=1e-6)
 (tab.nint, tab.ncoef, tab.maxerr)           # intervals, coefficients per interval, measured error (km)
 ```
 
@@ -25,7 +21,7 @@ tab = ephemeris_table("PROBE", t0, t1, "J2000", "NONE", "EARTH"; tol=1e-6)
 
 ```@example tab
 et = t0 + 3600.0
-table_state(tab, et) - spkezr("PROBE", et, "J2000", "NONE", "EARTH")[1]
+table_state(tab, et) - spkezr("MOON", et, "J2000", "NONE", "EARTH")[1]
 ```
 
 ```@example tab
@@ -86,7 +82,7 @@ A table is no more accurate than its source: the `IAU_EARTH` and `LT+S` rows rea
 ```@example tab
 path = joinpath(mktempdir(), "table.bsp")
 handle = spkopn(path, "from a table", 0)
-table_to_spk(handle, tab, "PROBE from a table")
+table_to_spk(handle, tab, "Moon from a table")
 spkcls(handle)
 spkobj(path)
 ```

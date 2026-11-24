@@ -6,7 +6,8 @@ a body is, how a frame is oriented, when an event occurs) in pure Julia.
 
 The calls keep the names of CSPICE without the `_c` suffix, and its argument order with
 [few exceptions](@ref "Names, arguments and results"); the docstring of each ported call
-links to its NAIF page.
+links to its NAIF page. Use the wrapper [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl)
+instead when results must be bit-identical to the CSPICE library on every platform.
 
 ## Installation
 
@@ -16,65 +17,77 @@ Almanac.jl needs Julia 1.10 or later. Install it from the Julia package manager:
 pkg> add Almanac
 ```
 
-## Features
+## Quickstart
 
-- Queries from any number of threads without locks: each query reads an immutable
-  snapshot of the loaded kernels.
-- Independent kernel sets, one per [`SpiceContext`](@ref).
-- Event searches, surface geometry on ellipsoids and DSK shapes, and writers for SPK,
-  CK, binary PCK, DSK and EK files.
-- Beyond CSPICE: time derivatives of any order and automatic differentiation, tables
-  for inner loops and GPU kernels, bodies and frames defined by Julia functions, and
-  orbital elements after ANISE, a Rust astrodynamics library. [What Almanac.jl adds](@ref) lists them all.
+[SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels)
+downloads the NAIF generic kernels and returns their paths.
 
-Use the wrapper [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl) instead when results
-must be bit-identical to the CSPICE library on every platform.
+```julia
+using Almanac
+using SPICEKernels
+
+furnsh(naif0012_tls())   # leap seconds
+furnsh(de440s())         # planets, Moon and Sun, 1849 to 2150
+furnsh(pck00011())       # orientation and radii of the bodies
+
+# Convert a UTC time to ephemeris time (TDB seconds past J2000), and back
+et = str2et("2025-03-01T12:00:00")
+et2utc(et, "ISOC", 3)
+
+# State of the Moon relative to the Earth (km, km/s) and the one-way light time (s),
+# corrected for light time and stellar aberration
+state, lt = spkezr("MOON", et, "J2000", "LT+S", "EARTH")
+
+# Rotate the position into the Earth-fixed frame
+r = pxform("J2000", "IAU_EARTH", et)
+mxv(r, state[1:3])
+```
+
+Results are returned, not written into arguments. A call that cannot answer throws a
+[`SpiceError`](@ref). Before porting a CSPICE or SPICE.jl program, read [Conventions](@ref).
 
 ## Contents
 
-### Tutorials
+### Getting started
 
-Each tutorial solves one task, from several kernel sets and threads to orbits.
+Each tutorial solves one task on the NAIF generic kernels, which SPICEKernels.jl
+downloads.
 
 ```@contents
 Pages = [
+    "tutorials/events.md",
     "tutorials/contexts.md",
     "tutorials/derivatives.md",
     "tutorials/tables.md",
     "tutorials/providers.md",
-    "tutorials/events.md",
     "tutorials/writing.md",
     "tutorials/orbits.md",
 ]
-Depth = 2
+Depth = 1
 ```
 
-### Relation to CSPICE
+### Porting from CSPICE
 
-These pages say where Almanac.jl follows CSPICE and where it departs from it; read
-[Conventions](@ref) before porting a CSPICE or SPICE.jl program.
+How Almanac.jl relates to CSPICE: its conventions, what it ports, what it adds, and
+the defects of CSPICE that it copies or fixes.
 
 ```@contents
 Pages = [
     "manual/conventions.md",
-    "manual/numerics.md",
+    "manual/coverage.md",
     "manual/additions.md",
     "manual/cspice_defects.md",
 ]
-Depth = 2
+Depth = 1
 ```
 
-### Coverage and validation
+### Accuracy and validation
 
-What is ported, and how the results were checked against CSPICE and ANISE.
+How close the results are to those of CSPICE, and how they were tested.
 
 ```@contents
-Pages = [
-    "manual/coverage.md",
-    "manual/validation.md",
-    "manual/orbit_validation.md",
-]
-Depth = 2
+Pages = ["manual/numerics.md", "manual/validation.md", "manual/orbit_validation.md"]
+Depth = 1
 ```
 
 ### API reference
@@ -102,16 +115,6 @@ Pages = [
 ]
 Depth = 1
 ```
-
-## The example kernels
-
-The examples run on three small kernels that
-[`docs/fixture.jl`](https://github.com/Orbitology/Almanac.jl/blob/main/docs/fixture.jl)
-of the repository writes: leap seconds, constants of the Sun and the Earth with the
-name of a spacecraft `PROBE`, and an SPK for the year 2025. The SPK holds the Sun at
-the solar system barycenter, the Earth on a two-body orbit around the Sun, and `PROBE`
-on a two-body orbit around the Earth, so the positions are not those of the real
-bodies.
 
 ## Reporting issues
 
