@@ -5,6 +5,8 @@
 ```@docs
 SpiceContext
 default_context
+Almanac.kernelset
+Almanac.KernelSet
 SpiceError
 SpiceKindError
 SpkInsufficientDataError

@@ -46,9 +46,10 @@ dlafps
 ## DSK files
 
 The spatial index of a type 2 segment divides a box around the plates into cubes of
-equal size, the fine voxels, which form groups of `corscl^3`, the coarse voxels. The
-voxel-plate list gives the plates that meet each fine voxel, and the vertex-plate list
-the plates that share each vertex. The DSK Required Reading of NAIF
+equal size, the fine voxels, which form groups of `corscl^3`, the coarse voxels;
+`corscl`, the coarse voxel scale, is the number of fine voxels along one edge of a
+coarse voxel. The voxel-plate list gives the plates that meet each fine voxel, and the
+vertex-plate list the plates that share each vertex. The DSK Required Reading of NAIF
 ([https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/dsk.html](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/req/dsk.html))
 describes the index.
 

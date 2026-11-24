@@ -5,11 +5,13 @@ CSPICE is the reference. The tests call each routine and its CSPICE counterpart
 kernels written by the CSPICE writers so that every data type is exercised. The
 measured differences are in [Known limits of accuracy](@ref).
 
-- **Files:** a kernel written by Almanac.jl equals the one CSPICE writes from the same
-  input, byte for byte (SPK, CK, PCK) or word for word (DSK, EK).
+- **Files:** a kernel written by Almanac.jl holds the data, word for word, of the one
+  CSPICE writes from the same input. The bytes differ only where CSPICE leaves them
+  [unset](@ref "Fixes that change only the bytes of a file").
 - **Derivatives:** the first derivative of a state is compared with the velocity of
   CSPICE, and each higher derivative with automatic differentiation of the one below.
-- **Errors:** the kind of each error matches CSPICE.
+- **Errors:** an input that CSPICE refuses gives the kind of the CSPICE error. Checks
+  that CSPICE does not make give kinds of Almanac.jl, such as `:badarg`.
 - **Threads:** answers from many threads, while kernels are loaded and unloaded, equal
   those of one thread.
 - **Allocation:** AllocCheck.jl proves that the numeric hot paths cannot allocate.
@@ -28,7 +30,6 @@ julia --project=test test/tspice/run.jl
 ```
 
 The first run downloads NAIF's archive, builds it with gcc and records the calls, about
-2 GB; later runs only replay them. A run fails on a mismatch that is not in the baseline
-of known mismatches. The `tspice` workflow of the repository runs this check, in about an
-hour, on each push to `main` that changes the package. Details are in
+2 GB; later runs only replay them. A run fails on a mismatch that is not in the
+baseline, the list of known differences from CSPICE. Details are in
 [`test/tspice/README.md`](https://github.com/Orbitology/Almanac.jl/blob/main/test/tspice/README.md).

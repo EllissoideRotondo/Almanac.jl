@@ -27,10 +27,10 @@ state, light_time = spkezr(-1000, t0 + 600.0, "J2000", "LT+S", "PROBE")
 round.(state; digits = 3)
 ```
 
-The body acts as if it were a file loaded at the time of the call. It takes priority over the files loaded earlier, which still apply outside its interval, and [`unload`](@ref) with its name removes it.
+The body acts as if it were a file loaded at the time of the call: queries that start after the call use it, and a search that runs on another thread does not. It takes priority over the files loaded earlier, which apply outside its interval, and [`unload`](@ref) with its name removes it.
 
 ```@example prov
-kinfo("my orbit")                           # (type, meta-kernel, handle)
+kinfo("my orbit")                           # (file type, meta-kernel or "", handle 0)
 ```
 
 ## Define a frame
@@ -83,6 +83,6 @@ The load takes a copy, so close the handle after `furnsh` or `save_kernel`, not 
 
 ## Epoch types and thread safety
 
-This section is about the functions of [`add_ephemeris!`](@ref) and [`add_frame!`](@ref); the function of [`load_function!`](@ref) gets `Float64` epochs, during the call only. The epoch passed to the function is not always a `Float64`. It is a `ForwardDiff.Dual` when the caller differentiates, and an internal Taylor number when a call needs derivatives of order 2 or more (an `LT+S` state of an observer, [`sxform`](@ref) of a frame). Plain arithmetic and the functions of `Base` (`sin`, `cos`, `sqrt`, ...) work with all of them. A function that branches on the epoch, or calls code that accepts only `Float64`, works only in the calls that need no derivative of order 2, such as geometric states and [`pxform`](@ref), and only with a `Float64` epoch.
+This section is about the functions of [`add_ephemeris!`](@ref) and [`add_frame!`](@ref); the function of [`load_function!`](@ref) gets `Float64` epochs, during the call only. The epoch passed to the function is not always a `Float64`. It is a `ForwardDiff.Dual` when the caller differentiates. It is a Taylor number, a type internal to Almanac.jl that carries derivatives and defines no comparisons, when a call needs a derivative that the function does not return: order 2 or more of a body (an `LT+S` state of an observer, [`spkder`](@ref)), and order 1 or more of a frame ([`sxform`](@ref), a corrected state in the frame). Plain arithmetic and the functions of `Base` (`sin`, `cos`, `sqrt`, ...) work with all of them. A function that branches on the epoch, or calls code that accepts only `Float64`, works only with a `Float64` epoch, in the calls that need no such derivative, such as geometric states and [`pxform`](@ref).
 
 The function is called from every thread that queries, so it must not change shared data. Beware of closures that assign to a variable of the enclosing function, because they share it. Declare such variables `local` in the closure, or give them names that the enclosing function does not use.

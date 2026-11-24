@@ -89,7 +89,9 @@ Almanac.jl by 1.6e-13; degrees 1 and 2 agree to rounding.
 ### Smoothness at record boundaries
 
 For polynomial data (SPK types 2, 3, 8, 9, 12, 13, 14, 18, 20 and binary PCK), every
-order is the exact derivative of the polynomial. For other types and for frames defined
+order is the exact derivative of a polynomial of the segment: of the position
+polynomial, or, for the types that store the velocity separately, of the velocity
+polynomial from order 1 on. For other types and for frames defined
 by formulas, the algorithm is evaluated on truncated Taylor series, which gives its
 derivatives without finite differences.
 

@@ -40,7 +40,7 @@ These are returned instead of an error:
 
 ### Units and ANISE names
 
-The names in the order of `elements()`, with the unit and the name in ANISE:
+The names in the order of `elements()`, with the unit in Almanac.jl and the name in ANISE, whose angles are in degrees:
 
 ```@eval
 using Almanac, Markdown

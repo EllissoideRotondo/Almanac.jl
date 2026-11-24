@@ -70,7 +70,7 @@ wncard(fast)                                # intervals with a speed above 8 km/
 
 ## Search on several threads
 
-Every search takes the keyword `threads=true`, which processes intervals on separate threads.
+Every search takes the keyword `threads`, `false` by default. With `threads=true` a search processes intervals on separate threads, and its result does not change.
 
 - Every search runs the intervals of its confinement window in parallel.
 - `"="`, `"<"`, `">"`, and `"ABSMIN"` or `"ABSMAX"` with a nonzero adjustment, also run in parallel on the monotone intervals that they find first, so they gain even on a window of one interval.

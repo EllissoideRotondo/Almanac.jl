@@ -9,7 +9,7 @@ include(joinpath(@__DIR__, "..", "fixture.jl"))
 
 ## Load kernels
 
-This page runs on [the example kernels](@ref "The example kernels") of the manual. `DocKernels.write`, defined in [`docs/fixture.jl`](https://github.com/Orbitology/Almanac.jl/blob/main/docs/fixture.jl), writes them into a directory and returns their three paths: leap seconds, constants of the Sun and the Earth, and an SPK with the Earth and the spacecraft `PROBE`.
+This page runs on [the example kernels](@ref "The example kernels") of the manual. `DocKernels.write`, defined in [`docs/fixture.jl`](https://github.com/Orbitology/Almanac.jl/blob/main/docs/fixture.jl) of the repository and not part of the package, writes them into a directory and returns their three paths: leap seconds, constants of the Sun and the Earth, and an SPK with the Earth and the spacecraft `PROBE`. To run the page without that file, load the real kernels shown below and replace `PROBE` with `MOON`.
 
 ```@example first
 using Almanac
@@ -69,11 +69,11 @@ lt_sun                        # s
 
 ## Rotate between frames
 
-[`pxform`](@ref) returns the 3×3 rotation from one frame to another, and [`sxform`](@ref) the 6×6 state transformation.
+[`pxform`](@ref) returns the 3×3 rotation from one frame to another, and [`sxform`](@ref) the 6×6 state transformation. [`mxv`](@ref) applies a matrix to a vector with the arithmetic of CSPICE.
 
 ```@example first
 r = pxform("J2000", "IAU_EARTH", et)
-r * state[1:3]                # km, in the Earth-fixed frame
+mxv(r, state[1:3])            # km, in the Earth-fixed frame
 ```
 
 ## Find the point below the spacecraft

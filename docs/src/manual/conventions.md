@@ -1,7 +1,8 @@
 # Conventions
 
-Almanac.jl keeps the names, the units and the numerical results of CSPICE N0067, and
-its argument order with the few exceptions below. It departs from CSPICE where the C
+Almanac.jl keeps the names and the units of CSPICE N0067, its numerical results to
+rounding ([Numerical results and derivatives](@ref) gives the differences), and its
+argument order with the few exceptions below. It departs from CSPICE where the C
 interface relies on hidden state, on output arguments or on arguments that only manage
 C memory.
 
@@ -13,8 +14,10 @@ specification; the docstring gives the Julia signature, the units and what diffe
 
 - **Names.** The `_c` suffix is dropped: `spkezr_c` is [`spkezr`](@ref). A call that
   changes one of its arguments ends in `!`, as [`wninsd!`](@ref).
-- **Results** are returned, never written to output arguments. Several results come
-  back as a tuple: `state, lt = spkezr(...)`.
+- **Results** are returned. Several results come back as a tuple:
+  `state, lt = spkezr(...)`. The exceptions end in `!` and fill a container that the
+  caller passes first: the cells below, the windows, and [`dskxv!`](@ref), which writes
+  the intercepts into arrays of the caller so that it does not allocate.
 - **Arrays.** Vectors and matrices are returned as `SVector` and `SMatrix` of
   StaticArrays.jl. Inputs can be any `AbstractVector` or `AbstractMatrix`.
 - **Strings** are returned as a `String`, so no call takes a string length.
@@ -38,16 +41,21 @@ specification; the docstring gives the Julia signature, the units and what diffe
 Loaded kernels, the kernel pool and settings such as [`timdef`](@ref) belong to a
 [`SpiceContext`](@ref), not to the process. A call that needs them takes a context as
 an optional first argument, written `[ctx,]` in the reference, and uses
-[`default_context`](@ref) without one. `[ctx | ks,]` means that the call also accepts a
-`KernelSet`, the immutable snapshot of a context that `Almanac.kernelset(ctx)` returns.
+[`default_context`](@ref) without one. A call that fills a container takes the context
+after it, as in `dskxv!(xptarr, fndarr, [ctx | ks,] ...)`; [`add_ephemeris!`](@ref)
+and [`add_frame!`](@ref) take their function first. `[ctx | ks,]` means that the call
+also accepts a [`Almanac.KernelSet`](@ref), the immutable snapshot of a context that
+[`Almanac.kernelset`](@ref) returns.
 [Contexts and threads](@ref) shows contexts in use.
 
 ## Errors and `found` flags
 
 - A call that fails throws a [`SpiceError`](@ref), in place of setting the error flag
-  of CSPICE. Its `kind` is the CSPICE short message as a lower-case symbol
+  of CSPICE. Most failures throw its subtype [`SpiceKindError`](@ref). The `kind` is
+  the CSPICE short message as a lower-case symbol
   (`SPICE(INVALIDDEGREE)` is `:invaliddegree`), and its `msg` is the text. Conditions
   that CSPICE does not check have kinds of Almanac.jl, such as `:badarg`.
+  [`Almanac.ERROR_KINDS`](@ref) lists every kind.
 - Because each kind is that of the routine a call ports, two calls can report one
   failure with different kinds, as in CSPICE; [`SpiceError`](@ref) gives examples.
 - Missing SPK data throw the subtype [`SpkInsufficientDataError`](@ref), whose fields

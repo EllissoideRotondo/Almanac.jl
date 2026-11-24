@@ -37,6 +37,9 @@ using Pkg
 Pkg.add("Almanac")
 ```
 
+The quickstart also needs [SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels),
+which downloads the NAIF generic kernels: `Pkg.add("SPICEKernels")`.
+
 ## Quickstart
 
 ```julia
@@ -85,7 +88,9 @@ Beyond CSPICE:
 
 The test suite compares Almanac.jl with CSPICE through SPICE.jl and replays NAIF's own test
 suite against Almanac.jl. Results agree to within rounding error, apart from a few
-[documented differences](https://orbitology.github.io/Almanac.jl/dev/manual/numerics/).
+[documented differences](https://orbitology.github.io/Almanac.jl/dev/manual/numerics/)
+and the [defects of CSPICE](https://orbitology.github.io/Almanac.jl/dev/manual/cspice_defects/)
+that Almanac.jl fixes.
 The package is under active development, and its interface may still change.
 
 ## Tutorials and Documentation
