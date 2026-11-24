@@ -1,4 +1,4 @@
-# Kernel writers
+# SPK, CK and binary PCK writers
 
 The writers take the arguments of CSPICE in the order of CSPICE, but leave out most
 counts and flags that follow from the input. For example, in [`ckw01`](@ref) and

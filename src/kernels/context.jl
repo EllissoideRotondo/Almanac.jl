@@ -130,7 +130,8 @@ default_context() = DEFAULT_CONTEXT
 """
     kernelset(ctx::SpiceContext) -> KernelSet
 
-Return the current snapshot of `ctx` with one atomic read; the result never changes.
+Return the current [`Almanac.KernelSet`](@ref) of `ctx`, read atomically. The result
+never changes.
 """
 kernelset(ctx::SpiceContext) = @atomic ctx.ks
 

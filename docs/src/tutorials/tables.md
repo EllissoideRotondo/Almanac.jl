@@ -8,6 +8,8 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
+[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
+
 ## Build and evaluate an ephemeris table
 
 ```@example tab
@@ -19,7 +21,7 @@ tab = ephemeris_table("PROBE", t0, t1, "J2000", "NONE", "EARTH"; tol=1e-6)
 (tab.nint, tab.ncoef, tab.maxerr)           # intervals, coefficients per interval, measured error (km)
 ```
 
-`tol` is the accepted error in km; its default is 1e-12 times the largest distance in the table. [`table_position`](@ref), [`table_state`](@ref) and [`table_jet`](@ref) return the position, the state, and the position with its derivatives of any order.
+`tol` is the accepted error in km; its default is 1e-12 times the largest distance in the table. [`table_position`](@ref), [`table_state`](@ref) and [`table_jet`](@ref) return the position, the state, and the jet: the position with its time derivatives of orders 0 to `N`.
 
 ```@example tab
 et = t0 + 3600.0
@@ -33,7 +35,7 @@ acceleration                                # km/s²
 
 Epochs can be `ForwardDiff.Dual` numbers, also on the GPU.
 
-An epoch outside the table throws `SpiceError(:spkinsuffdata)`, not the [`SpkInsufficientDataError`](@ref) of `spkezr`. The check is a bounds check, which `@inbounds` removes, as GPU code requires; an epoch outside the table then extrapolates the nearest interval.
+An epoch outside the table throws a [`SpiceKindError`](@ref) of kind `:spkinsuffdata`, without the fields of the [`SpkInsufficientDataError`](@ref) that `spkezr` throws. The check is a bounds check, which `@inbounds` removes, as GPU code requires; an epoch outside the table then extrapolates the nearest interval.
 
 ## How the table is built
 
@@ -50,7 +52,7 @@ rtab = rotation_table("J2000", "IAU_EARTH", t0, t1)
 maximum(abs, table_rotation(rtab, et) - pxform("J2000", "IAU_EARTH", et))
 ```
 
-The matrix is not orthogonalized again, so its distance from orthogonality is of the order of the error of the table. The errors below are Frobenius norms over six days from 2022-03-08, with the default arguments:
+The matrix is not orthogonalized again, so its distance from orthogonality is of the order of the error of the table. The errors below are Frobenius norms over six days from 2022-03-08, with the default arguments; `MOON_PA` is the principal-axis frame of the Moon:
 
 | From | To | Intervals | Measured error of the table | Difference from CSPICE `pxform` |
 |---|---|---:|---:|---:|
@@ -63,7 +65,7 @@ The tables that reach the Earth stop at 1.5e-11 because of the rounding of the r
 
 ## Measured accuracy and speed
 
-The figures below cover 400 days of `de440s.bsp` and 4,000,000 epochs, measured by `benchmark/table_gpu.jl` on one thread of an Intel CPU and on an NVIDIA RTX 3090. The error is the largest difference from the kernels, and the tolerance is the default unless stated. `MOON_PA` is the principal-axis frame of the Moon.
+The figures below cover 400 days of `de440s.bsp` and 4,000,000 epochs, measured on one machine, on one CPU thread and on a GPU. The error is the largest difference from the kernels, and the tolerance is the default unless stated.
 
 | Case | Intervals | Error (km) | Table (ns per epoch) | `spkezr` (ns per epoch) |
 |---|---:|---:|---:|---:|
@@ -99,24 +101,3 @@ using CUDA, Adapt
 gpu = adapt(CuArray, tab)                   # `cu(tab)` gives Float32 coefficients
 states = map(et -> @inbounds(table_state(gpu, et)), CuArray(epochs))
 ```
-
-## Use a table in a CasADi model
-
-[CasADiCodegen.jl](https://github.com/EllissoideRotondo/CasADiCodegen.jl) generates Julia code from a CasADi model, and its `callback` embeds a Julia function with the derivatives that CasADi needs. Because [`table_jet`](@ref) returns static vectors, a table gives the position of a body to the generated code without allocation, and its derivatives to the Jacobian. A sketch (not a complete program) for an Earth satellite perturbed by the Moon, where `t0`, `t1`, `GM_EARTH` and `GM_MOON` come from the application:
-
-```julia
-using Almanac, CasADiCodegen, LinearAlgebra
-
-tab = ephemeris_table("MOON", t0, t1, "J2000", "NONE", "EARTH")
-order(k) = let v = Val(k); t -> table_jet(tab, t[1], v)[k+1]; end       # derivative k of the position
-moon = callback(order(0), "moon", (1,), (3,); jacobian = (order(1), order(2)))
-
-x, t = MX.sym("x", 6), MX.sym("t")
-r, s = x[1:3], moon(t)
-a = -GM_EARTH * r / norm(r)^3 + GM_MOON * ((s - r) / norm(s - r)^3 - s / norm(s)^3)
-z = vertcat(x, t)
-f = CasADiCodegen.Function("f", [x, t], [vertcat(x[4:6], a), jacobian(vertcat(x[4:6], a), z)])
-g, g! = build_function(f; expression = Val{false})
-```
-
-`t` is in seconds past J2000 TDB and `order(k)` returns the `k`-th derivative in km/sᵏ; CasADi takes first derivatives from `order(1)` and second from `order(2)`.

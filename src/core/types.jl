@@ -374,46 +374,51 @@ struct NameTable <: AbstractDict{String, Int32}
     slots::Vector{Int32}
 end
 
+# Immutable snapshot of everything loaded. Built by `build_kernelset` from the load
+# list; never modified afterwards. Declared `mutable` with `const` fields only so that
+# it lives behind one pointer: the atomic reference in `SpiceContext` is then one word,
+# and readers on many threads do not contend.
+#
+# - `loaded`: the load list, in load order.
+# - `daf`: data arrays of the DAF files; `Segment.file` indexes this vector.
+# - `spk`: SPK segments by target body, highest priority first (later file first, and
+#   inside a file later segment first), which is the search order of CSPICE, each list
+#   with the index of `find_segment` (`SegmentList`).
+# - `pck`: binary PCK segments by frame class ID, in the same priority order and form.
+# - `pool`: kernel-pool variables after all assignments, in load order.
+# - `name2code`, `code2name`: body names defined in the pool (`NAIF_BODY_NAME` and
+#   `NAIF_BODY_CODE`); keys of `name2code` are normalized with `normalize_name`. The
+#   built-in table is consulted after these.
+# - `frames`, `framename2id`: frames defined in the pool; the built-in table is
+#   consulted before these, as in CSPICE. Keys of `framename2id` are normalized.
+# - `tk`: fixed-offset frames by frame ID.
+# - `bodyrot`: text-PCK orientation constants by body ID.
+# - `lsk`: leap-second data, or `nothing` if no leap-second kernel is loaded.
+# - `ck`: CK segments by instrument ID, in the priority order and form of `spk`.
+# - `sclk`: type 1 spacecraft clocks by clock ID (the spacecraft ID, a negative number).
+# - `ckmeta`: the pair (`CK_<id>_SCLK`, `CK_<id>_SPK`) for each CK ID that has one of
+#   these variables in the pool; a missing one of the two holds the default of `ckmeta`.
+# - `dyn`, `switch`: definitions of the dynamic frames (class 5) and of the switch frames
+#   (class 6) by frame ID, parsed from the pool (`dynframes.jl`, `switchframes.jl`).
+# - `inner`: the snapshot with the same data that the evaluation of a dynamic frame of
+#   this snapshot uses, or `nothing` at the recursion limit of CSPICE (`dynframes.jl`).
+# - `pooledited`: true if `pool` holds direct edits (`pdpool`, `lmpool`, ...), so that it
+#   is not the result of the text kernels of `loaded` alone (`pool_write.jl`).
+# - `bodydefs`: the name and code pairs of `boddef`, oldest first.
+# - `dskfiles`: the loaded DSK files, in load order; `DSKSegment.file` indexes this vector.
+# - `dsk`: DSK segments by center body ID, in the search order of CSPICE (later file
+#   first, and inside a file later segment first).
+# - `ekfiles`: the loaded EK files, in load order (a file that is loaded twice is here once).
+# - `ektables`: the tables of the loaded EK files, in load order; `EKTable.segs` indexes
+#   `ekfiles` (`ek/file.jl`).
+
 """
     KernelSet
 
-Immutable snapshot of everything loaded. Built by `build_kernelset` from the load
-list; never modified afterwards. Declared `mutable` with `const` fields only so that
-it lives behind one pointer: the atomic reference in `SpiceContext` is then one word,
-and readers on many threads do not contend.
-
-- `loaded`: the load list, in load order.
-- `daf`: data arrays of the DAF files; `Segment.file` indexes this vector.
-- `spk`: SPK segments by target body, highest priority first (later file first, and
-  inside a file later segment first), which is the search order of CSPICE, each list
-  with the index of `find_segment` (`SegmentList`).
-- `pck`: binary PCK segments by frame class ID, in the same priority order and form.
-- `pool`: kernel-pool variables after all assignments, in load order.
-- `name2code`, `code2name`: body names defined in the pool (`NAIF_BODY_NAME` and
-  `NAIF_BODY_CODE`); keys of `name2code` are normalized with `normalize_name`. The
-  built-in table is consulted after these.
-- `frames`, `framename2id`: frames defined in the pool; the built-in table is
-  consulted before these, as in CSPICE. Keys of `framename2id` are normalized.
-- `tk`: fixed-offset frames by frame ID.
-- `bodyrot`: text-PCK orientation constants by body ID.
-- `lsk`: leap-second data, or `nothing` if no leap-second kernel is loaded.
-- `ck`: CK segments by instrument ID, in the priority order and form of `spk`.
-- `sclk`: type 1 spacecraft clocks by clock ID (the spacecraft ID, a negative number).
-- `ckmeta`: the pair (`CK_<id>_SCLK`, `CK_<id>_SPK`) for each CK ID that has one of
-  these variables in the pool; a missing one of the two holds the default of `ckmeta`.
-- `dyn`, `switch`: definitions of the dynamic frames (class 5) and of the switch frames
-  (class 6) by frame ID, parsed from the pool (`dynframes.jl`, `switchframes.jl`).
-- `inner`: the snapshot with the same data that the evaluation of a dynamic frame of
-  this snapshot uses, or `nothing` at the recursion limit of CSPICE (`dynframes.jl`).
-- `pooledited`: true if `pool` holds direct edits (`pdpool`, `lmpool`, ...), so that it
-  is not the result of the text kernels of `loaded` alone (`pool_write.jl`).
-- `bodydefs`: the name and code pairs of `boddef`, oldest first.
-- `dskfiles`: the loaded DSK files, in load order; `DSKSegment.file` indexes this vector.
-- `dsk`: DSK segments by center body ID, in the search order of CSPICE (later file
-  first, and inside a file later segment first).
-- `ekfiles`: the loaded EK files, in load order (a file that is loaded twice is here once).
-- `ektables`: the tables of the loaded EK files, in load order; `EKTable.segs` indexes
-  `ekfiles` (`ek/file.jl`).
+Immutable snapshot of everything loaded in a [`SpiceContext`](@ref), as
+[`Almanac.kernelset`](@ref) returns it. A call written `f([ctx | ks,] ...)` takes it in
+place of the context. A snapshot never changes: `furnsh`, `unload`, `kclear` and the
+pool edits of a context make a new one. Its fields are internal.
 """
 mutable struct KernelSet
     const loaded::Vector{Loaded}

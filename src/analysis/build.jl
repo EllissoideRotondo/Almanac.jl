@@ -47,8 +47,9 @@ Return the [`Orbit`](@ref) of Keplerian elements about `center` in `frame` at `e
   `BODYnnn_RADII` when present; with `gm` given the radii are NaN, and only names of `center` and
   `frame` are looked up in the kernels.
 
-As in ANISE, a negative `ecc` and a semi-major axis of the wrong sign for `ecc` change
-sign. The elements and the epoch may be dual numbers.
+An `ecc` below 1 gives an ellipse, with `sma > 0`, and an `ecc` above 1 a hyperbola,
+with `sma < 0`. As in ANISE, a negative `ecc` and a semi-major axis of the wrong sign for
+`ecc` change sign. The elements and the epoch may be dual numbers.
 
 Throws `SpiceError`:
 - `:badarg` unless exactly one shape pair and exactly one of `ta` and `ma` are given;

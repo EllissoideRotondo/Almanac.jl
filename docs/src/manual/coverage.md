@@ -7,7 +7,8 @@ scope and what replaces the routines that are not.
 ## What is covered
 
 - **Kernels:** SPK, CK, binary PCK, DSK and EK files, text kernels and meta-kernels.
-- **SPK:** every data type of N0067 (1 to 21), every aberration correction, and
+- **SPK:** all 16 data types of N0067 (1, 2, 3, 5, 8, 9, 10, 12 to 15 and 17 to 21),
+  every aberration correction, and
   two-line elements (`getelm`, `evsgp4`).
 - **Frames:** inertial, body-fixed, fixed-offset, CK-based, dynamic and switch frames.
 - **Orientation and clocks:** CK types 1 to 6, binary PCK types 2, 3 and 20, and
@@ -20,10 +21,10 @@ scope and what replaces the routines that are not.
 - **Mathematics:** vectors, matrices, rotations, quaternions, coordinate systems,
   ellipsoids, conics and interpolation. `det` is public but not exported, because
   `LinearAlgebra` exports a `det` too: call it as `Almanac.det`.
-- **Writers:** SPK (all types), CK (types 1 to 6), binary PCK (types 2, 3 and 20), DSK
+- **Writers:** SPK (all 16 types), CK (types 1 to 6), binary PCK (types 2, 3 and 20), DSK
   type 2 and EK, plus low-level DAF and DAS access.
-- **SPICELIB routines without a C wrapper** that a caller of CSPICE reaches through
-  f2c: among them the writers of CK type 4 and binary PCK type 3, the record readers of
+- **SPICELIB routines without a C wrapper**, which a caller of CSPICE reaches through
+  their f2c names (CSPICE is SPICELIB translated to C by f2c): among them the writers of CK type 4 and binary PCK type 3, the record readers of
   CK types 1 to 6, [`kpsolv`](@ref), [`npsgpt`](@ref), [`incnsg`](@ref),
   [`scn2id`](@ref) and [`scid2n`](@ref). Their docstrings say so.
 
@@ -51,7 +52,8 @@ Routines that Julia or the design of the package makes unnecessary:
 - **Loading one file by handle** (`spklef`, `cklpf`, `pcklof`, and their unload
   forms): [`furnsh`](@ref) and [`unload`](@ref). [`eklef`](@ref) remains for EK files.
 - **Settings of the geometry finder** (`gfsstp`, `gfrepi`, `gfbail`, ...): the step
-  argument and the keywords `report` and `bail` of each search; see [`gfdist`](@ref).
+  argument and the keywords of each search: `report`, a progress callback, and `bail`,
+  a function that stops the search when it returns `true`; see [`gfdist`](@ref).
 - **The current DAF or DAS file** (`dafcs`, `dafgh`, `daswbr`): the handle passed to
   each call.
 - **Private `zz` routines and the toolkit programs** (`brief`, `mkspk`, ...).

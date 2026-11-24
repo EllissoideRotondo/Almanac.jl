@@ -5,19 +5,21 @@ those of CSPICE, or fixes it, so that its results differ for the inputs that the
 concerns. This page lists the known defects of the routines that Almanac.jl ports, and
 what Almanac.jl does about each.
 
-The defects come from the tests of Almanac.jl, from [NAIF's test suite](@ref "Run
-NAIF's test suite") replayed against Almanac.jl, and from the
+The defects come from the tests of Almanac.jl, from [NAIF's test suite](@ref "NAIF's test suite")
+replayed against Almanac.jl, and from the
 [list of SPICELIB bugs](https://github.com/jacobwilliams/pepper/blob/master/spicelib_bugs.md)
 of [PEPPER](https://github.com/jacobwilliams/pepper), a Fortran port of SPICELIB. Not
 listed: defects of routines that Almanac.jl does not port, and defects of the Fortran
 source that cannot occur in Julia, such as a string passed as both input and output.
-In the tables:
+CSPICE is SPICELIB translated from Fortran to C by f2c, and some defects come from the
+run-time library of f2c. In the tables:
 
 - **Where** names the routine of SPICELIB in lower case, `_c` for a routine written in
-  C. Parentheses name the public calls through which the defect shows.
+  C. Parentheses name the public calls of Almanac.jl through which the defect shows,
+  where the routine is not one of them.
 - **Test** names the test group (`test/test_<group>.jl`) that covers the behavior, or
   the family of NAIF's test suite (`tspice F_NAME`) whose difference from CSPICE is in
-  the baseline of that suite.
+  the baseline of that suite, the list of known differences that a replay accepts.
 
 ## Defects that Almanac.jl copies
 
@@ -26,7 +28,7 @@ In the tables:
 | `nparsd` (text kernels, SCLK kernels, TLE fields) | Converts a decimal string to a double that is not always the nearest one: the GM of the Sun in `gm_de431.tpc` comes out 5 units in the last place low | The same doubles. The EK query scanner fixes it (below) | `pool` |
 | `zzeksemc` (`ekfind`) | The check of a query stops at the first `IS NULL` or `IS NOT NULL`: the constraints after it and the ORDER BY columns are not checked. A non-scalar column in a later constraint then makes the search signal `SPICE(BUG)` | The same check. The search compares a non-scalar column by its first element, with no error | `ek_parse` |
 | `ttrans` (`str2et`) | Day numbers are 32-bit integers and wrap: the epoch `"238409829538 JD"` gives an ET of the opposite sign | The same | `time` |
-| C casts of f2c (`(integer) x`, `i_dnnt`) | A double outside the 32-bit range, or NaN, is undefined behavior in C: x86 gives the smallest 32-bit integer, ARM saturates | The x86 result on every machine, so it differs from CSPICE built for ARM | `time` |
+| C casts of f2c (`(integer) x`, `i_dnnt`; `str2et`, `ekfind`) | A double outside the 32-bit range, or NaN, is undefined behavior in C: x86 gives the smallest 32-bit integer, ARM saturates | The x86 result on every machine, so it differs from CSPICE built for ARM | `time`, `ek_query` |
 | `hx2dp` | The exponent -2³¹ overflows when negated, and the routine divides by 16 once instead of returning zero | The same | `math_vectors` |
 | `ckw06` | The second bounds check of a mini-segment compares its last epoch with the start of its interval, not the end, so a mini-segment whose epochs end before its interval is written | The same check | `dafwrite` |
 
@@ -51,14 +53,13 @@ error or the correct result.
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
 | `spkpvn` (types 1, 2, 3, 5, 10, 20, 21) | No check of the time bounds: the reader extrapolates, reads outside the segment, or stops the process (type 1) | `:timeoutofbounds`. Types 15 and 17 hold one set of elements and are evaluated at any epoch, as in CSPICE | `dafwrite` |
-| `spke01` (SPK type 1) | No check of the step sizes of a difference line: a zero step divides by zero (`spke21` signals `SPICE(ZEROSTEP)` for type 21) | `:baddaf` | `spktypes` |
+| `spke01` (`spkezr` and the other state calls, on SPK type 1) | No check of the step sizes of a difference line: a zero step divides by zero (`spke21` signals `SPICE(ZEROSTEP)` for type 21) | `:baddaf` | `spktypes` |
 | `spks19` (`spksub` of type 19) | Reads `data[0]` and aborts when the last group of 100 epochs in the epoch directory starts after the `stop` epoch given to `spksub` | `:spkstructureerror` | `dafwrite` |
 | `spkgeo` | An SPK chain with a cycle never returns | `SpkInsufficientDataError`, kind `:spkinsuffdata` | `management` |
 | `ckw04a` | With more than one record in one call, packs the array in place and copies the midpoint and the radius of the second and later records after their coefficients have overwritten them | The values given | `dafwrite` |
-| `pck03b` | Leaves the unused half of the last integer word of the segment descriptor uninitialized, so the file holds what the stack held | Zero | `dafwrite` |
-| `ckr06` | On moving to the next mini-segment, rounds its clock rate to a whole number and keeps it, so later derivatives are wrong | The stored rate | `ck` |
+| `ckr06` (`ckgp`, `ckgpav`, on CK type 6) | On moving to the next mini-segment, rounds its clock rate to a whole number and keeps it, so later derivatives are wrong | The stored rate | `ck` |
 | `ckbsr` (`ckgp`, `ckgpav`) | Keeps the last segment found: `ckgp` right after `ckgpav` reuses it, although a segment of higher priority covers the request | No state between calls | `ck` |
-| `ckr05` | After a request in a gap between interpolation intervals, keeps that interval, so a later request finds no pointing where a new process finds some | No state between calls | `ck` |
+| `ckr05` (`ckgp`, `ckgpav`, on CK type 5) | After a request in a gap between interpolation intervals, keeps that interval, so a later request finds no pointing where a new process finds some | No state between calls | `ck` |
 | `zzsgp4` (`evsgp4`, SPK type 10) | An eccentricity above 1 gives no error, and the constants of the previous element set are kept | `:invalidelements` | `sgp4` |
 | f2c `open` (`dafopw`, `dasopw`) | A file that the process may not write is opened for read without an error, so the open for write succeeds and the first write fails | `:fileopenfail` at the open | `dafwrite` |
 
@@ -87,13 +88,14 @@ error or the correct result.
 
 ### EK queries
 
-The first five rows change the rows that `ekfind` returns. The tests reproduce each of
-the five with an internal switch of the search, so that every difference from CSPICE is
-traced to one of them.
+The `zz` routines and `nparsd` in this table are steps of [`ekfind`](@ref), and the
+parse errors show in [`ekpsel`](@ref) too. The first five rows change the rows that
+`ekfind` returns. The tests reproduce each of the five with an internal switch of the
+search, so that every difference from CSPICE is traced to one of them.
 
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
-| `zzekweed` | A row that two OR branches give can appear twice, and rows of two segments that have the same record pointer are merged into one | Each row once | `ek_query` |
+| `zzekweed` | A row that two OR branches give can appear twice, and two different rows of two segments can be merged into one | Each row once | `ek_query` |
 | `zzekillt`, `zzekille` | A double compared with an indexed integer column is rounded: `ID < 17.4` loses `ID = 17` | The exact comparison | `ek_query` |
 | `zzekjsqz` | After `zzekweed` empties a segment, the rows of the next segment are lost and later rows are read from the wrong segment | The correct rows | `ek_query` |
 | `nparsd` (query scanner) | `2.756` in a query gives the next double above the one nearest to 2.756, so it is not equal to a stored 2.756 | The nearest double | `ek_query` |
@@ -119,7 +121,7 @@ traced to one of them.
 | `ekacld`, `ekacli` (`zzekac04`, `zzekac05`) | An entry size below 1 for a non-null row aborts with a subscript error | `:badsubscript` | `ek_write` |
 | `ekaclc`, `ekacld`, `ekacli` | An entry size below 0 for a null row reads outside the values | `:invalidcount` | `ek_write` |
 | `ekdelr` on a fast-loaded segment | The record pages have a link count of 0, so the first deleted row frees a page and new rows overwrite the others | Correct link counts | `ek_write` |
-| `zzekac04` to `zzekac06`, `zzekde04` to `zzekde06` | A data page on which an array entry continues has no link, so an update frees it and the next entry overwrites another | Correct links | `ek_write` |
+| `zzekac04` to `zzekac06`, `zzekde04` to `zzekde06` (`ekaclc`, `ekacld`, `ekacli`, then `ekdelr`, `ekucec`, `ekuced`, `ekucei`) | A data page on which an array entry continues has no link, so an update frees it and the next entry overwrites another | Correct links | `ek_write` |
 | `zzekfrx` (`ekdelr`, `ekucec`, `ekuced`, `ekucei`) | Looks for a key at one position of the index only. The index can hold equal keys in another order (the fast writers sort unstably, and strings longer than the column are cut), so the call gives `ITEMNOTFOUND` | Looks at all equal keys | `ek_write` |
 | `zzektr1s` (`ekffld`) | For a fast load of 5167 or 5168 rows (the smallest trees of depth 3), sizes the subtrees of the middle nodes by dividing by MNKEYC in place of MNKIDC, so their leaves overlap: the record tree and the index trees hold more keys than they state, some of them twice | A valid tree | `ek_write` |
 
@@ -131,9 +133,10 @@ writes differs.
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
 | `dafps` (binary PCK writers) | The 4 padding bytes of a summary with 5 integers keep the sixth integer of the last summary packed, often an SPK or CK address | Zero | `dafwrite` |
-| `dafarr` | Extends the file with a buffer that is not set | Zeros | `dafwrite` |
+| `pck03b` | Leaves the unused half of the last integer word of the segment descriptor uninitialized, so the file holds what the stack held | Zero | `dafwrite` |
+| `dafarr` (`dafac`) | Extends the file with a buffer that is not set | Zeros | `dafwrite` |
 | DAS writers (DSK, EK) | The padding of a record is whatever the buffer held before | Blanks in a character record, zeros in a double precision or integer record | `dsk` |
-| `zzekpage` | Unused bytes of new character pages are NUL until an `ekopn` in the same process | Blanks | `ek_write` |
+| `zzekpage` (the EK writers) | Unused bytes of new character pages are NUL until an `ekopn` in the same process | Blanks | `ek_write` |
 
 ### Fixes that change no computed value
 
@@ -154,9 +157,9 @@ Where CSPICE signals an error past the size of a fixed table, Almanac.jl makes t
 
 | Where | Limit of CSPICE | In Almanac.jl | Test |
 |---|---|---|---|
-| `zzddhopn`, `rdker`, `rdtext` | A path is cut to 255 characters, so two paths with the same start are confused | The whole path | `dafwrite` |
-| `ttrans` | Only the first 140 leap seconds of a leap-seconds kernel are used; later ones are ignored with no error | All of them | `time` |
-| `framex` | `HASHISFULL` past 5209 frames defined in kernels | No limit | `frameinfo` |
+| `zzddhopn`, `rdker`, `rdtext` (`furnsh`, `ldpool`, `dafopr`, `dasopr`) | A path is cut to 255 characters, so two paths with the same start are confused | The whole path | `dafwrite` |
+| `ttrans` (`str2et`) | Only the first 140 leap seconds of a leap-seconds kernel are used; later ones are ignored with no error | All of them | `time` |
+| `framex` (`namfrm`, `frmnam` and every query in a frame) | `HASHISFULL` past 5209 frames defined in kernels | No limit | `frameinfo` |
 | `zzboddef` (`boddef`) | `TOOMANYPAIRS` past 161 pairs, where the header says 150 | No limit | `poolwrite` |
 | `zzrvbf` (`lmpool`) | A string value over 80 characters is written past its slot | Keeps the first 80 characters and writes nothing past them | `poolwrite` |
 | `keeper` (`furnsh`) | `FILENAMETOOLONG`, `PATHTOOLONG` past 255 characters, after the path symbols of a meta-kernel are replaced | The whole name | `tspice F_KEEPER` |

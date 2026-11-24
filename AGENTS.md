@@ -195,6 +195,13 @@ alters a deviation updates that text in the same commit.
   samples go in the exhaustive tier (`ALMANAC_TEST_FULL=1`, `nsample(fast, full)`).
 - CI tests Julia 1.10, which can allocate where later versions do not: after changing a
   hot path, run `quality` on Julia 1.10 too.
+- Two checks are outside `test/runtests.jl`. NAIF's test suite replays with
+  `julia --project=test test/tspice/run.jl`: the first run downloads NAIF's archive,
+  builds it with gcc and records the calls (about 2 GB), and later runs only replay
+  them; `test/tspice/README.md` has the details. The `tspice` workflow runs it, in about
+  an hour, on each push to `main` that changes the package. The comparison with ANISE is
+  `julia --startup-file=no --project=test/anise test/anise/runtests.jl`, which installs
+  Python and the `anise` wheel through CondaPkg.
 - Kernels are downloaded into `test/data/` by `test/kernels.jl` (`SOURCES` lists the
   URLs and SHA-256 sums). `ALMANAC_KERNEL_DIR` overrides the location,
   `ALMANAC_DOWNLOAD_KERNELS=0` turns the download off, and `ALMANAC_REQUIRE_KERNELS=1`

@@ -22,7 +22,7 @@ These features have no counterpart in CSPICE:
   [`furnsh`](@ref) of the handle. See [Load states as a kernel, with no file](@ref).
 - **Scratch files kept in memory**: [`dasops`](@ref), [`ekops`](@ref). CSPICE writes a
   temporary file instead.
-- **Text kernels in JSON**.
+- **Text kernels in JSON**: [`furnsh`](@ref) reads a file named `*.json` as a text kernel.
 
 ## Text kernels in JSON
 

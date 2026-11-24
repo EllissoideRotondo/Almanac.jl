@@ -9,7 +9,7 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 
 ## One context per kernel set
 
-Contexts are independent of each other. Use one per version of an ephemeris, or one per mission. Here `kernels` holds the paths of [the example kernels](@ref "The example kernels"), written as in [Getting started](@ref):
+Contexts are independent of each other. Use one per version of an ephemeris, or one per mission. Here `kernels` holds the paths of [the example kernels](@ref "The example kernels"), written by `DocKernels`, which [Getting started](@ref "Load kernels") explains:
 
 ```@example ctx
 using Almanac
@@ -23,7 +23,7 @@ foreach(k -> furnsh(mission, k), kernels)
 
 ## Query from many threads
 
-A query reads an immutable snapshot of the context and takes no lock, so any number of threads can query one context at once:
+A query reads an immutable snapshot of the context and takes no lock, so any number of threads can query one context at once. Julia uses several threads only when it starts with `--threads` or `JULIA_NUM_THREADS`:
 
 ```@example ctx
 et = str2et(mission, "2025 MAR 01 12:00:00 UTC")

@@ -55,6 +55,7 @@ invstm
 invert
 invort
 trace
+Almanac.det
 isrot
 ident
 ```

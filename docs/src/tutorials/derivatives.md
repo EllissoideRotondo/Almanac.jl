@@ -8,9 +8,11 @@ include(joinpath(@__DIR__, "..", "..", "fixture.jl"))
 foreach(furnsh, DocKernels.write(mktempdir()))
 ```
 
+[Getting started](@ref "Load kernels") explains `DocKernels`, which writes [the example kernels](@ref "The example kernels").
+
 ## Derivatives from `spkder` and `pxder`
 
-[`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and, with upper-case names, the call does not allocate.
+[`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and the call does not [allocate](@ref "Allocation").
 
 ```@example der
 using Almanac

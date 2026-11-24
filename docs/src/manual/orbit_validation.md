@@ -33,18 +33,14 @@ otherwise ANISE is. Differences below are relative unless a unit is given.
   [`local_frame_state`](@ref) and [`relative_state`](@ref) cannot allocate for
   `Float64` inputs.
 
-The comparison with ANISE is an opt-in group, which installs Python and the `anise`
-wheel through CondaPkg:
-
-```sh
-julia --startup-file=no --project=test/anise test/anise/runtests.jl
-```
+The comparison with ANISE is not part of the default test run.
 
 ## Deviations from ANISE
 
 - **Retrograde Brouwer elements** (an ANISE defect, reproduced). Above 175° of
-  inclination ANISE maps back the inclination and `raan` from its pseudo-state but not
-  the argument of periapsis, so `:brouwer_aop` carries an error of about twice its
+  inclination ANISE computes on a pseudo-state, the prograde orbit with the inclination
+  π - `inc` and the signs of `raan` and `aop` changed. It maps back the inclination and
+  `raan` but not the argument of periapsis, so `:brouwer_aop` carries an error of about twice its
   short-period correction (0.6° for a 7200 km orbit). Brouwer elements are those of
   the Earth; another center throws `SpiceError(:degeneratecase)`.
 - **Hyperbolic `two_body`.** ANISE recovers the mean anomaly as the mean longitude
@@ -54,6 +50,8 @@ julia --startup-file=no --project=test/anise test/anise/runtests.jl
 - **Frame rate.** ANISE differences two frames 1 ms apart; `local_frame_state` uses the
   exact rate of two-body motion.
 - **No NaN values.** Where ANISE returns NaN, the calls throw
-  `SpiceError(:degeneratecase)`; a derivative can be NaN (see
-  [Differentiate an orbit](@ref)). [Element names](@ref) lists the few non-finite and
-  fallback values that are returned.
+  `SpiceError(:degeneratecase)`, also for a dual-number state whose value has no
+  derivative ([Differentiate an orbit](@ref)). [Element names](@ref) lists the few
+  non-finite and fallback values that are returned. The rule holds for values only:
+  the derivative of a fallback value, such as the infinite `:ta_dot` of a hyperbola,
+  can be NaN.
