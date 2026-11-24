@@ -82,7 +82,7 @@ slots are decimals), rounded at slot `to` if `rnd`, with `fill` in the integer s
 the left of the number, and return the buffer and whether the rounding carried out of
 slot `from`. `digits` and `expont` come from `_dpstr_digits(x, 14)`, and `from <= to`.
 """
-function _vsbstr(
+@inline function _vsbstr(
         buf, digits::NTuple{14, Int}, expont::Int, from::Int, to::Int,
         fill::Char = ' ', rnd::Bool = true
     )
@@ -165,12 +165,12 @@ integer digit (a leading `0` asks for zero fill), and optionally a decimal point
 decimal. The number is rounded at the last decimal and written in exactly
 `length(pictur)` characters: right justified, the minus sign next
 to the first digit, the exponent form of `dpstr` when the integer part does not fit and
-`*` characters when that does not fit either.
+`*` characters when that does not fit either. `buf` is a `Vector{UInt8}` or a
+`_StackBuf`, and `pictur` anything with `length` and indexing.
 """
-function _dpfmt!(buf::Vector{UInt8}, x::Float64, p::AbstractVector{UInt8})
+@inline function _dpfmt!(buf, x::Float64, p)
     lastch = length(p)
     lastch == 0 && return buf
-    stars() = _putn(buf, UInt8('*'), lastch)
     sign = x > 0.0 ? UInt8('+') : (x < 0.0 ? UInt8('-') : UInt8(' '))
     sprsiz = x < 0.0 ? 1 : 0
     if p[1] == UInt8('+')
@@ -184,7 +184,13 @@ function _dpfmt!(buf::Vector{UInt8}, x::Float64, p::AbstractVector{UInt8})
     end
     start = needsn ? 2 : 1
     fill = start <= lastch && p[start] == UInt8('0') ? '0' : ' '
-    dpat = something(findfirst(==(UInt8('.')), p), 0)
+    dpat = 0
+    for k in 1:lastch
+        if p[k] == UInt8('.')
+            dpat = k
+            break
+        end
+    end
     intlen, declen = dpat > 0 ? (dpat - start, lastch - dpat) : (lastch - start + 1, -1)
     shift = false
     if start == 1 && sgnlen == 1
@@ -193,46 +199,46 @@ function _dpfmt!(buf::Vector{UInt8}, x::Float64, p::AbstractVector{UInt8})
         if intlen == -1
             intlen = 0
             declen -= 1
-            declen == 0 && return stars()
+            declen == 0 && return _putn(buf, UInt8('*'), lastch)
         end
     end
     y = abs(x)
     digits, expont = _dpstr_digits(y)
-    (expont >= intlen && y != 0.0) && return _dpfmt_exp!(buf, x, sign, sgnlen, lastch, expont)
-    ((intlen == 0 && declen == 0) || -intlen > declen) && return stars()
-    s0 = length(buf)
-    sgnlen == 1 && push!(buf, sign)
-    if _vsbstr(buf, digits, expont, -intlen, declen, fill, true)[2]
-        resize!(buf, s0)
-        return _dpfmt_exp!(buf, x, sign, sgnlen, lastch, expont)
+    (expont >= intlen && y != 0.0) &&
+        return _puts(buf, _dpfmt_exp(x, sign, sgnlen, lastch, expont))
+    ((intlen == 0 && declen == 0) || -intlen > declen) && return _putn(buf, UInt8('*'), lastch)
+    s0 = _blen(buf)
+    sgnlen == 1 && (buf = _bpush(buf, sign))
+    buf, carry = _vsbstr(buf, digits, expont, -intlen, declen, fill, true)
+    if carry
+        buf = _bresize(buf, s0)
+        return _puts(buf, _dpfmt_exp(x, sign, sgnlen, lastch, expont))
     end
     if shift
         # The first character that is neither a blank nor the sign moves the sign next to it.
         frstch = 0
-        for k in (s0 + 1):length(buf)
-            c = buf[k]
+        for k in (s0 + 1):_blen(buf)
+            c = _bget(buf, k)
             if c != UInt8(' ') && c != UInt8('-')
                 frstch = k - s0
                 break
             end
         end
         if frstch > 2
-            buf[s0 + frstch - 1] = buf[s0 + 1]
-            buf[s0 + 1] = UInt8(' ')
+            buf = _bset(buf, s0 + frstch - 1, _bget(buf, s0 + 1))
+            buf = _bset(buf, s0 + 1, UInt8(' '))
         end
     end
-    return _putn(buf, UInt8(' '), lastch - (length(buf) - s0))
+    return _putn(buf, UInt8(' '), lastch - (_blen(buf) - s0))
 end
 
 "The exponent form of `_dpfmt!`, right justified in `lastch` characters (or `*`s); the rare path, which builds strings."
-@noinline function _dpfmt_exp!(
-        buf::Vector{UInt8}, x::Float64, sign::UInt8, sgnlen::Int, lastch::Int, expont::Int
-    )
+@noinline function _dpfmt_exp(x::Float64, sign::UInt8, sgnlen::Int, lastch::Int, expont::Int)::String
     sigdig = lastch - sgnlen - (min(1, div(expont, 1000)) + 4 + min(1, div(expont, 100))) - 1
-    sigdig < 1 && return _putn(buf, UInt8('*'), lastch)
+    sigdig < 1 && return '*'^lastch
     e = _dpstr(x, sigdig)
     e = lstrip(string(Char(sign), SubString(e, 2)), ' ')
-    return _puts(buf, ncodeunits(e) >= lastch ? first(e, lastch) : lpad(e, lastch))
+    return String(ncodeunits(e) >= lastch ? first(e, lastch) : lpad(e, lastch))
 end
 
 # ---------------------------------------------------------------------------------
@@ -336,23 +342,25 @@ const _WEEKDAY_NAMES = (
     "Saturday",
 )
 
-"""
-    _to_scan(mystr) -> (ident, beg, fin)
+# The longest picture that `timout` reads: 255 characters of up to four bytes, and the
+# blank after them.
+const _TO_MAXBYTES = 4 * 255 + 1
 
-Return the tokens of the picture `mystr` in order: for each token the
-number of its mark (`_ID_TEXT` for a run of characters that start no mark) and its
-first and last position (`scan` with the marks of `timout`). At each position the
-marks are tried in descending ASCII order.
 """
-function _to_scan(mystr::Vector{UInt8})
+    _to_scan!(ident, beg, fin, mystr) -> ntokns
+
+Write the tokens of the picture `mystr` in order and return their number: for each
+token the number of its mark (`_ID_TEXT` for a run of characters that start no mark)
+and its first and last position (`scan` with the marks of `timout`). At each position
+the marks are tried in descending ASCII order.
+"""
+@inline function _to_scan!(ident, beg, fin, mystr)
     n = length(mystr)
-    ident = sizehint!(Int[], n)
-    beg = sizehint!(Int[], n)
-    fin = sizehint!(Int[], n)
+    ntokns = 0
     known = true
     start = 1
-    # Loop invariant: `mystr[1:start-1]` is covered by the tokens, and `known` says
-    # whether the last token is a mark.
+    # Loop invariant: `mystr[1:start-1]` is covered by the `ntokns` tokens, and `known`
+    # says whether the last token is a mark.
     while start <= n
         hit = 0
         stop = start
@@ -361,26 +369,51 @@ function _to_scan(mystr::Vector{UInt8})
             m = codeunits(mark)
             m[1] == c || continue
             stop = start + length(m) - 1
-            if stop <= n && @views(mystr[start:stop] == m)
+            if stop <= n && _matches(mystr, start, m)
                 hit = id
                 break
             end
         end
         if hit != 0
-            push!(ident, hit); push!(beg, start); push!(fin, stop)
+            ntokns += 1
+            ident[ntokns], beg[ntokns], fin[ntokns] = hit, start, stop
             known = true
             start = stop + 1
         else
             if known
-                push!(ident, _ID_TEXT); push!(beg, start); push!(fin, start)
+                ntokns += 1
+                ident[ntokns], beg[ntokns], fin[ntokns] = _ID_TEXT, start, start
                 known = false
             else
-                fin[end] = start
+                fin[ntokns] = start
             end
             start += 1
         end
     end
-    return ident, beg, fin
+    return ntokns
+end
+
+"The class of token `i` of the `n` tokens `ident`; `_TC_TEXT` after the last."
+@inline _to_tclass(ident, n::Int, i::Int) = i <= n ? _to_class(ident[i]) : _TC_TEXT
+
+"""
+    _to_put!(out, appnd, text, hw) -> hw
+
+Write `text` at `appnd` of the line `out` of 256 bytes, and blank the rest of the
+line, as the Fortran assignment does. The bytes of `out` after `hw` are blank, so the
+blanks are written up to `hw` only; the result is the new bound.
+"""
+@inline function _to_put!(out, appnd::Int, text, hw::Int)
+    appnd <= 256 || return hw
+    t = text isa AbstractString ? codeunits(text) : text
+    last = min(256, appnd + length(t) - 1)
+    for i in appnd:last
+        out[i] = t[i - appnd + 1]
+    end
+    for i in (last + 1):hw
+        out[i] = _BLANK
+    end
+    return max(last, appnd - 1)
 end
 
 """
@@ -451,13 +484,20 @@ function timout(
     l = _lsk(ks, :missingtimeinfo)
     # The picture, left justified, with one blank after it: the blank closes the last
     # numeric component.
+    # The buffers are on the stack: every function that takes one is inlined.
     pic = strip(pictur, ' ')
-    pic = length(pic) <= 255 ? pic : first(pic, 255)
-    mystr = Vector{UInt8}(undef, ncodeunits(pic) + 1)
-    copyto!(mystr, codeunits(pic))
-    mystr[end] = _BLANK
-    ident, beg, fin = _to_scan(mystr)
-    ntokns = length(ident)
+    nb = length(pic) <= 255 ? ncodeunits(pic) : nextind(pic, 0, 256) - 1
+    buf = _StackVec{_TO_MAXBYTES, UInt8}(undef)
+    cu = codeunits(pic)
+    for k in 1:nb
+        buf[k] = cu[k]
+    end
+    buf[nb + 1] = _BLANK
+    mystr = _Span(buf, 1, nb + 1)
+    ident = _StackVec{_TO_MAXBYTES, Int}(undef)
+    beg = _StackVec{_TO_MAXBYTES, Int}(undef)
+    fin = _StackVec{_TO_MAXBYTES, Int}(undef)
+    ntokns = _to_scan!(ident, beg, fin, mystr)
 
     # Time system: the default, or the first system mark of the picture.
     hoff = moff = 0.0
@@ -469,7 +509,7 @@ function timout(
     elseif tsys == "TDT" || tsys == "TT"
         timtyp = _ID_TDT
     elseif tsys != "UTC"
-        hoff, moff, _, ok = _zzutcpm(codeunits(string("::", defs.zone)), 1)
+        hoff, moff, ok = _zone_offsets(defs.zone)
         dozone = ok
         timtyp = ok ? _ID_UTCP : _ID_UTC
     end
@@ -502,36 +542,38 @@ function timout(
     # Calendar: the default, or the first calendar mark of the picture.
     caltyp = defs.calendar == "GREGORIAN" ? _ID_GCAL :
         (defs.calendar == "JULIAN" ? _ID_JCAL : _ID_MCAL)
-    k = findfirst(id -> _to_class(id) == _TC_CAL, ident)
-    k === nothing || (caltyp = ident[k])
-
-    pumpup = _ID_RND in ident
-    doera = any(id -> 33 <= id <= 36, ident)
+    pumpup = false
+    doera = false
+    calfound = false
+    for k in 1:ntokns
+        id = ident[k]
+        if !calfound && _to_class(id) == _TC_CAL
+            caltyp = id
+            calfound = true
+        end
+        pumpup |= id == _ID_RND
+        doera |= 33 <= id <= 36
+    end
     vanish = false
 
     # Remove the marks that write nothing.
+    nall = ntokns
     ntokns = 0
     # Loop invariant: the kept tokens of `1:k-1` are at `1:ntokns`.
-    for k in eachindex(ident)
+    for k in 1:nall
         id = ident[k]
         (_to_class(id) == _TC_SYSTEM || _to_class(id) == _TC_CAL || id == _ID_RND || id == 32) &&
             continue
         ntokns += 1
         ident[ntokns], beg[ntokns], fin[ntokns] = id, beg[k], fin[k]
     end
-    resize!(ident, ntokns)
-    resize!(beg, ntokns)
-    resize!(fin, ntokns)
-    # The closures take the variables that change as arguments: a captured variable
-    # that is assigned again is kept in a box, which allocates on each use.
-    class(ident, i) = i <= length(ident) ? _to_class(ident[i]) : _TC_TEXT
 
     # With `::RND`, add half of the smallest unit that the picture shows.
     timpad = 0.0
     if pumpup
         i = 1
         while i <= ntokns
-            type = class(ident, i)
+            type = _to_tclass(ident, ntokns, i)
             if type == _TC_TEXT || type == _TC_POINT || type == _TC_PLACE || type == _TC_AMPM ||
                     type == _TC_ERA || type == _TC_MONTH || type == _TC_WKDAY
                 i += 1
@@ -539,7 +581,7 @@ function timout(
                 factor = 1.0
                 incr = _to_pad(type)
                 i += 1
-                if class(ident, i) == _TC_POINT
+                if _to_tclass(ident, ntokns, i) == _TC_POINT
                     factor *= 0.1
                     i += 1
                     while i <= ntokns && ident[i] == _ID_HASH
@@ -553,8 +595,8 @@ function timout(
         end
     end
 
-    values = zero(MVector{52, Float64})
-    have = zero(MVector{52, Bool})
+    values = _StackVec{52, Float64}(0.0)
+    have = _StackVec{52, Bool}(false)
     myet = primal(et)
     sp1950 = _SPD * (j2000() - j1950())
     if timtyp == _ID_TDB
@@ -576,29 +618,27 @@ function timout(
         have[_TC_SP2000] = have[_TC_SP1950] = have[_TC_JD] = true
     end
 
-    out = fill(_BLANK, 256)
+    out = _StackVec{256, UInt8}(_BLANK)
+    hw = 0                        # the bytes of `out` after `hw` are blank
     appnd = 1
-    # Write `text` at `appnd`; the Fortran assignment also blanks the rest of the line.
-    put(appnd, text) = appnd <= 256 && _assign!(out, appnd, 256, text)
     making = false
     go2jul = false
-    fmt = UInt8[]                 # the number picture of the component being made
-    num = UInt8[]                 # the component, written to its picture
+    fmt = _StackBuf{_TO_MAXBYTES}()   # the number picture of the component being made
+    num = _StackBuf{_TO_MAXBYTES}()   # the component, written to its picture
     width = 0
     numtyp = _TC_YEAR
     timfmt = 1
     intyp = ymdfmt
     value = 0.0
-    ptvec = zero(MVector{7, Float64})
-    ntvec = zero(MVector{7, Float64})
-    tup(v) = (v[1], v[2], v[3], v[4], v[5], v[6], v[7])
+    ptvec = zero(SVector{7, Float64})
+    ntvec = zero(SVector{7, Float64})
 
     # Loop invariant: tokens `1:i-1` are written to `out[1:appnd-1]`, except a numeric
     # component that is still collecting its decimals (`making`, with picture `fmt`).
     for i in 1:ntokns
-        type = class(ident, i)
-        text = @view mystr[beg[i]:fin[i]]
+        type = _to_tclass(ident, ntokns, i)
         len = fin[i] - beg[i] + 1
+        text = _Span(buf, beg[i], len)
         if type != _TC_PLACE && making && (type != _TC_POINT || have[_TC_POINT])
             # The component is complete: truncate it to its decimals and write it. The
             # value is moved one eighth of the last place below the cut so that the
@@ -611,36 +651,39 @@ function timout(
             end
             intmed = (trunc(frac * _POW10[trncat + 1]) - 0.125) / _POW10[trncat + 1]
             value = trunc(value) + clamp(intmed, 0.0, 1.0)
-            put(appnd, _dpfmt!(empty!(num), value, fmt))
+            hw = _to_put!(out, appnd, _dpfmt!(_bresize(num, 0), value, fmt), hw)
             appnd += width
             have[_TC_POINT] = false
             making = false
         end
         if type == _TC_TEXT
-            put(appnd, text)
+            hw = _to_put!(out, appnd, text, hw)
             appnd += len
         elseif type == _TC_PLACE
             if making
-                append!(fmt, text)
+                _puts(fmt, text)
                 width += len
             else
-                appnd <= 256 && (out[appnd] = text[1])
+                if appnd <= 256
+                    out[appnd] = text[1]
+                    hw = max(hw, appnd)
+                end
                 appnd += len
             end
         elseif type == _TC_POINT
             if !making
-                put(appnd, text)
+                hw = _to_put!(out, appnd, text, hw)
                 appnd += len
                 have[_TC_POINT] = false
             else
-                append!(fmt, text)
+                _puts(fmt, text)
                 width += len
                 have[_TC_POINT] = true
                 if timfmt != 2
                     # Fraction of the unit: where the epoch lies between the start of
                     # this unit and the start of the next one.
-                    pt = _ttrans(l, intyp, bastyp, tup(ptvec))
-                    nt = _ttrans(l, intyp, bastyp, tup(ntvec))
+                    pt = _ttrans(l, intyp, bastyp, Tuple(ptvec))
+                    nt = _ttrans(l, intyp, bastyp, Tuple(ntvec))
                     delta = max(1.0, nt[1] - pt[1])
                     value += clamp((myet - pt[1]) / delta, 0.0, 1.0)
                 end
@@ -649,7 +692,7 @@ function timout(
             making = true
             have[_TC_POINT] = false
             f, width = _to_format(type)
-            append!(empty!(fmt), codeunits(f))
+            _puts(_bresize(fmt, 0), f)
             numtyp = type
             if !have[type]
                 if type == _TC_WKDAY
@@ -724,33 +767,34 @@ function timout(
                 style = (ident[i] - (type == _TC_MONTH ? 4 : 12))   # 0..5, as the marks are listed
                 nc = style < 3 ? 3 : ncodeunits(name)
                 # The name in the letter case of the mark: upper, as listed, or lower.
-                empty!(num)
+                _bresize(num, 0)
                 for k in 1:nc
                     c = codeunit(name, k)
-                    push!(num, style % 3 == 0 ? _upper(c) : (style % 3 == 2 ? _lower(c) : c))
+                    _bpush(num, style % 3 == 0 ? _upper(c) : (style % 3 == 2 ? _lower(c) : c))
                 end
-                put(appnd, num)
+                hw = _to_put!(out, appnd, num, hw)
                 appnd += nc
                 making = false
             elseif type == _TC_ERA
                 upper = ident[i] == 33 || ident[i] == 35
                 ad = values[_TC_ERA] == 2.0
-                put(appnd, ad ? (upper ? " A.D." : " a.d.") : (upper ? " B.C." : " b.c."))
+                hw = _to_put!(out, appnd, ad ? (upper ? " A.D." : " a.d.") : (upper ? " B.C." : " b.c."), hw)
                 if ident[i] >= 35
                     if vanish
-                        put(appnd, " ")
+                        hw = _to_put!(out, appnd, " ", hw)
                         appnd += 1
                     else
                         appnd += 6
                     end
                 else
-                    appnd <= 256 && put(appnd, lstrip(String(out[appnd:256]), ' '))
+                    # The era moves to `appnd`, without the blanks before it.
+                    hw = _to_lstrip!(out, appnd, hw)
                     appnd += 4
                 end
                 making = false
             elseif type == _TC_AMPM
                 pm = values[_TC_HR] >= 12.0
-                put(appnd, ident[i] == 37 ? (pm ? "P.M." : "A.M.") : (pm ? "p.m." : "a.m."))
+                hw = _to_put!(out, appnd, ident[i] == 37 ? (pm ? "P.M." : "A.M.") : (pm ? "p.m." : "a.m."), hw)
                 appnd += 4
                 making = false
             else
@@ -759,8 +803,8 @@ function timout(
             if making
                 # The time vectors of the start of this unit and of the next one, for
                 # the fraction that a `.#` may ask for.
-                fill!(ptvec, 0.0)
-                fill!(ntvec, 0.0)
+                ptvec = zero(SVector{7, Float64})
+                ntvec = zero(SVector{7, Float64})
                 incr = 1.0
                 timfmt = 1
                 intyp = ymdfmt
@@ -790,40 +834,64 @@ function timout(
                 if timfmt == 1
                     comps = (_TC_SIGNED_YEAR, _TC_MM, _TC_DD, _TC_HR, _TC_MN, _TC_SC)
                     for j in 1:stopat
-                        ptvec[j] = ntvec[j] = values[comps[j]]
+                        ptvec = Base.setindex(ptvec, values[comps[j]], j)
                     end
                 else
-                    ptvec[1] = ntvec[1] = values[type]
+                    ptvec = Base.setindex(ptvec, values[type], 1)
                 end
-                ntvec[stopat] += incr
+                ntvec = Base.setindex(ptvec, ptvec[stopat] + incr, stopat)
                 if type == _TC_YEAR || type == _TC_YR
-                    ptvec[2] = ntvec[2] = ptvec[3] = ntvec[3] = 1.0
+                    ptvec = Base.setindex(Base.setindex(ptvec, 1.0, 2), 1.0, 3)
+                    ntvec = Base.setindex(Base.setindex(ntvec, 1.0, 2), 1.0, 3)
                 elseif type == _TC_MM
-                    ptvec[3] = ntvec[3] = 1.0
+                    ptvec = Base.setindex(ptvec, 1.0, 3)
+                    ntvec = Base.setindex(ntvec, 1.0, 3)
                 end
                 if go2jul && timfmt != 2
-                    for v in (ptvec, ntvec)
-                        gy, gm, gd, _ = jul2gr(_nint(v[1]), _nint(v[2]), _nint(v[3]))
-                        v[1], v[2], v[3] = Float64(gy), Float64(gm), Float64(gd)
-                    end
+                    ptvec, ntvec = _to_jul2gr(ptvec), _to_jul2gr(ntvec)
                 end
                 if dozone && timfmt != 2
-                    for v in (ptvec, ntvec)
-                        v[4] -= hoff
-                        v[5] -= moff
-                        v[6] = 0.0
-                        v .= _ttrans(l, _TT_YMDF, _TT_YMDF, tup(v))
-                        type == _TC_SC && (v[6] = values[_TC_SC])
-                    end
+                    keep = type == _TC_SC
+                    ptvec = _to_unzone(l, ptvec, hoff, moff, keep, values[_TC_SC])
+                    ntvec = _to_unzone(l, ntvec, hoff, moff, keep, values[_TC_SC])
                 end
             end
         end
     end
-    n = length(out)
+    n = hw
     while n > 0 && out[n] == _BLANK
         n -= 1
     end
-    return String(resize!(out, n))
+    return _string_of(out, n)
+end
+
+"Move the text of `out[appnd:256]` to `appnd`, without the blanks before it, and blank the rest of the line (`out(appnd:) = ljust(out(appnd:))`); the bytes after `hw` are blank, and the result is the new bound."
+@inline function _to_lstrip!(out, appnd::Int, hw::Int)
+    appnd <= 256 || return hw
+    k = appnd
+    while k <= hw && out[k] == _BLANK
+        k += 1
+    end
+    k > hw && return hw
+    shift = k - appnd
+    # Loop invariant: `out[appnd:j-1]` holds the moved text; the bytes read are at or after `j`.
+    for j in appnd:hw
+        src = j + shift
+        out[j] = src <= hw ? out[src] : _BLANK
+    end
+    return hw - shift
+end
+
+"The time vector `v` (year, month, day of the Julian calendar first) with the date on the Gregorian calendar."
+function _to_jul2gr(v::SVector{7, Float64})
+    gy, gm, gd, _ = jul2gr(_nint(v[1]), _nint(v[2]), _nint(v[3]))
+    return SVector(Float64(gy), Float64(gm), Float64(gd), v[4], v[5], v[6], v[7])
+end
+
+"The time vector `v` of a zone `hoff:moff` moved to UTC without its seconds and normalized, with the seconds `sc` if `keep`."
+function _to_unzone(l, v::SVector{7, Float64}, hoff::Float64, moff::Float64, keep::Bool, sc::Float64)
+    w = _ttrans(l, _TT_YMDF, _TT_YMDF, (v[1], v[2], v[3], v[4] - hoff, v[5] - moff, 0.0, v[7]))
+    return SVector(w[1], w[2], w[3], w[4], w[5], keep ? sc : w[6], w[7])
 end
 
 # ---------------------------------------------------------------------------------

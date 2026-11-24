@@ -35,6 +35,7 @@ _inline(b::_ByteBuf) = String63(b)
 # The buffer operations. A writer that grows a buffer with `_bresize` writes every new byte.
 _blen(b::Vector{UInt8}) = length(b)
 _blen(b::_ByteBuf) = b.len
+@inline _bget(b::Vector{UInt8}, i::Int) = b[i]
 @inline _bget(b::_ByteBuf, i::Int) = (b.words[((i - 1) >> 3) + 1] >> (((i - 1) & 7) << 3)) % UInt8
 @inline _bset(b::Vector{UInt8}, i::Int, c::UInt8) = (b[i] = c; b)
 @inline function _bset(b::_ByteBuf, i::Int, c::UInt8)
@@ -116,4 +117,105 @@ function _putint(b::_ByteBuf, n::Integer, width::Int = 1)
         b = _bset(b, base + nd - k, UInt8('0') + UInt8(d))
     end
     return b
+end
+
+# `_StackVec`, a vector of fixed length for the state of a parser. It is an `MVector`
+# whose index check throws without a reference to the vector: when every function
+# that takes it is inlined, the compiler keeps it on the stack, which a `BoundsError`
+# that holds the vector would prevent. The elements are read and written through a
+# pointer, as StaticArrays writes an `MVector`, so that `--check-bounds=yes` (which
+# ignores `@inbounds`) adds no check of its own.
+struct _StackVec{N, T}
+    data::MVector{N, T}
+end
+
+"A `_StackVec` of `N` copies of `x`."
+@inline function _StackVec{N, T}(x::T) where {N, T}
+    v = _StackVec{N, T}(MVector{N, T}(undef))
+    # Loop invariant: elements `1:i-1` are `x`.
+    for i in 1:N
+        _stackvec_store!(v.data, x, i)
+    end
+    return v
+end
+
+"A `_StackVec` whose elements are undefined."
+@inline _StackVec{N, T}(::UndefInitializer) where {N, T} = _StackVec{N, T}(MVector{N, T}(undef))
+
+Base.length(::_StackVec{N}) where {N} = N
+@inline function Base.getindex(v::_StackVec{N, T}, i::Int) where {N, T}
+    1 <= i <= N || _stackvec_index_error(i, N)
+    m = v.data
+    return GC.@preserve m unsafe_load(Base.unsafe_convert(Ptr{T}, pointer_from_objref(m)), i)
+end
+@inline function Base.setindex!(v::_StackVec{N}, x, i::Int) where {N}
+    1 <= i <= N || _stackvec_index_error(i, N)
+    _stackvec_store!(v.data, x, i)
+    return v
+end
+@inline _stackvec_store!(m::MVector{N, T}, x, i::Int) where {N, T} =
+    GC.@preserve m unsafe_store!(Base.unsafe_convert(Ptr{T}, pointer_from_objref(m)), convert(T, x), i)
+@noinline _stackvec_index_error(i::Int, N::Int) = throw(BoundsError(1:N, i))
+
+"The first `n` bytes of `v` as a `String`, the one allocation."
+@inline function _string_of(v::_StackVec{N, UInt8}, n::Int) where {N}
+    0 <= n <= N || _stackvec_index_error(n, N)
+    m = v.data
+    return GC.@preserve m unsafe_string(pointer(m), n)
+end
+
+"""
+    _StackBuf{N}
+
+A byte buffer of at most `N` bytes with the interface of the writers (`_blen`,
+`_bget`, `_bset`, `_bresize`, `_bpush`, `_puts`), changed in place, and with `length`
+and indexing, which read its first `_blen` bytes. It stays on the stack where every
+function that takes it is inlined.
+"""
+struct _StackBuf{N}
+    data::_StackVec{N, UInt8}
+    len::_StackVec{1, Int}
+end
+
+"An empty `_StackBuf` of `N` bytes. Its bytes are undefined: the writers write a byte before they read it."
+@inline _StackBuf{N}() where {N} = _StackBuf{N}(_StackVec{N, UInt8}(undef), _StackVec{1, Int}(0))
+
+@inline _blen(b::_StackBuf) = b.len[1]
+@inline _bget(b::_StackBuf, i::Int) = b.data[i]
+@inline _bset(b::_StackBuf, i::Int, c::UInt8) = (b.data[i] = c; b)
+@inline function _bresize(b::_StackBuf{N}, n::Int) where {N}
+    0 <= n <= N || _stackvec_index_error(n, N)
+    b.len[1] = n
+    return b
+end
+@inline function _bpush(b::_StackBuf, c::UInt8)
+    n = _blen(b) + 1
+    _bresize(b, n)
+    b.data[n] = c
+    return b
+end
+"Append the bytes of `s`, a string or anything with `length` and indexing."
+@inline function _puts(b::_StackBuf, s)
+    u = s isa AbstractString ? codeunits(s) : s
+    for k in 1:length(u)
+        _bpush(b, u[k])
+    end
+    return b
+end
+Base.length(b::_StackBuf) = _blen(b)
+@inline function Base.getindex(b::_StackBuf, i::Int)
+    1 <= i <= _blen(b) || _stackvec_index_error(i, _blen(b))
+    return b.data[i]
+end
+
+"The bytes `from:from+len-1` of the buffer `buf` (anything with indexing), as a vector with `length` and indexing that holds no copy."
+struct _Span{B}
+    buf::B
+    from::Int
+    len::Int
+end
+Base.length(s::_Span) = s.len
+@inline function Base.getindex(s::_Span, k::Int)
+    1 <= k <= s.len || _stackvec_index_error(k, s.len)
+    return s.buf[s.from + k - 1]
 end

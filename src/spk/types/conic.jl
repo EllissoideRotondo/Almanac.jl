@@ -181,12 +181,14 @@ function _prop2b_root(
         end
     end
     # Bisection. The count starts again at 64 when both ends are away from zero.
+    # `prop2b` computes the Stumpff functions of each new `x` at the end of the loop
+    # body, and those of the last `x` are not used; here they are computed at the start.
     x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
-    _, c1, c2, c3 = _stumpff(f * x * x, kind)
     lcount = 0
     mostc = 1000
     # invariant: kfun(lower) <= t <= kfun(upper)
     while x > lower && x < upper && lcount < mostc
+        _, c1, c2, c3 = _stumpff(f * x * x, kind)
         kfun = _kfun_chained(x, br0, b2rv, bq, c1, c2, c3)
         # The `if kfun > t ... elseif kfun < t ... else` of `prop2b`, without
         # branches: a NaN or an equal `kfun` closes the bracket on `x`.
@@ -197,7 +199,6 @@ function _prop2b_root(
             lcount = 0
         end
         x = _f2c_min(upper, _f2c_max(lower, (lower + upper) / 2.0))
-        _, c1, c2, c3 = _stumpff(f * x * x, kind)
         lcount += 1
     end
     return x

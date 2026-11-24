@@ -119,9 +119,6 @@ const _TK_PATTERNS = (
     ("i-itix", "Y*y*H*"), ("i-itnx", "Y*y*H*"),
 )
 
-"Pattern key (12 characters, blank padded) to meaning (12 characters, blank padded)."
-const _TK_KNOWN = Dict{String, String}(rpad(k, 12) => rpad(m, 12) for (k, m) in _TK_PATTERNS)
-
 const _TK_ZONES = ("EST", "EDT", "CST", "CDT", "MST", "MDT", "PST", "PDT")
 const _TK_OFFSETS = ("UTC-5", "UTC-4", "UTC-6", "UTC-5", "UTC-7", "UTC-6", "UTC-8", "UTC-7")
 
@@ -145,8 +142,6 @@ const _BLANK = UInt8(' ')
 
 const _MAXTOK = 64
 const _MAXPIC = 320
-const _ByteView = SubArray{UInt8, 1, Vector{UInt8}, Tuple{UnitRange{Int}}, true}
-const _IntView = SubArray{Int, 1, Vector{Int}, Tuple{UnitRange{Int}}, true}
 
 """
     _Tokens
@@ -154,53 +149,50 @@ const _IntView = SubArray{Int, 1, Vector{Int}, Tuple{UnitRange{Int}}, true}
 Token list of one time string, as the saved variables of `zztime.c` hold it: `str` is
 the string without trailing blanks, `rep[1:size]` has one class letter for each token
 and is blank after `size`, `begs`/`ends` are the positions of the tokens in `str` and
-`pbegs`/`pends` in the picture `pictur` (320 characters, blank padded). `ampm` is true
-when the string has an A.M./P.M. mark.
+`pbegs`/`pends` in the picture `pictur` (320 characters, blank padded). `meta[1]` is
+`size`, and `meta[2]` is 1 when the string has an A.M./P.M. mark.
+
+The buffers are `_StackVec`s, and every function that takes a `_Tokens` is inlined
+into `_tpartv`, so that the list stays on the stack.
 """
-mutable struct _Tokens
-    const str::Vector{UInt8}
-    const rep::_ByteView
-    size::Int
-    const begs::_IntView
-    const ends::_IntView
-    const pbegs::_IntView
-    const pends::_IntView
-    const pictur::_ByteView
-    ampm::Bool
+struct _Tokens{S <: AbstractVector{UInt8}}
+    str::S
+    rep::_StackVec{_MAXTOK, UInt8}
+    begs::_StackVec{_MAXTOK, Int}
+    ends::_StackVec{_MAXTOK, Int}
+    pbegs::_StackVec{_MAXTOK, Int}
+    pends::_StackVec{_MAXTOK, Int}
+    pictur::_StackVec{_MAXPIC, UInt8}
+    meta::_StackVec{2, Int}
 end
 
-"""
-    _Tokens(str) -> _Tokens
+"An empty token list of the bytes `str` (`size` 0, `rep` and `pictur` blank)."
+@inline _Tokens(str::AbstractVector{UInt8}) = _Tokens(
+    str, _StackVec{_MAXTOK, UInt8}(_BLANK), _StackVec{_MAXTOK, Int}(0),
+    _StackVec{_MAXTOK, Int}(0), _StackVec{_MAXTOK, Int}(0), _StackVec{_MAXTOK, Int}(0),
+    _StackVec{_MAXPIC, UInt8}(_BLANK), _StackVec{2, Int}(0)
+)
 
-An empty token list of the string `str` (`size` 0, `rep` and `pictur` blank). The
-letters and the picture share one buffer, and the four position vectors another.
-"""
-function _Tokens(str::Vector{UInt8})
-    chars = fill(_BLANK, _MAXTOK + _MAXPIC)
-    ints = zeros(Int, 4 * _MAXTOK)
-    iv(k) = view(ints, ((k - 1) * _MAXTOK + 1):(k * _MAXTOK))
-    return _Tokens(
-        str, view(chars, 1:_MAXTOK), 0, iv(1), iv(2), iv(3), iv(4),
-        view(chars, (_MAXTOK + 1):(_MAXTOK + _MAXPIC)), false
-    )
-end
+@inline _ntok(st::_Tokens) = st.meta[1]
+@inline _setntok!(st::_Tokens, n::Int) = (st.meta[1] = n; nothing)
+@inline _ampm(st::_Tokens) = st.meta[2] == 1
 
 "Return `s[b:e]` as a `String`; empty when the range is empty or outside `s`."
-_sub(s::Vector{UInt8}, b::Int, e::Int) =
+_sub(s::AbstractVector{UInt8}, b::Int, e::Int) =
     (b >= 1 && e <= length(s) && b <= e) ? String(s[b:e]) : ""
 
 "Return the text of `s` with `<` before position `b` and `>` after position `e`, the marking of the CSPICE messages. Requires `1 <= b`."
-function _marked(s::Vector{UInt8}, b::Int, e::Int)
+function _marked(s::AbstractVector{UInt8}, b::Int, e::Int)
     b = clamp(b, 1, length(s) + 1)
     e = clamp(e, b - 1, length(s))
     return string(String(s[1:(b - 1)]), '<', String(s[b:e]), '>', String(s[(e + 1):end]))
 end
 
 "Write `text` into `dest[from:to]` of the blank-padded buffer `dest`, cut or blank padded to that length (the Fortran substring assignment)."
-function _assign!(dest::AbstractVector{UInt8}, from::Int, to::Int, text)
+@inline function _assign!(dest, from::Int, to::Int, text)
     t = text isa AbstractString ? codeunits(text) : text
     # Loop invariant: `dest[from:i-1]` holds the first characters of `text`, blank padded.
-    @inbounds for i in from:to
+    for i in from:to
         k = i - from + 1
         dest[i] = k <= length(t) ? t[k] : _BLANK
     end
@@ -215,7 +207,7 @@ place, cut or blank padded to the length of `buf` (`zzrepsub`). With `ndec >= 0`
 `text` is followed by a decimal point and `ndec` characters `#` (the mark of
 `zzmkpc`). `text` is a `String` or a tuple of bytes.
 """
-function _repsub!(buf::AbstractVector{UInt8}, left::Int, right::Int, text, ndec::Int = -1)
+@inline function _repsub!(buf, left::Int, right::Int, text, ndec::Int = -1)
     t = text isa AbstractString ? codeunits(text) : text
     n = length(buf)
     head = clamp(left - 1, 0, n)                 # bytes kept before the text
@@ -223,39 +215,59 @@ function _repsub!(buf::AbstractVector{UInt8}, left::Int, right::Int, text, ndec:
     tlen = length(t) + (ndec >= 0 ? 1 + ndec : 0)
     dest = head + tlen + 1                       # where the kept tail goes
     ntail = n - tail0 + 1
-    # The tail moves first: the text may overlap where it was.
-    dest <= n && ntail > 0 && copyto!(buf, dest, buf, tail0, min(ntail, n - dest + 1))
-    @inbounds for k in 1:min(tlen, n - head)
+    # The tail moves first: the text may overlap where it was. The copy runs from the
+    # end that it does not overwrite before it reads.
+    if dest <= n && ntail > 0
+        m = min(ntail, n - dest + 1)
+        if dest > tail0
+            for k in (m - 1):-1:0
+                buf[dest + k] = buf[tail0 + k]
+            end
+        elseif dest < tail0
+            for k in 0:(m - 1)
+                buf[dest + k] = buf[tail0 + k]
+            end
+        end
+    end
+    for k in 1:min(tlen, n - head)
         buf[head + k] = k <= length(t) ? t[k] : (k == length(t) + 1 ? UInt8('.') : UInt8('#'))
     end
-    @inbounds for k in (head + tlen + ntail + 1):n
+    for k in (head + tlen + ntail + 1):n
         buf[k] = _BLANK
     end
     return buf
 end
 
+"Return whether `rep[b:b+length(p)-1]` equals the bytes `p`."
+@inline function _matches(rep, b::Int, p)
+    for k in 1:length(p)
+        rep[b + k - 1] == p[k] || return false
+    end
+    return true
+end
+
 "Return the first position `b` in `1:n` at which `pat` starts inside `rep[1:n]`, or 0 (`pos`)."
-function _pos(rep::AbstractVector{UInt8}, n::Int, pat)::Int
+@inline function _pos(rep, n::Int, pat)::Int
     p = codeunits(pat)
     for b in 1:(n - length(p) + 1)
-        @views rep[b:(b + length(p) - 1)] == p && return b
+        _matches(rep, b, p) && return b
     end
     return 0
 end
 
 "Return the last position `b <= start` at which `pat` starts inside `rep[1:n]`, or 0 (`posr`)."
-function _posr(rep::AbstractVector{UInt8}, n::Int, start::Int, pat)::Int
+@inline function _posr(rep, n::Int, start::Int, pat)::Int
     p = codeunits(pat)
     for b in min(n - length(p) + 1, start):-1:1
-        @views rep[b:(b + length(p) - 1)] == p && return b
+        _matches(rep, b, p) && return b
     end
     return 0
 end
 
 "Move the position records of tokens `get:size` down to `put...` (the common loop of `zzcmbt` and `zznote`). Requires `get > put`."
-function _shift!(st::_Tokens, put::Int, get::Int)
+@inline function _shift!(st::_Tokens, put::Int, get::Int)
     # Loop invariant: records `get0:g-1` are at `put0:p-1`.
-    for g in get:st.size
+    for g in get:_ntok(st)
         st.begs[put] = st.begs[g]
         st.ends[put] = st.ends[g]
         st.pbegs[put] = st.pbegs[g]
@@ -266,61 +278,107 @@ function _shift!(st::_Tokens, put::Int, get::Int)
 end
 
 "Combine the first (`l2r`) or last occurrence of the token run `pat` into the one token `letter`; return whether it did (`zzcmbt`)."
-function _zzcmbt!(st::_Tokens, pat::String, letter::Char, l2r::Bool)::Bool
+@inline function _zzcmbt!(st::_Tokens, pat::String, letter::Char, l2r::Bool)::Bool
     n = ncodeunits(pat)
-    from = l2r ? _pos(st.rep, st.size, pat) : _posr(st.rep, st.size, st.size, pat)
+    size = _ntok(st)
+    from = l2r ? _pos(st.rep, size, pat) : _posr(st.rep, size, size, pat)
     from > 0 || return false
     to = from + n - 1
     st.ends[from] = st.ends[to]
     st.pends[from] = st.pends[to]
     _repsub!(st.rep, from, to, (UInt8(letter),))
     _shift!(st, from + 1, to + 1)
-    st.size -= n - 1
+    _setntok!(st, size - (n - 1))
     return true
 end
 
-"Return the 12-character key of the token list (`zzgrep` into the 12-character variable of `tpartv`): longer lists are cut."
-_zzgrep(st::_Tokens) = String(@view st.rep[1:12])
+"Return the 12-character key of the token list (`zzgrep` into the 12-character variable of `tpartv`; longer lists are cut) as an integer, the first character in the high byte."
+@inline function _zzgrep_key(st::_Tokens)::UInt128
+    key = zero(UInt128)
+    for i in 1:12
+        key = (key << 8) | st.rep[i]
+    end
+    return key
+end
+
+"The key of `_zzgrep_key` for the text `s` of 12 characters."
+function _tk_key(s::String)::UInt128
+    @assert ncodeunits(s) == 12
+    key = zero(UInt128)
+    for c in codeunits(s)
+        key = (key << 8) | c
+    end
+    return key
+end
+
+"Pattern key (12 characters, blank padded, as `_tk_key` gives it) to meaning (12 characters, blank padded)."
+const _TK_KNOWN = Dict{UInt128, String}(_tk_key(rpad(k, 12)) => rpad(m, 12) for (k, m) in _TK_PATTERNS)
 
 "Return whether the token list has a token of class `letter` (`zzist`)."
-_zzist(st::_Tokens, letter::Char) = UInt8(letter) in @view st.rep[1:st.size]
+@inline function _zzist(st::_Tokens, letter::Char)
+    c = UInt8(letter)
+    for i in 1:_ntok(st)
+        st.rep[i] == c && return true
+    end
+    return false
+end
+
+"Return whether the byte `c` is one of the bytes of `chars`."
+@inline function _isin(c::UInt8, chars)
+    for k in 1:length(chars)
+        chars[k] == c && return true
+    end
+    return false
+end
 
 "Return (found, b, e): whether two tokens in a row both have a class in `chars`, and the range of the pair in the string (`zzispt`)."
-function _zzispt(st::_Tokens, chars::String)
+@inline function _zzispt(st::_Tokens, chars::String)
     c = codeunits(chars)
-    from = findfirst(in(c), st.rep)
     # Loop invariant: no pair starts before `from`.
-    while from !== nothing
-        from < st.size || return false, 0, 0
-        to = from + 1
-        st.rep[to] in c && return true, st.begs[from], st.ends[to]
-        from = findnext(in(c), st.rep, to)
+    from = 1
+    while from <= _MAXTOK
+        if _isin(st.rep[from], c)
+            from < _ntok(st) || return false, 0, 0
+            to = from + 1
+            _isin(st.rep[to], c) && return true, st.begs[from], st.ends[to]
+            from = to
+        else
+            from += 1
+        end
     end
     return false, 0, 0
 end
 
 "Remove the first token of class `letter`; return (found, b, e) with its range in the string, or (false, 0, 0) (`zznote`)."
-function _zznote!(st::_Tokens, letter::Char)
-    put = findfirst(==(UInt8(letter)), st.rep)
-    put === nothing && return false, 0, 0
+@inline function _zznote!(st::_Tokens, letter::Char)
+    c = UInt8(letter)
+    put = 0
+    for i in 1:_MAXTOK
+        if st.rep[i] == c
+            put = i
+            break
+        end
+    end
+    put == 0 && return false, 0, 0
     b, e = st.begs[put], st.ends[put]
     _shift!(st, put, put + 1)
+    size = _ntok(st)
     # Loop invariant: `rep[put0:i-1]` holds the letters that were at `put0+1:i`.
-    for i in put:(st.size - 1)
+    for i in put:(size - 1)
         st.rep[i] = st.rep[i + 1]
     end
-    st.rep[st.size] = _BLANK
-    st.size -= 1
+    st.rep[size] = _BLANK
+    _setntok!(st, size - 1)
     return true, b, e
 end
 
 "Remove every token of class `letter`; return whether one was removed (`zzremt`)."
-function _zzremt!(st::_Tokens, letter::Char)::Bool
+@inline function _zzremt!(st::_Tokens, letter::Char)::Bool
     put = 0
     did = false
     c = UInt8(letter)
     # Loop invariant: tokens `1:i-1` that are not of class `letter` are at `1:put`.
-    for i in 1:st.size
+    for i in 1:_ntok(st)
         if st.rep[i] != c
             put += 1
             st.rep[put] = st.rep[i]
@@ -332,8 +390,10 @@ function _zzremt!(st::_Tokens, letter::Char)::Bool
             did = true
         end
     end
-    st.size = put
-    fill!(view(st.rep, (put + 1):_MAXTOK), _BLANK)
+    _setntok!(st, put)
+    for i in (put + 1):_MAXTOK
+        st.rep[i] = _BLANK
+    end
     return did
 end
 
@@ -346,38 +406,59 @@ match at the start of the list and one that ends with `>` at its end; in these t
 forms the replaced range has the length of the pattern without the mark, and a shorter
 `transl` is blank padded, as the Fortran assignment does.
 """
-function _zzsubt!(st::_Tokens, pat::String, transl::String, l2r::Bool)::Bool
+@inline function _zzsubt!(st::_Tokens, pat::String, transl::String, l2r::Bool)::Bool
     p = codeunits(pat)
     k = length(p)
+    size = _ntok(st)
     if p[1] == UInt8('<') && k > 1
-        to = min(k - 1, st.size)
-        (to == k - 1 && @views(st.rep[1:to] == p[2:k])) || return false
+        to = min(k - 1, size)
+        to == k - 1 || return false
+        for i in 1:to
+            st.rep[i] == p[i + 1] || return false
+        end
         _assign!(st.rep, 1, to, transl)
         return true
     elseif p[k] == UInt8('>') && k > 1
-        from = max(1, st.size - k + 2)
-        to = st.size
-        (to - from + 1 == k - 1 && @views(st.rep[from:to] == p[1:(k - 1)])) || return false
+        from = max(1, size - k + 2)
+        to = size
+        to - from + 1 == k - 1 || return false
+        _matches(st.rep, from, @view p[1:(k - 1)]) || return false
         _assign!(st.rep, from, to, transl)
         return true
     end
-    from = l2r ? _pos(st.rep, _MAXTOK, pat) : _posr(st.rep, _MAXTOK, st.size, pat)
+    from = l2r ? _pos(st.rep, _MAXTOK, pat) : _posr(st.rep, _MAXTOK, size, pat)
     from > 0 || return false
     _assign!(st.rep, from, min(_MAXTOK, from + ncodeunits(transl) - 1), transl)
     return true
 end
 
 "Apply `_zzsubt!`, then remove every `*` token; return whether the substitution was made (`zzrept`)."
-function _zzrept!(st::_Tokens, pat::String, transl::String, l2r::Bool)::Bool
+@inline function _zzrept!(st::_Tokens, pat::String, transl::String, l2r::Bool)::Bool
     did = _zzsubt!(st, pat, transl, l2r)
     _zzremt!(st, '*')
     return did
 end
 
+"""
+    _zzknown!(st) -> Bool
+
+Replace the classes of the token list by the meaning of its built-in pattern, if its
+12-character key is one, and remove the `*` tokens (`zzrept` with the key of `zzgrep`
+and the meaning of `zztpats`); return whether the key is a pattern. The key matches at
+the start of the list, where `zzsubt` finds it.
+"""
+@inline function _zzknown!(st::_Tokens)::Bool
+    meaning = get(_TK_KNOWN, _zzgrep_key(st), nothing)
+    meaning === nothing && return false
+    _assign!(st.rep, 1, 12, meaning)
+    _zzremt!(st, '*')
+    return true
+end
+
 "Give class `letter` to every integer token whose value is in `b..e`; return whether one changed (`zzvalt`)."
-function _zzvalt!(st::_Tokens, b::Int, e::Int, letter::Char)::Bool
+@inline function _zzvalt!(st::_Tokens, b::Int, e::Int, letter::Char)::Bool
     did = false
-    for i in 1:st.size
+    for i in 1:_ntok(st)
         st.rep[i] == UInt8('i') || continue
         # `nparsi` rejects a value that is not a 32-bit integer.
         x = _try_nparsi(@view st.str[st.begs[i]:st.ends[i]])
@@ -391,44 +472,35 @@ function _zzvalt!(st::_Tokens, b::Int, e::Int, letter::Char)::Bool
 end
 
 "Return whether characters `from:to` of `s` exist and equal `text[1:to-from+1]` when case is ignored (`samsbi`)."
-function _samsbi(s::Vector{UInt8}, from::Int, to::Int, text::String)::Bool
+@inline function _samsbi(s::AbstractVector{UInt8}, from::Int, to::Int, text::String)::Bool
     to <= length(s) || return false
     t = codeunits(text)
-    @inbounds for i in from:to
+    for i in from:to
         _upper(s[i]) == t[i - from + 1] || return false
     end
     return true
 end
 
-"""
-    _zztokns(str) -> (st, error)
+@noinline _toomany(str, s, b, e) = "The input time string '$str' cannot be processed " *
+    "because it contains more than $_MAXTOK recognizable tokens. The token that " *
+    "could not be processed was '$(_sub(s, b, e))'."
+@noinline _toolong(str, s, b, e) = "The input time string '$str' cannot be processed " *
+    "because the internal picture describing it requires more than $_MAXPIC " *
+    "characters. The token that could not be processed was '$(_sub(s, b, e))'."
 
-Return the token list of `str` and `""`, or `nothing` and a message that
-says which part of the string is not a recognized token (`zztokns`). Integers, runs of
-blanks, tabs, punctuation, month and weekday names (three letters or more of the
-name), eras, A.M./P.M., time zones, `UTC+`/`UTC-`, time systems, `JD`, `T` and `Z` are
-tokens; the picture of the string is built at the same time.
 """
-function _zztokns(str::AbstractString)
-    bytes = Vector{UInt8}(codeunits(str))
+    _zztokns!(st, str) -> String
+
+Fill the empty token list `st` of the bytes `st.str` of `str` and return `""`, or
+return a message that says which part of the string is not a recognized token
+(`zztokns`). Integers, runs of blanks, tabs, punctuation, month and weekday names
+(three letters or more of the name), eras, A.M./P.M., time zones, `UTC+`/`UTC-`,
+time systems, `JD`, `T` and `Z` are tokens; the picture of the string is built at the
+same time.
+"""
+@inline function _zztokns!(st::_Tokens, str::AbstractString)
+    bytes = st.str
     last = length(bytes)
-    # Loop invariant: `bytes[last+1:end]` is blank.
-    while last > 0 && bytes[last] == _BLANK
-        last -= 1
-    end
-    last == 0 && return nothing, "The input time string is blank."
-    resize!(bytes, last)
-    st = _Tokens(bytes)
-    toomany(b, e) = (
-        nothing, "The input time string '$str' cannot be processed " *
-            "because it contains more than $_MAXTOK recognizable tokens. The token that " *
-            "could not be processed was '$(_sub(bytes, b, e))'.",
-    )
-    toolong(b, e) = (
-        nothing, "The input time string '$str' cannot be processed " *
-            "because the internal picture describing it requires more than $_MAXPIC " *
-            "characters. The token that could not be processed was '$(_sub(bytes, b, e))'.",
-    )
     next = 1
     pnext = 1
     put = 0
@@ -446,16 +518,16 @@ function _zztokns(str::AbstractString)
         nchar = to - from + 1
         if nchar > 0
             put += 1
-            put > _MAXTOK && return toomany(from, to)
+            put > _MAXTOK && return _toomany(str, bytes, from, to)
             st.rep[put] = UInt8('i')
             next = to + 1
             pto = pfrom + nchar - 1
-            pto > _MAXPIC && return toolong(from, to)
+            pto > _MAXPIC && return _toolong(str, bytes, from, to)
             pnext = pto + 1
             _assign!(st.pictur, pfrom, pto, @view bytes[from:to])
         elseif item == _BLANK
             put += 1
-            put > _MAXTOK && return toomany(from, from)
+            put > _MAXTOK && return _toomany(str, bytes, from, from)
             to = from
             while to < last && bytes[to + 1] == _BLANK
                 to += 1
@@ -463,23 +535,21 @@ function _zztokns(str::AbstractString)
             st.rep[put] = UInt8('b')
             next = to + 1
             pto = pfrom + to - from
-            pto > _MAXPIC && return toolong(from, from)
+            pto > _MAXPIC && return _toolong(str, bytes, from, from)
             pnext = pto + 1
             _assign!(st.pictur, pfrom, pto, "")
         elseif item == 0x09
             put += 1
-            put > _MAXTOK && return toomany(from, from)
+            put > _MAXTOK && return _toomany(str, bytes, from, from)
             st.rep[put] = UInt8('b')
             to = from
             next += 1
             pto = pfrom
-            pto > _MAXPIC && return toolong(from, from)
+            pto > _MAXPIC && return _toolong(str, bytes, from, from)
             pnext = pto + 1
             st.pictur[pfrom] = _BLANK
         elseif item < 32 || item > 126
-            return nothing, "There is a non-printing, non-tab character (ASCII " *
-                "$(Int(item))) at position $next of the time string: " *
-                String(bytes[1:(next - 1)]) * "<>" * String(bytes[(next + 1):end])
+            return _nonprinting(bytes, next)
         else
             up = _upper(item)
             found = false
@@ -495,53 +565,62 @@ function _zztokns(str::AbstractString)
                         to += 1
                     end
                     kind = w >= r ? 1 : 2
-                    case = up != item ? 1 :
-                        (_sub(bytes, next, next + 2) == text[1:3] ? 2 : 3)
+                    # The letter case: lower, as the name is listed (its first three
+                    # letters in upper case) or other.
+                    case = up != item ? 1 : (
+                            next + 2 <= last && bytes[next + 1] == codeunit(text, 2) &&
+                            bytes[next + 2] == codeunit(text, 3) ? 2 : 3
+                        )
                     mark = class == 'm' ?
                         (("month", "MONTH", "Month"), ("mon", "MON", "Mon"))[kind][case] :
                         (("weekday", "WEEKDAY", "Weekday"), ("wkd", "WKD", "Wkd"))[kind][case]
                     pto = pfrom + ncodeunits(mark) - 1
-                    pto > _MAXPIC && return toolong(from, to)
+                    pto > _MAXPIC && return _toolong(str, bytes, from, to)
                     pnext = pto + 1
                     _assign!(st.pictur, pfrom, pto, mark)
                 elseif class == 'e'
                     pto = pfrom + 2
-                    pto > _MAXPIC && return toolong(from, to)
+                    pto > _MAXPIC && return _toolong(str, bytes, from, to)
                     pnext = pto + 1
                     _assign!(st.pictur, pfrom, pto, item == up ? "ERA" : "era")
                 elseif class == 'N'
                     pto = pfrom + 3
-                    pto > _MAXPIC && return toolong(from, to)
+                    pto > _MAXPIC && return _toolong(str, bytes, from, to)
                     pnext = pto + 1
                     _assign!(st.pictur, pfrom, pto, item == up ? "AMPM" : "ampm")
-                    st.ampm = true
+                    st.meta[2] = 1
                 elseif class == 'x'
                     # Recognized and ignored: the picture gets nothing.
                 else
                     pto = pfrom + to - from
-                    pto > _MAXPIC && return toolong(from, to)
+                    pto > _MAXPIC && return _toolong(str, bytes, from, to)
                     pnext = pto + 1
                     _assign!(st.pictur, pfrom, pto, @view bytes[from:to])
                 end
                 put += 1
-                put > _MAXTOK && return toomany(from, to)
+                put > _MAXTOK && return _toomany(str, bytes, from, to)
                 st.rep[put] = UInt8(class)
                 next = to + 1
                 found = true
                 break
             end
-            found || return nothing, "The input string contains an unrecognizable " *
-                "substring beginning at the character marked by <$(Char(item))>: \"" *
-                _marked(bytes, from, from) * "\""
+            found || return _unrecognized(bytes, from)
         end
         st.begs[put] = from
         st.ends[put] = to
         st.pbegs[put] = pfrom
         st.pends[put] = pto
     end
-    st.size = put
-    return st, ""
+    _setntok!(st, put)
+    return ""
 end
+
+@noinline _nonprinting(bytes, next) = "There is a non-printing, non-tab character (ASCII " *
+    "$(Int(bytes[next]))) at position $next of the time string: " *
+    String(bytes[1:(next - 1)]) * "<>" * String(bytes[(next + 1):end])
+@noinline _unrecognized(bytes, from) = "The input string contains an unrecognizable " *
+    "substring beginning at the character marked by <$(Char(bytes[from]))>: \"" *
+    _marked(bytes, from, from) * "\""
 
 "Return the number of `#` that `zzmkpc` writes after the picture mark of the token text `token`: one for each decimal (14 at most), or -1 if the token has no decimal point."
 function _zzmkpc(token::AbstractVector{UInt8})
@@ -550,7 +629,7 @@ function _zzmkpc(token::AbstractVector{UInt8})
 end
 
 "Return the month number of the first three characters of `s[j:k]` (blank padded, any case) as `_MONTH_ABBR` lists them, or `nothing`."
-function _month_abbr_index(s::Vector{UInt8}, j::Int, k::Int)
+function _month_abbr_index(s::AbstractVector{UInt8}, j::Int, k::Int)
     c1, c2, c3 = ntuple(n -> j + n - 1 <= min(k, j + 2) ? _upper(s[j + n - 1]) : _BLANK, Val(3))
     for (i, m) in enumerate(_MONTH_ABBR)
         codeunit(m, 1) == c1 && codeunit(m, 2) == c2 && codeunit(m, 3) == c3 && return i
@@ -559,106 +638,113 @@ function _month_abbr_index(s::Vector{UInt8}, j::Int, k::Int)
 end
 
 "Return the value of the number in `s[j:k]` as `nparsd` computes it, or `old` if the text is not a number (`nparsd` leaves its output unchanged then)."
-function _tokval(s::Vector{UInt8}, j::Int, k::Int, old::Float64)::Float64
+function _tokval(s::AbstractVector{UInt8}, j::Int, k::Int, old::Float64)::Float64
     x = _try_nparsd(@view s[j:k])
     return x === nothing ? old : x
 end
 
 """
-    _zzunpck(st, yabbrv) -> (ok, tvec, ntvec, type, pictur, error)
+    _zzunpck!(pic, st, yabbrv) -> (ok, tvec, ntvec, type, np, error)
 
 Return the time vector `tvec` (eight components, the absent ones 0), the number of
 components `ntvec` that the string gives, the type `"YMD"`, `"YD"` or `"JD"`, and the
-`timout` picture of the string; or `ok == false` and a message that says which token
-has no meaning or which component is absent or given twice (`zzunpck`). Every token of
-`st` is one of the resolved classes `Y m D y H M S J`. The picture is
-blank when a token has no meaning, and it is set in every other case.
+length `np` of the `timout` picture of the string, which is written into `pic` (the
+picture `st.pictur`, which changes); or `ok == false` and a message that says which token has no meaning or
+which component is absent or given twice (`zzunpck`). Every token of `st` is one of the
+resolved classes `Y m D y H M S J`. The picture is blank (`np == 0`) when a token has no
+meaning, and it is set in every other case.
 """
-function _zzunpck(st::_Tokens, yabbrv::Bool)
+@inline function _zzunpck!(pic, st::_Tokens, yabbrv::Bool)
     s = st.str
-    tvec = zeros(Float64, 8)
-    hms = zero(MVector{3, Float64})
+    tvec = zero(SVector{8, Float64})
+    h = m = sec = 0.0
     nyear = nmon = nday = nhour = nmin = nsec = ndoy = njd = 0
     ntvec = 0
-    pic = copy(st.pictur)
     # Loop invariant: tokens `i+1:size` are counted, their values are stored and their
     # picture marks are written (from the right, so the positions to the left hold).
-    for i in st.size:-1:1
+    for i in _ntok(st):-1:1
         item = Char(st.rep[i])
         j, k = st.begs[i], st.ends[i]
         tok = @view s[j:k]
         if item == 'Y'
             nyear += 1; ntvec += 1
-            tvec[1] = _tokval(s, j, k, tvec[1])
+            tvec = Base.setindex(tvec, _tokval(s, j, k, tvec[1]), 1)
             _repsub!(pic, st.pbegs[i], st.pends[i], yabbrv ? "YR" : "YYYY")
         elseif item == 'm'
             nmon += 1; ntvec += 1
             value = _month_abbr_index(s, j, k)
             if value === nothing
-                tvec[2] = _tokval(s, j, k, tvec[2])
+                tvec = Base.setindex(tvec, _tokval(s, j, k, tvec[2]), 2)
                 _repsub!(pic, st.pbegs[i], st.pends[i], "MM")
             else
-                tvec[2] = Float64(value)
+                tvec = Base.setindex(tvec, Float64(value), 2)
             end
         elseif item == 'D'
             nday += 1; ntvec += 1
-            tvec[3] = _tokval(s, j, k, tvec[3])
+            tvec = Base.setindex(tvec, _tokval(s, j, k, tvec[3]), 3)
             _repsub!(pic, st.pbegs[i], st.pends[i], "DD", _zzmkpc(tok))
         elseif item == 'y'
             ndoy += 1; ntvec += 1
-            tvec[2] = _tokval(s, j, k, tvec[2])
+            tvec = Base.setindex(tvec, _tokval(s, j, k, tvec[2]), 2)
             _repsub!(pic, st.pbegs[i], st.pends[i], "DOY", _zzmkpc(tok))
         elseif item == 'H'
             nhour += 1; ntvec += 1
-            hms[1] = _tokval(s, j, k, hms[1])
-            _repsub!(pic, st.pbegs[i], st.pends[i], st.ampm ? "AP" : "HR", _zzmkpc(tok))
+            h = _tokval(s, j, k, h)
+            _repsub!(pic, st.pbegs[i], st.pends[i], _ampm(st) ? "AP" : "HR", _zzmkpc(tok))
         elseif item == 'M'
             nmin += 1; ntvec += 1
-            hms[2] = _tokval(s, j, k, hms[2])
+            m = _tokval(s, j, k, m)
             _repsub!(pic, st.pbegs[i], st.pends[i], "MN", _zzmkpc(tok))
         elseif item == 'S'
             nsec += 1; ntvec += 1
-            hms[3] = _tokval(s, j, k, hms[3])
+            sec = _tokval(s, j, k, sec)
             _repsub!(pic, st.pbegs[i], st.pends[i], "SC", _zzmkpc(tok))
         elseif item == 'J'
             njd += 1; ntvec += 1
             # A token such as `- jd 2451545.0` is not a number. CSPICE leaves the value
             # of an earlier call in the vector; NaN marks the date as having no value.
-            tvec[1] = _tokval(s, j, k, NaN)
+            tvec = Base.setindex(tvec, _tokval(s, j, k, NaN), 1)
             _repsub!(pic, st.pbegs[i], st.pends[i], "JULIAND", _zzmkpc(tok))
-        elseif item == 'i'
-            return false, tvec, 0, "", "", "The meaning of the integer <$(_sub(s, j, k))> " *
-                "could not be determined: '" * _marked(s, j, k) * "'"
-        elseif item == 'n'
-            return false, tvec, 0, "", "", "The meaning of the decimal number " *
-                "<$(_sub(s, j, k))> could not be determined: " * _marked(s, j, k)
         else
-            return false, tvec, 0, "", "", "An unexpected " *
-                get(_TK_NAMES, item, "substring") * " (\"$(_sub(s, j, k))\") was " *
-                "encountered in the time string: " * _marked(s, j, k)
+            return false, tvec, 0, "", 0, _unpck_token_error(s, item, j, k)
         end
     end
     np = length(pic)
     while np > 0 && pic[np] == _BLANK
         np -= 1
     end
-    pictur = String(resize!(pic, np))
     if nyear == 1 && nmon == 1 && nday == 1 && ndoy == 0 && njd == 0 && nhour <= 1 &&
             nmin <= nhour && nsec <= nmin
-        tvec[4], tvec[5], tvec[6] = hms
-        return true, tvec, ntvec, "YMD", pictur, ""
+        tvec = SVector(tvec[1], tvec[2], tvec[3], h, m, sec, tvec[7], tvec[8])
+        return true, tvec, ntvec, "YMD", np, ""
     elseif nyear == 1 && nmon == 0 && nday == 0 && njd == 0 && ndoy == 1 && nhour <= 1 &&
             nmin <= nhour && nsec <= nmin
-        tvec[3], tvec[4], tvec[5] = hms
-        return true, tvec, ntvec, "YD", pictur, ""
+        tvec = SVector(tvec[1], tvec[2], h, m, sec, tvec[6], tvec[7], tvec[8])
+        return true, tvec, ntvec, "YD", np, ""
     elseif nyear == 0 && nmon == 0 && nday == 0 && njd == 1 && ndoy == 0 && nhour <= 0 &&
             nmin <= 0 && nsec <= 0
-        return true, tvec, ntvec, "JD", pictur, ""
+        return true, tvec, ntvec, "JD", np, ""
     end
-    str = String(copy(s))
+    error = _unpck_count_error(s, nyear, nmon, nday, nhour, nmin, nsec, ndoy, njd)
+    return false, tvec, 0, "", np, error
+end
+
+"The message of `zzunpck` for the token `s[j:k]` of class `item`, which has no meaning."
+@noinline function _unpck_token_error(s, item::Char, j::Int, k::Int)
+    item == 'i' && return "The meaning of the integer <$(_sub(s, j, k))> " *
+        "could not be determined: '" * _marked(s, j, k) * "'"
+    item == 'n' && return "The meaning of the decimal number " *
+        "<$(_sub(s, j, k))> could not be determined: " * _marked(s, j, k)
+    return "An unexpected " * get(_TK_NAMES, item, "substring") * " (\"$(_sub(s, j, k))\") was " *
+        "encountered in the time string: " * _marked(s, j, k)
+end
+
+"The message of `zzunpck` for the counts of the components that do not make a date."
+@noinline function _unpck_count_error(s, nyear, nmon, nday, nhour, nmin, nsec, ndoy, njd)
+    str = String(s[1:end])
     twice(what) = "Two substrings indicating $what were identified in the input time " *
         "string \"$str\""
-    error = if nyear == 0 && nday == 0 && njd == 0 && ndoy == 0 && nhour == 0 && nmin == 0 &&
+    return if nyear == 0 && nday == 0 && njd == 0 && ndoy == 0 && nhour == 0 && nmin == 0 &&
             nsec == 0
         "No numeric components were supplied in the time string."
     elseif njd == 1
@@ -700,7 +786,6 @@ function _zzunpck(st::_Tokens, yabbrv::Bool)
     else
         "The time string \"$str\" could not be parsed."
     end
-    return false, tvec, 0, "", pictur, error
 end
 
 # ---------------------------------------------------------------------------------
@@ -714,14 +799,15 @@ Result of `_tpartv`: `ok` and, if it is false, `error`; the time vector `tvec` w
 `ntvec` components given and its `type` (`"YMD"`, `"YD"`, `"JD"`); the five modifiers
 `modify` (era `A.D.`/`B.C.`, weekday, zone as `UTC+h:mm`, `A.M.`/`P.M.`, system), `""`
 when absent, and `mods` (one is present); `yabbrv` (the year has the form `'yy`); and
-the `timout` picture `pictur` of the string (`""` if it has none).
+the `timout` picture `pictur` of the string (`""` if it has none, or if it was not
+asked for).
 """
 struct _TimeParts
     ok::Bool
-    tvec::Vector{Float64}
+    tvec::SVector{8, Float64}
     ntvec::Int
     type::String
-    modify::Vector{String}
+    modify::NTuple{5, String63}
     mods::Bool
     yabbrv::Bool
     pictur::String
@@ -729,7 +815,7 @@ struct _TimeParts
 end
 
 "Return `text` after `pictur` without its trailing blanks and `spaces` blanks (`suffix`)."
-function _suffix(pictur::String, text::String, spaces::Int)
+function _suffix(pictur::String, text::AbstractString, spaces::Int)
     head = rstrip(pictur, ' ')
     buf = Base.StringVector(ncodeunits(head) + spaces + ncodeunits(text))
     copyto!(buf, codeunits(head))
@@ -738,8 +824,19 @@ function _suffix(pictur::String, text::String, spaces::Int)
     return String(buf)
 end
 
+"""
+    _picture_string(pic, np, needle, modify, zone) -> String
+
+Return the picture `pic[1:np]` as a `String`, with the marks that `tpartv` adds after
+it: `::RND` when `needle` occurs in it, then the zone (if `zone`) and the system
+modifiers.
+"""
+@inline function _picture_string(pic, np::Int, needle::String, modify::NTuple{5, String63}, zone::Bool)
+    return _picture_suffix(_string_of(pic, np), needle, modify, zone)
+end
+
 "Return `pictur` with the marks that `tpartv` adds after it: `::RND` when `needle` occurs in it, then the zone (if `zone`) and the system modifiers."
-function _picture_suffix(pictur::String, needle::String, modify::Vector{String}, zone::Bool)
+@noinline function _picture_suffix(pictur::String, needle::String, modify::NTuple{5, String63}, zone::Bool)
     occursin(needle, pictur) && (pictur = _suffix(pictur, "::RND", 1))
     if zone && modify[_MOD_ZONE] != ""
         pictur = _suffix(_suffix(pictur, "::", 1), modify[_MOD_ZONE], 0)
@@ -750,8 +847,40 @@ function _picture_suffix(pictur::String, needle::String, modify::Vector{String},
     return pictur
 end
 
+"Return the text of `s[b:e]`, cut to `modlen` characters, in upper case, as a `String63` (`modlen <= 63`)."
+@inline function _upcut(s::AbstractVector{UInt8}, b::Int, e::Int, modlen::Int)::String63
+    buf = _ByteBuf()
+    if b >= 1 && b <= e && e <= length(s)
+        for i in b:min(e, b + modlen - 1)
+            buf = _bpush(buf, _upper(s[i]))
+        end
+    end
+    return _inline(buf)
+end
+
+"The weekday of the token `s[b:e]` (three letters or more of a weekday name, any case) in three upper case letters."
+@inline function _weekday_abbr(s::AbstractVector{UInt8}, b::Int)::String63
+    c1, c2 = _upper(s[b]), _upper(s[b + 1])
+    for name in ("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+        codeunit(name, 1) == c1 && codeunit(name, 2) == c2 && return String63(name)
+    end
+    return String63("")
+end
+
+"The time system of a token of class `s` (`TDB`, `TDT` or `UTC`, any case), in upper case."
+@inline function _system_name(s::AbstractVector{UInt8}, b::Int)::String63
+    _upper(s[b]) == UInt8('U') && return String63("UTC")
+    return _upper(s[b + 2]) == UInt8('B') ? String63("TDB") : String63("TDT")
+end
+
+const _NOMODS = ntuple(_ -> String63(""), Val(5))
+
+"The result of `_tpartv` for a string that does not parse; `modify` holds the modifiers found before the error."
+@noinline _fail_parts(error::String, modify::NTuple{5, String63} = _NOMODS) =
+    _TimeParts(false, zero(SVector{8, Float64}), 0, "", modify, false, false, "", error)
+
 """
-    _tpartv(str, modlen) -> _TimeParts
+    _tpartv(str, modlen, wantpic = true) -> _TimeParts
 
 Return the components of the time string, its modifiers and its picture, or `ok ==
 false` and a message, with the rules of `tpartv` in their order: combine `UTC+h:mm`,
@@ -759,18 +888,26 @@ find one decimal number, handle a Julian date, mark integers of 1000 or more as 
 match the ISO patterns if a `T` is present, extract the modifiers, match the built-in
 patterns (again after the removal of commas, dashes and slashes, one kind at a time),
 and at last resolve hours, minutes, seconds and the integers next to a month name.
-A modifier is cut to `modlen` characters, the length of the modifier variables of the
-CSPICE caller (16 in `str2et`, 8 in the others).
+A modifier is cut to `modlen` characters (at most 63), the length of the modifier
+variables of the CSPICE caller (16 in `str2et`, 8 in the others). With `wantpic`
+false the picture is not made (`pictur == ""`), and a string that parses allocates
+nothing.
 """
-function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
-    modify = fill("", 5)
-    fail(error; pictur = "") =
-        _TimeParts(false, zeros(Float64, 8), 0, "", modify, false, false, pictur, error)
-    st, error = _zztokns(str)
-    st === nothing && return fail(error)
-    s = st.str
-    upcut(b, e) = uppercase(_sub(s, b, min(e, b + modlen - 1)))
+function _tpartv(str::AbstractString, modlen::Int, wantpic::Bool = true)::_TimeParts
+    @assert 1 <= modlen <= 63
+    cu = codeunits(str)
+    last = length(cu)
+    # Loop invariant: `cu[last+1:end]` is blank.
+    while last > 0 && cu[last] == _BLANK
+        last -= 1
+    end
+    last == 0 && return _fail_parts("The input time string is blank.")
+    s = view(cu, 1:last)
+    st = _Tokens(s)
+    error = _zztokns!(st, str)
+    error == "" || return _fail_parts(error)
     l2r, r2l = true, false
+    era = wday = zone = ampm = system = String63("")
 
     for sign in ("Oi", "oi")
         if _zzcmbt!(st, sign, 'z', l2r)
@@ -783,46 +920,38 @@ function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
     _zzrept!(st, "w,", "w*", l2r)
     _zzcmbt!(st, "i.i", 'n', r2l) || _zzcmbt!(st, "i.", 'n', r2l)
     _zzremt!(st, 'b')
+    # `zzunpck` writes its marks into the picture of the tokens, which is used once.
+    pic = st.pictur
 
     # Julian date.
     if _zzist(st, 'j')
         _zzrept!(st, "[s]", "*s*", l2r)
         mods, b, e = _zznote!(st, 's')
-        mods && (modify[_MOD_SYSTEM] = upcut(b, e))
+        mods && (system = _system_name(s, b))
         _zzrept!(st, "[j]", "*j*", l2r)
         _zzremt!(st, 'j')
         _zzist(st, 'n') || _zzsubt!(st, "i", "n", l2r)
         _zzcmbt!(st, "-n", 'n', l2r)
         _zzsubt!(st, "n", "J", l2r)
-        ok, tvec, ntvec, type, pictur, error = _zzunpck(st, false)
-        pictur = _picture_suffix(pictur, "JULIAND.", modify, false)
+        ok, tvec, ntvec, type, np, error = _zzunpck!(pic, st, false)
+        modify = (era, wday, zone, ampm, system)
+        pictur = wantpic ? _picture_string(pic, np, "JULIAND.", modify, false) : ""
         return _TimeParts(ok, tvec, ntvec, type, modify, mods, false, pictur, error)
     end
 
     # Calendar date: an integer of 1000 or more is a year.
     _zzvalt!(st, 1000, Int(typemax(Int32)), 'Y')
 
-    finish(mods, yabbrv) = begin
-        local ok, tvec, ntvec, type, pictur, error    # not the variables of the same names above
-        ok, tvec, ntvec, type, pictur, error = _zzunpck(st, yabbrv)
-        pictur = _picture_suffix(pictur, ".#", modify, true)
-        _TimeParts(ok, tvec, ntvec, type, modify, mods, yabbrv, pictur, error)
-    end
-    known() = begin
-        key = _zzgrep(st)
-        meaning = get(_TK_KNOWN, key, nothing)
-        meaning === nothing && return false
-        _zzrept!(st, key, meaning, l2r)
-        return true
-    end
-
     # With the ISO separator only the built-in patterns are tried.
     if _zzist(st, 't')
-        known() && return finish(false, false)
-        return fail(
+        _zzknown!(st) || return _fail_parts(
             "The input string uses the ISO \"T\" date/time delimiter but does " *
                 "not match any of the accepted ISO formats."
         )
+        ok, tvec, ntvec, type, np, error = _zzunpck!(pic, st, false)
+        modify = (era, wday, zone, ampm, system)
+        pictur = wantpic ? _picture_string(pic, np, ".#", modify, true) : ""
+        return _TimeParts(ok, tvec, ntvec, type, modify, false, false, pictur, error)
     end
 
     # Abbreviated years: a quote and an integer below 100.
@@ -842,94 +971,114 @@ function _tpartv(str::AbstractString, modlen::Int)::_TimeParts
     havapm, bn, en = _zznote!(st, 'N')
     havsys, bs, es = _zznote!(st, 's')
     mods = havera || havwdy || havzon || havapm || havsys
-    havera && (modify[_MOD_ERA] = _upper(s[be]) == UInt8('A') ? "A.D." : "B.C.")
-    havwdy && (modify[_MOD_WDAY] = first(upcut(bw, ew), 3))
-    havapm && (modify[_MOD_AMPM] = _upper(s[bn]) == UInt8('A') ? "A.M." : "P.M.")
-    havsys && (modify[_MOD_SYSTEM] = upcut(bs, es))
+    havera && (era = _upper(s[be]) == UInt8('A') ? String63("A.D.") : String63("B.C."))
+    havwdy && (wday = _weekday_abbr(s, bw))
+    havapm && (ampm = _upper(s[bn]) == UInt8('A') ? String63("A.M.") : String63("P.M."))
+    havsys && (system = _system_name(s, bs))
     if havzon
-        zone = upcut(bz, ez)
-        mapto = findfirst(==(zone), _TK_ZONES)
-        modify[_MOD_ZONE] = mapto === nothing ? zone : _TK_OFFSETS[mapto]
+        zone = _upcut(s, bz, ez, modlen)
+        for k in eachindex(_TK_ZONES)
+            if zone == _TK_ZONES[k]
+                zone = String63(_TK_OFFSETS[k])
+                break
+            end
+        end
     end
+    modify = (era, wday, zone, ampm, system)
 
-    known() && return finish(mods, yabbrv)
-
-    # Two delimiters in a row, or a delimiter at one end, make the string ambiguous.
-    pair, from, to = _zzispt(st, ",/-:d.")
-    pair && return fail(
-        "There are two successive delimiters <$(_sub(s, from, to))> in " *
-            "the input string. This is an ambiguous input. '" *
-            _marked(s, from, to) * "'"
-    )
-    rep = _zzgrep(st)
-    r = something(findlast(!=(' '), rep), 1)
-    edge = rep[1] in ",/-:." ? rep[1:1] : (rep[r] in ",/-:." ? rep[r:r] : "")
-    if edge != ""
-        _zzsubt!(st, edge, "Q", l2r)
-        _, from, to = _zznote!(st, 'Q')
-        return fail(
-            "An unexpected delimiter ('$(_sub(s, from, to))') was encountered " *
-                "in the input string. '" * _marked(s, from, to) * "'"
+    known = _zzknown!(st)
+    if !known
+        # Two delimiters in a row, or a delimiter at one end, make the string ambiguous.
+        pair, from, to = _zzispt(st, ",/-:d.")
+        pair && return _fail_parts(
+            "There are two successive delimiters <$(_sub(s, from, to))> in " *
+                "the input string. This is an ambiguous input. '" *
+                _marked(s, from, to) * "'", modify
         )
+        # The first and the last of the 12 letters of the key that are not blank.
+        r = 1
+        for k in 1:12
+            st.rep[k] != _BLANK && (r = k)
+        end
+        edge = _isin(st.rep[1], codeunits(",/-:.")) ? st.rep[1] :
+            (_isin(st.rep[r], codeunits(",/-:.")) ? st.rep[r] : _BLANK)
+        if edge != _BLANK
+            _zzsubt!(st, _delimiter_string(edge), "Q", l2r)
+            _, from, to = _zznote!(st, 'Q')
+            return _fail_parts(
+                "An unexpected delimiter ('$(_sub(s, from, to))') was encountered " *
+                    "in the input string. '" * _marked(s, from, to) * "'", modify
+            )
+        end
+
+        # Remove commas, then dashes, then slashes, and try the patterns after each step.
+        for delim in (',', '-', '/')
+            _zzremt!(st, delim)
+            known = _zzknown!(st)
+            known && break
+        end
     end
 
-    # Remove commas, then dashes, then slashes, and try the patterns after each step.
-    for delim in (',', '-', '/')
-        _zzremt!(st, delim)
-        known() && return finish(mods, yabbrv)
-    end
-
-    # What is left of the modifier classes is a second modifier of one kind.
-    b = e = 0
-    for c in ('e', 's', 'Z', 'w', 'N')
-        found, b, e = _zznote!(st, c)
-        found && break
-    end
-    b > 0 && return fail(
-        "The substring \"$(_sub(s, b, e))\" is a duplicate modifier of " *
-            "the input string: '" * _marked(s, b, e) * "'"
-    )
-    for c in ('[', ']', 'O', 'o', 'z')
-        found, b, e = _zznote!(st, c)
-        found && break
-    end
-    b > 0 && return fail(
-        "The substring \"$(_sub(s, b, e))\" could not be resolved in " *
-            "the input string: '" * _marked(s, b, e) * "'"
-    )
-    if _zzist(st, 'm') && _zzist(st, 'd')
-        _, b1, e1 = _zznote!(st, 'm')
-        _, b2, e2 = _zznote!(st, 'd')
-        return fail(
-            "Both a month \"$(_sub(s, b1, e1))\" and day of year delimiter " *
-                "\"$(_sub(s, b2, e2))\" appear in the input string: '$str'"
+    if !known
+        # What is left of the modifier classes is a second modifier of one kind.
+        b = e = 0
+        for c in ('e', 's', 'Z', 'w', 'N')
+            found, b, e = _zznote!(st, c)
+            found && break
+        end
+        b > 0 && return _fail_parts(
+            "The substring \"$(_sub(s, b, e))\" is a duplicate modifier of " *
+                "the input string: '" * _marked(s, b, e) * "'", modify
         )
-    end
-
-    # Hours, minutes and seconds: the rightmost run of numbers with colons.
-    for (pat, meaning) in (
-            ("i:i:i:n", "D*H*M*S"), ("i:i:i:i", "D*H*M*S"), ("i:i:n", "H*M*S"),
-            ("i:i:i", "H*M*S"), ("i:n", "H*M"), ("i:i", "H*M"),
+        for c in ('[', ']', 'O', 'o', 'z')
+            found, b, e = _zznote!(st, c)
+            found && break
+        end
+        b > 0 && return _fail_parts(
+            "The substring \"$(_sub(s, b, e))\" could not be resolved in " *
+                "the input string: '" * _marked(s, b, e) * "'", modify
         )
-        _zzrept!(st, pat, meaning, r2l) && break
-    end
-    _zzremt!(st, ':')
+        if _zzist(st, 'm') && _zzist(st, 'd')
+            _, b1, e1 = _zznote!(st, 'm')
+            _, b2, e2 = _zznote!(st, 'd')
+            return _fail_parts(
+                "Both a month \"$(_sub(s, b1, e1))\" and day of year delimiter " *
+                    "\"$(_sub(s, b2, e2))\" appear in the input string: '$str'", modify
+            )
+        end
 
-    # An integer next to a month name, and the day-of-year forms.
-    for (pat, meaning, remove) in (
-            ("<miiH", "mDY", false), ("<mi", "mD", false),
-            ("Siim>", "SYDm", false), ("im>", "Dm", false), ("miY>", "mDY", false),
-            ("Ymi", "YmD", false), ("Smi", "SmD", false), ("Mmi", "MmD", false),
-            ("imY", "DmY", false), ("imH", "DmH", false), ("Yid", "Yy*", true),
-            ("iYd", "yY*", true), ("Ydi", "Y*y", true),
-        )
-        (remove ? _zzrept!(st, pat, meaning, l2r) : _zzsubt!(st, pat, meaning, l2r)) && break
+        # Hours, minutes and seconds: the rightmost run of numbers with colons.
+        for (pat, meaning) in (
+                ("i:i:i:n", "D*H*M*S"), ("i:i:i:i", "D*H*M*S"), ("i:i:n", "H*M*S"),
+                ("i:i:i", "H*M*S"), ("i:n", "H*M"), ("i:i", "H*M"),
+            )
+            _zzrept!(st, pat, meaning, r2l) && break
+        end
+        _zzremt!(st, ':')
+
+        # An integer next to a month name, and the day-of-year forms.
+        for (pat, meaning, remove) in (
+                ("<miiH", "mDY", false), ("<mi", "mD", false),
+                ("Siim>", "SYDm", false), ("im>", "Dm", false), ("miY>", "mDY", false),
+                ("Ymi", "YmD", false), ("Smi", "SmD", false), ("Mmi", "MmD", false),
+                ("imY", "DmY", false), ("imH", "DmH", false), ("Yid", "Yy*", true),
+                ("iYd", "yY*", true), ("Ydi", "Y*y", true),
+            )
+            (remove ? _zzrept!(st, pat, meaning, l2r) : _zzsubt!(st, pat, meaning, l2r)) && break
+        end
     end
 
-    ok, tvec, ntvec, type, pictur, error = _zzunpck(st, yabbrv)
-    pictur != "" && (pictur = _picture_suffix(pictur, ".#", modify, true))
+    ok, tvec, ntvec, type, np, error = _zzunpck!(pic, st, yabbrv)
+    # A string that matches a built-in pattern always gets its picture; another one
+    # has none when a token has no meaning.
+    pictur = wantpic && (known || np > 0) ? _picture_string(pic, np, ".#", modify, true) : ""
     return _TimeParts(ok, tvec, ntvec, type, modify, mods, yabbrv, pictur, error)
 end
+
+"The delimiter `c` (one of `,/-:.`) as a `String` of one character."
+_delimiter_string(c::UInt8) = c == UInt8(',') ? "," : c == UInt8('/') ? "/" :
+    c == UInt8('-') ? "-" : c == UInt8(':') ? ":" : "."
+
 
 "Message for a Julian date whose number cannot be read (CSPICE returns the value of an earlier call for such a string)."
 const _NOJDVALUE = "The Julian date of the string has no value: the sign and the number " *
@@ -959,8 +1108,10 @@ end
 Return the signed hour and minute offsets of `str[start:]`, of the form `::UTC+h[:mm]`
 or `::UTC-h[:mm]` with one or two digits in each number, `h < 13` and `mm <= 59`,
 the position of the last character used and whether the hours were read (`zzutcpm`); minutes that cannot be read count as 0.
+`str` is any vector of bytes with `length` and indexing; the call is inlined, so that a
+buffer on the stack stays there.
 """
-function _zzutcpm(str::AbstractVector{UInt8}, start::Int)
+@inline function _zzutcpm(str, start::Int)
     n = length(str)
     at(i) = i <= n ? str[i] : _BLANK
     signat = start + 5
@@ -976,7 +1127,7 @@ function _zzutcpm(str::AbstractVector{UInt8}, start::Int)
     unsat = start + 6
     unsto = digits(unsat)
     (1 <= unsto - unsat + 1 <= 2) || return 0.0, 0.0, start - 1, false
-    x = _nparsd(@view str[unsat:unsto])
+    x = _digits_value(str, unsat, unsto)
     x >= 13.0 && return 0.0, 0.0, start - 1, false
     hoff = sign * x
     last = unsto
@@ -984,14 +1135,28 @@ function _zzutcpm(str::AbstractVector{UInt8}, start::Int)
     unsat = unsto + 2
     unsto = digits(unsat)
     (1 <= unsto - unsat + 1 <= 2) || return hoff, 0.0, last, true
-    x = _nparsd(@view str[unsat:unsto])
+    x = _digits_value(str, unsat, unsto)
     x > 59.0 && return hoff, 0.0, last, true
     return hoff, sign * x, unsto, true
 end
 
+"The value of the one or two decimal digits `str[from:to]`, which `nparsd` gives exactly."
+@inline function _digits_value(str, from::Int, to::Int)::Float64
+    v = 0
+    for i in from:to
+        v = 10 * v + Int(str[i] - UInt8('0'))
+    end
+    return Float64(v)
+end
+
 "Return (hoff, moff, ok) of `_zzutcpm` for the zone `zone` (`\"\"` or a zone such as `UTC-7:30`) as `str2et` holds it in a 16-character variable after `::`."
 function _zone_offsets(zone::AbstractString)
-    field = codeunits(first(string("::", zone), 16))
+    n = ncodeunits(zone)
+    field = SVector(
+        ntuple(Val(16)) do i
+            i <= 2 ? UInt8(':') : (i - 2 <= n ? codeunit(zone, i - 2) : _BLANK)
+        end
+    )
     hoff, moff, _, ok = _zzutcpm(field, 1)
     return hoff, moff, ok
 end
@@ -1007,7 +1172,9 @@ A.M./P.M. modifier), minutes 0..59, seconds below 60, or below 61 in the last mi
 of June 30 and December 31; and a fraction only in the last component that is not
 zero. `error` says which component is out of range.
 """
-function _tcheck(tvec::Vector{Float64}, type::String, mods::Bool, modify::Vector{String})
+function _tcheck(
+        tvec::SVector{8, Float64}, type::String, mods::Bool, modify::NTuple{5, String63}
+    )
     year = _nint(tvec[1])
     myear = (mods && modify[_MOD_ERA] == "B.C.") ? 1 - year : year
     leapdy = _leap(abs(myear))
@@ -1226,37 +1393,38 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefau
     _chkfstr("str2et", "time string", s)
     l = _lsk(ks)
     dhoff, dmoff, _ = defs.zone == "" ? (0.0, 0.0, true) : _zone_offsets(defs.zone)
-    p = _tpartv(s, 16)
+    p = _tpartv(s, 16, false)
     p.ok || _badtime(s, p.error, :unparsedtime)
-    modify = copy(p.modify)
+    modify = p.modify
+    era, zone, ampm, system = modify[_MOD_ERA], modify[_MOD_ZONE], modify[_MOD_AMPM], modify[_MOD_SYSTEM]
     mods = p.mods
     tvec = p.tvec
     type = p.type
-    (modify[_MOD_ZONE] != "" && modify[_MOD_SYSTEM] != "") && _badtime(
+    (zone != "" && system != "") && _badtime(
         s,
-        "both a time system '$(modify[_MOD_SYSTEM])' and a time zone " *
-            "'$(modify[_MOD_ZONE])' are specified; specify one of them only", :timeconflict
+        "both a time system '$system' and a time zone '$zone' are specified; specify " *
+            "one of them only", :timeconflict
     )
-    zoned = false
+    # Without a zone and a system in the string, those of `defs` apply.
+    usedefs = zone == "" && system == ""
+    zoned = usedefs ? defs.zone != "" : zone != ""
     hoff = moff = 0.0
-    if modify[_MOD_ZONE] == "" && modify[_MOD_SYSTEM] == ""
-        modify[_MOD_ZONE] = defs.zone
-        modify[_MOD_SYSTEM] = defs.system
+    if usedefs
         hoff, moff = dhoff, dmoff
-        zoned = modify[_MOD_ZONE] != ""
-    elseif modify[_MOD_ZONE] != ""
-        zoned = true
-        hoff, moff, ok = _zone_offsets(modify[_MOD_ZONE])
+    elseif zone != ""
+        hoff, moff, ok = _zone_offsets(zone)
         ok || _badtime(
-            s, "the time zone '$(modify[_MOD_ZONE])' is not an offset UTC+h[:mm] " *
+            s, "the time zone '$zone' is not an offset UTC+h[:mm] " *
                 "or UTC-h[:mm] with h below 13", :timezoneerror
         )
     end
-    system = modify[_MOD_SYSTEM]
+    sysname = usedefs ? defs.system : system
+    tdb = sysname == "TDB"
+    tdt = sysname == "TDT"
 
     if type == "JD"
         isnan(tvec[1]) && _badtime(s, _NOJDVALUE, :unparsedtime)
-        from = system == "TDB" ? _TT_JDTDB : (system == "TDT" ? _TT_JDTDT : _TT_JDUTC)
+        from = tdb ? _TT_JDTDB : (tdt ? _TT_JDTDT : _TT_JDUTC)
         return _ttrans(l, from, _TT_TDB, _tvec(tvec[1]))[1]
     end
     yd = type == "YD"
@@ -1266,46 +1434,45 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefau
     forml = yd ? _TT_YDF : _TT_YMDF
     ptype = yd ? _TT_YD : _TT_YMD
     calndr = defs.calendar
+    set(v, x, i) = Base.setindex(v, x, i)
 
     # A leap second in a zone or in the Julian calendar cannot be checked before the
     # date is moved to UTC and to the Gregorian calendar: check with one second less.
     adjust = false
     if (zoned || calndr != "GREGORIAN") && 60.0 <= tvec[sc] < 61.0
         adjust = true
-        tvec[sc] -= 1.0
+        tvec = set(tvec, tvec[sc] - 1.0, sc)
     end
     if calndr == "JULIAN" || (calndr == "MIXED" && tvec[yr] < 1580.0)
         # The Julian calendar has a leap day every fourth year: accept the date if it
         # is valid in this year or in the Gregorian leap pattern four years later.
-        tvecm = copy(tvec)
-        tvecm[1] += 4.0
-        ok1, _ = _tcheck(tvecm, type, mods, modify)
+        ok1, _ = _tcheck(set(tvec, tvec[1] + 4.0, 1), type, mods, modify)
         ok2, error = _tcheck(tvec, type, mods, modify)
         ok = ok1 || ok2
     else
         ok, error = _tcheck(tvec, type, mods, modify)
     end
     ok || _badtime(s, error, :badtimestring)
-    adjust && (tvec[sc] += 1.0)
-    ((system == "TDT" || system == "TDB") && tvec[sc] >= 60.0) && _badtime(
+    adjust && (tvec = set(tvec, tvec[sc] + 1.0, sc))
+    ((tdt || tdb) && tvec[sc] >= 60.0) && _badtime(
         s,
-        "the seconds component is $(_num(tvec[sc])), and the time system $system has " *
+        "the seconds component is $(_num(tvec[sc])), and the time system $sysname has " *
             "no leap seconds: the seconds must be less than 60", :badtimestring
     )
-    (modify[_MOD_ERA] == "B.C." && p.yabbrv) && _badtime(
+    (era == "B.C." && p.yabbrv) && _badtime(
         s,
         "the year is abbreviated with a quote and the era is B.C.; these do not go together",
         :badtimestring
     )
-    modify[_MOD_ERA] == "B.C." && (tvec[yr] = 1.0 - tvec[yr])
-    if modify[_MOD_AMPM] == "P.M."
-        tvec[hr] < 12.0 && (tvec[hr] += 12.0)
-    elseif modify[_MOD_AMPM] == "A.M."
-        tvec[hr] >= 12.0 && (tvec[hr] -= 12.0)
+    era == "B.C." && (tvec = set(tvec, 1.0 - tvec[yr], yr))
+    if ampm == "P.M."
+        tvec[hr] < 12.0 && (tvec = set(tvec, tvec[hr] + 12.0, hr))
+    elseif ampm == "A.M."
+        tvec[hr] >= 12.0 && (tvec = set(tvec, tvec[hr] - 12.0, hr))
     end
     year = _nint(tvec[yr])
-    if p.yabbrv || (year < 100 && modify[_MOD_ERA] == "")
-        tvec[yr] = Float64(_expand_year(year, defs.yearbound))
+    if p.yabbrv || (year < 100 && era == "")
+        tvec = set(tvec, Float64(_expand_year(year, defs.yearbound)), yr)
     end
 
     dojul = if calndr == "MIXED"
@@ -1322,37 +1489,33 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefau
         day = _cint(tvec[dy])
         frac = tvec[dy] - Float64(day)
         gy, gm, gd, gdoy = jul2gr(orgnyr, yd ? 1 : _cint(tvec[mm]), day)
-        tvec[yr] = Float64(gy)
+        tvec = set(tvec, Float64(gy), yr)
         if yd
-            tvec[dy] = Float64(gdoy) + frac
+            tvec = set(tvec, Float64(gdoy) + frac, dy)
         else
-            tvec[mm] = Float64(gm)
-            tvec[dy] = Float64(gd) + frac
+            tvec = set(set(tvec, Float64(gm), mm), Float64(gd) + frac, dy)
         end
     end
 
-    tv() = _tvec(tvec[1], tvec[2], tvec[3], tvec[4], tvec[5], tvec[6])
-    if system == "TDT"
-        return _unitim(l, _ttrans(l, forml, _TT_FORMAL, tv())[1], _US_TDT, _US_TDB)
-    elseif system == "TDB"
-        return _ttrans(l, forml, _TT_FORMAL, tv())[1]
+    tv(v) = _tvec(v[1], v[2], v[3], v[4], v[5], v[6])
+    if tdt
+        return _unitim(l, _ttrans(l, forml, _TT_FORMAL, tv(tvec))[1], _US_TDT, _US_TDB)
+    elseif tdb
+        return _ttrans(l, forml, _TT_FORMAL, tv(tvec))[1]
     end
     if zoned
-        tvec[hr] -= hoff
-        tvec[mn] -= moff
+        tvec = set(set(tvec, tvec[hr] - hoff, hr), tvec[mn] - moff, mn)
         secs = tvec[sc]
-        tvec[sc] = 0.0
-        out = _ttrans(l, forml, forml, tv())
-        tvec[1:6] .= out[1:6]
-        tvec[sc] = secs
+        out = _ttrans(l, forml, forml, tv(set(tvec, 0.0, sc)))
+        tvec = SVector(out[1], out[2], out[3], out[4], out[5], out[6], tvec[7], tvec[8])
+        tvec = set(tvec, secs, sc)
     end
     if adjust
-        modify[_MOD_AMPM] = ""
         ok, _ = _tcheck(tvec, type, false, modify)
         ok || _badtime(
             s, "the seconds component is out of range: " * (
                 zoned ?
-                    "in the time zone $(modify[_MOD_ZONE]) " : ""
+                    "in the time zone $(usedefs ? defs.zone : zone) " : ""
             ) * (
                 dojul ? "on the Julian " *
                     "calendar " : ""
@@ -1360,7 +1523,7 @@ function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefau
                 "second that follows 23:59:59 UTC on June 30 and December 31", :badtimestring
         )
     end
-    return _ttrans(l, ptype, _TT_TDB, tv())[1]
+    return _ttrans(l, ptype, _TT_TDB, tv(tvec))[1]
 end
 
 # The range check of `tcheck_` that `tparch` turns on, for `utc2et` and `tparse`: it
@@ -1476,11 +1639,7 @@ function tparse(s::AbstractString, defs::TimeDefaults)::Float64
     p.type == "JD" && return (tvec[1] - _JD2000) * _SPD
     _tparch_check(s, defs, p, :badtimestring)
     if p.type == "YD"
-        tvec[6] = tvec[5]
-        tvec[5] = tvec[4]
-        tvec[4] = tvec[3]
-        tvec[3] = tvec[2]
-        tvec[2] = 1.0
+        tvec = SVector(tvec[1], 1.0, tvec[2], tvec[3], tvec[4], tvec[5], tvec[7], tvec[8])
     end
     year = _era_year(_nint(tvec[1]), modify[_MOD_ERA], defs.yearbound)
     month, day = _nint(tvec[2]), _nint(tvec[3])
