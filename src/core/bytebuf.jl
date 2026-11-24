@@ -122,7 +122,9 @@ end
 # `_StackVec`, a vector of fixed length for the state of a parser. It is an `MVector`
 # whose index check throws without a reference to the vector: when every function
 # that takes it is inlined, the compiler keeps it on the stack, which a `BoundsError`
-# that holds the vector would prevent. The check is made with `@inbounds` too.
+# that holds the vector would prevent. The elements are read and written through a
+# pointer, as StaticArrays writes an `MVector`, so that `--check-bounds=yes` (which
+# ignores `@inbounds`) adds no check of its own.
 struct _StackVec{N, T}
     data::MVector{N, T}
 end
@@ -132,7 +134,7 @@ end
     v = _StackVec{N, T}(MVector{N, T}(undef))
     # Loop invariant: elements `1:i-1` are `x`.
     for i in 1:N
-        @inbounds v.data[i] = x
+        _stackvec_store!(v.data, x, i)
     end
     return v
 end
@@ -141,15 +143,18 @@ end
 @inline _StackVec{N, T}(::UndefInitializer) where {N, T} = _StackVec{N, T}(MVector{N, T}(undef))
 
 Base.length(::_StackVec{N}) where {N} = N
-@inline function Base.getindex(v::_StackVec{N}, i::Int) where {N}
+@inline function Base.getindex(v::_StackVec{N, T}, i::Int) where {N, T}
     1 <= i <= N || _stackvec_index_error(i, N)
-    return @inbounds v.data[i]
+    m = v.data
+    return GC.@preserve m unsafe_load(Base.unsafe_convert(Ptr{T}, pointer_from_objref(m)), i)
 end
 @inline function Base.setindex!(v::_StackVec{N}, x, i::Int) where {N}
     1 <= i <= N || _stackvec_index_error(i, N)
-    @inbounds v.data[i] = x
+    _stackvec_store!(v.data, x, i)
     return v
 end
+@inline _stackvec_store!(m::MVector{N, T}, x, i::Int) where {N, T} =
+    GC.@preserve m unsafe_store!(Base.unsafe_convert(Ptr{T}, pointer_from_objref(m)), convert(T, x), i)
 @noinline _stackvec_index_error(i::Int, N::Int) = throw(BoundsError(1:N, i))
 
 "The first `n` bytes of `v` as a `String`, the one allocation."
