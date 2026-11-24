@@ -9,7 +9,8 @@ makedocs(;
     format = Documenter.HTML(;
         prettyurls = get(ENV, "CI", "false") == "true",
         collapselevel = 1,
-        size_threshold = 600_000, size_threshold_warn = 300_000
+        size_threshold = 600_000, size_threshold_warn = 300_000,
+        search_size_threshold_warn = 800_000,  # 571 docstrings; about 150 KiB gzipped
     ),
     pages = [
         "Home" => "index.md",
