@@ -52,6 +52,6 @@ The comparison with ANISE is not part of the default test run.
 - **No NaN values.** Where ANISE returns NaN, the calls throw
   `SpiceError(:degeneratecase)`, also for a dual-number state whose value has no
   derivative ([Differentiate an orbit](@ref)). [Element names](@ref) lists the few
-  non-finite and fallback values that are returned. The rule holds for values only:
-  the derivative of a fallback value, such as the infinite `:ta_dot` of a hyperbola,
-  can be NaN.
+  non-finite and fallback values that are returned. The rule holds for values only;
+  `:period` and `:ta_dot` of an orbit that is not elliptic are constants, with the
+  derivative 0.

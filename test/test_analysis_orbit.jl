@@ -415,6 +415,9 @@ group(
         @test throws_kind(() -> para.ma, :degeneratecase)
         @test abs(para.ecc - 1) < 1.0e-11 && !isnan(para.sma) && abs(para.sma) > 1.0e9
         @test para.period == 0.0 && para.ta_dot == Inf           # ANISE: Duration::ZERO, 360/0
+        # The infinite ta_dot of an orbit that is not elliptic is a constant: derivative 0.
+        hyp_ta_dot(vy) = Orbit(SVector(7000.0, 0, 0, 0, vy, 0), 0.0, 399, 1, gm).ta_dot
+        @test hyp_ta_dot(12.0) == Inf && ForwardDiff.derivative(hyp_ta_dot, 12.0) == 0.0
         @test throws_kind(() -> para.ha, :degeneratecase)        # NotHyperbolic for ecc <= 1
         # Zero radius or velocity: hvec and evec of ANISE are errors.
         zr = orb((0.0, 0, 0, 0, 8.0, 0))

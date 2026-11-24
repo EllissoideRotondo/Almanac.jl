@@ -342,7 +342,12 @@ function _el_period(o::Orbit{T}) where {T}
 end
 
 _el_mean_motion(o::Orbit) = sqrt(getfield(o, :gm) / abs(_el_sma(o))^3)
-_el_ta_dot(o::Orbit{T}) where {T} = 2 * T(π) / _el_period(o)
+# A period of 0 (an orbit that is not elliptic) gives the constant Inf of ANISE, so its
+# derivative is 0, not the 0/0 of the quotient.
+function _el_ta_dot(o::Orbit{T}) where {T}
+    p = _el_period(o)
+    return primal(p) > 0 ? 2 * T(π) / p : zero(p) + Inf
+end
 _el_c3(o::Orbit) = -getfield(o, :gm) / _el_sma(o)
 
 function _el_fpa(o::Orbit)
