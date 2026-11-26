@@ -145,7 +145,7 @@ end
 
 Return the window of epochs, in seconds past J2000 TDB, on which the body `front`
 occults the body `back` as seen from `obsrvr`, as
-[`gfoclt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfoclt_c.html). A transit of `front`
+`gfoclt_c`. A transit of `front`
 across `back` is the same event.
 
 The result is a new `Window` that is a subset of the confinement window `cnfine`;
@@ -209,6 +209,10 @@ end
 ```
 
 See also [`gfocce`](@ref), [`occult`](@ref), [`gfdist`](@ref).
+
+# References
+
+- [NAIF documentation of `gfoclt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfoclt_c.html)
 """
 function gfoclt(
         ks::KernelSet, occtyp::AbstractString, front::NameOrID,
@@ -247,7 +251,7 @@ gfoclt(
 
 Return the occultation window of [`gfoclt`](@ref), found with a step and a refinement
 function that the caller supplies, as
-[`gfocce_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfocce_c.html).
+`gfocce_c`.
 
 `tol`, `udstep` and `udrefn` are those of [`gfevnt`](@ref). The other arguments, the
 keywords `bail`, `report` and `threads`, the result and the errors are those of
@@ -255,6 +259,10 @@ keywords `bail`, `report` and `threads`, the result and the errors are those of
 `gfoclt(..., step, cnfine; tol)`.
 
 See also [`gfoclt`](@ref), [`gfevnt`](@ref), [`gffove`](@ref).
+
+# References
+
+- [NAIF documentation of `gfocce_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfocce_c.html)
 """
 function gfocce(
         ks::KernelSet, occtyp::AbstractString, front::NameOrID,

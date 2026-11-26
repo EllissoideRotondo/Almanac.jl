@@ -4,14 +4,14 @@ CSPICE gives a position and its velocity. Almanac.jl gives derivatives of any or
 
 ## Derivatives from `spkder` and `pxder`
 
-[`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and the call does not [allocate](@ref "Allocation").
+[`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and the call does not allocate.
 
 ```@example der
 using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
 
-furnsh(naif0012_tls())                      # leap seconds
-furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
-furnsh(pck00011())                          # orientation and radii of the bodies
+furnsh(naif0012_tls())
+furnsh(de440s())
+furnsh(pck00011())
 
 et = str2et("2025 MAR 01 12:00:00 UTC")
 position, velocity, acceleration = spkder("MOON", et, "J2000", "EARTH", Val(2))

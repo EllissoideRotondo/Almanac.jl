@@ -91,7 +91,7 @@ end
 
 One segment of a loaded DSK file. [`dskxsi`](@ref) returns it in place of the handle, the
 DLA descriptor and the DSK descriptor that
-[`dskxsi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskxsi_c.html) returns.
+`dskxsi_c` returns.
 
 [`dskgd`](@ref), [`dskb02`](@ref) and [`dskz02`](@ref) take the segment alone.
 [`dskp02`](@ref), [`dskv02`](@ref), [`dskn02`](@ref), [`dski02`](@ref), [`dskd02`](@ref)
@@ -104,6 +104,10 @@ A caller reads these fields:
 - `boxctr`, `boxrad`: center and radius (km) of the bounding sphere of the segment, in the
   frame of the segment. `boxrad` is NaN unless the coordinate system of the segment is
   latitudinal, rectangular or planetodetic.
+
+# References
+
+- [NAIF documentation of `dskxsi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskxsi_c.html)
 """
 struct DSKSegment
     file::Int32

@@ -56,7 +56,7 @@ end
     deltet([ctx,] epoch, eptype) -> Float64
 
 Return the difference ET - UTC in seconds at `epoch`, as
-[`deltet_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/deltet_c.html).
+`deltet_c`.
 
 `eptype` says how `epoch` is measured: `"UTC"` for UTC seconds past J2000, counted from 2000
 JAN 01 12:00:00 UTC with 86400 seconds in every day (the result of [`tparse`](@ref)), or
@@ -75,6 +75,10 @@ deltet(0.0, "ET")       # seconds, at J2000
 ```
 
 See also [`unitim`](@ref), [`str2et`](@ref).
+
+# References
+
+- [NAIF documentation of `deltet_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/deltet_c.html)
 """
 function deltet(ks::KernelSet, epoch::Real, eptype::AbstractString)::Float64
     _chkfstr("deltet", "epoch type", eptype)                # CHKFSTR of deltet_c
@@ -252,98 +256,154 @@ end
     j1900() -> Float64
 
 Return the Julian date of 1899 DEC 31 12:00:00, 2415020.0, as
-[`j1900_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j1900_c.html).
+`j1900_c`.
+
+# References
+
+- [NAIF documentation of `j1900_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j1900_c.html)
 """
 j1900() = 2415020.0
 """
     j1950() -> Float64
 
 Return the Julian date of 1950 JAN 01 00:00:00, 2433282.5, as
-[`j1950_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j1950_c.html).
+`j1950_c`.
+
+# References
+
+- [NAIF documentation of `j1950_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j1950_c.html)
 """
 j1950() = 2433282.5
 """
     j2000() -> Float64
 
 Return the Julian date of 2000 JAN 01 12:00:00, 2451545.0, as
-[`j2000_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j2000_c.html).
+`j2000_c`.
+
+# References
+
+- [NAIF documentation of `j2000_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j2000_c.html)
 """
 j2000() = _JD2000
 """
     j2100() -> Float64
 
 Return the Julian date of 2100 JAN 01 12:00:00, 2488070.0, as
-[`j2100_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j2100_c.html).
+`j2100_c`.
+
+# References
+
+- [NAIF documentation of `j2100_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/j2100_c.html)
 """
 j2100() = 2488070.0
 """
     jyear() -> Float64
 
 Return the number of seconds in a Julian year, 31557600.0, as
-[`jyear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/jyear_c.html).
+`jyear_c`.
+
+# References
+
+- [NAIF documentation of `jyear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/jyear_c.html)
 """
 jyear() = 31557600.0
 """
     tyear() -> Float64
 
 Return the number of seconds in a tropical year, 31556925.9747, as
-[`tyear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tyear_c.html).
+`tyear_c`.
+
+# References
+
+- [NAIF documentation of `tyear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tyear_c.html)
 """
 tyear() = 31556925.9747
 """
     spd() -> Float64
 
 Return the number of seconds in a day, 86400.0, as
-[`spd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spd_c.html).
+`spd_c`.
+
+# References
+
+- [NAIF documentation of `spd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spd_c.html)
 """
 spd() = _SPD
 """
     b1900() -> Float64
 
 Return the Julian date of the Besselian epoch B1900.0, 2415020.31352, as
-[`b1900_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/b1900_c.html).
+`b1900_c`.
+
+# References
+
+- [NAIF documentation of `b1900_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/b1900_c.html)
 """
 b1900() = 2415020.31352
 """
     b1950() -> Float64
 
 Return the Julian date of the Besselian epoch B1950.0, 2433282.42345905, as
-[`b1950_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/b1950_c.html).
+`b1950_c`.
+
+# References
+
+- [NAIF documentation of `b1950_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/b1950_c.html)
 """
 b1950() = 2433282.42345905
 """
     clight() -> Float64
 
 Return the speed of light in vacuum in km/s, 299792.458, as
-[`clight_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/clight_c.html).
+`clight_c`.
+
+# References
+
+- [NAIF documentation of `clight_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/clight_c.html)
 """
 clight() = 299792.458
 """
     halfpi() -> Float64
 
 Return `pi / 2`, as
-[`halfpi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/halfpi_c.html).
+`halfpi_c`.
+
+# References
+
+- [NAIF documentation of `halfpi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/halfpi_c.html)
 """
 halfpi() = Float64(pi) / 2
 """
     twopi() -> Float64
 
 Return `2 pi`, as
-[`twopi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/twopi_c.html).
+`twopi_c`.
+
+# References
+
+- [NAIF documentation of `twopi_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/twopi_c.html)
 """
 twopi() = 2 * Float64(pi)
 """
     rpd() -> Float64
 
 Return the number of radians in a degree, `pi / 180`, as
-[`rpd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rpd_c.html).
+`rpd_c`.
+
+# References
+
+- [NAIF documentation of `rpd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rpd_c.html)
 """
 rpd() = Float64(pi) / 180.0
 """
     dpr() -> Float64
 
 Return the number of degrees in a radian, `180 / pi`, as
-[`dpr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dpr_c.html).
+`dpr_c`.
+
+# References
+
+- [NAIF documentation of `dpr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dpr_c.html)
 """
 dpr() = 180.0 / Float64(pi)
 
@@ -366,7 +426,7 @@ const _OFFSTG = _RDAYG - _RDAYJ
 
 Return the Gregorian calendar date, and its day of year, of a date given in the
 Julian calendar, as
-[`jul2gr`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/jul2gr.html) of SPICELIB (CSPICE has it without a `_c` wrapper).
+`jul2gr` of SPICELIB (CSPICE has it without a `_c` wrapper).
 
 Years are astronomical: 1 B.C. is 0 and 2 B.C. is -1. A `month` outside 1:12 carries
 into the year: month 14 of 2000 is February 2001. The Gregorian calendar is extended
@@ -379,6 +439,10 @@ julia> jul2gr(1582, 10, 5)    # the day after 1582 OCT 4 of the Julian calendar
 ```
 
 See also [`gr2jul`](@ref).
+
+# References
+
+- [NAIF documentation of `jul2gr`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/jul2gr.html)
 """
 function jul2gr(year::Integer, month::Integer, day::Integer)
     yroff, mon = fldmod(Int(month) - 1, 12)
@@ -406,7 +470,7 @@ end
 
 Return the Julian calendar date, and its day of year, of a date given in the extended
 Gregorian calendar, as
-[`gr2jul`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/gr2jul.html) of SPICELIB (CSPICE has it without a `_c` wrapper).
+`gr2jul` of SPICELIB (CSPICE has it without a `_c` wrapper).
 
 This is the inverse of [`jul2gr`](@ref), with the same conventions.
 
@@ -415,6 +479,10 @@ This is the inverse of [`jul2gr`](@ref), with the same conventions.
 julia> gr2jul(1582, 10, 15)
 (1582, 10, 5, 278)
 ```
+
+# References
+
+- [NAIF documentation of `gr2jul`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/gr2jul.html)
 """
 function gr2jul(year::Integer, month::Integer, day::Integer)
     yroff, mon = fldmod(Int(month) - 1, 12)
@@ -499,7 +567,7 @@ end
 
 Return the epoch `epoch` of the uniform time scale `insys`, a scale without leap
 seconds, expressed in the scale `outsys`, as
-[`unitim_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unitim_c.html).
+`unitim_c`.
 
 | Scale                    | Epoch is                                  |
 |:-------------------------|:------------------------------------------|
@@ -529,6 +597,10 @@ tt = unitim(et, "TDB", "TT")        # seconds past J2000, TT
 ```
 
 See also [`deltet`](@ref).
+
+# References
+
+- [NAIF documentation of `unitim_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unitim_c.html)
 """
 function unitim(ks::KernelSet, epoch::Real, insys::AbstractString, outsys::AbstractString)
     _chkfstr("unitim", "input time scale", insys)           # CHKFSTR of unitim_c

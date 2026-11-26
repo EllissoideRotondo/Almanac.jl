@@ -401,7 +401,7 @@ end
 Return the window of epochs, in seconds past J2000 TDB, on which the coordinate `coord`
 of the sub-observer point on `target`, as seen from `obsrvr`, satisfies the relation
 `relate` with `refval`, as
-[`gfsubc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsubc_c.html).
+`gfsubc_c`.
 
 The point is the one of [`subpnt`](@ref), in the body-fixed frame `fixref`, which must
 be centered on `target`. `method` is one of the older forms of `subpnt`,
@@ -446,6 +446,10 @@ gfsubc("MARS", "IAU_MARS", "Near point: ellipsoid", "LT+S", "EARTH", "GEODETIC",
 ```
 
 See also [`gfsntc`](@ref), [`gfposc`](@ref), [`subpnt`](@ref).
+
+# References
+
+- [NAIF documentation of `gfsubc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsubc_c.html)
 """
 function gfsubc(
         ks::KernelSet, target::NameOrID, fixref::NameOrID, method::AbstractString,
@@ -490,7 +494,7 @@ gfsubc(
 Return the window of epochs, in seconds past J2000 TDB, on which the coordinate `coord`
 of a surface intercept point on `target` satisfies the relation `relate` with `refval`,
 as
-[`gfsntc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsntc_c.html). The point is where the ray from `obsrvr` along `dvec` meets the reference
+`gfsntc_c`. The point is where the ray from `obsrvr` along `dvec` meets the reference
 ellipsoid of `target`.
 
 `dvec` is a vector of 3 elements in the frame `dref`. The point is the one of
@@ -514,6 +518,10 @@ Throws the errors of [`gfsubc`](@ref), with `"Ellipsoid"` as the only method, an
 `dvec` is zero, and `SpiceError(:noframe)` if `dref` is not known.
 
 See also [`gfsubc`](@ref), [`gfposc`](@ref), [`sincpt`](@ref).
+
+# References
+
+- [NAIF documentation of `gfsntc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsntc_c.html)
 """
 function gfsntc(
         ks::KernelSet, target::NameOrID, fixref::NameOrID, method::AbstractString,

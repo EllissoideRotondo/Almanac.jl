@@ -238,7 +238,7 @@ end
     pdpool([ctx,] name, values) -> Nothing
 
 Set the kernel-pool variable `name` to the numbers `values`, as
-[`pdpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pdpool_c.html).
+`pdpool_c`.
 
 A variable of that name is replaced, whatever its type. An empty `values` changes
 nothing, as in CSPICE. Blanks around `name` are ignored.
@@ -264,6 +264,10 @@ julia> gdpool(ctx, "BODY999_GM")
 ```
 
 See also [`pipool`](@ref), [`pcpool`](@ref), [`dvpool`](@ref), [`lmpool`](@ref).
+
+# References
+
+- [NAIF documentation of `pdpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pdpool_c.html)
 """
 function pdpool(ctx::SpiceContext, name::AbstractString, values::AbstractVector{<:Real})
     _chkfstr("pdpool", "variable name", name)     # CHKFSTR of pdpool_c
@@ -277,10 +281,14 @@ end
     pipool([ctx,] name, ivals) -> Nothing
 
 Set the kernel-pool variable `name` to the integers `ivals`, as
-[`pipool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pipool_c.html).
+`pipool_c`.
 
 The pool stores them as `Float64` numbers; [`gipool`](@ref) reads them back as
 integers. The rules and the error are those of [`pdpool`](@ref).
+
+# References
+
+- [NAIF documentation of `pipool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pipool_c.html)
 """
 pipool(ctx::SpiceContext, name::AbstractString, ivals::AbstractVector{<:Integer}) =
     pdpool(ctx, name, ivals)
@@ -289,10 +297,14 @@ pipool(ctx::SpiceContext, name::AbstractString, ivals::AbstractVector{<:Integer}
     pcpool([ctx,] name, cvals) -> Nothing
 
 Set the kernel-pool variable `name` to the strings `cvals`, as
-[`pcpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pcpool_c.html).
+`pcpool_c`.
 
 A string longer than 80 characters is cut to 80, as in the kernel pool of CSPICE. The
 rules and the error are those of [`pdpool`](@ref).
+
+# References
+
+- [NAIF documentation of `pcpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pcpool_c.html)
 """
 function pcpool(ctx::SpiceContext, name::AbstractString, cvals::AbstractVector{<:AbstractString})
     _chkfstr("pcpool", "variable name", name)     # CHKFSTR of pcpool_c
@@ -306,12 +318,16 @@ end
     dvpool([ctx,] name) -> Nothing
 
 Delete the kernel-pool variable `name`, as
-[`dvpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvpool_c.html).
+`dvpool_c`.
 
 A name that is not in the pool changes nothing. The deletion is a direct edit of the
 pool, with the rules of [`pdpool`](@ref).
 
 Throws `SpiceError(:emptystring)` if `name` is the empty string.
+
+# References
+
+- [NAIF documentation of `dvpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dvpool_c.html)
 """
 function dvpool(ctx::SpiceContext, name::AbstractString)
     _chkfstr("dvpool", "variable name", name)     # CHKFSTR of dvpool_c
@@ -327,7 +343,7 @@ end
     clpool([ctx]) -> Nothing
 
 Remove every variable from the kernel pool, as
-[`clpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/clpool_c.html).
+`clpool_c`.
 
 The loaded kernels are not changed: binary kernels stay usable, and the text kernels
 stay in the list of [`ktotal`](@ref) although their variables are gone. A later
@@ -335,6 +351,10 @@ stay in the list of [`ktotal`](@ref) although their variables are gone. A later
 stay loaded.
 
 See also [`kclear`](@ref).
+
+# References
+
+- [NAIF documentation of `clpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/clpool_c.html)
 """
 clpool(ctx::SpiceContext) = _pool_x_edit!(pool -> (empty!(pool); :all), ctx)
 
@@ -347,7 +367,7 @@ end
     lmpool([ctx,] cvals) -> Nothing
 
 Load the text lines `cvals` into the kernel pool as the data section of a text kernel,
-as [`lmpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lmpool_c.html).
+as `lmpool_c`.
 
 Each line holds text-kernel assignments (`NAME = value`, `NAME += value`); an
 assignment can continue on the next line. Every line is data: `\\begintext` and
@@ -370,6 +390,10 @@ julia> gdpool(ctx, "A"), gcpool(ctx, "B")
 ```
 
 See also [`ldpool`](@ref), [`furnsh`](@ref).
+
+# References
+
+- [NAIF documentation of `lmpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lmpool_c.html)
 """
 function lmpool(ctx::SpiceContext, cvals::AbstractVector{<:AbstractString})
     defs = timedefaults(ctx)
@@ -381,7 +405,7 @@ end
     ldpool([ctx,] fname) -> Nothing
 
 Load the variables of the text kernel file `fname` into the kernel pool, as
-[`ldpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ldpool_c.html).
+`ldpool_c`.
 
 Different from [`furnsh`](@ref), the file does not enter the list of loaded kernels:
 [`ktotal`](@ref) does not count it and [`unload`](@ref) cannot remove it. Its
@@ -397,6 +421,10 @@ Throws `SpiceError`:
   a name of more than 32 characters, `:typemismatch` for strings and numbers in one
   variable or an empty string, `:numberexpected` for a value that is not a number, and
   `:badtimespec` for an `@` time that cannot be parsed. A JSON kernel throws `:badkernel`.
+
+# References
+
+- [NAIF documentation of `ldpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ldpool_c.html)
 """
 function ldpool(ctx::SpiceContext, fname::AbstractString)
     _chkfstr("ldpool", "file name", fname)
@@ -410,7 +438,7 @@ end
     boddef([ctx,] name, code) -> Nothing
 
 Define `name` as a name of the body with the NAIF ID `code`, as
-[`boddef_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/boddef_c.html).
+`boddef_c`.
 
 The pair has priority over the built-in names. A name or a code that the kernel pool
 defines (`NAIF_BODY_NAME`, `NAIF_BODY_CODE`) keeps the definition of the pool. The
@@ -432,6 +460,10 @@ julia> boddef(ctx, "My Probe", -999);
 julia> bodn2c(ctx, "my probe"), bodc2n(ctx, -999)
 (-999, "My Probe")
 ```
+
+# References
+
+- [NAIF documentation of `boddef_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/boddef_c.html)
 """
 function boddef(ctx::SpiceContext, name::AbstractString, code::Integer)
     _chkfstr("boddef", "body name", name)              # CHKFSTR of boddef_c
@@ -460,12 +492,16 @@ end
     expool([ctx,] name) -> Bool
 
 Return `true` if `name` is a numeric variable of the kernel pool, as
-[`expool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/expool_c.html).
+`expool_c`.
 
 A character variable gives `false`, as in CSPICE. Use [`dtpool`](@ref) to find a
 variable of any type.
 
 Throws `SpiceError(:emptystring)` if `name` is the empty string.
+
+# References
+
+- [NAIF documentation of `expool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/expool_c.html)
 """
 function expool(ks::KernelSet, name::AbstractString)
     _chkfstr("expool", "variable name", name)     # CHKFSTR of expool_c
@@ -476,7 +512,7 @@ end
     dtpool([ctx,] name) -> (n::Int, type::Symbol)
 
 Return the number of values and the type of the kernel-pool variable `name`, as
-[`dtpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dtpool_c.html).
+`dtpool_c`.
 
 `type` is `:N` for numbers and `:C` for strings. A variable that is not in the pool
 gives `(0, :X)`; this takes the place of the `found` flag of CSPICE, as in SPICE.jl.
@@ -492,6 +528,10 @@ julia> pcpool(ctx, "NAMES", ["a", "b"]);
 julia> dtpool(ctx, "NAMES"), dtpool(ctx, "ABSENT")
 ((2, :C), (0, :X))
 ```
+
+# References
+
+- [NAIF documentation of `dtpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dtpool_c.html)
 """
 function dtpool(ks::KernelSet, name::AbstractString)
     _chkfstr("dtpool", "variable name", name)     # CHKFSTR of dtpool_c
@@ -504,7 +544,7 @@ end
     badkpv([ctx,] caller, name, comp, size, divby, type) -> Bool
 
 Check the number of values and the type of the kernel-pool variable `name`, as
-[`badkpv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/badkpv_c.html), and return `false` if they are as expected.
+`badkpv_c`, and return `false` if they are as expected.
 
 The number of values `n` must satisfy `n comp size`, where `comp` is one of the
 operators of CSPICE, `"="`, `"<"`, `">"`, `"<="` and `"=>"` (not `">="` or `"=<"`);
@@ -542,6 +582,10 @@ julia> try
        end
 :badvariablesize
 ```
+
+# References
+
+- [NAIF documentation of `badkpv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/badkpv_c.html)
 """
 function badkpv(
         ks::KernelSet, caller::AbstractString, name::AbstractString,
@@ -615,7 +659,7 @@ end
     gnpool([ctx,] name, start=1, room=typemax(Int)) -> Vector{String}
 
 Return the names of the kernel-pool variables that match the template `name`, as
-[`gnpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gnpool_c.html).
+`gnpool_c`.
 
 In the template `*` stands for any substring and `%` for any one character; letter
 case is ignored. The result holds at most `room` names, from match number `start`.
@@ -637,6 +681,10 @@ julia> gnpool(ctx, "BODY%%%_GM")
  "BODY301_GM"
  "BODY399_GM"
 ```
+
+# References
+
+- [NAIF documentation of `gnpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gnpool_c.html)
 """
 function gnpool(ks::KernelSet, name::AbstractString, start::Integer = 1, room::Integer = typemax(Int))
     _chkfstr("gnpool", "template", name)          # CHKFSTR of gnpool_c, before the room check of gnpool_
@@ -658,7 +706,7 @@ end
 
 Return the kernel-pool size parameter `name` of CSPICE N0067, or `nothing` if the name
 is not one, as
-[`szpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/szpool_c.html).
+`szpool_c`.
 
 The names are `MAXVAR`, `MAXVAL`, `MAXLIN`, `MAXCHR`, `MXNOTE`, `MAXLEN` and `MAXAGT`;
 letter case and blanks are ignored. Of these limits the package has only `MAXLEN`
@@ -666,6 +714,10 @@ letter case and blanks are ignored. Of these limits the package has only `MAXLEN
 other values are reported for programs that read them and limit nothing here.
 
 Throws `SpiceError(:emptystring)` if `name` is the empty string.
+
+# References
+
+- [NAIF documentation of `szpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/szpool_c.html)
 """
 function szpool(name::AbstractString)
     _chkfstr("szpool", "parameter name", name)    # CHKFSTR of szpool_c
@@ -681,7 +733,7 @@ end
 
 Return string number `nth` of the character kernel-pool variable `item`, with
 continued elements joined, as
-[`stpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/stpool_c.html).
+`stpool_c`.
 
 An element that ends with the continuation marker `contin` is joined with the next
 element; the marker is removed and the text before it is kept. `nth` counts the joined
@@ -700,6 +752,10 @@ julia> pcpool(ctx, "PATH", ["/data/kernels/+", "spk/de440s.bsp", "other"]);
 julia> stpool(ctx, "PATH", 1, "+"), stpool(ctx, "PATH", 2, "+"), stpool(ctx, "PATH", 3, "+")
 ("/data/kernels/spk/de440s.bsp", "other", nothing)
 ```
+
+# References
+
+- [NAIF documentation of `stpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/stpool_c.html)
 """
 function stpool(ks::KernelSet, item::AbstractString, nth::Integer, contin::AbstractString)
     _chkfstr("stpool", "variable name", item)     # CHKFSTR of stpool_c, item then contin
@@ -719,7 +775,7 @@ end
     swpool([ctx,] agent, names) -> Nothing
 
 Watch the kernel-pool variables `names` for the agent `agent`, as
-[`swpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/swpool_c.html). An
+`swpool_c`. An
 agent is a name that the caller chooses for one watcher.
 
 After this call, and after every later change of one of the variables,
@@ -745,6 +801,10 @@ true
 ```
 
 See also [`poolversion`](@ref).
+
+# References
+
+- [NAIF documentation of `swpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/swpool_c.html)
 """
 function swpool(ctx::SpiceContext, agent::AbstractString, names::AbstractVector{<:AbstractString})
     _chkfstr("swpool", "agent name", agent)       # CHKFSTR of swpool_c
@@ -765,7 +825,7 @@ end
 
 Return `true` if a variable that `agent` watches changed since the last call for that
 agent, or since [`swpool`](@ref), as
-[`cvpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cvpool_c.html).
+`cvpool_c`.
 
 The call clears the pending update. A change is an assignment by [`furnsh`](@ref),
 [`ldpool`](@ref), [`lmpool`](@ref), [`pdpool`](@ref), [`pcpool`](@ref) or
@@ -774,6 +834,10 @@ The call clears the pending update. A change is an assignment by [`furnsh`](@ref
 watched variable, as in CSPICE. An agent without a watch gives `false`.
 
 Throws `SpiceError(:emptystring)` if `agent` is the empty string.
+
+# References
+
+- [NAIF documentation of `cvpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cvpool_c.html)
 """
 function cvpool(ctx::SpiceContext, agent::AbstractString)
     _chkfstr("cvpool", "agent name", agent)       # CHKFSTR of cvpool_c

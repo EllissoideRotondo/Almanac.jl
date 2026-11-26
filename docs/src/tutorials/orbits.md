@@ -9,10 +9,10 @@ An [`Orbit`](@ref) is a state about a central body, with the GM (km³/s²) and t
 ```@example orbits
 using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
 
-furnsh(naif0012_tls())                      # leap seconds
-furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
-furnsh(pck00011())                          # orientation and radii of the bodies
-furnsh(gm_de440())                          # gravitational parameters
+furnsh(naif0012_tls())
+furnsh(de440s())
+furnsh(pck00011())
+furnsh(gm_de440())
 
 et = str2et("2025 MAR 18 12:00:00 TDB")
 o = orbit("MOON", et, "J2000", "NONE", "EARTH")

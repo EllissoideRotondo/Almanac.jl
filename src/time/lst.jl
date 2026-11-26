@@ -17,7 +17,7 @@ end
 
 Return the local solar time at `et` for the longitude `lon` on the body with ID
 `body`, as
-[`et2lst_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/et2lst_c.html).
+`et2lst_c`.
 
 - `et`: seconds past J2000 TDB, a plain real number (not a `ForwardDiff.Dual`).
 - `lon`: longitude in radians.
@@ -56,6 +56,10 @@ furnsh("naif0012.tls"); furnsh("pck00011.tpc"); furnsh("de440s.bsp")
 et = str2et("2025-03-01T12:00:00")
 hr, mn, sc, time, ampm = et2lst(et, 399, deg2rad(-118.0), "PLANETOCENTRIC")
 ```
+
+# References
+
+- [NAIF documentation of `et2lst_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/et2lst_c.html)
 """
 function et2lst(ks::KernelSet, et::Real, body::Integer, lon::Real, type::AbstractString)
     _plain_epoch(et, "et2lst")
@@ -116,7 +120,7 @@ et2lst(et::Real, body::Integer, lon::Real, type::AbstractString) =
 
 Return the planetocentric longitude of the Sun (`Ls`) for `body` at `et`, in radians
 in `[0, 2pi)`, as
-[`lspcn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lspcn_c.html).
+`lspcn_c`.
 
 `Ls` is the season angle of the body: 0 at its spring equinox of the north, `pi/2` at
 the summer solstice of the north. It is the right ascension of the Sun as seen from
@@ -138,6 +142,10 @@ if the pole is parallel to the orbital angular momentum, and the errors of
 furnsh("naif0012.tls"); furnsh("pck00011.tpc"); furnsh("de440s.bsp")
 ls = rad2deg(lspcn("EARTH", str2et("2025-03-01"), "LT+S"))    # degrees
 ```
+
+# References
+
+- [NAIF documentation of `lspcn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lspcn_c.html)
 """
 function lspcn(ks::KernelSet, body::NameOrID, et::Real, abcorr::AbcorrArg)
     _plain_epoch(et, "lspcn")

@@ -1,6 +1,6 @@
 # Contexts and threads
 
-Every call that reads kernels takes an optional [`SpiceContext`](@ref) as its first argument ([API differences](@ref "Contexts in place of global state") gives the rule). Pure functions such as `vnorm` take no context. A program with one set of kernels never needs to name a context; this page is for programs with several sets, or with several threads.
+Every call that reads kernels takes an optional [`SpiceContext`](@ref) as its first argument, written `[ctx,]` in the reference, and uses [`default_context`](@ref) without one. `[ctx | ks,]` means that the call also accepts an [`Almanac.KernelSet`](@ref), the immutable snapshot of a context. A call that fills a container takes the context after it. Pure functions such as `vnorm` take no context. A program with one set of kernels never needs to name a context; this page is for programs with several sets, or with several threads.
 
 ## One context per kernel set
 

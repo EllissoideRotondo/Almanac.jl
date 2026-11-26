@@ -28,12 +28,16 @@ end
     gdpool([ctx,] name) -> Vector{Float64}
 
 Return the numeric values of the kernel-pool variable `name`, as
-[`gdpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gdpool_c.html).
+`gdpool_c`.
 
-The result is a new vector with every value of the variable. Different from CSPICE,
-the call has no `start` and `room` arguments and no `found` flag: an absent variable
-is an error. Use [`expool`](@ref) or [`dtpool`](@ref) to test first. Blanks around
-`name` are ignored; letter case is significant.
+The result is a new vector with every value of the variable. Blanks around `name` are
+ignored; letter case is significant.
+
+!!! warning "Difference from CSPICE"
+    The call has no `start` and `room` arguments and no `found` flag: an absent
+    variable throws `SpiceError(:kernelvarnotfound)`, where CSPICE sets `found` to false
+    and SPICE.jl returns `nothing`. Use [`expool`](@ref) or [`dtpool`](@ref) to test
+    first.
 
 Throws `SpiceError(:emptystring)` if `name` is the empty string,
 `SpiceError(:kernelvarnotfound)` if the variable is not in the pool and
@@ -53,6 +57,10 @@ julia> gdpool(ctx, "BODY399_RADII")
 ```
 
 See also [`gipool`](@ref), [`gcpool`](@ref), [`bodvrd`](@ref), [`pdpool`](@ref).
+
+# References
+
+- [NAIF documentation of `gdpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gdpool_c.html)
 """
 function gdpool(ks::KernelSet, name::AbstractString)
     return copy(_pool_get(ks, name, "gdpool", Vector{Float64}, "numeric"))
@@ -63,15 +71,22 @@ end
 
 Return the values of the numeric kernel-pool variable `name` rounded to the nearest
 integers, a tie away from zero, as
-[`gipool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gipool_c.html).
+`gipool_c`.
 
-The result holds every value; there is no `found` flag (see [`gdpool`](@ref)).
+The result holds every value.
+
+!!! warning "Difference from CSPICE"
+    There is no `found` flag: an absent variable throws, as in [`gdpool`](@ref).
 
 Throws `SpiceError`:
 - `:emptystring` if `name` is the empty string;
 - `:kernelvarnotfound` if the variable is not in the pool;
 - `:typemismatch` if it holds character values;
 - `:intoutofrange` if a value is outside the 32-bit integers or NaN.
+
+# References
+
+- [NAIF documentation of `gipool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gipool_c.html)
 """
 function gipool(ks::KernelSet, name::AbstractString)
     v = _pool_get(ks, name, "gipool", Vector{Float64}, "numeric")
@@ -86,14 +101,20 @@ end
     gcpool([ctx,] name) -> Vector{String}
 
 Return the character values of the kernel-pool variable `name`, as
-[`gcpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gcpool_c.html).
+`gcpool_c`.
 
-The result is a new vector with every value; there is no `found` flag (see
-[`gdpool`](@ref)).
+The result is a new vector with every value.
+
+!!! warning "Difference from CSPICE"
+    There is no `found` flag: an absent variable throws, as in [`gdpool`](@ref).
 
 Throws `SpiceError(:emptystring)` if `name` is the empty string,
 `SpiceError(:kernelvarnotfound)` if the variable is not in the pool and
 `SpiceError(:typemismatch)` if it holds numeric values.
+
+# References
+
+- [NAIF documentation of `gcpool_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gcpool_c.html)
 """
 function gcpool(ks::KernelSet, name::AbstractString)
     return copy(_pool_get(ks, name, "gcpool", Vector{String}, "character"))
@@ -151,7 +172,7 @@ end
     bodvrd([ctx,] body, item) -> Vector{Float64}
 
 Return the values of the kernel-pool variable `BODY<id>_<item>` for `body`, as
-[`bodvrd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodvrd_c.html).
+`bodvrd_c`.
 
 `body` is a body name, a string that holds an integer (`"399"`) or an integer NAIF ID
 code. `item` is case sensitive, as in CSPICE; blanks around it are ignored. The values have the units of the kernel: km for
@@ -170,6 +191,10 @@ a, b, c = bodvrd("EARTH", "RADII")    # km
 ```
 
 See also [`bodvcd`](@ref), [`gdpool`](@ref).
+
+# References
+
+- [NAIF documentation of `bodvrd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodvrd_c.html)
 """
 function bodvrd(ks::KernelSet, body::NameOrID, item::AbstractString)
     body isa AbstractString && _chkfstr("bodvrd", "body name", body)   # CHKFSTR of bodvrd_c,
@@ -235,7 +260,7 @@ end
     bods2c([ctx,] name) -> Union{Int,Nothing}
 
 Return the NAIF ID code of the body `name`, or `nothing` if the name is not known, as
-[`bods2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bods2c_c.html).
+`bods2c_c`.
 
 `name` is a body name or a string that holds an integer, such as `"399"`. Letter case
 and blanks around the name are ignored. Names from the kernel pool and from
@@ -251,6 +276,10 @@ julia> bods2c("Earth"), bods2c("-77"), bods2c("NO SUCH BODY")
 ```
 
 See also [`bodn2c`](@ref), [`bodc2n`](@ref).
+
+# References
+
+- [NAIF documentation of `bods2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bods2c_c.html)
 """
 function bods2c(ks::KernelSet, name::AbstractString)
     _chkfstr("bods2c", "body name", name)         # CHKFSTR of bods2c_c
@@ -278,7 +307,7 @@ end
 
 Return the NAIF ID code of the body name `name`, or `nothing` if the name is not
 known, as
-[`bodn2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodn2c_c.html).
+`bodn2c_c`.
 
 Different from [`bods2c`](@ref), a string that holds an integer is not a name.
 `nothing` takes the place of the `found` flag of CSPICE.
@@ -290,6 +319,10 @@ Throws `SpiceError(:emptystring)` if `name` is the empty string.
 julia> bodn2c("MOON"), bodn2c("301")
 (301, nothing)
 ```
+
+# References
+
+- [NAIF documentation of `bodn2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodn2c_c.html)
 """
 function bodn2c(ks::KernelSet, name::AbstractString)
     _chkfstr("bodn2c", "body name", name)         # CHKFSTR of bodn2c_c
@@ -302,7 +335,7 @@ end
 
 Return the name of the body with the NAIF ID `code`, or `nothing` if the code has no
 name, as
-[`bodc2n_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodc2n_c.html).
+`bodc2n_c`.
 
 A name from the kernel pool or from [`boddef`](@ref) has priority over the built-in
 name.
@@ -314,6 +347,10 @@ julia> bodc2n(399), bodc2n(123456789)
 ```
 
 See also [`bodn2c`](@ref).
+
+# References
+
+- [NAIF documentation of `bodc2n_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodc2n_c.html)
 """
 bodc2n(ks::KernelSet, code::Integer) = body_name(ks, code)
 
@@ -322,7 +359,7 @@ bodc2n(ks::KernelSet, code::Integer) = body_name(ks, code)
 
 Return the name of the body with the NAIF ID `code`, or the decimal text of `code` if
 the code has no name, as
-[`bodc2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodc2s_c.html).
+`bodc2s_c`.
 
 The name is the one of [`bodc2n`](@ref).
 
@@ -333,6 +370,10 @@ julia> bodc2s(399), bodc2s(123456789)
 ```
 
 See also [`bods2c`](@ref).
+
+# References
+
+- [NAIF documentation of `bodc2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodc2s_c.html)
 """
 function bodc2s(ks::KernelSet, code::Integer)
     name = body_name(ks, code)
@@ -344,7 +385,7 @@ end
 
 Return the NAIF ID code of the spacecraft clock `clknam`, or `nothing` if the name is
 not known, as
-[`scn2id`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/scn2id.html)
+`scn2id`
 of SPICELIB. CSPICE has no C wrapper for it.
 
 The name is usually the body name of the spacecraft with the word `SCLK` after it, as
@@ -359,6 +400,10 @@ julia> scn2id("CASSINI SCLK"), scn2id("cassini"), scn2id("NO SUCH CLOCK")
 ```
 
 See also [`scid2n`](@ref).
+
+# References
+
+- [NAIF documentation of `scn2id`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/scn2id.html)
 """
 function scn2id(ks::KernelSet, clknam::AbstractString)
     # `ucase` into a 32-character buffer, then the last "SCLK" becomes blanks.
@@ -381,7 +426,7 @@ end
 
 Return the name of the spacecraft clock with the NAIF ID `clkid`, or `nothing` if the
 code has no body name, as
-[`scid2n`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/scid2n.html)
+`scid2n`
 of SPICELIB. CSPICE has no C wrapper for it.
 
 The name is the body name of [`bodc2n`](@ref) with `" SCLK"` after it.
@@ -393,6 +438,10 @@ julia> scid2n(-82), scid2n(123456789)
 ```
 
 See also [`scn2id`](@ref).
+
+# References
+
+- [NAIF documentation of `scid2n`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/scid2n.html)
 """
 function scid2n(ks::KernelSet, clkid::Integer)
     name = body_name(ks, clkid)
@@ -403,7 +452,7 @@ end
     namfrm([ctx,] name) -> Int
 
 Return the ID of the frame `name`, or 0 if the frame is not known, as
-[`namfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/namfrm_c.html).
+`namfrm_c`.
 
 Built-in frames and frames defined in the kernel pool are known. Throws
 `SpiceError(:emptystring)` if `name` is empty.
@@ -415,6 +464,10 @@ julia> namfrm("J2000"), namfrm("eclipj2000"), namfrm("NO_SUCH_FRAME")
 ```
 
 See also [`frmnam`](@ref), [`frinfo`](@ref).
+
+# References
+
+- [NAIF documentation of `namfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/namfrm_c.html)
 """
 function namfrm(ks::KernelSet, name::AbstractString)
     _chkfstr("namfrm", "frame name", name)
@@ -437,7 +490,7 @@ _frame_code(ks::KernelSet, ref::AbstractString) = Int32(_namfrm(ks, ref))
     frmnam([ctx,] id) -> String
 
 Return the name of the frame with ID `id`, or `""` if the frame is not known, as
-[`frmnam_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frmnam_c.html).
+`frmnam_c`.
 
 # Examples
 ```jldoctest
@@ -446,6 +499,10 @@ julia> frmnam(17), frmnam(-123456)
 ```
 
 See also [`namfrm`](@ref).
+
+# References
+
+- [NAIF documentation of `frmnam_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frmnam_c.html)
 """
 function frmnam(ks::KernelSet, id::Integer)
     name = frame_name(ks, id)

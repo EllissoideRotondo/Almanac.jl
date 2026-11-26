@@ -21,7 +21,7 @@
     spkuds(descr) -> (body, center, frame, type, first, last, baddr, eaddr)
 
 Unpack the SPK segment descriptor `descr`, as
-[`spkuds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkuds_c.html).
+`spkuds_c`.
 
 `body` moves relative to `center` in the frame with the ID `frame`, and `type` is the SPK
 data type. `first` and `last` bound the coverage, in seconds past J2000 TDB. `baddr` and
@@ -31,6 +31,10 @@ values are not checked. The integers are `Int`.
 Throws `SpiceError(:dafinvalidparams)` if `descr` has fewer than 5 doubles.
 
 See also [`spksfs`](@ref), [`spkpds`](@ref), [`dafus`](@ref).
+
+# References
+
+- [NAIF documentation of `spkuds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkuds_c.html)
 """
 function spkuds(descr::AbstractVector{<:Real})
     dc, ic = dafus(descr, 2, 6)
@@ -53,7 +57,7 @@ end
 
 Return `(file, descr, ident)` for the loaded SPK segment of the highest priority for
 `body` at `et`, as
-[`spksfs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksfs_c.html),
+`spksfs_c`,
 or `nothing` if no loaded segment of `body` covers `et`.
 
 - `file`: the path of the loaded SPK file as it was passed to [`furnsh`](@ref) (the
@@ -97,6 +101,10 @@ true
 ```
 
 See also [`spksub`](@ref), [`spkobj`](@ref), [`spkcov`](@ref).
+
+# References
+
+- [NAIF documentation of `spksfs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksfs_c.html)
 """
 function spksfs(ks::KernelSet, body::Integer, et::Real)
     segs = get(ks.spk, Int32(body), nothing)
@@ -251,7 +259,7 @@ end
 
 Return the state of the target of one SPK segment relative to the center of the segment
 at `et`, as
-[`spkpvn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpvn_c.html).
+`spkpvn_c`.
 
 The segment has the descriptor `descr` (5 doubles, from [`dafgs`](@ref) or
 [`spksfs`](@ref)). It is in the file of `handle`, or in the file with the path `file` that
@@ -273,7 +281,7 @@ Throws `SpiceError`:
   coefficients, as CSPICE, whose record buffer has 198 doubles;
 - `:timeoutofbounds` if `et` is outside the coverage of `descr`, for every type but 15
   and 17, whose single set of elements is propagated to `et` as CSPICE does (CSPICE
-  checks only some types; see [CSPICE defects](@ref));
+  checks only some types);
 - `:dafnegaddr`, `:dafbeggtend` or `:filereadfailed` if the addresses of `descr` are not
   a range in the file;
 - the kinds of the evaluators of CSPICE for the values that they refuse: type 5 those of
@@ -287,6 +295,10 @@ Throws `SpiceError`:
 - `:noleapseconds` for a segment of type 10 and a context without leap seconds.
 
 See also [`spksfs`](@ref) for an example, [`spkuds`](@ref).
+
+# References
+
+- [NAIF documentation of `spkpvn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpvn_c.html)
 """
 function spkpvn(ks::KernelSet, h::DAFHandle, descr::AbstractVector{<:Real}, et::Real)
     _daf_check_open(h, "spkpvn")
@@ -840,7 +852,7 @@ end
 
 Write the part of an SPK segment that covers the interval `[start, stop]` as a new
 segment of another SPK file, as
-[`spksub_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksub_c.html).
+`spksub_c`.
 
 - `handle`, `descr`: the file that holds the source segment ([`dafopr`](@ref)) and the
   descriptor of the segment ([`dafgs`](@ref), [`spksfs`](@ref)).
@@ -907,6 +919,10 @@ julia> spkuds(dafgs(h))
 
 julia> dafcls(h)
 ```
+
+# References
+
+- [NAIF documentation of `spksub_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spksub_c.html)
 """
 function spksub(
         handle::DAFHandle, descr::AbstractVector{<:Real}, ident::AbstractString,

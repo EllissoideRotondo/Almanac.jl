@@ -113,7 +113,7 @@ end
     srfc2s([ctx | ks,] code, bodyid) -> (srfstr, isname)
 
 Return the name of the surface `code` of the body `bodyid`, as
-[`srfc2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfc2s_c.html).
+`srfc2s_c`.
 
 `isname` is `true` if the kernel pool assigns a name to the surface, with the variables
 `NAIF_SURFACE_NAME`, `NAIF_SURFACE_CODE` and `NAIF_SURFACE_BODY`. Otherwise `srfstr` is
@@ -127,6 +127,10 @@ Throws `SpiceError` if the three kernel variables are not consistent:
 - `:blanknameassigned` if a name is blank.
 
 See also [`srfcss`](@ref), [`srfscc`](@ref), [`srfs2c`](@ref).
+
+# References
+
+- [NAIF documentation of `srfc2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfc2s_c.html)
 """
 function srfc2s(ks::KernelSet, code::Integer, bodyid::Integer)
     name = _dsk_surface_c2n(ks, code, bodyid)
@@ -137,13 +141,17 @@ end
     srfcss([ctx | ks,] code, bodstr) -> (srfstr, isname)
 
 Return the name of the surface `code` of the body `bodstr`, as
-[`srfcss_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfcss_c.html). `bodstr` is a
+`srfcss_c`. `bodstr` is a
 body name or a string that holds a body ID; the result is that of [`srfc2s`](@ref).
 
 A body that is not known gives the code as a decimal string and `isname = false`.
 
 Throws `SpiceError(:emptystring)` if `bodstr` is empty, and the error kinds of
 [`srfc2s`](@ref).
+
+# References
+
+- [NAIF documentation of `srfcss_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfcss_c.html)
 """
 function srfcss(ks::KernelSet, code::Integer, bodstr::AbstractString)
     _chkfstr("srfcss", "string `bodstr`", bodstr)
@@ -156,7 +164,7 @@ end
     srfscc([ctx | ks,] srfstr, bodyid) -> Union{Int,Nothing}
 
 Return the code of the surface `srfstr` of the body `bodyid`, as
-[`srfscc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfscc_c.html), or `nothing`
+`srfscc_c`, or `nothing`
 if the string is not a surface name and does not hold an integer.
 
 A name that the kernel pool assigns has priority; case and extra blanks do not matter.
@@ -165,6 +173,10 @@ flag of CSPICE.
 
 Throws `SpiceError(:emptystring)` if `srfstr` is empty, and the error kinds of
 [`srfc2s`](@ref).
+
+# References
+
+- [NAIF documentation of `srfscc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfscc_c.html)
 """
 function srfscc(ks::KernelSet, srfstr::AbstractString, bodyid::Integer)
     _chkfstr("srfscc", "string `srfstr`", srfstr)
@@ -176,13 +188,17 @@ end
     srfs2c([ctx | ks,] srfstr, bodstr) -> Union{Int,Nothing}
 
 Return the code of the surface `srfstr` of the body `bodstr`, as
-[`srfs2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfs2c_c.html). `bodstr` is
+`srfs2c_c`. `bodstr` is
 a body name or a string that holds a body ID; the result is that of [`srfscc`](@ref).
 
 A body that is not known gives `nothing`.
 
 Throws `SpiceError(:emptystring)` if `srfstr` or `bodstr` is empty, and the error
 kinds of [`srfc2s`](@ref).
+
+# References
+
+- [NAIF documentation of `srfs2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfs2c_c.html)
 """
 function srfs2c(ks::KernelSet, srfstr::AbstractString, bodstr::AbstractString)
     _chkfstr("srfs2c", "string `srfstr`", srfstr)
@@ -461,7 +477,7 @@ _dsk_count2(a::AbstractVector) = length(a)
 
 Return the surface points of `target` (km, in the body-fixed frame `fixref`) at the
 planetocentric longitudes and latitudes `lonlat`, as
-[`latsrf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latsrf_c.html).
+`latsrf_c`.
 
 `lonlat` holds the pairs (longitude, latitude) in radians: a 2 x n matrix, or a vector of
 n pairs. `target` and `fixref` are names or IDs; the frame must be centered on the target.
@@ -492,6 +508,10 @@ Throws `SpiceError`:
   the far side of the center (DSK).
 
 See also [`srfnrm`](@ref), [`dskxsi`](@ref).
+
+# References
+
+- [NAIF documentation of `latsrf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latsrf_c.html)
 """
 function latsrf(
         ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,
@@ -553,7 +573,7 @@ end
 
 Return the outward unit normals of `target` at the surface points `srfpts`, in the
 body-fixed frame `fixref`, as
-[`srfnrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfnrm_c.html).
+`srfnrm_c`.
 
 `srfpts` holds the points (km, in the frame `fixref`): a 3 x n matrix, or a vector of n
 3-vectors. `method`, `target`, `et` and `fixref` are as for [`latsrf`](@ref). For a DSK
@@ -570,6 +590,10 @@ Throws `SpiceError`:
   the target is loaded, `:noframeinfo` if the frame of a segment of the target is not
   known, `:pointnotinsegment` if no segment holds a point,
   `:pointoffsurface` if a point is not on a plate (DSK).
+
+# References
+
+- [NAIF documentation of `srfnrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfnrm_c.html)
 """
 function srfnrm(
         ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,

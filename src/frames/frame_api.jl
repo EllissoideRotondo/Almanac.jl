@@ -6,7 +6,7 @@
 
 Return the matrix that rotates a position vector from frame `from` to frame `to` at
 `et`, as
-[`pxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pxform_c.html).
+`pxform_c`.
 
 For the matrix `R`, `R * v` gives in `to` the components of a vector `v` given in
 `from`. `from` and `to` are frame names or frame IDs. `et` is in seconds past J2000
@@ -45,6 +45,10 @@ r_fixed = R * r_inertial
 ```
 
 See also [`sxform`](@ref), [`pxder`](@ref).
+
+# References
+
+- [NAIF documentation of `pxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pxform_c.html)
 """
 pxform(ks::KernelSet, from::NameOrID, to::NameOrID, et::Real) =
     frame_rotation(ks, frame_id(ks, from), frame_id(ks, to), check_epoch(et))
@@ -57,7 +61,7 @@ pxform(from::NameOrID, to::NameOrID, et::Real) = pxform(default_context(), from,
 
 Return the matrix that rotates a position vector from frame `from` at the epoch
 `etfrom` to frame `to` at the epoch `etto`, as
-[`pxfrm2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pxfrm2_c.html) of CSPICE.
+`pxfrm2_c` of CSPICE.
 
 The matrix is the product of the rotation from `from` to J2000 at `etfrom` and the
 rotation from J2000 to `to` at `etto`. The arguments and the errors are those of [`pxform`](@ref); with
@@ -72,6 +76,10 @@ true
 ```
 
 See also [`pxform`](@ref), [`spkcpt`](@ref).
+
+# References
+
+- [NAIF documentation of `pxfrm2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pxfrm2_c.html)
 """
 function pxfrm2(ks::KernelSet, from::NameOrID, to::NameOrID, etfrom::Real, etto::Real)
     fcode = frame_id(ks, from)
@@ -135,7 +143,7 @@ pxder(from::NameOrID, to::NameOrID, et::Real, v::Val) =
 
 Return the matrix that transforms a state (position, velocity) from frame `from` to
 frame `to` at `et`, as
-[`sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html).
+`sxform_c`.
 
 The matrix is `[R 0; dR R]`: `R` is the rotation of [`pxform`](@ref) and `dR` is its
 time derivative in 1/s. `from` and `to` are frame names or frame IDs; `et` is in
@@ -145,6 +153,10 @@ seconds past J2000 TDB.
 of the CK segment, and only segments with angular velocity are used. For CK frames,
 some dynamic frames and switch frames, which [`pxder`](@ref) lists, `dR` can differ
 from the exact derivative of `R`; order 1 of `pxder` gives that.
+
+!!! warning "Difference from CSPICE"
+    For a body-fixed frame whose text PCK has cubic angles, `dR` is the exact derivative
+    and differs from the rate of CSPICE; see [`tisbod`](@ref).
 
 Throws the errors of [`pxform`](@ref).
 
@@ -159,6 +171,10 @@ state_fixed = X * state_inertial       # km, km/s
 ```
 
 See also [`pxform`](@ref), [`pxder`](@ref).
+
+# References
+
+- [NAIF documentation of `sxform_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sxform_c.html)
 """
 function sxform(ks::KernelSet, from::NameOrID, to::NameOrID, et::Real)
     R, dR = frame_jet(ks, frame_id(ks, from), frame_id(ks, to), check_epoch(et), Val(1))

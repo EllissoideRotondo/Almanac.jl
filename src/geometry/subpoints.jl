@@ -259,7 +259,7 @@ end
 
 Return the sub-observer point on `target` as seen by `obsrvr` at `et` (seconds past
 J2000 TDB), as
-[`subpnt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/subpnt_c.html) of CSPICE.
+`subpnt_c` of CSPICE.
 
 - `spoint`: the point, in km, in the body-fixed frame `fixref` of the target.
 - `trgepc`: the epoch at the point (seconds past J2000 TDB). With a light time
@@ -312,6 +312,10 @@ distance = vnorm(srfvec)               # km from the Earth to the point
 ```
 
 See also [`subslr`](@ref), [`sincpt`](@ref), [`gfsubc`](@ref).
+
+# References
+
+- [NAIF documentation of `subpnt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/subpnt_c.html)
 """
 function subpnt end
 
@@ -320,7 +324,7 @@ function subpnt end
 
 Return the sub-solar point on `target` as seen by `obsrvr` at `et` (seconds past J2000
 TDB), as
-[`subslr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/subslr_c.html) of CSPICE.
+`subslr_c` of CSPICE.
 
 - `spoint`: the point, in km, in the body-fixed frame `fixref` of the target.
 - `trgepc`: the epoch at the point (seconds past J2000 TDB). With a light time
@@ -339,6 +343,10 @@ Throws `SpiceError(:notsupported)` if `abcorr` is a transmission correction, and
 target can be the same body.
 
 See also [`subpnt`](@ref), [`ilumin`](@ref).
+
+# References
+
+- [NAIF documentation of `subslr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/subslr_c.html)
 """
 function subslr end
 

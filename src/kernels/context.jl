@@ -202,7 +202,7 @@ _release_content!(::Any) = nothing
     furnsh([ctx,] path) -> Nothing
 
 Load the kernel file at `path` into `ctx`, as
-[`furnsh_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/furnsh_c.html).
+`furnsh_c`.
 
 The type is read from the file: SPK, binary PCK, CK, DSK, EK, text kernel or
 meta-kernel. A file whose name ends in `.json` is a
@@ -226,8 +226,8 @@ not consistent throws `SpiceError(:badkernel)`.
 
 # Examples
 ```julia
-furnsh("naif0012.tls")      # leap seconds
-furnsh("de440s.bsp")        # planetary ephemeris
+furnsh("naif0012.tls")
+furnsh("de440s.bsp")
 et = str2et("2025-03-01T12:00:00")
 state, lt = spkezr("MOON", et, "J2000", "LT+S", "EARTH")
 
@@ -236,6 +236,10 @@ furnsh(ctx, "mission.tm")
 ```
 
 See also [`unload`](@ref), [`kclear`](@ref), [`ktotal`](@ref), [`kdata`](@ref).
+
+# References
+
+- [NAIF documentation of `furnsh_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/furnsh_c.html)
 """
 function furnsh(ctx::SpiceContext, path::AbstractString)
     _chk_filename("furnsh", path)
@@ -260,7 +264,7 @@ end
     unload([ctx,] path) -> Nothing
 
 Remove the kernel that was loaded from `path` out of `ctx`, as
-[`unload_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unload_c.html).
+`unload_c`.
 
 `path` is compared as a string with the `file` of [`kdata`](@ref): the path given to
 [`furnsh`](@ref), or for a file of a meta-kernel its `KERNELS_TO_LOAD` entry after the
@@ -280,6 +284,10 @@ that holds it. On Windows the file cannot be deleted or replaced while it is map
 Throws `SpiceError(:emptystring)` if `path` is empty.
 
 See also [`kclear`](@ref).
+
+# References
+
+- [NAIF documentation of `unload_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/unload_c.html)
 """
 function unload(ctx::SpiceContext, path::AbstractString)
     _chkfstr("unload", "file name", path)
@@ -303,7 +311,7 @@ end
     kclear([ctx]) -> Nothing
 
 Unload every kernel of `ctx` and empty its kernel pool, as
-[`kclear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kclear_c.html).
+`kclear_c`.
 
 Direct edits of the pool are removed and the pool watchers are told of the change.
 The names of [`boddef`](@ref) stay, as in CSPICE. The time defaults of
@@ -323,6 +331,10 @@ false
 ```
 
 See also [`unload`](@ref).
+
+# References
+
+- [NAIF documentation of `kclear_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kclear_c.html)
 """
 function kclear(ctx::SpiceContext)
     lock(ctx.lock) do

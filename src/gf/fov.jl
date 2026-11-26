@@ -43,7 +43,7 @@ end
 
 Return the window of epochs, in seconds past J2000 TDB, on which the body `target` is in
 the field of view of the instrument `inst`, as seen from `obsrvr`, as
-[`gftfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gftfov_c.html).
+`gftfov_c`.
 
 The result is a new `Window` that is a subset of the confinement window `cnfine`;
 `cnfine` is not modified. The test at each epoch is the one of [`fovtrg`](@ref).
@@ -86,6 +86,10 @@ shape of the field of view and for an observer inside the target. The errors of
 [`spkpos`](@ref) come from the epochs that the search samples.
 
 See also [`gfrfov`](@ref), [`gffove`](@ref), [`fovtrg`](@ref).
+
+# References
+
+- [NAIF documentation of `gftfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gftfov_c.html)
 """
 function gftfov(
         ks::KernelSet, inst::NameOrID, target::NameOrID, tshape::AbstractString,
@@ -120,7 +124,7 @@ gftfov(
 
 Return the window of epochs, in seconds past J2000 TDB, on which the ray from `obsrvr`
 along `raydir` is in the field of view of the instrument `inst`, as
-[`gfrfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrfov_c.html).
+`gfrfov_c`.
 
 `raydir` is a vector of 3 elements in the frame `rframe`. `abcorr` is `"NONE"`, `"S"`
 (the direction is corrected for the stellar aberration of the observer, as for light
@@ -136,6 +140,10 @@ and its field of view, and `SpiceError` with the kind
   time.
 
 See also [`gftfov`](@ref), [`gffove`](@ref), [`fovray`](@ref).
+
+# References
+
+- [NAIF documentation of `gfrfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrfov_c.html)
 """
 function gfrfov(
         ks::KernelSet, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,
@@ -163,7 +171,7 @@ gfrfov(
 
 Return the visibility window of [`gftfov`](@ref) or [`gfrfov`](@ref), found with a
 step and a refinement function that the caller supplies, as
-[`gffove_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gffove_c.html).
+`gffove_c`.
 
 `tshape` is `"ELLIPSOID"`, `"POINT"` or `"RAY"`. For a ray, `raydir` is the direction,
 `tframe` its frame, and `target` is not read. For a body, `raydir` is not read, but it
@@ -175,6 +183,10 @@ errors are those of [`gftfov`](@ref) and [`gfrfov`](@ref).
 gives the window of `gftfov` or `gfrfov` with the step `step` and the tolerance `tol`.
 
 See also [`gftfov`](@ref), [`gfrfov`](@ref), [`gfevnt`](@ref).
+
+# References
+
+- [NAIF documentation of `gffove_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gffove_c.html)
 """
 function gffove(
         ks::KernelSet, inst::NameOrID, tshape::AbstractString,

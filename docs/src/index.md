@@ -4,11 +4,6 @@ Almanac.jl is a native Julia port of CSPICE N0067, the C toolkit of NASA's NAIF 
 space geometry. It reads SPICE kernels and answers the questions CSPICE answers (where
 a body is, how a frame is oriented, when an event occurs) in pure Julia.
 
-The calls keep the names of CSPICE without the `_c` suffix, and its argument order with
-[few exceptions](@ref "Names, arguments and results"); the docstring of each ported call
-links to its NAIF page. Use the wrapper [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl)
-instead when results must be bit-identical to the CSPICE library on every platform.
-
 ## Installation
 
 Almanac.jl needs Julia 1.10 or later. Install it from the Julia package manager:
@@ -19,16 +14,13 @@ pkg> add Almanac
 
 ## Quickstart
 
-[SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels)
-downloads the NAIF generic kernels and returns their paths.
-
 ```julia
 using Almanac
 using SPICEKernels
 
-furnsh(naif0012_tls())   # leap seconds
-furnsh(de440s())         # planets, Moon and Sun, 1849 to 2150
-furnsh(pck00011())       # orientation and radii of the bodies
+furnsh(naif0012_tls())
+furnsh(de440s())
+furnsh(pck00011())
 
 # Convert a UTC time to ephemeris time (TDB seconds past J2000), and back
 et = str2et("2025-03-01T12:00:00")
@@ -43,15 +35,9 @@ r = pxform("J2000", "IAU_EARTH", et)
 mxv(r, state[1:3])
 ```
 
-Results are returned, not written into arguments. A call that cannot answer throws a
-[`SpiceError`](@ref). Before porting a CSPICE or SPICE.jl program, read [API differences](@ref).
-
 ## Contents
 
 ### Getting started
-
-Each tutorial solves one task on the NAIF generic kernels, which SPICEKernels.jl
-downloads.
 
 ```@contents
 Pages = [
@@ -66,24 +52,8 @@ Pages = [
 Depth = 1
 ```
 
-### Porting from CSPICE
-
-How the API of Almanac.jl differs from that of CSPICE, which routines it ports, what it
-adds, and which defects of CSPICE it copies or fixes.
-
-```@contents
-Pages = [
-    "manual/conventions.md",
-    "manual/coverage.md",
-    "manual/additions.md",
-    "manual/cspice_defects.md",
-]
-Depth = 1
-```
-
 ### Validation
 
-How close the results are to those of CSPICE, and how they were tested.
 
 ```@contents
 Pages = ["manual/numerics.md", "manual/validation.md"]
@@ -92,7 +62,6 @@ Depth = 1
 
 ### API reference
 
-The docstring of every exported call, grouped by subject.
 
 ```@contents
 Pages = [

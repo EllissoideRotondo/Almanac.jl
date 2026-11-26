@@ -13,7 +13,7 @@
 
 Return the Stumpff functions `ck(x) = sum((-x)^j / (2j + k)!, j = 0:∞)` for
 `k = 0:3`, as
-[`stmp03`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/stmp03.html)
+`stmp03`
 of SPICELIB. CSPICE has no C wrapper for it.
 
 `c0 = 1 - x * c2` and `c1 = 1 - x * c3` hold to rounding. For `x > 0`, `c0` is
@@ -29,6 +29,10 @@ julia> stmp03(0)
 ```
 
 See also [`prop2b`](@ref).
+
+# References
+
+- [NAIF documentation of `stmp03`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/stmp03.html)
 """
 function stmp03(x::Real)
     xx = _m_f(x)
@@ -46,7 +50,7 @@ end
 
 Return the state of a body at the time `dt` after the state `pvinit`, for two-body
 motion about a mass with the gravitational parameter `gm`, as
-[`prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html) of CSPICE.
+`prop2b_c` of CSPICE.
 
 The units must be consistent, for example km, km/s, seconds and km³/s². `gm` and
 `pvinit` are converted to `Float64`. `dt` can be a `ForwardDiff.Dual` or an
@@ -72,6 +76,10 @@ true
 ```
 
 See also [`conics`](@ref), [`oscelt`](@ref).
+
+# References
+
+- [NAIF documentation of `prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html)
 """
 function prop2b(gm::Real, pvinit::AbstractVector, dt::Real)
     s = _m_v6(pvinit)
@@ -100,7 +108,7 @@ end
 
 Return the state at the epoch `et` of a body on the conic orbit with the elements
 `elts`, as
-[`conics_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/conics_c.html) of CSPICE.
+`conics_c` of CSPICE.
 
 | Index | Name    | Meaning                                    |
 |:------|:--------|:-------------------------------------------|
@@ -135,6 +143,10 @@ true
 ```
 
 See also [`oscelt`](@ref), [`prop2b`](@ref).
+
+# References
+
+- [NAIF documentation of `conics_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/conics_c.html)
 """
 function conics(elts::AbstractVector, et::Real)
     length(elts) == 8 || _m_baddim("a set of conic elements", 8)
@@ -245,7 +257,7 @@ end
 
 Return the osculating conic elements `(rp, ecc, inc, lnode, argp, m0, t0, mu)` of a
 state, as
-[`oscelt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscelt_c.html) of CSPICE.
+`oscelt_c` of CSPICE.
 
 `state` is the position and the velocity at the epoch `et`, relative to a mass with the
 gravitational parameter `mu`. The table in [`conics`](@ref) defines the elements; `t0`
@@ -267,6 +279,10 @@ julia> round.(Tuple(oscelt([0, 2, 0, -0.5, 0, 0], 0, 1)); digits=6)
 ```
 
 See also [`oscltx`](@ref), [`conics`](@ref).
+
+# References
+
+- [NAIF documentation of `oscelt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscelt_c.html)
 """
 oscelt(state::AbstractVector, et::Real, mu::Real) = _m_oscelt(_m_v6(state), et, _m_f(mu))
 
@@ -275,7 +291,7 @@ oscelt(state::AbstractVector, et::Real, mu::Real) = _m_oscelt(_m_v6(state), et, 
 
 Return the osculating elements of [`oscelt`](@ref) with the true anomaly, the
 semi-major axis and the period, as
-[`oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html) of CSPICE.
+`oscltx_c` of CSPICE.
 
 | Index | Content                                                                    |
 |:------|:---------------------------------------------------------------------------|
@@ -298,6 +314,10 @@ julia> round.(Tuple(elts[9:11]); digits=6)
 ```
 
 See also [`oscelt`](@ref), [`conics`](@ref).
+
+# References
+
+- [NAIF documentation of `oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html)
 """
 function oscltx(state::AbstractVector, et::Real, mu::Real)
     s = _m_v6(state)
@@ -357,7 +377,7 @@ end
 
 Return the state at the epoch `et` (seconds past J2000 TDB) of a body whose orbit is
 given by equinoctial elements with the rates of the node and of the periapsis, as
-[`eqncpv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eqncpv_c.html) of CSPICE.
+`eqncpv_c` of CSPICE.
 
 `eqel` holds the elements at `epoch` (seconds past J2000 TDB):
 
@@ -395,6 +415,10 @@ true
 ```
 
 See also [`conics`](@ref).
+
+# References
+
+- [NAIF documentation of `eqncpv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eqncpv_c.html)
 """
 function eqncpv(et::Real, epoch::Real, eqel::AbstractVector, rapol::Real, decpol::Real)
     length(eqel) == 9 || _m_baddim("a set of equinoctial elements", 9)
@@ -418,7 +442,7 @@ end
     kpsolv(evec) -> Float64
 
 Return the root `x` of `x = h cos(x) + k sin(x)`, where `evec = (h, k)`, as
-[`kpsolv`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/kpsolv.html)
+`kpsolv`
 of SPICELIB. CSPICE has no C wrapper for it.
 
 The equation is a vector form of Kepler's equation, which [`eqncpv`](@ref) uses for
@@ -435,6 +459,10 @@ julia> kpsolv([0.0, 0.0])
 julia> x = kpsolv([0.5, 0.0]); x ≈ 0.5 * cos(x)
 true
 ```
+
+# References
+
+- [NAIF documentation of `kpsolv`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/kpsolv.html)
 """
 function kpsolv(evec::AbstractVector{<:Real})
     length(evec) == 2 || _m_baddim("`evec`", 2)

@@ -83,7 +83,7 @@ end
 
 Return the pointing of the instrument or structure `inst` at the encoded spacecraft
 clock value `sclkdp`, as
-[`ckgp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgp_c.html).
+`ckgp_c`.
 
 - `inst`: CK ID of the instrument or structure.
 - `sclkdp`: encoded spacecraft clock, in ticks (see [`sce2c`](@ref)).
@@ -105,6 +105,14 @@ when a pointing is found. The change of frame throws the kinds of [`pxform`](@re
 and the kinds of [`sct2e`](@ref) if the SCLK kernel is not loaded: [`ckfrot`](@ref)
 returns `nothing` in this case, and `ckgp` throws, both as in CSPICE.
 
+!!! warning "Difference from CSPICE"
+    The result depends only on the loaded kernels and on the arguments, and is the one
+    that CSPICE gives in a new process. In CSPICE N0067, `ckgp_c` right after `ckgpav_c`
+    can reuse the segment of the earlier call although a segment of higher priority
+    covers the request, a request in a gap of a type 5 segment changes the result of
+    later requests, and the clock rate of a type 6 segment is rounded to a whole number
+    after a change of mini-segment.
+
 # Examples
 ```julia
 furnsh("naif0012.tls"); furnsh("mission.tsc"); furnsh("mission.bc")
@@ -118,6 +126,10 @@ end
 ```
 
 See also [`ckgpav`](@ref), [`ckcov`](@ref), [`pxform`](@ref).
+
+# References
+
+- [NAIF documentation of `ckgp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgp_c.html)
 """
 function ckgp(ks::KernelSet, inst::Integer, sclkdp::Real, tol::Real, ref::NameOrID)
     i = Int32(inst)
@@ -137,12 +149,16 @@ end
 
 Return the pointing and the angular velocity of the instrument or structure `inst` at
 the encoded spacecraft clock value `sclkdp`, as
-[`ckgpav_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgpav_c.html).
+`ckgpav_c`.
 
 The result is `(cmat, av, clkout)`, where `av` is an `SVector{3}`: the angular velocity
 of the instrument frame relative to `ref`, in rad/s, with components in `ref`. Only
 segments with angular velocity are used, and the result is `nothing` if none gives a
 pointing. The other arguments, results and errors are those of [`ckgp`](@ref).
+
+# References
+
+- [NAIF documentation of `ckgpav_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgpav_c.html)
 """
 function ckgpav(ks::KernelSet, inst::Integer, sclkdp::Real, tol::Real, ref::NameOrID)
     i = Int32(inst)
@@ -176,7 +192,7 @@ end
 Return the rotation from the CK frame of the instrument or structure `inst` to its base
 frame, the reference frame of the CK segment, at `et`, and the frame ID of the base
 frame, as
-[`ckfrot_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckfrot_c.html).
+`ckfrot_c`.
 
 - `inst`: CK ID (frame class ID) of the CK frame.
 - `et`: seconds past J2000 TDB.
@@ -206,6 +222,10 @@ end
 ```
 
 See also [`ckfxfm`](@ref), [`ckgp`](@ref).
+
+# References
+
+- [NAIF documentation of `ckfrot_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckfrot_c.html)
 """
 function ckfrot(ks::KernelSet, inst::Integer, et::Real)
     i = Int32(inst)
@@ -222,7 +242,7 @@ end
 
 Return the state transformation from the CK frame of the instrument or structure `inst`
 to its base frame at `et`, and the frame ID of the base frame, as
-[`ckfxfm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckfxfm_c.html).
+`ckfxfm_c`.
 
 The matrix is `[R 0; dR R]`: `R` is the rotation of [`ckfrot`](@ref), and `dR` (1/s)
 comes from the angular velocity of the CK segment, as [`sxform`](@ref) gives it for a CK
@@ -230,6 +250,10 @@ frame. Only segments with angular velocity are searched, so the result is `nothi
 where only a segment without angular velocity covers `et`. The other `nothing` cases,
 the arguments and the errors are those of [`ckfrot`](@ref), except that `et` is a plain
 number.
+
+# References
+
+- [NAIF documentation of `ckfxfm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckfxfm_c.html)
 """
 function ckfxfm(ks::KernelSet, inst::Integer, et::Real)
     i = Int32(inst)
@@ -251,7 +275,7 @@ end
 
 Return the ID of the spacecraft clock or of the body that belongs to the CK ID
 `ckid`, as
-[`ckmeta_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckmeta_c.html).
+`ckmeta_c`.
 
 `meta` is `"SCLK"` for the clock ID or `"SPK"` for the body ID; letter case is
 ignored. The kernel-pool variables `CK_<ckid>_SCLK` and `CK_<ckid>_SPK` give the
@@ -265,6 +289,10 @@ Throws `SpiceError(:unknownckmeta)` if `meta` is not one of the two.
 julia> ckmeta(-77000, "SCLK"), ckmeta(5, "SPK")
 (-77, 0)
 ```
+
+# References
+
+- [NAIF documentation of `ckmeta_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckmeta_c.html)
 """
 function ckmeta(ks::KernelSet, ckid::Integer, meta::AbstractString)
     item = uppercase(strip(meta))
@@ -309,7 +337,7 @@ end
 
 Return the CK IDs of the instruments and structures that have a segment in the CK file
 `ck`, sorted and without duplicates, as
-[`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html).
+`ckobj_c`.
 
 The file is read from disk and need not be loaded. An open [`DAFHandle`](@ref)
 (in memory, or of a file) can take the place of the path: the call then reads the
@@ -324,6 +352,10 @@ Throws `SpiceError`:
 - `:baddaf` if the DAF is damaged.
 
 See also [`ckcov`](@ref), [`ckobj!`](@ref).
+
+# References
+
+- [NAIF documentation of `ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html)
 """
 ckobj(ck) =
     _ck_open(daf -> sort!(unique!(Int[s.inst for s in daf.cksegments])), ck, "ckobj")
@@ -332,12 +364,18 @@ ckobj(ck) =
     ckobj!(ids, ck) -> ids
 
 Insert the CK IDs that have a segment in the CK file `ck` into the vector `ids`, as
-[`ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html)
+`ckobj_c`
 does with a SPICE cell.
 
-`ids` is used as a set: on return it is sorted and without duplicates. The vector
-comes first, as in SPICE.jl; CSPICE has the cell last. A call that throws leaves `ids`
-unchanged. Throws the errors of [`ckobj`](@ref).
+`ids` is used as a set: on return it is sorted and without duplicates. A call that
+throws leaves `ids` unchanged. Throws the errors of [`ckobj`](@ref).
+
+!!! warning "Difference from CSPICE"
+    The vector comes first, as in SPICE.jl; CSPICE has the cell last.
+
+# References
+
+- [NAIF documentation of `ckobj_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckobj_c.html)
 """
 ckobj!(ids::AbstractVector{<:Integer}, ck) = _add_ids!(ids, ckobj(ck))
 
@@ -448,12 +486,19 @@ end
 
 Insert the coverage of the instrument or structure `idcode` in the CK file `ck` into the
 window `cover`, as
-[`ckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcov_c.html).
+`ckcov_c`.
 
-The result is the union of the old content of `cover` with the new intervals. The
-window comes first, as in [`spkcov!`](@ref) and [`pckcov!`](@ref); CSPICE and SPICE.jl
-have it last. See [`ckcov`](@ref) for the arguments, the intervals and the errors. A
-call that throws for an argument or for the file leaves `cover` unchanged.
+The result is the union of the old content of `cover` with the new intervals. See
+[`ckcov`](@ref) for the arguments, the intervals and the errors. A call that throws for
+an argument or for the file leaves `cover` unchanged.
+
+!!! warning "Difference from CSPICE"
+    The window comes first, as in [`spkcov!`](@ref) and [`pckcov!`](@ref); CSPICE and
+    SPICE.jl have it last.
+
+# References
+
+- [NAIF documentation of `ckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcov_c.html)
 """
 function ckcov!(
         cover::Window, ks::KernelSet, ck, idcode::Integer,
@@ -506,7 +551,7 @@ end
 
 Return the coverage [`Window`](@ref) of the instrument or structure `idcode` in the CK
 file `ck`, as
-[`ckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcov_c.html).
+`ckcov_c`.
 
 The window holds the intervals on which the file gives a pointing, as sorted disjoint
 intervals; it is empty if the file has no data for `idcode`. `wnfetd(w, i)` gives
@@ -543,6 +588,10 @@ end
 ```
 
 See also [`ckcov!`](@ref), [`spkcov`](@ref), [`pckcov`](@ref).
+
+# References
+
+- [NAIF documentation of `ckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcov_c.html)
 """
 ckcov(
     ks::KernelSet, ck, idcode::Integer, needav::Bool,

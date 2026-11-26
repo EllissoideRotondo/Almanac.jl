@@ -477,7 +477,7 @@ end
 
 Return the occultation state of two targets as seen by `obsrvr` at `et` (seconds past
 J2000 TDB), as
-[`occult_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/occult_c.html) of CSPICE:
+`occult_c` of CSPICE:
 
 | Code | Meaning |
 |---|---|
@@ -492,9 +492,11 @@ J2000 TDB), as
 `shape1` and `shape2` are `"ELLIPSOID"`, `"POINT"` or `"DSK/UNPRIORITIZED"`; the DSK
 form can end with `"/SURFACES = <list>"`. At least one target must be extended, and a
 DSK target needs a point as the other target. With a point and an extended target, the
-only codes are 0, ±2 (the point is in front) and ±3 (the point is behind). Surface
-names in `shape2` are surfaces of `targ2`; `occult_c` of CSPICE N0067 looks them up as
-surfaces of `targ1`.
+only codes are 0, ±2 (the point is in front) and ±3 (the point is behind).
+
+!!! warning "Difference from CSPICE"
+    Surface names in `shape2` are surfaces of `targ2`; `occult_c` of CSPICE N0067 looks
+    them up as surfaces of `targ1`. Surfaces given by number are not affected.
 
 `frame1` and `frame2` are the body-fixed frames of the extended targets, each centered
 on its target. The frame of a point target is not used; pass `" "`.
@@ -534,6 +536,10 @@ code == 3       # true if the eclipse is total there
 ```
 
 See also [`gfoclt`](@ref), [`fovtrg`](@ref).
+
+# References
+
+- [NAIF documentation of `occult_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/occult_c.html)
 """
 occult(
     ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,

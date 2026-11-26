@@ -174,12 +174,17 @@ an atomic reference to one of them is a single word.
 ## Deviations from CSPICE
 
 Every known defect of CSPICE N0067 in a ported routine is listed in
-`docs/src/manual/cspice_defects.md`, with what Almanac does and the test group that
-covers it. The other differences of the API are in `docs/src/manual/conventions.md`
+`docs/porting/cspice_defects.md`, with what Almanac does and the test group that
+covers it. The other differences of the API are in `docs/porting/conventions.md`
 (windows without a size limit, pool names without blanks, `dafopw` conflicts, the
 writers that fix SPICE.jl), in the contexts tutorial (independent contexts) and in the
-docstrings of the calls concerned (`ekfind`, `kdata`, `spksfs`). A change that adds or
-alters a deviation updates that text in the same commit.
+docstrings of the calls concerned. The pages in `docs/porting/` are not part of the
+published manual: a difference that a caller must know goes into a
+`!!! warning "Difference from CSPICE"` block of the docstring of the call. A change that
+adds or alters a deviation updates that text in the same commit.
+
+Every docstring of a ported routine ends with a `# References` section that links the
+NAIF page of the routine (``- [NAIF documentation of `name_c`](url)``).
 
 ## Tests
 

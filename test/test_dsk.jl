@@ -1075,7 +1075,7 @@ function dsk_part_11(env)
     # dskxsi_ and dskxv_ keep the frame ID of a call that fails the check of the frame
     # centre, and the next call with the frame of the last call that passed and the same
     # target uses it: here IAU_EARTH, whose constants the kernel of the group lacks, so
-    # that CSPICE fails. Almanac keeps no state (docs/src/manual/cspice_defects.md).
+    # that CSPICE fails. Almanac keeps no state (docs/porting/cspice_defects.md).
     try
         _, cx0 = c_dskxsi("MARS", (), 0.0, "IAU_MARS", v, -v)
         vx0 = c_dskxv("MARS", (), 0.0, "IAU_MARS", [v], [-v])[1][1]

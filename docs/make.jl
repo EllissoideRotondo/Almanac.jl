@@ -23,12 +23,6 @@ makedocs(;
             "tutorials/orbits.md",
             "tutorials/events.md",
         ],
-        "Porting from CSPICE" => [
-            "manual/conventions.md",
-            "manual/coverage.md",
-            "manual/additions.md",
-            "manual/cspice_defects.md",
-        ],
         "Validation" => [
             "manual/numerics.md",
             "manual/validation.md",

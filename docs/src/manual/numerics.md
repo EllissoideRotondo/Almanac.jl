@@ -80,8 +80,7 @@ The velocity of `spkezr` differs from order 1 for two reasons:
 | Switch, which selects a base frame by epoch | the base that `pxform` selects at the epoch | the block of that base |
 
 For a body whose text PCK has cubic nutation and precession angles
-(`BODY<sys>_MAX_PHASE_DEGREE = 3`), the rate block of `tisbod_` misses the cubic term
-(see [CSPICE defects](@ref)), while [`tisbod`](@ref), [`sxform`](@ref) and
+(`BODY<sys>_MAX_PHASE_DEGREE = 3`), the rate block of `tisbod_` misses the cubic term, while [`tisbod`](@ref), [`sxform`](@ref) and
 states in such frames give the exact derivative. With the Moon constants of the NAIF
 test suite, CSPICE differs from a central difference of `tipbod` by 1.1e-9 and
 Almanac.jl by 1.6e-13; degrees 1 and 2 agree to rounding.

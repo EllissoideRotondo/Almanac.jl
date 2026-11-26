@@ -158,7 +158,7 @@ end
 Return the window of epochs, in seconds past J2000 TDB, on which an illumination angle
 in radians at the surface point `spoint` of `target` satisfies the relation `relate`
 with `refval`, as
-[`gfilum_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfilum_c.html). The angle is the one of [`illumg`](@ref).
+`gfilum_c`. The angle is the one of [`illumg`](@ref).
 
 # Arguments
 - `method`: must be `"ELLIPSOID"`, in any case. The surface normal is the one of the
@@ -194,6 +194,10 @@ valid. The errors of [`spkcpt`](@ref) and [`spkcpo`](@ref) come from the epochs 
 the search samples.
 
 See also [`ilumin`](@ref), [`illumg`](@ref), [`gfpa`](@ref).
+
+# References
+
+- [NAIF documentation of `gfilum_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfilum_c.html)
 """
 function gfilum(
         ks::KernelSet, method::AbstractString, angtyp::AbstractString,

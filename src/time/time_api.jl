@@ -14,7 +14,7 @@ timedefaults(ctx::SpiceContext) = @atomic ctx.timedefs
     timdef([ctx,] action, item, value="") -> String
 
 Set or get a default of the time conversions of `ctx`, as
-[`timdef_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/timdef_c.html).
+`timdef_c`.
 
 `action` is `"SET"` or `"GET"` and `item` is `"CALENDAR"`, `"SYSTEM"` or `"ZONE"`;
 letter case is ignored. As in CSPICE, only the first 16 characters of the item and of
@@ -55,6 +55,10 @@ julia> timdef(ctx, "SET", "ZONE", "PST")
 julia> timdef(ctx, "GET", "SYSTEM")
 ""
 ```
+
+# References
+
+- [NAIF documentation of `timdef_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/timdef_c.html)
 """
 function timdef(
         ctx::SpiceContext, action::AbstractString, item::AbstractString,
@@ -122,7 +126,7 @@ timout(et::Real, pictur::AbstractString) = timout(default_context(), et, pictur)
     tsetyr([ctx,] year) -> Nothing
 
 Set the first year of the 100 years that a year of two digits stands for, as
-[`tsetyr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tsetyr_c.html).
+`tsetyr_c`.
 
 At start the value is 1969: the year 69 is 1969 and the year 68 is 2068. After
 `tsetyr(ctx, 1980)` the year 80 is 1980 and the year 79 is 2079. The value applies to
@@ -143,6 +147,10 @@ julia> tsetyr(ctx, 1980)
 julia> etcal(tparse(ctx, "79 JAN 1"))
 "2079 JAN 01 00:00:00.000"
 ```
+
+# References
+
+- [NAIF documentation of `tsetyr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tsetyr_c.html)
 """
 function tsetyr(ctx::SpiceContext, year::Integer)
     year > 0 || return nothing
@@ -160,7 +168,7 @@ tsetyr(year::Integer) = tsetyr(default_context(), year)
 
 Turn the range check of the components of a time string on (`type = "YES"`) or off
 (any other value), as
-[`tparch_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tparch_c.html).
+`tparch_c`.
 
 Letter case and blanks of `type` are ignored. At start the check is off: then
 [`tparse`](@ref) and [`utc2et`](@ref) accept `"1996-02-30"` as March 1 and a time of
@@ -189,6 +197,10 @@ julia> try
        end
 :badtimestring
 ```
+
+# References
+
+- [NAIF documentation of `tparch_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tparch_c.html)
 """
 function tparch(ctx::SpiceContext, type::AbstractString)
     _chkfstr("tparch", "argument type", type)

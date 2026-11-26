@@ -76,7 +76,7 @@ end
     chbval(cp, x2s, x) -> p
 
 Return the value at `x` of the Chebyshev expansion with the coefficients `cp`, as
-[`chbval_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbval_c.html) of CSPICE.
+`chbval_c` of CSPICE.
 
 The expansion is `p(x) = sum(cp[k] * T_{k-1}(s))` with `s = (x - x2s[1]) / x2s[2]`:
 `x2s` holds the midpoint and the radius of the interval of the expansion. The degree
@@ -94,6 +94,10 @@ julia> chbval([1, 2, 3], [0, 1], 0.5)
 ```
 
 See also [`chbint`](@ref), [`chbder`](@ref), [`chbigr`](@ref).
+
+# References
+
+- [NAIF documentation of `chbval_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbval_c.html)
 """
 function chbval(cp::AbstractVector, x2s::AbstractVector, x::Real)
     s, _ = _m_cheb_s(cp, x2s, x)
@@ -105,7 +109,7 @@ end
 
 Return the value and the first derivative with respect to `x` of the Chebyshev
 expansion of [`chbval`](@ref), as
-[`chbint_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbint_c.html) of CSPICE.
+`chbint_c` of CSPICE.
 
 Throws `SpiceError(:invaliddegree)` if `cp` is empty, and `SpiceError(:badarg)` if `x2s`
 does not have 2 elements.
@@ -117,6 +121,10 @@ julia> chbint([1, 2, 3], [0, 1], 0.5)
 ```
 
 See also [`chbder`](@ref).
+
+# References
+
+- [NAIF documentation of `chbint_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbint_c.html)
 """
 function chbint(cp::AbstractVector, x2s::AbstractVector, x::Real)
     s, rad = _m_cheb_s(cp, x2s, x)
@@ -129,7 +137,7 @@ end
 
 Return the value and the derivatives of orders 1 to `nderiv` with respect to `x` of
 the Chebyshev expansion of [`chbval`](@ref), as
-[`chbder_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbder_c.html) of CSPICE.
+`chbder_c` of CSPICE.
 
 Element `k + 1` of the result is the derivative of order `k`. A negative `nderiv`
 gives an empty result, as for [`polyds`](@ref); `chbder_c` signals no error then.
@@ -148,6 +156,10 @@ julia> chbder([1, 2, 3], [0, 1], 0.5, 3)
 ```
 
 See also [`chbint`](@ref), [`polyds`](@ref).
+
+# References
+
+- [NAIF documentation of `chbder_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbder_c.html)
 """
 function chbder(cp::AbstractVector, x2s::AbstractVector, x::Real, nderiv::Integer)
     s, rad = _m_cheb_s(cp, x2s, x)
@@ -192,7 +204,7 @@ end
 
 Return the value at `x` of the Chebyshev expansion of [`chbval`](@ref) and its integral
 from the midpoint `x2s[1]` to `x`, as
-[`chbigr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbigr_c.html) of CSPICE.
+`chbigr_c` of CSPICE.
 
 The integral is in the units of the expansion times the units of `x`.
 
@@ -207,6 +219,10 @@ julia> chbigr([1, 2], [0, 1], 0.5)
 ```
 
 See also [`chbval`](@ref).
+
+# References
+
+- [NAIF documentation of `chbigr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/chbigr_c.html)
 """
 function chbigr(cp::AbstractVector, x2s::AbstractVector, x::Real)
     mid, rad = _m_x2s(x2s)
@@ -247,7 +263,7 @@ end
 
 Return the value at `x` of the polynomial of degree `n - 1` through the `n` points
 `(xvals[i], yvals[i])`, as
-[`lgrint_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lgrint_c.html) of CSPICE (Lagrange interpolation).
+`lgrint_c` of CSPICE (Lagrange interpolation).
 
 The abscissas need not be ordered. A static `yvals` gives a call without allocation.
 
@@ -263,6 +279,10 @@ julia> lgrint([1, 2], [3, 5], 4)
 ```
 
 See also [`lgrind`](@ref), [`lgresp`](@ref), [`hrmint`](@ref).
+
+# References
+
+- [NAIF documentation of `lgrint_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lgrint_c.html)
 """
 function lgrint(xvals::AbstractVector, yvals::AbstractVector, x::Real)
     n = _m_npoints(xvals, yvals, 1)
@@ -278,7 +298,7 @@ end
 
 Return the value and the derivative at `x` of the interpolating polynomial of
 [`lgrint`](@ref), as
-[`lgrind_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lgrind_c.html) of CSPICE.
+`lgrind_c` of CSPICE.
 
 Throws `SpiceError(:invalidsize)` if `xvals` is empty, `SpiceError(:dividebyzero)` if
 two abscissas are equal, and `SpiceError(:badarg)` if `yvals` does not have the length
@@ -291,6 +311,10 @@ julia> lgrind([0, 1, 2], [0, 1, 4], 3)    # x²
 ```
 
 See also [`hrmint`](@ref).
+
+# References
+
+- [NAIF documentation of `lgrind_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lgrind_c.html)
 """
 function lgrind(xvals::AbstractVector, yvals::AbstractVector, x::Real)
     n = _m_npoints(xvals, yvals, 1)
@@ -307,7 +331,7 @@ end
 
 Return the value at `x` of the polynomial through the points
 `(first + (i - 1) * step, yvals[i])`, as
-[`lgresp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lgresp_c.html) of CSPICE (Lagrange interpolation on
+`lgresp_c` of CSPICE (Lagrange interpolation on
 equally spaced abscissas).
 
 Throws `SpiceError(:invalidsize)` if `yvals` is empty and
@@ -320,6 +344,10 @@ julia> lgresp(10, 5, [0, 25, 100], 25)     # (x - 10)²
 ```
 
 See also [`lgrint`](@ref), [`hrmesp`](@ref).
+
+# References
+
+- [NAIF documentation of `lgresp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/lgresp_c.html)
 """
 function lgresp(first::Real, step::Real, yvals::AbstractVector, x::Real)
     n = length(yvals)
@@ -337,7 +365,7 @@ end
 
 Return the value and the derivative at `x` of the Hermite polynomial that has, at
 `xvals[i]`, the value `yvals[2i-1]` and the derivative `yvals[2i]`, as
-[`hrmint_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/hrmint_c.html) of
+`hrmint_c` of
 CSPICE.
 
 The degree is `2n - 1` for `n` abscissas. The abscissas need not be ordered. A static
@@ -355,6 +383,10 @@ julia> hrmint([1, 2], [1, 3, 8, 12], 3)
 ```
 
 See also [`hrmesp`](@ref), [`lgrind`](@ref).
+
+# References
+
+- [NAIF documentation of `hrmint_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/hrmint_c.html)
 """
 function hrmint(xvals::AbstractVector, yvals::AbstractVector, x::Real)
     n = _m_npoints(xvals, yvals, 2)
@@ -370,7 +402,7 @@ end
 
 Return the value and the derivative at `x` of the Hermite polynomial that has, at
 `first + (i - 1) * step`, the value `yvals[2i-1]` and the derivative `yvals[2i]`, as
-[`hrmesp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/hrmesp_c.html) of CSPICE (equally spaced abscissas).
+`hrmesp_c` of CSPICE (equally spaced abscissas).
 
 Throws `SpiceError(:invalidsize)` if `yvals` is empty, `SpiceError(:invalidstepsize)`
 if `step == 0`, and `SpiceError(:badarg)` if the length of `yvals` is odd.
@@ -382,6 +414,10 @@ julia> hrmesp(1, 1, [1, 3, 8, 12], 3)       # x³, as for hrmint
 ```
 
 See also [`hrmint`](@ref), [`lgresp`](@ref).
+
+# References
+
+- [NAIF documentation of `hrmesp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/hrmesp_c.html)
 """
 function hrmesp(first::Real, step::Real, yvals::AbstractVector, x::Real)
     isempty(yvals) && _m_badsize(0)
@@ -411,7 +447,7 @@ end
 
 Return the value and the derivatives of orders 1 to `nderiv` at `t` of the polynomial
 `coeffs[1] + coeffs[2] t + coeffs[3] t² + ...`, as
-[`polyds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/polyds_c.html) of CSPICE.
+`polyds_c` of CSPICE.
 
 Element `k + 1` of the result is the derivative of order `k`. An empty `coeffs` is the
 zero polynomial. A negative `nderiv` gives an empty result, as CSPICE computes nothing
@@ -428,6 +464,10 @@ julia> polyds([1, 2, 3], 3, 2)               # 1 + 2t + 3t²
 ```
 
 See also [`chbder`](@ref).
+
+# References
+
+- [NAIF documentation of `polyds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/polyds_c.html)
 """
 function polyds(coeffs::AbstractVector, nderiv::Integer, t::Real)
     tt = _m_f(t)
@@ -453,7 +493,7 @@ end
 Return the derivative of a vector function at a point from its values `f0` at
 `t - delta` and `f2` at `t + delta`, by the central difference `(f2 - f0) / (2 delta)`,
 as
-[`qderiv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/qderiv_c.html) of CSPICE.
+`qderiv_c` of CSPICE.
 
 The result has the length of the arguments; static arguments give a static result.
 
@@ -465,6 +505,10 @@ lengths of `f0` and `f2` differ.
 julia> qderiv([1, 4], [9, 16], 1) == [4, 6]
 true
 ```
+
+# References
+
+- [NAIF documentation of `qderiv_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/qderiv_c.html)
 """
 function qderiv(f0::AbstractVector, f2::AbstractVector, delta::Real)
     d = _m_f(delta)
@@ -483,7 +527,7 @@ end
     rquad(a, b, c) -> (root1, root2)
 
 Return the roots of the quadratic equation `a x² + b x + c = 0`, as
-[`rquad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rquad_c.html) of
+`rquad_c` of
 CSPICE. Each root is an `SVector` of its real part and its imaginary part.
 
 `root1` is `(-b + sqrt(b² - 4ac)) / 2a` and `root2` the root with the minus sign. If
@@ -502,6 +546,10 @@ julia> rquad(1, 0, 4)
 ```
 
 See also [`diags2`](@ref).
+
+# References
+
+- [NAIF documentation of `rquad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rquad_c.html)
 """
 function rquad(a::Real, b::Real, c::Real)
     root1, root2 = _m_rquad(promote(_m_f(a), _m_f(b), _m_f(c))...)
@@ -513,7 +561,7 @@ end
 
 Return the diagonal matrix `d` and the rotation `r` that diagonalize the symmetric 2 by
 2 matrix `symmat`, so that `d = r' * symmat * r`, as
-[`diags2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/diags2_c.html) of CSPICE.
+`diags2_c` of CSPICE.
 
 Only the upper triangle of `symmat` is read. The columns of `r` are unit eigenvectors,
 and `d[i, i]` is the eigenvalue of column `i`. Of the rotations that diagonalize
@@ -532,6 +580,10 @@ true
 ```
 
 See also [`rquad`](@ref).
+
+# References
+
+- [NAIF documentation of `diags2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/diags2_c.html)
 """
 function diags2(symmat::AbstractMatrix)
     size(symmat) == (2, 2) || _m_baddim("a symmetric matrix", "2 by 2")

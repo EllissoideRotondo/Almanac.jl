@@ -30,9 +30,9 @@ elements() = ELEMENT_NAMES
 
 Return the quantity `name` of the orbit `o`; `o.name` returns the same. The names, units
 and ranges are in [Element names](@ref). The classical elements and the period are those
-of [`oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html)
+of `oscltx_c`
 and the geodetic coordinates those of
-[`recgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recgeo_c.html); the
+`recgeo_c`; the
 other names follow `OrbitalElement` of [ANISE](https://github.com/nyx-space/anise).
 
 The frame of `o` is not checked: the Keplerian and B-plane elements assume an inertial
@@ -62,6 +62,11 @@ julia> o = Orbit([3.0, 4.0, 0.0, 0.0, 0.0, 2.0], 0.0, 399, 1, 4.0e5);
 julia> element(o, :rmag), element(o, :hmag)
 (5.0, 10.0)
 ```
+
+# References
+
+- [NAIF documentation of `oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html)
+- [NAIF documentation of `recgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recgeo_c.html)
 """
 function element(o::Orbit, name::Symbol)
     name === :x && return _el_x(o)
@@ -391,7 +396,7 @@ end
 Return the classical elements of `o`: semi-major axis (km, negative for a hyperbola),
 eccentricity, and inclination, node, argument of periapsis and true anomaly (rad), as
 [`element`](@ref) returns them. A subset of
-[`oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html);
+`oscltx_c`;
 `Orbit.to_keplerian_vec` of ANISE, with angles in rad.
 
 Throws `SpiceError(:degeneratecase)` for a circular orbit (`ecc < 1e-11`), which has no
@@ -404,6 +409,10 @@ julia> o = Orbit([7000.0, 0.0, 0.0, 0.0, 8.0, 0.0], 0.0, 399, 1, 398600.4415);
 julia> k = keplerian(o); (round(k.sma), round(k.ecc; digits=3), k.inc, k.ta)
 (7990.0, 0.124, 0.0, 0.0)
 ```
+
+# References
+
+- [NAIF documentation of `oscltx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/oscltx_c.html)
 """
 keplerian(o::Orbit) = (;
     sma = _el_sma(o), ecc = _el_ecc(o), inc = _el_inc(o), raan = _el_raan(o),

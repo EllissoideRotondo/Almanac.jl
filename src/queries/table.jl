@@ -513,7 +513,7 @@ A segment has no aberration correction. Write only a table that was made with
 `abcorr = "NONE"`; the call cannot check this.
 
 Throws `SpiceError(:invalidrefframe)` if `tab.frame` is not a frame of `ctx`, as
-[`spkw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw02_c.html) for an unknown frame, and the other errors of [`spkw02`](@ref). Among its
+`spkw02_c` for an unknown frame, and the other errors of [`spkw02`](@ref). Among its
 conditions: `tab.ncoef <= 28`, and `first` and `last` inside the table.
 
 # Examples
@@ -523,6 +523,10 @@ h = spkopn("moon.bsp", "moon.bsp", 0)
 table_to_spk(h, tab, "Moon from table")
 spkcls(h)
 ```
+
+# References
+
+- [NAIF documentation of `spkw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw02_c.html)
 """
 function table_to_spk(
         ctx::SegContext, h::DAFHandle, tab::EphemerisTable,

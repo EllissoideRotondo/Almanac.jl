@@ -112,7 +112,7 @@ end
 Return the illumination angles at the surface point `spoint` of `target`, for the
 illumination source `ilusrc` and the observer `obsrvr` at `et` (seconds past J2000
 TDB), as
-[`illumg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/illumg_c.html) of CSPICE.
+`illumg_c` of CSPICE.
 
 - `trgepc`: the epoch at the point (seconds past J2000 TDB). With a light time
   correction it is `et` minus (reception) or plus (transmission) the light time between
@@ -152,6 +152,10 @@ Throws `SpiceError` with the kind
 Also throws the errors of [`spkcpt`](@ref) and, with a DSK method, of [`srfnrm`](@ref).
 
 See also [`ilumin`](@ref), [`illumf`](@ref), [`gfilum`](@ref).
+
+# References
+
+- [NAIF documentation of `illumg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/illumg_c.html)
 """
 function illumg end
 
@@ -160,7 +164,7 @@ function illumg end
         -> (trgepc, srfvec, phase, incdnc, emissn, visibl, lit)
 
 Return the outputs of [`illumg`](@ref) and two flags, as
-[`illumf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/illumf_c.html) of CSPICE: `visibl`
+`illumf_c` of CSPICE: `visibl`
 tells whether the observer sees the point, and `lit` whether the source lights it.
 
 With `"ELLIPSOID"`, `visibl` is `emissn <= π/2` and `lit` is `incdnc <= π/2`. With a
@@ -176,6 +180,10 @@ The arguments, the notes on `et`, allocation and tolerances, and the errors are 
 for `target`.
 
 See also [`ilumin`](@ref), [`illumg`](@ref).
+
+# References
+
+- [NAIF documentation of `illumf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/illumf_c.html)
 """
 function illumf end
 
@@ -208,7 +216,7 @@ end
 
 Return the illumination angles at the surface point `spoint` of `target`, with the Sun
 as the illumination source, as
-[`ilumin_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ilumin_c.html) of CSPICE.
+`ilumin_c` of CSPICE.
 
 `phase`, `incdnc` and `emissn` are the phase angle, the solar incidence angle and the
 emission angle (rad). `trgepc` is the epoch at the point (seconds past J2000 TDB) and
@@ -226,6 +234,10 @@ daylight = incdnc <= halfpi()          # the Sun is above the horizon of the poi
 ```
 
 See also [`illumg`](@ref), [`illumf`](@ref), [`phaseq`](@ref), [`subslr`](@ref).
+
+# References
+
+- [NAIF documentation of `ilumin_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ilumin_c.html)
 """
 ilumin(
     ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
@@ -251,7 +263,7 @@ ilumin(
 
 Return the phase angle at `target` at `et` (seconds past J2000 TDB), in radians in
 [0, π], as
-[`phaseq_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/phaseq_c.html) of CSPICE. It is the angle between the directions from the target
+`phaseq_c` of CSPICE. It is the angle between the directions from the target
 to the source `illmn` and to the observer `obsrvr`.
 
 With a correction, the target is taken as seen by the observer, and the source as seen
@@ -265,6 +277,10 @@ are the same, and `SpiceError(:idcodenotfound)` if a body name is not known. Als
 throws the errors of [`spkpos`](@ref).
 
 See also [`ilumin`](@ref), [`gfpa`](@ref).
+
+# References
+
+- [NAIF documentation of `phaseq_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/phaseq_c.html)
 """
 function phaseq(
         ks::KernelSet, et::Real, target::NameOrID, illmn::NameOrID, obsrvr::NameOrID,
@@ -370,7 +386,7 @@ end
 
 Return the angular separation (rad) of two targets as seen by the observer `obsrvr` at
 `et` (seconds past J2000 TDB), as
-[`trgsep_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/trgsep_c.html) of CSPICE.
+`trgsep_c` of CSPICE.
 
 Each target is a point (`shape = "POINT"`) or a sphere (`"SPHERE"`) whose radius is the
 largest of the three radii of the body in the kernel pool. For spheres the angle is
@@ -401,6 +417,10 @@ overlap = sep < 0           # the disks of the Moon and of the Sun overlap
 ```
 
 See also [`phaseq`](@ref), [`gfsep`](@ref).
+
+# References
+
+- [NAIF documentation of `trgsep_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/trgsep_c.html)
 """
 function trgsep(
         ks::KernelSet, et::Real, targ1::NameOrID, shape1::AbstractString,

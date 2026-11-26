@@ -124,7 +124,7 @@ end
     dafonw(path, ftype, nd, ni, ifname, resv) -> DAFHandle
 
 Create the DAF file `path` and open it for writing, as
-[`dafonw`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafonw.html) of SPICELIB.
+`dafonw` of SPICELIB.
 
 - `ftype`: the file type, for example `"SPK"`. Four characters are stored.
 - `nd`, `ni`: the numbers of doubles and of integers in an array summary.
@@ -146,6 +146,10 @@ Throws `SpiceError`, in this order:
 - `:fileopenfail` if the file exists or cannot be created.
 
 See also [`spkopn`](@ref), [`ckopn`](@ref), [`dafbna`](@ref), [`dafcls`](@ref).
+
+# References
+
+- [NAIF documentation of `dafonw`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafonw.html)
 """
 function dafonw(
         path::AbstractString, ftype::AbstractString, nd::Integer, ni::Integer,
@@ -286,7 +290,7 @@ end
     dafopw(path) -> DAFHandle
 
 Open the existing DAF file `path` for writing, as
-[`dafopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafopw_c.html), to add arrays or comments.
+`dafopw_c`, to add arrays or comments.
 
 The file must have the native byte order, and no other handle may have it open.
 [`dafopr`](@ref) can still open the file for read, and a kernel that [`furnsh`](@ref)
@@ -296,6 +300,10 @@ the arrays added later only after it loads the file again.
 Throws the `SpiceError` kinds of [`dafopr`](@ref), `:unsupportedbff` if the file has the
 other byte order, `:fileopenconflict` if another handle has the file open, and
 `:fileopenfail` if the file cannot be opened for update.
+
+# References
+
+- [NAIF documentation of `dafopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafopw_c.html)
 """
 function dafopw(path::AbstractString)
     nd, ni, swap = _daf_probe(path, "dafopw")
@@ -328,7 +336,7 @@ end
     dafbna(handle, sum, name) -> Nothing
 
 Begin a new array in the DAF file of `handle`, as
-[`dafbna`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafbna.html) of SPICELIB.
+`dafbna` of SPICELIB.
 
 `sum` is the packed summary ([`dafps`](@ref)); [`dafena`](@ref) sets its two address
 components. `name` is the array name, cut or padded to `8 * (nd + (ni + 1) ÷ 2)`
@@ -359,6 +367,10 @@ julia> dafus(dafgs(h), 2, 6)
 
 julia> dafcls(h)
 ```
+
+# References
+
+- [NAIF documentation of `dafbna`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafbna.html)
 """
 function dafbna(h::DAFHandle, sum::AbstractVector{<:Real}, name::AbstractString)
     _daf_check_write(h, "dafbna")
@@ -382,11 +394,15 @@ end
     dafada(handle, data) -> Nothing
 
 Append the doubles `data` to the array that [`dafbna`](@ref) began on `handle`, as
-[`dafada`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafada.html) of SPICELIB. The data are written to the file at once.
+`dafada` of SPICELIB. The data are written to the file at once.
 
 Throws `SpiceError(:dafnewconflict)` if no array is begun on the handle, and
 `:dafwritefail` if the array would pass the largest address of a DAF or the system reports
 a write error.
+
+# References
+
+- [NAIF documentation of `dafada`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafada.html)
 """
 function dafada(h::DAFHandle, data::AbstractVector{<:Real})
     _daf_check_write(h, "dafada")
@@ -414,7 +430,7 @@ end
     dafena(handle) -> Nothing
 
 End the array that [`dafbna`](@ref) began on `handle`, as
-[`dafena`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafena.html) of SPICELIB.
+`dafena` of SPICELIB.
 
 The call writes the summary and the name of the array and the new free address of the
 file. A search that is begun after the call finds the array. Before the call the file on
@@ -422,6 +438,10 @@ disk is a valid DAF without the array.
 
 Throws `SpiceError(:dafnewconflict)` if no array is begun on the handle, and `:baddaf` if
 the last summary record of the file is damaged.
+
+# References
+
+- [NAIF documentation of `dafena`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafena.html)
 """
 function dafena(h::DAFHandle)
     _daf_check_write(h, "dafena")
@@ -509,12 +529,16 @@ _daf_add_array!(h::DAFHandle, dc, ic, name::AbstractString, data::Vector{Float64
     dafws(handle, sum) -> Nothing
 
 Replace the packed summary of the current array of the search on `handle` with `sum`, as
-[`dafws`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafws.html) of SPICELIB. The two address components are replaced too; [`dafrs`](@ref) keeps them. The
+`dafws` of SPICELIB. The two address components are replaced too; [`dafrs`](@ref) keeps them. The
 change is on disk when the call returns.
 
 Throws `SpiceError(:nocurrentarray)` if the search has no current array,
 `:dafillegwrite` if the file is open for read, and `:dafinvalidparams` if `sum` has fewer
 doubles than a summary of the file. A call that throws does not change the file.
+
+# References
+
+- [NAIF documentation of `dafws`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafws.html)
 """
 function dafws(h::DAFHandle, sum::AbstractVector{<:Real})
     _daf_check_current(h, "dafws")
@@ -540,12 +564,16 @@ end
     dafrs(handle, sum) -> Nothing
 
 Replace the summary of the current array of the search on `handle` with `sum`, as
-[`dafrs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafrs_c.html), but keep its two address components (the last two integers). The change is on
+`dafrs_c`, but keep its two address components (the last two integers). The change is on
 disk when the call returns.
 
 Throws `SpiceError(:nocurrentarray)` if the search has no current array, and
 `:dafinvalidparams` if `sum` has fewer doubles than a summary of the file. A call that
 throws does not change the file.
+
+# References
+
+- [NAIF documentation of `dafrs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafrs_c.html)
 """
 function dafrs(h::DAFHandle, sum::AbstractVector{<:Real})
     _daf_check_write(h, "dafrs")
@@ -562,11 +590,15 @@ end
     dafrn(handle, name) -> Nothing
 
 Replace the name of the current array of the search on `handle` with `name`, as
-[`dafrn`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafrn.html) of SPICELIB. `name` is cut or padded to the name size of the file. The change is on disk
+`dafrn` of SPICELIB. `name` is cut or padded to the name size of the file. The change is on disk
 when the call returns.
 
 Throws `SpiceError(:nocurrentarray)` if the search has no current array. A call that
 throws does not change the file.
+
+# References
+
+- [NAIF documentation of `dafrn`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dafrn.html)
 """
 function dafrn(h::DAFHandle, name::AbstractString)
     _daf_check_write(h, "dafrn")
@@ -646,7 +678,7 @@ end
     dafac(handle, lines) -> Nothing
 
 Append the comment lines `lines` to the comment area of the DAF file, as
-[`dafac_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafac_c.html).
+`dafac_c`.
 
 A line can have any length; trailing blanks are not stored. If the reserved records do
 not have room, records are added and the data of the file move. Every address that was
@@ -676,6 +708,10 @@ julia> dafcls(h)
 ```
 
 See also [`dafec`](@ref), [`dafdc`](@ref).
+
+# References
+
+- [NAIF documentation of `dafac_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafac_c.html)
 """
 function dafac(h::DAFHandle, lines::AbstractVector{<:AbstractString})
     _daf_check_write(h, "dafac")
@@ -759,7 +795,7 @@ end
     dafdc(handle) -> Nothing
 
 Delete the comment area of the DAF file, as
-[`dafdc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafdc_c.html).
+`dafdc_c`.
 
 All reserved records are removed and the data of the file move up. Every address that was
 read from a summary before the call is then stale, and a search on the handle is at its
@@ -768,6 +804,10 @@ as in CSPICE.
 
 Throws `SpiceError(:dafnewconflict)` if an array is begun and not ended on the handle. A
 call that throws does not change the file.
+
+# References
+
+- [NAIF documentation of `dafdc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dafdc_c.html)
 """
 function dafdc(h::DAFHandle)
     _daf_check_write(h, "dafdc")

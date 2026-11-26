@@ -421,7 +421,7 @@ end
 
 Return the epoch `et` (seconds past J2000 TDB) as a string in the form of the picture
 `pictur`, as
-[`timout_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/timout_c.html).
+`timout_c`.
 
 A leap-second kernel must be loaded. The picture is copied to the result with each
 mark replaced by its component. Marks are case sensitive:
@@ -470,6 +470,10 @@ timout(et, "JULIAND.##### ::TDB ::RND")           # Julian date in TDB, rounded
 ```
 
 See also [`et2utc`](@ref), [`etcal`](@ref), [`str2et`](@ref).
+
+# References
+
+- [NAIF documentation of `timout_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/timout_c.html)
 """
 function timout(
         ks::KernelSet, et::Real, pictur::AbstractString,
@@ -917,7 +921,7 @@ end
     et2utc([ctx,] et, format, prec) -> String63
 
 Return the epoch `et` (seconds past J2000 TDB) as a UTC string, as
-[`et2utc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/et2utc_c.html).
+`et2utc_c`.
 The string is a `String63` of
 [InlineStrings.jl](https://github.com/JuliaStrings/InlineStrings.jl), stored inline, so
 that the call allocates nothing. It compares equal to the `String` with the same
@@ -953,6 +957,10 @@ et2utc(0.0, "ISOC", 3)      # UTC at the epoch J2000 TDB
 ```
 
 See also [`timout`](@ref), [`str2et`](@ref).
+
+# References
+
+- [NAIF documentation of `et2utc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/et2utc_c.html)
 """
 function et2utc(ks::KernelSet, et::Real, format::AbstractString, prec::Integer)::String63
     _chkfstr("et2utc", "format", format)                   # CHKFSTR of et2utc_c
@@ -1053,7 +1061,7 @@ end
 
 Return the calendar string of `et` (seconds past J2000 TDB) on the formal calendar, on
 which every day has 86400 seconds, as
-[`etcal_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/etcal_c.html).
+`etcal_c`.
 The string is a `String63`, as the one of [`et2utc`](@ref), so the call allocates
 nothing.
 
@@ -1074,6 +1082,10 @@ julia> etcal(0.0)
 julia> etcal(-1.0e11)
 "1170 B.C. FEB 16 02:13:20.000"
 ```
+
+# References
+
+- [NAIF documentation of `etcal_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/etcal_c.html)
 """
 function etcal(et::Real)::String63
     mynum = primal(et) + _HALFD

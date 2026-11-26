@@ -16,7 +16,7 @@
     ckopn(path, ifname, ncomch=0) -> DAFHandle
 
 Create the CK file `path` and open it for writing, as
-[`ckopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckopn_c.html).
+`ckopn_c`.
 
 `ifname` is the internal file name and `ncomch` is the number of comment characters to
 make room for. The file is on disk when the call returns. An existing file is never
@@ -45,6 +45,10 @@ julia> getfat(path)
 
 See also [`ckw01`](@ref), [`ckw02`](@ref), [`ckw03`](@ref), [`ckw05`](@ref),
 [`ckw06`](@ref), [`dafac`](@ref) to add comments.
+
+# References
+
+- [NAIF documentation of `ckopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckopn_c.html)
 """
 ckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0) =
     _seg_opn("ckopn", "CK", 6, path, ifname, ncomch)
@@ -66,7 +70,7 @@ ckops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("CK", 6, ifna
     ckcls(handle) -> Nothing
 
 Close the CK file of `handle`, as
-[`ckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcls_c.html).
+`ckcls_c`.
 The call does nothing if the handle is closed already. The close writes no data: every
 write call puts its bytes on disk before it returns. For a handle in memory
 (from [`ckops`](@ref)), the close discards the bytes: load it with [`furnsh`](@ref) or
@@ -74,6 +78,10 @@ save it with [`save_kernel`](@ref) before the close.
 
 Throws `SpiceError(:nosegmentsfound)` if the file is open for writing and holds no
 segment. The handle then stays open; close it with [`dafcls`](@ref).
+
+# References
+
+- [NAIF documentation of `ckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckcls_c.html)
 """
 ckcls(h::DAFHandle) = _seg_close(h, "CK")
 
@@ -174,7 +182,7 @@ end
     ckw01([ctx,] handle, begtim, endtim, inst, ref, segid, sclkdp, quats, avvs) -> Nothing
 
 Write a CK segment of type 1 (discrete pointing) to the file of `handle`, as
-[`ckw01_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw01_c.html).
+`ckw01_c`.
 
 # Arguments
 The arguments `ctx`, `handle`, `begtim`, `endtim`, `inst`, `ref` and `segid` have the same
@@ -220,6 +228,10 @@ Throws `SpiceError`. Every `ckwNN` writer throws:
 
 See also [`ckw02`](@ref), [`ckw03`](@ref), [`ckw05`](@ref), [`ckw06`](@ref), and
 [`ckopn`](@ref) for an example.
+
+# References
+
+- [NAIF documentation of `ckw01_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw01_c.html)
 """
 function ckw01(
         ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
@@ -272,7 +284,7 @@ ckw01(
         -> Nothing
 
 Write a CK segment of type 2 (pointing with a constant angular velocity on intervals), as
-[`ckw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw02_c.html).
+`ckw02_c`.
 
 Record `i` is valid from `start[i]` to `stop[i]` (encoded spacecraft clock ticks).
 `quats[i]` is its quaternion, `avvs[i]` its angular velocity (rad/s) and `rates[i]` its
@@ -287,6 +299,10 @@ Throws `SpiceError`:
 - `:timesoutoforder` unless `start` is strictly increasing;
 - `:badstoptime` if `stop[i-1] > start[i]`;
 - `:zeroquaternion` if a quaternion is zero.
+
+# References
+
+- [NAIF documentation of `ckw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw02_c.html)
 """
 function ckw02(
         ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
@@ -380,7 +396,7 @@ ckw02(
         -> Nothing
 
 Write a CK segment of type 3 (pointing with linear interpolation inside intervals), as
-[`ckw03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw03_c.html).
+`ckw03_c`.
 
 `sclkdp` holds the times of the `nrec` records (encoded spacecraft clock ticks), `quats`
 their quaternions and `starts` the start times of the interpolation intervals. Inside
@@ -398,6 +414,10 @@ Throws `SpiceError`:
 - `:zeroquaternion` if a quaternion is zero.
 
 See [`ckopn`](@ref) for an example.
+
+# References
+
+- [NAIF documentation of `ckw03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw03_c.html)
 """
 function ckw03(
         ctx::SegContext, h::DAFHandle, begtim::Real, endtim::Real, inst::Integer,
@@ -508,7 +528,7 @@ Base.show(io::IO, w::CKW04Writer) = _seg_show_writer(io, w)
 
 Begin a CK segment of type 4 (Chebyshev polynomials for the quaternion and the angular
 velocity, on intervals of unequal length) in the file of `handle`, as
-[`ckw04b`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04b.html)
+`ckw04b`
 of SPICELIB, and return its writer. CSPICE has no C wrapper for it.
 
 `begtim` is the begin time of the segment (encoded spacecraft clock ticks), `inst` the
@@ -548,6 +568,10 @@ julia> cmat, clkout = ckgp(ctx, -77000, 50.0, 0.0, "J2000");
 julia> cmat == [1 0 0; 0 1 0; 0 0 1], clkout
 (true, 50.0)
 ```
+
+# References
+
+- [NAIF documentation of `ckw04b`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04b.html)
 """
 function ckw04b(
         ctx::SegContext, h::DAFHandle, begtim::Real, inst::Integer, ref::SegFrame,
@@ -573,7 +597,7 @@ ckw04b(
     ckw04a(writer, pktsiz, pktdat, sclkdp) -> Nothing
 
 Add `npkts` records to the type 4 segment `writer`, as
-[`ckw04a`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04a.html)
+`ckw04a`
 of SPICELIB. CSPICE has no C wrapper for it. Without `npkts`, the number of records is
 `length(sclkdp)`.
 
@@ -598,6 +622,10 @@ Throws `SpiceError`:
   number, so the stored record has `pktsiz[i] - 6` numbers.
 
 See [`ckw04b`](@ref) for an example.
+
+# References
+
+- [NAIF documentation of `ckw04a`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04a.html)
 """
 function ckw04a(w::CKW04Writer, npkts::Integer, pktsiz, pktdat, sclkdp)
     who = "ckw04a"
@@ -669,7 +697,7 @@ ckw04a(w::CKW04Writer, pktsiz, pktdat, sclkdp) = ckw04a(w, length(sclkdp), pktsi
 
 End the type 4 segment `writer` with the end time `endtim` (ticks) and write it to its
 file, as
-[`ckw04e`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04e.html)
+`ckw04e`
 of SPICELIB. CSPICE has no C wrapper for it.
 
 [`ckw04b`](@ref) and [`ckw04a`](@ref) do not change the file, so a segment that is never
@@ -679,6 +707,10 @@ SPICELIB writes. The writer cannot be used again.
 Throws `SpiceError(:segmentnotopen)` if the writer was ended before, and
 `SpiceError(:dafnosuchhandle)` if the handle was closed after [`ckw04b`](@ref); the
 segment is then lost.
+
+# References
+
+- [NAIF documentation of `ckw04e`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw04e.html)
 """
 function ckw04e(w::CKW04Writer, endtim::Real)
     who = "ckw04e"
@@ -718,7 +750,7 @@ end
           packts, rate, nints, starts) -> Nothing
 
 Write a CK segment of type 5 (Hermite or Lagrange interpolation of attitude packets), as
-[`ckw05_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw05_c.html).
+`ckw05_c`.
 
 `subtyp` selects the interpolation and the content of a packet. `q` is a SPICE
 quaternion (scalar first), `dq` its derivative, `av` the angular velocity in `ref`
@@ -755,6 +787,10 @@ Throws `SpiceError`:
 - `:baddescrtimes` if `endtim < begtim`;
 - `:emptysegment` if no time of `sclkdp` is inside [`begtim`, `endtim`];
 - `:invalidvalue` if `rate` is zero.
+
+# References
+
+- [NAIF documentation of `ckw05_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckw05_c.html)
 """
 function ckw05(
         ctx::SegContext, h::DAFHandle, subtyp::Integer, degree::Integer,
@@ -902,7 +938,7 @@ end
           packts, rates, sclkdp, ivlbds, sellst) -> Nothing
 
 Write a CK segment of type 6 (mini-segments of Hermite or Lagrange interpolation), as
-[`ckw06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw06.html)
+`ckw06`
 of SPICELIB. CSPICE has no C wrapper for it.
 
 A mini-segment is a set of packets with its own subtype, degree and clock rate, valid on
@@ -941,6 +977,10 @@ For a mini-segment it throws:
 - `:zeroquaternion` if a quaternion is zero;
 - `:badquatsign`, for a Hermite subtype, if a quaternion is farther from its
   predecessor than its negative is.
+
+# References
+
+- [NAIF documentation of `ckw06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckw06.html)
 """
 function ckw06(
         ctx::SegContext, h::DAFHandle, inst::Integer, ref::SegFrame, avflag::Bool,

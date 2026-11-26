@@ -293,7 +293,7 @@ end
 
 Return the state of `target` relative to an observer that moves at a constant velocity
 relative to the body `obsctr`, as
-[`spkcvo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcvo_c.html) of CSPICE. `state` is an `SVector{6}` (km,
+`spkcvo_c` of CSPICE. `state` is an `SVector{6}` (km,
 km/s) in the frame `outref`; `lt` is the one-way light time in seconds.
 
 `obssta` is the state of the observer relative to the center of `obsctr` (km, km/s, 6
@@ -323,6 +323,10 @@ Throws `SpiceError`:
 - the kinds of [`spkezr`](@ref) for SPK or frame data that are not loaded.
 
 See also [`spkcpo`](@ref), [`spkcvt`](@ref), [`azlcpo`](@ref).
+
+# References
+
+- [NAIF documentation of `spkcvo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcvo_c.html)
 """
 function spkcvo(
         ks::KernelSet, target::NameOrID, et::Real, outref::NameOrID,
@@ -341,7 +345,7 @@ end
 
 Return the state of `target` relative to an observer at a constant position on the
 body `obsctr`, as
-[`spkcpo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcpo_c.html) of CSPICE. `state` is an `SVector{6}` (km, km/s) in the
+`spkcpo_c` of CSPICE. `state` is an `SVector{6}` (km, km/s) in the
 frame `outref`; `lt` is the one-way light time in seconds.
 
 `obspos` is the observer position relative to the center of `obsctr` (km, 3 elements)
@@ -350,6 +354,10 @@ planet. This is [`spkcvo`](@ref) with a zero velocity; the other arguments, the 
 and the errors are the same.
 
 See also [`spkcpt`](@ref), [`azlcpo`](@ref).
+
+# References
+
+- [NAIF documentation of `spkcpo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcpo_c.html)
 """
 function spkcpo(
         ks::KernelSet, target::NameOrID, et::Real, outref::NameOrID,
@@ -368,7 +376,7 @@ end
 
 Return the state, relative to the observer `obsrvr`, of a target that moves at a
 constant velocity relative to the body `trgctr`, as
-[`spkcvt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcvt_c.html) of CSPICE. `state` is an
+`spkcvt_c` of CSPICE. `state` is an
 `SVector{6}` (km, km/s) in the frame `outref`; `lt` is the one-way light time in seconds.
 
 `trgsta` is the state of the target relative to the center of `trgctr` (km, km/s, 6
@@ -380,6 +388,10 @@ Throws the errors of [`spkcvo`](@ref), with `trgsta` and `trgref` in the place o
 `obssta` and `obsref`.
 
 See also [`spkcpt`](@ref), [`spkcvo`](@ref).
+
+# References
+
+- [NAIF documentation of `spkcvt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcvt_c.html)
 """
 function spkcvt(
         ks::KernelSet, trgsta::AbstractVector, trgepc::Real, trgctr::NameOrID,
@@ -398,7 +410,7 @@ end
 
 Return the state, relative to the observer `obsrvr`, of a target at a constant position
 on the body `trgctr`, as
-[`spkcpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcpt_c.html) of CSPICE. `state` is an `SVector{6}` (km, km/s) in
+`spkcpt_c` of CSPICE. `state` is an `SVector{6}` (km, km/s) in
 the frame `outref`; `lt` is the one-way light time in seconds.
 
 `trgpos` is the target position relative to the center of `trgctr` (km, 3 elements) in
@@ -407,6 +419,10 @@ the frame `trgref`, for example a surface point in the body-fixed frame. This is
 are the same.
 
 See also [`spkcpo`](@ref), [`spkcvt`](@ref).
+
+# References
+
+- [NAIF documentation of `spkcpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkcpt_c.html)
 """
 function spkcpt(
         ks::KernelSet, trgpos::AbstractVector, trgctr::NameOrID, trgref::NameOrID,

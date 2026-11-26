@@ -38,7 +38,7 @@ end
 
 Return the [`Orbit`](@ref) of Keplerian elements about `center` in `frame` at `et`
 (seconds past J2000 TDB); lengths in km, angles in rad. The counterpart of
-[`conics_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/conics_c.html); `Orbit::try_keplerian`,
+`conics_c`; `Orbit::try_keplerian`,
 `try_keplerian_apsis_radii` and `try_keplerian_mean_anomaly` of ANISE.
 
 - `shape`: `sma` and `ecc`, or the radii `periapsis` and `apoapsis`;
@@ -72,6 +72,10 @@ julia> round.(collect(values(keplerian(o))), digits=9)
     2.0
     0.3
 ```
+
+# References
+
+- [NAIF documentation of `conics_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/conics_c.html)
 """
 function keplerian_orbit(
         ks::KernelSet, et::Real, center::NameOrID, frame::NameOrID;
@@ -183,7 +187,7 @@ end
 
 Return `o` at the epoch `et2` (seconds past J2000 TDB, earlier or later, a dual number
 too) by Kepler motion, without perturbations. The counterpart of
-[`prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html);
+`prop2b_c`;
 `Orbit::at_epoch` of ANISE, except for some hyperbolas ([differences from ANISE](@ref "Differences from ANISE")).
 
 Throws `SpiceError(:degeneratecase)` for a circular orbit (`ecc < 1e-11`), which has no
@@ -198,6 +202,10 @@ julia> o = keplerian_orbit(0.0, 399, 1; sma=8000.0, ecc=0.1, inc=0.5, raan=1.0, 
 julia> t = two_body(o, 3000.0); t.et, round(t.sma, digits=6)
 (3000.0, 8000.0)
 ```
+
+# References
+
+- [NAIF documentation of `prop2b_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/prop2b_c.html)
 """
 function two_body(o::Orbit{T}, et2::Real) where {T}
     et2 isa Float64 && o.et isa Float64 && et2 == o.et && return o

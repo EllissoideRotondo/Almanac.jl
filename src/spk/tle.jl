@@ -53,7 +53,7 @@ end
     getelm([ctx | ks,] frstyr, lines) -> (epoch::Float64, elems::SVector{10,Float64})
 
 Parse the two lines `lines` of a two-line element set, as
-[`getelm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getelm_c.html), and return the epoch
+`getelm_c`, and return the epoch
 of the elements (seconds past J2000 TDB) and the ten elements.
 
 `frstyr` is the first year of the 100-year interval in which the two-digit year of the
@@ -95,6 +95,10 @@ state = evsgp4(epoch + 3600.0, geophs, elems)      # km and km/s, frame TEME (se
 ```
 
 See also [`evsgp4`](@ref), [`spkw10`](@ref).
+
+# References
+
+- [NAIF documentation of `getelm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getelm_c.html)
 """
 function getelm(ks::KernelSet, frstyr::Integer, lines)
     length(lines) == 2 || throw(
@@ -183,7 +187,7 @@ end
 
 Return the state (km, km/s) in the TEME frame (true equator, mean equinox), at the epoch
 `et` (seconds past J2000 TDB), of the two-line element set `elems`, as
-[`evsgp4_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/evsgp4_c.html).
+`evsgp4_c`.
 
 `elems` holds the ten elements that [`getelm`](@ref) returns. `geophs` holds eight
 geophysical constants of the Earth:
@@ -213,6 +217,10 @@ Throws `SpiceError`:
   cannot be propagated.
 
 See [`getelm`](@ref) for an example.
+
+# References
+
+- [NAIF documentation of `evsgp4_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/evsgp4_c.html)
 """
 function evsgp4(ks::KernelSet, et::Real, geophs, elems)
     g = _tle_tuple("evsgp4", "geophs", geophs, Val(8))
@@ -228,7 +236,7 @@ evsgp4(et::Real, geophs, elems) = evsgp4(default_context(), et, geophs, elems)
         -> Nothing
 
 Write an SPK segment of type 10 (two-line element sets), as
-[`spkw10_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw10_c.html).
+`spkw10_c`.
 
 `consts` holds the eight geophysical constants of [`evsgp4`](@ref). `elems`
 holds `n` element sets of ten numbers each, in the form that [`getelm`](@ref) returns, and
@@ -244,6 +252,10 @@ Throws `SpiceError`:
 - `:segidtoolong` or `:nonprintingchars` if `segid` is not valid;
 - `:numpacketsnotpos` if there is no element set;
 - `:unorderedrefs` unless the epochs are strictly increasing.
+
+# References
+
+- [NAIF documentation of `spkw10_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkw10_c.html)
 """
 function spkw10(
         ctx::SegContext, h::DAFHandle, body::Integer, center::Integer,

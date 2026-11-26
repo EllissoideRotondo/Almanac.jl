@@ -7,13 +7,17 @@
 
 Return the rectangular coordinates of the point at distance `range`, azimuth `az` and
 elevation `el` (radians), as
-[`azlrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/azlrec_c.html) of CSPICE.
+`azlrec_c` of CSPICE.
 
 The azimuth is zero along +X. `azccw` tells whether it grows counterclockwise about +Z,
 seen from +Z. `elplsz` tells whether the elevation grows toward +Z. The ranges of the
 inputs are not checked. The result has the unit of `range`.
 
 See also [`recazl`](@ref), [`drdazl`](@ref).
+
+# References
+
+- [NAIF documentation of `azlrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/azlrec_c.html)
 """
 function azlrec(range::Real, az::Real, el::Real, azccw::Bool, elplsz::Bool)
     r, a, e = promote(float(range), float(az), float(el))
@@ -29,12 +33,16 @@ azlrec(range::Real, az::Real, el::Real; azccw::Bool = true, elplsz::Bool = true)
 
 Return the distance, the azimuth in [0, 2π) and the elevation in [-π/2, π/2] (radians)
 of the point `rectan`, as
-[`recazl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recazl_c.html) of CSPICE.
+`recazl_c` of CSPICE.
 
 `rectan` has 3 elements. The flags are those of [`azlrec`](@ref), which is the inverse
 conversion.
 
 See also [`dazldr`](@ref), [`azlcpo`](@ref).
+
+# References
+
+- [NAIF documentation of `recazl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recazl_c.html)
 """
 function recazl(rectan::AbstractVector, azccw::Bool, elplsz::Bool)
     # `recazl_` calls the Fortran `recrad_` and `reclat_`, whose longitude is the
@@ -58,7 +66,7 @@ recazl(rectan::AbstractVector; azccw::Bool = true, elplsz::Bool = true) =
 
 Return the Jacobian of the conversion from rectangular coordinates to (range, azimuth,
 elevation) at the point `(x, y, z)`, as
-[`dazldr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dazldr_c.html) of CSPICE.
+`dazldr_c` of CSPICE.
 
 Row `i` holds the partial derivatives of coordinate `i` of (range, azimuth, elevation)
 with respect to `x`, `y` and `z`. The flags are those of [`azlrec`](@ref).
@@ -66,6 +74,10 @@ with respect to `x`, `y` and `z`. The flags are those of [`azlrec`](@ref).
 Throws `SpiceError(:pointonzaxis)` if `x` and `y` are both zero.
 
 See also [`drdazl`](@ref), [`recazl`](@ref).
+
+# References
+
+- [NAIF documentation of `dazldr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dazldr_c.html)
 """
 function dazldr(x::Real, y::Real, z::Real, azccw::Bool, elplsz::Bool)
     (primal(x) == 0.0 && primal(y) == 0.0) && throw(
@@ -91,7 +103,7 @@ dazldr(x::Real, y::Real, z::Real; azccw::Bool = true, elplsz::Bool = true) =
 
 Return the Jacobian of the conversion from (range, azimuth, elevation) to rectangular
 coordinates, as
-[`drdazl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdazl_c.html) of CSPICE.
+`drdazl_c` of CSPICE.
 
 Column `j` holds the partial derivatives of `x`, `y` and `z` with respect to coordinate
 `j` of (range, azimuth, elevation). The angles are in radians. The flags are those of
@@ -100,6 +112,10 @@ Column `j` holds the partial derivatives of `x`, `y` and `z` with respect to coo
 Throws `SpiceError(:valueoutofrange)` if `range` is negative.
 
 See also [`dazldr`](@ref), [`azlrec`](@ref).
+
+# References
+
+- [NAIF documentation of `drdazl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdazl_c.html)
 """
 function drdazl(range::Real, az::Real, el::Real, azccw::Bool, elplsz::Bool)
     primal(range) < 0.0 && throw(
@@ -126,7 +142,7 @@ drdazl(range::Real, az::Real, el::Real; azccw::Bool = true, elplsz::Bool = true)
 Return the range, azimuth and elevation of `target` and their rates, seen from an
 observer at a constant position on the body `obsctr`, and the one-way light time `lt`
 (s), as
-[`azlcpo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/azlcpo_c.html) of CSPICE.
+`azlcpo_c` of CSPICE.
 
 `azlsta` is an `SVector{6}`: range (km), azimuth and elevation (rad), then their rates
 (km/s, rad/s). `obspos` is the observer position relative to the center of `obsctr`
@@ -164,6 +180,10 @@ az, el = azlsta[2] * dpr(), azlsta[3] * dpr()    # degrees; azimuth clockwise fr
 ```
 
 See also [`spkcpo`](@ref), [`recazl`](@ref), [`dazldr`](@ref).
+
+# References
+
+- [NAIF documentation of `azlcpo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/azlcpo_c.html)
 """
 function azlcpo(
         ks::KernelSet, method::AbstractString, target::NameOrID, et::Real,

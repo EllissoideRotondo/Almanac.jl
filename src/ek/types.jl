@@ -21,7 +21,7 @@ const _EK_TYPE_SYMBOLS = (:CHR, :DP, :INT, :TIME)
     EKColumnAttr
 
 Attributes of one EK column, as the attribute descriptor of
-[`ekcii_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekcii_c.html) and `ekssum_c`.
+`ekcii_c` and `ekssum_c`.
 [`ekcii`](@ref) and [`ekssum`](@ref) return it.
 
 - `cclass`: the column class of CSPICE, the code of the storage layout in the file:
@@ -34,6 +34,10 @@ Attributes of one EK column, as the attribute descriptor of
 - `size`: the number of values of an entry, -1 for entries of variable size;
 - `indexd`: true if the column has an index;
 - `nullok`: true if the column can hold null entries.
+
+# References
+
+- [NAIF documentation of `ekcii_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekcii_c.html)
 """
 struct EKColumnAttr
     cclass::Int

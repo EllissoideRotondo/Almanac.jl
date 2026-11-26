@@ -4,7 +4,7 @@ DSK and EK files are DAS (direct access segregated) files. A file handle is a
 [`DASHandle`](@ref) object, not an integer.
 
 `[ctx,]` and `[ctx | ks,]` in the signatures are the optional context of
-[Contexts in place of global state](@ref); [`dskxv!`](@ref) takes it after its two
+[Contexts and threads](@ref); [`dskxv!`](@ref) takes it after its two
 output arguments.
 
 ## DAS and DLA files

@@ -23,7 +23,7 @@
 
 Set the default convergence tolerance of the geometry finder searches on the context
 `ctx` to `value` seconds and return it, as
-[`gfstol_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfstol_c.html). Without `value`, return the
+`gfstol_c`. Without `value`, return the
 current default.
 
 The default of a new context is $(_GF_CNVTOL) s. The keyword `tol` of a search overrides
@@ -47,6 +47,10 @@ julia> gfstol(ctx)
 ```
 
 See also [`gfdist`](@ref).
+
+# References
+
+- [NAIF documentation of `gfstol_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfstol_c.html)
 """
 function gfstol(ctx::SpiceContext, value::Real)
     value > 0 || throw(
@@ -69,7 +73,7 @@ gfstol() = gfstol(default_context())
 Return the window of epochs, in seconds past J2000 TDB, on which the distance in km
 between `target` and `obsrvr` satisfies the relation `relate` with the reference value
 `refval`, as
-[`gfdist_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfdist_c.html).
+`gfdist_c`.
 
 The result is a new `Window` that is a subset of the confinement window `cnfine`.
 `cnfine` is not modified, and an empty `cnfine` gives an empty window. CSPICE needs a
@@ -146,6 +150,10 @@ wnsumd(near)[1]                          # seconds
 
 See also [`gfrr`](@ref), [`gfsep`](@ref), [`gfpa`](@ref), [`gfposc`](@ref),
 [`gfuds`](@ref), [`gfstol`](@ref), [`Window`](@ref).
+
+# References
+
+- [NAIF documentation of `gfdist_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfdist_c.html)
 """
 function gfdist(
         ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
@@ -164,13 +172,17 @@ end
 
 Return the window of epochs, in seconds past J2000 TDB, on which the range rate in km/s
 of `target` relative to `obsrvr` satisfies the relation `relate` with `refval`, as
-[`gfrr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrr_c.html).
+`gfrr_c`.
 
 The arguments, the keywords, the result and the errors are those of [`gfdist`](@ref).
 The search also reads the state 1 s before and 1 s after each epoch that it samples,
 as CSPICE does, so the kernels must cover `cnfine` with that margin.
 
 See also [`gfdist`](@ref).
+
+# References
+
+- [NAIF documentation of `gfrr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrr_c.html)
 """
 function gfrr(
         ks::KernelSet, target::NameOrID, abcorr::AbcorrArg, obsrvr::NameOrID,
@@ -213,7 +225,7 @@ end
 Return the window of epochs, in seconds past J2000 TDB, on which the angular separation
 in radians of `targ1` and `targ2`, as seen from `obsrvr`, satisfies the relation
 `relate` with `refval`, as
-[`gfsep_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsep_c.html).
+`gfsep_c`.
 
 Each shape is `"POINT"` or `"SPHERE"`, in any case. For a sphere the separation is
 measured from the limb, so it is negative when the disks overlap. The radius of the
@@ -228,6 +240,10 @@ Throws the errors of [`gfdist`](@ref), and `SpiceError` with the kind
   of the search.
 
 See also [`gfdist`](@ref), [`gfoclt`](@ref).
+
+# References
+
+- [NAIF documentation of `gfsep_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfsep_c.html)
 """
 function gfsep(
         ks::KernelSet, targ1::NameOrID, shape1::AbstractString, frame1::NameOrID,
@@ -267,7 +283,7 @@ gfsep(
 
 Return the window of epochs, in seconds past J2000 TDB, on which the phase angle in
 radians satisfies the relation `relate` with `refval`, as
-[`gfpa_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfpa_c.html). The phase angle is
+`gfpa_c`. The phase angle is
 the angle at `target` between the directions to the illumination source `illmn` and to
 the observer `obsrvr`.
 
@@ -278,6 +294,10 @@ Throws the errors of [`gfdist`](@ref), and `SpiceError(:invalidoption)` if `abco
 transmission correction.
 
 See also [`gfdist`](@ref), [`gfilum`](@ref), [`phaseq`](@ref).
+
+# References
+
+- [NAIF documentation of `gfpa_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfpa_c.html)
 """
 function gfpa(
         ks::KernelSet, target::NameOrID, illmn::NameOrID, abcorr::AbcorrArg,
@@ -341,7 +361,7 @@ end
 Return the window of epochs, in seconds past J2000 TDB, on which the coordinate `coord`
 of the position of `target` relative to `obsrvr` in the frame `frame` satisfies the
 relation `relate` with `refval`, as
-[`gfposc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfposc_c.html).
+`gfposc_c`.
 
 The coordinate systems and their coordinates, in any case, are
 
@@ -394,6 +414,10 @@ gfposc("SUN", "J2000", "LT+S", "EARTH", "RA/DEC", "RIGHT ASCENSION", "<", pi / 2
 ```
 
 See also [`gfdist`](@ref), [`gfsubc`](@ref), [`gfsntc`](@ref).
+
+# References
+
+- [NAIF documentation of `gfposc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfposc_c.html)
 """
 function gfposc(
         ks::KernelSet, target::NameOrID, frame::NameOrID, abcorr::AbcorrArg,
@@ -433,7 +457,7 @@ gfposc(
 
 Return the window of `cnfine` on which the scalar function `udfuns(et)` satisfies the
 relation `relate` with `refval`, as
-[`gfuds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfuds_c.html).
+`gfuds_c`.
 
 `udfuns(et)` returns a real number. `udqdec(et)` returns `true` if `udfuns` decreases at
 `et`, and must return a `Bool`. For a function without an analytical derivative, use
@@ -474,6 +498,10 @@ julia> [round(wnfetd(peaks, i)[1]; digits=4) for i in 1:wncard(peaks)]
 ```
 
 See also [`gfudb`](@ref), [`uddc`](@ref), [`uddf`](@ref), [`gfdist`](@ref).
+
+# References
+
+- [NAIF documentation of `gfuds_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfuds_c.html)
 """
 function gfuds(
         ::KernelSet, udfuns::F, udqdec::D, relate::AbstractString, refval::Real,
@@ -499,7 +527,7 @@ gfuds(
           threads=false) -> Window
 
 Return the window of `cnfine` on which the boolean function `udfunb(et)` is `true`, as
-[`gfudb_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfudb_c.html).
+`gfudb_c`.
 
 `udfunb` takes the epoch alone and must return a `Bool`; the scalar function that CSPICE
 passes through to it is not needed. The search samples `udfunb` from the start of each
@@ -523,6 +551,10 @@ julia> [round.(wnfetd(w, i); digits=4) for i in 1:wncard(w)]
 ```
 
 See also [`gfuds`](@ref), [`gfoclt`](@ref), [`gftfov`](@ref).
+
+# References
+
+- [NAIF documentation of `gfudb_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfudb_c.html)
 """
 function gfudb(
         ::KernelSet, udfunb::F, step::Real, cnfine::Window; tol::Real = _GF_CNVTOL,
@@ -578,7 +610,7 @@ const _GF_QPARS = (
 
 Return the window of `cnfine` on which the quantity `gquant` satisfies the relation `op`
 with the reference value `refval`, as
-[`gfevnt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfevnt_c.html). This is the general entry of the
+`gfevnt_c`. This is the general entry of the
 geometry finder, with a step and a refinement function that the caller supplies.
 
 # Arguments
@@ -645,6 +677,10 @@ gfevnt(86400.0, gfrefn, "DISTANCE", ["TARGET", "OBSERVER", "ABCORR"],
 ```
 
 See also [`gfocce`](@ref), [`gffove`](@ref).
+
+# References
+
+- [NAIF documentation of `gfevnt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfevnt_c.html)
 """
 function gfevnt(
         ks::KernelSet, udstep, udrefn, gquant::AbstractString,

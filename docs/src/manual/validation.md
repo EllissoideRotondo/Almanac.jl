@@ -10,7 +10,7 @@ have no CSPICE counterpart, are compared with ANISE as well.
 
 - **Files:** a kernel written by Almanac.jl holds the data, word for word, of the one
   CSPICE writes from the same input. The bytes differ only where CSPICE leaves them
-  [unset](@ref "Fixes that change only the bytes of a file").
+  unset.
 - **Derivatives:** the first derivative of a state is compared with the velocity of
   CSPICE, and each higher derivative with automatic differentiation of the one below.
 - **Errors:** an input that CSPICE refuses gives the kind of the CSPICE error. Checks
@@ -57,6 +57,6 @@ below are relative unless a unit is given.
   calls, and the orbit calls [`element`](@ref), [`keplerian`](@ref),
   [`with_element`](@ref), `two_body`, [`local_frame`](@ref),
   [`local_frame_state`](@ref) and [`relative_state`](@ref), cannot allocate for
-  `Float64` inputs. The tests measure the state and rotation calls of
-  [Allocation](@ref) call by call.
+  `Float64` inputs. The tests measure the allocations of [`spkezr`](@ref), [`spkpos`](@ref),
+  [`spkder`](@ref), [`pxform`](@ref), [`sxform`](@ref) and [`pxder`](@ref) call by call.
 - **Package hygiene:** Aqua.jl and ExplicitImports.jl.

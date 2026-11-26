@@ -7,9 +7,9 @@ An inner loop or a GPU kernel that needs the position of a body many times over 
 ```@example tab
 using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
 
-furnsh(naif0012_tls())                      # leap seconds
-furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
-furnsh(pck00011())                          # orientation and radii of the bodies
+furnsh(naif0012_tls())
+furnsh(de440s())
+furnsh(pck00011())
 
 t0 = str2et("2025 MAR 01 12:00:00 UTC")
 t1 = t0 + 86400.0

@@ -22,7 +22,7 @@
 
 Return the rotation matrix `[angle3]_axis3 * [angle2]_axis2 * [angle1]_axis1` of three
 Euler angles in radians, as
-[`eul2m_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eul2m_c.html) of CSPICE.
+`eul2m_c` of CSPICE.
 
 `[angle]_axis` is `rotate(angle, axis)`, about the axis 1, 2 or 3 (x, y, z). The factor
 of `angle1` is applied first to the components of a vector. `axis2` can be equal to
@@ -42,6 +42,10 @@ julia> round.(m2eul(r, 3, 1, 3); digits=12)
 ```
 
 See also [`m2eul`](@ref), [`eul2xf`](@ref), [`rotate`](@ref).
+
+# References
+
+- [NAIF documentation of `eul2m_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eul2m_c.html)
 """
 function eul2m(
         angle3::Real, angle2::Real, angle1::Real, axis3::Integer, axis2::Integer,
@@ -106,7 +110,7 @@ end
 
 Return the Euler angles in radians that factor the rotation matrix `r` as
 `[angle3]_axis3 * [angle2]_axis2 * [angle1]_axis1`, as
-[`m2eul_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/m2eul_c.html) of CSPICE.
+`m2eul_c` of CSPICE.
 
 `angle3` and `angle1` are in (-pi, pi]. `angle2` is in [0, pi] if `axis3 == axis1` and
 in [-pi/2, pi/2] otherwise. If `angle2` is at an end of its range, the factors are not
@@ -127,6 +131,10 @@ julia> round.(m2eul(rotate(0.3, 3), 3, 1, 3); digits=12)
 ```
 
 See also [`eul2m`](@ref), which has an example, and [`xf2eul`](@ref).
+
+# References
+
+- [NAIF documentation of `m2eul_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/m2eul_c.html)
 """
 m2eul(r::AbstractMatrix, axis3::Integer, axis2::Integer, axis1::Integer) =
     _m_m2eul(_m_m3(r), axis3, axis2, axis1)
@@ -135,7 +143,7 @@ m2eul(r::AbstractMatrix, axis3::Integer, axis2::Integer, axis1::Integer) =
     eul2xf(eulang, axisa, axisb, axisc) -> SMatrix{6,6}
 
 Return the 6 by 6 state transformation of three Euler angles and their rates, as
-[`eul2xf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eul2xf_c.html) of CSPICE.
+`eul2xf_c` of CSPICE.
 
 `eulang[1:3]` and `axisa`, `axisb`, `axisc` are `angle3`, `angle2`, `angle1` and
 `axis3`, `axis2`, `axis1` of [`eul2m`](@ref). `eulang[4:6]` are their rates in radians
@@ -163,6 +171,10 @@ true
 ```
 
 See also [`xf2eul`](@ref), [`eul2m`](@ref), [`rav2xf`](@ref).
+
+# References
+
+- [NAIF documentation of `eul2xf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/eul2xf_c.html)
 """
 function eul2xf(eulang::AbstractVector, axisa::Integer, axisb::Integer, axisc::Integer)
     e = _m_v6(eulang)
@@ -210,7 +222,7 @@ end
 
 Return the Euler angles and their rates of the 6 by 6 state transformation `xform`, and
 a flag that tells if they are unique, as
-[`xf2eul_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xf2eul_c.html) of CSPICE.
+`xf2eul_c` of CSPICE.
 
 `eulang` has the layout of [`eul2xf`](@ref): three angles in radians, then their rates.
 `unique` is `false` in the degenerate case of [`m2eul`](@ref); `eulang[1]` (`angle3`)
@@ -220,6 +232,10 @@ Throws as [`m2eul`](@ref) for the upper left 3 by 3 block, and `SpiceError(:bada
 `xform` is not 6 by 6.
 
 See also [`eul2xf`](@ref), which has an example, and [`xf2rav`](@ref).
+
+# References
+
+- [NAIF documentation of `xf2eul_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xf2eul_c.html)
 """
 function xf2eul(xform::AbstractMatrix, axisa::Integer, axisb::Integer, axisc::Integer)
     r, drdt = _m_blocks(_m_m6(xform))
@@ -250,7 +266,7 @@ end
     axisar(axis, angle) -> SMatrix{3,3}
 
 Return the matrix that rotates vectors by `angle` radians about the vector `axis`, as
-[`axisar_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/axisar_c.html) of CSPICE.
+`axisar_c` of CSPICE.
 
 The rotation follows the right-hand rule. `axis` need not have unit length; a zero
 `axis` gives the identity. The result is the transpose of the coordinate system
@@ -275,6 +291,10 @@ true
 ```
 
 See also [`raxisa`](@ref), [`vrotv`](@ref), [`rotate`](@ref).
+
+# References
+
+- [NAIF documentation of `axisar_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/axisar_c.html)
 """
 axisar(axis::AbstractVector, angle::Real) = _m_axisar(_m_v3(axis), _m_f(angle))
 
@@ -282,7 +302,7 @@ axisar(axis::AbstractVector, angle::Real) = _m_axisar(_m_v3(axis), _m_f(angle))
     m2q(r) -> SVector{4}
 
 Return the unit quaternion of the rotation matrix `r`, in the SPICE convention, as
-[`m2q_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/m2q_c.html) of CSPICE.
+`m2q_c` of CSPICE.
 
 In the SPICE convention the scalar part is first: the matrix that rotates vectors by
 the angle `θ` about the unit vector `u` (`axisar(u, θ)`) has the quaternion
@@ -304,6 +324,10 @@ true
 ```
 
 See also [`q2m`](@ref), [`qxq`](@ref), [`raxisa`](@ref).
+
+# References
+
+- [NAIF documentation of `m2q_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/m2q_c.html)
 """
 m2q(r::AbstractMatrix) = _m_m2q(_m_m3(r))
 
@@ -312,7 +336,7 @@ m2q(r::AbstractMatrix) = _m_m2q(_m_m3(r))
 
 Return the rotation matrix of the quaternion `q` in the SPICE convention (scalar part
 first, see [`m2q`](@ref)), as
-[`q2m_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/q2m_c.html) of CSPICE.
+`q2m_c` of CSPICE.
 
 A quaternion that does not have unit length is scaled to it, as in CSPICE. The zero
 quaternion gives the identity.
@@ -320,6 +344,10 @@ quaternion gives the identity.
 Throws `SpiceError(:badarg)` if `q` does not have 4 elements.
 
 See also [`m2q`](@ref), which has an example.
+
+# References
+
+- [NAIF documentation of `q2m_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/q2m_c.html)
 """
 function q2m(q::AbstractVector)
     v = _m_v4(q)
@@ -338,7 +366,7 @@ end
 
 Return the product `q1 * q2` of two quaternions in the SPICE convention (scalar part
 first), as
-[`qxq_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/qxq_c.html) of CSPICE.
+`qxq_c` of CSPICE.
 
 For unit quaternions `q2m(qxq(q1, q2))` is `q2m(q1) * q2m(q2)` to rounding.
 
@@ -352,6 +380,10 @@ true
 ```
 
 See also [`m2q`](@ref), [`q2m`](@ref), [`qdq2av`](@ref).
+
+# References
+
+- [NAIF documentation of `qxq_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/qxq_c.html)
 """
 qxq(q1::AbstractVector, q2::AbstractVector) = _m_qxq(_m_v4(q1), _m_v4(q2))
 
@@ -360,7 +392,7 @@ qxq(q1::AbstractVector, q2::AbstractVector) = _m_qxq(_m_v4(q1), _m_v4(q2))
 
 Return the angular velocity of a frame from its quaternion `q` and the time derivative
 `dq`, as
-[`qdq2av_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/qdq2av_c.html) of CSPICE.
+`qdq2av_c` of CSPICE.
 
 `q` has the SPICE convention (scalar part first) and is scaled to unit length.
 `q2m(q)` transforms the components of a vector from a base frame to the frame; for
@@ -371,6 +403,10 @@ frame, as [`xf2rav`](@ref) gives it. The unit is radians per unit of the time of
 Throws `SpiceError(:badarg)` if an argument does not have 4 elements.
 
 See also [`qxq`](@ref), [`xf2rav`](@ref).
+
+# References
+
+- [NAIF documentation of `qdq2av_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/qdq2av_c.html)
 """
 function qdq2av(q::AbstractVector, dq::AbstractVector)
     qq = _m_v4(q)
@@ -385,7 +421,7 @@ end
 
 Return the 6 by 6 state transformation of the rotation matrix `rot` and the angular
 velocity `av`, as
-[`rav2xf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rav2xf_c.html) of CSPICE.
+`rav2xf_c` of CSPICE.
 
 `rot` transforms the components of a vector from frame 1 to frame 2. `av` is the
 angular velocity of frame 2 relative to frame 1, in frame 1, in radians per unit of
@@ -406,6 +442,10 @@ true
 ```
 
 See also [`xf2rav`](@ref), [`eul2xf`](@ref).
+
+# References
+
+- [NAIF documentation of `rav2xf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/rav2xf_c.html)
 """
 function rav2xf(rot::AbstractMatrix, av::AbstractVector)
     r = _m_m3(rot)
@@ -420,7 +460,7 @@ end
 
 Return the rotation matrix and the angular velocity of the 6 by 6 state transformation
 `xform`, as
-[`xf2rav_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xf2rav_c.html) of CSPICE.
+`xf2rav_c` of CSPICE.
 
 `rot` is the upper left 3 by 3 block. `av` has the meaning and the unit that
 [`rav2xf`](@ref) states. `rav2xf(xf2rav(xform)...)` is `xform` to rounding if that block
@@ -429,6 +469,10 @@ is a rotation.
 Throws `SpiceError(:badarg)` if `xform` is not 6 by 6.
 
 See also [`rav2xf`](@ref), which has an example, and [`xf2eul`](@ref).
+
+# References
+
+- [NAIF documentation of `xf2rav_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xf2rav_c.html)
 """
 function xf2rav(xform::AbstractMatrix)
     r, drdt = _m_blocks(_m_m6(xform))
@@ -440,7 +484,7 @@ end
     raxisa(matrix) -> (axis::SVector{3}, angle)
 
 Return the unit axis and the angle in radians, in [0, pi], of the rotation `matrix`, as
-[`raxisa_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/raxisa_c.html) of CSPICE.
+`raxisa_c` of CSPICE.
 
 The matrix rotates vectors by `angle` about `axis`: `axisar(axis, angle)` is `matrix`
 to rounding. The identity gives the axis (0, 0, 1) and the angle 0.
@@ -449,6 +493,10 @@ Throws `SpiceError(:notarotation)` if `isrot(matrix, 0.1, 0.1)` is false, and
 `SpiceError(:badarg)` if `matrix` is not 3 by 3.
 
 See also [`axisar`](@ref), which has an example, and [`m2q`](@ref).
+
+# References
+
+- [NAIF documentation of `raxisa_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/raxisa_c.html)
 """
 raxisa(matrix::AbstractMatrix) = _m_raxisa_q(_m_m2q(_m_m3(matrix)))
 
@@ -456,7 +504,7 @@ raxisa(matrix::AbstractMatrix) = _m_raxisa_q(_m_m2q(_m_m3(matrix)))
     sharpr(rot) -> SMatrix{3,3}
 
 Return the 3 by 3 matrix `rot` with its columns made orthonormal, as
-[`sharpr`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/sharpr.html) of SPICELIB.
+`sharpr` of SPICELIB.
 
 Column 1 is scaled to unit length. Column 3 is the unit cross product of columns 1 and
 2, and column 2 is the unit cross product of columns 3 and 1.
@@ -464,5 +512,9 @@ Column 1 is scaled to unit length. Column 3 is the unit cross product of columns
 Throws `SpiceError(:badarg)` if `rot` is not 3 by 3.
 
 See also [`isrot`](@ref).
+
+# References
+
+- [NAIF documentation of `sharpr`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/sharpr.html)
 """
 sharpr(rot::AbstractMatrix) = _m_sharpr(_m_m3(rot))

@@ -411,7 +411,7 @@ end
     dasopr(path) -> DASHandle
 
 Open the DAS file `path` for reading and return its handle, as
-[`dasopr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasopr_c.html).
+`dasopr_c`.
 
 The file can have either byte order, and it need not be segregated. Close the handle
 with [`dascls`](@ref).
@@ -430,6 +430,10 @@ Throws `SpiceError`:
 - `:baddasdirectory` if the directory records do not agree with the file.
 
 See also [`dasopw`](@ref), [`dlabfs`](@ref), [`dasrdd`](@ref).
+
+# References
+
+- [NAIF documentation of `dasopr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasopr_c.html)
 """
 dasopr(path::AbstractString) = _open_register!(_das_load(path, "dasopr", false), path, false, "dasopr")
 
@@ -437,7 +441,7 @@ dasopr(path::AbstractString) = _open_register!(_das_load(path, "dasopr", false),
     dasopw(path) -> DASHandle
 
 Open the existing DAS file `path` for writing, as
-[`dasopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasopw_c.html).
+`dasopw_c`.
 
 The file is read into memory, and the file on disk does not change until
 [`dascls`](@ref). No other handle may have the file open. [`dasopr`](@ref) can still open
@@ -445,6 +449,10 @@ it for read, where CSPICE refuses; that handle keeps the data as they were when 
 
 Throws the `SpiceError` kinds of [`dasopr`](@ref), `:fileopenconflict` if another handle
 has the file open, and `:fileopenfail` if the file is not writable.
+
+# References
+
+- [NAIF documentation of `dasopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasopw_c.html)
 """
 function dasopw(path::AbstractString)
     h = _das_load(path, "dasopw", true)
@@ -461,7 +469,7 @@ end
     dasonw(path, ftype, ifname, ncomr) -> DASHandle
 
 Create the DAS file `path` and open it for writing, as
-[`dasonw`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasonw.html)
+`dasonw`
 of SPICELIB.
 
 `ftype` is the file type (for example `"DSK"`; four characters are stored), `ifname` is
@@ -480,6 +488,10 @@ Throws `SpiceError`:
 - `:invalidcount` if `ncomr < 0`.
 
 See also [`dlaopn`](@ref), [`dskopn`](@ref), [`dasops`](@ref).
+
+# References
+
+- [NAIF documentation of `dasonw`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasonw.html)
 """
 function dasonw(
         path::AbstractString, ftype::AbstractString, ifname::AbstractString,
@@ -528,7 +540,7 @@ end
     dasops() -> DASHandle
 
 Open a scratch DAS file for writing, as
-[`dasops`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasops.html)
+`dasops`
 of SPICELIB.
 
 The data are in memory: no file exists at any time and [`dascls`](@ref) writes nothing.
@@ -555,6 +567,10 @@ julia> dasrdd(h, 1, 3)
 
 julia> dascls(h)
 ```
+
+# References
+
+- [NAIF documentation of `dasops`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasops.html)
 """
 function dasops()
     h = DASHandle(
@@ -569,7 +585,7 @@ end
     dascls(handle) -> Nothing
 
 Close the DAS file of `handle`, as
-[`dascls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dascls_c.html).
+`dascls_c`.
 
 A handle open for writing writes the complete file in segregated form, to a temporary
 file that is then moved into place. A scratch file ([`dasops`](@ref)) is not written. The
@@ -578,6 +594,10 @@ call does nothing on a closed handle.
 Throws `SpiceError(:daswritefail)` if the file cannot be written; the handle then stays
 open. On Windows the file cannot be replaced, and the call throws, while another handle
 has it open for reading or a context has it loaded.
+
+# References
+
+- [NAIF documentation of `dascls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dascls_c.html)
 """
 function dascls(h::DASHandle)
     h.isopen || return nothing
@@ -611,11 +631,15 @@ end
     dasllc(handle) -> Nothing
 
 Close the DAS file of `handle`, as
-[`dasllc`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasllc.html)
+`dasllc`
 of SPICELIB.
 
 The call is [`dascls`](@ref): the file of a write handle is written in segregated form,
 which `dasllc` of CSPICE does not do.
+
+# References
+
+- [NAIF documentation of `dasllc`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasllc.html)
 """
 dasllc(h::DASHandle) = dascls(h)
 
@@ -627,8 +651,12 @@ dasllc(h::DASHandle) = dascls(h)
     dashfn(handle) -> String
 
 Return the name of the DAS file of `handle`, as
-[`dashfn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dashfn_c.html). A scratch file
+`dashfn_c`. A scratch file
 ([`dasops`](@ref)) has the name `""`.
+
+# References
+
+- [NAIF documentation of `dashfn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dashfn_c.html)
 """
 function dashfn(h::DASHandle)
     _das_check_open(h, "dashfn")
@@ -639,12 +667,16 @@ end
     dasrfr(handle) -> (idword, ifname, nresvr, nresvc, ncomr, ncomc)
 
 Return the contents of the file record, as
-[`dasrfr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasrfr_c.html): the ID word and the internal file
+`dasrfr_c`: the ID word and the internal file
 name (both without trailing blanks), the numbers of reserved records and of reserved
 characters, and the numbers of comment records and of comment characters.
 
 For a handle that is open for writing, the comment counts include the changes that are not
 on disk yet.
+
+# References
+
+- [NAIF documentation of `dasrfr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasrfr_c.html)
 """
 function dasrfr(h::DASHandle)
     _das_check_open(h, "dasrfr")
@@ -656,7 +688,11 @@ end
 
 Return the last addresses in use of the character, the double and the integer address
 space, as
-[`daslla`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/daslla.html) of SPICELIB. An address space without data gives 0.
+`daslla` of SPICELIB. An address space without data gives 0.
+
+# References
+
+- [NAIF documentation of `daslla`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/daslla.html)
 """
 function daslla(h::DASHandle)
     _das_check_open(h, "daslla")
@@ -667,7 +703,7 @@ end
     dashfs(handle) -> (nresvr, nresvc, ncomr, ncomc, free, lastla, lastrc, lastwd)
 
 Return the file summary, as
-[`dashfs`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dashfs.html)
+`dashfs`
 of SPICELIB.
 
 - `nresvr`, `nresvc`: the numbers of reserved records and of reserved characters.
@@ -682,6 +718,10 @@ of SPICELIB.
 
 For a handle that is open for writing, `free`, `lastrc` and `lastwd` describe the
 segregated file that [`dascls`](@ref) will write.
+
+# References
+
+- [NAIF documentation of `dashfs`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dashfs.html)
 """
 function dashfs(h::DASHandle)
     _das_check_open(h, "dashfs")
@@ -726,12 +766,16 @@ end
     dasrdd(handle, first, last) -> Vector{Float64}
 
 Return the doubles at the DAS addresses `first:last`, as
-[`dasrdd`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasrdd.html) of SPICELIB. Addresses
+`dasrdd` of SPICELIB. Addresses
 start at 1. The result is empty if `first > last`.
 
 Throws `SpiceError(:dasnosuchaddress)` if the range is not inside the address space.
 
 See also [`dasrdi`](@ref), [`dasrdc`](@ref), [`daslla`](@ref).
+
+# References
+
+- [NAIF documentation of `dasrdd`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasrdd.html)
 """
 function dasrdd(h::DASHandle, first::Integer, last::Integer)
     _das_check_open(h, "dasrdd")
@@ -744,10 +788,14 @@ end
     dasrdi(handle, first, last) -> Vector{Int}
 
 Return the integers at the DAS addresses `first:last`, as
-[`dasrdi`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasrdi.html) of SPICELIB. Addresses
+`dasrdi` of SPICELIB. Addresses
 start at 1. The result is empty if `first > last`.
 
 Throws `SpiceError(:dasnosuchaddress)` if the range is not inside the address space.
+
+# References
+
+- [NAIF documentation of `dasrdi`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasrdi.html)
 """
 function dasrdi(h::DASHandle, first::Integer, last::Integer)
     _das_check_open(h, "dasrdi")
@@ -760,10 +808,14 @@ end
     dasrdc(handle, first, last) -> String
 
 Return the characters at the DAS addresses `first:last` as one string.
-[`dasrdc`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasrdc.html) of SPICELIB fills substrings of an array of strings. Addresses start at 1. The result is
+`dasrdc` of SPICELIB fills substrings of an array of strings. Addresses start at 1. The result is
 empty if `first > last`.
 
 Throws `SpiceError(:dasnosuchaddress)` if the range is not inside the address space.
+
+# References
+
+- [NAIF documentation of `dasrdc`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasrdc.html)
 """
 function dasrdc(h::DASHandle, first::Integer, last::Integer)
     _das_check_open(h, "dasrdc")
@@ -776,11 +828,15 @@ end
     dasadd(handle, data) -> Nothing
 
 Append the doubles `data` to the double address space, as
-[`dasadd`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasadd.html) of SPICELIB. The file
+`dasadd` of SPICELIB. The file
 on disk changes when [`dascls`](@ref) runs.
 
 See also [`dasadi`](@ref), [`dasadc`](@ref), [`dasudd`](@ref), and [`dasops`](@ref) for
 an example.
+
+# References
+
+- [NAIF documentation of `dasadd`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasadd.html)
 """
 function dasadd(h::DASHandle, data::AbstractVector{<:Real})
     _das_check_write(h, "dasadd")
@@ -804,10 +860,14 @@ end
     dasadi(handle, data) -> Nothing
 
 Append the integers `data` to the integer address space, as
-[`dasadi`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasadi.html) of SPICELIB. The file
+`dasadi` of SPICELIB. The file
 on disk changes when [`dascls`](@ref) runs.
 
 Throws `SpiceError(:valueoutofrange)` if a value does not fit in 32 bits.
+
+# References
+
+- [NAIF documentation of `dasadi`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasadi.html)
 """
 function dasadi(h::DASHandle, data::AbstractVector{<:Integer})
     _das_check_write(h, "dasadi")
@@ -820,8 +880,12 @@ end
     dasadc(handle, data) -> Nothing
 
 Append the code units of the string `data` to the character address space.
-[`dasadc`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasadc.html) of SPICELIB takes substrings of an array of strings. The file on disk changes when
+`dasadc` of SPICELIB takes substrings of an array of strings. The file on disk changes when
 [`dascls`](@ref) runs.
+
+# References
+
+- [NAIF documentation of `dasadc`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasadc.html)
 """
 function dasadc(h::DASHandle, data::AbstractString)
     _das_check_write(h, "dasadc")
@@ -834,11 +898,15 @@ end
 
 Replace the doubles at the DAS addresses `first:last` with the first `last - first + 1`
 elements of `data`, as
-[`dasudd`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasudd.html) of SPICELIB.
+`dasudd` of SPICELIB.
 
 Throws `SpiceError(:invalidaddress)` unless `first` and `last` are both addresses of the
 double address space, and `SpiceError(:badarg)` if `data` is too short. If they are
 addresses and `first > last`, nothing changes.
+
+# References
+
+- [NAIF documentation of `dasudd`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasudd.html)
 """
 function dasudd(h::DASHandle, first::Integer, last::Integer, data::AbstractVector{<:Real})
     # an open handle first (`daslla` signals DASNOSUCHHANDLE), then the addresses, as
@@ -857,12 +925,16 @@ end
 
 Replace the integers at the DAS addresses `first:last` with the first `last - first + 1`
 elements of `data`, as
-[`dasudi`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasudi.html) of SPICELIB.
+`dasudi` of SPICELIB.
 
 Throws `SpiceError(:invalidaddress)` unless `first` and `last` are both addresses of the
 integer address space, `SpiceError(:badarg)` if `data` is too short, and
 `SpiceError(:valueoutofrange)` if a value does not fit in 32 bits. If they are addresses
 and `first > last`, nothing changes.
+
+# References
+
+- [NAIF documentation of `dasudi`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/dasudi.html)
 """
 function dasudi(h::DASHandle, first::Integer, last::Integer, data::AbstractVector{<:Integer})
     # an open handle first (`daslla` signals DASNOSUCHHANDLE), then the addresses, as
@@ -882,7 +954,7 @@ end
 
 Replace the characters at the DAS addresses `first:last` with the first
 `last - first + 1` code units of the string `data`, as
-[`dasudc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasudc_c.html). `dasudc_c` takes
+`dasudc_c`. `dasudc_c` takes
 substrings of an array of strings.
 
 Throws `SpiceError(:invalidaddress)` unless `first` and `last` are both addresses of the
@@ -890,6 +962,10 @@ character address space, and `SpiceError(:badarg)` if `data` is too short. If th
 addresses and `first > last`, nothing changes.
 
 See also [`dasadc`](@ref), [`dasrdc`](@ref).
+
+# References
+
+- [NAIF documentation of `dasudc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasudc_c.html)
 """
 function dasudc(h::DASHandle, first::Integer, last::Integer, data::AbstractString)
     # an open handle first (`daslla` signals DASNOSUCHHANDLE), then the addresses, as
@@ -912,7 +988,7 @@ end
     dasac(handle, lines) -> Nothing
 
 Append the comment lines `lines` to the comment area of the DAS file, as
-[`dasac_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasac_c.html).
+`dasac_c`.
 
 Trailing blanks of a line are not stored. Comment records are added if the area does not
 have room. The file on disk changes when [`dascls`](@ref) runs.
@@ -921,6 +997,10 @@ Throws `SpiceError(:invalidargument)` if `lines` is empty, and `:illegalcharacte
 line has a character outside the printable ASCII codes 32 to 126.
 
 See also [`dasec`](@ref), [`dasdc`](@ref).
+
+# References
+
+- [NAIF documentation of `dasac_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasac_c.html)
 """
 function dasac(h::DASHandle, lines::AbstractVector{<:AbstractString})
     _das_check_write(h, "dasac")
@@ -978,10 +1058,14 @@ end
 Return all lines of the comment area of the DAS file, in order.
 
 One call returns the whole comment area, where
-[`dasec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasec_c.html) returns one buffer of lines on
+`dasec_c` returns one buffer of lines on
 each call. The result is empty if the file has no comments.
 
 Throws `SpiceError(:baddascommentarea)` if the comment area is damaged.
+
+# References
+
+- [NAIF documentation of `dasec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasec_c.html)
 """
 function dasec(h::DASHandle)
     _das_check_open(h, "dasec")
@@ -1007,8 +1091,12 @@ end
     dasdc(handle) -> Nothing
 
 Delete the comment area of the DAS file, as
-[`dasdc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasdc_c.html): the file then has no comment
+`dasdc_c`: the file then has no comment
 record and no comment character. The file on disk changes when [`dascls`](@ref) runs.
+
+# References
+
+- [NAIF documentation of `dasdc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dasdc_c.html)
 """
 function dasdc(h::DASHandle)
     _das_check_write(h, "dasdc")

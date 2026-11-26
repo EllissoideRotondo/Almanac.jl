@@ -1,10 +1,10 @@
 # Writing kernels
 
-Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a file holds the data, word for word, of the file that CSPICE writes in a [new process](@ref "No state between calls"), and its bytes differ only where CSPICE leaves them [unset](@ref "Fixes that change only the bytes of a file"), such as the padding of DSK and EK records. Every writer follows the pattern open, write, close; this page writes an SPK, reads it back, and builds kernels in memory.
+Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a file holds the data, word for word, of the file that CSPICE writes in a new process, and its bytes differ only where CSPICE leaves them unset, such as the padding of DSK and EK records. Every writer follows the pattern open, write, close; this page writes an SPK, reads it back, and builds kernels in memory.
 
 ## Write an SPK
 
-[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded; [API differences](@ref "File handles and files open for write") says what a context then sees.
+[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded, and a context sees only the segments written before it loaded the file.
 
 Type 5 interpolates states with two-body motion, so a few states per revolution are enough. [`conics`](@ref) computes them from orbital elements.
 

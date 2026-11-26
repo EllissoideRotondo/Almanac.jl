@@ -21,7 +21,7 @@
     ekopn(path, ifname, ncomch=0) -> DASHandle
 
 Create the EK file `path` and return a handle that is open for write, as
-[`ekopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekopn_c.html) of
+`ekopn_c` of
 CSPICE.
 
 `ifname` is the internal file name and `ncomch` the number of comment characters to
@@ -86,6 +86,10 @@ julia> ekcls(h)
 
 See also [`ekopw`](@ref), [`ekops`](@ref), [`ekbseg`](@ref), [`ekappr`](@ref),
 [`ekacec`](@ref), [`ekfind`](@ref).
+
+# References
+
+- [NAIF documentation of `ekopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekopn_c.html)
 """
 function ekopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0)
     (isempty(path) || isempty(ifname)) && throw(
@@ -116,7 +120,7 @@ end
     ekops() -> DASHandle
 
 Return a write handle to a scratch EK, as
-[`ekops_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekops_c.html) of CSPICE: an EK with no segment
+`ekops_c` of CSPICE: an EK with no segment
 that exists only in memory while its handle is open.
 
 All calls that take an EK handle accept it. [`ekcls`](@ref) discards it; no file is
@@ -124,6 +128,10 @@ made (see [`dasops`](@ref)). A scratch EK has
 no name, so [`furnsh`](@ref) cannot load it for queries, as in CSPICE.
 
 See also [`ekopn`](@ref), [`ekifld`](@ref).
+
+# References
+
+- [NAIF documentation of `ekops_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekops_c.html)
 """
 function ekops()
     return _ekw_init!(dasops())
@@ -133,7 +141,7 @@ end
     ekopw(path) -> DASHandle
 
 Open the existing EK file `path` and return a handle that is open for write, as
-[`ekopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekopw_c.html) of CSPICE.
+`ekopw_c` of CSPICE.
 
 The file is read into memory; all changes are on disk when [`ekcls`](@ref) returns.
 No other handle of this process may have the file open, as in [`dasopw`](@ref).
@@ -145,6 +153,10 @@ the file does not exist, `SpiceError(:fileopenfail)` if it is not writable,
 [`dasopw`](@ref).
 
 See also [`ekopn`](@ref), [`ekopr`](@ref).
+
+# References
+
+- [NAIF documentation of `ekopw_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekopw_c.html)
 """
 function ekopw(path::AbstractString)
     _chkfstr("ekopw", "file name", path)
@@ -420,7 +432,7 @@ end
 
 Start a new segment without rows for the table `tabnam` in the EK of the write handle
 and return its segment number, as
-[`ekbseg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekbseg_c.html) of CSPICE.
+`ekbseg_c` of CSPICE.
 
 Segment numbers start at 1; the C interface of CSPICE counts from 0. `cnames` holds
 the column names and `decls` one declaration for each column. A table name and a
@@ -453,6 +465,10 @@ Throws `SpiceError` with the kind:
 - `:badattributes` if only some of the columns have `FIXED_COUNT = TRUE`.
 
 See the example of [`ekopn`](@ref).
+
+# References
+
+- [NAIF documentation of `ekbseg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekbseg_c.html)
 """
 function ekbseg(
         h::DASHandle, tabnam::AbstractString, cnames::AbstractVector{<:AbstractString},
@@ -520,7 +536,7 @@ end
     ekinsr(handle, segno, recno) -> Nothing
 
 Insert an empty record as row `recno` of segment `segno`, as
-[`ekinsr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekinsr_c.html) of CSPICE.
+`ekinsr_c` of CSPICE.
 
 The rows from `recno` on move up by one; `recno = nrows + 1` appends. Write every
 entry of the new record with [`ekacec`](@ref), [`ekaced`](@ref) or [`ekacei`](@ref).
@@ -532,6 +548,10 @@ handle is closed or open for read, `SpiceError(:invalidindex)` if there is no se
 segment has fixed-count columns.
 
 See also [`ekappr`](@ref), [`ekdelr`](@ref).
+
+# References
+
+- [NAIF documentation of `ekinsr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekinsr_c.html)
 """
 function ekinsr(h::DASHandle, segno::Integer, recno::Integer)
     segdsc, _ = _ekw_segment(h, "ekinsr", segno)
@@ -579,7 +599,7 @@ end
     ekappr(handle, segno) -> recno
 
 Append an empty record to segment `segno` and return its row number, as
-[`ekappr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekappr_c.html) of
+`ekappr_c` of
 CSPICE.
 
 Write every entry of the new record, as for [`ekinsr`](@ref).
@@ -587,6 +607,10 @@ Write every entry of the new record, as for [`ekinsr`](@ref).
 Throws the errors of [`ekinsr`](@ref).
 
 See the example of [`ekopn`](@ref).
+
+# References
+
+- [NAIF documentation of `ekappr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekappr_c.html)
 """
 function ekappr(h::DASHandle, segno::Integer)
     segdsc, _ = _ekw_segment(h, "ekappr", segno)
@@ -599,7 +623,7 @@ end
     ekdelr(handle, segno, recno) -> Nothing
 
 Delete row `recno` of segment `segno`, as
-[`ekdelr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekdelr_c.html) of CSPICE.
+`ekdelr_c` of CSPICE.
 
 The rows after `recno` move down by one.
 
@@ -612,6 +636,10 @@ handle is closed or open for read, `SpiceError(:invalidindex)` if there is no se
 has fixed-count columns.
 
 See also [`ekinsr`](@ref), [`ekappr`](@ref).
+
+# References
+
+- [NAIF documentation of `ekdelr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekdelr_c.html)
 """
 function ekdelr(h::DASHandle, segno::Integer, recno::Integer)
     segdsc, mbase = _ekw_segment(h, "ekdelr", segno)
@@ -788,7 +816,7 @@ end
 
 Write the entry of the character column `column` in row `recno` of segment `segno`,
 as
-[`ekacec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacec_c.html) of CSPICE.
+`ekacec_c` of CSPICE.
 
 `cvals` is a vector with the strings of the entry. A scalar column takes the first string (a
 blank string if `cvals` is empty); an array column takes all of them. Trailing blanks
@@ -814,6 +842,10 @@ Throws `SpiceError` with the kind:
 
 See the example of [`ekopn`](@ref). See also [`ekaced`](@ref), [`ekacei`](@ref),
 [`ekrcec`](@ref).
+
+# References
+
+- [NAIF documentation of `ekacec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacec_c.html)
 """
 ekacec(
     h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
@@ -826,7 +858,7 @@ ekacec(
 
 Write the entry of the double precision or time column `column` in row `recno` of
 segment `segno`, as
-[`ekaced_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekaced_c.html) of CSPICE.
+`ekaced_c` of CSPICE.
 
 `dvals` is a vector with the values of the entry; a time is in seconds past J2000
 TDB. A scalar column takes the first value (zero if `dvals` is empty); an array
@@ -836,6 +868,10 @@ Throws the errors of [`ekacec`](@ref), with `:wrongdatatype` for a column of ano
 type.
 
 See also [`ekuced`](@ref), [`ekrced`](@ref).
+
+# References
+
+- [NAIF documentation of `ekaced_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekaced_c.html)
 """
 ekaced(
     h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
@@ -849,13 +885,17 @@ ekaced(
     ekacei(handle, segno, recno, column, ivals, isnull=false) -> Nothing
 
 Write the entry of the integer column `column` in row `recno` of segment `segno`, as
-[`ekacei_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacei_c.html) of CSPICE.
+`ekacei_c` of CSPICE.
 
 `ivals` is a vector with the values of the entry. The file stores 32-bit integers: a
 value that `Int32` cannot hold throws `SpiceError(:valueoutofrange)`. The other arguments and the
 errors are those of [`ekaced`](@ref).
 
 See also [`ekucei`](@ref), [`ekrcei`](@ref).
+
+# References
+
+- [NAIF documentation of `ekacei_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacei_c.html)
 """
 ekacei(
     h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
@@ -870,7 +910,7 @@ ekacei(
 
 Replace the entry of the character column `column` in row `recno` of segment `segno`,
 as
-[`ekucec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekucec_c.html) of CSPICE.
+`ekucec_c` of CSPICE.
 
 The new entry can have another size than the old one, and it can be null. An entry
 that was never written is written. The arguments are those of [`ekacec`](@ref).
@@ -880,6 +920,10 @@ leaves the entry as it was. CSPICE deletes the old entry before it checks the ne
 so that the old value is lost after `:badattribute` or `:invalidcount`.
 
 See also [`ekuced`](@ref), [`ekucei`](@ref).
+
+# References
+
+- [NAIF documentation of `ekucec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekucec_c.html)
 """
 ekucec(
     h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
@@ -892,7 +936,7 @@ ekucec(
 
 Replace the entry of the double precision or time column `column` in row `recno` of
 segment `segno`, as
-[`ekuced_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekuced_c.html) of CSPICE.
+`ekuced_c` of CSPICE.
 
 The arguments are those of [`ekaced`](@ref). An entry that was never written is
 written.
@@ -903,6 +947,10 @@ the written value of a scalar column becomes null also if the column does not al
 nulls, as in CSPICE. A call that throws leaves the entry as it was.
 
 See also [`ekucei`](@ref), [`ekrced`](@ref).
+
+# References
+
+- [NAIF documentation of `ekuced_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekuced_c.html)
 """
 ekuced(
     h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
@@ -916,10 +964,14 @@ ekuced(
     ekucei(handle, segno, recno, column, ivals, isnull=false) -> Nothing
 
 Replace the entry of the integer column `column` in row `recno` of segment `segno`, as
-[`ekucei_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekucei_c.html) of CSPICE.
+`ekucei_c` of CSPICE.
 
 The arguments are those of [`ekacei`](@ref); the behavior and the errors are those
 of [`ekuced`](@ref).
+
+# References
+
+- [NAIF documentation of `ekucei_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekucei_c.html)
 """
 ekucei(
     h::DASHandle, segno::Integer, recno::Integer, column::AbstractString,
@@ -959,7 +1011,7 @@ Base.IndexStyle(::Type{EKFastLoad}) = IndexLinear()
     ekifld(handle, tabnam, nrows, cnames, decls) -> (segno, rcptrs::EKFastLoad)
 
 Start a new segment of `nrows` rows that is written column by column, as
-[`ekifld_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekifld_c.html)
+`ekifld_c`
 of CSPICE. Return the segment number (from 1) and the state of the load.
 
 `tabnam`, `cnames` and `decls` are those of [`ekbseg`](@ref). Store every column
@@ -1000,6 +1052,10 @@ julia> ekrced(h, seg, 1, "XY"), ekrced(h, seg, 2, "XY"), ekrced(h, seg, 3, "XY")
 
 julia> ekcls(h)
 ```
+
+# References
+
+- [NAIF documentation of `ekifld_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekifld_c.html)
 """
 function ekifld(
         h::DASHandle, tabnam::AbstractString, nrows::Integer,
@@ -1168,7 +1224,7 @@ _ekw_flags(nlflgs::AbstractVector) = nlflgs isa AbstractVector{Bool} ? nlflgs :
 
 Store the whole character column `column` of the segment that [`ekifld`](@ref)
 started, as
-[`ekaclc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekaclc_c.html) of CSPICE.
+`ekaclc_c` of CSPICE.
 
 - `cvals`: the strings of all rows in row order (for an array column the strings of
   row 1, then those of row 2, and so on). A null row also takes the room of its entry.
@@ -1196,6 +1252,10 @@ Throws `SpiceError` with the kind:
 - `:invalidsize` if a fixed-count column has a string length outside 1 to 1014.
 
 See also [`ekacld`](@ref), [`ekacli`](@ref), [`ekffld`](@ref).
+
+# References
+
+- [NAIF documentation of `ekaclc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekaclc_c.html)
 """
 function ekaclc(
         h::DASHandle, segno::Integer, column::AbstractString, cvals::AbstractVector,
@@ -1251,7 +1311,7 @@ end
 
 Store the whole double precision or time column `column` of the segment that
 [`ekifld`](@ref) started, as
-[`ekacld_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacld_c.html) of CSPICE.
+`ekacld_c` of CSPICE.
 
 `dvals` holds the values of all rows in row order; a time is in seconds past J2000
 TDB. The other arguments and the errors are those of [`ekaclc`](@ref), with
@@ -1259,6 +1319,10 @@ TDB. The other arguments and the errors are those of [`ekaclc`](@ref), with
 not null throws `SpiceError(:badsubscript)`, where CSPICE stops the process.
 
 See the example of [`ekifld`](@ref).
+
+# References
+
+- [NAIF documentation of `ekacld_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacld_c.html)
 """
 ekacld(
     h::DASHandle, segno::Integer, column::AbstractString, dvals::AbstractVector,
@@ -1274,7 +1338,7 @@ ekacld(
 
 Store the whole integer column `column` of the segment that [`ekifld`](@ref) started,
 as
-[`ekacli_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacli_c.html) of CSPICE.
+`ekacli_c` of CSPICE.
 
 `ivals` holds the values of all rows in row order. The file stores 32-bit integers: a
 value that `Int32` cannot hold throws `SpiceError(:valueoutofrange)`. The other arguments and the
@@ -1283,6 +1347,10 @@ type. An entry size below 1 of a row that is not null throws `SpiceError(:badsub
 where CSPICE stops the process.
 
 See the example of [`ekifld`](@ref).
+
+# References
+
+- [NAIF documentation of `ekacli_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekacli_c.html)
 """
 ekacli(
     h::DASHandle, segno::Integer, column::AbstractString, ivals::AbstractVector,
@@ -1353,7 +1421,7 @@ end
     ekffld(handle, segno, rcptrs) -> Nothing
 
 End the fast load of segment `segno` that [`ekifld`](@ref) started, as
-[`ekffld_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekffld_c.html) of
+`ekffld_c` of
 CSPICE.
 
 After the call the segment is complete and can be read. Rows can be added to it later,
@@ -1365,6 +1433,10 @@ handle is closed or open for read, `SpiceError(:invalidindex)` if there is no se
 call for this segment, and `SpiceError(:invalidaddress)` if a column was not stored.
 
 See the example of [`ekifld`](@ref).
+
+# References
+
+- [NAIF documentation of `ekffld_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ekffld_c.html)
 """
 function ekffld(h::DASHandle, segno::Integer, rcptrs::EKFastLoad)
     _ek_check_read(h, "ekffld")

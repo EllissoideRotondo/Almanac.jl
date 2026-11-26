@@ -1346,7 +1346,7 @@ end
     str2et([ctx,] s) -> Float64
 
 Return the epoch of the time string `s` in seconds past J2000 TDB, as
-[`str2et_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/str2et_c.html).
+`str2et_c`.
 
 A leap-second kernel must be loaded. The string forms of CSPICE are accepted:
 
@@ -1388,6 +1388,10 @@ timout(et, "YYYY-MM-DDTHR:MN:SC.### ::UTC ::RND")    # back to a string, rounded
 ```
 
 See also [`timout`](@ref), [`et2utc`](@ref), [`utc2et`](@ref), [`tparse`](@ref).
+
+# References
+
+- [NAIF documentation of `str2et_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/str2et_c.html)
 """
 function str2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
     _chkfstr("str2et", "time string", s)
@@ -1539,7 +1543,7 @@ end
     utc2et([ctx,] s) -> Float64
 
 Return the epoch of the UTC time string `s` in seconds past J2000 TDB, as
-[`utc2et_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/utc2et_c.html).
+`utc2et_c`.
 
 [`str2et`](@ref) is the call for new code; this one keeps the behavior of the older
 CSPICE routine:
@@ -1555,6 +1559,10 @@ Throws `SpiceError(:emptystring)` if `s` is `""`, and
 `SpiceError(:invalidtimestring)` if `s` is not a time string of these forms or,
 with the check on, if a component is out of range, as CSPICE does for every such
 string, and `SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
+
+# References
+
+- [NAIF documentation of `utc2et_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/utc2et_c.html)
 """
 function utc2et(ks::KernelSet, s::AbstractString, defs::TimeDefaults = TimeDefaults())::Float64
     _chkfstr("utc2et", "time string", s)
@@ -1589,7 +1597,7 @@ end
     tparse([ctx,] s) -> Float64
 
 Return the seconds past J2000 of the time string `s` on a formal calendar, as
-[`tparse_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tparse_c.html).
+`tparse_c`.
 
 On the formal calendar every day has 86400 seconds: there are no leap seconds, and
 the call needs no kernel. The result is the count that [`etcal`](@ref) writes back,
@@ -1616,6 +1624,10 @@ julia> tparse("2000-01-01T12:00:00")
 julia> tparse("2 JAN 2000")
 43200.0
 ```
+
+# References
+
+- [NAIF documentation of `tparse_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tparse_c.html)
 """
 function tparse(s::AbstractString, defs::TimeDefaults)::Float64
     _chkfstr("tparse", "time string", s)
@@ -1662,7 +1674,7 @@ end
 
 Return the picture with which [`timout`](@ref) writes epochs in the form of the time
 string `sample`, as
-[`tpictr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tpictr_c.html).
+`tpictr_c`.
 
 `sample` has a form that [`str2et`](@ref) accepts. The call needs no kernel; `ctx` is
 accepted and not used.
@@ -1680,6 +1692,10 @@ julia> tpictr("Mar 1, 2025 3:04:05 PM")
 julia> tpictr("2025-03-01T12:00:00.000")
 "YYYY-MM-DDTHR:MN:SC.### ::RND"
 ```
+
+# References
+
+- [NAIF documentation of `tpictr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tpictr_c.html)
 """
 function tpictr(sample::AbstractString)::String
     _chkfstr("tpictr", "sample", sample)

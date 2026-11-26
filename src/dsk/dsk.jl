@@ -2022,7 +2022,7 @@ search selects segments by surface and time: the error of `zzsegbox` and
 `SpiceError(:noframeinfo)`. Throws `SpiceError(:noloadeddskfiles)` if no DSK file is
 loaded and `:nodsksegments` (from `zzdskbux` and `zzdskbun`) if the body has no
 segment. The SPK offset of a frame centered on another body is looked up only for the
-segments that a search uses (see the page of CSPICE defects).
+segments that a search uses, which fixes a defect of `zzdsksba`.
 """
 function _dsk_body_segments(ks::KernelSet, bodyid::Int32)
     _dsk_check_files(ks)

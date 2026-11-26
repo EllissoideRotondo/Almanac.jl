@@ -168,7 +168,7 @@ end
 
 Return the first point where the ray from `obsrvr` along `dvec` meets the surface of
 `target`, as `(spoint, trgepc, srfvec)`, or `nothing` if the ray misses the target. As
-[`sincpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sincpt_c.html) of CSPICE, which returns a `found` flag instead of `nothing`.
+`sincpt_c` of CSPICE, which returns a `found` flag instead of `nothing`.
 
 - `spoint`: the intercept, in km, in the body-fixed frame `fixref` of the target.
 - `trgepc`: the epoch at the intercept (seconds past J2000 TDB). With a light time
@@ -219,6 +219,10 @@ end
 ```
 
 See also [`subpnt`](@ref), [`dskxsi`](@ref), [`gfsntc`](@ref), [`fovray`](@ref).
+
+# References
+
+- [NAIF documentation of `sincpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sincpt_c.html)
 """
 sincpt(
     ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
@@ -244,7 +248,7 @@ sincpt(
 
 Return the point of the reference ellipsoid of `body` at the planetocentric longitude
 `lon` and latitude `lat` (radians), in km in the body-fixed frame, as
-[`srfrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfrec_c.html) of
+`srfrec_c` of
 CSPICE.
 
 `body` is a name or an integer ID. The radii come from the pool variable
@@ -255,6 +259,10 @@ Throws `SpiceError(:idcodenotfound)` if the body name is not known. Throws
 if there are not 3 of them, and `SpiceError(:badaxislength)` if one is not positive.
 
 See also [`latsrf`](@ref), [`latrec`](@ref), [`bodvrd`](@ref).
+
+# References
+
+- [NAIF documentation of `srfrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/srfrec_c.html)
 """
 function srfrec(ks::KernelSet, body::NameOrID, lon::Real, lat::Real)
     a, b, c = _positive_radii(ks, _body_id(ks, body, "body"))

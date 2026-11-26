@@ -94,12 +94,16 @@ end
     sctype([ctx,] sc) -> Int
 
 Return the data type of the spacecraft clock `sc`, as
-[`sctype`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/sctype.html) of SPICELIB.
+`sctype` of SPICELIB.
 
 `sc` is the NAIF ID of the spacecraft, a negative number. The value is the one of
 `SCLK_DATA_TYPE_<-sc>`. The conversion calls of the package support type 1.
 
 Throws `SpiceError(:kernelvarnotfound)` if no SCLK kernel for `sc` is loaded.
+
+# References
+
+- [NAIF documentation of `sctype`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/sctype.html)
 """
 function sctype(ks::KernelSet, sc::Integer)
     name = "SCLK_DATA_TYPE_$(-Int(sc))"
@@ -283,7 +287,7 @@ end
 
 Return the epoch, in seconds past J2000 TDB, of the encoded spacecraft clock value
 `sclkdp` of the clock `sc`, as
-[`sct2e_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sct2e_c.html).
+`sct2e_c`.
 
 `sc` is the NAIF ID of the spacecraft. `sclkdp` is in ticks, the counts of the last
 field of the clock, from the start of the first partition; [`scencd`](@ref) makes it
@@ -304,12 +308,16 @@ loaded.
 # Examples
 ```julia
 furnsh("naif0012.tls")
-furnsh("mission.tsc")                    # the SCLK kernel of the spacecraft -77
+furnsh("mission.tsc")
 et = sct2e(-77, scencd(-77, "1/0123456789:123"))
 et = scs2e(-77, "1/0123456789:123")      # the same in one call
 ```
 
 See also [`sce2c`](@ref), [`scs2e`](@ref).
+
+# References
+
+- [NAIF documentation of `sct2e_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sct2e_c.html)
 """
 sct2e(ks::KernelSet, sc::Integer, sclkdp::Real) =
     _sct2e(ks, _sclk(ks, sc), _sclk_num(sclkdp))
@@ -318,7 +326,7 @@ sct2e(ks::KernelSet, sc::Integer, sclkdp::Real) =
     sce2c([ctx,] sc, et) -> Real
 
 Return the continuous encoded spacecraft clock value of the clock `sc` at `et`, as
-[`sce2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2c_c.html).
+`sce2c_c`.
 
 `et` is in seconds past J2000 TDB. The result is in ticks from the start of the first
 partition and can have a fraction, which makes it continuous; [`sce2t`](@ref) gives
@@ -327,6 +335,10 @@ the form that [`ckgp`](@ref) takes. The result has the number type of `et`, and 
 call does not allocate.
 
 Throws the errors of [`sct2e`](@ref), with `et` in the place of `sclkdp`.
+
+# References
+
+- [NAIF documentation of `sce2c_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2c_c.html)
 """
 sce2c(ks::KernelSet, sc::Integer, et::Real) = _sce2c(ks, _sclk(ks, sc), _sclk_num(et))
 
@@ -335,12 +347,16 @@ sce2c(ks::KernelSet, sc::Integer, et::Real) = _sce2c(ks, _sclk(ks, sc), _sclk_nu
 
 Return the discrete encoded spacecraft clock value of the clock `sc` at `et`, in
 whole ticks, as
-[`sce2t_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2t_c.html).
+`sce2t_c`.
 
 `et` is in seconds past J2000 TDB. A dual-number `et` is taken at its plain value: the
 result is a step function and has no derivative.
 
 Throws the errors of [`sce2c`](@ref).
+
+# References
+
+- [NAIF documentation of `sce2t_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2t_c.html)
 """
 sce2t(ks::KernelSet, sc::Integer, et::Real) = _sce2t(ks, _sclk(ks, sc), primal(et))
 
@@ -348,12 +364,16 @@ sce2t(ks::KernelSet, sc::Integer, et::Real) = _sce2t(ks, _sclk(ks, sc), primal(e
     scpart([ctx,] sc) -> (pstart::Vector{Float64}, pstop::Vector{Float64})
 
 Return the start and stop times of the partitions of the clock `sc`, in ticks, as
-[`scpart_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scpart_c.html).
+`scpart_c`.
 
 The two vectors are new and have one element for each partition; their length takes
 the place of the `nparts` result of CSPICE. [`sct2e`](@ref) says what a partition is.
 
 Also throws the SCLK kernel errors of [`sct2e`](@ref).
+
+# References
+
+- [NAIF documentation of `scpart_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scpart_c.html)
 """
 function scpart(ks::KernelSet, sc::Integer)
     clock = _sclk(ks, sc)
@@ -420,7 +440,7 @@ end
     sctiks([ctx,] sc, clkstr) -> Float64
 
 Return the tick count of the clock string `clkstr` of the clock `sc`, as
-[`sctiks_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sctiks_c.html).
+`sctiks_c`.
 
 `clkstr` has no partition number. Its fields are given most significant first and are
 separated by `.`, `:`, `-`, `,` or blanks. Each field counts from its offset, the
@@ -434,6 +454,10 @@ has a field that is not a number, or has a field below its offset.
 Also throws the SCLK kernel errors of [`sct2e`](@ref).
 
 See also [`scfmt`](@ref).
+
+# References
+
+- [NAIF documentation of `sctiks_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sctiks_c.html)
 """
 function sctiks(ks::KernelSet, sc::Integer, clkstr::AbstractString)
     ticks, msg = _sclk_ticks(_sclk(ks, sc), clkstr)
@@ -493,7 +517,7 @@ end
 
 Return the clock string of the tick count `ticks` of the clock `sc`, without a
 partition number, as
-[`scfmt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scfmt_c.html).
+`scfmt_c`.
 
 `ticks` is rounded to a whole number and split into the fields of the clock. Each
 field is written with leading zeros to the width of its largest value (a field of
@@ -504,6 +528,10 @@ blank that `SCLK01_OUTPUT_DELIM_<-sc>` selects with 1 to 5. This is the inverse 
 
 Throws `SpiceError(:valueoutofrange)` if `ticks` is negative.
 Also throws the SCLK kernel errors of [`sct2e`](@ref).
+
+# References
+
+- [NAIF documentation of `scfmt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scfmt_c.html)
 """
 function scfmt(ks::KernelSet, sc::Integer, ticks::Real)
     clock = _sclk(ks, sc)
@@ -579,7 +607,7 @@ end
 
 Return the encoded spacecraft clock value of the clock string `sclkch` of the clock
 `sc`, as
-[`scencd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scencd_c.html).
+`scencd_c`.
 
 `sclkch` has the form `"partition/fields"`, such as `"1/0123456789:123"`; the
 partition number is optional. The result is in ticks from the start of the first
@@ -596,6 +624,10 @@ Throws `SpiceError`:
 Also throws the SCLK kernel errors of [`sct2e`](@ref).
 
 See also [`scdecd`](@ref), [`scs2e`](@ref).
+
+# References
+
+- [NAIF documentation of `scencd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scencd_c.html)
 """
 function scencd(ks::KernelSet, sc::Integer, sclkch::AbstractString)
     sclkdp, kind, msg = _sclk_encode(_sclk(ks, sc), sc, sclkch, true)
@@ -666,13 +698,17 @@ end
 
 Return the clock string `"partition/fields"` of the encoded spacecraft clock value
 `sclkdp` of the clock `sc`, as
-[`scdecd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scdecd_c.html).
+`scdecd_c`.
 
 `sclkdp` is in ticks from the start of the first partition and is rounded to whole
 ticks. This is the inverse of [`scencd`](@ref).
 
 Throws `SpiceError(:valueoutofrange)` if the ticks are not inside a partition.
 Also throws the SCLK kernel errors of [`sct2e`](@ref).
+
+# References
+
+- [NAIF documentation of `scdecd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scdecd_c.html)
 """
 function scdecd(ks::KernelSet, sc::Integer, sclkdp::Real)
     clock = _sclk(ks, sc)
@@ -695,11 +731,15 @@ end
 
 Return the clock string `"partition/fields"` of the clock `sc` at `et` (seconds past
 J2000 TDB), as
-[`sce2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2s_c.html).
+`sce2s_c`.
 
 The result is [`scdecd`](@ref) of [`sce2t`](@ref), and the errors are theirs.
 
 See also [`scs2e`](@ref).
+
+# References
+
+- [NAIF documentation of `sce2s_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sce2s_c.html)
 """
 sce2s(ks::KernelSet, sc::Integer, et::Real) = scdecd(ks, sc, sce2t(ks, sc, et))
 
@@ -708,11 +748,15 @@ sce2s(ks::KernelSet, sc::Integer, et::Real) = scdecd(ks, sc, sce2t(ks, sc, et))
 
 Return the epoch, in seconds past J2000 TDB, of the clock string `sclkch` of the
 clock `sc`, as
-[`scs2e_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scs2e_c.html).
+`scs2e_c`.
 
 The result is [`sct2e`](@ref) of [`scencd`](@ref), and the errors are theirs.
 
 See also [`sce2s`](@ref).
+
+# References
+
+- [NAIF documentation of `scs2e_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/scs2e_c.html)
 """
 scs2e(ks::KernelSet, sc::Integer, sclkch::AbstractString) =
     sct2e(ks, sc, scencd(ks, sc, sclkch))

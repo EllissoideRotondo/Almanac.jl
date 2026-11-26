@@ -9,9 +9,9 @@ The examples of this page need the leap seconds, the planetary ephemeris and the
 ```@example gf
 using Almanac, SPICEKernels
 
-furnsh(naif0012_tls())                      # leap seconds
-furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
-furnsh(pck00011())                          # orientation and radii of the bodies
+furnsh(naif0012_tls())
+furnsh(de440s())
+furnsh(pck00011())
 ```
 
 ## Define the search window

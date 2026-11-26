@@ -13,7 +13,7 @@
     reclat(rectan) -> (radius, lon, lat)
 
 Return the latitudinal coordinates of the rectangular point `rectan`, as
-[`reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html) of
+`reclat_c` of
 CSPICE.
 
 `radius` has the unit of `rectan`. The angles are in radians: the longitude `lon` in
@@ -33,6 +33,10 @@ true
 
 See also [`latrec`](@ref), [`recrad`](@ref), [`recsph`](@ref), [`recgeo`](@ref),
 [`dlatdr`](@ref).
+
+# References
+
+- [NAIF documentation of `reclat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reclat_c.html)
 """
 reclat(rectan::AbstractVector) = _m_reclat(_m_v3(rectan), true)
 
@@ -41,9 +45,13 @@ reclat(rectan::AbstractVector) = _m_reclat(_m_v3(rectan), true)
 
 Return the rectangular coordinates of the point with the latitudinal coordinates
 `radius`, `lon`, `lat` (angles in radians), as
-[`latrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latrec_c.html) of CSPICE.
+`latrec_c` of CSPICE.
 
 See also [`reclat`](@ref), which has an example, and [`drdlat`](@ref).
+
+# References
+
+- [NAIF documentation of `latrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latrec_c.html)
 """
 latrec(radius::Real, lon::Real, lat::Real) = _m_latrec(_m_f(radius), _m_f(lon), _m_f(lat))
 
@@ -52,7 +60,7 @@ latrec(radius::Real, lon::Real, lat::Real) = _m_latrec(_m_f(radius), _m_f(lon), 
 
 Return the range, the right ascension and the declination of the rectangular point
 `rectan`, as
-[`recrad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recrad_c.html) of CSPICE.
+`recrad_c` of CSPICE.
 
 The angles are in radians: `ra` in [0, 2 pi) and `dec` in [-pi/2, pi/2]. They differ
 from the result of [`reclat`](@ref) only in the range of the first angle.
@@ -66,6 +74,10 @@ julia> recrad([0, -2, 0])
 ```
 
 See also [`radrec`](@ref), [`reclat`](@ref).
+
+# References
+
+- [NAIF documentation of `recrad_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recrad_c.html)
 """
 function recrad(rectan::AbstractVector)
     range, ra, dec = _m_reclat(_m_v3(rectan), true)
@@ -77,9 +89,13 @@ end
 
 Return the rectangular coordinates of the point with the range `range`, the right
 ascension `ra` and the declination `dec` (angles in radians), as
-[`radrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/radrec_c.html) of CSPICE.
+`radrec_c` of CSPICE.
 
 See also [`recrad`](@ref).
+
+# References
+
+- [NAIF documentation of `radrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/radrec_c.html)
 """
 radrec(range::Real, ra::Real, dec::Real) = _m_latrec(_m_f(range), _m_f(ra), _m_f(dec))
 
@@ -102,7 +118,7 @@ end
     recsph(rectan) -> (r, colat, slon)
 
 Return the spherical coordinates of the rectangular point `rectan`, as
-[`recsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recsph_c.html) of
+`recsph_c` of
 CSPICE.
 
 The angles are in radians: the colatitude `colat` in [0, pi], from the positive z axis,
@@ -118,6 +134,10 @@ julia> recsph([0, 0, -2])
 ```
 
 See also [`sphrec`](@ref), [`reclat`](@ref), [`dsphdr`](@ref).
+
+# References
+
+- [NAIF documentation of `recsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recsph_c.html)
 """
 recsph(rectan::AbstractVector) = _m_recsph(_m_v3(rectan))
 
@@ -132,9 +152,13 @@ end
 
 Return the rectangular coordinates of the point with the spherical coordinates `r`,
 `colat`, `slon` (angles in radians), as
-[`sphrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphrec_c.html) of CSPICE.
+`sphrec_c` of CSPICE.
 
 See also [`recsph`](@ref), [`drdsph`](@ref).
+
+# References
+
+- [NAIF documentation of `sphrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphrec_c.html)
 """
 sphrec(r::Real, colat::Real, slon::Real) = _m_sphrec(_m_f(r), _m_f(colat), _m_f(slon))
 
@@ -155,7 +179,7 @@ end
     reccyl(rectan) -> (r, clon, z)
 
 Return the cylindrical coordinates of the rectangular point `rectan`, as
-[`reccyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reccyl_c.html) of
+`reccyl_c` of
 CSPICE.
 
 `r` is the distance from the z axis. The longitude `clon` is in radians in [0, 2 pi),
@@ -170,6 +194,10 @@ julia> reccyl([0, -2, 3])
 ```
 
 See also [`cylrec`](@ref), [`dcyldr`](@ref).
+
+# References
+
+- [NAIF documentation of `reccyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/reccyl_c.html)
 """
 reccyl(rectan::AbstractVector) = _m_reccyl(_m_v3(rectan))
 
@@ -178,9 +206,13 @@ reccyl(rectan::AbstractVector) = _m_reccyl(_m_v3(rectan))
 
 Return the rectangular coordinates of the point with the cylindrical coordinates `r`,
 `clon`, `z` (`clon` in radians), as
-[`cylrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cylrec_c.html) of CSPICE.
+`cylrec_c` of CSPICE.
 
 See also [`reccyl`](@ref), [`drdcyl`](@ref).
+
+# References
+
+- [NAIF documentation of `cylrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cylrec_c.html)
 """
 cylrec(r::Real, clon::Real, z::Real) = _m_cylrec(_m_f(r), _m_f(clon), _m_f(z))
 
@@ -198,10 +230,14 @@ end
 
 Return the latitudinal coordinates of the point with the cylindrical coordinates `r`,
 `clon`, `z`, as
-[`cyllat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cyllat_c.html) of CSPICE. Angles are in radians. The longitude is returned
+`cyllat_c` of CSPICE. Angles are in radians. The longitude is returned
 as given.
 
 See also [`latcyl`](@ref), [`reclat`](@ref), [`reccyl`](@ref).
+
+# References
+
+- [NAIF documentation of `cyllat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cyllat_c.html)
 """
 function cyllat(r::Real, clon::Real, z::Real)
     r, clon, z = promote(_m_f(r), _m_f(clon), _m_f(z))
@@ -215,10 +251,14 @@ end
 
 Return the cylindrical coordinates of the point with the latitudinal coordinates
 `radius`, `lon`, `lat`, as
-[`latcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latcyl_c.html) of CSPICE. Angles are in radians. The longitude
+`latcyl_c` of CSPICE. Angles are in radians. The longitude
 is returned as given.
 
 See also [`cyllat`](@ref).
+
+# References
+
+- [NAIF documentation of `latcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latcyl_c.html)
 """
 function latcyl(radius::Real, lon::Real, lat::Real)
     radius, lon, lat = promote(_m_f(radius), _m_f(lon), _m_f(lat))
@@ -231,10 +271,14 @@ end
 
 Return the spherical coordinates of the point with the cylindrical coordinates `r`,
 `clon`, `z`, as
-[`cylsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cylsph_c.html) of CSPICE. Angles are in radians. The longitude is returned
+`cylsph_c` of CSPICE. Angles are in radians. The longitude is returned
 as given.
 
 See also [`sphcyl`](@ref), [`recsph`](@ref).
+
+# References
+
+- [NAIF documentation of `cylsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cylsph_c.html)
 """
 function cylsph(r::Real, clon::Real, z::Real)
     r, clon, z = promote(_m_f(r), _m_f(clon), _m_f(z))
@@ -248,10 +292,14 @@ end
 
 Return the cylindrical coordinates of the point with the spherical coordinates
 `radius`, `colat`, `slon`, as
-[`sphcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphcyl_c.html) of CSPICE. Angles are in radians. The
+`sphcyl_c` of CSPICE. Angles are in radians. The
 longitude is returned as given.
 
 See also [`cylsph`](@ref).
+
+# References
+
+- [NAIF documentation of `sphcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphcyl_c.html)
 """
 function sphcyl(radius::Real, colat::Real, slon::Real)
     radius, colat, slon = promote(_m_f(radius), _m_f(colat), _m_f(slon))
@@ -264,10 +312,14 @@ end
 
 Return the latitudinal coordinates of the point with the spherical coordinates `r`,
 `colat`, `slon`, as
-[`sphlat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphlat_c.html) of CSPICE. Angles are in radians. The latitude is
+`sphlat_c` of CSPICE. Angles are in radians. The latitude is
 `pi/2 - colat`, and the other two values are returned as given.
 
 See also [`latsph`](@ref).
+
+# References
+
+- [NAIF documentation of `sphlat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/sphlat_c.html)
 """
 function sphlat(r::Real, colat::Real, slon::Real)
     r, colat, slon = promote(_m_f(r), _m_f(colat), _m_f(slon))
@@ -279,7 +331,7 @@ end
 
 Return the spherical coordinates of the point with the latitudinal coordinates
 `radius`, `lon`, `lat`, as
-[`latsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latsph_c.html) of CSPICE. Angles are in radians. The colatitude
+`latsph_c` of CSPICE. Angles are in radians. The colatitude
 is `pi/2 - lat`, and the other two values are returned as given.
 
 The longitude is the second latitudinal coordinate and the third spherical one:
@@ -289,6 +341,10 @@ julia> latsph(2.0, 0.5, 0.0)
 ```
 
 See also [`sphlat`](@ref).
+
+# References
+
+- [NAIF documentation of `latsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/latsph_c.html)
 """
 function latsph(radius::Real, lon::Real, lat::Real)
     radius, lon, lat = promote(_m_f(radius), _m_f(lon), _m_f(lat))
@@ -313,7 +369,7 @@ end
 
 Return the geodetic coordinates of the rectangular point `rectan` relative to a
 spheroid, as
-[`recgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recgeo_c.html) of CSPICE.
+`recgeo_c` of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`; its polar radius is
 `re * (1 - f)`. `lon` and `lat` are in radians. `lat` is the angle between the
@@ -338,6 +394,10 @@ true
 ```
 
 See also [`georec`](@ref), [`recpgr`](@ref), [`dgeodr`](@ref).
+
+# References
+
+- [NAIF documentation of `recgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recgeo_c.html)
 """
 recgeo(rectan::AbstractVector, re::Real, f::Real) = _m_recgeo(_m_v3(rectan), _m_f(re), _m_f(f))
 
@@ -346,7 +406,7 @@ recgeo(rectan::AbstractVector, re::Real, f::Real) = _m_recgeo(_m_v3(rectan), _m_
 
 Return the rectangular coordinates of the point with the geodetic coordinates `lon`,
 `lat` and `alt`, as
-[`georec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/georec_c.html) of CSPICE.
+`georec_c` of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`. Angles are in
 radians. The result has the unit of `re` and `alt`.
@@ -354,6 +414,10 @@ radians. The result has the unit of `re` and `alt`.
 Throws `SpiceError(:valueoutofrange)` if `re <= 0` or `f >= 1`.
 
 See also [`recgeo`](@ref), which has an example, and [`drdgeo`](@ref).
+
+# References
+
+- [NAIF documentation of `georec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/georec_c.html)
 """
 georec(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
     _m_georec(_m_f(lon), _m_f(lat), _m_f(alt), _m_f(re), _m_f(f))
@@ -405,7 +469,7 @@ end
 
 Return the planetographic coordinates of the rectangular point `rectan` relative to the
 spheroid of `body`, as
-[`recpgr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recpgr_c.html) of CSPICE.
+`recpgr_c` of CSPICE.
 
 `body` is a name or an ID. `re` is the equatorial radius and `f` the flattening of the
 spheroid. `lat` (radians) and `alt` are the geodetic values of [`recgeo`](@ref). `lon`
@@ -443,6 +507,10 @@ true
 ```
 
 See also [`pgrrec`](@ref), [`recgeo`](@ref), [`dpgrdr`](@ref).
+
+# References
+
+- [NAIF documentation of `recpgr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/recpgr_c.html)
 """
 function recpgr(ks::KernelSet, body::NameOrID, rectan::AbstractVector, re::Real, f::Real)
     body isa AbstractString && _chkfstr("recpgr", "string `body`", body)
@@ -461,7 +529,7 @@ end
 
 Return the rectangular coordinates of the point with the planetographic coordinates
 `lon`, `lat` and `alt` of `body`, as
-[`pgrrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pgrrec_c.html) of CSPICE.
+`pgrrec_c` of CSPICE.
 
 `re` is the equatorial radius and `f` the flattening of the spheroid. Angles are in
 radians. The kernel pool of `ctx` (without `ctx`, of [`default_context`](@ref)) gives
@@ -470,6 +538,10 @@ the sense of the longitude, by the rules in [`recpgr`](@ref).
 Throws the errors of [`recpgr`](@ref).
 
 See also [`recpgr`](@ref), which has an example, and [`drdpgr`](@ref).
+
+# References
+
+- [NAIF documentation of `pgrrec_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pgrrec_c.html)
 """
 function pgrrec(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("pgrrec", "string `body`", body)
@@ -501,9 +573,13 @@ end
 
 Return the Jacobian of rectangular coordinates with respect to the latitudinal
 coordinates `(r, lon, lat)`, as
-[`drdlat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdlat_c.html) of CSPICE.
+`drdlat_c` of CSPICE.
 
 See also [`dlatdr`](@ref), [`latrec`](@ref).
+
+# References
+
+- [NAIF documentation of `drdlat_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdlat_c.html)
 """
 drdlat(r::Real, lon::Real, lat::Real) = _m_drdlat(promote(_m_f(r), _m_f(lon), _m_f(lat))...)
 
@@ -512,7 +588,7 @@ drdlat(r::Real, lon::Real, lat::Real) = _m_drdlat(promote(_m_f(r), _m_f(lon), _m
 
 Return the Jacobian of the latitudinal coordinates `(radius, lon, lat)` with respect to
 rectangular coordinates, at the point `(x, y, z)`, as
-[`dlatdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dlatdr_c.html) of CSPICE.
+`dlatdr_c` of CSPICE.
 
 Throws `SpiceError(:pointonzaxis)` if the point is on the z axis.
 
@@ -524,6 +600,10 @@ true
 ```
 
 See also [`drdlat`](@ref), [`reclat`](@ref).
+
+# References
+
+- [NAIF documentation of `dlatdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dlatdr_c.html)
 """
 function dlatdr(x::Real, y::Real, z::Real)
     v = SVector(promote(_m_f(x), _m_f(y), _m_f(z))...)
@@ -547,9 +627,13 @@ end
 
 Return the Jacobian of rectangular coordinates with respect to the spherical
 coordinates `(r, colat, slon)`, as
-[`drdsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdsph_c.html) of CSPICE.
+`drdsph_c` of CSPICE.
 
 See also [`dsphdr`](@ref), [`sphrec`](@ref), [`drdlat`](@ref).
+
+# References
+
+- [NAIF documentation of `drdsph_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdsph_c.html)
 """
 drdsph(r::Real, colat::Real, slon::Real) = _m_drdsph(promote(_m_f(r), _m_f(colat), _m_f(slon))...)
 
@@ -558,11 +642,15 @@ drdsph(r::Real, colat::Real, slon::Real) = _m_drdsph(promote(_m_f(r), _m_f(colat
 
 Return the Jacobian of the spherical coordinates `(r, colat, slon)` with respect to
 rectangular coordinates, at the point `(x, y, z)`, as
-[`dsphdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dsphdr_c.html) of CSPICE.
+`dsphdr_c` of CSPICE.
 
 Throws `SpiceError(:pointonzaxis)` if the point is on the z axis.
 
 See also [`drdsph`](@ref), [`recsph`](@ref), [`dlatdr`](@ref).
+
+# References
+
+- [NAIF documentation of `dsphdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dsphdr_c.html)
 """
 function dsphdr(x::Real, y::Real, z::Real)
     v = SVector(promote(_m_f(x), _m_f(y), _m_f(z))...)
@@ -582,9 +670,13 @@ end
 
 Return the Jacobian of rectangular coordinates with respect to the cylindrical
 coordinates `(r, clon, z)`, as
-[`drdcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdcyl_c.html) of CSPICE.
+`drdcyl_c` of CSPICE.
 
 See also [`dcyldr`](@ref), [`cylrec`](@ref), [`drdlat`](@ref).
+
+# References
+
+- [NAIF documentation of `drdcyl_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdcyl_c.html)
 """
 drdcyl(r::Real, clon::Real, z::Real) = _m_drdcyl(promote(_m_f(r), _m_f(clon), _m_f(z))...)
 
@@ -593,11 +685,15 @@ drdcyl(r::Real, clon::Real, z::Real) = _m_drdcyl(promote(_m_f(r), _m_f(clon), _m
 
 Return the Jacobian of the cylindrical coordinates `(r, clon, z)` with respect to
 rectangular coordinates, at the point `(x, y, z)`, as
-[`dcyldr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dcyldr_c.html) of CSPICE.
+`dcyldr_c` of CSPICE.
 
 Throws `SpiceError(:pointonzaxis)` if the point is on the z axis.
 
 See also [`drdcyl`](@ref), [`reccyl`](@ref), [`dlatdr`](@ref).
+
+# References
+
+- [NAIF documentation of `dcyldr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dcyldr_c.html)
 """
 function dcyldr(x::Real, y::Real, z::Real)
     v = SVector(promote(_m_f(x), _m_f(y), _m_f(z))...)
@@ -634,7 +730,7 @@ end
 
 Return the Jacobian of rectangular coordinates with respect to the geodetic coordinates
 `(lon, lat, alt)`, as
-[`drdgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdgeo_c.html) of CSPICE.
+`drdgeo_c` of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`.
 
@@ -642,6 +738,10 @@ Throws `SpiceError(:valueoutofrange)` if `f >= 1`, and `SpiceError(:badradius)` 
 `re <= 0`.
 
 See also [`dgeodr`](@ref), [`georec`](@ref), [`drdlat`](@ref).
+
+# References
+
+- [NAIF documentation of `drdgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdgeo_c.html)
 """
 drdgeo(lon::Real, lat::Real, alt::Real, re::Real, f::Real) =
     _m_drdgeo(promote(_m_f(lon), _m_f(lat), _m_f(alt), _m_f(re), _m_f(f))...)
@@ -659,7 +759,7 @@ end
 
 Return the Jacobian of the geodetic coordinates `(lon, lat, alt)` with respect to
 rectangular coordinates, at the point `(x, y, z)`, as
-[`dgeodr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dgeodr_c.html) of CSPICE.
+`dgeodr_c` of CSPICE.
 
 The spheroid has the equatorial radius `re` and the flattening `f`.
 
@@ -667,6 +767,10 @@ Throws `SpiceError(:valueoutofrange)` if `f >= 1`, `SpiceError(:badradius)` if
 `re <= 0`, and `SpiceError(:pointonzaxis)` if the point is on the z axis.
 
 See also [`drdgeo`](@ref), [`recgeo`](@ref), [`dlatdr`](@ref).
+
+# References
+
+- [NAIF documentation of `dgeodr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dgeodr_c.html)
 """
 dgeodr(x::Real, y::Real, z::Real, re::Real, f::Real) =
     _m_dgeodr(SVector(promote(_m_f(x), _m_f(y), _m_f(z))...), _m_f(re), _m_f(f))
@@ -676,13 +780,17 @@ dgeodr(x::Real, y::Real, z::Real, re::Real, f::Real) =
 
 Return the Jacobian of rectangular coordinates with respect to the planetographic
 coordinates `(lon, lat, alt)` of `body`, as
-[`drdpgr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdpgr_c.html) of CSPICE. The kernel pool of
+`drdpgr_c` of CSPICE. The kernel pool of
 `ctx` (without `ctx`, of [`default_context`](@ref)) gives the sense of the longitude,
 by the rules in [`recpgr`](@ref).
 
 Throws the errors of [`recpgr`](@ref).
 
 See also [`dpgrdr`](@ref), [`pgrrec`](@ref), [`drdgeo`](@ref).
+
+# References
+
+- [NAIF documentation of `drdpgr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/drdpgr_c.html)
 """
 function drdpgr(ks::KernelSet, body::NameOrID, lon::Real, lat::Real, alt::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("drdpgr", "string `body`", body)
@@ -696,7 +804,7 @@ end
 
 Return the Jacobian of the planetographic coordinates `(lon, lat, alt)` of `body` with
 respect to rectangular coordinates, at the point `(x, y, z)`, as
-[`dpgrdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dpgrdr_c.html) of CSPICE.
+`dpgrdr_c` of CSPICE.
 The kernel pool of `ctx` (without `ctx`, of [`default_context`](@ref)) gives the sense
 of the longitude, by the rules in [`recpgr`](@ref).
 
@@ -704,6 +812,10 @@ Throws the errors of [`recpgr`](@ref), and `SpiceError(:pointonzaxis)` if the po
 on the z axis.
 
 See also [`drdpgr`](@ref), [`recpgr`](@ref), [`dgeodr`](@ref).
+
+# References
+
+- [NAIF documentation of `dpgrdr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dpgrdr_c.html)
 """
 function dpgrdr(ks::KernelSet, body::NameOrID, x::Real, y::Real, z::Real, re::Real, f::Real)
     body isa AbstractString && _chkfstr("dpgrdr", "string `body`", body)
@@ -758,7 +870,7 @@ end
 
 Return the state `istate` converted from the coordinate system `icosys` to the
 coordinate system `ocosys`, as
-[`xfmsta_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xfmsta_c.html) of CSPICE.
+`xfmsta_c` of CSPICE.
 
 A state is three coordinates followed by their time derivatives. The names of the
 systems ignore case and blanks. Angles are in radians. A length has the unit of the
@@ -800,6 +912,10 @@ true
 ```
 
 See also [`reclat`](@ref), [`recgeo`](@ref), [`recpgr`](@ref), [`dlatdr`](@ref).
+
+# References
+
+- [NAIF documentation of `xfmsta_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/xfmsta_c.html)
 """
 function xfmsta(
         ks::KernelSet, istate::AbstractVector, icosys::AbstractString,
@@ -936,7 +1052,7 @@ end
     convrt(x, in, out)
 
 Return the measurement `x` converted from the unit `in` to the unit `out`, as
-[`convrt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/convrt_c.html) of CSPICE.
+`convrt_c` of CSPICE.
 
 | Class    | Units                                                                 |
 |:---------|:----------------------------------------------------------------------|
@@ -958,6 +1074,10 @@ julia> convrt(1.5, "HOURS", "MINUTES")
 julia> convrt(1, "km", "METERS")
 1000.0
 ```
+
+# References
+
+- [NAIF documentation of `convrt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/convrt_c.html)
 """
 function convrt(x::Real, in::AbstractString, out::AbstractString)
     _chkfstr("convrt", "string `in`", in)

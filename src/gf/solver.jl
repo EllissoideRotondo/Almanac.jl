@@ -25,7 +25,7 @@ const _GF_ADDWIN = 0.5
     gfrefn(t1, t2, s1=false, s2=true) -> Float64
 
 Return the midpoint of the bracket [`t1`, `t2`], as
-[`gfrefn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrefn_c.html). This is the default
+`gfrefn_c`. This is the default
 refinement function of the geometry finder.
 
 The result is `t1 * 0.5 + t2 * 0.5`, clamped between `t1` and `t2`; the two ends can be in
@@ -33,6 +33,10 @@ either order. `s1` and `s2`, the values of the search condition at the two ends,
 not used.
 
 See also [`gfevnt`](@ref), [`gfocce`](@ref), [`gffove`](@ref).
+
+# References
+
+- [NAIF documentation of `gfrefn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/gfrefn_c.html)
 """
 @inline function gfrefn(t1::Real, t2::Real, s1::Bool = false, s2::Bool = true)
     a = Float64(t1)
@@ -519,7 +523,7 @@ end
     uddf(udfunc, x, dx) -> Float64
 
 Return the numerical derivative of the scalar function `udfunc` at `x`, as
-[`uddf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/uddf_c.html).
+`uddf_c`.
 
 The result is the central difference `(udfunc(x + dx) - udfunc(x - dx)) / (2 dx)`.
 Unlike CSPICE, `udfunc` takes the abscissa alone.
@@ -534,6 +538,10 @@ julia> uddf(x -> x^2, 3.0, 0.5)
 ```
 
 See also [`uddc`](@ref), [`gfuds`](@ref).
+
+# References
+
+- [NAIF documentation of `uddf_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/uddf_c.html)
 """
 function uddf(udfunc::F, x::Real, dx::Real) where {F}
     h = Float64(dx)
@@ -553,7 +561,7 @@ end
     uddc(udfunc, x, dx) -> Bool
 
 Return `true` if the numerical derivative `uddf(udfunc, x, dx)` is negative, as
-[`uddc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/uddc_c.html).
+`uddc_c`.
 
 This is the "is decreasing" test that [`gfuds`](@ref) needs, for a function without an
 analytical derivative: pass `et -> uddc(udfuns, et, dx)` as `udqdec`.
@@ -567,5 +575,9 @@ true
 ```
 
 See also [`uddf`](@ref), [`gfuds`](@ref).
+
+# References
+
+- [NAIF documentation of `uddc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/uddc_c.html)
 """
 uddc(udfunc::F, x::Real, dx::Real) where {F} = uddf(udfunc, x, dx) < 0.0

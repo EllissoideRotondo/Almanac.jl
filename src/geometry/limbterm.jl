@@ -725,7 +725,7 @@ end
 
 Return limb points of `target` as seen by `obsrvr` at `et` (seconds past J2000 TDB),
 as
-[`limbpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/limbpt_c.html) of CSPICE.
+`limbpt_c` of CSPICE.
 
 The points lie in `ncuts` half planes bounded by the line from the target center to
 the observer. Half plane `i` contains `refvec` rotated by `(i - 1) * rolstp` radians,
@@ -803,6 +803,10 @@ lonlat = [reclat(p)[2:3] for p in points]
 ```
 
 See also [`termpt`](@ref), [`tangpt`](@ref), [`edlimb`](@ref).
+
+# References
+
+- [NAIF documentation of `limbpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/limbpt_c.html)
 """
 limbpt(
     ks::KernelSet, method::AbstractString, target::NameOrID, et::Real, fixref::NameOrID,
@@ -838,7 +842,7 @@ limbpt(
 
 Return terminator points of `target` lit by the source `ilusrc`, as seen by `obsrvr` at
 `et` (seconds past J2000 TDB), as
-[`termpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/termpt_c.html) of CSPICE.
+`termpt_c` of CSPICE.
 
 The points lie in `ncuts` half planes bounded by the line from the target center to
 the source center. Half plane `i` contains `refvec` (body-fixed frame `fixref`)
@@ -900,6 +904,10 @@ lonlat = [reclat(p)[2:3] for p in points]
 ```
 
 See also [`limbpt`](@ref), [`edterm`](@ref), [`ilumin`](@ref).
+
+# References
+
+- [NAIF documentation of `termpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/termpt_c.html)
 """
 termpt(
     ks::KernelSet, method::AbstractString, ilusrc::NameOrID, target::NameOrID, et::Real,
@@ -937,7 +945,7 @@ termpt(
 
 Return the tangent point of the ray from `obsrvr` along `dvec` on the reference
 ellipsoid of `target`, as
-[`tangpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tangpt_c.html) of CSPICE.
+`tangpt_c` of CSPICE.
 
 - `tanpt`: the point of the ray nearest to the ellipsoid, in km in the body-fixed
   frame `fixref`.
@@ -977,6 +985,10 @@ Throws `SpiceError` with the kind
 Also throws the errors of [`spkpos`](@ref).
 
 See also [`limbpt`](@ref), [`sincpt`](@ref), [`npedln`](@ref).
+
+# References
+
+- [NAIF documentation of `tangpt_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tangpt_c.html)
 """
 function tangpt(
         ks::KernelSet, method::AbstractString, target::NameOrID, et0::Real,

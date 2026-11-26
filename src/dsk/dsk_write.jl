@@ -14,7 +14,7 @@ const _DSK_IXIFIX = _DSK_MAXCGR + 7       # size of the fixed part of the intege
     dskopn(fname, ifname, ncomch) -> DASHandle
 
 Create the DSK file `fname` and open it for writing, as
-[`dskopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskopn_c.html).
+`dskopn_c`.
 
 `ifname` is the internal file name and `ncomch` is the number of comment characters to
 make room for. The new file has no segment. Segments that [`dskw02`](@ref) adds are in
@@ -26,6 +26,10 @@ Throws `SpiceError(:emptystring)` if `fname` is empty, `:badrecordcount` if `nco
 [`dasonw`](@ref).
 
 See also [`dskw02`](@ref) for an example, [`dasac`](@ref) to add comments.
+
+# References
+
+- [NAIF documentation of `dskopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskopn_c.html)
 """
 dskopn(fname::AbstractString, ifname::AbstractString, ncomch::Integer) =
     dlaopn(fname, "DSK", ifname, ncomch)
@@ -34,7 +38,7 @@ dskopn(fname::AbstractString, ifname::AbstractString, ncomch::Integer) =
     dskcls(handle, optmiz=true) -> Nothing
 
 Close the DSK file of `handle`, as
-[`dskcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskcls_c.html). A file that is open for writing is written
+`dskcls_c`. A file that is open for writing is written
 to disk by this call.
 
 `optmiz` is accepted for CSPICE compatibility and ignored. The file is always written
@@ -42,6 +46,10 @@ segregated (see [`DASHandle`](@ref)), which is what `optmiz = true` gives in CSP
 
 Throws `SpiceError(:daswritefail)` if the file cannot be written; the handle then stays
 open.
+
+# References
+
+- [NAIF documentation of `dskcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskcls_c.html)
 """
 dskcls(h::DASHandle, optmiz::Bool = true) = dascls(h)
 
@@ -311,7 +319,7 @@ end
         -> (spaixd, spaixi)
 
 Return the spatial index of a type 2 segment, as
-[`dskmi2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskmi2_c.html): the double part `spaixd` (10
+`dskmi2_c`: the double part `spaixd` (10
 elements) and the integer part `spaixi` (`spxisz` elements). [`dskw02`](@ref) takes both.
 
 # Arguments
@@ -347,6 +355,10 @@ Throws `SpiceError`:
   here.
 
 See also [`dskrb2`](@ref), and [`dskw02`](@ref) for an example.
+
+# References
+
+- [NAIF documentation of `dskmi2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskmi2_c.html)
 """
 function dskmi2(
         vrtces, plates, finscl::Real, corscl::Integer, worksz::Integer,
@@ -437,7 +449,7 @@ end
     dskrb2(vrtces, plates, corsys, corpar) -> (mncor3, mxcor3)
 
 Return the bounds of the third coordinate of the plates of a type 2 segment, as
-[`dskrb2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskrb2_c.html), in the unit of the vertices (km).
+`dskrb2_c`, in the unit of the vertices (km).
 
 - `corsys = 1`, latitudinal: the radius.
 - `corsys = 3`, rectangular: z.
@@ -450,6 +462,10 @@ bound is a safe bound, not the exact minimum, as in CSPICE.
 Throws `SpiceError(:notsupported)` if `corsys` is not 1, 3 or 4, `:badvertexindex` if
 a vertex number is not in `1:nv`, and for the planetodetic system `:valueoutofrange`
 unless the radius is positive and the flattening is less than 1.
+
+# References
+
+- [NAIF documentation of `dskrb2_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskrb2_c.html)
 """
 function dskrb2(vrtces, plates, corsys::Integer, corpar)
     nv = _dsk_count3(vrtces)
@@ -512,7 +528,7 @@ end
         -> Nothing
 
 Write a type 2 segment (triangular plates) to the DSK file of `handle`, as
-[`dskw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskw02_c.html).
+`dskw02_c`.
 
 # Arguments
 - `handle`: a [`DASHandle`](@ref) from [`dskopn`](@ref).
@@ -597,6 +613,10 @@ true
 ```
 
 See also [`dskopn`](@ref), [`dskmi2`](@ref), [`dskrb2`](@ref), [`dskcls`](@ref).
+
+# References
+
+- [NAIF documentation of `dskw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/dskw02_c.html)
 """
 function dskw02(
         ctx::SpiceContext, h::DASHandle, center::Integer, surfid::Integer,

@@ -333,7 +333,7 @@ spkder(targ::NameOrID, et::Real, ref::NameOrID, obs::NameOrID, v::Val) =
 
 Return the geometric state of body `targ` relative to body `obs` in frame `ref` at
 `et`, and the one-way light time, as
-[`spkgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgeo_c.html).
+`spkgeo_c`.
 
 `state` is an `SVector{6}`: position in km, then velocity in km/s. `lt` is the
 distance divided by the speed of light, in seconds. `et` is in seconds past J2000
@@ -347,6 +347,10 @@ and a zero light time before `ref` and `et` are checked; so does [`spkezr`](@ref
 the correction `"NONE"`.
 
 See also [`spkezr`](@ref), [`spkssb`](@ref).
+
+# References
+
+- [NAIF documentation of `spkgeo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgeo_c.html)
 """
 function spkgeo(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, obs::Integer)
     # As in CSPICE, a body relative to itself is zero before `ref` and `et` are checked.
@@ -364,13 +368,17 @@ spkgeo(targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
 
 Return the geometric position of body `targ` relative to body `obs` in frame `ref` at
 `et`, and the one-way light time, as
-[`spkgps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgps_c.html).
+`spkgps_c`.
 
 `pos` is an `SVector{3}` in km and `lt` is in seconds. The arguments and the errors are
 those of [`spkgeo`](@ref). As in CSPICE, `targ == obs` gives a zero position and a zero
 light time before `ref` and `et` are checked.
 
 See also [`spkezp`](@ref), [`spkpos`](@ref).
+
+# References
+
+- [NAIF documentation of `spkgps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkgps_c.html)
 """
 function spkgps(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, obs::Integer)
     targ == obs && return zero(Vec3{typeof(float(et))}), zero(float(et))
@@ -387,7 +395,7 @@ spkgps(targ::Integer, et::Real, ref::NameOrID, obs::Integer) =
 
 Return the state of `targ` relative to `obs` in frame `ref` at `et`, and the one-way
 light time, as
-[`spkezr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkezr_c.html).
+`spkezr_c`.
 
 `state` is an `SVector{6}`: position in km, then velocity in km/s. `lt` is in seconds.
 
@@ -401,7 +409,7 @@ light time, as
   An [`Aberration`](@ref) value is also accepted.
 
 The call does not allocate, with integer IDs or with names in any case, unless it throws or
-a chain has more than 10 SPK segments ([Allocation](@ref)). With ForwardDiff loaded, `et`
+a chain has more than 10 SPK segments. With ForwardDiff loaded, `et`
 can be a dual number (see [Differentiate with ForwardDiff](@ref)).
 
 The SPK segments connect a body to its center, and that center to the next one. The
@@ -431,6 +439,10 @@ state, lt = spkezr(4, et, 17, Aberration("LT+S"), 399)   # the same with IDs
 ```
 
 See also [`spkpos`](@ref), [`spkgeo`](@ref), [`spkder`](@ref), [`furnsh`](@ref).
+
+# References
+
+- [NAIF documentation of `spkezr_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkezr_c.html)
 """
 spkezr(
     ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString,
@@ -448,7 +460,7 @@ spkezr(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString, obs::Nam
 
 Return the position of `targ` relative to `obs` in frame `ref` at `et`, and the
 one-way light time, as
-[`spkpos_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpos_c.html).
+`spkpos_c`.
 
 `pos` is an `SVector{3}` in km and `lt` is in seconds. The arguments and the errors
 are those of [`spkezr`](@ref), except that an `abcorr` that is not valid throws
@@ -466,6 +478,10 @@ pos, lt = spkpos("SUN", et, "J2000", "LT+S", "EARTH")    # km, s
 ```
 
 See also [`spkezr`](@ref), [`spkder`](@ref).
+
+# References
+
+- [NAIF documentation of `spkpos_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkpos_c.html)
 """
 spkpos(
     ks::KernelSet, targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbstractString,

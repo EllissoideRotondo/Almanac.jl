@@ -30,7 +30,7 @@ end
 
 Return the number of pointing records in the CK type 2 segment with the descriptor
 `descr`, as
-[`cknr02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cknr02_c.html).
+`cknr02_c`.
 
 `descr` is the packed descriptor of the segment (5 doubles), as [`dafgs`](@ref) returns
 it during a search on `handle`. The count follows from the addresses in the descriptor,
@@ -55,6 +55,10 @@ dafcls(h)
 ```
 
 See also [`ckgr02`](@ref), [`cknr03`](@ref).
+
+# References
+
+- [NAIF documentation of `cknr02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cknr02_c.html)
 """
 function cknr02(h::DAFHandle, descr::AbstractVector{<:Real})
     ic = _ck_descr_ic("cknr02", descr, 2)
@@ -66,7 +70,7 @@ end
 
 Return the pointing record `recno` of the CK type 2 segment with the descriptor `descr`
 in the file of `handle`, as
-[`ckgr02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr02_c.html).
+`ckgr02_c`.
 Records count from 1, as in CSPICE.
 
 The record has 10 doubles: the start and the stop of its interval (ticks), the clock rate
@@ -79,6 +83,10 @@ Throws `SpiceError`:
 - `:cknonexistrec` unless `1 <= recno <= cknr02(handle, descr)`;
 - `:dafnosuchhandle` if the handle is closed;
 - `:dafinvalidparams` if `descr` has fewer than 5 doubles.
+
+# References
+
+- [NAIF documentation of `ckgr02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr02_c.html)
 """
 function ckgr02(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     ic = _ck_descr_ic("ckgr02", descr, 2)
@@ -102,12 +110,16 @@ end
 
 Return the number of pointing instances in the CK type 3 segment with the descriptor
 `descr` in the file of `handle`, as
-[`cknr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cknr03_c.html).
+`cknr03_c`.
 `descr` is as in [`cknr02`](@ref).
 
 Throws `SpiceError(:ckwrongdatatype)` if the segment is not of type 3,
 `:dafnosuchhandle` if the handle is closed, and `:dafinvalidparams` if `descr` has fewer
 than 5 doubles.
+
+# References
+
+- [NAIF documentation of `cknr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cknr03_c.html)
 """
 function cknr03(h::DAFHandle, descr::AbstractVector{<:Real})
     ic = _ck_descr_ic("cknr03", descr, 3)
@@ -119,7 +131,7 @@ end
 
 Return the pointing instance `recno` of the CK type 3 segment with the descriptor `descr`
 in the file of `handle`, as
-[`ckgr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr03_c.html).
+`ckgr03_c`.
 Records count from 1, as in CSPICE.
 
 The record is the time tag (ticks) and the quaternion of the C-matrix (SPICE form, scalar
@@ -133,6 +145,10 @@ Throws `SpiceError`:
 - `:cknonexistrec` unless `1 <= recno <= cknr03(handle, descr)`;
 - `:dafnosuchhandle` if the handle is closed;
 - `:dafinvalidparams` if `descr` has fewer than 5 doubles.
+
+# References
+
+- [NAIF documentation of `ckgr03_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ckgr03_c.html)
 """
 function ckgr03(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     ic = _ck_descr_ic("ckgr03", descr, 3)
@@ -157,13 +173,17 @@ end
 
 Return the number of pointing instances in the CK type 1 segment with the descriptor
 `descr` in the file of `handle`, as
-[`cknr01`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknr01.html)
+`cknr01`
 of SPICELIB. CSPICE has no C wrapper for it. `descr` is the packed descriptor of the
 segment (5 doubles), as [`dafgs`](@ref) returns it during a search of the file.
 
 The record readers of the types 1 and 4 to 6 throw `:ckwrongdatatype` for a segment of
 another type, `:dafnosuchhandle` for a closed handle, `:dafinvalidparams` for a short
 descriptor and, the `ckgr` readers, `:cknonexistrec` for a record number out of range.
+
+# References
+
+- [NAIF documentation of `cknr01`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknr01.html)
 """
 function cknr01(h::DAFHandle, descr::AbstractVector{<:Real})
     ic = _ck_descr_ic("cknr01", descr, 1)
@@ -175,12 +195,16 @@ end
 
 Return the pointing instance `recno` of the CK type 1 segment with the descriptor `descr`
 in the file of `handle`, as
-[`ckgr01`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr01.html)
+`ckgr01`
 of SPICELIB. CSPICE has no C wrapper for it. Records count from 1.
 
 The record has the layout of [`ckgr03`](@ref): the time tag (ticks), the quaternion
 (SPICE form, scalar first) and, for a segment with angular velocity, the angular velocity
 (rad/s), 5 or 8 doubles. The errors are those of [`cknr01`](@ref).
+
+# References
+
+- [NAIF documentation of `ckgr01`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr01.html)
 """
 function ckgr01(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     ic = _ck_descr_ic("ckgr01", descr, 1)
@@ -217,9 +241,13 @@ end
 
 Return the number of pointing records in the CK type 4 segment with the descriptor
 `descr` in the file of `handle`, as
-[`cknr04`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknr04.html)
+`cknr04`
 of SPICELIB. CSPICE has no C wrapper for it. The errors are those of [`cknr01`](@ref),
 and `:invalidmetadata` if the segment has fewer than 15 meta data items.
+
+# References
+
+- [NAIF documentation of `cknr04`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknr04.html)
 """
 function cknr04(h::DAFHandle, descr::AbstractVector{<:Real})
     ic = _ck_descr_ic("cknr04", descr, 4)
@@ -231,13 +259,17 @@ end
 
 Return the pointing record `recno` of the CK type 4 segment with the descriptor `descr`
 in the file of `handle`, as
-[`ckgr04`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr04.html)
+`ckgr04`
 of SPICELIB. CSPICE has no C wrapper for it. Records count from 1.
 
 The record has the layout that [`ckw04a`](@ref) takes: the midpoint and the radius of
 the interval (ticks), the seven coefficient counts (quaternion components q0 to q3, then
 the angular velocity components), and the Chebyshev coefficients, `9 + sum(counts)`
 doubles. The errors are those of [`cknr04`](@ref).
+
+# References
+
+- [NAIF documentation of `ckgr04`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr04.html)
 """
 function ckgr04(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     ic = _ck_descr_ic("ckgr04", descr, 4)
@@ -264,8 +296,12 @@ end
 
 Return the number of pointing instances in the CK type 5 segment with the descriptor
 `descr` in the file of `handle`, as
-[`cknr05`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknr05.html)
+`cknr05`
 of SPICELIB. CSPICE has no C wrapper for it. The errors are those of [`cknr01`](@ref).
+
+# References
+
+- [NAIF documentation of `cknr05`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknr05.html)
 """
 function cknr05(h::DAFHandle, descr::AbstractVector{<:Real})
     ic = _ck_descr_ic("cknr05", descr, 5)
@@ -277,12 +313,16 @@ end
 
 Return the pointing instance `recno` of the CK type 5 segment with the descriptor `descr`
 in the file of `handle`, as
-[`ckgr05`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr05.html)
+`ckgr05`
 of SPICELIB. CSPICE has no C wrapper for it. Records count from 1.
 
 The record is the time tag (ticks), the subtype of the segment and the packet of the
 subtype (8, 4, 14 or 7 doubles for the subtypes 0 to 3; see [`ckw05`](@ref)). The errors
 are those of [`cknr01`](@ref), and `:notsupported` for a subtype other than 0 to 3.
+
+# References
+
+- [NAIF documentation of `ckgr05`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr05.html)
 """
 function ckgr05(h::DAFHandle, descr::AbstractVector{<:Real}, recno::Integer)
     ic = _ck_descr_ic("ckgr05", descr, 5)
@@ -305,10 +345,14 @@ end
 
 Return the number of mini-segments in the CK type 6 segment with the descriptor `descr`
 in the file of `handle`, as
-[`cknm06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknm06.html)
+`cknm06`
 of SPICELIB. CSPICE has no C wrapper for it. The errors are those of [`cknr01`](@ref).
 
 See also [`ckmp06`](@ref), [`ckgr06`](@ref).
+
+# References
+
+- [NAIF documentation of `cknm06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/cknm06.html)
 """
 function cknm06(h::DAFHandle, descr::AbstractVector{<:Real})
     ic = _ck_descr_ic("cknm06", descr, 6)
@@ -327,7 +371,7 @@ end
 
 Return the parameters of the mini-segment `msno` of the CK type 6 segment with the
 descriptor `descr` in the file of `handle`, as
-[`ckmp06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckmp06.html)
+`ckmp06`
 of SPICELIB. CSPICE has no C wrapper for it. Mini-segments count from 1.
 
 `rate` is the clock rate (seconds per tick), `subtyp` the subtype, `winsiz` the
@@ -337,6 +381,10 @@ last epoch of its records (ticks).
 
 Throws `SpiceError(:indexoutofrange)` unless `1 <= msno <= cknm06(handle, descr)`; the
 other errors are those of [`cknr01`](@ref).
+
+# References
+
+- [NAIF documentation of `ckmp06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckmp06.html)
 """
 function ckmp06(h::DAFHandle, descr::AbstractVector{<:Real}, msno::Integer)
     ic = _ck_descr_ic("ckmp06", descr, 6)
@@ -358,7 +406,7 @@ end
 
 Return the record `recno` of the mini-segment `msno` of the CK type 6 segment with the
 descriptor `descr` in the file of `handle`, as
-[`ckgr06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr06.html)
+`ckgr06`
 of SPICELIB. CSPICE has no C wrapper for it. Mini-segments and records count from 1.
 
 The record is the time tag (ticks), the subtype, the clock rate (seconds per tick) and the
@@ -370,6 +418,10 @@ Throws `SpiceError`:
 - `:notsupported` for a subtype other than 0 to 3;
 - `:cknonexistrec` unless `1 <= recno <= nrec` of [`ckmp06`](@ref);
 - the errors of [`cknr01`](@ref).
+
+# References
+
+- [NAIF documentation of `ckgr06`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/ckgr06.html)
 """
 function ckgr06(h::DAFHandle, descr::AbstractVector{<:Real}, msno::Integer, recno::Integer)
     ic = _ck_descr_ic("ckgr06", descr, 6)

@@ -155,7 +155,7 @@ end
     getfov([ctx,] instid, room=10000) -> (shape, frame, bsight, bounds)
 
 Return the field of view of the instrument with the integer ID `instid`, as
-[`getfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getfov_c.html)
+`getfov_c`
 of CSPICE.
 
 - `shape`: `"CIRCLE"`, `"ELLIPSE"`, `"RECTANGLE"` or `"POLYGON"`.
@@ -191,6 +191,10 @@ Throws `SpiceError` with the kind
 Also throws the errors of [`convrt`](@ref) for the angle unit.
 
 See also [`getfvn`](@ref), [`fovtrg`](@ref), [`fovray`](@ref).
+
+# References
+
+- [NAIF documentation of `getfov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getfov_c.html)
 """
 getfov(ks::KernelSet, instid::Integer, room::Integer = _GEO_MAXVRT) = _geo_getfov(ks, instid, room)
 getfov(ctx::SpiceContext, instid::Integer, room::Integer = _GEO_MAXVRT) =
@@ -201,7 +205,7 @@ getfov(instid::Integer, room::Integer = _GEO_MAXVRT) = getfov(default_context(),
     getfvn([ctx,] inst, room=10000) -> (shape, frame, bsight, bounds)
 
 Return the field of view of the instrument with the name `inst`, as
-[`getfvn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getfvn_c.html) of
+`getfvn_c` of
 CSPICE. The outputs and the errors are those of [`getfov`](@ref).
 
 `inst` is a name that the loaded kernels map to an ID, or the ID written as a string.
@@ -209,6 +213,10 @@ CSPICE. The outputs and the errors are those of [`getfov`](@ref).
 Throws `SpiceError(:idcodenotfound)` if the name is not known.
 
 See also [`getfov`](@ref), [`bodn2c`](@ref).
+
+# References
+
+- [NAIF documentation of `getfvn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/getfvn_c.html)
 """
 getfvn(ks::KernelSet, inst::AbstractString, room::Integer = _GEO_MAXVRT) =
     _geo_getfov(ks, _body_id(ks, inst, "instrument"), room)
@@ -791,7 +799,7 @@ end
 
 Return `true` if the body `target` is in the field of view of the instrument `inst` at
 `et` (seconds past J2000 TDB), as seen by `obsrvr`, as
-[`fovtrg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/fovtrg_c.html) of CSPICE.
+`fovtrg_c` of CSPICE.
 
 `tshape` is the model of the target:
 
@@ -839,6 +847,10 @@ fovtrg("CASSINI_ISS_NAC", "SUN", "POINT", " ", "LT+S", "CASSINI", et)
 ```
 
 See also [`fovray`](@ref), [`getfov`](@ref), [`gftfov`](@ref), [`occult`](@ref).
+
+# References
+
+- [NAIF documentation of `fovtrg_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/fovtrg_c.html)
 """
 function fovtrg(
         ks::KernelSet, inst::NameOrID, target::NameOrID, tshape::AbstractString,
@@ -871,7 +883,7 @@ fovtrg(
 
 Return `true` if the ray along `raydir` is in the field of view of the instrument `inst`
 at `et` (seconds past J2000 TDB), as
-[`fovray_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/fovray_c.html) of CSPICE.
+`fovray_c` of CSPICE.
 
 `raydir` is a direction (3 elements, not zero) in the frame `rframe`, for example the
 direction of a star in `"J2000"`. `obsrvr` is the body that carries the instrument; its
@@ -897,6 +909,10 @@ Throws `SpiceError` with the kind
 Also throws the errors of [`fovtrg`](@ref) for the field of view.
 
 See also [`fovtrg`](@ref), [`gfrfov`](@ref), [`sincpt`](@ref).
+
+# References
+
+- [NAIF documentation of `fovray_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/fovray_c.html)
 """
 fovray(
     ks::KernelSet, inst::NameOrID, raydir::AbstractVector, rframe::NameOrID,

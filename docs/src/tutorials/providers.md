@@ -9,9 +9,9 @@ The function takes an epoch (ET) and returns the position (km) and the velocity 
 ```@example prov
 using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
 
-furnsh(naif0012_tls())                      # leap seconds
-furnsh(de440s())                            # planets, Moon and Sun, 1849 to 2150
-furnsh(pck00011())                          # orientation and radii of the bodies
+furnsh(naif0012_tls())
+furnsh(de440s())
+furnsh(pck00011())
 
 μ = 3.986004418e5                           # km³/s², the Earth
 r = 8000.0                                  # km

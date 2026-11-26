@@ -25,7 +25,7 @@ end
     pckopn(path, ifname, ncomch=0) -> DAFHandle
 
 Create the binary PCK file `path` and open it for writing, as
-[`pckopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckopn_c.html).
+`pckopn_c`.
 
 `ifname` is the internal file name and `ncomch` is the number of comment characters to
 make room for. The file is on disk when the call returns, byte for byte the file that
@@ -59,6 +59,10 @@ true
 ```
 
 See also [`dafac`](@ref) to add comments.
+
+# References
+
+- [NAIF documentation of `pckopn_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckopn_c.html)
 """
 pckopn(path::AbstractString, ifname::AbstractString, ncomch::Integer = 0) =
     _seg_opn("pckopn", "PCK", 5, path, ifname, ncomch)
@@ -82,7 +86,7 @@ pckops(ifname::AbstractString = "", ncomch::Integer = 0) = _seg_ops("PCK", 5, if
 
 Write a binary PCK segment of type 2 (Chebyshev polynomials for three Euler angles, on
 intervals of equal length) to the file of `handle`, as
-[`pckw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckw02_c.html).
+`pckw02_c`.
 
 - `handle`: a [`DAFHandle`](@ref) from [`pckopn`](@ref) or [`pckops`](@ref).
 - `clssid`: the frame class ID of the body-fixed frame, the `classid` of
@@ -100,8 +104,11 @@ intervals of equal length) to the file of `handle`, as
   `R3(w) * R1(delta) * R3(phi)`, which is `eul2m(w, delta, phi, 3, 1, 3)`.
 
 `cdata` is a vector of vectors or a matrix with one record in each column, as in
-[`spkw02`](@ref). The record count `n` and the degree, which CSPICE takes as arguments,
-follow from its shape.
+[`spkw02`](@ref).
+
+!!! warning "Difference from CSPICE"
+    The call has no arguments for the record count `n` and the degree, which CSPICE and
+    SPICE.jl take: both follow from the shape of `cdata`.
 
 The segment is on disk when the call returns. A call that throws writes nothing.
 
@@ -120,6 +127,10 @@ Throws `SpiceError`:
 - `:idstringtoolong` or `:nonprintablechars` if `segid` is not valid.
 
 See [`pckopn`](@ref) for an example.
+
+# References
+
+- [NAIF documentation of `pckw02_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckw02_c.html)
 """
 function pckw02(
         h::DAFHandle, clssid::Integer, frame::SegFrame, first::Real, last::Real,
@@ -188,7 +199,7 @@ Base.show(io::IO, w::PCK03Writer) = _seg_show_writer(io, w)
 
 Begin a binary PCK segment of type 3 (Chebyshev polynomials for RA, DEC and W and for
 the angular velocity, on intervals of unequal length) in the file of `handle`, as
-[`pck03b`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03b.html)
+`pck03b`
 of SPICELIB, and return its writer. CSPICE has no C wrapper for it.
 
 `body` is the frame class ID of the body-fixed frame, as `clssid` of [`pckw02`](@ref),
@@ -233,6 +244,10 @@ julia> furnsh(ctx, path)
 julia> pxform(ctx, "J2000", "ITRF93", 90.0) ≈ [0 1 0; -1 0 0; 0 0 1]
 true
 ```
+
+# References
+
+- [NAIF documentation of `pck03b`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03b.html)
 """
 function pck03b(
         h::DAFHandle, segid::AbstractString, body::Integer, frame::SegFrame, first::Real,
@@ -272,7 +287,7 @@ end
     pck03a(writer, coeffs, epochs) -> Nothing
 
 Add `ncsets` records to the type 3 segment `writer`, as
-[`pck03a`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03a.html)
+`pck03a`
 of SPICELIB. CSPICE has no C wrapper for it. Without `ncsets`, the number of records is
 `length(epochs)`.
 
@@ -293,6 +308,10 @@ Throws `SpiceError`:
   of the call before.
 
 See [`pck03b`](@ref) for an example.
+
+# References
+
+- [NAIF documentation of `pck03a`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03a.html)
 """
 function pck03a(w::PCK03Writer, ncsets::Integer, coeffs, epochs)
     who = "pck03a"
@@ -313,7 +332,7 @@ pck03a(w::PCK03Writer, coeffs, epochs) = pck03a(w, length(epochs), coeffs, epoch
     pck03e(writer) -> Nothing
 
 End the type 3 segment `writer` and write it to its file, as
-[`pck03e`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03e.html)
+`pck03e`
 of SPICELIB. CSPICE has no C wrapper for it.
 
 [`pck03b`](@ref) and [`pck03a`](@ref) do not change the file, so a segment that is never
@@ -323,6 +342,10 @@ that SPICELIB writes. The writer cannot be used again.
 Throws `SpiceError(:segmentnotopen)` if the writer was ended before, and
 `SpiceError(:dafnosuchhandle)` if the handle was closed after [`pck03b`](@ref); the
 segment is then lost.
+
+# References
+
+- [NAIF documentation of `pck03e`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pck03e.html)
 """
 pck03e(w::PCK03Writer) = _seg_cheb_end!("pck03e", w)
 
@@ -332,7 +355,7 @@ pck03e(w::PCK03Writer) = _seg_cheb_end!("pck03e", w)
 
 Write a binary PCK segment of type 20 (Chebyshev polynomials for the rates of three
 Euler angles, on intervals of equal length) to the file of `handle`, as
-[`pckw20`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pckw20.html) of SPICELIB.
+`pckw20` of SPICELIB.
 
 Each record of `cdata` holds `polydg + 1` coefficients of the rate of `phi`, then the
 value of `phi` at the midpoint of the interval, then the same for `delta` and for `w`
@@ -360,6 +383,10 @@ Throws `SpiceError`:
 - `:coveragegap` unless [`first`, `last`] is inside the intervals of the data, with the
   tolerance of [`spkw20`](@ref);
 - `:idstringtoolong` or `:nonprintablechars` if `segid` is not valid.
+
+# References
+
+- [NAIF documentation of `pckw20`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/FORTRAN/spicelib/pckw20.html)
 """
 function pckw20(
         ctx::SegContext, h::DAFHandle, clssid::Integer, frame::SegFrame, first::Real,
@@ -386,7 +413,7 @@ pckw20(
     pckcls(handle) -> Nothing
 
 Close the binary PCK file of `handle`, as
-[`pckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcls_c.html). The call does nothing if the handle
+`pckcls_c`. The call does nothing if the handle
 is closed already. The close writes no data: every write call puts its bytes on disk
 before it returns. Load the file with [`furnsh`](@ref) after the close. For a handle in memory
 (from [`pckops`](@ref)), the close discards the bytes: load it with [`furnsh`](@ref) or
@@ -394,5 +421,9 @@ save it with [`save_kernel`](@ref) before the close.
 
 Throws `SpiceError(:nosegmentsfound)` if the file is open for writing and holds no
 segment. The handle then stays open; close it with [`dafcls`](@ref).
+
+# References
+
+- [NAIF documentation of `pckcls_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcls_c.html)
 """
 pckcls(h::DAFHandle) = _seg_close(h, "PCK")

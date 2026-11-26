@@ -8,7 +8,7 @@
     frinfo([ctx,] frcode) -> Union{Nothing,Tuple{Int,Int,Int}}
 
 Return `(center, class, classid)` of the frame with ID `frcode`, as
-[`frinfo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frinfo_c.html), or
+`frinfo_c`, or
 `nothing` if the frame is not known.
 
 `center` is the NAIF ID of the body at the frame origin. `class` is 1 for inertial, 2
@@ -25,6 +25,10 @@ julia> frinfo(namfrm("IAU_EARTH")), frinfo(-999)
 ```
 
 See also [`namfrm`](@ref), [`ccifrm`](@ref).
+
+# References
+
+- [NAIF documentation of `frinfo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/frinfo_c.html)
 """
 function frinfo(ks::KernelSet, frcode::Integer)
     f = _frame_def_or_nothing(ks, frcode)
@@ -85,7 +89,7 @@ end
 
 Return `(frcode, frname)` of the frame that is associated with the body with ID
 `cent`, as
-[`cidfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cidfrm_c.html), or `nothing` if there is none.
+`cidfrm_c`, or `nothing` if there is none.
 
 The kernel-pool variable `OBJECT_<cent>_FRAME` (or `OBJECT_<name>_FRAME`) has
 priority. Without it the answer is `IAU_EARTH` for the Earth, and otherwise a built-in
@@ -99,6 +103,10 @@ julia> cidfrm(499)
 ```
 
 See also [`cnmfrm`](@ref).
+
+# References
+
+- [NAIF documentation of `cidfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cidfrm_c.html)
 """
 function cidfrm(ks::KernelSet, cent::Integer)
     v = get(ks.pool, _pool_key("OBJECT_", cent, "_FRAME"), nothing)
@@ -126,7 +134,7 @@ end
 
 Return `(frcode, frname)` of the frame that is associated with the body called
 `cname`, as
-[`cnmfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cnmfrm_c.html), or `nothing` if there is none.
+`cnmfrm_c`, or `nothing` if there is none.
 
 The kernel-pool variable `OBJECT_<cname>_FRAME` (or `OBJECT_<id>_FRAME`) has priority.
 Without it the answer is the built-in frame `IAU_<CNAME>`, if it exists. `nothing`
@@ -140,6 +148,10 @@ julia> cnmfrm("Mars"), cnmfrm("NO SUCH BODY")
 ```
 
 See also [`cidfrm`](@ref).
+
+# References
+
+- [NAIF documentation of `cnmfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/cnmfrm_c.html)
 """
 function cnmfrm(ks::KernelSet, cname::AbstractString)
     _chkfstr("cnmfrm", "string `cname`", cname)
@@ -160,7 +172,7 @@ end
 
 Return `(frcode, frname, center)` of the frame with the class `frclss` and the class
 ID `clssid`, as
-[`ccifrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ccifrm_c.html), or `nothing` if there is none.
+`ccifrm_c`, or `nothing` if there is none.
 
 The built-in frames are searched first. If several frames of the kernel pool match,
 the one with the smallest ID is returned; CSPICE returns the first one in the order
@@ -178,6 +190,10 @@ julia> ccifrm(2, 499)
 ```
 
 See also [`frinfo`](@ref).
+
+# References
+
+- [NAIF documentation of `ccifrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ccifrm_c.html)
 """
 function ccifrm(ks::KernelSet, frclss::Integer, clssid::Integer)
     if frclss == 1 && 1 <= clssid <= N_INERTIAL_FRAMES
@@ -268,7 +284,7 @@ const _BUILTIN_FRAME_CLASSES = sort!(
     bltfrm(frmcls) -> Vector{Int}
 
 Return the IDs of the built-in frames of the class `frmcls`, in increasing order, as
-[`bltfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bltfrm_c.html) of CSPICE.
+`bltfrm_c` of CSPICE.
 
 `frmcls` is a frame class of [`frinfo`](@ref) (1 to 6), or -1 for every class. The
 frames that the kernel pool defines are not included; [`kplfrm`](@ref) gives those.
@@ -280,6 +296,10 @@ Throws `SpiceError(:badframeclass)` if `frmcls` is not -1 or a class 1 to 6.
 julia> length(bltfrm(1)), bltfrm(1)[1:3], bltfrm(3)
 (21, [1, 2, 3], Int64[])
 ```
+
+# References
+
+- [NAIF documentation of `bltfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bltfrm_c.html)
 """
 function bltfrm(frmcls::Integer)
     _check_frame_class("bltfrm", frmcls)
@@ -291,7 +311,7 @@ end
 
 Return the IDs of the frames of the class `frmcls` that the kernel pool defines, in
 increasing order and without duplicates, as
-[`kplfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kplfrm_c.html) of CSPICE.
+`kplfrm_c` of CSPICE.
 
 `frmcls` is a frame class of [`frinfo`](@ref) (1 to 6), or -1 for every class. As in
 CSPICE, a frame is listed if the pool has
@@ -317,6 +337,10 @@ julia> lmpool(ctx, ["FRAME_TOPO = 1500001", "FRAME_1500001_NAME = 'TOPO'",
 julia> kplfrm(ctx, 4), kplfrm(ctx, 3)
 ([1500001], Int64[])
 ```
+
+# References
+
+- [NAIF documentation of `kplfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/kplfrm_c.html)
 """
 function kplfrm(ks::KernelSet, frmcls::Integer)
     _check_frame_class("kplfrm", frmcls)
@@ -347,7 +371,7 @@ end
 
 Return `(rot, relative)` of the fixed-offset (class 4) frame with the class ID
 `frcode`, as
-[`tkfram_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tkfram_c.html). `frcode` is the value of `FRAME_<id>_CLASS_ID`.
+`tkfram_c`. `frcode` is the value of `FRAME_<id>_CLASS_ID`.
 
 `rot` rotates a vector from the frame to its relative frame, the frame with ID
 `relative`; this is the meaning of `TKFRAME_<frcode>_MATRIX`. The definition comes
@@ -391,6 +415,10 @@ julia> pdpool(ctx, "TKFRAME_-1000_AXES", [1.0, 2.0]);
 julia> try tkfram(ctx, -1000) catch err; err.kind end
 :badvariablesize
 ```
+
+# References
+
+- [NAIF documentation of `tkfram_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tkfram_c.html)
 """
 function tkfram(ks::KernelSet, frcode::Integer)
     r = frcode == 0 ? nothing : ccifrm(ks, 4, frcode)
@@ -447,7 +475,7 @@ end
 
 Return the matrix that rotates a position vector from the inertial frame `ref` to the
 body-fixed frame of `body` at `et`, as
-[`tipbod_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tipbod_c.html).
+`tipbod_c`.
 
 `ref` is the name or the ID of a built-in inertial frame. `body` is a NAIF body ID, or
 the frame class ID of a binary PCK frame, the ID that its segments carry (31008 for
@@ -467,6 +495,10 @@ Throws `SpiceError`:
   is outside 1:3; `:insufficientangles` if the body has more terms than angles.
 
 See also [`tisbod`](@ref), [`pxform`](@ref).
+
+# References
+
+- [NAIF documentation of `tipbod_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tipbod_c.html)
 """
 tipbod(ks::KernelSet, ref::NameOrID, body::Integer, et::Real) = _tis_jet(ks, ref, body, et)[1]
 
@@ -475,12 +507,22 @@ tipbod(ks::KernelSet, ref::NameOrID, body::Integer, et::Real) = _tis_jet(ks, ref
 
 Return the matrix that transforms a state from the inertial frame `ref` to the
 body-fixed frame of `body` at `et`, as
-[`tisbod_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tisbod_c.html).
+`tisbod_c`.
 
 The matrix is `[R 0; dR R]`, with `R` the matrix of [`tipbod`](@ref) and `dR` its
 time derivative in 1/s. The arguments and the errors are those of `tipbod`.
 
+!!! warning "Difference from CSPICE"
+    For a body whose text PCK has cubic nutation and precession angles
+    (`BODY<sys>_MAX_PHASE_DEGREE = 3`), `dR` differs from that of `tisbod_c`: CSPICE
+    N0067 divides the rate of the cubic term by the square of the seconds per century,
+    so its `dR` misses that term. This call gives the exact derivative.
+
 See also [`sxform`](@ref).
+
+# References
+
+- [NAIF documentation of `tisbod_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/tisbod_c.html)
 """
 function tisbod(ks::KernelSet, ref::NameOrID, body::Integer, et::Real)
     r, dr = _tis_jet(ks, ref, body, et)
@@ -492,13 +534,19 @@ end
 
 Insert the frame class IDs of the frames that have data in the binary PCK file `pck`
 into the vector `ids`, as
-[`pckfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckfrm_c.html) does with a SPICE cell.
+`pckfrm_c` does with a SPICE cell.
 
-`ids` is used as a set: on return it is sorted and without duplicates. The vector
-comes first, as in SPICE.jl; CSPICE has the cell last. The file is read from disk and
-need not be loaded.
+`ids` is used as a set: on return it is sorted and without duplicates. The file is
+read from disk and need not be loaded.
+
+!!! warning "Difference from CSPICE"
+    The vector comes first, as in SPICE.jl; CSPICE has the cell last.
 
 Throws the errors of [`pckfrm`](@ref).
+
+# References
+
+- [NAIF documentation of `pckfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckfrm_c.html)
 """
 function pckfrm!(ids::AbstractVector{<:Integer}, pck::AbstractString)
     _require_binary_kernel("pckfrm", pck, "PCK")
@@ -515,7 +563,7 @@ end
 
 Return the frame class IDs of the frames that have data in the binary PCK file `pck`,
 sorted and without duplicates, as
-[`pckfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckfrm_c.html).
+`pckfrm_c`.
 
 The file is read from disk and need not be loaded. An open [`DAFHandle`](@ref)
 (in memory, or of a file) can take the place of the path: the call then reads the
@@ -527,6 +575,10 @@ if it is a transfer file (a binary kernel in text form), `SpiceError(:invalidarc
 it is not a DAF, and `SpiceError(:invalidfiletype)` if it is a DAF of another kernel type.
 
 See also [`pckcov`](@ref).
+
+# References
+
+- [NAIF documentation of `pckfrm_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckfrm_c.html)
 """
 pckfrm(pck::AbstractString) = pckfrm!(Int[], pck)
 
@@ -535,11 +587,17 @@ pckfrm(pck::AbstractString) = pckfrm!(Int[], pck)
 
 Insert the coverage of the frame with the class ID `idcode` in the binary PCK file
 `pck` into the window `cover`, as
-[`pckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcov_c.html).
+`pckcov_c`.
 
-The result is the union of the old content of `cover` with the new intervals. The
-window comes first, as in SPICE.jl; CSPICE has the cell last. See [`pckcov`](@ref) for
-the intervals and the errors.
+The result is the union of the old content of `cover` with the new intervals. See
+[`pckcov`](@ref) for the intervals and the errors.
+
+!!! warning "Difference from CSPICE"
+    The window comes first, as in SPICE.jl; CSPICE has the cell last.
+
+# References
+
+- [NAIF documentation of `pckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcov_c.html)
 """
 function pckcov!(cover::Window, pck::AbstractString, idcode::Integer)
     _require_binary_kernel("pckcov", pck, "PCK")
@@ -554,7 +612,7 @@ end
 
 Return the coverage [`Window`](@ref) of the frame with the class ID `idcode` in the
 binary PCK file `pck`, as
-[`pckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcov_c.html).
+`pckcov_c`.
 
 The window is the union of the intervals of the segments of that frame, in seconds
 past J2000 TDB. It is empty if the frame has no data. The file is read from disk and
@@ -566,6 +624,10 @@ did not end, and throws `SpiceError(:dafnosuchhandle)` if the handle is closed.
 Throws the errors of [`pckfrm`](@ref).
 
 See also [`pckcov!`](@ref), [`spkcov`](@ref).
+
+# References
+
+- [NAIF documentation of `pckcov_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/pckcov_c.html)
 """
 pckcov(pck::AbstractString, idcode::Integer) = pckcov!(Window(), pck, idcode)
 
@@ -573,12 +635,16 @@ pckcov(pck::AbstractString, idcode::Integer) = pckcov!(Window(), pck, idcode)
     bodfnd([ctx,] body, item) -> Bool
 
 Return `true` if the kernel pool holds the variable `BODY<body>_<item>`, as
-[`bodfnd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodfnd_c.html).
+`bodfnd_c`.
 
 `body` is a NAIF ID code. `item` is case sensitive; blanks around it are ignored. The
 variable can be numeric or character.
 
 See also [`bodvcd`](@ref).
+
+# References
+
+- [NAIF documentation of `bodfnd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodfnd_c.html)
 """
 bodfnd(ks::KernelSet, body::Integer, item::AbstractString) =
     haskey(ks.pool, _body_key(body, item))
@@ -587,7 +653,7 @@ bodfnd(ks::KernelSet, body::Integer, item::AbstractString) =
     bodvcd([ctx,] bodyid, item) -> Vector{Float64}
 
 Return the values of the kernel-pool variable `BODY<bodyid>_<item>`, as
-[`bodvcd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodvcd_c.html).
+`bodvcd_c`.
 
 `bodyid` is a NAIF ID code; [`bodvrd`](@ref) also takes a body name. `item` is case
 sensitive. The result is a new vector with every value, in the units of the kernel;
@@ -608,6 +674,10 @@ julia> bodvcd(ctx, 399, "RADII")
  6378.1366
  6356.7519
 ```
+
+# References
+
+- [NAIF documentation of `bodvcd_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/bodvcd_c.html)
 """
 bodvcd(ks::KernelSet, bodyid::Integer, item::AbstractString) =
     gdpool(ks, _body_key(bodyid, item))

@@ -4,7 +4,7 @@
 [![CI](https://github.com/Orbitology/Almanac.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/Orbitology/Almanac.jl/actions/workflows/CI.yml)
 [![Coverage](https://codecov.io/gh/Orbitology/Almanac.jl/graph/badge.svg)](https://codecov.io/gh/Orbitology/Almanac.jl)
 
-*NASA NAIF's SPICE toolkit, in native Julia*
+*NASA NAIF's SPICE toolkit in native Julia*
 
 **Almanac.jl** is a pure-Julia port of [CSPICE](https://naif.jpl.nasa.gov/naif/toolkit.html)
 (toolkit version N0067), the library of NASA's Navigation and Ancillary Information Facility
@@ -20,31 +20,21 @@ tables that run on a GPU.
 
 **Note:** This project is *not* affiliated with NASA, NAIF or JPL in any way.
 
-**AI assistance:** Much of the code, the tests and the documentation of Almanac.jl was
-written with AI coding assistants (Claude, by Anthropic), under the direction of the
-maintainer. Its correctness rests on the comparisons with CSPICE and with NAIF's test suite
-described [below](#features) and in the
-[manual](https://orbitology.github.io/Almanac.jl/dev/manual/validation/). For results
-that matter to your work, check them against CSPICE, and please report any difference in
-the [issues](https://github.com/Orbitology/Almanac.jl/issues).
+**AI assistance:** the code for this project was 
+written with the help of AI coding assistants (Claude Opus 5.5). 
+The code was [validated](https://orbitology.github.io/Almanac.jl/dev/manual/validation/) against CSPICE using NAIF's test suite, [tspice](https://naif.jpl.nasa.gov/pub/naif/misc/tspice/N0067/). 
 
 ## Installation
 
-Almanac.jl requires Julia 1.10 or later. Install it with the package manager:
-
 ```julia
-using Pkg
-Pkg.add("Almanac")
+import Pkg; Pkg.add("Almanac")
 ```
-
-The quickstart also needs [SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels),
-which downloads the NAIF generic kernels: `Pkg.add("SPICEKernels")`.
 
 ## Quickstart
 
 ```julia
 using Almanac
-using SPICEKernels  # downloads the NAIF generic kernels and returns their paths
+using SPICEKernels
 
 # Load the leap seconds kernel and a planetary ephemeris
 furnsh(naif0012_tls())
@@ -56,10 +46,6 @@ et = utc2et("2025-03-01T12:00:00")
 # Position of the Moon as seen from the Earth, corrected for light time and stellar aberration
 pos, lt = spkpos("MOON", et, "J2000", "LT+S", "EARTH")
 ```
-
-`pos` is in kilometers and `lt`, the one-way light time, in seconds. As in SPICE.jl, outputs
-are returned rather than written into arguments, and indices start at 1; errors throw a
-`SpiceError`.
 
 ## Features
 
@@ -89,18 +75,8 @@ Beyond CSPICE:
 The test suite compares Almanac.jl with CSPICE through SPICE.jl and replays NAIF's own test
 suite against Almanac.jl. Results agree to within rounding error, apart from a few
 [documented differences](https://orbitology.github.io/Almanac.jl/dev/manual/numerics/)
-and the [defects of CSPICE](https://orbitology.github.io/Almanac.jl/dev/manual/cspice_defects/)
-that Almanac.jl fixes.
+and the defects of CSPICE that Almanac.jl fixes.
 The package is under active development, and its interface may still change.
-
-## Tutorials and Documentation
-
-For information on using the package, see the
-[documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a
-quickstart, followed by tutorials, pages on the relation to CSPICE and on validation, and
-the API reference, in which the docstring of each ported routine links to its NAIF page. To port a program from CSPICE or
-SPICE.jl, start with the
-[API differences](https://orbitology.github.io/Almanac.jl/dev/manual/conventions/).
 
 ## Citing
 
@@ -110,12 +86,17 @@ If you publish work that uses Almanac.jl, please cite the SPICE toolkit as NAIF 
   Facility", *Planetary and Space Science* 44 (1), 65–70, 1996.
 - C. Acton, N. Bachman, B. Semenov, and E. Wright, "A look towards the future in the handling
   of space science mission geometry", *Planetary and Space Science* 150, 9–12, 2018.
+  
+## Documentation
 
-## Contributing
+For information on using the package, see the
+[documentation](https://orbitology.github.io/Almanac.jl/dev/). It opens with a
+quickstart, followed by tutorials, pages on validation, and
+the API reference, in which the docstring of each ported routine links to its NAIF page.
 
-Bug reports and questions are welcome in the
-[issues](https://github.com/Orbitology/Almanac.jl/issues). Please report bugs in Almanac.jl
-here, not to NAIF.
+## Acknowledgements
+
+
 
 ## License
 

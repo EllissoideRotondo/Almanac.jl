@@ -637,13 +637,17 @@ spkpos(targ::NameOrID, et::Real, ref::NameOrID, corr::Aberration, obs::NameOrID)
 
 Return the state of body `targ` relative to body `obs` in frame `ref` at `et`, and the
 one-way light time, as
-[`spkez_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkez_c.html).
+`spkez_c`.
 
 This is [`spkezr`](@ref), which takes names or IDs, restricted to NAIF ID codes for the
 bodies, as in CSPICE; the other arguments, the result and the errors are those of
 `spkezr`.
 
 See also [`spkezp`](@ref), [`spkgeo`](@ref).
+
+# References
+
+- [NAIF documentation of `spkez_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkez_c.html)
 """
 spkez(
     ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
@@ -661,13 +665,17 @@ spkez(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::Integer) =
 
 Return the position of body `targ` relative to body `obs` in frame `ref` at `et`, and
 the one-way light time, as
-[`spkezp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkezp_c.html).
+`spkezp_c`.
 
 This is [`spkpos`](@ref), which takes names or IDs, restricted to NAIF ID codes for the
 bodies, as in CSPICE; the other arguments, the result and the errors are those of
 `spkpos`.
 
 See also [`spkez`](@ref), [`spkgps`](@ref).
+
+# References
+
+- [NAIF documentation of `spkezp_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkezp_c.html)
 """
 spkezp(
     ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
@@ -742,13 +750,17 @@ spkder(targ::NameOrID, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::NameOrID
 
 Return the geometric state of body `targ` relative to the solar system barycenter in
 frame `ref` at `et`, as
-[`spkssb_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkssb_c.html).
+`spkssb_c`.
 
 Position in km, then velocity in km/s. `et` is in seconds past J2000 TDB. `targ` is a
 NAIF ID code; `ref` is a frame name or a frame ID. The result equals the state of
 `spkgeo(targ, et, ref, 0)`.
 
 Throws the errors of [`spkgeo`](@ref).
+
+# References
+
+- [NAIF documentation of `spkssb_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkssb_c.html)
 """
 function spkssb(ks::KernelSet, targ::Integer, et::Real, ref::NameOrID)
     r, v = spk_jet(ks, Int32(targ), check_epoch(et), frame_id(ks, ref), Int32(0), Val(1))
@@ -763,7 +775,7 @@ spkssb(targ::Integer, et::Real, ref::NameOrID) = spkssb(default_context(), targ,
 
 Return the state of body `targ` relative to an observer with a given barycentric
 state, corrected for light time, with the light time and its rate, as
-[`spkltc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkltc_c.html).
+`spkltc_c`.
 
 - `et`: epoch of the observer in seconds past J2000 TDB.
 - `stobs`: state of the observer relative to the solar system barycenter at `et`, in
@@ -785,6 +797,10 @@ Throws `SpiceError`:
 - the SPK errors of [`spkgeo`](@ref).
 
 See also [`spkaps`](@ref), [`spkacs`](@ref).
+
+# References
+
+- [NAIF documentation of `spkltc_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkltc_c.html)
 """
 function spkltc(
         ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
@@ -810,7 +826,7 @@ spkltc(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, stobs::Abstrac
 
 Return the state of body `targ` relative to an observer with a given barycentric state
 and acceleration, corrected for light time and stellar aberration, as
-[`spkaps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkaps_c.html).
+`spkaps_c`.
 
 `stobs` (6 elements, km and km/s) and `accobs` (3 elements, km/s^2) are relative to
 the solar system barycenter at `et`, in the inertial frame `ref`. The other arguments
@@ -826,6 +842,10 @@ to the line of sight is not below the speed of light (`zzstelab`), and the error
 [`spkltc`](@ref).
 
 See also [`spkacs`](@ref).
+
+# References
+
+- [NAIF documentation of `spkaps_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkaps_c.html)
 """
 function spkaps(
         ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
@@ -854,7 +874,7 @@ spkaps(
 
 Return the state of body `targ` relative to body `obs` in the inertial frame `ref` at
 `et` with the correction `abcorr`, the light time and its rate, as
-[`spkacs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkacs_c.html).
+`spkacs_c`.
 
 `state` is an `SVector{6}` in km and km/s, `lt` is in seconds and `dlt` is the time
 derivative of `lt`. `targ` and `obs` are NAIF ID codes. For the `+S` forms the
@@ -863,6 +883,10 @@ in CSPICE. `et` is in seconds past J2000 TDB. The state and `lt` are those of
 [`spkezr`](@ref).
 
 Throws the errors of [`spkltc`](@ref).
+
+# References
+
+- [NAIF documentation of `spkacs_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkacs_c.html)
 """
 function spkacs(
         ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg,
@@ -887,7 +911,7 @@ spkacs(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::Integer) 
 
 Return the position of body `targ` relative to an observer with a given barycentric
 state, with the correction `abcorr`, and the light time, as
-[`spkapo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkapo_c.html).
+`spkapo_c`.
 
 `sobs` is the state of the observer relative to the solar system barycenter at `et`
 (seconds past J2000 TDB) in the inertial frame `ref` (6 elements, km and km/s). `pos`
@@ -904,6 +928,10 @@ Throws `SpiceError`:
 - the SPK errors of [`spkgeo`](@ref).
 
 See also [`spkpos`](@ref), [`spkltc`](@ref).
+
+# References
+
+- [NAIF documentation of `spkapo_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/spkapo_c.html)
 """
 function spkapo(
         ks::KernelSet, targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector,
@@ -928,7 +956,7 @@ spkapo(targ::Integer, et::Real, ref::NameOrID, sobs::AbstractVector, abcorr::Abc
 
 Return the epoch at which a signal is at body `targ`, given that it is at body `obs`
 at `etobs`, and the light time between the two, as
-[`ltime_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ltime_c.html).
+`ltime_c`.
 
 `dir = "->"`: the signal leaves `obs` at `etobs` and reaches `targ` at `ettarg`.
 `dir = "<-"`: the signal reaches `obs` at `etobs` and left `targ` at `ettarg`. Epochs
@@ -941,6 +969,10 @@ Only the first two characters of `dir` count, as in CSPICE: `"-> "` is `"->"`.
 Throws `SpiceError(:emptystring)` if `dir` is empty, `SpiceError(:baddirection)` if
 `dir` does not begin with `"->"` or `"<-"`, `SpiceError(:badarg)` if `etobs` is not
 finite, and the SPK errors of [`spkgeo`](@ref).
+
+# References
+
+- [NAIF documentation of `ltime_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/ltime_c.html)
 """
 function ltime(ks::KernelSet, etobs::Real, obs::Integer, dir::AbstractString, targ::Integer)
     _chkfstr("ltime", "direction", dir)
@@ -968,7 +1000,7 @@ ltime(etobs::Real, obs::Integer, dir::AbstractString, targ::Integer) =
     stelab(pobj, vobs) -> SVector{3}
 
 Return the position `pobj` corrected for stellar aberration at reception, as
-[`stelab_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/stelab_c.html).
+`stelab_c`.
 
 `pobj` is the position of the target relative to the observer and `vobs` is the
 velocity of the observer relative to the solar system barycenter, in the same
@@ -987,6 +1019,10 @@ julia> round(p[2] / p[1] * 1.0e4; digits=4)    # tangent of the angle is near v/
 ```
 
 See also [`stlabx`](@ref).
+
+# References
+
+- [NAIF documentation of `stelab_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/stelab_c.html)
 """
 stelab(pobj::AbstractVector, vobs::AbstractVector) = _stelab(_m_v3(pobj), _m_v3(vobs))
 
@@ -994,9 +1030,13 @@ stelab(pobj::AbstractVector, vobs::AbstractVector) = _stelab(_m_v3(pobj), _m_v3(
     stlabx(pobj, vobs) -> SVector{3}
 
 Return the position `pobj` corrected for stellar aberration at transmission, as
-[`stlabx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/stlabx_c.html):
+`stlabx_c`:
 [`stelab`](@ref) with the velocity negated.
 
 Units and errors are those of [`stelab`](@ref).
+
+# References
+
+- [NAIF documentation of `stlabx_c`](https://naif.jpl.nasa.gov/pub/naif/toolkit_docs/C/cspice/stlabx_c.html)
 """
 stlabx(pobj::AbstractVector, vobs::AbstractVector) = _stelab(_m_v3(pobj), -_m_v3(vobs))
