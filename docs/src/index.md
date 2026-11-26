@@ -6,8 +6,6 @@ a body is, how a frame is oriented, when an event occurs) in pure Julia.
 
 ## Installation
 
-Almanac.jl needs Julia 1.10 or later. Install it from the Julia package manager:
-
 ```julia-repl
 pkg> add Almanac
 ```
