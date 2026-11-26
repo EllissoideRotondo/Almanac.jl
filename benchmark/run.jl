@@ -11,8 +11,9 @@
 #
 # The scripts that are not in the suite need more than the test kernels:
 #
-#   pepper.jl     the comparison of PEPPER with ANISE; takes a directory of its kernels
-#   table_gpu.jl  ephemeris tables on an NVIDIA GPU; needs CUDA.jl
+#   pepper.jl       the comparison of PEPPER with ANISE; takes a directory of its kernels
+#   table_gpu.jl    ephemeris tables on an NVIDIA GPU; needs CUDA.jl
+#   ephemerides.jl  Almanac against Ephemerides.jl; needs Ephemerides.jl in the environment
 #
 # Environment: ALMANAC_BENCH_SECONDS (seconds of samples per row, default 2),
 # ALMANAC_BENCH_REPS (repetitions of `latency`, default 3), ALMANAC_KERNEL_DIR (the
