@@ -7,7 +7,7 @@ A trajectory that the program computes (with a propagator, an optimizer, an inte
 The function takes an epoch (ET) and returns the position (km) and the velocity (km/s) relative to the center, in the given frame. Here, a circular orbit of radius 8000 km around the Earth, for a body with the ID -1000, which no NAIF kernel uses:
 
 ```@example prov
-using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+using Almanac, SPICEKernels
 
 furnsh(naif0012_tls())
 furnsh(de440s())

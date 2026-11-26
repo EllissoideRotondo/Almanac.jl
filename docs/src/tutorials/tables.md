@@ -5,7 +5,7 @@ An inner loop or a GPU kernel that needs the position of a body many times over 
 ## Build and evaluate an ephemeris table
 
 ```@example tab
-using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+using Almanac, SPICEKernels
 
 furnsh(naif0012_tls())
 furnsh(de440s())

@@ -7,7 +7,7 @@ An [`Orbit`](@ref) is a state about a central body, with the GM (km³/s²) and t
 [`orbit`](@ref) takes the arguments of [`spkezr`](@ref), any aberration correction included, and the GM and radii of the observer from the kernel pool, here from `gm_de440.tpc` and `pck00011.tpc`. The epoch of the orbit is `et`, the epoch of the observer:
 
 ```@example orbits
-using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+using Almanac, SPICEKernels
 
 furnsh(naif0012_tls())
 furnsh(de440s())

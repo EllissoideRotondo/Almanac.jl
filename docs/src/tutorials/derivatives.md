@@ -7,7 +7,7 @@ CSPICE gives a position and its velocity. Almanac.jl gives derivatives of any or
 [`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and the call does not allocate.
 
 ```@example der
-using Almanac, SPICEKernels                 # SPICEKernels downloads the NAIF generic kernels
+using Almanac, SPICEKernels
 
 furnsh(naif0012_tls())
 furnsh(de440s())

@@ -4,7 +4,7 @@ The geometry finder, the `gf` calls, answers the question "when is this quantity
 
 ## Load the kernels
 
-The examples of this page need the leap seconds, the planetary ephemeris and the shapes and rotations of the bodies. [SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels) downloads the NAIF generic kernels on first use and returns their paths:
+The examples of this page need the leap seconds, the planetary ephemeris and the shapes and rotations of the bodies:
 
 ```@example gf
 using Almanac, SPICEKernels

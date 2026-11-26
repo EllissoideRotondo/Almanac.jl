@@ -4,7 +4,7 @@ Every call that reads kernels takes an optional [`SpiceContext`](@ref) as its fi
 
 ## One context per kernel set
 
-Contexts are independent of each other. Use one per version of an ephemeris, or one per mission. [SPICEKernels.jl](https://github.com/JuliaAstro/EphemerisSources.jl/tree/main/lib/SPICEKernels) downloads the NAIF generic kernels and returns their paths:
+Contexts are independent of each other. Use one per version of an ephemeris, or one per mission.
 
 ```@example ctx
 using Almanac, SPICEKernels
