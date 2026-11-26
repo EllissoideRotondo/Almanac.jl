@@ -1844,10 +1844,9 @@ group("9. DAF access, SPK and CK writers") do
         end
     end
 
-    # SPICELIB defect that `ckw06` copies: the second check of the bounds of a
-    # mini-segment compares its last epoch with the start of its interval, not with the
-    # end, so a mini-segment that ends before the end of its interval is written. Own
-    # random stream.
+    # Regression: SPICELIB `ckw06` compares the last epoch of a mini-segment with the
+    # start of its interval, not with the end, and writes a mini-segment that ends before
+    # its interval; Almanac refuses it. Own random stream.
     @apart @testset "ckw06: a mini-segment that ends before its interval" begin
         r2 = MersenneTwister(SEED + 1206)
         a = gen_ckw06(r2, 1; nmini = 1)
@@ -1856,8 +1855,11 @@ group("9. DAF access, SPK and CK writers") do
         end
         bds = copy(a.ivlbds)
         bds[end] += 0.5
-        pc, pn = write_both(writer_case("ckw06"), dir, "ckw06_short", [merge(a, (ivlbds = bds,))])
-        @test padless(pn) == padless(pc)
+        b = merge(a, (ivlbds = bds,))
+        path = joinpath(dir, "ckw06_short.bc")
+        h = ckopn(path, "ckw06", 0)
+        @test throws_kind(() -> writer_case("ckw06").neo(h, b), :boundsdisagree)
+        dafcls(h)
     end
 
     # Regression: the sign check of the Hermite quaternions of `ckw06` compared sums of

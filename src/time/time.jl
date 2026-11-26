@@ -129,7 +129,10 @@ const _DPBEGL = (0, 31, 60, 91, 121, 152, 182, 213, 244, 274, 305, 335)
 _leap(year::Int) = (year % 4 == 0) - (year % 100 == 0) + (year % 400 == 0)
 
 "Return the day number (0001-01-01 is day 0) of the date in the extended Gregorian calendar, as the `DAYNUM` statement function of `ttrans` with its shift of years before 1 by whole 400-year cycles. Requires `1 <= month <= 12`."
-function _tt_daynum(year::Int, month::Int, day::Int)::Int
+_tt_daynum(year::Int, month::Int, day::Int)::Int = Int(_tt_daynum64(year, month, day) % Int32)
+
+"Return the day number of `_tt_daynum` in 64-bit arithmetic, without the 32-bit wrap of CSPICE."
+function _tt_daynum64(year::Int, month::Int, day::Int)::Int
     doffst = 0
     if year <= 0
         yr400, year = fldmod(year, 400)
@@ -142,7 +145,7 @@ function _tt_daynum(year::Int, month::Int, day::Int)::Int
     y = year - 1
     n = y * 365 + div(y, 4) - div(y, 100) + div(y, 400) +
         (_DPJAN0[month] + (month > 2 ? _leap(year) : 0) + day) - 1 + doffst
-    return Int(n % Int32)
+    return n
 end
 
 const _DN2000 = _tt_daynum(2000, 1, 1)
@@ -679,6 +682,24 @@ const TVec = NTuple{7, Float64}
 
 @inline _tvec(x::Vararg{Real, N}) where {N} = ntuple(i -> i <= N ? Float64(x[i]) : 0.0, Val(7))
 
+# CSPICE `ttrans` keeps day numbers in 32-bit integers and lets them wrap, so that a day
+# number outside them gives a wrong epoch. `_tt_cint` and `_tt_day32` throw
+# for such a day number instead.
+function _tt_cint(x::Float64)::Int
+    (-2.147483649e9 < x < 2.147483648e9) || _tt_range_error(x)
+    return _cint(x)
+end
+function _tt_day32(n::Int)::Int
+    typemin(Int32) <= n <= typemax(Int32) || _tt_range_error(n)
+    return n
+end
+@noinline _tt_range_error(x) = throw(
+    SpiceError(
+        :valueoutofrange,
+        "the time component or day number $x is outside the range of 32-bit integers"
+    )
+)
+
 """
     _ttrans(l, pfrom, pto, tv) -> NTuple{7,Float64}
 
@@ -692,17 +713,17 @@ function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
     daynum = 0
     secs = 0.0
     if pfrom == _TT_YMD || pfrom == _TT_YMDF
-        year, month, day = _cint(tv[1]), _cint(tv[2]), _cint(tv[3])
+        year, month, day = _tt_cint(tv[1]), _tt_cint(tv[2]), _tt_cint(tv[3])
         dyear, month = fldmod(month - 1, 12)
-        daynum = _tt_daynum(year + dyear, month + 1, day)
+        daynum = _tt_daynum64(year + dyear, month + 1, day)
         secs = tv[4] * 3600.0 + tv[5] * 60.0 + tv[6]
     elseif pfrom == _TT_YD || pfrom == _TT_YDF
-        daynum = _tt_daynum(_cint(tv[1]), 1, _cint(tv[2]))
+        daynum = _tt_daynum64(_tt_cint(tv[1]), 1, _tt_cint(tv[2]))
         secs = tv[3] * 3600.0 + tv[4] * 60.0 + tv[5]
     elseif pfrom == _TT_YDD || pfrom == _TT_YDDF
-        day = _cint(tv[2])
+        day = _tt_cint(tv[2])
         frac = tv[2] - Float64(day)
-        daynum = _tt_daynum(_cint(tv[1]), 1, day)
+        daynum = _tt_daynum64(_tt_cint(tv[1]), 1, day)
         if pfrom == _TT_YDDF
             secs = frac * _SPD
         else
@@ -713,25 +734,25 @@ function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
         end
     elseif pfrom == _TT_FORMAL
         dp2000, secs = _rmaind(tv[1] + _HALFD, _SPD)
-        daynum = _wrap32(_cint(dp2000) + _DN2000)
+        daynum = _tt_day32(_tt_cint(dp2000) + _DN2000)
     elseif pfrom == _TT_JDUTC
         daydp, secs = _rmaind((tv[1] - _JD1101) * _SPD, _SPD)
-        daynum = _cint(daydp)
+        daynum = _tt_cint(daydp)
     elseif pfrom == _TT_DAYSEC
-        daynum = _cint(tv[1])
+        daynum = _tt_cint(tv[1])
         secs = tv[2]
     elseif pfrom == _TT_DP2000
-        daynum = _wrap32(_cint(tv[1]) + _DN2000)
+        daynum = _tt_day32(_tt_cint(tv[1]) + _DN2000)
         secs = tv[2]
     elseif pfrom == _TT_YWD || pfrom == _TT_YWDF
-        week = _cint(tv[2]) - 1
-        wkday = _cint(tv[3])
-        daynum = _tt_daynum(_cint(tv[1]), 1, 1)
+        week = _tt_cint(tv[2]) - 1
+        wkday = _tt_cint(tv[3])
+        daynum = _tt_daynum64(_tt_cint(tv[1]), 1, 1)
         fyrday = mod(daynum - _SUNDAY, 7) + 1
         daynum += week * 7 + mod(wkday - fyrday, 7)
         secs = tv[4] * 3600.0 + tv[5] * 60.0 + tv[6]
     elseif pfrom == _TT_YMWD || pfrom == _TT_YMWDF
-        month = _cint(tv[2])
+        month = _tt_cint(tv[2])
         # CSPICE aborts here on a subscript out of range (BADSUBSCRIPT)
         (1 <= month <= 12) || throw(
             SpiceError(
@@ -739,9 +760,9 @@ function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
                 "the month $month of a year-month-week-day time vector is not in 1..12"
             )
         )
-        week = _cint(tv[3]) - 1
-        day = _cint(tv[4])
-        daynum = _tt_daynum(_cint(tv[1]), month, 1)
+        week = _tt_cint(tv[3]) - 1
+        day = _tt_cint(tv[4])
+        daynum = _tt_daynum64(_tt_cint(tv[1]), month, 1)
         fmday = mod(daynum - _SUNDAY, 7) + 1
         daynum += week * 7 + mod(day - fmday, 7)
         secs = tv[5] * 3600.0 + tv[6] * 60.0 + tv[7]
@@ -751,9 +772,10 @@ function _ttrans(l::LeapSeconds, pfrom::Int, pto::Int, tv::TVec)::TVec
         uout != 0 && return Base.setindex(tv, _unitim(l, tv[1], uin, uout), 1)
         daynum, secs = _tai_to_day(l, _unitim(l, tv[1], uin, _US_TAI))
     end
+    daynum = _tt_day32(daynum)
     if _tt_formal(pfrom)
         daydp, secs = _rmaind(secs, _SPD)
-        daynum = _wrap32(daynum + _cint(daydp))
+        daynum = _tt_day32(daynum + _tt_cint(daydp))
     end
     # A formal input that goes to a formal output keeps its seconds; every other pair
     # moves seconds outside [0, 86399] to the day that holds the instant.

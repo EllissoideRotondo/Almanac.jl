@@ -1376,7 +1376,13 @@ Throws `SpiceError`, with the reason in the message:
 - `:badtimestring` if a component is out of range;
 - `:timeconflict` if `s` names both a time system and a time zone;
 - `:timezoneerror` if the time zone is not one of the above;
+- `:valueoutofrange` if the day number of the epoch is outside the 32-bit integers;
 - `:noleapseconds` if no leap-second kernel is loaded.
+
+!!! warning "Difference from CSPICE"
+    CSPICE N0067 keeps day numbers in 32-bit integers and lets them wrap, so
+    `"238409829538 JD"` gives a wrong ET. This call throws
+    `SpiceError(:valueoutofrange)` for a day number outside the 32-bit integers.
 
 # Examples
 ```julia
@@ -1558,7 +1564,9 @@ CSPICE routine:
 Throws `SpiceError(:emptystring)` if `s` is `""`, and
 `SpiceError(:invalidtimestring)` if `s` is not a time string of these forms or,
 with the check on, if a component is out of range, as CSPICE does for every such
-string, and `SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
+string, `SpiceError(:valueoutofrange)` if the day number of the epoch is outside the
+32-bit integers (CSPICE lets it wrap; see [`str2et`](@ref)), and
+`SpiceError(:noleapseconds)` if no leap-second kernel is loaded.
 
 # References
 

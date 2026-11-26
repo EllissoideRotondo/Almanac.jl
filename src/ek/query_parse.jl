@@ -2005,9 +2005,9 @@ Check the constraints and the order-by columns of the resolved query `q` (`zzeks
 and return `nothing`, or the error message. Rules: a
 column of a constraint or of the ORDER BY clause is scalar (size 1); LIKE and NOT LIKE
 need a character column on the left; the two sides of a constraint have the same
-type, or both are numeric (DP and INT mix). As in CSPICE, the check stops without an
-error at the first constraint with IS NULL or IS NOT NULL: the constraints after it
-and the order-by columns are not checked.
+type, or both are numeric (DP and INT mix). Every constraint and every order-by
+column is checked; CSPICE stops the check without an error at the first constraint
+with IS NULL or IS NOT NULL.
 
 In the message for a non-scalar column CSPICE prints the query from the start of the
 left column name to the end of the right side of the most recent constraint that had
@@ -2060,7 +2060,7 @@ function _ek_qsemc!(
             rhstyp = _ek_dtype_code(rhs.dtype)
             rhs.size != 1 && return nonscalar("query constraint", lxb0, lxe1, rhs.size)
         else
-            (opcode == _EKQ_ISNULL || opcode == _EKQ_NOTNUL) && return nothing
+            (opcode == _EKQ_ISNULL || opcode == _EKQ_NOTNUL) && continue
             rhstyp = _ek_qget(q, base + 20)
             lxb1, lxe1 = _ek_qget(q, base + 21), _ek_qget(q, base + 22)
             what = "value"

@@ -26,11 +26,8 @@ run-time library of f2c. In the tables:
 | Where | Defect | In Almanac.jl | Test |
 |---|---|---|---|
 | `nparsd` (text kernels, SCLK kernels, TLE fields) | Converts a decimal string to a double that is not always the nearest one: the GM of the Sun in `gm_de431.tpc` comes out 5 units in the last place low | The same doubles. The EK query scanner fixes it (below) | `pool` |
-| `zzeksemc` (`ekfind`) | The check of a query stops at the first `IS NULL` or `IS NOT NULL`: the constraints after it and the ORDER BY columns are not checked. A non-scalar column in a later constraint then makes the search signal `SPICE(BUG)` | The same check. The search compares a non-scalar column by its first element, with no error | `ek_parse` |
-| `ttrans` (`str2et`) | Day numbers are 32-bit integers and wrap: the epoch `"238409829538 JD"` gives an ET of the opposite sign | The same | `time` |
 | C casts of f2c (`(integer) x`, `i_dnnt`; `str2et`, `ekfind`) | A double outside the 32-bit range, or NaN, is undefined behavior in C: x86 gives the smallest 32-bit integer, ARM saturates | The x86 result on every machine, so it differs from CSPICE built for ARM | `time`, `ek_query` |
 | `hx2dp` | The exponent -2³¹ overflows when negated, and the routine divides by 16 once instead of returning zero | The same | `math_vectors` |
-| `ckw06` | The second bounds check of a mini-segment compares its last epoch with the start of its interval, not the end, so a mini-segment whose epochs end before its interval is written | The same check | `dafwrite` |
 
 ## Defects that Almanac.jl fixes
 
@@ -43,6 +40,7 @@ error or the correct result.
 |---|---|---|---|
 | `tisbod` (`sxform`, states in a body-fixed frame) | For cubic angles (`BODY<sys>_MAX_PHASE_DEGREE = 3`, `<sys>` the ID of the system barycenter), divides the rate of the cubic term by the square of the seconds per century in place of the seconds per century, so the derivative block misses that term | The exact derivative; see [Derivatives of rotations](@ref) | `frameinfo` |
 | `str2et`, `tparch` | Converting a second 60 in a time zone, or a Julian-calendar date, turns on the range check of `tparch` for the rest of the process, so later conversions depend on earlier ones | Conversions do not change the setting of `tparch`, which belongs to the context | `time` |
+| `ttrans` (`str2et`) | Day numbers are 32-bit integers and wrap: the epoch `"238409829538 JD"` gives a wrong ET | `:valueoutofrange` | `time` |
 | `ttrans` (`str2et`) | A month outside 1 to 12 in a year-month-weekday input aborts with a subscript error | `:badsubscript` | `time` |
 | `zzrefch0`, `zzfrmch0` (`pxform`, `sxform`, every query in a frame) | Frame definitions that form a cycle (frame A relative to B, B relative to A) make the search of the chain loop forever | `:framechain` after 1000 links | `rotations` |
 | `et2lst` | The short message is cut to `SPICE(CANTGETROTATIONTYPE`, without its closing parenthesis | `:cantgetrotationtype` | `frameinfo` |
@@ -56,6 +54,7 @@ error or the correct result.
 | `spke01` (`spkezr` and the other state calls, on SPK type 1) | No check of the step sizes of a difference line: a zero step divides by zero (`spke21` signals `SPICE(ZEROSTEP)` for type 21) | `:baddaf` | `spktypes` |
 | `spks19` (`spksub` of type 19) | Reads `data[0]` and aborts when the last group of 100 epochs in the epoch directory starts after the `stop` epoch given to `spksub` | `:spkstructureerror` | `dafwrite` |
 | `spkgeo` | An SPK chain with a cycle never returns | `SpkInsufficientDataError`, kind `:spkinsuffdata` | `management` |
+| `ckw06` | The second bounds check of a mini-segment compares its last epoch with the start of its interval, not the end, so a mini-segment whose epochs end before its interval is written | `:boundsdisagree` | `dafwrite` |
 | `ckw04a` | With more than one record in one call, packs the array in place and copies the midpoint and the radius of the second and later records after their coefficients have overwritten them | The values given | `dafwrite` |
 | `ckr06` (`ckgp`, `ckgpav`, on CK type 6) | On moving to the next mini-segment, rounds its clock rate to a whole number and keeps it, so later derivatives are wrong | The stored rate | `ck` |
 | `ckbsr` (`ckgp`, `ckgpav`) | Keeps the last segment found: `ckgp` right after `ckgpav` reuses it, although a segment of higher priority covers the request | No state between calls | `ck` |
@@ -100,6 +99,7 @@ search, so that every difference from CSPICE is traced to one of them.
 | `zzekjsqz` | After `zzekweed` empties a segment, the rows of the next segment are lost and later rows are read from the wrong segment | The correct rows | `ek_query` |
 | `nparsd` (query scanner) | `2.756` in a query gives the next double above the one nearest to 2.756, so it is not equal to a stored 2.756 | The nearest double | `ek_query` |
 | `zzekqcon`, `zzekscmp` | An integer value outside the 32-bit range becomes the smallest 32-bit integer (`i_dnnt`): `DCOL > 10000000000` holds for every row that is not null | The value compared as a double | `ek_query` |
+| `zzeksemc` | The check of a query stops at the first `IS NULL` or `IS NOT NULL`: the constraints after it and the ORDER BY columns are not checked, so a type mismatch passes, and a non-scalar column in a later constraint makes the search signal `SPICE(BUG)` | Checks every constraint and every ORDER BY column | `ek_parse` |
 | `zzekjsrt` | ORDER BY or a join on a fixed-count string column longer than 32 characters fails with `STRINGTRUNCATED` | The sorted rows | `ek_query` |
 | `zzekscan` | Reads past its buffer for a query over 2000 characters | A parse error, reported in `errmsg` | `ek_parse` |
 | `zzeknrml` | A WHERE clause that ends with NOT reads one token past the end of the query | Reads no token past the end | `ek_parse` |
@@ -146,8 +146,8 @@ writes differs.
 - `stmp03`: SPICELIB built with Intel Fortran on Windows sums 10 terms; CSPICE and
   Almanac.jl sum 11.
 - `zzekjtst`: the element indices of a non-key join constraint are never set. Only a
-  non-scalar column reaches them, which the copied `zzeksemc` defect allows; Almanac.jl
-  compares element 1 there, as in the copied row.
+  non-scalar column reaches them, which the check of `zzeksemc` lets through after
+  `IS NULL`; Almanac.jl refuses such a query.
 - `zzekad06`: a message prints the record count as the range of column indices; the
   check cannot fail through a public call.
 

@@ -708,14 +708,19 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
         filter!(x -> x[2] !== nothing && x[2] !== x[3], bad)
         isempty(bad) || @info "malformed strings: kinds that differ from CSPICE" bad
         @test isempty(bad)
-        # A Julian date whose day number is outside the 32-bit integers: the day
-        # arithmetic of CSPICE wraps, and the result has the sign of the wrapped number.
-        jds = filter(!cast_dependent, ["238409829538 Jd", "238409829538.5 JD", "JD 5373484.5"])
+        # Regression: the day arithmetic of CSPICE `ttrans` is in 32-bit integers and
+        # wraps, so a Julian date whose day number is outside them gives a wrong ET.
+        # Almanac throws for it, and agrees with CSPICE below the limit.
+        ORACLE_CAST_X86 &&
+            @test abs(SPICE.str2et("238409829538 JD") - (238409829538 - 2451545) * 86400.0) > 1.0e16
+        for s in ("238409829538 Jd", "238409829538.5 JD")
+            @test throws_kind(() -> str2et(ctx, s), :valueoutofrange)
+        end
         r = compare_outcomes(
-            "str2et, Julian date above the integer range", jds, SPICE.str2et,
-            s -> str2et(ctx, s)
+            "str2et, Julian date near the integer range", ["JD 5373484.5", "JD 2147483647"],
+            SPICE.str2et, s -> str2et(ctx, s)
         )
-        @test r.both == length(jds) && r.unequal == 0
+        @test r.both == 2 && r.unequal == 0
         # The message says what is wrong with the string.
         msg(s) = try
             str2et(ctx, s); ""
@@ -737,7 +742,16 @@ group("9. time subsystem against CSPICE", Kernels.LSK) do
 
     @apart @testset "utc2et, tparse, tpictr, tparch" begin
         all_strings = reduce(vcat, [corpus[name] for name in order])
-        sample = filter(!cast_dependent, vcat(all_strings[1:3:end], TS_STR2ET_EXAMPLES, TS_MALFORMED))
+        # Regression: without the range check, a year or a day of 1e11 gives a day number
+        # outside the 32-bit integers, which CSPICE wraps; Almanac throws.
+        wraps = ("99999999999 Jan 1", "2000 Jan 99999999999")
+        for s in wraps
+            @test throws_kind(() -> utc2et(ctx, s), :valueoutofrange)
+        end
+        sample = filter(
+            s -> !cast_dependent(s) && !(s in wraps),
+            vcat(all_strings[1:3:end], TS_STR2ET_EXAMPLES, TS_MALFORMED)
+        )
         r = compare_outcomes("utc2et", sample, s -> oracle_unchecked(SPICE.utc2et, s), s -> utc2et(ctx, s))
         @test r.mixed == 0 && r.unequal == 0 && r.both > nsample(200, 500)
         r = compare_outcomes("tparse", sample, s -> oracle_unchecked(oracle_tparse, s), tparse)

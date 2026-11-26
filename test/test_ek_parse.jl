@@ -390,11 +390,15 @@ function ekq_compare(fx, query::String; guard_not::Bool = false)
         n.kind === c.kind && return :signal, string(n.kind)
         return :diff_signal, "Almanac $(n.kind), CSPICE $(c.kind) [$(c.errmsg)]"
     end
+    # Regression: CSPICE stops the semantic check at the first IS NULL or IS NOT NULL,
+    # and then leaves entry 7 of the cell (the query was checked) unset; Almanac checks
+    # every constraint and refuses a query that a later check refuses.
+    stopped = !c.error && c.kind === nothing && c.i[7] != 1
+    (n.error && stopped) && return :fixed, "CSPICE stops its check at IS NULL: " * n.errmsg
     n.error == c.error || return :diff_flag, "Almanac $(n.error) [$(n.errmsg)], CSPICE " *
         "$(c.error) [$(c.errmsg)]"
-    # The semantic check stops at IS NULL. The search of ekfind_c then meets constraints
-    # that were not checked (it signals SPICE(BUG) for a non-scalar column), so ekfind_c
-    # is called only for a query that is not valid or that was checked to the end.
+    # Almanac checked every constraint, so the constraints that the check of CSPICE
+    # skipped after IS NULL are valid, and the search of ekfind_c meets no SPICE(BUG).
     f = (n.error || n.q.i[7] == 1) ? ekq_c_find(query) : (error = false, errmsg = "", kind = nothing)
     (f.error == c.error && f.errmsg == c.errmsg && f.kind === nothing) ||
         return :diff_ekfind, "ekfind_c: $(f.error) $(f.kind) [$(f.errmsg)]; zzekencd_: [$(c.errmsg)]"
@@ -406,7 +410,9 @@ function ekq_compare(fx, query::String; guard_not::Bool = false)
             return :diff_psel, "error case: Almanac [$(s.errmsg)], CSPICE [$(p.errmsg)]"
         return :invalid, n.errmsg
     end
-    n.q.i == c.i || return :diff_cell, "integer cell differs at " *
+    ci = copy(c.i)
+    stopped && (ci[7] = 1)
+    n.q.i == ci || return :diff_cell, "integer cell differs at " *
         "$(findfirst(k -> k > min(length(n.q.i), length(c.i)) || n.q.i[k] != c.i[k], 1:max(length(n.q.i), length(c.i))))"
     nc, nd = Int(c.i[16]) - 1, Int(c.i[14]) - 1
     n.q.c[1:nc] == c.c[1:nc] || return :diff_chars, "character buffer differs"
@@ -548,10 +554,6 @@ const EKQ_VALID_CORPUS = let
         "SELECT ICOL FROM ALPHA WHERE NOT ICOL IS NULL",
         "SELECT ICOL FROM ALPHA WHERE NOT (ICOL IS NOT NULL)",
         "SELECT ICOL FROM ALPHA WHERE DCOL > 1 AND ICOL IS NULL",
-        "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL AND CCOL = 5",
-        "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL ORDER BY IARR",
-        "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL OR IARR = 1",
-        "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL AND IARR = 1 OR ICOL = 'x'",
         "SELECT ICOL FROM BETA WHERE BCHR IS NULL OR BCHR LIKE 'S*'",
         # BETWEEN
         "SELECT ICOL FROM ALPHA WHERE ICOL BETWEEN 1 AND 10",
@@ -1150,7 +1152,7 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
         end
         function run(queries; guard_not = false)
             res = [(query, ekq_compare(fx, query; guard_not)...) for query in queries]
-            return res, [r for r in res if !(r[2] in (:valid, :invalid, :signal, :unsafe))]
+            return res, [r for r in res if !(r[2] in (:valid, :invalid, :signal, :unsafe, :fixed))]
         end
 
         ek_part("catalogue") do
@@ -1302,7 +1304,7 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             # A non-scalar column on the left of the first constraint, or in ORDER BY
             # without a constraint before it: CSPICE prints the query up to an undefined
             # position (a segmentation fault was seen); Almanac prints the column name.
-            # After IS NULL the semantic check of both engines has stopped already.
+            # After IS NULL CSPICE has stopped its check, and Almanac checks on.
             for (query, msg) in (
                     "SELECT ICOL FROM ALPHA WHERE IARR = 1" =>
                         "Non-scalar column <IARR> having size 3 found in query constraint.",
@@ -1310,11 +1312,24 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
                         "Non-scalar column <DARR> having size -1 found in query constraint.",
                     "SELECT ICOL FROM ALPHA ORDER BY CARR" =>
                         "Non-scalar column <CARR> having size 2 found in order-by column.",
-                    "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL ORDER BY CARR" => "",
+                    "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL ORDER BY CARR" =>
+                        "Non-scalar column <CARR> having size 2 found in order-by column.",
                 )
                 r = enc(query)
                 @test msg == "" ? !r[2] : r == (nothing, true, msg)
                 @test ekq_compare(fx, query)[1] === (msg == "" ? :valid : :unsafe)
+            end
+            # Regression: CSPICE does not check the constraints and the order-by columns
+            # after IS NULL, and accepts these queries; Almanac refuses them. A non-scalar
+            # column gives the message that CSPICE prints from an undefined position.
+            for (q, status) in (
+                    "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL AND CCOL = 5" => :fixed,
+                    "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL ORDER BY IARR" => :unsafe,
+                    "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL OR IARR = 1" => :unsafe,
+                    "SELECT ICOL FROM ALPHA WHERE ICOL IS NULL AND IARR = 1 OR ICOL = 'x'" => :unsafe,
+                )
+                @test enc(q)[2]
+                @test ekq_compare(fx, q)[1] === status
             end
             # A time that tpartv accepts and str2et rejects, and a missing kernel: CSPICE
             # sets the flag and the message and leaves a SPICE error signalled as well.

@@ -496,6 +496,9 @@ The call changes nothing, so many tasks can run queries at the same time.
       is not equal to a stored 2.756.
     - CSPICE changes an integer value outside the 32-bit range into the smallest 32-bit
       integer.
+    - CSPICE stops the check of a query at the first IS NULL or IS NOT NULL, and
+      accepts a type mismatch or a non-scalar column after it. This call refuses the
+      query.
 
 Throws `SpiceError` for a query that is over a size limit:
 - `:celltoosmall` if the WHERE clause expands to more than 1000 constraints (fewer if
