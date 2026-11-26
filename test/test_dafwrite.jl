@@ -1844,9 +1844,9 @@ group("9. DAF access, SPK and CK writers") do
         end
     end
 
-    # Regression: SPICELIB `ckw06` compares the last epoch of a mini-segment with the
-    # start of its interval, not with the end, and writes a mini-segment that ends before
-    # its interval; Almanac refuses it. Own random stream.
+    # A CK type 6 mini-segment may end before the end of its interval (a coverage gap,
+    # as the header of SPICELIB `ckw06` states); the file equals the one CSPICE writes.
+    # Own random stream.
     @apart @testset "ckw06: a mini-segment that ends before its interval" begin
         r2 = MersenneTwister(SEED + 1206)
         a = gen_ckw06(r2, 1; nmini = 1)
@@ -1855,11 +1855,8 @@ group("9. DAF access, SPK and CK writers") do
         end
         bds = copy(a.ivlbds)
         bds[end] += 0.5
-        b = merge(a, (ivlbds = bds,))
-        path = joinpath(dir, "ckw06_short.bc")
-        h = ckopn(path, "ckw06", 0)
-        @test throws_kind(() -> writer_case("ckw06").neo(h, b), :boundsdisagree)
-        dafcls(h)
+        pc, pn = write_both(writer_case("ckw06"), dir, "ckw06_short", [merge(a, (ivlbds = bds,))])
+        @test padless(pn) == padless(pc)
     end
 
     # Regression: the sign check of the Hermite quaternions of `ckw06` compared sums of

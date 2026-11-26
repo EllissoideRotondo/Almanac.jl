@@ -383,6 +383,7 @@ function ekq_compare(fx, query::String; guard_not::Bool = false)
         return :unsafe, "CSPICE reads past its buffer of 2000 characters"
     (guard_not && occursin(EKQ_UNSAFE_NOT, query)) &&
         return :unsafe, "CSPICE reads the token after the last one"
+    cast_dependent(query) && return :unsafe, "the cast of CSPICE depends on the processor"
     (n.error && occursin(EKQ_UNSAFE_NONSCALAR, n.errmsg)) &&
         return :unsafe, "CSPICE reads an undefined position: " * n.errmsg
     c = ekq_c_encd(query)

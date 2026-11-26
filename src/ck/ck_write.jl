@@ -895,11 +895,11 @@ ckw05(
     sclkdp, packts, rate, nints, starts
 )
 
-# The mini-segments of CK type 6 for `_seg_minis` (see `_SPK19_MINI`). SPICELIB
-# compares the last epoch of a mini-segment with the start of its interval; the check
-# here is against the end, as for SPK type 19.
+# The mini-segments of CK type 6 for `_seg_minis` (see `_SPK19_MINI`). As in SPICELIB,
+# the last epoch of a mini-segment is compared with the start of its interval: a CK
+# type 6 mini-segment may end before its interval, which leaves a coverage gap.
 const _CK06_MINI = (
-    pktszs = _CK5_PACKSZ, maxsub = 3, maxdeg = 23, endbound = true,
+    pktszs = _CK5_PACKSZ, maxsub = 3, maxdeg = 23, endbound = false,
     kname = "CK type 6", count = "mini-segment", bounds = "mini-segment interval",
     ivl = "mini-segment interval", union = "mini-segment intervals", times = "sclkdp",
 )
@@ -973,15 +973,11 @@ For a mini-segment it throws:
 - `:badwindowsize` if its window size is odd;
 - `:timesoutoforder` unless its times are strictly increasing;
 - `:boundsdisagree` if its first time is after the start of its interval, or its last
-  time is before the end of its interval;
+  time is before that start. The times can end before the end of the interval, which
+  leaves a gap in the coverage;
 - `:zeroquaternion` if a quaternion is zero;
 - `:badquatsign`, for a Hermite subtype, if a quaternion is farther from its
   predecessor than its negative is.
-
-!!! warning "Difference from CSPICE"
-    `ckw06` of SPICELIB N0067 compares the last time of a mini-segment with the start of
-    its interval, not with the end, so it writes a mini-segment whose times end before
-    its interval. This call throws `SpiceError(:boundsdisagree)` for it.
 
 # References
 

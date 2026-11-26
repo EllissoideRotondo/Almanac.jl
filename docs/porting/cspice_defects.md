@@ -54,7 +54,6 @@ error or the correct result.
 | `spke01` (`spkezr` and the other state calls, on SPK type 1) | No check of the step sizes of a difference line: a zero step divides by zero (`spke21` signals `SPICE(ZEROSTEP)` for type 21) | `:baddaf` | `spktypes` |
 | `spks19` (`spksub` of type 19) | Reads `data[0]` and aborts when the last group of 100 epochs in the epoch directory starts after the `stop` epoch given to `spksub` | `:spkstructureerror` | `dafwrite` |
 | `spkgeo` | An SPK chain with a cycle never returns | `SpkInsufficientDataError`, kind `:spkinsuffdata` | `management` |
-| `ckw06` | The second bounds check of a mini-segment compares its last epoch with the start of its interval, not the end, so a mini-segment whose epochs end before its interval is written | `:boundsdisagree` | `dafwrite` |
 | `ckw04a` | With more than one record in one call, packs the array in place and copies the midpoint and the radius of the second and later records after their coefficients have overwritten them | The values given | `dafwrite` |
 | `ckr06` (`ckgp`, `ckgpav`, on CK type 6) | On moving to the next mini-segment, rounds its clock rate to a whole number and keeps it, so later derivatives are wrong | The stored rate | `ck` |
 | `ckbsr` (`ckgp`, `ckgpav`) | Keeps the last segment found: `ckgp` right after `ckgpav` reuses it, although a segment of higher priority covers the request | No state between calls | `ck` |
