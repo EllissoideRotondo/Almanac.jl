@@ -33,56 +33,6 @@ r = pxform("J2000", "IAU_EARTH", et)
 mxv(r, state[1:3])
 ```
 
-## Contents
-
-### Getting started
-
-```@contents
-Pages = [
-    "tutorials/contexts.md",
-    "tutorials/derivatives.md",
-    "tutorials/tables.md",
-    "tutorials/providers.md",
-    "tutorials/writing.md",
-    "tutorials/orbits.md",
-    "tutorials/events.md",
-]
-Depth = 1
-```
-
-### Validation
-
-
-```@contents
-Pages = ["manual/numerics.md", "manual/validation.md"]
-Depth = 1
-```
-
-### API reference
-
-
-```@contents
-Pages = [
-    "reference/kernels.md",
-    "reference/time.md",
-    "reference/states.md",
-    "reference/frames.md",
-    "reference/geometry.md",
-    "reference/events.md",
-    "reference/orbits.md",
-    "reference/math/vectors.md",
-    "reference/math/rotations.md",
-    "reference/math/coordinates.md",
-    "reference/math/ellipsoids.md",
-    "reference/math/conics.md",
-    "reference/files/daf.md",
-    "reference/files/writers.md",
-    "reference/files/das.md",
-    "reference/files/ek.md",
-]
-Depth = 1
-```
-
 ## Reporting issues
 
 Report defects and ask questions in the
