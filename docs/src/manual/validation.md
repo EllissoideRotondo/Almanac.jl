@@ -1,62 +1,54 @@
-# Tests and comparisons
+# Validation
 
-CSPICE is the reference. The tests call each routine and its CSPICE counterpart
-(through SPICE.jl) on the same input and compare the results, on NAIF kernels and on
-kernels written by the CSPICE writers so that every data type is exercised; the
-measured differences are in [Known limits of accuracy](@ref). The orbit calls, which
-have no CSPICE counterpart, are compared with ANISE as well.
+Almanac.jl is a port of CSPICE N0067, and CSPICE is its reference: each routine follows
+the arithmetic of its CSPICE counterpart operation by operation, including the order of
+summation, and uses no fused multiply-add. The tests call each routine and its CSPICE
+counterpart, through SPICE.jl, on the same input, with NAIF kernels and with kernels
+written by the CSPICE writers so that every data type is exercised. For the states of
+`de440s.bsp` with all nine aberration corrections, the states and light times agree bit
+for bit in inertial frames and to 4e-15 relative in body-fixed frames, and a kernel
+written by Almanac.jl holds the data, word for word, of the one that CSPICE writes from
+the same input. NAIF's own test suite of CSPICE N0067 (tspice_c, the SPICELIB test
+suite translated to C) is recorded and replayed against Almanac.jl as well, and a replay
+fails on any difference that is not in its list of known differences from CSPICE.
 
-## Comparisons with CSPICE
+## Known limits of accuracy
 
-- **Files:** a kernel written by Almanac.jl holds the data, word for word, of the one
-  CSPICE writes from the same input. The bytes differ only where CSPICE leaves them
-  unset.
-- **Derivatives:** the first derivative of a state is compared with the velocity of
-  CSPICE, and each higher derivative with automatic differentiation of the one below.
+The elementary functions (`sin`, `cos`, `exp`, ...) are those of Julia, while CSPICE
+calls the C library of the platform; the two differ in the last bit for about 3 % of
+the arguments of `sin` and `cos`, so a result can differ from CSPICE in its last bit.
+The difference grows where a computation carries it over a long span, as in a type 5
+SPK segment propagated over six years (3e-8 km at 2e8 km from the Sun), and where the
+geometry amplifies it, as at a limb point or a grazing intercept on a DSK shape (up to
+2.5e-3 km in NAIF's test suite, where a change of the epoch by one unit in the last
+place moves the limb point of CSPICE itself by 3e-3 km). With the `sin` and `cos` of
+glibc in place of Julia's, these results equal those of CSPICE.
+
+Three limits hold in CSPICE as well, because they come from the size of a number or from
+the method of CSPICE:
+
+- The rotation angle of the Earth in `IAU_EARTH` grows to about 50,000 rad this
+  century. Its rounding alone moves the Sun by some meters in that frame.
+- An aberration-corrected position has millimeter steps at the boundaries between SPK
+  [records](@ref "Smoothness at record boundaries"), because target and observer are
+  evaluated at different epochs and cross a boundary at different times.
+- `spkezr` and `spkpos` differ by up to 2e-11 relative with the converged corrections
+  (`CN`, `CN+S`), because they stop iterating by different rules.
+
+The derivatives of states and rotations differ from the velocities and rates of CSPICE
+where CSPICE approximates them; the tutorial section
+[Differences from `spkezr` and `sxform`](@ref "Differences from spkezr and sxform") gives each case.
+
+## Other checks
+
 - **Errors:** an input that CSPICE refuses gives the kind of the CSPICE error. Checks
   that CSPICE does not make give kinds of Almanac.jl, such as `:badarg`.
-
-## NAIF's test suite
-
-The calls of NAIF's test suite of CSPICE N0067 (tspice_c, the SPICELIB test suite
-translated to C) are recorded and replayed against Almanac.jl, and a replay fails on a
-difference that is not in the baseline, the list of known differences from CSPICE.
-
-## The orbit calls
-
-The calls of [Orbits and relative motion](@ref) follow the source of ANISE function by
-function, including its error and fallback cases, with the [differences from
-ANISE](@ref "Differences from ANISE") of the API reference. Where CSPICE computes the
-same quantity, CSPICE is the reference for the numbers; otherwise ANISE is. Differences
-below are relative unless a unit is given.
-
-- **Against CSPICE** (`oscltx`, `recgeo`, `conics`, `prop2b`): elements, geodetic
-  coordinates, [`keplerian_orbit`](@ref) and [`two_body`](@ref) agree to a few
-  multiples of the rounding error that the sampled orbit amplifies (through `1 - e`
-  near parabolic orbits, or through the arc cosine of a nearly circular or equatorial
-  one).
-- **Against published values:** the GMAT, Vallado and Davis cases and the Brouwer,
-  `with_element` and `two_body` cases of the ANISE tests pass within the limits of
-  those tests. The largest difference is the B-plane of the GMAT hyperbolic case,
-  0.65 km (ANISE allows 1 km).
-- **Against ANISE itself:** every element, local frame and relative state of random
-  elliptic, near-circular, near-equatorial, retrograde and hyperbolic states, with the
-  same inputs given to both libraries. Most elements agree to 1e-11, angles of
-  near-circular orbits to 3e-8, and frame rates to 1e-5, the error of the difference
-  quotient that ANISE uses. This comparison is not part of the default test run.
-- **Identities and derivatives:** element identities, orthonormal local frames, the
-  exact frame rate and the derivatives through the Kepler solver against ForwardDiff
-  and closed forms; Enzyme, Mooncake, Zygote, ReverseDiff and Tracker against
-  ForwardDiff.
-
-## Checks of every call
-
+- **Derivatives:** each order of a jet is compared with automatic differentiation of
+  the order below, and every AD backend with ForwardDiff.
 - **Threads:** answers from many threads, while kernels are loaded and unloaded, equal
   those of one thread.
 - **Allocation:** AllocCheck.jl proves that the vector, matrix, coordinate and table
-  calls, and the orbit calls [`element`](@ref), [`keplerian`](@ref),
-  [`with_element`](@ref), `two_body`, [`local_frame`](@ref),
-  [`local_frame_state`](@ref) and [`relative_state`](@ref), cannot allocate for
-  `Float64` inputs. The tests measure the allocations of [`spkezr`](@ref), [`spkpos`](@ref),
-  [`spkder`](@ref), [`pxform`](@ref), [`sxform`](@ref) and [`pxder`](@ref) call by call.
+  calls cannot allocate for `Float64` inputs, and the tests measure the
+  allocations of [`spkezr`](@ref), [`spkpos`](@ref), [`spkder`](@ref), [`pxform`](@ref),
+  [`sxform`](@ref) and [`pxder`](@ref) call by call.
 - **Package hygiene:** Aqua.jl and ExplicitImports.jl.

@@ -113,8 +113,8 @@ where it can differ because `sxform` follows the rates of CSPICE:
 - switch frames (class 6), which take a base frame by epoch, where the base is one of
   the above.
 
-[Derivatives and stored rates](@ref) says what is differentiated for each
-class.
+The tutorial section [Differences from `spkezr` and `sxform`](@ref "Differences from spkezr and sxform")
+says what is differentiated for each class.
 
 Throws `SpiceError(:badarg)` if `N` is not an integer `>= 0`, and the errors of
 [`pxform`](@ref).

@@ -1,8 +1,8 @@
 module AlmanacMooncakeExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_pin, _ad_rule,
-    _ad_scale, _AD_POINTS, _AD_CONSTANT, _AD_CONSTANT_ORBIT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, _ad_pin, _ad_rule,
+    _ad_scale, _AD_POINTS, _AD_CONSTANT, _ad_typeof
 using Mooncake: Mooncake
 using Mooncake: DefaultCtx, CoDual, Dual, NoTangent, NoRData, RData, @is_primitive,
     @zero_derivative, zero_fcodual
@@ -43,19 +43,6 @@ for (f, types, iet) in _AD_POINTS
     end
 end
 
-# The Kepler solver of the Orbit layer: both arguments, the mean anomaly and the
-# eccentricity, have tangents (see `src/analysis/brouwer.jl`).
-@is_primitive DefaultCtx Tuple{typeof(_ma_to_ta), Float64, Float64}
-function Mooncake.frule!!(::Dual{typeof(_ma_to_ta)}, m::Dual, e::Dual)
-    y, (dm, de) = _ad_rule(_ma_to_ta, Mooncake.primal(m), Mooncake.primal(e))
-    return Dual(y, dm * Mooncake.tangent(m) + de * Mooncake.tangent(e))
-end
-function Mooncake.rrule!!(::CoDual{typeof(_ma_to_ta)}, m::CoDual, e::CoDual)
-    y, (dm, de) = _ad_rule(_ma_to_ta, Mooncake.primal(m), Mooncake.primal(e))
-    pullback(ȳ) = (NoRData(), ȳ * dm, ȳ * de)
-    return zero_fcodual(y), pullback
-end
-
 # The value of one formula with the derivatives of another (see `src/ad.jl`).
 @is_primitive DefaultCtx Tuple{typeof(_ad_pin), Float64, Float64}
 Mooncake.frule!!(::Dual{typeof(_ad_pin)}, a::Dual, p::Dual) =
@@ -70,7 +57,7 @@ end
 Mooncake.tangent_type(::Type{<:KernelSet}) = NoTangent
 Mooncake.tangent_type(::Type{<:SpiceContext}) = NoTangent
 Mooncake.tangent_type(::Type{Aberration}) = NoTangent
-for f in (_AD_CONSTANT..., _AD_CONSTANT_ORBIT...)
+for f in _AD_CONSTANT
     @eval @zero_derivative DefaultCtx Tuple{$(_ad_typeof(f)), Vararg}
 end
 

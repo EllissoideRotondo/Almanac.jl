@@ -1,8 +1,8 @@
 # Group: automatic differentiation with the tracked numbers of ReverseDiff and Tracker.
 # See `adfixtures.jl` for the behaviours and the tolerances. ReverseDiff runs without a
 # compiled tape, because a compiled tape keeps the branches of its first epoch (segment,
-# record). Run time of the group (default tier, one process, 2 threads): 40 s, of which
-# the Orbit cases about 10 s.
+# record). Run time of the group (default tier, `test/parallel.jl` with 8 threads):
+# 46 s.
 isdefined(@__MODULE__, :ad_check) || include("adfixtures.jl")
 
 import ReverseDiff, Tracker
@@ -20,7 +20,6 @@ group("ad tracked", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
             bname, backend, ctx, epochs, default, full;
             gradient = true, batched = false, nested
         )
-        ad_orbit_check(bname, backend)
         @testset "$bname: a plain-epoch call refuses a tracked epoch" begin
             lst(t) = et2lst(ctx, t, 399, 0.0, "PLANETOCENTRIC")[1]
             @test throws_kind(() -> DI.derivative(lst, backend, epochs[1]), :badarg)

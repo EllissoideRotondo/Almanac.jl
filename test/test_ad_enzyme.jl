@@ -13,8 +13,7 @@
 # `unitim`, `table_position`: 9.5 min and 4.4 GB with them; each passes on its own), and
 # `subpnt NEAR POINT` for the same reason; the exhaustive run takes them. `prop2b` (the
 # root of the Kepler equation through `_ad_pin`) stays in the default run. Run time of the
-# group (default tier, one process, 2 threads): 448 s and 3.6 GB, of which the Orbit cases
-# about 50 s, before `prop2b` and the Orbit angles at pi were added.
+# group (default tier, `test/parallel.jl` with 8 threads): 463 s.
 isdefined(@__MODULE__, :ad_check) || include("adfixtures.jl")
 
 import Enzyme
@@ -32,8 +31,6 @@ group("ad enzyme", Kernels.FULL_SET_FILES..., Kernels.GM_TPC) do
         "Enzyme reverse", rev, ctx, epochs, default, full;
         gradient = true, batched = false, nested = false, skip
     )
-    ad_orbit_check("Enzyme forward", AutoEnzyme(; mode = Enzyme.Forward, function_annotation = Enzyme.Const))
-    ad_orbit_check("Enzyme reverse", rev)
     @testset "Enzyme reverse refuses a Dual epoch" begin
         f(t) = norm(spkpos(ctx, "MOON", t, "IAU_EARTH", "LT+S", "EARTH")[1])
         @test_throws ArgumentError DI.second_derivative(

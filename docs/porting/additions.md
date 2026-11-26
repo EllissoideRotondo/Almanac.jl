@@ -15,8 +15,6 @@ These features have no counterpart in CSPICE:
   [`rotation_table`](@ref). See [Ephemeris and rotation tables](@ref).
 - **Bodies and frames defined by Julia functions**: [`add_ephemeris!`](@ref),
   [`add_frame!`](@ref). See [Custom bodies and frames](@ref).
-- **Orbital elements, two-body propagation and relative motion**: [`Orbit`](@ref). See
-  [Orbits and relative motion](@ref).
 - **Kernels built in memory**, with no file: [`load_samples!`](@ref),
   [`load_function!`](@ref), and [`spkops`](@ref), [`ckops`](@ref), [`pckops`](@ref) with
   [`furnsh`](@ref) of the handle. See [Kernels in memory](@ref).

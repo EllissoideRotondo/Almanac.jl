@@ -1,9 +1,0 @@
-# The reference of the group is the source of ANISE main at commit b3aaadc. The pin is the
-# newest release on PyPI (1.0.0b0, 2026-10-19); it moves to the first release that contains
-# the definitions of main, and then KNOWN_DIFFERENT_IN_PIN of runtests.jl is emptied.
-[deps]
-python = ">=3.10,<3.14"
-numpy = ">=1.26"
-
-[pip.deps]
-anise = "==1.0.0b0"

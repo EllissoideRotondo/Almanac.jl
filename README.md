@@ -68,13 +68,10 @@ Beyond CSPICE:
   Enzyme.jl, Mooncake.jl, Zygote.jl, ReverseDiff.jl and Tracker.jl.
 - **Fast tables.** `ephemeris_table` and `rotation_table` compress a trajectory or a rotation
   into Chebyshev coefficients, for inner loops and for code that runs on a GPU.
-- **Orbits.** Orbital elements, two-body propagation and relative motion in local frames,
-  after [ANISE](https://github.com/nyx-space/anise)
-  ([how-to](https://orbitology.github.io/Almanac.jl/dev/tutorials/orbits/)).
 
 The test suite compares Almanac.jl with CSPICE through SPICE.jl and replays NAIF's own test
 suite against Almanac.jl. Results agree to within rounding error, apart from a few
-[documented differences](https://orbitology.github.io/Almanac.jl/dev/manual/numerics/)
+[documented differences](https://orbitology.github.io/Almanac.jl/dev/manual/validation/)
 and the defects of CSPICE that Almanac.jl fixes.
 The package is under active development, and its interface may still change.
 
@@ -96,7 +93,10 @@ the API reference, in which the docstring of each ported routine links to its NA
 
 ## Acknowledgements
 
-
+Almanac.jl keeps the interface of [SPICE.jl](https://github.com/JuliaAstro/SPICE.jl), which
+is also the test oracle. [PEPPER](https://github.com/jacobwilliams/pepper), a modern Fortran
+reimagining of SPICELIB, inspired the port; the JSON kernels follow its
+[jsonspice](https://github.com/jacobwilliams/jsonspice) format.
 
 ## License
 

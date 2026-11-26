@@ -78,7 +78,6 @@ an atomic reference to one of them is a single word.
 | `ek/` | event kernels: file, columns, query parser and engine, writers (`write*.jl`) |
 | `queries/` | `queries.jl` (prepared queries), `providers.jl`, `table.jl` |
 | `math/`, `geometry/`, `gf/` | SPICELIB math (`kernels.jl` holds the `_m_` products; `windows.jl`), geometry, the geometry finder |
-| `analysis/` (Orbit layer, ANISE-style) | `orbit.jl` (`Orbit`, `orbit`), `elements.jl` (`element`, `elements`), `brouwer.jl` (Brouwer mean elements, Kepler solver), `build.jl` (`keplerian_orbit`, `with_element`, `with_apsides`, `two_body`), `local_frames.jl` |
 | top level | `Almanac.jl`, `ad.jl` (AD rules), `precompile.jl`; the package extensions are in `ext/` (Adapt, ForwardDiff, ChainRulesCore, EnzymeCore, Mooncake, ReverseDiff, Tracker) |
 
 ## Invariants that are easy to break
@@ -147,16 +146,11 @@ an atomic reference to one of them is a single word.
 - **Automatic differentiation.** No AD package differentiates the evaluators. The
   derivative points are `spk_jet`, `frame_rotation`, `frame_jet`, `abcorr_jet`,
   `abcorr_position` and `abcorr_state`; the derivative of each is the next order of its
-  jet. The Orbit layer has one more, the Kepler solver `_ma_to_ta(M, e)` of
-  `analysis/brouwer.jl`, whose rules take the partials of the implicit function at the
-  converged anomaly (ForwardDiff and the tracked numbers get them from the carried
-  Newton step `_carry`). The bisections of `nearpt` and `prop2b` (`_m_nearpt_plain`,
+  jet. The bisections of `nearpt` and `prop2b` (`_m_nearpt_plain`,
   `_prop2b_root`) are in `_AD_CONSTANT`; their callers take the derivative of the root
   by Newton steps in the number type, one for `Float64` through `_ad_pin(a, p)` (value
   `p`, derivative of `a`, with a rule in the ChainRulesCore, Enzyme and Mooncake
-  extensions), so the plain value stays bit for bit. The angles `:ta`, `:aop` and
-  `:raan` use `_ad_pin` too: the arc cosine of ANISE for the value
-  (`_AD_CONSTANT_ORBIT`), the arc tangent for the derivative. `AlmanacForwardDiffExt` assembles `Dual` results from the jet
+  extensions), so the plain value stays bit for bit. `AlmanacForwardDiffExt` assembles `Dual` results from the jet
   at `primal(et)`; `src/ad.jl` gives `_ad_rule` (value and derivative, for the rules of
   ChainRulesCore, Enzyme and Mooncake) and `_ad_lift` (for the tracked numbers of
   ReverseDiff and Tracker). A new derivative point, or a new path to the epoch that
@@ -166,10 +160,7 @@ an atomic reference to one of them is a single word.
   storage slot (see `_ssbpos_still` in `aberration.jl`), and applies a rule only to a
   call that is not inlined (`_ad_pin` is `@noinline`); the groups `ad_enzyme`,
   `ad_mooncake`, `ad_zygote` and `ad_tracked` (fixture `test/adfixtures.jl`) cover every
-  backend. `element` and the properties of an `Orbit` take the name at run time:
-  `getproperty` stays `@inline` (so that Mooncake and Enzyme see one branch), and the
-  ChainRulesCore extension has rules for both (so that Zygote compiles one branch, not
-  all of `element`).
+  backend.
 
 ## Deviations from CSPICE
 
@@ -200,13 +191,11 @@ NAIF page of the routine (``- [NAIF documentation of `name_c`](url)``).
   samples go in the exhaustive tier (`ALMANAC_TEST_FULL=1`, `nsample(fast, full)`).
 - CI tests Julia 1.10, which can allocate where later versions do not: after changing a
   hot path, run `quality` on Julia 1.10 too.
-- Two checks are outside `test/runtests.jl`. NAIF's test suite replays with
+- One check is outside `test/runtests.jl`. NAIF's test suite replays with
   `julia --project=test test/tspice/run.jl`: the first run downloads NAIF's archive,
   builds it with gcc and records the calls (about 2 GB), and later runs only replay
   them; `test/tspice/README.md` has the details. The `tspice` workflow runs it, in about
-  an hour, on each push to `main` that changes the package. The comparison with ANISE is
-  `julia --startup-file=no --project=test/anise test/anise/runtests.jl`, which installs
-  Python and the `anise` wheel through CondaPkg.
+  an hour, on each push to `main` that changes the package.
 - Kernels are downloaded into `test/data/` by `test/kernels.jl` (`SOURCES` lists the
   URLs and SHA-256 sums). `ALMANAC_KERNEL_DIR` overrides the location,
   `ALMANAC_DOWNLOAD_KERNELS=0` turns the download off, and `ALMANAC_REQUIRE_KERNELS=1`

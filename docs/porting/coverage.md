@@ -28,8 +28,7 @@ scope and what replaces the routines that are not.
   CK types 1 to 6, [`kpsolv`](@ref), [`npsgpt`](@ref), [`incnsg`](@ref),
   [`scn2id`](@ref) and [`scid2n`](@ref). Their docstrings say so.
 
-The features beyond CSPICE (derivatives, tables, user-defined bodies and frames,
-orbits) are in [Beyond CSPICE](@ref).
+The features beyond CSPICE (derivatives, tables, user-defined bodies and frames) are in [Beyond CSPICE](@ref).
 
 ## What is left out
 

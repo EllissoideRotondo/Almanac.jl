@@ -1,8 +1,8 @@
 module AlmanacEnzymeCoreExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, _ma_to_ta, _ad_pin, _ad_rule,
-    _ad_scale, _AD_POINTS, _AD_CONSTANT, _AD_CONSTANT_ORBIT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, _ad_pin, _ad_rule,
+    _ad_scale, _AD_POINTS, _AD_CONSTANT, _ad_typeof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const, Active, Duplicated,
     BatchDuplicated
 using EnzymeCore.EnzymeRules: FwdConfig, RevConfig, AugmentedReturn, needs_primal,
@@ -99,34 +99,6 @@ for (f, types, iet) in _AD_POINTS
     end
 end
 
-# The Kepler solver of the Orbit layer: both arguments, the mean anomaly and the
-# eccentricity, can be active (see `src/analysis/brouwer.jl`).
-function EnzymeRules.forward(
-        config::FwdConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
-        m::Annotation{<:Real}, e::Annotation{<:Real}
-    )
-    y, (dm, de) = _ad_rule(_ma_to_ta, m.val, e.val)
-    W = width(config)
-    lm, le = _lanes(m, Val(W)), _lanes(e, Val(W))
-    return _fwd_return(config, y, ntuple(i -> dm * lm[i] + de * le[i], Val(W)))
-end
-EnzymeRules.augmented_primal(
-    ::RevConfig, ::Const{typeof(_ma_to_ta)}, ::Type,
-    m::Annotation{<:Real}, e::Annotation{<:Real}
-) = _no_nested_reverse(m)
-function EnzymeRules.augmented_primal(
-        config::RevConfig, ::Const{typeof(_ma_to_ta)},
-        ::Type, m::Annotation{Float64}, e::Annotation{Float64}
-    )
-    y, dy = _ad_rule(_ma_to_ta, m.val, e.val)
-    return AugmentedReturn(needs_primal(config) ? y : nothing, nothing, dy)
-end
-EnzymeRules.reverse(
-    config::RevConfig, ::Const{typeof(_ma_to_ta)}, dret, dy,
-    m::Annotation{Float64}, e::Annotation{Float64}
-) =
-    (_epoch_cotangent(m, dret, dy[1]), _epoch_cotangent(e, dret, dy[2]))
-
 # The value of one formula with the derivatives of another (see `src/ad.jl`): the
 # derivative is 1 with respect to `a` and 0 with respect to `p`.
 function EnzymeRules.forward(
@@ -153,7 +125,7 @@ EnzymeRules.reverse(
 EnzymeRules.inactive_type(::Type{<:KernelSet}) = true
 EnzymeRules.inactive_type(::Type{<:SpiceContext}) = true
 EnzymeRules.inactive_type(::Type{Aberration}) = true
-for f in (_AD_CONSTANT..., _AD_CONSTANT_ORBIT...)
+for f in _AD_CONSTANT
     @eval EnzymeRules.inactive(::$(_ad_typeof(f)), args...) = nothing
 end
 

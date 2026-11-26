@@ -15,11 +15,6 @@
 #   plain epoch and assembles the result from it with `_ad_lift`, as the ForwardDiff
 #   extension does for a `Dual`.
 #
-# The Orbit layer adds one derivative point that is not a function of the epoch: the
-# Kepler solver `_ma_to_ta(M, e)` (`src/analysis/brouwer.jl`), with a method of `_ad_rule`
-# there that returns the true anomaly and its partials with respect to M and e. The rules
-# of ChainRulesCore, Enzyme and Mooncake take it; the tracked numbers do not need it.
-#
 # Two root solvers run on plain numbers and are constants for the AD packages: the
 # bisection of `nearpt` (`_m_nearpt_plain`, for the multiplier of the near point) and
 # that of `prop2b` (`_prop2b_root`, for the universal variable). The derivative of the
@@ -28,9 +23,7 @@
 # through `_ad_pin(a, p)` (`src/spk/types/numeric.jl`), whose value is `p` and whose
 # derivative, in the rules of ChainRulesCore, Enzyme and Mooncake, is that of `a`; so
 # the value is the plain one bit for bit, and a reverse-mode package that differentiates
-# the code after the root gets the derivative of the root. `_ad_pin` also gives the
-# angles of an orbit (:ta, :aop, :raan) the value of an arc cosine and the derivatives
-# of an arc tangent (`_AD_CONSTANT_ORBIT` holds those arc cosines).
+# the code after the root gets the derivative of the root.
 #
 # The derivative is that of the function that `spkder` and `pxder` differentiate. For an
 # SPK type with a separate velocity series (type 3), the derivative of the position is
@@ -40,8 +33,7 @@
 
 """
 Functions on the way from a public call to a derivative point whose results do not
-depend on the epoch: lookups by name or code (`bodvcd` and `bodfnd` for the GM and the
-radii of an `Orbit`), the snapshot of a context, and the parsing of corrections and method
+depend on the epoch: lookups by name or code, the snapshot of a context, and the parsing of corrections and method
 strings. The extensions mark them as constant, so that no AD
 package looks into them (they hold strings, dictionaries, atomics and `try` blocks). The
 root solvers `_m_nearpt_plain` and `_prop2b_root` are constants too: their callers take

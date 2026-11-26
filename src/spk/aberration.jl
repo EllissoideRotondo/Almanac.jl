@@ -712,8 +712,8 @@ the same derivatives as this call.
 Order 1 is the velocity of `spkezr` for a geometric state. With an `LT` correction it
 differs from that velocity, by about 1e-8 relative for the Moon seen from the Earth,
 because CSPICE approximates the rate of the light time.
-[Derivatives and stored rates](@ref) gives the function that is
-differentiated.
+The tutorial section [Differences from `spkezr` and `sxform`](@ref "Differences from spkezr and sxform")
+gives the function that is differentiated.
 
 Throws `SpiceError(:badarg)` if `N` is not an integer `>= 0`,
 `SpiceError(:invalidoption)` if `abcorr` is not valid, and the errors of

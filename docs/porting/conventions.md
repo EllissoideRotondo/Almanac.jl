@@ -1,7 +1,7 @@
 # API differences
 
 Almanac.jl keeps the names and the units of CSPICE N0067, its numerical results to
-rounding ([Numerical accuracy](@ref) gives the differences), and its
+rounding ([Validation](@ref) gives the differences), and its
 argument order with the few exceptions below. It departs from CSPICE where the C
 interface relies on hidden state, on output arguments or on arguments that only manage
 C memory.

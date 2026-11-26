@@ -20,13 +20,9 @@ makedocs(;
             "tutorials/tables.md",
             "tutorials/providers.md",
             "tutorials/writing.md",
-            "tutorials/orbits.md",
             "tutorials/events.md",
         ],
-        "Validation" => [
-            "manual/numerics.md",
-            "manual/validation.md",
-        ],
+        "manual/validation.md",
         "API reference" => [
             "reference/kernels.md",
             "reference/time.md",
@@ -34,7 +30,6 @@ makedocs(;
             "reference/frames.md",
             "reference/geometry.md",
             "reference/events.md",
-            "reference/orbits.md",
             "Mathematics" => [
                 "reference/math/vectors.md",
                 "reference/math/rotations.md",

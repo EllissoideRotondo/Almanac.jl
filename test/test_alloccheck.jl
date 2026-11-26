@@ -32,10 +32,6 @@ group("allocation proof: numeric kernels (AllocCheck)") do
         (stelab, (V, V)), (deltet, (SpiceContext, F, String)), (unitim, (SpiceContext, F, String, String)),
         (table_state, (typeof(tab), F)), (table_position, (typeof(tab), F)),
         (table_jet, (typeof(tab), F, Val{2})),
-        (element, (Orbit{Float64}, Symbol)), (keplerian, (Orbit{Float64},)),
-        (local_frame, (Orbit{Float64}, Symbol)), (local_frame_state, (Orbit{Float64}, Symbol)),
-        (relative_state, (Orbit{Float64}, Orbit{Float64}, Symbol)), (two_body, (Orbit{Float64}, Float64)),
-        (with_element, (Orbit{Float64}, Symbol, Float64)),
         (Almanac.spk_eval, (Vector{Float64}, Almanac.Segment, F, Val{1})),
     ]
     bad = String[]
