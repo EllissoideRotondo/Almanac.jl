@@ -33,7 +33,7 @@ Epochs can be `ForwardDiff.Dual` numbers, also on the GPU.
 
 An epoch outside the table throws a [`SpiceKindError`](@ref) of kind `:spkinsuffdata`, without the fields of the [`SpkInsufficientDataError`](@ref) that `spkezr` throws. The check is a bounds check, which `@inbounds` removes, as GPU code requires; an epoch outside the table then extrapolates the nearest interval.
 
-## How the table is built
+## Exact and interpolated tables
 
 For a geometric position in an inertial frame from SPK type 2 data, as in the planetary ephemerides, the table copies the [records](@ref "Smoothness at record boundaries") of the kernel and agrees with `spkpos` to rounding. Otherwise (a rotating frame, an aberration correction, other SPK types) it interpolates, doubling the number of intervals until the measured error is below `tol`, and `maxerr` records that error. [`ephemeris_table`](@ref) gives the exact conditions.
 

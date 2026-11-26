@@ -2,7 +2,7 @@
 
 Every call that reads kernels takes an optional [`SpiceContext`](@ref) as its first argument, written `[ctx,]` in the reference, and uses [`default_context`](@ref) without one. `[ctx | ks,]` means that the call also accepts an [`Almanac.KernelSet`](@ref), the immutable snapshot of a context. A call that fills a container takes the context after it. Pure functions such as `vnorm` take no context. A program with one set of kernels never needs to name a context; this page is for programs with several sets, or with several threads.
 
-## One context per kernel set
+## Create a context
 
 Contexts are independent of each other. Use one per version of an ephemeris, or one per mission.
 
@@ -48,6 +48,6 @@ q(epochs[1]) == spkezr(mission, "MOON", epochs[1], "J2000", "LT+S", "EARTH")
 
 To see kernels loaded later, make a new query.
 
-## What threads can share
+## Share objects between threads
 
 A file handle (from `dafopr`, `dasopr`, `spkopn`, ...) and a [`Window`](@ref) that is being changed must not be used from two threads at once. Queries ([`StateQuery`](@ref), [`RotationQuery`](@ref)) and tables ([`EphemerisTable`](@ref), [`RotationTable`](@ref)) are immutable, and safe to share.

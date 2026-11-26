@@ -2,7 +2,7 @@
 
 CSPICE gives a position and its velocity. Almanac.jl gives derivatives of any order, either from a direct call or by automatic differentiation of the ordinary calls. The two agree to rounding.
 
-## Derivatives from `spkder` and `pxder`
+## Differentiate with `spkder` and `pxder`
 
 [`spkder`](@ref) returns a position and its first `N` derivatives, and [`pxder`](@ref) a rotation and its first `N` derivatives. The order is passed as `Val(N)`, so the result is a tuple of static arrays and the call does not allocate.
 
@@ -80,6 +80,6 @@ DI.gradient(radius, AutoZygote(), x)        # km per element unit
 
 Reverse mode pays off when one number depends on many epochs, as in the gradient over two epochs above. For a second derivative, run ForwardDiff over one of Zygote, ReverseDiff, or Enzyme in forward mode: `DI.SecondOrder(AutoForwardDiff(), AutoZygote())`. Mooncake and Tracker do not take dual numbers, and Enzyme in reverse mode refuses them. ReverseDiff must run without a compiled tape (`AutoReverseDiff(compile=false)`, the default), because a compiled tape keeps the segment and the record of its first epoch.
 
-## Where order 1 differs from the velocity of `spkezr`
+## Compare with the velocity of `spkezr`
 
 For a geometric position, order 1 is the velocity of `spkezr`. With the `LT` corrections, CSPICE approximates the rate of the light time, so the two differ by about 1e-8 relative for the Moon seen from the Earth. For some frames, `pxder` likewise differs from the rate block of `sxform`. [Derivatives and stored rates](@ref) gives each case.

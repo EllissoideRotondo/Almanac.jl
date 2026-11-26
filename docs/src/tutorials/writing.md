@@ -104,7 +104,7 @@ bodn2c("MY PROBE")
 
 The load takes a copy, so close the handle after `furnsh` or `save_kernel`, not before.
 
-## Writers for each kind of kernel
+## Write other kernels
 
 | Kernel | Open | Write | Close |
 |---|---|---|---|
