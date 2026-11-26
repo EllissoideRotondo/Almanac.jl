@@ -1,10 +1,19 @@
 # Writing kernels
 
-Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a file holds the data, word for word, of the file that CSPICE writes in a new process, and its bytes differ only where CSPICE leaves them unset, such as the padding of DSK and EK records. Every writer follows the pattern open, write, close; this page writes an SPK, reads it back, and builds kernels in memory.
+Almanac.jl writes SPK, CK, binary PCK, DSK and EK files. From the same input, a file holds the data, word for word, of the file that CSPICE writes in a new process, and its bytes differ only where CSPICE leaves them unset, such as the padding of DSK and EK records. Every writer follows the pattern open, write, close, with calls named after the kernel:
+
+- **SPK:** [`spkopn`](@ref) creates a file and [`spkopa`](@ref) opens one to append. Each data type `NN` but 14 has its writer `spkwNN`, and [`spkw10`](@ref) writes two-line elements read by [`getelm`](@ref). [`spkcls`](@ref) closes the file.
+- **CK:** [`ckopn`](@ref), then `ckw01`, `ckw02`, `ckw03`, `ckw05` or `ckw06`, and [`ckcls`](@ref).
+- **Binary PCK:** [`pckopn`](@ref), then [`pckw02`](@ref) or [`pckw20`](@ref), and [`pckcls`](@ref).
+- **DSK:** [`dskopn`](@ref), then [`dskmi2`](@ref), which builds the spatial index of a plate model, and [`dskw02`](@ref), which writes the type 2 segment; [`dskcls`](@ref) closes the file.
+- **EK:** [`ekopn`](@ref) for a file or [`ekops`](@ref) in memory, then [`ekbseg`](@ref) to start a segment. Rows go in one at a time with [`ekappr`](@ref) and [`ekacec`](@ref), [`ekaced`](@ref) or [`ekacei`](@ref), or whole columns at once with [`ekifld`](@ref), [`ekacld`](@ref) and [`ekffld`](@ref). [`ekcls`](@ref) closes the file.
+- **DAF and DAS**, the containers of all these files: [`dafonw`](@ref) and [`dasonw`](@ref) create one, [`dafada`](@ref) and [`dasadd`](@ref) add data, and [`dafcls`](@ref) and [`dascls`](@ref) close it.
+
+As in CSPICE, an SPK, CK or binary PCK writer puts its segment on disk when it returns, except for the writers that collect records and write the segment at the end: SPK type 14 ([`spk14b`](@ref), [`spk14a`](@ref), [`spk14e`](@ref)), CK type 4 ([`ckw04b`](@ref), [`ckw04a`](@ref), [`ckw04e`](@ref)) and binary PCK type 3 ([`pck03b`](@ref), [`pck03a`](@ref), [`pck03e`](@ref)). A DSK or EK file changes on disk when it is closed. A text kernel is plain text, written with `write` or set directly in the pool with [`pdpool`](@ref), [`pcpool`](@ref) and [`pipool`](@ref); the rest of this page writes an SPK, reads it back, and builds kernels in memory.
 
 ## Write an SPK
 
-[`spkopn`](@ref) creates a file, which must not exist, and returns a handle. Each `spkwNN` adds a segment of type `NN`, and [`spkcls`](@ref) closes the file. A file still open for write can be loaded, and a context sees only the segments written before it loaded the file.
+[`spkopn`](@ref) creates a file, which must not exist, and returns the handle that the writers take. A file still open for write can be loaded, and a context sees only the segments written before it loaded the file.
 
 Type 5 interpolates states with two-body motion, so a few states per revolution are enough. [`conics`](@ref) computes them from orbital elements.
 
@@ -97,18 +106,3 @@ bodn2c("MY PROBE")
 ```
 
 The load takes a copy, so close the handle after `furnsh` or `save_kernel`, not before.
-
-## Writers for every kernel type
-
-The other kernels follow the pattern of the SPK, with calls named after the kernel:
-
-- **SPK:** [`spkopn`](@ref) creates a file and [`spkopa`](@ref) opens one to append. Each of the 16 data types has its writer `spkwNN`, and [`spkw10`](@ref) writes two-line elements read by [`getelm`](@ref). [`spkcls`](@ref) closes the file.
-- **CK:** [`ckopn`](@ref), then `ckw01`, `ckw02`, `ckw03`, `ckw05` or `ckw06` for types 1 to 6 except 4, and [`ckcls`](@ref).
-- **Binary PCK:** [`pckopn`](@ref), then [`pckw02`](@ref) or [`pckw20`](@ref), and [`pckcls`](@ref).
-- **DSK:** [`dskopn`](@ref), then [`dskmi2`](@ref), which builds the spatial index of a plate model, and [`dskw02`](@ref), which writes the type 2 segment; [`dskcls`](@ref) closes the file.
-- **EK:** [`ekopn`](@ref) for a file or [`ekops`](@ref) in memory, then [`ekbseg`](@ref) to start a segment. Rows go in one at a time with [`ekappr`](@ref) and [`ekacec`](@ref), [`ekaced`](@ref) or [`ekacei`](@ref), or whole columns at once with [`ekifld`](@ref), [`ekacld`](@ref) and [`ekffld`](@ref). [`ekcls`](@ref) closes the file.
-- **DAF and DAS**, the containers of all these files: [`dafonw`](@ref) and [`dasonw`](@ref) create one, [`dafada`](@ref) and [`dasadd`](@ref) add data, and [`dafcls`](@ref) and [`dascls`](@ref) close it.
-
-As in CSPICE, each write call changes the file on disk, except for the writers that collect records and write the segment when they end: SPK type 14 ([`spk14b`](@ref), [`spk14a`](@ref), [`spk14e`](@ref)), CK type 4 ([`ckw04b`](@ref), [`ckw04a`](@ref), [`ckw04e`](@ref)) and binary PCK type 3 ([`pck03b`](@ref), [`pck03a`](@ref), [`pck03e`](@ref)).
-
-A text kernel is plain text: write it with `write`, or set the pool variables directly with [`pdpool`](@ref), [`pcpool`](@ref) and [`pipool`](@ref).
