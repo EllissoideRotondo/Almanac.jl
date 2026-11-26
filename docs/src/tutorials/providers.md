@@ -31,7 +31,7 @@ The body acts as if it were a file loaded at the time of the call: queries that 
 kinfo("my orbit")                           # (file type, meta-kernel or "", handle 0)
 ```
 
-The function is called at every query. When it is expensive, or when the states exist as samples, load them as a kernel in memory instead, as [Kernels in memory](@ref) shows.
+The function is called at every query. When it is expensive, or when the states exist as samples, load them as a kernel in memory instead, as [Build a kernel in memory](@ref) shows.
 
 ## Define a frame
 

@@ -28,11 +28,7 @@ spkcls(handle)
 spkobj(path)                                 # the bodies in the file
 ```
 
-As in CSPICE, the file changes on disk at each write call, except for the writers that collect records and write the segment at the end: SPK type 14 ([`spk14b`](@ref), [`spk14a`](@ref), [`spk14e`](@ref)), CK type 4 ([`ckw04b`](@ref), [`ckw04a`](@ref), [`ckw04e`](@ref)) and binary PCK type 3 ([`pck03b`](@ref), [`pck03a`](@ref), [`pck03e`](@ref)).
-
-## Inspect the file
-
-[`spkobj`](@ref) and [`spkcov`](@ref) read the bodies and the coverage of a file, which need not be loaded.
+[`spkobj`](@ref) and [`spkcov`](@ref) read the bodies and the coverage of a file, which need not be loaded:
 
 ```@example write
 spkcov(path, -77)
@@ -50,9 +46,7 @@ end
 dafcls(daf)
 ```
 
-## Load the file
-
-A body without a name is given by its ID code, as an integer or as a string. The epoch is a number, so no leap-seconds kernel is needed.
+After [`furnsh`](@ref) loads the file, queries read it. A body without a name is given by its ID code, as an integer or as a string. The epoch is a number, so no leap-seconds kernel is needed.
 
 ```@example write
 furnsh(path)
@@ -61,7 +55,7 @@ kclear()
 state[1:3]                                   # km
 ```
 
-## Kernels in memory
+## Build a kernel in memory
 
 A kernel can also live in memory, with no file. This suits states that a program computes (a numerical propagator) or that exist as samples: unlike a body of [`add_ephemeris!`](@ref), whose function runs at every query, a kernel in memory costs at each query what an SPK file costs. The examples use a circular orbit of radius 8000 km around the Earth:
 
@@ -104,16 +98,17 @@ bodn2c("MY PROBE")
 
 The load takes a copy, so close the handle after `furnsh` or `save_kernel`, not before.
 
-## Write other kernels
+## Writers for every kernel type
 
-| Kernel | Open | Write | Close |
-|---|---|---|---|
-| SPK, 16 data types | [`spkopn`](@ref), or [`spkopa`](@ref) to append | `spkwNN` for each type, [`spk14b`](@ref) for type 14 | [`spkcls`](@ref) |
-| SPK from two-line elements | [`spkopn`](@ref) | [`getelm`](@ref), [`spkw10`](@ref) | [`spkcls`](@ref) |
-| CK, types 1 to 6 | [`ckopn`](@ref) | `ckw01`, `ckw02`, `ckw03`, `ckw05`, `ckw06`, [`ckw04b`](@ref) for type 4 | [`ckcls`](@ref) |
-| Binary PCK, types 2, 3 and 20 | [`pckopn`](@ref) | [`pckw02`](@ref), [`pckw20`](@ref), [`pck03b`](@ref) for type 3 | [`pckcls`](@ref) |
-| DSK type 2 | [`dskopn`](@ref) | [`dskmi2`](@ref), [`dskw02`](@ref) | [`dskcls`](@ref) |
-| EK | [`ekopn`](@ref), [`ekops`](@ref) | [`ekbseg`](@ref), [`ekappr`](@ref), `ekace*`, or whole columns with [`ekifld`](@ref) | [`ekcls`](@ref) |
-| Any DAF, or any DAS (the container of DSK and EK files) | [`dafonw`](@ref), [`dasonw`](@ref) | `dafada`, `dasadd` and related calls | [`dafcls`](@ref), [`dascls`](@ref) |
+The other kernels follow the pattern of the SPK, with calls named after the kernel:
+
+- **SPK:** [`spkopn`](@ref) creates a file and [`spkopa`](@ref) opens one to append. Each of the 16 data types has its writer `spkwNN`, and [`spkw10`](@ref) writes two-line elements read by [`getelm`](@ref). [`spkcls`](@ref) closes the file.
+- **CK:** [`ckopn`](@ref), then `ckw01`, `ckw02`, `ckw03`, `ckw05` or `ckw06` for types 1 to 6 except 4, and [`ckcls`](@ref).
+- **Binary PCK:** [`pckopn`](@ref), then [`pckw02`](@ref) or [`pckw20`](@ref), and [`pckcls`](@ref).
+- **DSK:** [`dskopn`](@ref), then [`dskmi2`](@ref), which builds the spatial index of a plate model, and [`dskw02`](@ref), which writes the type 2 segment; [`dskcls`](@ref) closes the file.
+- **EK:** [`ekopn`](@ref) for a file or [`ekops`](@ref) in memory, then [`ekbseg`](@ref) to start a segment. Rows go in one at a time with [`ekappr`](@ref) and [`ekacec`](@ref), [`ekaced`](@ref) or [`ekacei`](@ref), or whole columns at once with [`ekifld`](@ref), [`ekacld`](@ref) and [`ekffld`](@ref). [`ekcls`](@ref) closes the file.
+- **DAF and DAS**, the containers of all these files: [`dafonw`](@ref) and [`dasonw`](@ref) create one, [`dafada`](@ref) and [`dasadd`](@ref) add data, and [`dafcls`](@ref) and [`dascls`](@ref) close it.
+
+As in CSPICE, each write call changes the file on disk, except for the writers that collect records and write the segment when they end: SPK type 14 ([`spk14b`](@ref), [`spk14a`](@ref), [`spk14e`](@ref)), CK type 4 ([`ckw04b`](@ref), [`ckw04a`](@ref), [`ckw04e`](@ref)) and binary PCK type 3 ([`pck03b`](@ref), [`pck03a`](@ref), [`pck03e`](@ref)).
 
 A text kernel is plain text: write it with `write`, or set the pool variables directly with [`pdpool`](@ref), [`pcpool`](@ref) and [`pipool`](@ref).
