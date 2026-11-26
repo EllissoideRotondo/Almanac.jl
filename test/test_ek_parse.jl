@@ -376,14 +376,15 @@ Compare the two engines on `query`. Returns `(status, detail)`: `:valid` or `:in
 if all results are equal (the query is valid or not), `:signal` if both signal the same
 SPICE error, and a status that starts with `diff` otherwise.
 """
-function ekq_compare(fx, query::String; guard_not::Bool = false)
+function ekq_compare(fx, query::String; guard_not::Bool = false, skip_casts::Bool = false)
     n = ekq_n_encd(fx, query)
     n.kind === :toomanyconjunctions && return :unsafe, "CSPICE stops the program"
     sizeof(rstrip(query, ' ')) > 2000 &&
         return :unsafe, "CSPICE reads past its buffer of 2000 characters"
     (guard_not && occursin(EKQ_UNSAFE_NOT, query)) &&
         return :unsafe, "CSPICE reads the token after the last one"
-    cast_dependent(query) && return :unsafe, "the cast of CSPICE depends on the processor"
+    (skip_casts && cast_dependent(query)) &&
+        return :unsafe, "the cast of CSPICE depends on the processor"
     (n.error && occursin(EKQ_UNSAFE_NONSCALAR, n.errmsg)) &&
         return :unsafe, "CSPICE reads an undefined position: " * n.errmsg
     c = ekq_c_encd(query)
@@ -1151,8 +1152,8 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
         report(name, list) = for (query, status, detail) in first(list, 12)
             println("  ", name, " ", status, ": ", first(query, 150), "\n      ", detail)
         end
-        function run(queries; guard_not = false)
-            res = [(query, ekq_compare(fx, query; guard_not)...) for query in queries]
+        function run(queries; guard_not = false, skip_casts = false)
+            res = [(query, ekq_compare(fx, query; guard_not, skip_casts)...) for query in queries]
             return res, [r for r in res if !(r[2] in (:valid, :invalid, :signal, :unsafe, :fixed))]
         end
 
@@ -1216,7 +1217,7 @@ group("ek_parse: EK query parser against CSPICE", Kernels.LSK) do
             rng = MersenneTwister(SEED + 1)
             valid = ekq_valid_corpus()
             queries = unique(String(ekq_fuzz_query(rng, valid)) for _ in 1:nsample(800, 4000))
-            res, bad = run(queries; guard_not = true)
+            res, bad = run(queries; guard_not = true, skip_casts = true)
             report("fuzz", bad)
             nvalid = count(r -> r[2] === :valid, res)
             ninvalid = count(r -> r[2] === :invalid, res)
