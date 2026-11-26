@@ -33,8 +33,24 @@ r = pxform("J2000", "IAU_EARTH", et)
 mxv(r, state[1:3])
 ```
 
-## Reporting issues
+## Notable differences to CSPICE
 
-Report defects and ask questions in the
-[issues](https://github.com/Orbitology/Almanac.jl/issues). Almanac.jl is not developed
-or supported by NAIF, so do not send its defects to NAIF.
+- **No global state.** Loaded kernels, the kernel pool and settings such as
+  [`timdef`](@ref) belong to a [`SpiceContext`](@ref), which a call takes as an
+  optional first argument; without one, it uses [`default_context`](@ref). Queries
+  take no lock, so any number of threads can query while another loads kernels.
+- **Cells and windows.** A CSPICE cell is a `Vector` or a [`Window`](@ref), with no
+  declared size. The calls that fill one, such as [`spkcov!`](@ref) and
+  [`ckcov!`](@ref), take it as the first argument, where CSPICE takes it last.
+- **Indices count from 1**, where CSPICE counts from 0: the interval of
+  [`wnfetd`](@ref), the `which` of [`kdata`](@ref), the `start` of [`gnpool`](@ref)
+  and [`gcpool`](@ref), and the rows and segments of an EK. An index copied unchanged
+  from C code selects the element before the one intended.
+- **No memory arguments.** String lengths, `room`, workspaces and counts such as
+  `nintvls`, which serve only C memory, are absent: [`gdpool`](@ref) takes only the
+  name of the variable.
+- **Routines left out.** Error handling (`chkin`, `failed`, `reset`) is replaced by
+  exceptions: a call throws a [`SpiceError`](@ref). The cell, set and string utilities
+  are replaced by Base functions. Routines deprecated by NAIF are replaced by their
+  successors ([`bodvrd`](@ref) for `bodvar`, [`subpnt`](@ref) for `subpt`). Loading by
+  handle (`spklef`, `cklpf`, `pcklof`) is replaced by [`furnsh`](@ref).
