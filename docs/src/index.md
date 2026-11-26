@@ -1,8 +1,8 @@
 # Almanac.jl
 
-Almanac.jl is a native Julia port of CSPICE N0067, the C toolkit of NASA's NAIF for
-space geometry. It reads SPICE kernels and answers the questions CSPICE answers (where
-a body is, how a frame is oriented, when an event occurs) in pure Julia.
+Almanac.jl is a pure-Julia port of CSPICE (toolkit version N0067), the library of NASA's
+NAIF for spacecraft and planetary geometry, which reads SPICE kernels and computes
+positions, velocities, orientations, time conversions, surface geometry and event times.
 
 ## Installation
 
