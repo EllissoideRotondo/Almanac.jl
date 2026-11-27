@@ -55,12 +55,17 @@ const W33 = SMatrix{3, 3}(0.1, -0.2, 0.3, 0.4, -0.5, 0.6, -0.7, 0.8, 0.9)
 Scalar functions of the epoch, by name. The default cases reach each derivative point
 of `src/ad.jl` once: `spk_jet` (orders 0 and 2), `abcorr_position`, `abcorr_state`,
 `abcorr_jet`, `frame_rotation` (PCK and binary PCK frames), `frame_jet` (`sxform`), the
+points of the chain plans of the prepared queries, the
 geometry of `subpnt`, the time scales and the tables; and the two root solvers that run on plain
 numbers, that of `nearpt` (`subpnt` with `NEAR POINT`) and that of `prop2b`, whose
 derivative a `Float64` takes through `_ad_pin`. The full cases add the other calls of
 the list in the manual, `subslr` with `NEAR POINT` and `conics`.
 """
 function ad_cases(ctx, tab, rtab, dvec)
+    # Prepared queries with chain plans: their own derivative points.
+    qs = state_query(ctx, "MOON", "J2000", "NONE", "EARTH")
+    qr = rotation_query(ctx, "J2000", "MOON_PA")
+    qx = rotation_query(ctx, "J2000", "IAU_EARTH")
     default = [
         "spkpos NONE J2000" => t -> dot(W3, spkpos(ctx, "MOON", t, "J2000", "NONE", "EARTH")[1]),
         "spkpos LT+S IAU_EARTH" => t -> dot(W3, spkpos(ctx, "MOON", t, "IAU_EARTH", "LT+S", "EARTH")[1]),
@@ -71,6 +76,9 @@ function ad_cases(ctx, tab, rtab, dvec)
         "spkder LT order 2" => t -> dot(W3, spkder(ctx, "MOON", t, "J2000", "LT", "EARTH", Val(2))[3]),
         "spkder NONE order 2" => t -> dot(W3, spkder(ctx, "MOON", t, "J2000", "EARTH", Val(2))[3]),
         "pxform MOON_PA" => t -> sum(W33 .* pxform(ctx, "J2000", "MOON_PA", t)),
+        "state_query NONE" => t -> (s = qs(t); dot(W6, s[1]) + 1.0e6 * s[2]),
+        "rotation_query MOON_PA" => t -> sum(W33 .* qr(t)),
+        "sxform of rotation_query" => t -> sum(sxform(qx, t)[SVector(4, 5, 6), SVector(1, 2, 3)] .* W33),
         "sxform IAU_EARTH" => t -> sum(sxform(ctx, "J2000", "IAU_EARTH", t)[SVector(4, 5, 6), SVector(1, 2, 3)] .* W33),
         "subpnt" => t -> dot(W3, subpnt(ctx, "INTERCEPT/ELLIPSOID", "EARTH", t, "IAU_EARTH", "LT+S", "MOON")[1]),
         "unitim" => t -> unitim(ctx, t, "ET", "TDT"),

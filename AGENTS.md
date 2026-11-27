@@ -76,12 +76,23 @@ an atomic reference to one of them is a single word.
 | `time/` | `time.jl`, `timeparse.jl`, `timeout.jl`, `time_api.jl`, `sclk.jl`, `lst.jl` |
 | `dsk/` | `dsk_types.jl`, `dsk.jl`, `dsk_api.jl`, `dsk_write.jl`, `surfaces.jl` |
 | `ek/` | event kernels: file, columns, query parser and engine, writers (`write*.jl`) |
-| `queries/` | `queries.jl` (prepared queries), `providers.jl`, `table.jl` |
+| `queries/` | `plans.jl` (chain plans of the prepared queries), `queries.jl` (prepared queries), `providers.jl`, `table.jl` |
 | `math/`, `geometry/`, `gf/` | SPICELIB math (`kernels.jl` holds the `_m_` products; `windows.jl`), geometry, the geometry finder |
 | top level | `Almanac.jl`, `ad.jl` (AD rules), `precompile.jl`; the package extensions are in `ext/` (Adapt, ForwardDiff, ChainRulesCore, EnzymeCore, Mooncake, ReverseDiff, Tracker) |
 
 ## Invariants that are easy to break
 
+- **Chain plans.** A `StateQuery` or `RotationQuery` holds a plan of its chain when the
+  chain cannot change with the epoch (`queries/plans.jl`): every body has segments of
+  one center; every frame is of class 1, 2 or 4. The plan makes the operations of
+  `spk_jet` and `_chain_rotation` in the same order, and an epoch at which a link has
+  no data goes to the general path. A change to the arithmetic or to the order of the
+  checks of those two functions must be made in the plan too. The type parameter of
+  the query is its plan or `Nothing`, and selects the method, because Enzyme compiles
+  every branch: a run-time test for the plan with the general `spkezr` as the other
+  branch more than doubles the compile time of reverse mode. For the same reason the
+  rules of the plan points call the rules of `spk_jet`, `frame_rotation` and
+  `frame_jet`.
 - **Priority order.** `KernelSet.spk`, `pck`, `ck` and `dsk` are in the CSPICE search
   order: the later file first, and within a file the later segment first. The lists of
   `spk`, `pck` and `ck` are `SegmentList`s: from 16 segments on, `find_segment` answers
@@ -145,8 +156,9 @@ an atomic reference to one of them is a single word.
   derivative, so that the brackets match those of CSPICE.
 - **Automatic differentiation.** No AD package differentiates the evaluators. The
   derivative points are `spk_jet`, `frame_rotation`, `frame_jet`, `abcorr_jet`,
-  `abcorr_position` and `abcorr_state`; the derivative of each is the next order of its
-  jet. The bisections of `nearpt` and `prop2b` (`_m_nearpt_plain`,
+  `abcorr_position` and `abcorr_state`, and the evaluators of the chain plans
+  (`_spk_plan_jet`, `_plan_rotation`, `_plan_frame_jet`); the derivative of each is the
+  next order of its jet. The bisections of `nearpt` and `prop2b` (`_m_nearpt_plain`,
   `_prop2b_root`) are in `_AD_CONSTANT`; their callers take the derivative of the root
   by Newton steps in the number type, one for `Float64` through `_ad_pin(a, p)` (value
   `p`, derivative of `a`, with a rule in the ChainRulesCore, Enzyme and Mooncake
@@ -184,9 +196,10 @@ NAIF page of the routine (``- [NAIF documentation of `name_c`](url)``).
   `isdefined(@__MODULE__, :NAME) || include(...)`.
 - CSPICE has global state and is not thread safe. Each group calls `oracle_load` once,
   and SPICE.jl is never called from a spawned task.
-- The AD groups take most of the suite time (`ad_enzyme` about 8 min on CI). CI runs
-  them and `static` on the coverage job and on a tag; the job `ad-lower-bounds` runs
-  `ad_mooncake` and `ad_enzyme` on Julia 1.10 at the lower bounds of `[compat]`.
+- The AD groups take most of the suite time (`ad_enzyme` about 17 min in
+  `test/parallel.jl`). CI runs them and `static` on the coverage job and on a tag; the
+  job `ad-lower-bounds` runs `ad_mooncake` and `ad_enzyme` on Julia 1.10 at the lower
+  bounds of `[compat]`.
   `ALMANAC_TEST_EXCLUDE` leaves groups out, `ALMANAC_TEST_SEED` sets the seed, and large
   samples go in the exhaustive tier (`ALMANAC_TEST_FULL=1`, `nsample(fast, full)`).
 - CI tests Julia 1.10, which can allocate where later versions do not: after changing a

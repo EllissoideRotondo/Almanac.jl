@@ -45,7 +45,7 @@ struct Row
     bytes::Float64
 end
 
-"The engine of a row: the first word of its name (`Almanac`, `CSPICE` or `ANISE`)."
+"The engine of a row: the first word of its name (`Almanac`, `CSPICE`, `ANISE` or `Ephemerides`)."
 engine(r::Row) = first(split(r.name))
 
 """
@@ -53,11 +53,11 @@ engine(r::Row) = first(split(r.name))
 
 Benchmark `f(args...)`, which makes `n` queries per call, and return the time per query
 (minimum and median over the samples) and the allocations per query. The name starts with
-the engine: `Almanac`, `CSPICE` or `ANISE`.
+the engine: `Almanac`, `CSPICE`, `ANISE` or `Ephemerides` (Ephemerides.jl).
 """
 function bench_row(group::AbstractString, name::AbstractString, f, args...; n::Integer)
     @assert n > 0
-    @assert first(split(name)) in ("Almanac", "CSPICE", "ANISE") "name without an engine: $name"
+    @assert first(split(name)) in ("Almanac", "CSPICE", "ANISE", "Ephemerides") "name without an engine: $name"
     f(args...)                                   # compile, and fail early if it throws
     b = @benchmark $f($(args)...) seconds = BENCH_SECONDS
     row = Row(

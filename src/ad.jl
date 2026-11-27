@@ -44,7 +44,7 @@ const _AD_CONSTANT = (
     default_context, Aberration, bodvcd, bodfnd,
     _spk_abcorr, _geo_method, _body_id, _frame_code, _geo_frinfo,
     _geo_fixfid, _positive_radii, _geo_shape, _lsk, _unitim_code,
-    _m_nearpt_plain, _prop2b_root,
+    _m_nearpt_plain, _prop2b_root, _spk_plan, _frame_plan,
 )
 
 "The type to dispatch on for the callable `f`: `Type{f}` for a type, `typeof(f)` otherwise."
@@ -62,6 +62,9 @@ const _AD_POINTS = (
     (abcorr_jet, (KernelSet, Int32, Real, Int32, Aberration, Int32, Val), 3),
     (abcorr_position, (KernelSet, Int32, Real, Int32, Aberration, Int32), 3),
     (abcorr_state, (KernelSet, Int32, Real, Int32, Aberration, Int32), 3),
+    (_spk_plan_jet, (_SPKPlan, Real, Val), 2),
+    (_plan_rotation, (_FramePlan, Real), 2),
+    (_plan_frame_jet, (_FramePlan, Real, Val), 2),
 )
 
 # --- value and first derivative at an epoch ---------------------------------------------
@@ -82,6 +85,16 @@ function _ad_rule(
     jet = spk_jet(ks, targ, et, ref, obs, Val(N + 1))
     return spk_jet(ks, targ, et, ref, obs, Val(N)), Base.tail(jet)
 end
+
+# The plans of the prepared queries give the values of `spk_jet`, `frame_rotation` and
+# `frame_jet` to the last bit, so their rules are the rules of these points. An AD
+# package that compiles the rules then does not compile the code of the plans.
+_ad_rule(::typeof(_spk_plan_jet), p::_SPKPlan, et::Real, v::Val) =
+    _ad_rule(spk_jet, p.ks, p.targ, et, p.ref, p.obs, v)
+_ad_rule(::typeof(_plan_rotation), p::_FramePlan, et::Real) =
+    _ad_rule(frame_rotation, p.ks, p.from, p.to, et)
+_ad_rule(::typeof(_plan_frame_jet), p::_FramePlan, et::Real, v::Val) =
+    _ad_rule(frame_jet, p.ks, p.from, p.to, et, v)
 
 function _ad_rule(::typeof(frame_rotation), ks::KernelSet, from::Int32, to::Int32, et::Real)
     jet = _exact_frame_jet(ks, from, to, et, Val(1))

@@ -691,6 +691,7 @@ spkezp(targ::Integer, et::Real, ref::NameOrID, abcorr::AbcorrArg, obs::Integer) 
 """
     spkder([ctx,] targ, et, ref, obs, Val(N)) -> NTuple{N+1,SVector{3}}
     spkder([ctx,] targ, et, ref, abcorr, obs, Val(N)) -> NTuple{N+1,SVector{3}}
+    spkder(q::StateQuery, et, Val(N)) -> NTuple{N+1,SVector{3}}
 
 Return the position of `targ` relative to `obs` in frame `ref` at `et` and its time
 derivatives to order `N`. This call has no CSPICE counterpart.
@@ -698,7 +699,8 @@ derivatives to order `N`. This call has no CSPICE counterpart.
 Element `k + 1` of the result is the derivative of order `k`, in km/s^k. `et` is in
 seconds past J2000 TDB. `targ`, `obs` and `ref` are names or integer IDs. The form
 without `abcorr` is geometric, as is `abcorr = "NONE"`; `abcorr` is a string or an
-[`Aberration`](@ref), as for [`spkezr`](@ref). With ForwardDiff loaded, `et` can be a
+[`Aberration`](@ref), as for [`spkezr`](@ref). The form with a [`StateQuery`](@ref)
+evaluates a query of [`state_query`](@ref). With ForwardDiff loaded, `et` can be a
 dual number. The call does not allocate under the condition that [`spkezr`](@ref)
 states.
 
