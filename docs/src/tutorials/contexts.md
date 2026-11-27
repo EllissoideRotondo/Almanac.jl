@@ -37,7 +37,7 @@ extrema(distance)                           # km
 
 ## Prepare a query for many epochs
 
-[`state_query`](@ref) and [`rotation_query`](@ref) resolve the names, the frame and the correction once, on the current snapshot. Evaluating the query, as `q(t)` for the state or `spkpos(q, t)` for the position, gives the result of [`spkezr`](@ref) or [`spkpos`](@ref) bit for bit; a rotation query gives that of [`pxform`](@ref). The query skips the name lookup at each epoch, and keeps its snapshot even if another thread loads a kernel.
+[`state_query`](@ref) and [`rotation_query`](@ref) resolve the names, the frame and the correction once, on the current snapshot. Evaluating the query, as `q(t)` for the state or `spkpos(q, t)` for the position, gives the result of [`spkezr`](@ref) or [`spkpos`](@ref) bit for bit; a rotation query gives that of [`pxform`](@ref). The query skips the name lookup at each epoch, and keeps its snapshot even if another thread loads a kernel. For the correction `"NONE"`, and for a rotation between inertial, PCK and fixed-offset frames, it also finds once the chain of SPK segments or of frames, when no epoch can change that chain. [`spkder`](@ref)`(q, t, Val(N))` gives the position of a query and its derivatives, without the light time.
 
 ```@example ctx
 q = state_query(mission, "MOON", "J2000", "LT+S", "EARTH")

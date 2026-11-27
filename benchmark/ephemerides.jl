@@ -6,7 +6,10 @@
 # center of its segment, in the frame of the segment, with no chain and no change of
 # frame. Every case is such a link, so the three engines make the same computation:
 # Almanac and CSPICE through `spkgps`, `spkgeo` and `spkder` in the frame of the segment,
-# Ephemerides.jl through `ephem_vector3` to `ephem_vector12`.
+# Ephemerides.jl through `ephem_vector3` to `ephem_vector12`. Almanac is also timed with
+# a prepared query (`state_query`, `rotation_query`): `q(et)` returns the light time
+# too, and `spkder(q, et, Val(1))` returns the position and the velocity only, as
+# Ephemerides.jl does.
 #
 # Cases:
 #
@@ -19,6 +22,8 @@
 # - Binary PCK type 2: the rotation from J2000 to MOON_PA_DE440 of
 #   moon_pa_de440_200625.bpc. Almanac and CSPICE call `pxform`; Ephemerides.jl gives
 #   the Euler angles, which `eul2m` of Almanac turns into the matrix.
+# - de440s, the Moon relative to the Earth: a chain of two links, which Ephemerides.jl
+#   does not follow; Almanac and CSPICE only.
 # - The load of de440s.bsp.
 #
 # Before any timing, each segment of the type kernel is compared with CSPICE in the
@@ -49,7 +54,7 @@ isdefined(@__MODULE__, :write_type_kernel) ||
 
 require_kernels(Kernels.DE440S, Kernels.MOON_BPC, Kernels.MOON_TF)
 
-const EMB, J2000, MOON_PA = 3, 1, 31008
+const EMB, MOON, J2000, MOON_PA = 3, 301, 1, 31008
 
 "Largest relative difference from CSPICE for which a case is timed with Ephemerides.jl."
 const EPH_RTOL = 1.0e-12
@@ -81,6 +86,34 @@ function loop_alm_ad(ctx, epochs, targ, ref, obs)
     acc = 0.0
     for et in epochs
         acc += ForwardDiff.derivative(t -> spkgps(ctx, targ, t, ref, obs)[1], et)[1]
+    end
+    return acc
+end
+function loop_alm_query(q, epochs)
+    acc = 0.0
+    for et in epochs
+        acc += q(et)[1][4]
+    end
+    return acc
+end
+function loop_alm_query_der(q, epochs)
+    acc = 0.0
+    for et in epochs
+        acc += spkder(q, et, Val(1))[2][1]
+    end
+    return acc
+end
+function loop_alm_query_pos(q, epochs)
+    acc = 0.0
+    for et in epochs
+        acc += spkpos(q, et)[1][1]
+    end
+    return acc
+end
+function loop_alm_query_rot(q, epochs)
+    acc = 0.0
+    for et in epochs
+        acc += q(et)[3, 1]
     end
     return acc
 end
@@ -255,12 +288,20 @@ function main()
     rows = Row[]
     g = "de440s, order 0"
     push!(rows, bench_row(g, "Almanac spkgps", loop_alm_gps, ctx, epochs, EARTH, J2000, EMB; n))
+    q_earth = state_query(ctx, EARTH, J2000, "NONE", EMB)
+    push!(rows, bench_row(g, "Almanac spkpos of a state_query", loop_alm_query_pos, q_earth, epochs; n))
     push!(rows, bench_row(g, "Ephemerides ephem_vector3", loop_eph, ephem_vector3, eph_de, epochs, EMB, EARTH, 1; n))
     push!(rows, bench_row(g, "CSPICE spkgps", loop_cspice_gps, epochs, EARTH, "J2000", EMB; n))
     g = "de440s, order 1"
     push!(rows, bench_row(g, "Almanac spkgeo", loop_alm_geo, ctx, epochs, EARTH, J2000, EMB; n))
+    push!(rows, bench_row(g, "Almanac state_query", loop_alm_query, q_earth, epochs; n))
+    push!(rows, bench_row(g, "Almanac spkder of a state_query, Val(1)", loop_alm_query_der, q_earth, epochs; n))
     push!(rows, bench_row(g, "Ephemerides ephem_vector6", loop_eph, ephem_vector6, eph_de, epochs, EMB, EARTH, 4; n))
     push!(rows, bench_row(g, "CSPICE spkgeo", loop_cspice_geo, epochs, EARTH, "J2000", EMB; n))
+    g = "de440s, Moon relative to Earth (two links), order 1"
+    push!(rows, bench_row(g, "Almanac spkgeo", loop_alm_geo, ctx, epochs, MOON, J2000, EARTH; n))
+    push!(rows, bench_row(g, "Almanac state_query", loop_alm_query, state_query(ctx, MOON, J2000, "NONE", EARTH), epochs; n))
+    push!(rows, bench_row(g, "CSPICE spkgeo", loop_cspice_geo, epochs, MOON, "J2000", EARTH; n))
     for (N, f) in ((2, ephem_vector9), (3, ephem_vector12))
         g = "de440s, order $N"
         push!(rows, bench_row(g, "Almanac spkder Val($N)", loop_alm_der, ctx, epochs, EARTH, J2000, EMB, Val(N); n))
@@ -280,6 +321,9 @@ function main()
         ets = inner_epochs(c.t0, c.t1)
         g = "type $dtype, order 1 ($(c.label))"
         push!(rows, bench_row(g, "Almanac spkgeo", loop_alm_geo, ctx, ets, c.body, J2000, EARTH; n))
+        q = state_query(ctx, c.body, J2000, "NONE", EARTH)
+        push!(rows, bench_row(g, "Almanac state_query", loop_alm_query, q, ets; n))
+        push!(rows, bench_row(g, "Almanac spkder of a state_query, Val(1)", loop_alm_query_der, q, ets; n))
         a.eph <= EPH_RTOL && push!(
             rows,
             bench_row(g, "Ephemerides ephem_vector6", loop_eph, ephem_vector6, eph_types, ets, EARTH, c.body, 4; n)
@@ -290,6 +334,8 @@ function main()
     g = "PCK type 2, J2000 to MOON_PA_DE440"
     push!(rows, bench_row(g, "Almanac pxform, names", loop_alm_pxform, ctx, epochs, "J2000", "MOON_PA_DE440"; n))
     push!(rows, bench_row(g, "Almanac pxform, frame IDs", loop_alm_pxform, ctx, epochs, J2000, MOON_PA; n))
+    q_moon = rotation_query(ctx, J2000, MOON_PA)
+    push!(rows, bench_row(g, "Almanac rotation_query", loop_alm_query_rot, q_moon, epochs; n))
     push!(rows, bench_row(g, "Ephemerides ephem_rotation3 and eul2m", loop_eph_matrix, eph_moon, epochs, J2000, MOON_PA; n))
     push!(rows, bench_row(g, "CSPICE pxform", loop_cspice_pxform, epochs, "J2000", "MOON_PA_DE440"; n))
 

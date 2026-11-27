@@ -12,8 +12,10 @@
 # also leaves out the three cases that Enzyme differentiates without a rule (`subpnt`,
 # `unitim`, `table_position`: 9.5 min and 4.4 GB with them; each passes on its own), and
 # `subpnt NEAR POINT` for the same reason; the exhaustive run takes them. `prop2b` (the
-# root of the Kepler equation through `_ad_pin`) stays in the default run. Run time of the
-# group (default tier, `test/parallel.jl` with 8 threads): 463 s.
+# root of the Kepler equation through `_ad_pin`) stays in the default run. The compile
+# time of the combined function grows faster than the number of its cases: 8 cases took
+# 311 s and 11 cases 675 s (forward and reverse mode). Run time of the group (default
+# tier, `test/parallel.jl` with 8 threads): 1018 s.
 isdefined(@__MODULE__, :ad_check) || include("adfixtures.jl")
 
 import Enzyme

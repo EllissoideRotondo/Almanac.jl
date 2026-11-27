@@ -15,10 +15,13 @@ from the angular velocity of the CK segment, as `sxform_c` of CSPICE gives it
 Otherwise the result is `rotation_jet`, unchanged.
 """
 @inline function frame_jet(ks::KernelSet, from::Int32, to::Int32, et::Float64, v::Val{1})
-    (isempty(ks.ck) && isempty(ks.dyn) && isempty(ks.switch) && isempty(ks.bodyrot) && isempty(ks.pck)) &&
-        return rotation_jet(ks, from, to, et, v)
+    _exact_rates(ks) && return rotation_jet(ks, from, to, et, v)
     return _ck_frame_jet(ks, from, to, et)
 end
+
+"True if `ks` holds none of the frames whose `sxform` rate is not the derivative of `rotation_jet`."
+@inline _exact_rates(ks::KernelSet) =
+    isempty(ks.ck) && isempty(ks.dyn) && isempty(ks.switch) && isempty(ks.bodyrot) && isempty(ks.pck)
 
 # Not inlined, so that the callers of `frame_jet` stay small for a snapshot without such
 # frames.

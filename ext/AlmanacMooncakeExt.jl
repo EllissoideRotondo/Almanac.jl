@@ -1,8 +1,8 @@
 module AlmanacMooncakeExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, _ad_pin, _ad_rule,
-    _ad_scale, _AD_POINTS, _AD_CONSTANT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, StateQuery, RotationQuery, _SPKPlan,
+    _FramePlan, _ad_pin, _ad_rule, _ad_scale, _AD_POINTS, _AD_CONSTANT, _ad_typeof
 using Mooncake: Mooncake
 using Mooncake: DefaultCtx, CoDual, Dual, NoTangent, NoRData, RData, @is_primitive,
     @zero_derivative, zero_fcodual
@@ -52,11 +52,11 @@ function Mooncake.rrule!!(::CoDual{typeof(_ad_pin)}, a::CoDual, p::CoDual)
     return zero_fcodual(_ad_pin(Mooncake.primal(a), Mooncake.primal(p))), pullback
 end
 
-# The snapshot, the context and the correction are data without derivatives, and the
-# lookups and the parsing of strings have no derivative.
-Mooncake.tangent_type(::Type{<:KernelSet}) = NoTangent
-Mooncake.tangent_type(::Type{<:SpiceContext}) = NoTangent
-Mooncake.tangent_type(::Type{Aberration}) = NoTangent
+# The snapshot, the context, the correction, the queries and their plans are data
+# without derivatives, and the lookups and the parsing of strings have no derivative.
+for T in (KernelSet, SpiceContext, Aberration, StateQuery, RotationQuery, _SPKPlan, _FramePlan)
+    @eval Mooncake.tangent_type(::Type{<:$T}) = NoTangent
+end
 for f in _AD_CONSTANT
     @eval @zero_derivative DefaultCtx Tuple{$(_ad_typeof(f)), Vararg}
 end

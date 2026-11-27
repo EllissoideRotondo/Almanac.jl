@@ -263,6 +263,9 @@ function _text_pck_rotation(br::BodyRot, body::Integer, et::T) where {T <: Real}
     return _m_mxm(tipm, inertial_rotation(br.ref))
 end
 
+"An empty segment list: the binary PCK segments of a body that has none. Never mutated."
+const _NO_SEGMENTS = SegmentList(Segment[])
+
 """
     _body_state(ks, classid, et::Float64) -> Mat3{Taylor{1,Float64}}
 
@@ -270,17 +273,18 @@ Return the matrix of `_body_rotation` with its time derivative as `tisbod_` give
 them: from a binary PCK segment if one covers `et` (`_binary_pck_state`), else from the
 text PCK constants (`_text_pck_state`). Throws as `_body_rotation`.
 """
-function _body_state(ks::KernelSet, classid::Int32, et::Float64)
-    segs = get(ks.pck, classid, nothing)
-    if segs !== nothing
-        i = find_segment(segs, et)
-        if i > 0
-            seg = @inbounds segs[i]
-            return _binary_pck_state(ks.daf[seg.file], seg, et)
-        end
+_body_state(ks::KernelSet, classid::Int32, et::Float64) =
+    _body_state(ks, get(ks.pck, classid, _NO_SEGMENTS), classid, et)
+
+# `segs` are the binary PCK segments of `classid` in `ks`, `_NO_SEGMENTS` for none.
+function _body_state(ks::KernelSet, segs::SegmentList{Segment}, classid::Int32, et::Float64)
+    i = find_segment(segs, et)
+    if i > 0
+        seg = @inbounds segs[i]
+        return _binary_pck_state(ks.daf[seg.file], seg, et)
     end
     br = get(ks.bodyrot, classid, nothing)
-    br === nothing && return _body_rotation(ks, classid, taylor_var(et, Val(1)))::Mat3{Taylor{1, Float64}}
+    br === nothing && return _body_rotation(ks, segs, classid, taylor_var(et, Val(1)))::Mat3{Taylor{1, Float64}}
     return _text_pck_state(br, classid, et)
 end
 
@@ -457,14 +461,17 @@ segment if one covers `primal(et)`, otherwise from the text-PCK constants, as
 `tisbod_` does. Throws `SpiceError(:framedatanotfound)` if neither exists, and
 `SpiceError(:kernelvarnotfound)` if `BODY<id>_PM` exists without a pole angle.
 """
-function _body_rotation(ks::KernelSet, classid::Int32, et::T) where {T <: Real}
-    segs = get(ks.pck, classid, nothing)
-    if segs !== nothing
-        i = find_segment(segs, primal(et))
-        if i > 0
-            seg = @inbounds segs[i]
-            return _binary_pck_rotation(ks.daf[seg.file], seg, et)::Mat3{T}
-        end
+_body_rotation(ks::KernelSet, classid::Int32, et::Real) =
+    _body_rotation(ks, get(ks.pck, classid, _NO_SEGMENTS), classid, et)
+
+# `segs` are the binary PCK segments of `classid` in `ks`, `_NO_SEGMENTS` for none.
+function _body_rotation(
+        ks::KernelSet, segs::SegmentList{Segment}, classid::Int32, et::T
+    ) where {T <: Real}
+    i = find_segment(segs, primal(et))
+    if i > 0
+        seg = @inbounds segs[i]
+        return _binary_pck_rotation(ks.daf[seg.file], seg, et)::Mat3{T}
     end
     br = get(ks.bodyrot, classid, nothing)
     br === nothing && _missing_pole(ks, classid)

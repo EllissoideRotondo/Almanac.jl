@@ -161,6 +161,7 @@ include("gf/illumination.jl")        # gfilum: illumination angles at a surface 
 include("gf/occultation.jl")         # gfoclt, gfocce: occultations and transits
 include("gf/fov.jl")                 # gftfov, gfrfov, gffove: visibility in a field of view
 include("queries/providers.jl")      # EphemerisProvider evaluation, add_ephemeris!
+include("queries/plans.jl")          # chain plans of the prepared queries
 include("queries/queries.jl")        # StateQuery, state_query, RotationQuery, rotation_query
 include("queries/table.jl")          # EphemerisTable, ephemeris_table, table_position, table_state, table_jet
 include("kernels/memkernels.jl")     # furnsh of a DAF in memory, load_samples!, load_function!

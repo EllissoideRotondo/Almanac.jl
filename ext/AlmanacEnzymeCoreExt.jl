@@ -1,8 +1,8 @@
 module AlmanacEnzymeCoreExt
 
 using Almanac
-using Almanac: KernelSet, SpiceContext, Aberration, _ad_pin, _ad_rule,
-    _ad_scale, _AD_POINTS, _AD_CONSTANT, _ad_typeof
+using Almanac: KernelSet, SpiceContext, Aberration, StateQuery, RotationQuery, _SPKPlan,
+    _FramePlan, _ad_pin, _ad_rule, _ad_scale, _AD_POINTS, _AD_CONSTANT, _ad_typeof
 using EnzymeCore: EnzymeCore, EnzymeRules, Annotation, Const, Active, Duplicated,
     BatchDuplicated
 using EnzymeCore.EnzymeRules: FwdConfig, RevConfig, AugmentedReturn, needs_primal,
@@ -120,11 +120,11 @@ EnzymeRules.reverse(
     a::Annotation{Float64}, p::Annotation{Float64}
 ) = (_epoch_cotangent(a, dret, 1.0), _epoch_cotangent(p, dret, 0.0))
 
-# The snapshot, the context and the correction are data without derivatives, and the
-# lookups and the parsing of strings have no derivative.
-EnzymeRules.inactive_type(::Type{<:KernelSet}) = true
-EnzymeRules.inactive_type(::Type{<:SpiceContext}) = true
-EnzymeRules.inactive_type(::Type{Aberration}) = true
+# The snapshot, the context, the correction, the queries and their plans are data
+# without derivatives, and the lookups and the parsing of strings have no derivative.
+for T in (KernelSet, SpiceContext, Aberration, StateQuery, RotationQuery, _SPKPlan, _FramePlan)
+    @eval EnzymeRules.inactive_type(::Type{<:$T}) = true
+end
 for f in _AD_CONSTANT
     @eval EnzymeRules.inactive(::$(_ad_typeof(f)), args...) = nothing
 end

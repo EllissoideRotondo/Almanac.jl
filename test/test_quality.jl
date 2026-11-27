@@ -23,6 +23,9 @@ alloc_spkder_rot(ctx, et, ref, ::Val{N}) where {N} = @allocated spkder(ctx, 301,
 alloc_pxform(ctx, from, to, et) = @allocated pxform(ctx, from, to, et)
 alloc_sxform(ctx, from, to, et) = @allocated sxform(ctx, from, to, et)
 alloc_pxder(ctx, from, to, et, ::Val{N}) where {N} = @allocated pxder(ctx, from, to, et, Val(N))
+alloc_query(q, et) = @allocated q(et)
+alloc_query_pos(q, et) = @allocated spkpos(q, et)
+alloc_query_sx(q, et) = @allocated sxform(q, et)
 alloc_names(ctx, et) = @allocated spkezr(ctx, "MOON", et, "J2000", "NONE", "EARTH")
 alloc_pxform_names(ctx, et) = @allocated pxform(ctx, "J2000", "IAU_EARTH", et)
 nalloc_mixed_names(ctx, et) = @allocations spkezr(ctx, "Moon", et, "J2000", "NONE", "Earth")
@@ -68,6 +71,14 @@ group("8. quality gates", Kernels.FULL_SET_FILES...) do
             for N in 0:3
                 @test warm(alloc_pxder, ctx, from, to, et, Val(N)) == 0
             end
+            q = rotation_query(ctx, from, to)
+            @test warm(alloc_query, q, et) == 0
+            @test warm(alloc_query_sx, q, et) == 0
+        end
+        for (targ, obs) in ((301, 399), (301, 10)), ref in (1, iau_earth, moon_me)
+            q = state_query(ctx, targ, ref, "NONE", obs)
+            @test warm(alloc_query, q, et) == 0
+            @test warm(alloc_query_pos, q, et) == 0
         end
     end
 
