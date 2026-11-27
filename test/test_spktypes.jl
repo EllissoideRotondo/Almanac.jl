@@ -19,6 +19,8 @@
 #   (c) orders 2 and 3 of `spkder` against the nested `ForwardDiff.derivative` of the
 #       velocity part of `spkgeo` (the generic path with a `Dual` epoch), and order 2
 #       against a central finite difference of the velocity.
+# A second file (`write_zero_kernel`, type 2 segments written by Almanac) holds a
+# component -0.0: the states of chains of one and two links keep the sign of CSPICE.
 #
 # Tolerance of (a). The two engines make the same operations in the same order on the
 # same numbers, so the states differ by a few units in the last place. The bound is
@@ -92,12 +94,32 @@ function smooth_epochs(rng, c::TypeCase, n::Int)
     return out
 end
 
+"Target of the segments with a component -0.0; `ZERO_BODY - 1` is relative to it."
+const ZERO_BODY = -8000
+
+"""
+    write_zero_kernel(path) -> path
+
+Write the SPK file `path` with two type 2 segments of degree 0 over [0, 200] s whose z
+coefficient is -0.0: `ZERO_BODY` relative to the Earth and `ZERO_BODY - 1` relative to
+`ZERO_BODY`. In the first half of a record the Chebyshev sum of CSPICE gives z = -0.0.
+"""
+function write_zero_kernel(path)
+    h = spkopn(path, "signed zeros", 0)
+    rec = [1000.0, 2000.0, -0.0]
+    spkw02(h, ZERO_BODY, EARTH, "J2000", 0.0, 200.0, "zero", 100.0, [rec, rec], 0.0)
+    spkw02(h, ZERO_BODY - 1, ZERO_BODY, "J2000", 0.0, 200.0, "zero 2", 100.0, [rec, rec], 0.0)
+    spkcls(h)
+    return path
+end
+
 group("9. SPK data types against CSPICE") do
     rng = MersenneTwister(SEED + 9)
     path = joinpath(mktempdir(), "almanac_types.bsp")
     cases = write_type_kernel(path, rng)
-    oracle_load([path])
-    ctx = neo_context([path])
+    zpath = write_zero_kernel(joinpath(mktempdir(), "almanac_zero.bsp"))
+    oracle_load([path, zpath])
+    ctx = neo_context([path, zpath])
     ks = Almanac.kernelset(ctx)
     println("  ", length(cases), " segments in ", path)
     @test sort(unique(c.dtype for c in cases)) == [1, 3, 5, 8, 9, 12, 13, 14, 15, 17, 18, 19, 20, 21]
@@ -139,6 +161,23 @@ group("9. SPK data types against CSPICE") do
         fails = Failures()
         for et in random_epochs(MersenneTwister(SEED + 90), 20, lo, hi)   # own stream
             check!(fails, spkgeo(ctx, a.body, et, "J2000", b.body)[1] == SPICE.spkgeo(a.body, et, "J2000", b.body)[1], "spkgeo", et)
+        end
+        @test isempty(fails)
+    end
+
+    # SPKGEO takes the state of the first link of each chain as it is: a component -0.0
+    # stays -0.0, where a sum that starts from zero gives +0.0.
+    @apart @testset "signed zeros of the first link of a chain: those of CSPICE" begin
+        @test signbit(SPICE.spkgeo(ZERO_BODY, 10.0, "J2000", EARTH)[1][3])
+        fails = Failures()
+        for (t, o) in (
+                    (ZERO_BODY, EARTH), (ZERO_BODY - 1, EARTH), (EARTH, ZERO_BODY),
+                    (ZERO_BODY - 1, ZERO_BODY),
+                ), et in (10.0, 60.0, 150.0)
+            ref = collect(SPICE.spkgeo(t, et, "J2000", o)[1])
+            check!(fails, isequal(collect(spkgeo(ctx, t, et, "J2000", o)[1]), ref), "spkgeo", t, o, et)
+            q = state_query(ctx, t, "J2000", "NONE", o)
+            check!(fails, isequal(collect(q(et)[1]), ref), "state_query", t, o, et)
         end
         @test isempty(fails)
     end

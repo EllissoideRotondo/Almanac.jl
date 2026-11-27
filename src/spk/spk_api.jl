@@ -84,6 +84,17 @@ last bit.
 end
 
 """
+    _chain_first(ks, et, zero, seg, ::Val{N}) -> (jet, frame)
+
+The jet of `seg`, the first link of a chain, and the frame of `seg`: `SPKGEO` takes the
+state of the first link as it is, also a component -0.0. `zero` is the zero jet of the
+sum of the chain; subtracting it gives the number type of `_chain_add` and changes no
+value.
+"""
+@inline _chain_first(ks::KernelSet, et, zero, seg::Segment, v::Val) =
+    map(-, segment_jet_native(ks, seg, et, v), zero), seg.frame
+
+"""
     _chain_combine(ks, et, tjet, tframe, ojet, oframe, ref) -> jet
 
 `tjet` (frame `tframe`) minus `ojet` (frame `oframe`) in frame `ref`, with the frame
@@ -216,8 +227,8 @@ function spk_jet(
         depth += 1
         depth > length(ks.spk) && throw_chain_cycle(targ, obs, t)
         seg = segs[i]
-        depth == 1 && (oframe = seg.frame)
-        ojet, oframe = _chain_add(ks, et, ojet, oframe, seg, Val(N))
+        ojet, oframe = depth == 1 ? _chain_first(ks, et, ojet, seg, Val(N)) :
+            _chain_add(ks, et, ojet, oframe, seg, Val(N))
         body = seg.center
         common = chain_index(tbody, nt, body)
     end
@@ -226,8 +237,8 @@ function spk_jet(
     tframe = oframe
     for k in 1:(common - 1)
         seg = ks.spk[tbody[k]][tseg[k]]
-        k == 1 && (tframe = seg.frame)
-        tjet, tframe = _chain_add(ks, et, tjet, tframe, seg, Val(N))
+        tjet, tframe = k == 1 ? _chain_first(ks, et, tjet, seg, Val(N)) :
+            _chain_add(ks, et, tjet, tframe, seg, Val(N))
     end
     depth == 0 && (oframe = tframe)   # no observer segment: CSPICE takes the target frame
     return _chain_combine(ks, et, tjet, tframe, ojet, oframe, ref)
@@ -271,16 +282,16 @@ end
         i == 0 && throw_no_connection(ks, targ, obs, t, last(tbody), body)
         depth += 1
         depth > length(ks.spk) && throw_chain_cycle(targ, obs, t)
-        depth == 1 && (oframe = segs[i].frame)
-        ojet, oframe = _chain_add(ks, et, ojet, oframe, segs[i], Val(N))
+        ojet, oframe = depth == 1 ? _chain_first(ks, et, ojet, segs[i], Val(N)) :
+            _chain_add(ks, et, ojet, oframe, segs[i], Val(N))
         body = segs[i].center
         common = findfirst(==(body), tbody)
     end
     tjet = ntuple(_ -> zero(Vec3{T}), Val(N + 1))
     tframe = oframe
     for k in 1:(common - 1)
-        k == 1 && (tframe = tseg[k].frame)
-        tjet, tframe = _chain_add(ks, et, tjet, tframe, tseg[k], Val(N))
+        tjet, tframe = k == 1 ? _chain_first(ks, et, tjet, tseg[k], Val(N)) :
+            _chain_add(ks, et, tjet, tframe, tseg[k], Val(N))
     end
     depth == 0 && (oframe = tframe)   # no observer segment: CSPICE takes the target frame
     return _chain_combine(ks, et, tjet, tframe, ojet, oframe, ref)
