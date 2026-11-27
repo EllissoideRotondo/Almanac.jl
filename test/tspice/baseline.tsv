@@ -10,25 +10,15 @@ dskxv	1	0	0	documented	the frame of an earlier failed call, a CSPICE defect (csp
 furnsh	0	4	0	documented	FILENAMETOOLONG and PATHTOOLONG past 255 characters: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits); Almanac then finds no such file
 gcpool	0	1	0	documented	:typemismatch for a variable of the other type (gcpool)
 gdpool	0	2	0	documented	:typemismatch for a variable of the other type (gdpool); room 0, which Almanac does not take (conventions.md, memory arguments)
-gfilum	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
-gfpa	1	0	0	documented	an event endpoint 2.03e-6 s from SPICELIB's, past 2 tol: a phase angle search at a small slope; bit-identical with glibc sin and cos (replay.jl gf_search_mapping)
 gipool	0	1	0	documented	:typemismatch for a variable of the other type (gipool)
-limbpt	42	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md), amplified at the tangency of a DSK limb: up to 2.5e-3 km, where 1 ulp of the epoch moves CSPICE's own point by 3e-3 km; no difference with glibc's sin and cos
 pcklof	0	2	0	gap	Almanac has no pcklof; the replay loads with furnsh (NOSUCHFILE); FTFULL past 5000 open files is a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 pckopn	0	1	0	documented	DAFFTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
-pxform	8	1	0	documented	values: Julia's sin or cos differs from glibc's in the last bit (numerics.md) in two-vector frames, no difference with glibc's sin and cos; errors: kind names
+pxform	0	1	0	documented	errors: kind names
 scdecd	0	1	0	documented	TOOMANYCOEFFS past 100000 coefficients of an SCLK kernel: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 sce2c	0	1	0	documented	TOOMANYPARTITIONS past 9999 partitions of an SCLK kernel: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits); Almanac then finds the epoch out of range
-sincpt	108	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md), amplified by rays that graze the surface: up to 4.4e-4 km; no difference with glibc's sin and cos
-spkcpt	3	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md): up to 3.0e-6 km; no difference with glibc's sin and cos
 spkopn	0	1	0	documented	DAFFTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
-subpnt	6	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md): up to 5.2e-8 km; no difference with glibc's sin and cos
-subslr	6	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md): up to 1.4e-8 km; no difference with glibc's sin and cos
 swpool	0	4	0	documented	KERVARSETOVERFLOW, TOOMANYWATCHES, AGENTLISTOVERFLOW past the sizes of the watcher tables: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
-sxform	5	1	0	documented	values: Julia's sin or cos differs from glibc's in the last bit (numerics.md) in two-vector frames, no difference with glibc's sin and cos; errors: TOOMANYBASEFRAMES past 15000 base frames of switch frames, a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
-tangpt	192	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md), amplified by rays that graze the surface: up to 4.4e-4 km; no difference with glibc's sin and cos
-termpt	32	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md), amplified at the tangency of a DSK terminator: up to 1.1e-5 km; no difference with glibc's sin and cos
+sxform	0	1	0	documented	errors: TOOMANYBASEFRAMES past 15000 base frames of switch frames, a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
 tisbod	134	0	0	documented	CSPICE's rate of a cubic pole term, and the degree check (numerics.md)
 tkvrsn	400	0	0	documented	the version string names Almanac (tkvrsn docstring)
-xfmsta	1	0	0	documented	Julia's sin or cos differs from glibc's in the last bit (numerics.md), near the pole: up to 6.0e-8 km; no difference with glibc's sin and cos
 zzdsklsf	0	1	0	documented	FTFULL past 5000 open files: a CSPICE table limit that Almanac does not have (cspice_defects.md, Limits)
